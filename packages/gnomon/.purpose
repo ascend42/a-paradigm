@@ -1261,7 +1261,15 @@ components:
       status.mods full to the human class only, counts otherwise; watcher
       unarmed on exit/timeout/pause/cap and re-armed on a successful start;
       a lost mod.paused / mod.effect.refused row surfaces as
-      daemon.mod.row.unrecorded. Slice 3: spend from the caller permit, dev-mode cards/re-pin,
+      daemon.mod.row.unrecorded. Round 3 (Aegis R2-1/R2-2): fold.ts RowFold -
+      mod.effect.refused (per mod, keyed effect|why|verb, verb clipped) and
+      relay-miss manifest.refuse rows: 8 individual per 10 s window, the rest
+      one coalesced row on the timer / next window / stop / stopAll, at most
+      16 keys + other<Field>s + distinct (exact to 1024, then distinctCapped);
+      the bridge drops a call's byte tally on the host's onCallEnd and prunes
+      past idle seconds (never a wholesale clear); kernel-side refusals reach
+      a mod as code + reason only (generic message, no wrapped data).
+      Slice 3: spend from the caller permit, dev-mode cards/re-pin,
       gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
     tags: [kernel, mods, sandbox, M1.11]
 flows:

@@ -16,7 +16,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isRefusalV1, MOD_ABI_ID } from '@a-company/gnomon-contracts';
+import { isRefusalV1, MOD_ABI_ID, RefusedError, refuse } from '@a-company/gnomon-contracts';
 import { ModRefusal, sanitizeModBlock, EgressProxy, isNonPublicAddress } from '../src/kernel/modhost/index.js';
 import { modLaunchPlan } from '../src/kernel/sandbox/mod.js';
 import { createModHostForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
@@ -446,17 +446,69 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
 
   it('I1: watching() tells the truth across a crash restart and the restart cap', async () => {
     const { h } = await started({ linked: true });
+    const until = async (f: () => boolean, ms = 8_000) => {
+      for (let t = 0; t < ms && !f(); t += 50) await new Promise((res) => setTimeout(res, 50));
+    };
     expect(h.watching()).toEqual(['probe']);
     await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
-    for (let i = 0; i < 20 && h.running().length === 0; i++) await new Promise((res) => setTimeout(res, 100));
+    await until(() => h.restarts('probe') === 1 && h.running().length === 1 && h.watching().length === 1);
     expect(h.running()).toEqual(['probe']);
     expect(h.watching()).toEqual(['probe']); // re-armed by the successful restart
-    for (let i = 0; i < 3; i++) {
+    for (let n = 2; n <= 4; n++) {
+      await until(() => h.running().length === 1);
       await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
-      await new Promise((res) => setTimeout(res, 700));
+      await until(() => (n <= 3 ? h.restarts('probe') === n && h.running().length === 1 : h.down().includes('probe')));
     }
     expect(h.running()).toEqual([]);
     expect(h.watching()).toEqual([]);
+  }, 30_000);
+});
+
+describe('round 3 (Aegis R2-1, R2-2, low)', () => {
+  it('R2-1: a 1000-request refusal loop writes at most 8 individual mod.effect.refused rows + 1 coalesced row', async () => {
+    const { r, h } = await started();
+    expect(await h.callTool('probe', 'probe.read', { op: 'aloop', n: 1000 }, { timeoutMs: 20_000 })).toEqual({ refused: 1000 });
+    await h.stop('probe'); // stop flushes the fold
+    const rows = r.events.filter((e) => e.kind === 'mod.effect.refused');
+    expect(rows.filter((e) => !e.payload.coalesced)).toHaveLength(8);
+    const co = rows.filter((e) => e.payload.coalesced);
+    expect(co).toHaveLength(1);
+    expect(co[0]!.payload).toMatchObject({ name: 'probe', count: 992, byKey: { 'approve||approve': 992 }, otherKeys: 0, distinct: 1 });
+  }, 30_000);
+
+  it('R2-2: 10 000 rotating relay-miss names fold into one coalesced row under 4 KiB (16 keys + otherNames + distinct)', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    for (let i = 0; i < 10_000; i++) await h.admit(`n${i}`).catch(() => undefined);
+    h.flushRelayMisses();
+    const co = r.events.filter((e) => e.kind === 'manifest.refuse' && e.payload.coalesced);
+    expect(co).toHaveLength(1);
+    const p = co[0]!.payload as { count: number; byName: Record<string, number>; otherNames: number; distinct: number; distinctCapped?: boolean };
+    expect(p.count).toBe(10_000 - 8);
+    expect(Object.keys(p.byName)).toHaveLength(16);
+    expect(p.otherNames).toBe(10_000 - 8 - 16);
+    expect(p.distinct).toBe(1024);
+    expect(p.distinctCapped).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(p))).toBeLessThan(4096);
+  }, 60_000);
+
+  it('Aegis low: a kernel-side refusal reaches the mod with its code and reason only — never its message or wrapped data', async () => {
+    const written: string[] = [];
+    const stdin = new Writable({ write: (c, _e, cb) => (written.push(String(c)), cb()) });
+    const stdout = new PassThrough();
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr: new PassThrough() }) as unknown as ChildProcess;
+    const ch = new ModChannel(child, async () => {
+      throw new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'anchor-failed', path: '/Users/secret/.gnomon/keys', error: 'EACCES /Users/secret' } }), 'anchor write failed at /Users/secret/.gnomon/anchor: EACCES');
+    });
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'kernel.call', params: { verb: 'log.append', params: {} } })}\n`);
+    for (let i = 0; i < 20 && !written.length; i++) await new Promise((res) => setTimeout(res, 10));
+    const reply = JSON.parse(written[0]!) as { error: { message: string; data: { code: string; data: Record<string, unknown> } } };
+    expect(reply.error.message).toBe('refused ENGINE (anchor-failed)');
+    expect(reply.error.data).toMatchObject({ code: 'ENGINE', data: { reason: 'anchor-failed' } });
+    expect(JSON.stringify(reply)).not.toContain('secret');
+    ch.close(new Error('done'));
   });
 });
 

@@ -91,29 +91,47 @@ export function clampModAppend(name: string, principal: string, params: Record<s
   return row;
 }
 
-export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => number } = {}): (req: KernelCallRequest) => Promise<unknown> {
+export interface ModKernelCall {
+  (req: KernelCallRequest): Promise<unknown>;
+  /** the host's onCallEnd: drop that call's byte tally (it can bind no further request) */
+  endCall(name: string, callId: string): void;
+  /** live budget keys (tests) */
+  budgetKeys(): number;
+}
+
+export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => number } = {}): ModKernelCall {
   const now = opts.now ?? Date.now;
   const rows = new Map<string, number[]>(); // name → append times in the last second
   const bytes = new Map<string, number>(); // `${name}|${callKey}` → payload bytes appended
-  return async (req) => {
+  const fn = async (req: KernelCallRequest): Promise<unknown> => {
     if (req.verb === 'log.append') {
       const row = clampModAppend(req.name, req.principal, req.params);
       const t = now();
       const recent = (rows.get(req.name) ?? []).filter((x) => t - x < 1_000);
       if (recent.length >= MOD_APPEND_ROWS_PER_SEC) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_ROWS_PER_SEC} appends per second`, { name: req.name, budget: 'rows' });
-      const key = `${req.name}|${req.callId ?? `idle:${Math.floor(t / 1_000)}`}`;
+      const sec = Math.floor(t / 1_000);
+      // prune idle windows older than this second (never a live call's tally)
+      for (const k of bytes.keys()) {
+        const i = k.lastIndexOf('|idle:');
+        if (i >= 0 && Number(k.slice(i + 6)) < sec) bytes.delete(k);
+      }
+      const key = `${req.name}|${req.callId ?? `idle:${sec}`}`;
       const size = Buffer.byteLength(canonicalJson(row.payload), 'utf8');
       const used = bytes.get(key) ?? 0;
       if (used + size > MOD_APPEND_BYTES_PER_CALL) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_BYTES_PER_CALL} appended bytes in this call`, { name: req.name, budget: 'bytes' });
       recent.push(t);
       rows.set(req.name, recent);
-      if (bytes.size > 256) bytes.clear(); // bounded: old call windows are dead
       bytes.set(key, used + size);
       const r = await ports.append(row);
       return { seq: r.seq };
     }
     return ports.callAs(req.principal, req.verb, req.params);
   };
+  // bounded by the host: one call in force per mod, and each call's key is dropped when it ends
+  return Object.assign(fn, {
+    endCall: (name: string, callId: string) => void bytes.delete(`${name}|${callId}`),
+    budgetKeys: () => bytes.size,
+  });
 }
 
 /** What the dispatcher needs from the mod host (socket/dispatch.ts ModRelayPort). */

@@ -136,10 +136,16 @@ export class ModChannel {
 }
 
 function errorObject(err: unknown): RpcErrorObject {
-  if (err instanceof ModRefusal || err instanceof RefusedError) {
-    // a refusal:v1 is data, never a stack (e.g. the log's label-relaxed for a mod append)
+  if (err instanceof ModRefusal) {
     const r: Refusal = err.refusal;
     return { code: jsonRpcCodeFor(r.code), message: err.message, data: r };
+  }
+  if (err instanceof RefusedError) {
+    // a kernel-side refusal (e.g. the log's label-relaxed or anchor-failed for a mod append): the code and reason only —
+    // its message and data may wrap host paths or an underlying error, which never reach a mod (Aegis low, round 3)
+    const r: Refusal = err.refusal;
+    const reason = typeof r.data?.reason === 'string' ? r.data.reason : undefined;
+    return { code: jsonRpcCodeFor(r.code), message: `refused ${r.code}${reason ? ` (${reason})` : ''}`, data: { ...r, data: reason ? { reason } : {} } };
   }
   return { code: -32603, message: 'internal error' }; // never leak a host stack to a mod
 }

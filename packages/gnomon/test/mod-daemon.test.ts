@@ -9,9 +9,14 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
-import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, loadDeviceKey, readRegistry, registerDevice, registerKernelKey, RootVerifier, writeNewDeviceKey } from '../src/kernel/identity/index.js';
-import { startDaemon } from '../src/kernel/lifecycle/index.js';
-import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
+import * as fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, loadDeviceKey, readKernelPubs, readRegistry, registerDevice, registerKernelKey, RootVerifier, writeNewDeviceKey } from '../src/kernel/identity/index.js';
+import { startDaemon, type DaemonEvent } from '../src/kernel/lifecycle/index.js';
+import { KeyRing, SoftwareEd25519Signer, verifyLog } from '../src/kernel/log/index.js';
+import { install, writeModFolder, probeManifest } from './mod-helpers.js';
+import { removeTree } from '../src/kernel/manifest/index.js';
 import { connectGnomon } from '../src/kernel/socket/index.js';
 import { clampModAppend, createModKernelCall, MOD_APPEND_BYTES_PER_CALL, MOD_APPEND_MAX_BYTES, MOD_APPEND_ROWS_PER_SEC, ModRefusal } from '../src/kernel/modhost/index.js';
 import type { PrincipalKind } from '@a-company/gnomon-contracts';
@@ -22,7 +27,7 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function rig(kind: PrincipalKind = 'human') {
+async function rig(kind: PrincipalKind = 'human', events: DaemonEvent[] = []) {
   const t = tempHome('gmd-');
   cleanups.push(t.cleanup);
   const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
@@ -30,7 +35,7 @@ async function rig(kind: PrincipalKind = 'human') {
   registerKernelKey(t.home, root, kernel.publicKeyPem);
   const devKey = writeNewDeviceKey(t.home);
   const entry = registerDevice(t.home, root, { host: 'mac-1', name: 'founder', publicKeyPem: devKey.publicKeyPem, principalKind: kind });
-  const d = await startDaemon({ home: t.home, idleMs: 60_000, kernelSigner: kernel, rootAuthority: root });
+  const d = await startDaemon({ home: t.home, idleMs: 60_000, kernelSigner: kernel, rootAuthority: root, onEvent: (e) => void events.push(e) });
   cleanups.push(() => d.shutdown('signal'));
   const reg = readRegistry(t.home, new RootVerifier(root.publicKeyPem));
   const s = await connectGnomon({
@@ -40,7 +45,7 @@ async function rig(kind: PrincipalKind = 'human') {
     device: { principalId: entry.principalId, deviceId: entry.deviceId, signer: loadDeviceKey(t.home) },
   });
   cleanups.push(() => s.conn.close());
-  return { d, s, ns: root.ns };
+  return { d, s, ns: root.ns, home: t.home, root };
 }
 
 describe('ModHost in startDaemon (M1.11 slice 2)', () => {
@@ -101,6 +106,33 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     await expect(d.modKernelCall({ name: 'probe', principal: p, verb: 'log.append', params: { kind: 'modns.probe.x', audience: 'team' } })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN', data: { reason: 'label-relaxed' } } });
   });
 
+  it('reviewer: an OFFLINE chain verify accepts the userland row with a mod principal signed by the kernel key', async () => {
+    const { d, ns, home } = await rig();
+    await d.modKernelCall({ name: 'probe', principal: `p:${ns}/mod-probe`, verb: 'log.append', params: { kind: 'modns.probe.x', payload: { a: 1 } } });
+    await d.shutdown('signal');
+    const ring = new KeyRing();
+    const pubs = readKernelPubs(home);
+    for (const k of pubs) ring.addEd25519(k.publicKeyPem);
+    const rep = verifyLog(home, { keyRing: ring, kernelPrincipal: d.kernelPrincipal, kernelKeyIds: pubs.map((k) => k.keyId) });
+    expect(rep.failures).toEqual([]);
+    expect(rep.ok).toBe(true);
+  });
+
+  it('N3: a mod.paused row the log refuses surfaces as daemon.mod.row.unrecorded on the diag channel', async () => {
+    const events: DaemonEvent[] = [];
+    const { d, home, root } = await rig('human', events);
+    const srcRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gmd-src-')));
+    cleanups.push(() => fs.rmSync(srcRoot, { recursive: true, force: true }));
+    const src = path.join(srcRoot, 'probe');
+    install({ root: srcRoot, home, auth: root, events: [], cleanup: async () => undefined }, writeModFolder(src, probeManifest()), { via: 'linked' });
+    fs.appendFileSync(path.join(src, 'index.mjs'), '\n// edited\n');
+    await d.log.close(); // every append now refuses
+    await expect(d.mods.admit('probe')).rejects.toMatchObject({ modCode: 'PAUSED' });
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'daemon.mod.row.unrecorded', rowKind: 'mod.paused', name: 'probe' }));
+    await d.shutdown('signal');
+    removeTree(path.join(home, 'mods')); // pinned snapshots are read-only
+  });
+
   it('shutdown stops the mod host (no restart can race the children sweep)', async () => {
     const { d } = await rig();
     await d.shutdown('idle');
@@ -136,5 +168,22 @@ describe('Aegis F2: the per-mod append budget', () => {
     }
     await expect(append(big, 'call-1')).rejects.toMatchObject({ modCode: 'LOG', detail: { budget: 'bytes' } });
     await append(big, 'call-2'); // a new call has its own window
+  });
+});
+
+describe('reviewer: per-call byte budgets survive other keys', () => {
+  it("a call's 64 KiB budget still holds after 300 other keys exist; ending a call drops only its own key", async () => {
+    let t = 5_000_000;
+    const call = createModKernelCall({ callAs: async () => null, append: async () => ({ seq: 1 }) }, { now: () => t });
+    const big = { b: 'x'.repeat(15 * 1024) };
+    const append = (name: string, payload: Record<string, unknown>, callId: string) => call({ name, principal: `p:x/mod-${name}`, verb: 'log.append', params: { kind: `modns.${name}.x`, payload }, callId });
+    for (let i = 0; i < 2; i++) await append('probe', big, 'call-1');
+    for (let i = 0; i < 300; i++) await append(`m${i}`, { i }, `c-${i}`);
+    expect(call.budgetKeys()).toBe(301);
+    for (let i = 0; i < 2; i++) await append('probe', big, 'call-1');
+    await expect(append('probe', big, 'call-1')).rejects.toMatchObject({ modCode: 'LOG', detail: { budget: 'bytes' } });
+    call.endCall('m0', 'c-0');
+    expect(call.budgetKeys()).toBe(300);
+    await expect(append('probe', big, 'call-1')).rejects.toMatchObject({ detail: { budget: 'bytes' } });
   });
 });

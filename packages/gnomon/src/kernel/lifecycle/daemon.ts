@@ -522,6 +522,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
     kernelCall: (req) => modKernelCall(req),
+    onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
   });
   const modKernelCall = createModKernelCall({
       callAs: (principal, verb, params) => dispatcher.callAs(principal, verb, params),

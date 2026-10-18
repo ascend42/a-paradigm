@@ -89,6 +89,7 @@ import type { TreeDiff } from '../manifest/snapshot.js';
 import { modLaunchPlan, type ModLaunchInput } from '../sandbox/mod.js';
 import type { ChildLaunchPlan } from '../sandbox/transport.js';
 import { sanitizeModBlock } from './block.js';
+import { RowFold } from './fold.js';
 import { ModChannel, ModRpcError } from './channel.js';
 import { declaredEffects, effectsFor, methodEffect, type CallContext } from './effects.js';
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
@@ -114,6 +115,9 @@ export const MAX_MOD_HOST_INFLIGHT = 8;
 /** Relay misses (an uninstalled name): individual manifest.refuse rows per window before folding. */
 export const RELAY_MISS_ROWS_PER_WINDOW = 8;
 export const RELAY_MISS_WINDOW_MS = 10_000;
+/** Aegis R2-1: mod.effect.refused rows per mod per window before folding. */
+export const EFFECT_REFUSED_ROWS_PER_WINDOW = 8;
+export const EFFECT_REFUSED_WINDOW_MS = 10_000;
 const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 export interface ModChildrenPort {
@@ -140,6 +144,8 @@ export interface ModHostOptions {
   kernelPrincipal?: string;
   /** the kernel side of `kernel.call` (slice 2 wires the socket dispatcher); absent ⇒ ENGINE not-implemented */
   kernelCall?: (req: KernelCallRequest) => Promise<unknown>;
+  /** a host → mod call left force (its callId can no longer bind a request) — the bridge drops that call's budget */
+  onCallEnd?: (name: string, callId: string) => void;
   platform?: string;
   callTimeoutMs?: number;
   cancelGraceMs?: number;
@@ -203,13 +209,44 @@ export class ModHost {
   /** mods out of restarts: refused DOWN to relays until an operator start() */
   readonly #down = new Set<string>();
   readonly #inflight = new Map<string, number>();
-  readonly #misses = { windowStart: 0, individual: 0, folded: new Map<string, number>(), timer: undefined as NodeJS.Timeout | undefined };
+  #misses!: RowFold;
+  readonly #refusedFolds = new Map<string, RowFold>();
   #closed = false;
   #seams: ModHostSeams = {};
 
   constructor(opts: ModHostOptions) {
     this.#o = opts;
     this.#emit = opts.emit ?? noEvents;
+    this.#misses = new RowFold({
+      perWindow: RELAY_MISS_ROWS_PER_WINDOW,
+      windowMs: RELAY_MISS_WINDOW_MS,
+      now: () => this.#now(),
+      write: (payload) => this.#emit('manifest.refuse', payload),
+      base: { code: 'NOT_INSTALLED', via: 'relay' },
+      field: 'byName',
+    });
+  }
+
+  /** Aegis R2-1: one fold per mod for mod.effect.refused, keyed by {effect, why, verb}. */
+  #refused(name: string, row: Record<string, unknown>): void {
+    let f = this.#refusedFolds.get(name);
+    if (!f) {
+      f = new RowFold({
+        perWindow: EFFECT_REFUSED_ROWS_PER_WINDOW,
+        windowMs: EFFECT_REFUSED_WINDOW_MS,
+        now: () => this.#now(),
+        write: (payload) => this.#emit('mod.effect.refused', payload),
+        base: { name },
+        field: 'byKey',
+      });
+      this.#refusedFolds.set(name, f);
+    }
+    f.hit(`${String(row.effect)}|${String(row.why ?? '')}|${String(row.verb ?? '')}`, row);
+  }
+
+  /** Write every folded mod.effect.refused counter row now (also on the fold timers, at stop and stopAll). */
+  flushRefused(name?: string): void {
+    for (const [n, f] of this.#refusedFolds) if (!name || n === name) f.flush();
   }
 
   static {
@@ -323,38 +360,12 @@ export class ModHost {
   }
 
   #relayMiss(name: string): void {
-    const m = this.#misses;
-    const now = this.#now();
-    if (now - m.windowStart >= RELAY_MISS_WINDOW_MS) {
-      this.#flushMisses();
-      m.windowStart = now;
-      m.individual = 0;
-    }
-    if (m.individual < RELAY_MISS_ROWS_PER_WINDOW) {
-      m.individual++;
-      this.#emit('manifest.refuse', { name, code: 'NOT_INSTALLED', via: 'relay' });
-      return;
-    }
-    m.folded.set(name, (m.folded.get(name) ?? 0) + 1);
-    if (!m.timer) {
-      m.timer = setTimeout(() => this.#flushMisses(), RELAY_MISS_WINDOW_MS);
-      m.timer.unref();
-    }
+    this.#misses.hit(name, { name, code: 'NOT_INSTALLED', via: 'relay' });
   }
 
   /** Write the folded relay-miss counter row now (also on its window timer and at stopAll). */
   flushRelayMisses(): void {
-    this.#flushMisses();
-  }
-
-  #flushMisses(): void {
-    const m = this.#misses;
-    clearTimeout(m.timer);
-    m.timer = undefined;
-    if (m.folded.size === 0) return;
-    const byName = Object.fromEntries(m.folded);
-    this.#emit('manifest.refuse', { code: 'NOT_INSTALLED', via: 'relay', coalesced: true, count: Object.values(byName).reduce((a, b) => a + b, 0), byName });
-    m.folded.clear();
+    this.#misses.flush();
   }
 
   /** Names a relay is refused DOWN for (inspect / tests). */
@@ -535,6 +546,7 @@ export class ModHost {
 
   async stop(name: string, reason = 'stopped'): Promise<void> {
     this.#unwatch(name);
+    this.flushRefused(name);
     const r = this.#running.get(name);
     if (!r) return;
     r.stopping = true;
@@ -550,7 +562,8 @@ export class ModHost {
   async stopAll(reason = 'shutdown'): Promise<void> {
     this.#closed = true;
     for (const n of [...this.#watchers.keys()]) this.#unwatch(n);
-    this.#flushMisses();
+    this.#misses.flush();
+    this.flushRefused();
     await Promise.allSettled([...this.#starting.values()]); // reviewer #2: an in-flight start finishes (or refuses) before the sweep
     await Promise.all([...this.#running.keys()].map((n) => this.stop(n, reason)));
   }
@@ -631,6 +644,7 @@ export class ModHost {
       } finally {
         r.ctx = { kind: 'idle' };
         r.callId = null;
+        if (callId) this.#o.onCallEnd?.(name, callId);
         r.proxy?.closeTunnels(); // Aegis F2: a tunnel never outlives the call that opened it
       }
     });
@@ -746,7 +760,8 @@ export class ModHost {
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {
-        this.#emit('mod.effect.refused', { name, effect: err.detail.effect ?? (err.modCode === 'APPROVE' ? 'approve' : err.modCode === 'CALL' ? 'call-id' : 'verb'), method, ...(err.modCode === 'CALL' ? { why: 'call-id' } : {}), ...(method === 'kernel.call' ? { verb: String(params.verb) } : {}) });
+        // R2-1: folded per mod; the verb is mod-supplied, so it is clipped
+        this.#refused(name, { name, effect: err.detail.effect ?? (err.modCode === 'APPROVE' ? 'approve' : err.modCode === 'CALL' ? 'call-id' : 'verb'), method: String(method).slice(0, 64), ...(err.modCode === 'CALL' ? { why: 'call-id' } : {}), ...(method === 'kernel.call' ? { verb: String(params.verb).slice(0, 64) } : {}) });
       }
       throw err;
     }
