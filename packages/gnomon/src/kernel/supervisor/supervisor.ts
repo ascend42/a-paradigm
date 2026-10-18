@@ -75,7 +75,7 @@ import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type Session
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
-import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, repoHookCard, type RepoHook } from './repo-hooks.js';
+import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -465,7 +465,7 @@ export class SessionSupervisor {
       }
     }
     await this.#o.log('gate-class.detected', {
-      what: 'repo-hooks', hsid, repoKey: set.repoKey, setHash: set.setHash, status: 'ok', hooks: set.hooks.length, refused: set.refused,
+      what: 'repo-hooks', hsid, repoKey: set.repoKey, setHash: set.setHash, status: 'ok', hooks: set.hooks.length, refused: set.refused.slice(0, MAX_REFUSED_LOGGED), refusedCount: set.refused.length,
       approved: approved.map((h) => h.hookId), denied: set.hooks.filter((h) => decided.get(h.hookId) === 'deny').map((h) => h.hookId), pending: pending.map((h) => h.hookId), cards, run: approved.length,
     }, { session: hsid });
     return approved;

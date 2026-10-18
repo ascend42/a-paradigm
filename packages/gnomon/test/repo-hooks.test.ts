@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, repoHookCard } from '../src/kernel/supervisor/repo-hooks.js';
+import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, repoHookCard, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
 
 let root = '';
 afterEach(() => {
@@ -84,6 +84,59 @@ describe('extractRepoHooks', () => {
   it(`more than ${MAX_REPO_HOOKS} hooks ⇒ too-many (none run; bounded)`, () => {
     const hooks = Array.from({ length: MAX_REPO_HOOKS + 1 }, (_, i) => ({ type: 'command', command: `echo ${i}` }));
     expect(extractRepoHooks([repo({ hooks: { PreToolUse: [{ hooks }] } })]).status).toBe('too-many');
+  });
+  it('round 2 (reviewer): the cap holds for NON-ARRAY event values too (every increment is checked)', () => {
+    const hooks: Record<string, unknown> = {};
+    for (let i = 0; i <= MAX_REPO_HOOKS; i++) hooks[`E${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`] = { not: 'an array' };
+    expect(extractRepoHooks([repo({ hooks })]).status).toBe('too-many');
+    // exactly at the cap: still a set, every entry refused (the refused list is bounded by the cap)
+    const at: Record<string, unknown> = {};
+    for (let i = 0; i < MAX_REPO_HOOKS; i++) at[`E${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`] = 1;
+    fs.rmSync(root, { recursive: true, force: true });
+    const s = extractRepoHooks([repo({ hooks: at })]);
+    expect(s.status === 'ok' && s.refused.length).toBe(MAX_REPO_HOOKS);
+  });
+  it('Aegis C1: only the hook events Claude supports; constructor / __proto__ / toString are refused', () => {
+    for (const ev of ['constructor', '__proto__', 'toString', 'NotAnEvent']) {
+      const s = extractRepoHooks([repo({ hooks: { [ev]: [{ hooks: [{ type: 'command', command: 'echo a' }] }] } })]);
+      fs.rmSync(root, { recursive: true, force: true });
+      expect(s.status === 'ok' && s.hooks.length, ev).toBe(0);
+    }
+    for (const ev of CLAUDE_HOOK_EVENTS) {
+      const s = extractRepoHooks([repo({ hooks: { [ev]: [{ hooks: [{ type: 'command', command: 'echo a' }] }] } })]);
+      fs.rmSync(root, { recursive: true, force: true });
+      expect(s.status === 'ok' && s.hooks.length, ev).toBe(1);
+    }
+  });
+  it('Aegis C1: an approved hook named like an Object.prototype member never throws and stays an own key', () => {
+    const h = (event: string): RepoHook => ({ hookId: `sha256:${'0'.repeat(64)}`, source: 'project', event, matcher: null, command: 'echo a', timeout: null });
+    const b = hooksBlock([h('constructor'), h('__proto__'), h('hasOwnProperty')]);
+    expect(Object.keys(b).sort()).toEqual(['__proto__', 'constructor', 'hasOwnProperty']);
+    const m = mergeHooks(JSON.parse('{"__proto__":[1],"constructor":[2]}'), b);
+    expect(Object.keys(m).sort()).toEqual(['__proto__', 'constructor', 'hasOwnProperty']);
+    expect(JSON.parse(JSON.stringify(m)).constructor).toHaveLength(2);
+  });
+  it('reviewer: a worktree equal to cwd (by realpath) counts once', () => {
+    const r = repo(one('echo a'));
+    const link = `${r}-alias`;
+    fs.symlinkSync(r, link);
+    try {
+      const a = extractRepoHooks([r]);
+      const b = extractRepoHooks([r, link]);
+      expect(b.setHash).toBe(a.setHash);
+      expect(b.repoKey).toBe(a.repoKey);
+    } finally {
+      fs.rmSync(link, { force: true });
+    }
+  });
+  it('Aegis L: a symlinked .claude dir makes the set unreadable (O_NOFOLLOW covers only the file itself)', () => {
+    const r = repo();
+    fs.rmSync(path.join(r, '.claude'), { recursive: true });
+    const elsewhere = path.join(r, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    fs.writeFileSync(path.join(elsewhere, 'settings.json'), JSON.stringify(one('echo a')));
+    fs.symlinkSync(elsewhere, path.join(r, '.claude'));
+    expect(extractRepoHooks([r]).status).toBe('unreadable');
   });
   it('the set hash moves when a hook changes, is added, or a refused one appears', () => {
     const h = (doc: unknown) => {

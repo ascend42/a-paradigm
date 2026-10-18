@@ -68,9 +68,52 @@ const sha = (s: string): string => `sha256:${createHash('sha256').update(s, 'utf
 const EVENT_RE = /^[A-Za-z]{1,64}$/;
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** One key per repo root (realpath'd cwd + worktree). */
+/** The session roots realpath'd and deduped (a worktree equal to cwd counts once). */
+export function uniqueRoots(roots: readonly string[]): string[] {
+  return [...new Set(roots.map((r) => realpathLoose(r)))];
+}
+
+/** One key per repo root (realpath'd, deduped cwd + worktree). */
 export function repoKeyOf(roots: readonly string[]): string {
-  return sha(roots.map((r) => realpathLoose(r)).join('\u0000'));
+  return sha(uniqueRoots(roots).join('\u0000'));
+}
+
+/**
+ * The hook events Claude Code supports (Aegis C1): anything else is refused,
+ * so no repo-controlled name ever becomes a key the kernel did not expect.
+ */
+export const CLAUDE_HOOK_EVENTS = Object.freeze([
+  'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Notification', 'UserPromptSubmit',
+  'Stop', 'SubagentStart', 'SubagentStop', 'PreCompact', 'SessionStart', 'SessionEnd',
+]);
+/** refused hook ids carried on a gate-class.detected row (the set is bounded by MAX_REPO_HOOKS too) */
+export const MAX_REFUSED_LOGGED = 64;
+
+/** Read one settings layer: O_NOFOLLOW + fstat (no symlink, a regular file, bounded). null = absent. */
+function readLayer(file: string): { ok: true; text: string } | { ok: false; why: string } | null {
+  let fd: number;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return null;
+    return { ok: false, why: code === 'ELOOP' ? 'a symlink' : `unopenable (${code ?? 'error'})` };
+  }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) return { ok: false, why: 'not a regular file' };
+    if (st.size > MAX_SETTINGS_BYTES) return { ok: false, why: `over ${MAX_SETTINGS_BYTES} bytes` };
+    const buf = Buffer.alloc(st.size);
+    let n = 0;
+    while (n < st.size) {
+      const r = fs.readSync(fd, buf, n, st.size - n, n);
+      if (r <= 0) break;
+      n += r;
+    }
+    return { ok: true, text: buf.subarray(0, n).toString('utf8') };
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** Extract the repo hooks of the session roots (strict, fail closed). Pure but for reading the two settings files per root. */
@@ -79,21 +122,22 @@ export function extractRepoHooks(roots: readonly string[]): RepoHookSet {
   const hooks = new Map<string, RepoHook>();
   const refused = new Set<string>();
   let total = 0;
-  for (const root of roots) {
+  const tooMany = (): RepoHookSet => ({ status: 'too-many', repoKey, setHash: null, hooks: [], refused: [], why: `more than ${MAX_REPO_HOOKS} repo hooks` });
+  for (const root of uniqueRoots(roots)) {
     for (const f of REPO_HOOK_FILES) {
-      const file = path.join(realpathLoose(root), ...f.rel);
-      let st: fs.Stats;
-      try {
-        st = fs.lstatSync(file);
-      } catch {
-        continue; // no such layer
-      }
       const unreadable = (why: string): RepoHookSet => ({ status: 'unreadable', repoKey, setHash: null, hooks: [], refused: [], why: `${f.source}: ${why}` });
-      if (!st.isFile()) return unreadable('not a regular file (a symlink or other)');
-      if (st.size > MAX_SETTINGS_BYTES) return unreadable(`over ${MAX_SETTINGS_BYTES} bytes`);
+      // the .claude dir itself must not be a link (O_NOFOLLOW guards only the last component)
+      try {
+        if (fs.lstatSync(path.join(root, f.rel[0])).isSymbolicLink()) return unreadable('.claude is a symlink');
+      } catch {
+        continue; // no .claude dir
+      }
+      const layer = readLayer(path.join(root, ...f.rel));
+      if (layer === null) continue; // no such layer
+      if (!layer.ok) return unreadable(layer.why);
       let doc: unknown;
       try {
-        doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+        doc = JSON.parse(layer.text);
       } catch {
         return unreadable('unparseable');
       }
@@ -102,19 +146,18 @@ export function extractRepoHooks(roots: readonly string[]): RepoHookSet {
       if (!isObj(doc.hooks)) return unreadable('hooks is not an object');
       for (const [event, groups] of Object.entries(doc.hooks)) {
         if (!Array.isArray(groups)) {
-          total++;
+          if (++total > MAX_REPO_HOOKS) return tooMany(); // round 2: the cap holds on EVERY increment
           refused.add(sha(canonicalJson({ source: f.source, event, groups })));
           continue;
         }
         for (const g of groups as unknown[]) {
           const gHooks = isObj(g) && Array.isArray(g.hooks) ? g.hooks : [g];
           for (const h of gHooks) {
-            total++;
-            if (total > MAX_REPO_HOOKS) return { status: 'too-many', repoKey, setHash: null, hooks: [], refused: [], why: `more than ${MAX_REPO_HOOKS} repo hooks` };
+            if (++total > MAX_REPO_HOOKS) return tooMany();
             const raw = sha(canonicalJson({ source: f.source, event, group: isObj(g) ? Object.fromEntries(Object.entries(g).filter(([k]) => k !== 'hooks')) : (g ?? null), hook: h ?? null }));
             const matcher = isObj(g) ? g.matcher : undefined;
             const ok =
-              EVENT_RE.test(event) && !COMMAND_UNSAFE.test(event) &&
+              EVENT_RE.test(event) && CLAUDE_HOOK_EVENTS.includes(event) && !COMMAND_UNSAFE.test(event) &&
               isObj(g) && Object.keys(g).every((k) => k === 'matcher' || k === 'hooks') && Array.isArray(g.hooks) &&
               (matcher === undefined || (typeof matcher === 'string' && matcher.length <= 1024 && !COMMAND_UNSAFE.test(matcher))) &&
               isObj(h) && Object.keys(h).every((k) => k === 'type' || k === 'command' || k === 'timeout') &&
@@ -140,7 +183,8 @@ export function extractRepoHooks(roots: readonly string[]): RepoHookSet {
 
 /** The approved hooks as a Claude settings `hooks` block (merged into the session's policy.json). */
 export function hooksBlock(approved: readonly RepoHook[]): Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> }>> {
-  const out: Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> }>> = {};
+  // Aegis C1: a null-prototype object — an event named like an Object.prototype member is just a key
+  const out: Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> }>> = Object.create(null);
   for (const h of approved) {
     (out[h.event] ??= []).push({ ...(h.matcher !== null ? { matcher: h.matcher } : {}), hooks: [{ type: 'command', command: h.command, ...(h.timeout !== null ? { timeout: h.timeout } : {}) }] });
   }
@@ -149,7 +193,7 @@ export function hooksBlock(approved: readonly RepoHook[]): Record<string, Array<
 
 /** Merge two settings `hooks` blocks (generated first, then approved repo hooks). */
 export function mergeHooks(a: unknown, b: Record<string, unknown[]>): Record<string, unknown[]> {
-  const out: Record<string, unknown[]> = {};
+  const out: Record<string, unknown[]> = Object.create(null);
   if (isObj(a)) for (const [k, v] of Object.entries(a)) out[k] = Array.isArray(v) ? [...v] : [v];
   for (const [k, v] of Object.entries(b)) out[k] = [...(out[k] ?? []), ...v];
   return out;
