@@ -18,6 +18,7 @@ import {
   DEV_TEST_HELPER_ACK,
   HardwareRootAuthority,
   HelperProcess,
+  SupervisedHelper,
   HelperUnavailableError,
   IDENTITY_SCHEMA,
   IdentityError,
@@ -44,7 +45,7 @@ afterEach(() => {
 });
 
 /** A fake `gnomon-helper serve`: echoes the id; op `bad-id` answers with the wrong id; op `die` exits. */
-function fakeServe(dir: string): string {
+function fakeServe(dir: string, version = '1.2.0'): string {
   const f = path.join(dir, 'gnomon-helper');
   fs.writeFileSync(
     f,
@@ -58,7 +59,8 @@ process.stdin.on('data', (d) => {
     buf = buf.slice(i + 1);
     if (req.op === 'die') process.exit(1);
     const id = req.op === 'bad-id' ? 999 : req.id;
-    process.stdout.write(JSON.stringify(req.op === 'refuse' ? { id, ok: false, error: 'presence-denied', message: 'no' } : { id, ok: true, op: req.op }) + '\\n');
+    const info = { protocol: 'gnomon-helper:v1', version: '${version}' };
+    process.stdout.write(JSON.stringify(req.op === 'refuse' ? { id, ok: false, error: 'presence-denied', message: 'no' } : { id, ok: true, op: req.op, ...(req.op === 'info' ? info : {}) }) + '\\n');
   }
 });
 `,
@@ -110,6 +112,42 @@ describe('pinHelper', () => {
 });
 
 describe('HelperProcess (serve)', () => {
+  it('falsifier (H1 c): a helper below the version floor, or speaking another protocol, is refused before any request', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.1.0'), { verifier: DEV }));
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum/);
+    expect(h.alive).toBe(false);
+  });
+
+  it('falsifier (H5): a running child that fails the pid code-signing check is killed before any request', async () => {
+    const pin = pinHelper(fakeServe(tmp()), { verifier: { kind: 'dev-test', verify: () => undefined, verifyRunning: (pid) => { throw new HelperUnavailableError('unsigned', `pid ${pid}`); } } });
+    const h = HelperProcess.start(pin);
+    expect(h.alive).toBe(false);
+    await expect(h.request({ op: 'info' })).rejects.toThrow(/not running/);
+  });
+
+  it('falsifier (H5): a file swapped DURING verification is refused (hash, verify, re-hash)', () => {
+    const f = fakeServe(tmp());
+    expect(() => pinHelper(f, { verifier: { kind: 'dev-test', verify: (exe) => fs.appendFileSync(exe, '// swapped mid-verify\n'), verifyRunning: () => undefined } })).toThrow(/while it was being verified/);
+  });
+
+  it('SupervisedHelper: never restarts after close(), and backs off a helper that keeps dying', async () => {
+    let starts = 0;
+    let t = 0;
+    const sup = new SupervisedHelper(() => {
+      starts++;
+      return HelperProcess.start(pinHelper(fakeServe(tmp()), { verifier: DEV }));
+    }, () => t);
+    await sup.request({ op: 'info' });
+    await expect(sup.request({ op: 'die' })).rejects.toThrow();
+    await expect(sup.request({ op: 'info' })).rejects.toThrow(/restart allowed/);
+    t += 1_500;
+    await sup.request({ op: 'info' });
+    expect(starts).toBe(2);
+    await sup.close();
+    await expect(sup.request({ op: 'info' })).rejects.toThrow(/closed/);
+    expect(starts).toBe(2);
+  });
+
   it('answers in order; a refusal is a HelperRefusal; an out-of-order reply kills the helper (fail closed)', async () => {
     const pin = pinHelper(fakeServe(tmp()), { verifier: DEV });
     const h = HelperProcess.start(pin);

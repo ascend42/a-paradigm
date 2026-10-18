@@ -17,7 +17,14 @@
  *      every spawn, so a binary swapped after verification is refused.
  * A missing, unsigned or changed helper fails closed: HelperUnavailableError
  * (the callers refuse UNSUPPORTED, never a software fallback, §3.1).
- * Residual: the window between the final re-check and exec(2) itself.
+ * The window between the final file re-check and exec(2) is closed for
+ * `serve` by the post-spawn pid check; a one-shot `once` child is not
+ * pid-verified (residual).
+ *
+ * Round 2 (Aegis H1 c, H5): the pin is hash → verify → re-hash; after spawn
+ * the RUNNING child is code-sign-verified by pid and must answer `info` with
+ * HELPER_PROTOCOL and a version ≥ MIN_HELPER_VERSION before any request.
+ * The platform check lives in src/platform/helper-verifier.ts (R6).
  *
  * The verifier is a seam only for tests on hosts with no Developer ID build:
  * `acceptUnsignedHelperForTests(DEV_TEST_HELPER_ACK)` — programmatic only, no
@@ -26,10 +33,23 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import { helperVerifierFor } from '../../platform/helper-verifier.js';
 
 export const HELPER_TEAM = 'SW4BMQ8PNL';
 export const HELPER_IDENTIFIER = 'gnomon.helper';
 export const HELPER_PROTOCOL = 'gnomon-helper:v1';
+/**
+ * Aegis H1 (c): identifier + team is not enough (every binary the team signs
+ * as gnomon.helper passes it, an old one included). After spawn and before
+ * any request the kernel asks `info` and refuses a helper whose protocol is
+ * not HELPER_PROTOCOL or whose version is below this floor (the floor moves
+ * with every security-relevant helper change). Chosen over a CDHash
+ * allowlist: a timestamped signature changes the CDHash-bearing bytes on
+ * every founder build, so an allowlist shipped with the kernel would break on
+ * each rebuild; the floor stops downgrades to known-weaker helpers.
+ */
+export const MIN_HELPER_VERSION = '1.2.0';
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */
 export const HELPER_REQUIREMENT =
   `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${HELPER_TEAM}" and identifier "${HELPER_IDENTIFIER}"`;
@@ -44,7 +64,7 @@ export const HELPER_OP_TIMEOUT_MS = 15_000;
 
 export class HelperUnavailableError extends Error {
   constructor(
-    readonly reason: 'missing' | 'not-a-file' | 'unsigned' | 'changed' | 'checksum' | 'spawn' | 'exited' | 'timeout' | 'busy' | 'protocol' | 'platform',
+    readonly reason: 'missing' | 'not-a-file' | 'unsigned' | 'changed' | 'checksum' | 'spawn' | 'exited' | 'timeout' | 'busy' | 'protocol' | 'platform' | 'version' | 'closed',
     message: string,
   ) {
     super(`#identity: helper unavailable (${reason}): ${message}`);
@@ -84,39 +104,63 @@ export const DEV_TEST_HELPER_ACK = 'gnomon-dev-test-helper:unsigned:never-produc
 export interface HelperVerifier {
   /** Throws HelperUnavailableError when `exe` is not the signed helper. */
   verify(exe: string): void;
-  readonly kind: 'codesign' | 'dev-test';
+  /** After spawn, before the first request: throws when the RUNNING child is not the signed helper (H5). */
+  verifyRunning(pid: number): void;
+  readonly kind: 'codesign' | 'dev-test' | 'unavailable';
 }
 
-/** Production: codesign --verify --strict + HELPER_REQUIREMENT (darwin only). */
-export const CODESIGN_VERIFIER: HelperVerifier = Object.freeze({
-  kind: 'codesign' as const,
-  verify(exe: string): void {
-    if (process.platform !== 'darwin') throw new HelperUnavailableError('platform', `no signed helper on ${process.platform} yet (Windows parity phase, P8-D78)`);
-    const r = spawnSync('/usr/bin/codesign', ['--verify', '--strict', `-R=${HELPER_REQUIREMENT}`, exe], { encoding: 'utf8', timeout: 30_000 });
-    if (r.status !== 0) throw new HelperUnavailableError('unsigned', `${exe} does not satisfy the helper's code-signing requirement (team ${HELPER_TEAM}, ${HELPER_IDENTIFIER})`);
-  },
-});
+/** Production: the platform backend's code-signing check against HELPER_REQUIREMENT (platform/helper-verifier.ts). */
+export function productionHelperVerifier(platform: string = process.platform): HelperVerifier {
+  const v = helperVerifierFor(platform);
+  return Object.freeze({
+    kind: v.kind === 'codesign' ? ('codesign' as const) : ('unavailable' as const),
+    verify(exe: string): void {
+      if (v.kind !== 'codesign') throw new HelperUnavailableError('platform', `this platform ${v.why}`);
+      if (!v.verifyFile(exe, HELPER_REQUIREMENT)) throw new HelperUnavailableError('unsigned', `${exe} ${v.why} (team ${HELPER_TEAM}, ${HELPER_IDENTIFIER})`);
+    },
+    verifyRunning(pid: number): void {
+      if (v.verifyPid(pid, HELPER_REQUIREMENT) !== true) throw new HelperUnavailableError('unsigned', `the running helper (pid ${pid}) ${v.why}`);
+    },
+  });
+}
+
+/** The production verifier for this host. */
+export const CODESIGN_VERIFIER: HelperVerifier = productionHelperVerifier();
 
 /** Tests only: accept any executable (programmatic acknowledgement; never env/argv). */
 export function acceptUnsignedHelperForTests(ack: typeof DEV_TEST_HELPER_ACK): HelperVerifier {
   if (ack !== DEV_TEST_HELPER_ACK) throw new Error('#identity: the unsigned-helper verifier needs DEV_TEST_HELPER_ACK');
-  return Object.freeze({ kind: 'dev-test' as const, verify: () => undefined });
+  return Object.freeze({ kind: 'dev-test' as const, verify: () => undefined, verifyRunning: () => undefined });
 }
 
 export interface PinnedHelper {
   readonly exe: string;
   readonly sha256: string;
-  readonly verifier: HelperVerifier['kind'];
-  /** Synchronous re-check right before a spawn: same inode, size, mtime and sha256. Throws HelperUnavailableError. */
+  readonly verifier: HelperVerifier;
+  /** Synchronous re-check right before a spawn: same path, inode, size, mtime and sha256. Throws HelperUnavailableError. */
   recheck(): void;
 }
 
-function fileFacts(exe: string): { st: fs.Stats; sha256: string } {
-  const st = fs.statSync(exe);
-  return { st, sha256: createHash('sha256').update(fs.readFileSync(exe)).digest('hex') };
+interface Facts {
+  ino: number;
+  size: number;
+  mtimeMs: number;
+  sha256: string;
 }
 
-/** Resolve once, verify the signature, record the facts the pre-spawn re-check compares. */
+function fileFacts(exe: string): Facts {
+  const st = fs.statSync(exe);
+  return { ino: st.ino, size: st.size, mtimeMs: st.mtimeMs, sha256: createHash('sha256').update(fs.readFileSync(exe)).digest('hex') };
+}
+
+const sameFacts = (a: Facts, b: Facts): boolean => a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.sha256 === b.sha256;
+
+/**
+ * Resolve once; HASH, then VERIFY the signature, then RE-HASH and compare
+ * (Aegis H5: a file swapped between the codesign check and the hash would
+ * otherwise pin bytes nobody verified); record the facts the pre-spawn
+ * re-check compares.
+ */
 export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expectedSha256?: string } = {}): PinnedHelper {
   let exe: string;
   try {
@@ -128,25 +172,24 @@ export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expec
   if (!st0.isFile() || (st0.mode & 0o111) === 0) throw new HelperUnavailableError('not-a-file', `${exe} is not an executable file`);
   if ((st0.mode & 0o022) !== 0) throw new HelperUnavailableError('unsigned', `${exe} is group- or world-writable`);
   const verifier = o.verifier ?? CODESIGN_VERIFIER;
+  const before = fileFacts(exe);
   verifier.verify(exe);
-  const facts = fileFacts(exe);
-  if (o.expectedSha256 !== undefined && o.expectedSha256 !== facts.sha256) throw new HelperUnavailableError('checksum', `${exe} does not match the pinned sha256`);
-  const pinned = { ino: facts.st.ino, size: facts.st.size, mtimeMs: facts.st.mtimeMs, sha256: facts.sha256 };
+  const after = fileFacts(exe);
+  if (!sameFacts(before, after)) throw new HelperUnavailableError('changed', `${exe} changed while it was being verified`);
+  if (o.expectedSha256 !== undefined && o.expectedSha256 !== after.sha256) throw new HelperUnavailableError('checksum', `${exe} does not match the pinned sha256`);
   return Object.freeze({
     exe,
-    sha256: facts.sha256,
-    verifier: verifier.kind,
+    sha256: after.sha256,
+    verifier,
     recheck(): void {
-      let now: { st: fs.Stats; sha256: string };
+      let now: Facts;
       try {
         if (fs.realpathSync.native(exePath) !== exe) throw new Error('moved');
         now = fileFacts(exe);
       } catch {
         throw new HelperUnavailableError('changed', `${exe} moved or vanished after it was verified`);
       }
-      if (now.st.ino !== pinned.ino || now.st.size !== pinned.size || now.st.mtimeMs !== pinned.mtimeMs || now.sha256 !== pinned.sha256) {
-        throw new HelperUnavailableError('changed', `${exe} changed after it was verified`);
-      }
+      if (!sameFacts(now, after)) throw new HelperUnavailableError('changed', `${exe} changed after it was verified`);
     },
   });
 }
@@ -156,15 +199,29 @@ function helperEnv(): NodeJS.ProcessEnv {
   return { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', ...(process.env.HOME ? { HOME: process.env.HOME } : {}), LANG: 'C' };
 }
 
-/** `gnomon-helper once`, synchronously (re-checks the pin first). */
+function runOnce(pin: PinnedHelper, req: Record<string, unknown>, timeoutMs: number): HelperReply {
+  pin.recheck();
+  const line = `${JSON.stringify({ id: 1, ...req })}\n`;
+  if (Buffer.byteLength(line) > HELPER_MAX_LINE_BYTES) throw new HelperUnavailableError('protocol', 'request too large');
+  const r = spawnSync(pin.exe, ['once'], { input: line, encoding: 'utf8', timeout: timeoutMs, env: helperEnv(), maxBuffer: HELPER_MAX_LINE_BYTES * 2 });
+  if (r.error) throw new HelperUnavailableError((r.error as NodeJS.ErrnoException).code === 'ETIMEDOUT' ? 'timeout' : 'spawn', r.error.message);
+  return parseReply((r.stdout ?? '').split('\n').find((l) => l.trim() !== '') ?? '');
+}
+
+/**
+ * `gnomon-helper once`, synchronously: re-checks the pin before every spawn
+ * and checks the helper's `info` (protocol, version floor) on first use.
+ * Residual: a one-shot child is not pid-verified (it exits before a check
+ * could run); the file re-check is its only pin.
+ */
 export function helperOnceSync(pin: PinnedHelper): HelperOnceSync {
+  let checked = false;
   return (req, timeoutMs = HELPER_SIGN_TIMEOUT_MS) => {
-    pin.recheck();
-    const line = `${JSON.stringify({ id: 1, ...req })}\n`;
-    if (Buffer.byteLength(line) > HELPER_MAX_LINE_BYTES) throw new HelperUnavailableError('protocol', 'request too large');
-    const r = spawnSync(pin.exe, ['once'], { input: line, encoding: 'utf8', timeout: timeoutMs, env: helperEnv(), maxBuffer: HELPER_MAX_LINE_BYTES * 2 });
-    if (r.error) throw new HelperUnavailableError((r.error as NodeJS.ErrnoException).code === 'ETIMEDOUT' ? 'timeout' : 'spawn', r.error.message);
-    return parseReply((r.stdout ?? '').split('\n').find((l) => l.trim() !== '') ?? '');
+    if (!checked) {
+      checkHelperInfo(runOnce(pin, { op: 'info' }, HELPER_OP_TIMEOUT_MS));
+      checked = true;
+    }
+    return runOnce(pin, req, timeoutMs);
   };
 }
 
@@ -184,16 +241,41 @@ function parseReply(line: string): HelperReply {
   return o;
 }
 
+/** `a.b.c` ≥ `min.b.c` (numeric, missing parts are 0); anything unparsable is below. */
+export function versionAtLeast(v: unknown, min: string): boolean {
+  if (typeof v !== 'string' || !/^\d+(\.\d+){0,2}$/.test(v)) return false;
+  const a = v.split('.').map(Number);
+  const b = min.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return true;
+}
+
+/** Check an `info` reply (H1 c): protocol, version floor, signing identity as the helper reports it. */
+export function checkHelperInfo(info: HelperReply): void {
+  if (info.protocol !== HELPER_PROTOCOL) throw new HelperUnavailableError('version', `the helper speaks ${String(info.protocol)}, not ${HELPER_PROTOCOL}`);
+  if (!versionAtLeast(info.version, MIN_HELPER_VERSION)) throw new HelperUnavailableError('version', `helper ${String(info.version)} is older than the minimum ${MIN_HELPER_VERSION}`);
+}
+
 /* ── the long-lived helper child (`serve`) ─────────────────────────────── */
 
 interface Pending {
-  line: string;
+  req: Record<string, unknown>;
   timeoutMs: number;
   resolve: (r: HelperReply) => void;
   reject: (e: Error) => void;
 }
 
-/** `gnomon-helper serve` as a child: one request in flight, a bounded queue, every unlock dies with it. */
+/**
+ * `gnomon-helper serve` as a child: the pin is re-checked before spawn, the
+ * RUNNING child is code-sign-verified by pid and answers `info` with the
+ * right protocol and a version at or above the floor BEFORE any request is
+ * sent (H1 c, H5); then one request in flight, a bounded queue, every unlock
+ * dies with it.
+ */
 export class HelperProcess implements HelperTransport {
   readonly #child: ChildProcess;
   readonly #queue: Pending[] = [];
@@ -201,6 +283,7 @@ export class HelperProcess implements HelperTransport {
   #nextId = 1;
   #buf = Buffer.alloc(0);
   #alive = true;
+  #ready = false;
   readonly #exitCbs: Array<() => void> = [];
 
   private constructor(child: ChildProcess) {
@@ -212,15 +295,45 @@ export class HelperProcess implements HelperTransport {
     child.stdin!.on('error', () => undefined);
   }
 
-  /** Re-check the pin synchronously, then spawn. */
+  /** Re-check the pin synchronously, spawn, verify the running child, then handshake (`info`). */
   static start(pin: PinnedHelper): HelperProcess {
     pin.recheck();
     const child = spawn(pin.exe, ['serve'], { stdio: ['pipe', 'pipe', 'pipe'], env: helperEnv() });
-    return new HelperProcess(child);
+    const p = new HelperProcess(child);
+    try {
+      if (typeof child.pid !== 'number') throw new HelperUnavailableError('spawn', 'the helper did not start');
+      pin.verifier.verifyRunning(child.pid);
+    } catch (e) {
+      p.#gone(e instanceof Error ? e : new HelperUnavailableError('spawn', 'helper verification failed'));
+      child.kill('SIGKILL');
+      return p;
+    }
+    // the handshake goes first; every caller request queues behind it
+    p.#queue.push({
+      req: { op: 'info' },
+      timeoutMs: HELPER_OP_TIMEOUT_MS,
+      resolve: (info) => {
+        try {
+          checkHelperInfo(info);
+          p.#ready = true;
+        } catch (e) {
+          p.#gone(e as Error);
+          child.kill('SIGKILL');
+        }
+      },
+      reject: () => undefined,
+    });
+    p.#pump();
+    return p;
   }
 
   get alive(): boolean {
     return this.#alive;
+  }
+
+  /** The handshake passed (info: protocol + version floor). */
+  get ready(): boolean {
+    return this.#ready;
   }
 
   onExit(cb: () => void): void {
@@ -231,12 +344,11 @@ export class HelperProcess implements HelperTransport {
   request(req: Record<string, unknown>, timeoutMs: number = HELPER_OP_TIMEOUT_MS): Promise<HelperReply> {
     if (!this.#alive) return Promise.reject(new HelperUnavailableError('exited', 'the helper is not running'));
     if (this.#queue.length >= HELPER_MAX_QUEUED) return Promise.reject(new HelperUnavailableError('busy', 'too many helper requests queued'));
+    const { id: _ignored, ...rest } = req; // the transport owns ids
+    void _ignored;
+    if (Buffer.byteLength(JSON.stringify(rest)) + 32 > HELPER_MAX_LINE_BYTES) return Promise.reject(new HelperUnavailableError('protocol', 'request too large'));
     return new Promise((resolve, reject) => {
-      const { id: _drop, ...rest } = req;
-      void _drop;
-      const line = JSON.stringify(rest);
-      if (Buffer.byteLength(line) + 32 > HELPER_MAX_LINE_BYTES) return reject(new HelperUnavailableError('protocol', 'request too large'));
-      this.#queue.push({ line, timeoutMs, resolve, reject });
+      this.#queue.push({ req: rest, timeoutMs, resolve, reject });
       this.#pump();
     });
   }
@@ -252,7 +364,7 @@ export class HelperProcess implements HelperTransport {
       this.#child.kill('SIGKILL');
     }, next.timeoutMs);
     this.#inflight = { ...next, id, timer };
-    this.#child.stdin!.write(`{"id":${id},${next.line.slice(1)}\n`);
+    this.#child.stdin!.write(`${JSON.stringify({ id, ...next.req })}\n`);
   }
 
   #onData(d: Buffer): void {
@@ -289,6 +401,10 @@ export class HelperProcess implements HelperTransport {
       p.resolve(parseReply(line));
     } catch (e) {
       p.reject(e as Error);
+      if (!this.#ready) {
+        this.#gone(new HelperUnavailableError('version', 'the helper refused the handshake'));
+        this.#child.kill('SIGKILL');
+      }
     }
     this.#pump();
   }
@@ -312,31 +428,42 @@ export class HelperProcess implements HelperTransport {
   }
 
   async close(): Promise<void> {
-    if (!this.#alive) return;
-    const exited = new Promise<void>((r) => this.#child.once('exit', () => r()));
+    if (!this.#alive && this.#child.exitCode !== null) return;
+    const exited = new Promise<void>((r) => (this.#child.exitCode !== null || this.#child.signalCode !== null ? r() : this.#child.once('exit', () => r())));
     this.#child.stdin!.end(); // EOF: the helper drops every unlock and exits
     const t = setTimeout(() => this.#child.kill('SIGKILL'), 2_000);
     await exited;
     clearTimeout(t);
+    this.#gone(new HelperUnavailableError('closed', 'the helper was closed'));
   }
 }
+
+/** Restart backoff (R5): a helper that keeps dying is restarted at most this often, doubling to the cap. */
+export const HELPER_RESTART_MIN_MS = 1_000;
+export const HELPER_RESTART_MAX_MS = 30_000;
 
 /**
  * A transport that (re)starts the pinned helper on demand: a helper exit
  * drops every unlock (the onExit listeners hear it), and the next request
- * re-checks the pin and starts a fresh helper with none.
+ * re-checks the pin and starts a fresh helper with none — no sooner than the
+ * backoff allows. After close() it never starts again.
  */
 export class SupervisedHelper implements HelperTransport {
   #cur: HelperTransport | null = null;
+  #closed = false;
+  #lastStart = -Infinity;
+  #backoff = 0;
   readonly #exitCbs: Array<() => void> = [];
   readonly #start: () => HelperTransport;
+  readonly #now: () => number;
 
-  constructor(start: () => HelperTransport) {
+  constructor(start: () => HelperTransport, now: () => number = () => performance.now()) {
     this.#start = start;
+    this.#now = now;
   }
 
   get alive(): boolean {
-    return true; // starts on demand; a failed start rejects the request
+    return !this.#closed; // starts on demand; a failed start rejects the request
   }
 
   onExit(cb: () => void): void {
@@ -344,7 +471,13 @@ export class SupervisedHelper implements HelperTransport {
   }
 
   #ensure(): HelperTransport {
+    if (this.#closed) throw new HelperUnavailableError('closed', 'the helper was closed');
     if (this.#cur?.alive) return this.#cur;
+    const now = this.#now();
+    if (now - this.#lastStart < this.#backoff) throw new HelperUnavailableError('exited', `the helper exited; restart allowed in ${Math.ceil(this.#backoff - (now - this.#lastStart))} ms`);
+    // the NEXT start waits at least this long after this one (1 s, doubling to 30 s; a helper that lived longer than that restarts at once)
+    this.#backoff = now - this.#lastStart > HELPER_RESTART_MAX_MS ? HELPER_RESTART_MIN_MS : Math.min(HELPER_RESTART_MAX_MS, Math.max(HELPER_RESTART_MIN_MS, this.#backoff * 2));
+    this.#lastStart = now;
     const t = this.#start();
     t.onExit(() => {
       if (this.#cur === t) this.#cur = null;
@@ -371,6 +504,7 @@ export class SupervisedHelper implements HelperTransport {
   }
 
   async close(): Promise<void> {
+    this.#closed = true;
     const t = this.#cur;
     this.#cur = null;
     await t?.close();

@@ -518,6 +518,13 @@ components:
       oversized replies kill it — fail closed); SupervisedHelper restarts it
       on demand; helperOnceSync runs `once` for synchronous root signatures.
       The unsigned verifier exists only behind DEV_TEST_HELPER_ACK.
+      Round 2: the pin is hash → verify → re-hash (H5); after spawn the
+      RUNNING child is code-sign-verified by pid and must answer `info` with
+      gnomon-helper:v1 and version ≥ MIN_HELPER_VERSION before any request
+      (H1 c — a version floor, not a CDHash allowlist, because timestamped
+      signatures change every build); the platform check is
+      src/platform/helper-verifier.ts (R6); SupervisedHelper never restarts
+      after close() and backs off 1 s doubling to 30 s (R5).
       hardware.ts — HardwareRootAuthority (state `hardware`; verifies with
       the pinned root; signRow sync via `once`, signRowAsync via the daemon's
       helper; fresh presence per signature; a signature that does not verify
