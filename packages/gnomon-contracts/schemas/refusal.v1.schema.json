@@ -251,6 +251,7 @@
             "note-missing",
             "presence",
             "hello-not-offered",
+            "client-nonce-mismatch",
             "frame-too-large",
             "malformed-utf8",
             "malformed-json",

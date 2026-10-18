@@ -234,7 +234,13 @@ components:
       authTokenMessage + their *Preimage forms, all binding the negotiated
       clientApi + canonical features; no unbound form; AUTH_TOKEN_DOMAIN
       gnomon:auth-token:v1 for read-token proof of possession — M1.4 slice 3,
-      T-2026-10-17-017, P8-D89a), negotiateHello (highest shared
+      T-2026-10-17-017, P8-D89a); hello clientNonce (T-2026-10-18-016,
+      P8-D93): HelloParams.clientNonce required (CLIENT_NONCE_PATTERN,
+      base64url 22..86 chars, CLIENT_NONCE_BYTES = 32), echoed in
+      HelloResult.clientNonce and bound into authServerMessage(nonce,
+      clientNonce, endpointPath, negotiated) so a recorded hello cannot be
+      replayed to another connection; client-local reason
+      client-nonce-mismatch; negotiateHello (highest shared
       version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
       VERBS (12, with params, refusals and the §5 access matrix incl. the
       all-refused peer column; session.open runMode?, contract.claim note? /

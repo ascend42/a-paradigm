@@ -144,15 +144,22 @@ export const badCards: Array<[string, unknown]> = [
   ['note with kernel field in agentClaims', { ...goodCard, note: { agentClaims: { verified: { n: 1, of: 1 } } } }],
 ];
 
+/** 32 random bytes, base64url (T-2026-10-18-016). */
+export const CLIENT_NONCE = 'q2Nh3ZUc0kPq6vBv8w1mEa1tYxQnJw7oZrF5K9dL2sM';
+
 export const goodHello = {
   clientApis: ['gnomon-rpc:v1'],
   features: ['subscription'],
+  clientNonce: CLIENT_NONCE,
   client: { name: 'gnomon-gui', version: '8.0.0', surface: 'wrapper', conformance: { suite: 'gnomon-conform', version: '1', reportHash: H } },
 };
 
 export const badHellos: Array<[string, unknown]> = [
   ['empty clientApis', { ...goodHello, clientApis: [] }],
-  ['no client', { clientApis: ['gnomon-rpc:v1'], features: [] }],
+  ['no client', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: CLIENT_NONCE }],
+  ['no clientNonce', { clientApis: ['gnomon-rpc:v1'], features: [], client: { name: 'x', version: '1' } }],
+  ['clientNonce too short', { ...goodHello, clientNonce: 'abc' }],
+  ['clientNonce not base64url', { ...goodHello, clientNonce: `${CLIENT_NONCE.slice(0, 40)}+/=` }],
   ['bad api id', { ...goodHello, clientApis: ['gnomon rpc'] }],
   ['client without version', { ...goodHello, client: { name: 'x' } }],
 ];

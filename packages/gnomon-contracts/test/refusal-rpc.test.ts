@@ -237,14 +237,17 @@ describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-0
   it('server, device and read-token messages append clientApi + canonical features; there is no unbound form; the three domains differ', async () => {
     const c = await import('../src/index.js');
     const n = { clientApi: 'gnomon-rpc:v1', features: ['b', 'a'] };
-    expect(c.authServerMessage('N', '/s', n)).toBe('N\n/s\ngnomon-rpc:v1\n["b","a"]');
-    expect(c.authServerPreimage('N', '/s', n)).toBe('gnomon:auth-server:v1\nN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerMessage('N', 'CN', '/s', n)).toBe('N\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerPreimage('N', 'CN', '/s', n)).toBe('gnomon:auth-server:v1\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientMessage('N', 'k', 'p', 'd', '/s', n)).toBe('N\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientPreimage('N', 'k', 'p', 'd', '/s', n)).toBe(`gnomon:auth:v1\n${c.authClientMessage('N', 'k', 'p', 'd', '/s', n)}`);
     expect(c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)).toBe('N\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authTokenPreimage('N', 'k', 'rtk:X', '/s', n)).toBe(`gnomon:auth-token:v1\n${c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)}`);
     expect(new Set([c.AUTH_SERVER_DOMAIN, c.AUTH_CLIENT_DOMAIN, c.AUTH_TOKEN_DOMAIN]).size).toBe(3);
-    expect(c.authServerPreimage.length).toBe(3); // negotiated is required
+    expect(c.authServerPreimage.length).toBe(4); // clientNonce (T-2026-10-18-016) and negotiated are required
+    // T-2026-10-18-016: the client nonce is bound — a different clientNonce is a different preimage
+    expect(c.authServerPreimage('N', 'CN2', '/s', n)).not.toBe(c.authServerPreimage('N', 'CN', '/s', n));
+    expect(c.CLIENT_LOCAL_REFUSAL_REASONS).toContain('client-nonce-mismatch');
   });
 
   it('P8-D89: the slice-3 socket reasons and the client-local hello-not-offered are registered; log.append lists ENGINE', async () => {

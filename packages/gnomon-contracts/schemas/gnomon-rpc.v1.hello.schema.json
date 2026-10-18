@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/gnomon-rpc.v1.hello.schema.json",
   "title": "gnomon-rpc:v1 hello",
-  "description": "hello params and result (spec §4.9). Highest shared clientApi wins; none ⇒ UNSUPPORTED{data:{offered[]}}.",
+  "description": "hello params and result (spec §4.9). Highest shared clientApi wins; none ⇒ UNSUPPORTED{data:{offered[]}}. The result echoes clientNonce and serverSig covers it (T-2026-10-18-016).",
   "$defs": {
     "params": {
       "type": "object",
@@ -20,6 +20,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "clientNonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{22,86}$"
         },
         "client": {
           "type": "object",
@@ -73,6 +77,7 @@
       "required": [
         "clientApis",
         "features",
+        "clientNonce",
         "client"
       ],
       "additionalProperties": false
@@ -93,6 +98,10 @@
         "nonce": {
           "type": "string",
           "minLength": 1
+        },
+        "clientNonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{22,86}$"
         },
         "serverKeyId": {
           "type": "string",
@@ -115,6 +124,7 @@
         "clientApi",
         "features",
         "nonce",
+        "clientNonce",
         "serverKeyId",
         "serverSig",
         "clientApiId",
