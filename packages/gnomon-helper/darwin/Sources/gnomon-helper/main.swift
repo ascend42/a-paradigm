@@ -36,7 +36,8 @@ let gnomonHelperVersion = "1.2.0"
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {
-    guard let h = dlopen(nil, RTLD_NOW), let s = dlsym(h, "sandbox_check") else { return false }
+    // Aegis M5 (round 3): if the check cannot be made, assume sandboxed — fail CLOSED
+    guard let h = dlopen(nil, RTLD_NOW), let s = dlsym(h, "sandbox_check") else { return true }
     return unsafeBitCast(s, to: SandboxCheck.self)(getpid(), nil, 0) != 0
 }
 
