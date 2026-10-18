@@ -69,11 +69,21 @@ function socketOf(home: string): string | null {
 }
 
 
+/**
+ * The DAEMON's home (§2.4 rule 1): `--home` from argv, else `~/.gnomon`. The
+ * daemon never reads `GNOMON_HOME` — that is a client-side test seam, and the
+ * clean re-exec env drops it anyway; reading it here would let an
+ * environment the daemon does not own pick the key-holding process's home.
+ */
+export function daemonHomeOf(args: { home?: string }): string {
+  return args.home ?? resolveGnomonHome({ env: {} });
+}
+
 /** `gnomond --foreground`: run until idle exit or a signal. */
 export async function runForeground(args: DaemonArgs): Promise<number> {
   try {
     const handle = await startDaemon({
-      home: homeOf(args),
+      home: daemonHomeOf(args),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
       onEvent: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
     });

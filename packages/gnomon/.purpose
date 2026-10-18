@@ -63,6 +63,7 @@ components:
       - "#web-endpoint"
       - "#oracle-sandbox"
       - "#manifest-loader"
+      - "#scheduler"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -875,6 +876,38 @@ components:
       - test/log-cli-quarantine-posix.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
+  scheduler:
+    description: >-
+      #scheduler (spec §3.5, §2.4 rule 3, §9.1 schedule.*, §10 law 5; M1.9) in
+      src/kernel/scheduler/. Log-derived timers (timer:v1, never stored): the
+      last fired due instant of a key is the max dueAt of its
+      schedule.automation.due rows, so start() rebuilds every timer from the
+      records + the log and no instant fires twice (G-SCH-01). automation:v1
+      {id, trigger: {at} | {every, anchor}, model: local|claude|any, attended}
+      is a LOCAL shape (not a wire object yet; moving it into
+      gnomon-contracts would move clientApiId). attended defaults true;
+      attended:false is accepted only with model and markedBy, a human-class
+      principal (law 5) — anything else is refused and logged
+      schedule.dropped{reason}. One daemon ⇒ one timer per key: duplicates
+      (N worktrees) are dropped {reason:'duplicate-key'} (G-LAW-05b). An
+      instant due while down fires on activation as an attended event
+      (late:true); several missed instants coalesce (schedule.dropped
+      {reason:'coalesced', count}). An attended due row spends nothing; an
+      unattended one reaches the run step, which is refused
+      ENGINE{not-implemented} and logged session.refused{milestone: M1.7 |
+      M1.8 | M1.7+M1.8} until #session-runner / #local-runner exist — no
+      spawn, no permit (G-LAW-05). While the next due instant is inside 10 min
+      the scheduler holds idle exit ('timer' holder). Clock and wake are seams
+      (now, arm), so the 24 h soak is a unit test. Daemon wiring: DaemonOptions
+      .automations (none by default; root-signed config later), handle.scheduler.
+    path: src/kernel/scheduler/
+    type: module
+    tags: [gnomon, kernel, scheduler, paradigm-8]
+    tests:
+      - test/scheduler.test.ts
+      - test/scheduler-daemon.test.ts
+    oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]
+
 flows:
   daemon-lifecycle:
     description: >-
@@ -897,12 +930,40 @@ flows:
       sessions/timers as holders, mod stop, orphan sweep, the Windows pipe.
       M1.4: the #web-endpoint is started by requestWebLaunch, its WebSocket
       connections are idle holders, and it is stopped (child ended) before
-      the socket closes at shutdown.
+      the socket closes at shutdown. M1.9: (5) home — the daemon takes its
+      home only from --home (daemonHomeOf; GNOMON_HOME is a client-side test
+      seam it never reads); (6) orphan sweep at start, before the socket
+      listens — every session.spawned with no session.exited/orphaned is
+      probed by process group (process-control.ts registry: POSIX group
+      signals; win32 = parity phase, unprobeable, never signalled), recorded
+      session.orphaned{probe, action} BEFORE any signal, then stopped
+      SIGTERM → grace → SIGKILL (G-DMN-04); (7) supervised children
+      (DaemonChildren: session, local-runner, mod) — sessions write
+      session.spawned/exited and hold idle ('session'); mods never hold;
+      every shutdown (idle included) stops the scheduler, then stops and
+      AWAITS every child (mod.stopped{reason}) and the web transport child
+      (socket.web.stop{reason:'idle'|'daemon-exit'}) BEFORE daemon.exit
+      {reason, liveChildren} is written — the falsifier "daemon exits with a
+      live child"; (8) idle holders are connections, subscribers (log.read
+      follow AND open GUI WebSockets), sessions and #scheduler timers due
+      inside 10 min. Not yet built: the session runner and mod host that
+      call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object
+      and owner-only DACL read-back (G-WIN-02, parity phase P8-D78).
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
       - "#identity"
       - "#socket"
+      - "#scheduler"
+      - "#web-endpoint"
+    tests:
+      - test/daemon-lifecycle.test.ts
+      - test/idle-exit.test.ts
+      - test/home-resolution.test.ts
+      - test/reexec-env.test.ts
+      - test/daemon-children.test.ts
+      - test/scheduler-daemon.test.ts
+    oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 aspects:
   ~ample-internal-logs:

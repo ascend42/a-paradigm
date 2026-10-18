@@ -67,6 +67,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
   { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/socket-server.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
+  // M1.9 #scheduler + $daemon-lifecycle in the real daemon: unix socket + POSIX process groups (orphan sweep).
+  { test: 'test/scheduler-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/scheduler.test.ts', na: 'the scheduler logic and the children/orphan-sweep logic run on every platform in test/scheduler.test.ts and test/daemon-children.test.ts; the daemon-level half needs the unix socket and process groups (the pipe and job object are the Windows parity phase, P8-D78)' },
   { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/socket-auth.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint and POSIX device-key modes only; the pipe (P03) and owner-only ACLs come there' },
   { test: 'test/socket-abi.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): read tokens and the G-ABI/G-SOCK suites over the unix-socket endpoint with POSIX device-key and token-file modes; the pipe (P03) comes there' },

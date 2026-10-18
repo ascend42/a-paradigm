@@ -43,8 +43,16 @@
  * `gnomon open` and adding one is the M1.4 falsifier, so this is an
  * in-process API until the spec names the wire path (reported).
  *
- * Not yet here: sessions, mods, timers, orphan sweep and an approved `stop`
- * (#approval-broker, M1.6).
+ * M1.9: #scheduler runs log-derived timers and `automation:v1` records
+ * (`opts.automations`; root-signed config supplies them later — none by
+ * default, so a fresh install spends nothing, law 5) and holds idle exit while
+ * a timer is due inside 10 min; DaemonChildren tracks session / local-runner /
+ * mod children and every shutdown (idle included) stops them and awaits their
+ * exit BEFORE `daemon.exit` is written (falsifier: daemon exits with a live
+ * child); the start-up orphan sweep stops what a crashed daemon left behind
+ * (`session.orphaned`, G-DMN-04); an open GUI WebSocket counts as a
+ * subscriber. Not yet here: the session runner itself (M1.7/M1.8), the mod
+ * host (M1.11) and an approved `stop` (#approval-broker, M1.6).
  */
 import * as path from 'node:path';
 import { completePendingQuarantine, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
@@ -65,6 +73,9 @@ import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
 import { acquireDaemonLock, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
 import { LifecycleRefusal } from './refusal.js';
+import { Scheduler } from '../scheduler/index.js';
+import { DaemonChildren, sweepOrphans } from './children.js';
+import { processControlFor } from './process-control.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
 
@@ -110,6 +121,12 @@ export interface DaemonOptions {
   writeHighWater?: number;
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
   web?: { lingerMs?: number; authDeadlineMs?: number };
+  /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
+  automations?: readonly unknown[];
+  /** #scheduler clock seam (default Date.now). */
+  schedulerNow?: () => number;
+  /** Staged-stop grace for supervised children and orphans (default 2 s). */
+  childGraceMs?: number;
 }
 
 export interface DaemonStatus {
@@ -141,6 +158,12 @@ export interface DaemonHandle {
   requestWebLaunch(connId: string): Promise<LaunchGrant>;
   /** The web endpoint, once started (null before the first launch). */
   web(): WebEndpoint | null;
+  /** Supervised children (sessions, local runners, mods): stopped and awaited before every exit. */
+  readonly children: DaemonChildren;
+  /** #scheduler (log-derived timers, automations). */
+  readonly scheduler: Scheduler;
+  /** The start-up orphan sweep's result (G-DMN-04). */
+  readonly orphanSweep: { orphans: number; stopped: number };
 }
 
 /** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
@@ -198,6 +221,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     void p.finally(() => pendingRows.delete(p)).catch(() => undefined);
     return p;
   };
+  const control = processControlFor(opts.platform ?? process.platform);
+  const children = new DaemonChildren({ append: (kind, payload) => appendRow(kind, payload), control, holdIdle: () => idle.hold('session'), ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}) });
   /** Coalesced pre-auth diagnostics: counters, flushed as one signed row per kind per window. */
   const diag = {
     windowStart: new Date().toISOString(),
@@ -270,15 +295,19 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     if (stopping) return stopping;
     stopping = (async () => {
       idle.stop();
+      scheduler.stop();
       emit({ kind: 'daemon.exit', reason });
+      let liveChildren = 0;
       try {
-        await web?.stop('daemon-exit').catch(() => undefined);
+        // §2.4 rule 3: mod, session and transport children stop BEFORE daemon.exit — never exit with a live child
+        liveChildren = await children.stopAll(reason).catch(() => children.live());
+        await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         hub.close();
         await server?.close();
         clearInterval(diagTimer);
         clearInterval(tokenTimer);
         await flushDiagnostics();
-        await appendRow('daemon.exit', { reason }).catch(() => undefined);
+        await appendRow('daemon.exit', { reason, liveChildren }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
         await log.close();
       } finally {
@@ -290,6 +319,18 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   };
 
   const idle = new IdleMonitor({ idleMs, onIdle: () => void shutdown('idle') });
+  const scheduler = new Scheduler({
+    log: {
+      append: (kind, payload) => appendRow(kind, payload),
+      rows: (kinds) => fullRows(kinds),
+    },
+    holdIdle: () => idle.hold('timer'),
+    ...(opts.automations ? { automations: opts.automations } : {}),
+    ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
+  });
+  function* fullRows(kinds: readonly string[]): Generator<{ kind: string; payload: unknown }> {
+    for (const v of log.read({ reader: { class: 'human' }, kinds })) if (v.view === 'full') yield { kind: v.event.kind, payload: v.event.payload };
+  }
 
   const status = (): DaemonStatus => ({
     pid: pidfile.pid,
@@ -377,7 +418,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       home,
       kernelPublicKeyPem: kernelPem,
       log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
-      holdIdle: () => idle.hold('connection'),
+      // §2.4 rule 3 / §11.2: an open GUI WebSocket is a subscriber; a closed one counts for nothing
+      holdIdle: () => idle.hold('subscriber'),
       ...(opts.web?.lingerMs !== undefined ? { lingerMs: opts.web.lingerMs } : {}),
       ...(opts.web?.authDeadlineMs !== undefined ? { authDeadlineMs: opts.web.authDeadlineMs } : {}),
       dispatcher: (endpointPath, webHook) =>
@@ -404,7 +446,15 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     // socket.disconnect has no §9.1 kind: callback only (contract gap, reported).
   };
 
+  let orphanSweep: { orphans: number; stopped: number };
   try {
+    // §2.4 rule 4: before serving anyone, stop what a crashed daemon left running
+    orphanSweep = await sweepOrphans({
+      rows: fullRows(['session.spawned', 'session.exited', 'session.orphaned']),
+      append: (kind, payload) => appendRow(kind, payload),
+      control,
+      ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}),
+    });
     server = await listenSocket({
       socketPath: choice.path,
       handle: dispatcher.handle,
@@ -443,5 +493,28 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     kernelKeyCustody: 'partial',
     root: authority.state,
   });
-  return { pidfile, via: choice.via, log, kernelSigner, kernelPrincipal, flushDiagnostics, server: server!, subscriptions: () => hub.stats(), status, exited, shutdown, requestWebLaunch, web: () => web };
+  try {
+    await scheduler.start();
+  } catch (err) {
+    await shutdown('error');
+    throw err;
+  }
+  return {
+    pidfile,
+    via: choice.via,
+    log,
+    kernelSigner,
+    kernelPrincipal,
+    flushDiagnostics,
+    server: server!,
+    subscriptions: () => hub.stats(),
+    status,
+    exited,
+    shutdown,
+    requestWebLaunch,
+    web: () => web,
+    children,
+    scheduler,
+    orphanSweep,
+  };
 }
