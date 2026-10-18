@@ -47,6 +47,8 @@ interface SentinelIncidentsState {
   selectedIncidentId: string | null;
   isLoading: boolean;
   error: string | null;
+  /** HTTP status of the failed load, or null when the server could not be reached. */
+  errorStatus: number | null;
 
   // Filters
   statusFilter: 'all' | 'open' | 'investigating' | 'resolved' | 'wont-fix';
@@ -73,21 +75,27 @@ export const useSentinelIncidentsStore = create<SentinelIncidentsState>((set, ge
   selectedIncidentId: null,
   isLoading: false,
   error: null,
+  errorStatus: null,
   statusFilter: 'all',
   environmentFilter: null,
   symbolFilter: null,
 
   loadIncidents: async () => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, errorStatus: null });
+    let status: number | null = null;
     try {
       const response = await fetch('/api/sentinel/incidents');
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        status = response.status;
+        throw new Error(`API error: ${response.status}`);
+      }
       const data = await response.json();
       set({ incidents: data.incidents || [], isLoading: false });
     } catch (error) {
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to load incidents',
+        errorStatus: status,
         incidents: [],
       });
     }

@@ -110,7 +110,7 @@ function ThreadListSidebar() {
                     </span>
                   ))}
                   {t.participants.length > 4 && (
-                    <span className="participant-avatar" style={{ background: 'var(--p-text-muted)' }}>
+                    <span className="participant-avatar" style={{ background: 'var(--p-text-muted)', color: 'var(--p-bg-primary)' }}>
                       +{t.participants.length - 4}
                     </span>
                   )}

@@ -26,9 +26,10 @@ export function SidebarNav() {
   const setActiveSection = usePlatformStore(s => s.setActiveSection);
   const toggleTheme = usePlatformStore(s => s.toggleTheme);
   const theme = usePlatformStore(s => s.theme);
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" aria-label="Sections">
       <div className="sidebar__nav">
         {availableSections.map((section) => (
           <button
@@ -36,8 +37,9 @@ export function SidebarNav() {
             className={`sidebar__item ${activeSection === section ? 'sidebar__item--active' : ''}`}
             onClick={() => setActiveSection(section as SectionId)}
             title={section.charAt(0).toUpperCase() + section.slice(1)}
+            aria-current={activeSection === section ? 'page' : undefined}
           >
-            <span className="sidebar__item-icon">{SECTION_ICONS[section] || '○'}</span>
+            <span className="sidebar__item-icon" aria-hidden="true">{SECTION_ICONS[section] || '○'}</span>
             <span className="sidebar__item-label">{section}</span>
           </button>
         ))}
@@ -46,10 +48,12 @@ export function SidebarNav() {
         <button
           className="sidebar__item"
           onClick={toggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          title={`Switch to ${nextTheme} theme`}
+          aria-label={`${theme === 'dark' ? 'Dark' : 'Light'} theme on. Switch to ${nextTheme} theme`}
         >
-          <span className="sidebar__item-icon">{theme === 'dark' ? '◑' : '◐'}</span>
-          <span className="sidebar__item-label">theme</span>
+          <span className="sidebar__item-icon" aria-hidden="true">{theme === 'dark' ? '◑' : '◐'}</span>
+          {/* Visible label names the current theme, so its state is readable without the tooltip. */}
+          <span className="sidebar__item-label">{theme}</span>
         </button>
       </div>
     </nav>
