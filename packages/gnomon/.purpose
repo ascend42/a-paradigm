@@ -1123,7 +1123,16 @@ components:
       announced rungs from budget.usage rows joined to their permit.grant
       (grant-less, malformed, over-permit and non-stream rows count nothing);
       day and window from the chain's last event time (S-L2,
-      KernelLog.lastEventAt), never the wall clock. M1.7 note: api-token session turn
+      KernelLog.lastEventAt), never the wall clock. Round 2: restore counts
+      only rows whose principal is a kernel principal AND whose keyId is a
+      kernel key (KernelLog.isKernelKey; Aegis C1 — these kinds are not
+      reserved), and a usage row's user must equal its grant's scope.user;
+      a turn counts under its own budget.usage row's `at` (the row is
+      written first; runtime and restore agree); chain times beyond wall +
+      MAX_CLOCK_SKEW_MS (5 min) are clamped to the wall clock and reported
+      once (onClockSkew → daemon event daemon.fuse.clock.skew, no row);
+      restore runs before daemon.start, so its "today" is the day of the
+      chain's last event. M1.7 note: api-token session turn
       permits are labelled subscription; per-turn billing.api.active needs
       usage against the spawn permit (G-SUB-03).
     path: src/kernel/budget/

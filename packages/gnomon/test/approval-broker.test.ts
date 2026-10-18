@@ -594,7 +594,7 @@ describe('M1.6 slice 2 — broker residuals', () => {
     const other = r.broker.status(false);
     expect(other).toEqual({ n: 3, pendingForYou: 0, held: 0 });
     expect(other).not.toHaveProperty('byKind');
-    const port = createApprovalPort({ broker: r.broker, fuse: new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('k'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: { env: () => ({}), layers: () => [] } }), kernelPrincipal: KERNEL });
+    const port = createApprovalPort({ broker: r.broker, fuse: new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: { env: () => ({}), layers: () => [] } }), kernelPrincipal: KERNEL });
     for (const cls of ['agent', 'session', 'mod', 'voice', 'readToken', 'peer']) expect(port.cards(cls)).toEqual({ n: 3, pendingForYou: 0, held: 0 });
     expect(port.cards('human')).toMatchObject({ byKind: { permission: 2, 'ask-user': 1 } });
   });

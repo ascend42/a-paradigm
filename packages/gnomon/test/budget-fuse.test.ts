@@ -288,16 +288,25 @@ describe('tracking (P8-D92)', () => {
 describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-L2)', () => {
   const DAY = Date.UTC(2026, 9, 18, 0, 0, 0);
   /** A fuse whose rows carry the chain time `at` = t.now; the day and window follow `t.last` (the chain's last event time). */
-  function timed(t: { now: number; last: number }, config?: typeof DEFAULT_FUSE) {
+  const KP = 'p:abcdefgh/kernel';
+  const KEY = 'ed25519:kernelkey';
+  const TRUST = { principals: [KP], isKernelKey: (k: string) => k === KEY };
+  function timed(t: { now: number; last: number; wall?: number }, config?: typeof DEFAULT_FUSE, skews: unknown[] = []) {
     const rows: FuseRow[] = [];
     const fuse = new BudgetFuse({
       kernel: SoftwareEd25519Signer.generate('kernel'),
       logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ',
-      log: async (kind, payload) => void rows.push({ kind, at: new Date(t.now).toISOString(), payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown> }),
+      // the rig's log stamps the row with chain time t.now and returns it, like the daemon's
+      log: async (kind, payload) => {
+        const at = new Date(t.now).toISOString();
+        rows.push({ kind, at, principal: KP, keyId: KEY, payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown> });
+        return { at };
+      },
       ...(config ? { config } : {}),
       billing: clean,
-      clock: () => t.now,
+      clock: () => t.wall ?? t.now,
       lastEventTime: () => t.last,
+      onClockSkew: (d) => void skews.push(d),
     });
     return { fuse, rows };
   }
@@ -312,7 +321,7 @@ describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-
     await a.fuse.recordStreamUsage({ source: 'turn.result', permitId: p2.permitId, tokens: 30 });
     const before = a.fuse.status();
     const b = timed(t);
-    expect(b.fuse.restore(a.rows)).toEqual({ usage: 2, ladder: 0 });
+    expect(b.fuse.restore(a.rows, TRUST)).toEqual({ usage: 2, ladder: 0, untrusted: 0 });
     const after = b.fuse.status();
     expect(after.spend).toEqual(before.spend);
     expect(after.local).toEqual(before.local);
@@ -333,7 +342,7 @@ describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-
     t.now = t.last = DAY + 3_600_000; // 01:00 today
     await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 2 });
     const b = timed({ now: DAY + 3 * 86_400_000, last: DAY + 3_600_000 }); // wall clock days later; chain says 01:00 today
-    expect(b.fuse.restore(a.rows).usage).toBe(1);
+    expect(b.fuse.restore(a.rows, TRUST).usage).toBe(1);
     expect(b.fuse.spent('user', HUMAN)).toBe(2);
     expect((b.fuse.status().subscriptionWindow as { used: { n: number } }).used.n).toBe(42); // the 5 h window spans midnight
   });
@@ -348,12 +357,13 @@ describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-
     await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: 'permit:01HZZZZZZZZZZZZZZZZZZZZZZZ', tokens: 9 }); // malformed (unknown permit)
     expect(a.rows.filter((r) => r.kind === 'budget.ladder')).toHaveLength(1);
     const forged: FuseRow[] = [
-      { kind: 'budget.usage', at: new Date(t.now).toISOString(), payload: { permitId: 'permit:01HZZZZZZZZZZZZZZZZZZZZZZY', source: 'turn.usage', tokens: 1_000_000, user: HUMAN } }, // no grant on the chain
-      { kind: 'budget.usage', at: new Date(t.now).toISOString(), payload: { permitId: p.permitId, source: 'stdin', tokens: 1_000_000 } }, // not a stream event
-      { kind: 'budget.usage', at: 'not a time', payload: { permitId: p.permitId, source: 'turn.usage', tokens: 1_000_000 } },
+      { kind: 'budget.usage', at: new Date(t.now).toISOString(), principal: KP, keyId: KEY, payload: { permitId: 'permit:01HZZZZZZZZZZZZZZZZZZZZZZY', source: 'turn.usage', tokens: 1_000_000, user: HUMAN } }, // no grant on the chain
+      { kind: 'budget.usage', at: new Date(t.now).toISOString(), principal: KP, keyId: KEY, payload: { permitId: p.permitId, source: 'stdin', tokens: 1_000_000, user: HUMAN } }, // not a stream event
+      { kind: 'budget.usage', at: 'not a time', principal: KP, keyId: KEY, payload: { permitId: p.permitId, source: 'turn.usage', tokens: 1_000_000, user: HUMAN } },
+      { kind: 'budget.usage', at: new Date(t.now).toISOString(), principal: KP, keyId: KEY, payload: { permitId: p.permitId, source: 'turn.usage', tokens: 1_000_000, user: 'p:abcdefgh/someone-else' } }, // user is not the grant's
     ];
     const b = timed(t, cfg);
-    expect(b.fuse.restore([...a.rows, ...forged])).toEqual({ usage: 1, ladder: 1 });
+    expect(b.fuse.restore([...a.rows, ...forged], TRUST)).toEqual({ usage: 1, ladder: 1, untrusted: 0 });
     expect(b.fuse.spent('user', HUMAN)).toBe(60);
     const before = b.rows.length;
     const q = await b.fuse.reserve(human());
@@ -361,5 +371,71 @@ describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-
     expect(b.rows.slice(before).filter((r) => r.kind === 'budget.ladder')).toHaveLength(0); // 61 % — the 50 % rung was already said today
     await b.fuse.recordStreamUsage({ source: 'turn.usage', permitId: q.permitId, tokens: 15 });
     expect(b.rows.slice(before).filter((r) => r.kind === 'budget.ladder').map((r) => r.payload.rung)).toEqual([0.75]);
+  });
+});
+
+describe('restore trusts only the kernel (Aegis C1) and a future-dated chain never moves the day (Aegis low)', () => {
+  const KP = 'p:abcdefgh/kernel';
+  const KEY = 'ed25519:kernelkey';
+  const TRUST = { principals: [KP], isKernelKey: (k: string) => k === KEY };
+  const T = Date.UTC(2026, 9, 18, 10);
+  const at = new Date(T).toISOString();
+  const grant = (principal: string, keyId: string | undefined, permitId: string, user: string): FuseRow => ({
+    kind: 'permit.grant', at, principal, ...(keyId ? { keyId } : {}),
+    payload: { permit: { permitId, scope: { org: null, team: null, user, repo: 'repo:a', loop: null, session: null, machine: null }, backend: 'claude-code', model: 'opus', hsid: null } },
+  });
+  const usage = (principal: string, keyId: string | undefined, permitId: string, user: string, tokens: number): FuseRow => ({ kind: 'budget.usage', at, principal, ...(keyId ? { keyId } : {}), payload: { permitId, source: 'turn.usage', tokens, user } });
+  const fuse = (clock = T) => new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: clean, clock: () => clock, lastEventTime: () => T });
+
+  it('a forged grant/usage pair under a non-kernel principal, an unsigned row, or a non-kernel key counts nothing', () => {
+    const f = fuse();
+    const P1 = 'permit:01HZZZZZZZZZZZZZZZZZZZZZZ1', P2 = 'permit:01HZZZZZZZZZZZZZZZZZZZZZZ2', P3 = 'permit:01HZZZZZZZZZZZZZZZZZZZZZZ3';
+    const out = f.restore(
+      [
+        grant(AGENT, KEY, P1, HUMAN), usage(AGENT, KEY, P1, HUMAN, 1_000), // a non-kernel principal, even with a kernel keyId
+        grant(KP, undefined, P2, HUMAN), usage(KP, undefined, P2, HUMAN, 1_000), // the kernel's name, unsigned
+        grant(KP, 'ed25519:other', P3, HUMAN), usage(KP, 'ed25519:other', P3, HUMAN, 1_000), // the kernel's name, another key
+        usage(KP, KEY, P1, HUMAN, 1_000), // a genuine usage row pointing at the forged grant
+      ],
+      TRUST,
+    );
+    expect(out).toEqual({ usage: 0, ladder: 0, untrusted: 6 });
+    expect(f.spent('user', HUMAN)).toBe(0);
+    const g = fuse();
+    expect(g.restore([grant(KP, KEY, P1, HUMAN), usage(KP, KEY, P1, HUMAN, 7)], TRUST)).toEqual({ usage: 1, ladder: 0, untrusted: 0 });
+    expect(g.spent('user', HUMAN)).toBe(7);
+  });
+
+  it('a chain time beyond wall + 5 min is clamped to the wall clock and reported once', async () => {
+    const skews: unknown[] = [];
+    const wall = Date.UTC(2026, 9, 18, 23, 0);
+    const t = { now: wall, last: wall + 2 * 86_400_000 }; // the chain claims two days ahead
+    const f = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => ({ at: new Date(t.last).toISOString() }), billing: clean, clock: () => t.now, lastEventTime: () => t.last, onClockSkew: (d) => void skews.push(d) });
+    const p = await f.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN }, backend: 'claude-code' });
+    await f.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 3 });
+    expect((f.status() as { day: string }).day).toBe('2026-10-18');
+    expect(f.spent('user', HUMAN)).toBe(3);
+    expect(skews).toEqual([{ chainAt: t.last, wall }]);
+    // within the allowance: trusted as is
+    const ok: unknown[] = [];
+    const g = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: clean, clock: () => wall, lastEventTime: () => wall + 4 * 60_000, onClockSkew: (d) => void ok.push(d) });
+    expect((g.status() as { day: string }).day).toBe('2026-10-18');
+    expect(ok).toEqual([]);
+  });
+
+  it('runtime and restore count a turn under the usage row’s own time, not the last event time', async () => {
+    const t = { now: Date.UTC(2026, 9, 17, 23, 59), last: Date.UTC(2026, 9, 18, 0, 1) }; // row written 23:59, a later row at 00:01
+    const rows: FuseRow[] = [];
+    const f = new BudgetFuse({
+      kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', billing: clean, clock: () => t.last, lastEventTime: () => t.last,
+      log: async (kind, payload) => { const a = new Date(t.now).toISOString(); rows.push({ kind, at: a, principal: KP, keyId: KEY, payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown> }); return { at: a }; },
+    });
+    const p = await f.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN }, backend: 'claude-code' });
+    await f.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 9 });
+    expect(f.spent('user', HUMAN)).toBe(0); // counted under 2026-10-17 (the row's day); today (last event) is the 18th
+    const g = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: clean, clock: () => t.last, lastEventTime: () => t.last });
+    expect(g.restore(rows, TRUST).usage).toBe(0); // restore agrees: not today's
+    expect((f.status() as { subscriptionWindow: { used: { n: number } } }).subscriptionWindow.used.n).toBe(9);
+    expect((g.status() as { subscriptionWindow: { used: { n: number } } }).subscriptionWindow.used.n).toBe(9);
   });
 });

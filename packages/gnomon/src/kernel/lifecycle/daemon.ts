@@ -113,6 +113,8 @@ export type DaemonEvent =
   | { kind: 'daemon.mod.row.unrecorded'; rowKind: string; name: string | null; error: string }
   /** A read-token revocation could not be written to the chain twice; it stays pending and is retried on the token timer. */
   | { kind: 'daemon.token.revocation.unrecorded'; tokenId: string; error: string }
+  /** #budget-fuse: the chain's time ran ahead of the wall clock beyond the skew allowance; the wall clock keys the day (once). */
+  | { kind: 'daemon.fuse.clock.skew'; chainAt: string; wall: string }
   | SocketEvent;
 
 export interface DaemonOptions {
@@ -466,7 +468,10 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const fuse = new BudgetFuse({
     kernel: kernelSigner,
     logId: log.head().log,
-    log: brokerLog,
+    // a turn counts under its own budget.usage row's chain time (the time restore reads back)
+    log: (kind, payload, ids = {}) =>
+      log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}) }).then((r) => ({ at: r.event.at })),
+    onClockSkew: (d) => emit({ kind: 'daemon.fuse.clock.skew', chainAt: new Date(d.chainAt).toISOString(), wall: new Date(d.wall).toISOString() }),
     config: fuseCfg.config,
     apiTokens,
     // S-L2: day windows from the chain's last event time, never the wall clock
@@ -481,13 +486,16 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
     },
   });
-  // M1.6 slice 2: a restart no longer forgets today's spend — the meter is rebuilt from the chain (S-L2 day)
+  // M1.6 slice 2: a restart no longer forgets today's spend — the meter is rebuilt from the chain. Runs BEFORE
+  // daemon.start is written, so "today" is the day of the chain's last event (clamped to the wall clock + skew).
+  // Only the kernel's own signed rows count (Aegis C1).
   fuse.restore(
     (function* (): Generator<FuseRow> {
       for (const v of log.read({ reader: { class: 'human' }, kinds: FUSE_RESTORE_KINDS })) {
-        if (v.view === 'full') yield { kind: v.event.kind, at: v.event.at, payload: (v.event.payload ?? {}) as Record<string, unknown> };
+        if (v.view === 'full') yield { kind: v.event.kind, at: v.event.at, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), payload: (v.event.payload ?? {}) as Record<string, unknown> };
       }
     })(),
+    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
   );
   // P8-D91: an agent's spend lands in its human's user bucket. Its parent is not known at dispatch before
   // M1.7, so it is attributed to the root's human principal (8.0 is single-human: the founder).

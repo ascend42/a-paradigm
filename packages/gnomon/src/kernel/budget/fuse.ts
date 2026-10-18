@@ -34,15 +34,25 @@
  * `subscription`; the per-turn `billing.api.active` row (G-SUB-03) depends on
  * the supervisor reporting usage against the SPAWN permit.
  *
- * BOOT (M1.6 slice 2): `restore(rows)` rebuilds today's counters, the
+ * TIME (S-L2). A turn counts under the `at` of its own `budget.usage` row:
+ * the row is written FIRST, and the day and window entry are taken from the
+ * time the log returns for it (the same `at` restore reads back), so runtime
+ * and restore agree. Without a log time, the chain's last event time is
+ * used. Either time is clamped: later than the wall clock + MAX_CLOCK_SKEW_MS
+ * ⇒ the wall clock, reported once through `onClockSkew` (a diag, never a row).
+ *
+ * BOOT (M1.6 slice 2). `restore(rows, trust)` rebuilds the counters, the
  * subscription window and the announced rungs from the chain — the
  * `budget.usage` rows joined to their `permit.grant` (the permit names every
- * axis, incl. loop), and today's `budget.ladder` rows (a rung is never
- * announced twice in a day across a restart). "Today" and the window are
- * taken from the chain's last event time (S-L2), never the wall clock, so a
- * replay reproduces them. Malformed and over-permit rows count nothing.
- * Permits themselves are not restored: a permit is live for its holder's
- * connection, and a restart ends those.
+ * axis, incl. loop) and the `budget.ladder` rows. Only rows the KERNEL wrote
+ * count (principal in trust.principals AND signed by a kernel key, Aegis C1:
+ * these kinds are not reserved kinds, so the chain alone does not prove the
+ * writer), and a usage row's user must be its grant's scope.user. "Today" at
+ * restore is the day of the chain's last event (restore runs before
+ * daemon.start is written): a counter is keyed by its row's own day, so a
+ * restart across midnight shows the new day empty, as runtime would.
+ * Malformed, over-permit and grant-less rows count nothing. Permits are not
+ * restored: a permit is live for its holder's connection; a restart ends it.
  */
 import { canonicalJson, mintId, refuse, RefusedError, type RefusalCode } from '@a-company/gnomon-contracts';
 import type { Signer } from '../log/signer.js';
@@ -56,7 +66,8 @@ export const RUNGS = Object.freeze([0.5, 0.75, 0.9, 1]);
 /** Law 7 runs for EVERY claude-code permit kind that can start or drive a Claude process; only tool.permission starts none (Aegis L1). */
 const LAW7_EXEMPT_KINDS: readonly string[] = ['tool.permission'];
 
-export type FuseLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string; connId?: string }) => Promise<void>;
+/** Appends a row; may return the row's chain time `at` (the time a turn counts under). */
+export type FuseLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string; connId?: string }) => Promise<void | { at?: string }>;
 
 export interface PermitScope {
   user: string;
@@ -112,12 +123,24 @@ export interface StreamUsage {
   usd?: number;
 }
 
-/** A chain row the fuse restores from (#kernel-log full view: kind, at, payload). */
+/** A chain row the fuse restores from (#kernel-log full view). */
 export interface FuseRow {
   kind: string;
   at: string;
+  /** who wrote the row, and the key that signed it (restore counts only the kernel's rows, Aegis C1) */
+  principal: string;
+  keyId?: string;
   payload: Record<string, unknown>;
 }
+
+/** Who the kernel is, for restore: its principals (continuity across root provisioning) and its keys. */
+export interface FuseRowTrust {
+  principals: readonly string[];
+  isKernelKey(keyId: string): boolean;
+}
+
+/** A chain time later than the wall clock by more than this is not trusted for the day key (Aegis low). */
+export const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 
 /** The kinds `restore` reads (the daemon asks the chain for exactly these). */
 export const FUSE_RESTORE_KINDS = Object.freeze(['permit.grant', 'budget.usage', 'budget.ladder'] as const);
@@ -133,6 +156,8 @@ export interface FuseOptions {
   /** the chain's last event time (S-L2); default: clock */
   lastEventTime?: () => number;
   permitTtlMs?: number;
+  /** a chain time beyond the wall clock + MAX_CLOCK_SKEW_MS was replaced by the wall clock (reported once) */
+  onClockSkew?: (d: { chainAt: number; wall: number }) => void;
 }
 
 interface Held {
@@ -168,9 +193,27 @@ export class BudgetFuse {
     this.#clock = o.clock ?? Date.now;
   }
 
+  #skewReported = false;
+
+  /** A chain time, clamped to the wall clock + MAX_CLOCK_SKEW_MS (a future-dated chain never moves the day). */
+  #clamp(t: number): number {
+    const wall = this.#clock();
+    if (!(t > wall + MAX_CLOCK_SKEW_MS)) return t;
+    if (!this.#skewReported) {
+      this.#skewReported = true;
+      this.#o.onClockSkew?.({ chainAt: t, wall });
+    }
+    return wall;
+  }
+
+  /** The chain's last event time (S-L2), clamped. */
+  #now(): number {
+    return this.#clamp(this.#o.lastEventTime?.() ?? this.#clock());
+  }
+
   /** UTC calendar day of the chain's last event time (S-L2). */
   #dayKey(): string {
-    return new Date(this.#o.lastEventTime?.() ?? this.#clock()).toISOString().slice(0, 10);
+    return new Date(this.#now()).toISOString().slice(0, 10);
   }
 
   #axes(p: PermitV1): Array<[Axis, string]> {
@@ -182,7 +225,7 @@ export class BudgetFuse {
   }
 
   #windowUsed(): number {
-    const now = this.#o.lastEventTime?.() ?? this.#clock();
+    const now = this.#now();
     const from = now - this.#cfg.subscription.windowMs;
     while (this.#window.length && this.#window[0]!.at < from) this.#window.shift();
     return this.#window.reduce((a, e) => a + e.tokens, 0);
@@ -290,9 +333,17 @@ export class BudgetFuse {
       return;
     }
     const usd = ev.usd ?? 0;
+    // the row first: the turn counts under the row's own chain time (restore reads the same `at`)
+    const wrote = await this.#o.log(
+      'budget.usage',
+      { permitId: ev.permitId, hsid: h.permit.hsid, source: ev.source, tokens: ev.tokens, usd, user: h.permit.scope.user, repo: h.permit.scope.repo, model: h.permit.model, backend: h.permit.backend },
+      h.permit.hsid ? { session: h.permit.hsid } : {},
+    );
+    const rowAt = wrote && typeof wrote.at === 'string' ? Date.parse(wrote.at) : NaN;
+    const at = Number.isFinite(rowAt) ? this.#clamp(rowAt) : this.#now();
     h.used.tokens += ev.tokens;
     h.used.usd += usd;
-    const day = this.#dayKey();
+    const day = new Date(at).toISOString().slice(0, 10);
     for (const [axis, id] of this.#axes(h.permit)) {
       for (const [dim, amt] of [['tokens', ev.tokens], ['usd', usd]] as const) {
         const k = `${day}|${dim}|${axis}|${id}`;
@@ -301,18 +352,13 @@ export class BudgetFuse {
         if (axis !== 'model' && axis !== 'backend') await this.#announce(day, dim, axis, id, v / this.#cfg[dim][axis as ScopeName]);
       }
     }
-    if (h.permit.backend === 'claude-code') this.#window.push({ at: this.#o.lastEventTime?.() ?? this.#clock(), tokens: ev.tokens });
+    if (h.permit.backend === 'claude-code') this.#window.push({ at, tokens: ev.tokens });
     else {
       const l = this.#local.get(h.permit.hsid ?? h.permit.permitId) ?? { model: h.permit.model, repos: new Set<string>(), tokens: 0 };
       l.tokens += ev.tokens;
       if (h.permit.scope.repo) l.repos.add(h.permit.scope.repo);
       this.#local.set(h.permit.hsid ?? h.permit.permitId, l);
     }
-    await this.#o.log(
-      'budget.usage',
-      { permitId: ev.permitId, hsid: h.permit.hsid, source: ev.source, tokens: ev.tokens, usd, user: h.permit.scope.user, repo: h.permit.scope.repo, model: h.permit.model, backend: h.permit.backend },
-      h.permit.hsid ? { session: h.permit.hsid } : {},
-    );
     if (h.permit.billing.startsWith('api-token:') && h.permit.hsid) await this.#o.apiTokens?.onTurn(h.permit.hsid);
     if (!h.over && (h.used.tokens > h.permit.limits.tokens || h.used.usd > h.permit.limits.usd)) {
       h.over = true; // informational (P8-D92): recorded once, nothing is killed
@@ -341,8 +387,8 @@ export class BudgetFuse {
    * rows in chain order (boot, before the first reserve). Idempotent only on
    * a fresh fuse: it adds to what is there.
    */
-  restore(rows: Iterable<FuseRow>): { usage: number; ladder: number } {
-    const now = this.#o.lastEventTime?.() ?? this.#clock();
+  restore(rows: Iterable<FuseRow>, trust: FuseRowTrust): { usage: number; ladder: number; untrusted: number } {
+    const now = this.#now();
     const today = new Date(now).toISOString().slice(0, 10);
     const from = now - this.#cfg.subscription.windowMs;
     const grants = new Map<string, PermitV1>();
@@ -350,7 +396,13 @@ export class BudgetFuse {
     const amount = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : -1);
     let usage = 0;
     let ladder = 0;
+    let untrusted = 0;
     for (const row of rows) {
+      // Aegis C1: only the kernel's own signed rows count — these kinds are not reserved, so anyone could write one
+      if (!trust.principals.includes(row.principal) || typeof row.keyId !== 'string' || !trust.isKernelKey(row.keyId)) {
+        untrusted++;
+        continue;
+      }
       const p = row.payload ?? {};
       if (row.kind === 'permit.grant') {
         const permit = p.permit as PermitV1 | undefined;
@@ -374,6 +426,7 @@ export class BudgetFuse {
       if (tokens < 0 || usd < 0 || (p.source !== 'turn.usage' && p.source !== 'turn.result')) continue;
       const permit = typeof p.permitId === 'string' ? grants.get(p.permitId) : undefined;
       if (!permit) continue; // a usage row with no grant on the chain attributes to nothing (never guessed)
+      if (p.user !== permit.scope.user) continue; // the row's user must be its grant's user
       const backend = permit.backend;
       if (backend === 'claude-code' && at >= from && at <= now) this.#window.push({ at, tokens });
       if (day !== today) continue;
@@ -393,7 +446,7 @@ export class BudgetFuse {
       }
     }
     this.#window.sort((a, b) => a.at - b.at);
-    return { usage, ladder };
+    return { usage, ladder, untrusted };
   }
 
   /** Today's spend for one axis value (tests, status). */
