@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux
 /**
  * P8-D96 card composition (permission.ts, pure; Aegis C1/A1/A2 round 2):
  * every input field is on the card, wrapped and never cut; writing tools are
