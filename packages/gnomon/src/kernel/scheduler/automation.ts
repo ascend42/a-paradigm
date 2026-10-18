@@ -5,18 +5,20 @@
  *
  *   automation:v1 { id, trigger, model: local|claude|any, attended }
  *
- * An automation is ATTENDED unless a human marked it otherwise (law 5: local
- * automations spend compute only after a human marks them `attended:false` +
- * `model`). So `attended:false` is accepted only together with `model` and a
- * `markedBy` principal of the human class; anything else is refused at
- * registration (fail closed), never silently downgraded. The mark is a plain
- * principal string until #approval-broker (M1.6) can carry a root-signed
- * decision for it (reported residual).
+ * An automation is ATTENDED. Law 5 lets a local automation spend compute only
+ * after a human marks it `attended:false` + `model`; that mark must be an
+ * #approval-broker decision (M1.6), and the run step it unlocks is
+ * #session-runner / #local-runner (M1.7 / M1.8). Neither is wired yet, so
+ * `attended:false` is REFUSED at registration (`unattended-unavailable`) —
+ * never accepted on the strength of a principal string, never silently
+ * downgraded. The scheduler's run step stays hard-wired to refuse.
  *
  * Triggers are log-derivable on purpose: `at` is one instant; `every` is a
  * period counted from a fixed `anchor`, so the due instants are a pure
  * function of the record and the log's `schedule.automation.due` rows — a
- * restart rebuilds the same timers (G-SCH-01), never "now + period".
+ * restart rebuilds the same timers (G-SCH-01), never "now + period". Instants
+ * are strict ISO-8601 with `Z` or `±hh:mm`, years 0001–9999; `every` is 1 min
+ * to 10 years, so every derived instant stays inside the Date range.
  *
  * LOCAL SHAPE: `automation:v1` / `timer:v1` are not wire objects yet (no verb
  * carries them), so they live here, not in @a-company/gnomon-contracts —
@@ -28,6 +30,8 @@ export type AutomationModel = (typeof AUTOMATION_MODELS)[number];
 
 /** Smallest period an `every` trigger may have (a tighter loop is a mod's business, not a timer's). */
 export const MIN_AUTOMATION_PERIOD_MS = 60_000;
+/** Largest period: 10 Julian years. */
+export const MAX_AUTOMATION_PERIOD_MS = 10 * 365.25 * 86_400_000;
 
 export type AutomationTrigger = { at: string } | { every: number; anchor: string };
 
@@ -35,10 +39,8 @@ export interface AutomationV1 {
   id: string;
   trigger: AutomationTrigger;
   model: AutomationModel;
-  /** true unless a human marked it unattended. */
-  attended: boolean;
-  /** The human principal that marked `attended:false` (required then, absent otherwise). */
-  markedBy?: string;
+  /** Always true until the M1.6 decision + M1.7/M1.8 run step land. */
+  attended: true;
 }
 
 export class AutomationRefusal extends Error {
@@ -51,11 +53,13 @@ export class AutomationRefusal extends Error {
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
-/** A human-class principal: `p:<ns>/<name>`, never the kernel, a mod, a session, voice or a peer (§3.1). */
-const HUMAN_PRINCIPAL = /^p:[A-Za-z0-9]+\/(?!kernel$|mod-|mods-|session-|voice|peer-)[a-z0-9][a-z0-9-]*$/;
+const STRICT_ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 
-function isoMs(v: unknown, field: string): number {
+/** Strict ISO-8601 instant with a zone, years 0001–9999. */
+export function strictIsoMs(v: unknown, field: string): number {
   if (typeof v !== 'string') throw new AutomationRefusal('bad-trigger', `${field} must be an ISO-8601 string`);
+  const m = STRICT_ISO.exec(v);
+  if (!m || m[1] === '0000') throw new AutomationRefusal('bad-trigger', `${field} must be YYYY-MM-DDTHH:MM:SS[.fff](Z|±hh:mm)`);
   const ms = Date.parse(v);
   if (!Number.isFinite(ms)) throw new AutomationRefusal('bad-trigger', `${field} is not a valid instant`);
   return ms;
@@ -66,7 +70,7 @@ export function parseAutomation(raw: unknown): AutomationV1 {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AutomationRefusal('bad-shape', 'not an object');
   const r = raw as Record<string, unknown>;
   for (const k of Object.keys(r)) {
-    if (!['id', 'trigger', 'model', 'attended', 'markedBy'].includes(k)) throw new AutomationRefusal('bad-shape', `unknown field ${k}`);
+    if (!['id', 'trigger', 'model', 'attended'].includes(k)) throw new AutomationRefusal('bad-shape', `unknown field ${k}`);
   }
   if (typeof r.id !== 'string' || !ID.test(r.id)) throw new AutomationRefusal('bad-id', 'id must be kebab-case, ≤ 64 chars');
   if (typeof r.model !== 'string' || !(AUTOMATION_MODELS as readonly string[]).includes(r.model)) {
@@ -77,13 +81,13 @@ export function parseAutomation(raw: unknown): AutomationV1 {
   const tr = t as Record<string, unknown>;
   let trigger: AutomationTrigger;
   if ('at' in tr && Object.keys(tr).length === 1) {
-    isoMs(tr.at, 'trigger.at');
+    strictIsoMs(tr.at, 'trigger.at');
     trigger = { at: tr.at as string };
   } else if ('every' in tr && 'anchor' in tr && Object.keys(tr).length === 2) {
-    if (typeof tr.every !== 'number' || !Number.isInteger(tr.every) || tr.every < MIN_AUTOMATION_PERIOD_MS) {
-      throw new AutomationRefusal('bad-trigger', `trigger.every must be an integer ≥ ${MIN_AUTOMATION_PERIOD_MS} ms`);
+    if (typeof tr.every !== 'number' || !Number.isInteger(tr.every) || tr.every < MIN_AUTOMATION_PERIOD_MS || tr.every > MAX_AUTOMATION_PERIOD_MS) {
+      throw new AutomationRefusal('bad-trigger', `trigger.every must be an integer in [${MIN_AUTOMATION_PERIOD_MS}, ${MAX_AUTOMATION_PERIOD_MS}] ms`);
     }
-    isoMs(tr.anchor, 'trigger.anchor');
+    strictIsoMs(tr.anchor, 'trigger.anchor');
     trigger = { every: tr.every, anchor: tr.anchor as string };
   } else {
     throw new AutomationRefusal('bad-trigger', 'trigger must be exactly {at} or {every, anchor}');
@@ -91,13 +95,11 @@ export function parseAutomation(raw: unknown): AutomationV1 {
   const attended = r.attended === undefined ? true : r.attended;
   if (typeof attended !== 'boolean') throw new AutomationRefusal('bad-shape', 'attended must be a boolean');
   if (!attended) {
-    // law 5: unattended (spending) only after a HUMAN marked it, with a model.
-    if (typeof r.markedBy !== 'string' || !HUMAN_PRINCIPAL.test(r.markedBy)) {
-      throw new AutomationRefusal('unattended-unmarked', 'attended:false needs markedBy, a human principal (law 5)');
-    }
-    return { id: r.id, trigger, model: r.model as AutomationModel, attended: false, markedBy: r.markedBy };
+    throw new AutomationRefusal(
+      'unattended-unavailable',
+      'attended:false needs an #approval-broker decision (M1.6) and the unattended run step (#session-runner M1.7 / #local-runner M1.8); refused until both land (law 5)',
+    );
   }
-  if (r.markedBy !== undefined) throw new AutomationRefusal('bad-shape', 'markedBy is only meaningful with attended:false');
   return { id: r.id, trigger, model: r.model as AutomationModel, attended: true };
 }
 

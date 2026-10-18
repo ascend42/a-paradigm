@@ -259,7 +259,7 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     expect(JSON.parse(after.stdout)).toEqual({ running: false, state: 'stopped' });
   });
 
-  it('--detach activates a daemon with the clean env, which then idles out', async () => {
+  it('G-DMN-03 + G-DMN-05: --detach activates a daemon with the clean env (no NODE_OPTIONS / GNOMON_*), which then idles out', async () => {
     const h = home();
     const r = spawnSync(process.execPath, [GNOMON, 'daemon', '--detach', '--home', h, '--idle-ms', '300'], {
       encoding: 'utf8',

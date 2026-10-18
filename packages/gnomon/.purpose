@@ -885,18 +885,22 @@ components:
       records + the log and no instant fires twice (G-SCH-01). automation:v1
       {id, trigger: {at} | {every, anchor}, model: local|claude|any, attended}
       is a LOCAL shape (not a wire object yet; moving it into
-      gnomon-contracts would move clientApiId). attended defaults true;
-      attended:false is accepted only with model and markedBy, a human-class
-      principal (law 5) — anything else is refused and logged
-      schedule.dropped{reason}. One daemon ⇒ one timer per key: duplicates
+      gnomon-contracts would move clientApiId). Every automation is attended:
+      attended:false is REFUSED (schedule.dropped{reason:
+      'unattended-unavailable'}) until an #approval-broker decision (M1.6) and
+      the run step (M1.7/M1.8) exist (law 5). Instants are strict ISO-8601
+      with Z or ±hh:mm; every is 1 min..10 years. Rebuild trusts only
+      kernel-principal due rows whose dueAt is not after their own at. One daemon ⇒ one timer per key: duplicates
       (N worktrees) are dropped {reason:'duplicate-key'} (G-LAW-05b). An
-      instant due while down fires on activation as an attended event
-      (late:true); several missed instants coalesce (schedule.dropped
-      {reason:'coalesced', count}). An attended due row spends nothing; an
-      unattended one reaches the run step, which is refused
-      ENGINE{not-implemented} and logged session.refused{milestone: M1.7 |
-      M1.8 | M1.7+M1.8} until #session-runner / #local-runner exist — no
-      spawn, no permit (G-LAW-05). While the next due instant is inside 10 min
+      instant due while down — or older than one period capped at the
+      horizon (a slept host) — fires as an attended event (late:true);
+      several missed instants coalesce (schedule.dropped{reason:'coalesced',
+      count}). A due row spends nothing; the run step is hard-wired to refuse
+      ENGINE{not-implemented} (session.refused) — no spawn, no permit
+      (G-LAW-05). Wakes are capped at 60 s; a failed append releases the hold
+      and retries in 5 s; stop() is a latch returning the in-flight tick,
+      which the daemon awaits before stopping children; the scheduler starts
+      before the idle monitor. While the next due instant is inside 10 min
       the scheduler holds idle exit ('timer' holder). Clock and wake are seams
       (now, arm), so the 24 h soak is a unit test. Daemon wiring: DaemonOptions
       .automations (none by default; root-signed config later), handle.scheduler.
@@ -932,14 +936,24 @@ flows:
       connections are idle holders, and it is stopped (child ended) before
       the socket closes at shutdown. M1.9: (5) home — the daemon takes its
       home only from --home (daemonHomeOf; GNOMON_HOME is a client-side test
-      seam it never reads); (6) orphan sweep at start, before the socket
-      listens — every session.spawned with no session.exited/orphaned is
-      probed by process group (process-control.ts registry: POSIX group
-      signals; win32 = parity phase, unprobeable, never signalled), recorded
-      session.orphaned{probe, action} BEFORE any signal, then stopped
-      SIGTERM → grace → SIGKILL (G-DMN-04); (7) supervised children
-      (DaemonChildren: session, local-runner, mod) — sessions write
-      session.spawned/exited and hold idle ('session'); mods never hold;
+      seam it never reads — both gnomond paths, foreground and detaching;
+      only `gnomon` client commands honour the seam); (6) orphan sweep at
+      start, before the socket listens — every KERNEL-written session.spawned
+      with no session.exited/orphaned is recorded session.orphaned{probe,
+      action} BEFORE any signal, and its group is signalled only when the
+      row's boot session (log/boot.ts) equals this boot AND the live
+      leader's start-time witness (process-control.ts: macOS ps lstart,
+      Linux /proc stat field 22; win32 = parity phase, never signalled)
+      equals the recorded one — else probe stale-boot | unattributable,
+      action none; orphans stopped in parallel, counted only when gone
+      (G-DMN-04); (7) supervised children (DaemonChildren: session,
+      local-runner, mod) — intend() writes session.spawned{phase:'intent'}
+      before the fork, track() writes {phase:'running', pid, pgid, boot,
+      startTime} and refuses a session child that does not lead its own
+      group; sessions write session.exited and hold idle ('session'); mods
+      never hold, and have no spawn/exit kinds in §9.1, so a crash-orphaned
+      mod is not swept (residual); stop = SIGTERM → grace → SIGKILL, then
+      group members outliving the leader are SIGKILLed and counted;
       every shutdown (idle included) stops the scheduler, then stops and
       AWAITS every child (mod.stopped{reason}) and the web transport child
       (socket.web.stop{reason:'idle'|'daemon-exit'}) BEFORE daemon.exit

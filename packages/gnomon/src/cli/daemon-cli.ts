@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4) — CLI glue for `gnomond` and `gnomon daemon`.
  * Writes to stdio directly: the kernel has zero deps (G-SEC-01) and cannot use
  * the Paradigm logger; #kernel-log brings structured logging at M1.2.
@@ -70,10 +72,11 @@ function socketOf(home: string): string | null {
 
 
 /**
- * The DAEMON's home (§2.4 rule 1): `--home` from argv, else `~/.gnomon`. The
- * daemon never reads `GNOMON_HOME` — that is a client-side test seam, and the
- * clean re-exec env drops it anyway; reading it here would let an
- * environment the daemon does not own pick the key-holding process's home.
+ * The DAEMON's home (§2.4 rule 1): `--home` from argv, else `~/.gnomon`.
+ * Every `gnomond` path (foreground and the detaching activator) resolves its
+ * home here and never reads `GNOMON_HOME`; the env seam is honoured only by
+ * the `gnomon` client commands (`gnomon daemon status|stop|--detach`, via
+ * homeOf), which pass the result to the daemon as `--home`.
  */
 export function daemonHomeOf(args: { home?: string }): string {
   return args.home ?? resolveGnomonHome({ env: {} });
@@ -108,8 +111,8 @@ export async function runForeground(args: DaemonArgs): Promise<number> {
  * Client activation (§2.4 rule 2): re-exec gnomond with the clean env and
  * wait for the socket (5 × 200 ms, then a little longer for a cold start).
  */
-export async function activateDetached(args: DaemonArgs, gnomondEntry: string): Promise<number> {
-  const home = homeOf(args);
+export async function activateDetached(args: DaemonArgs, gnomondEntry: string, resolveHome: (a: { home?: string }) => string = homeOf): Promise<number> {
+  const home = resolveHome(args);
   const sock = socketOf(home);
   if (!sock) {
     process.stderr.write('gnomond: no safe endpoint path for this home [no-safe-endpoint]\n');

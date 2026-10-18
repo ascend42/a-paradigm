@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { cleanReexecEnv, DEFAULT_REEXEC_PATH, isAllowlistedEnvKey, reexecArgs } from '../src/kernel/lifecycle/env.js';
 
-describe('cleanReexecEnv', () => {
+describe('G-DMN-05 cleanReexecEnv: the activator env never reaches the daemon', () => {
   const source = {
     HOME: '/Users/x',
     USERPROFILE: 'C:\\Users\\x',

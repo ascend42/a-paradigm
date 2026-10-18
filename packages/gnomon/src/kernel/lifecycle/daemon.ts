@@ -55,7 +55,7 @@
  * host (M1.11) and an approved `stop` (#approval-broker, M1.6).
  */
 import * as path from 'node:path';
-import { completePendingQuarantine, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
+import { completePendingQuarantine, readBootSession, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
 import {
   createKernelDispatcher,
@@ -222,7 +222,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     return p;
   };
   const control = processControlFor(opts.platform ?? process.platform);
-  const children = new DaemonChildren({ append: (kind, payload) => appendRow(kind, payload), control, holdIdle: () => idle.hold('session'), ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}) });
+  const boot = readBootSession();
+  const children = new DaemonChildren({ append: (kind, payload) => appendRow(kind, payload), control, boot, holdIdle: () => idle.hold('session'), ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}) });
   /** Coalesced pre-auth diagnostics: counters, flushed as one signed row per kind per window. */
   const diag = {
     windowStart: new Date().toISOString(),
@@ -295,13 +296,13 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     if (stopping) return stopping;
     stopping = (async () => {
       idle.stop();
-      scheduler.stop();
-      emit({ kind: 'daemon.exit', reason });
       let liveChildren = 0;
       try {
+        await scheduler.stop().catch(() => undefined); // an in-flight tick finishes before children stop
         // §2.4 rule 3: mod, session and transport children stop BEFORE daemon.exit — never exit with a live child
         liveChildren = await children.stopAll(reason).catch(() => children.live());
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
+        emit({ kind: 'daemon.exit', reason });
         hub.close();
         await server?.close();
         clearInterval(diagTimer);
@@ -324,12 +325,15 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       append: (kind, payload) => appendRow(kind, payload),
       rows: (kinds) => fullRows(kinds),
     },
+    kernelPrincipal,
     holdIdle: () => idle.hold('timer'),
     ...(opts.automations ? { automations: opts.automations } : {}),
     ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
   });
-  function* fullRows(kinds: readonly string[]): Generator<{ kind: string; payload: unknown }> {
-    for (const v of log.read({ reader: { class: 'human' }, kinds })) if (v.view === 'full') yield { kind: v.event.kind, payload: v.event.payload };
+  function* fullRows(kinds: readonly string[]): Generator<{ kind: string; payload: unknown; principal: string; at: string }> {
+    for (const v of log.read({ reader: { class: 'human' }, kinds })) {
+      if (v.view === 'full') yield { kind: v.event.kind, payload: v.event.payload, principal: v.event.principal, at: v.event.at };
+    }
   }
 
   const status = (): DaemonStatus => ({
@@ -451,6 +455,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     // §2.4 rule 4: before serving anyone, stop what a crashed daemon left running
     orphanSweep = await sweepOrphans({
       rows: fullRows(['session.spawned', 'session.exited', 'session.orphaned']),
+      kernelPrincipal,
+      boot,
       append: (kind, payload) => appendRow(kind, payload),
       control,
       ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}),
@@ -481,7 +487,6 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     throw err;
   }
 
-  idle.start();
   emit({ kind: 'daemon.start', pid: pidfile.pid, socketPath: pidfile.socketPath, via: choice.via, idleMs });
   await appendRow('daemon.start', {
     pid: pidfile.pid,
@@ -494,11 +499,13 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     root: authority.state,
   });
   try {
+    // before idle.start(): a timer due inside the horizon holds the daemon from its first instant
     await scheduler.start();
   } catch (err) {
     await shutdown('error');
     throw err;
   }
+  idle.start();
   return {
     pidfile,
     via: choice.via,

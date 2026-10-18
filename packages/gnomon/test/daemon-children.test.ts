@@ -1,10 +1,12 @@
 /**
  * $daemon-lifecycle (spec §2.4 rules 1, 3, 4; §16) — the platform-independent
  * pieces of M1.9: supervised children are stopped and awaited (falsifier:
- * daemon exits with a live child), the orphan sweep's record-before-signal
- * order and its fail-closed cases (G-DMN-04), the process-control registry's
- * Windows row, and the daemon's home coming from argv only. Real children are
- * plain `node -e` processes (no detach), stopped through the host's own row.
+ * daemon exits with a live child) with SIGKILL escalation and group-survivor
+ * kill, spawn intent rows, the orphan sweep's attribution rules (boot session
+ * + start-time witness + kernel principal; record-before-signal; G-DMN-04),
+ * the process-control registry's Windows row, and the daemon's home coming
+ * from argv only. Process control is faked here; the real POSIX groups are
+ * exercised in test/scheduler-daemon.test.ts.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import os from 'node:os';
@@ -13,60 +15,122 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { daemonHomeOf } from '../src/cli/daemon-cli.js';
 import { DaemonChildren, PROCESS_CONTROL, processControlFor, sweepOrphans, type GroupProbe, type ProcessControl } from '../src/kernel/lifecycle/index.js';
 
+const K = 'p:ab12/kernel';
+const BOOT = 'boot-A';
 const kids: ChildProcess[] = [];
 afterEach(() => {
   for (const k of kids.splice(0)) if (k.exitCode === null && k.signalCode === null) k.kill('SIGKILL');
 });
 
-function sleeper(ignoreTerm = false): ChildProcess {
-  const code = ignoreTerm ? "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)" : 'setInterval(()=>{},1000)';
-  const c = spawn(process.execPath, ['-e', code], { stdio: 'ignore' });
+function sleeper(): ChildProcess {
+  const c = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
   kids.push(c);
   return c;
 }
 
 const alive = (c: ChildProcess): boolean => c.exitCode === null && c.signalCode === null;
 
+/**
+ * Fake group control over real children: a group is alive while its leader
+ * (or a registered extra member) lives. SIGTERM is IGNORED (records only) when
+ * `ignoreTerm`; SIGKILL kills the leader and every member.
+ */
+function childControl(opts: { ignoreTerm?: boolean; members?: Map<number, { alive: boolean }> } = {}): ProcessControl & { signals: string[]; register(c: ChildProcess): void } {
+  const byPid = new Map<number, ChildProcess>();
+  const signals: string[] = [];
+  const members = opts.members ?? new Map<number, { alive: boolean }>();
+  return {
+    fidelity: 'full',
+    signals,
+    register: (c) => void byPid.set(c.pid!, c),
+    probeGroup: (pgid) => {
+      const c = byPid.get(pgid);
+      return (c && alive(c)) || members.get(pgid)?.alive ? 'alive' : 'gone';
+    },
+    signalGroup: (pgid, sig) => {
+      signals.push(`${pgid}:${sig}`);
+      const c = byPid.get(pgid);
+      if (sig === 'SIGKILL') {
+        c?.kill('SIGKILL');
+        const m = members.get(pgid);
+        if (m) m.alive = false;
+      } else if (!opts.ignoreTerm) c?.kill('SIGTERM');
+      return true;
+    },
+    startTime: (pid) => `t:${pid}`,
+  };
+}
+
 describe('DaemonChildren: never exit with a live child', () => {
-  it('stopAll stops and awaits every child; sessions log spawned/exited and hold idle, mods log mod.stopped', async () => {
+  it('stopAll stops and awaits every child; sessions write intent/running/exited rows and hold idle, mods log mod.stopped', async () => {
     const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
     let holds = 0;
+    const control = childControl();
     const children = new DaemonChildren({
       append: async (kind, payload) => void rows.push({ kind, payload }),
-      control: processControlFor(),
+      control,
+      boot: BOOT,
       holdIdle: () => {
         holds++;
         return () => void holds--;
       },
     });
+    const intent = await children.intend({ kind: 'session', hsid: 'h-1' });
+    expect(rows[0]).toEqual({ kind: 'session.spawned', payload: { phase: 'intent', spawnId: intent.spawnId, hsid: 'h-1', kind: 'session', boot: BOOT } });
     const s = sleeper();
     const m = sleeper();
-    await children.track({ kind: 'session', child: s, hsid: 'h-1' });
+    control.register(s);
+    control.register(m);
+    await children.track({ kind: 'session', child: s, hsid: 'h-1', intent });
     await children.track({ kind: 'mod', child: m, name: 'workshop' });
+    expect(rows[1]!.payload).toEqual({ phase: 'running', spawnId: intent.spawnId, hsid: 'h-1', kind: 'session', pid: s.pid, pgid: s.pid, boot: BOOT, startTime: `t:${s.pid}` });
     expect(children.live()).toBe(2);
     expect(holds).toBe(1); // the session holds idle; the mod never does
     expect(await children.stopAll('idle')).toBe(0);
     expect(alive(s)).toBe(false);
     expect(alive(m)).toBe(false);
     expect(holds).toBe(0);
-    expect(rows.map((r) => r.kind)).toEqual(expect.arrayContaining(['session.spawned', 'session.exited', 'mod.stopped']));
     expect(rows.find((r) => r.kind === 'mod.stopped')!.payload).toEqual({ name: 'workshop', reason: 'idle' });
-    expect(rows.find((r) => r.kind === 'session.exited')!.payload).toMatchObject({ hsid: 'h-1', pid: s.pid, reason: 'idle' });
+    expect(rows.find((r) => r.kind === 'session.exited')!.payload).toMatchObject({ spawnId: intent.spawnId, hsid: 'h-1', pid: s.pid, reason: 'idle' });
     await expect(children.track({ kind: 'mod', child: sleeper(), name: 'late' })).rejects.toThrow(/stopping/);
+    await expect(children.intend({ kind: 'session' })).rejects.toThrow(/stopping/);
   });
 
-  it('escalates to SIGKILL after the grace when a child ignores SIGTERM', async () => {
-    const children = new DaemonChildren({ append: async () => undefined, control: processControlFor(), graceMs: 300 });
-    const c = sleeper(true);
-    await new Promise((r) => setTimeout(r, 200)); // let it install the handler
+  it('escalates SIGTERM → SIGKILL after the grace when the group ignores SIGTERM', async () => {
+    const control = childControl({ ignoreTerm: true });
+    const children = new DaemonChildren({ append: async () => undefined, control, boot: BOOT, graceMs: 200 });
+    const c = sleeper();
+    control.register(c);
     await children.track({ kind: 'local-runner', child: c, hsid: 'h-2' });
     expect(await children.stopAll('signal')).toBe(0);
     expect(alive(c)).toBe(false);
+    expect(control.signals).toEqual([`${c.pid}:SIGTERM`, `${c.pid}:SIGKILL`]);
+  });
+
+  it('kills group members that outlive the leader and counts a member that will not die as a live child', async () => {
+    const members = new Map<number, { alive: boolean }>();
+    const control = childControl({ members });
+    const children = new DaemonChildren({ append: async () => undefined, control, boot: BOOT, graceMs: 200 });
+    const c = sleeper();
+    control.register(c);
+    members.set(c.pid!, { alive: true }); // a grandchild in the leader's group
+    await children.track({ kind: 'session', child: c, hsid: 'h-3' });
+    expect(await children.stopAll('idle')).toBe(0);
+    expect(members.get(c.pid!)!.alive).toBe(false);
+    expect(control.signals).toEqual([`${c.pid}:SIGTERM`, `${c.pid}:SIGKILL`]);
+
+    // a member SIGKILL cannot remove (stuck): reported, never hidden
+    const stuck = childControl();
+    const d2 = new DaemonChildren({ append: async () => undefined, control: { ...stuck, probeGroup: (g) => (g === c2.pid ? 'alive' : 'gone') }, boot: BOOT, graceMs: 100 });
+    const c2 = sleeper();
+    stuck.register(c2);
+    await d2.track({ kind: 'mod', child: c2, name: 'm' });
+    expect(await d2.stopAll('signal')).toBe(1);
   });
 });
 
 describe('G-DMN-04 orphan sweep (fake process control)', () => {
-  function fakeControl(probes: Record<number, GroupProbe>): ProcessControl & { signals: string[] } {
+  function fakeControl(probes: Record<number, GroupProbe>, starts: Record<number, string> = {}): ProcessControl & { signals: string[] } {
     const signals: string[] = [];
     return {
       fidelity: 'full',
@@ -77,41 +141,73 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
         probes[pgid] = 'gone';
         return true;
       },
+      startTime: (pid) => starts[pid] ?? null,
     };
   }
+  const spawned = (hsid: string, pid: number, extra: Record<string, unknown> = {}, principal = K) => ({
+    kind: 'session.spawned',
+    principal,
+    payload: { phase: 'running', spawnId: `sp-${hsid}`, hsid, pid, pgid: pid, boot: BOOT, startTime: `t:${pid}`, ...extra },
+  });
 
-  it('records each open session.spawned BEFORE signalling, stops live groups, never signals gone / foreign / unsupported', async () => {
+  it('signals only a group whose boot and start-time witness both match; records first; ignores non-kernel rows', async () => {
     const order: string[] = [];
-    const control = fakeControl({ 101: 'alive', 102: 'gone', 103: 'foreign', 104: 'unsupported', 105: 'alive' });
+    const control = fakeControl(
+      { 101: 'alive', 102: 'gone', 103: 'foreign', 104: 'unsupported', 105: 'alive', 107: 'alive', 108: 'alive', 109: 'alive' },
+      { 101: 't:101', 107: 't:107', 108: 't:RECYCLED', 109: 't:109' },
+    );
     const origSignal = control.signalGroup;
     control.signalGroup = (pgid, sig) => (order.push(`signal:${pgid}`), origSignal(pgid, sig));
     const rows = [
-      { kind: 'session.spawned', payload: { hsid: 'a', pid: 101, pgid: 101 } },
-      { kind: 'session.spawned', payload: { hsid: 'b', pid: 102, pgid: 102 } },
-      { kind: 'session.spawned', payload: { hsid: 'c', pid: 103, pgid: 103 } },
-      { kind: 'session.spawned', payload: { hsid: 'd', pid: 104, pgid: 104 } },
-      { kind: 'session.spawned', payload: { hsid: 'e', pid: 105, pgid: 105 } },
-      { kind: 'session.exited', payload: { hsid: 'e', pid: 105 } }, // ended cleanly: not an orphan
-      { kind: 'session.spawned', payload: { hsid: 'f', pid: 106, pgid: 106 } },
-      { kind: 'session.orphaned', payload: { hsid: 'f', pid: 106 } }, // swept by an earlier start
+      spawned('a', 101),
+      spawned('b', 102),
+      spawned('c', 103),
+      spawned('d', 104),
+      spawned('e', 105),
+      { kind: 'session.exited', principal: K, payload: { spawnId: 'sp-e', hsid: 'e', pid: 105 } }, // ended cleanly
+      spawned('f', 106),
+      { kind: 'session.orphaned', principal: K, payload: { spawnId: 'sp-f', hsid: 'f', pid: 106 } }, // swept before
+      spawned('g', 107, { boot: 'boot-OTHER' }), // live group, but from another boot: a recycled pid
+      spawned('h', 108), // live, same boot, start time differs: recycled pid
+      spawned('i', 109, {}, 'p:ab12/mod-evil'), // not the kernel's row: ignored entirely
+      { kind: 'session.spawned', principal: K, payload: { phase: 'intent', spawnId: 'sp-j', hsid: 'j', boot: BOOT } }, // crash in the spawn gap
     ];
     const out: Array<Record<string, unknown>> = [];
-    const r = await sweepOrphans({ rows, control, append: async (kind, payload) => void (out.push({ kind, ...payload }), order.push(`row:${String(payload.pgid)}`)), pollMs: 1 });
-    expect(r).toEqual({ orphans: 4, stopped: 1 });
-    expect(out.map((o) => [o.hsid, o.probe, o.action])).toEqual([
-      ['a', 'alive', 'stop'],
-      ['b', 'gone', 'none'],
-      ['c', 'foreign', 'none'],
-      ['d', 'unsupported', 'none'],
+    const r = await sweepOrphans({ rows, kernelPrincipal: K, boot: BOOT, control, append: async (kind, payload) => void (out.push({ kind, ...payload }), order.push(`row:${String(payload.pgid)}`)), pollMs: 1 });
+    expect(r).toEqual({ orphans: 7, stopped: 1 });
+    expect(out.map((o) => [o.hsid, o.probe, o.action, o.detail])).toEqual([
+      ['a', 'alive', 'stop', undefined],
+      ['b', 'gone', 'none', undefined],
+      ['c', 'foreign', 'none', undefined],
+      ['d', 'unsupported', 'none', undefined],
+      ['g', 'stale-boot', 'none', undefined],
+      ['h', 'unattributable', 'none', 'start-time'],
+      ['j', 'unattributable', 'none', 'spawn-gap'],
     ]);
     expect(control.signals).toEqual(['101:SIGTERM']);
     expect(order.indexOf('row:101')).toBeLessThan(order.indexOf('signal:101'));
+  });
+
+  it('an unknown boot session never signals', async () => {
+    const control = fakeControl({ 201: 'alive' }, { 201: 't:201' });
+    const r = await sweepOrphans({ rows: [spawned('k', 201, { boot: 'unknown' })], kernelPrincipal: K, boot: 'unknown', control, append: async () => undefined });
+    expect(r).toEqual({ orphans: 1, stopped: 0 });
+    expect(control.signals).toEqual([]);
+  });
+
+  it('counts an orphan as stopped only when its group is gone', async () => {
+    const control = fakeControl({ 301: 'alive' }, { 301: 't:301' });
+    control.signalGroup = (pgid, sig) => (control.signals.push(`${pgid}:${sig}`), true); // the group will not die
+    const r = await sweepOrphans({ rows: [spawned('z', 301)], kernelPrincipal: K, boot: BOOT, control, append: async () => undefined, graceMs: 50, pollMs: 5 });
+    expect(r).toEqual({ orphans: 1, stopped: 0 });
+    expect(control.signals).toEqual(['301:SIGTERM', '301:SIGKILL']);
   });
 
   it('the win32 row is the parity phase: groups are unprobeable and never signalled (fail closed, partial)', () => {
     expect(PROCESS_CONTROL.win32.fidelity).toBe('partial');
     expect(PROCESS_CONTROL.win32.probeGroup(1234)).toBe('unsupported');
     expect(PROCESS_CONTROL.win32.signalGroup(1234, 'SIGKILL')).toBe(false);
+    expect(PROCESS_CONTROL.win32.startTime(1234)).toBeNull();
     expect(processControlFor('aix')).toBe(PROCESS_CONTROL.win32);
     expect(PROCESS_CONTROL.darwin.probeGroup(1)).toBe('foreign'); // never init / ourselves
   });
@@ -133,4 +229,5 @@ describe('§2.4 rule 1: the daemon learns its home only from --home', () => {
 
   it.todo('G-WIN-02: %USERPROFILE%\\.gnomon gets an owner-only DACL via the signed helper (icacls fallback), inheritance removed, and the ACL read back equals the expected one (Windows parity phase, P8-D78; ensureGnomonHome refuses unsafe-home on win32 until then)');
   it.todo('G-DMN-03 (Windows): client activation over the named pipe (Windows parity phase, P8-D78)');
+  it.todo('G-DMN-05 (Windows): the clean re-exec env keeps the §16 Windows allowlist (USERPROFILE SYSTEMROOT …) and nothing else (Windows parity phase, P8-D78)');
 });
