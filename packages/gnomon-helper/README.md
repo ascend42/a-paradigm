@@ -10,9 +10,9 @@ and the private launch-token URL hand-off.
 
 | Path | What |
 |---|---|
-| `darwin/` | SwiftPM package (swift-tools 5.9, macOS 14), executable `gnomon-helper`. Today it only prints its version. Signing (Developer ID, OPEN 1) never runs in CI. |
+| `darwin/` | SwiftPM package (swift-tools 5.9, macOS 14), executable `gnomon-helper`: `--version`, `serve` (NDJSON loop) and `once` (one request) speaking `gnomon-helper:v1` — key.list/create/public/delete, sign, unlock.drop(-all). CI builds it unsigned; signing (Developer ID) runs only on the founder's Mac. |
 | `win32/` | Rust helper (P8-D71). Placeholder only. |
-| `bin/` | Prebuilt, signed binaries land here at release time. |
+| `bin/` | Build output (gitignored): `bin/darwin/GnomonHelper.app` from `scripts/build-darwin.mjs`. |
 | `checksums.json` | sha256 of each built binary in `bin/`. **Advisory**: the kernel does not read it; the pin is the code-signing requirement plus the version floor (`packages/gnomon/src/kernel/identity/helper.ts`). Spec `G-HLP-01` also names a checksum verified at start; that is not wired (reported gap). |
 
 Build (macOS):
@@ -24,6 +24,54 @@ node packages/gnomon-helper/scripts/notarize-darwin.mjs           # optional: no
 ```
 
 Output: `bin/darwin/GnomonHelper.app` (gitignored) and its sha256 in `checksums.json`.
+
+## Founder flow (macOS, from the repo root)
+
+Every root or approvals signature shows a Touch ID / password prompt: the
+caller's text, then the helper's own line `Gnomon Helper: <key> key signs <n>:
+<digest>…`. Where the CLI prints "the prompt must end with <digest>", check
+that the helper line ends with the same value; press Cancel if it does not.
+
+1. Build the kernel and the signed helper (no Touch ID; macOS may ask once to
+   let codesign use the Developer ID key — enter your login password, Always
+   Allow):
+
+   ```sh
+   npm run build:gnomon
+   node packages/gnomon-helper/scripts/build-darwin.mjs
+   ```
+
+2. Hardware test — run it BEFORE `identity init` (the helper refuses a new key
+   generation while another exists). Three prompts: approve 1/3, approve the
+   root prompt, CANCEL 3/3; there must be no prompt between the first two.
+
+   ```sh
+   cd packages/gnomon && GNOMON_HW_TESTS=1 npx vitest run test/identity-hw.test.ts && cd ../..
+   ```
+
+3. Provision the root (two prompts: the approvals key, then this device):
+
+   ```sh
+   node packages/gnomon/dist/cli/gnomon.js identity init --name matt
+   node packages/gnomon/dist/cli/gnomon.js identity status
+   ```
+
+4. Remove a leftover or retired generation (one prompt per key; never the live one):
+
+   ```sh
+   node packages/gnomon/dist/cli/gnomon.js identity purge-keys --gen <gen>
+   ```
+
+5. Rotate (the old root signs the change; type `rotate`; three prompts, then it
+   offers to purge the old generation) or recover a LOST root (type `recover`;
+   a new namespace, logged as not signed by the lost root):
+
+   ```sh
+   node packages/gnomon/dist/cli/gnomon.js identity init --rotate
+   node packages/gnomon/dist/cli/gnomon.js identity init --recover
+   ```
+
+Optional, no prompt: `node packages/gnomon-helper/scripts/notarize-darwin.mjs`.
 
 ## Keychain separation (Aegis H1, M1.3 round 2)
 
