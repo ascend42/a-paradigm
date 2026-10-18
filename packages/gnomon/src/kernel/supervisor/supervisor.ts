@@ -551,7 +551,8 @@ export class SessionSupervisor {
     // S2: every driver event is a turn.event before anything acts on it; big lines by hash (Aegis M3)
     await this.#o.log('turn.event', {
       hsid: s.hsid, type: ev.type, seq: ++s.seq,
-      ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }),
+      // Aegis A4: a control_request line (can_use_tool carries the tool input) is logged by hash only, never its text
+      ...(bytes > EVENT_LINE_CAP || ev.type.startsWith('control_request') ? { lineHash: sha(line), bytes } : { line }),
       ...(ev.kind === 'init' ? { apiKeySource: ev.apiKeySource ?? 'absent' } : {}),
     }, { session: s.hsid });
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {

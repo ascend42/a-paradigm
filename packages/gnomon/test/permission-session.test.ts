@@ -165,6 +165,13 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     const inj = r.rows[injectAt]!.payload;
     expect(inj).toMatchObject({ answer: 'allow', bytes: expect.any(Number), hash: expect.stringMatching(/^sha256:/) });
     expect(JSON.stringify(inj)).not.toContain('hello'); // a byte count and a hash, never the text
+    // Aegis A4: the can_use_tool line is a turn.event by hash only (it carries the tool input)
+    const ev = r.kinds('turn.event').filter((x) => String(x.payload.type).startsWith('control_request'));
+    expect(ev.length).toBeGreaterThan(0);
+    for (const e of ev) {
+      expect(e.payload.line).toBeUndefined();
+      expect(e.payload.lineHash).toMatch(/^sha256:/);
+    }
   });
 
   it('Aegis C1 end to end: the raised card shows a >512-code-point one-line command in full', async () => {
