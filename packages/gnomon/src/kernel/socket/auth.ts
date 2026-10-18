@@ -26,8 +26,11 @@
  * digest of its signature: presenting it again — on this or another
  * connection — is `socket.auth.replay`, and fails anyway because each
  * connection's nonce differs. Every failure is AUTH and closes the connection
- * after the one refusal (dispatch.ts). `{launchToken}` and `{reconnect}` (the
- * web endpoint) are a later M1.4 slice: UNSUPPORTED.
+ * after the one refusal (dispatch.ts). `{launchToken}` and `{reconnect}` are
+ * the WEB endpoint's forms (#web-endpoint, web/endpoint.ts supplies the
+ * `web` hook): on the unix socket they stay UNSUPPORTED
+ * `web-auth-not-implemented`. A GUI connection authenticates with
+ * `credential: 'gui'` as the launching device's human principal.
  *
  * READ TOKENS (M1.4 slice 3, P8-D89a: proof of possession):
  * `auth {tokenId, sig}` — exactly those keys — after a hello on this
@@ -88,8 +91,10 @@ export interface ConnAuthState {
   principal?: string;
   /** The device principal's kind; absent on a read-token connection (a token is not a principal kind). */
   principalKind?: PrincipalKind;
-  /** How the connection authenticated: a device key (the principal's own class) or a read token (class `readToken`). */
-  credential?: 'device' | 'read-token';
+  /** How the connection authenticated: a device key (the principal's own class), a read token (class `readToken`) or a GUI token (#web-endpoint, the launching device's human). */
+  credential?: 'device' | 'read-token' | 'gui';
+  /** GUI connections: how the GUI token was obtained. */
+  via?: 'launch' | 'reconnect';
   deviceId?: string;
   keyId?: string;
   tokenId?: string;
@@ -117,14 +122,68 @@ export function clientAuthMessage(
 
 export type HelloOutcome = { ok: true; result: HelloResult } | ({ ok: false; offered?: string[] } & RefusalWithMessage);
 
+/** A row the dispatcher writes (best-effort) before an auth refusal, e.g. socket.auth.reconnect.requested. */
+export interface AuthRow {
+  kind: 'socket.auth.reconnect.requested';
+  payload: Record<string, unknown>;
+}
+
+export type AuthFailure = { ok: false; reason: string; replay: boolean; deviceId?: string; principalClaimed?: string; tokenId?: string; logKind?: 'socket.auth.theft'; logPayload?: Record<string, unknown>; preRows?: AuthRow[] } & RefusalWithMessage;
+
 export type AuthOutcome =
   | { ok: true; credential: 'device'; principal: string; principalKind: PrincipalKind; deviceId: string; keyId: string }
   | { ok: true; credential: 'read-token'; principal: string; tokenId: string; expiresAt: string }
-  | ({ ok: false; reason: string; replay: boolean; deviceId?: string; principalClaimed?: string; tokenId?: string } & RefusalWithMessage);
+  | {
+      ok: true;
+      credential: 'gui';
+      principal: string;
+      principalKind: 'human';
+      deviceId: string;
+      via: 'launch' | 'reconnect';
+      guiToken: string;
+      /** The auth rows are written: the GUI session is live. */
+      commit(): void;
+      /** The auth rows could not be written (or the connection went away): withdraw the GUI session. */
+      abort(): void;
+    }
+  | AuthFailure;
+
+/** The web endpoint's `{launchToken}` / `{reconnect}` handler (#web-endpoint); called after the nonce checks. */
+export type WebAuthHook = (conn: ConnAuthState, params: Record<string, unknown>) => AuthOutcome;
 
 export interface AuthenticateOptions {
   /** Is this token already bound to another live connection? (one live connection per token) */
   tokenInUse?: (tokenId: string) => boolean;
+  /** Present only on the web endpoint's dispatcher. */
+  web?: WebAuthHook;
+}
+
+export interface AuthFailExtra {
+  replay?: boolean;
+  deviceId?: string;
+  principalClaimed?: string;
+  tokenId?: string;
+  code?: 'AUTH' | 'UNSUPPORTED';
+  data?: Record<string, unknown>;
+  logKind?: 'socket.auth.theft';
+  logPayload?: Record<string, unknown>;
+  preRows?: AuthRow[];
+}
+
+/** An auth refusal (AUTH unless `code` says otherwise); the dispatcher answers it once and closes. */
+export function authFail(reason: string, message: string, extra: AuthFailExtra = {}): AuthFailure {
+  return {
+    ok: false,
+    reason,
+    replay: extra.replay ?? false,
+    ...(extra.deviceId ? { deviceId: extra.deviceId } : {}),
+    ...(extra.principalClaimed ? { principalClaimed: extra.principalClaimed } : {}),
+    ...(extra.tokenId ? { tokenId: extra.tokenId } : {}),
+    ...(extra.logKind ? { logKind: extra.logKind } : {}),
+    ...(extra.logPayload ? { logPayload: extra.logPayload } : {}),
+    ...(extra.preRows ? { preRows: extra.preRows } : {}),
+    ...refusalWith(extra.code ?? 'AUTH', reason, message, extra.data),
+  };
 }
 
 export interface AuthenticatorOptions {
@@ -210,15 +269,7 @@ export class SocketAuthenticator {
   }
 
   authenticate(conn: ConnAuthState, params: unknown, opts: AuthenticateOptions = {}): AuthOutcome {
-    const fail = (reason: string, message: string, extra: { replay?: boolean; deviceId?: string; principalClaimed?: string; tokenId?: string; code?: 'AUTH' | 'UNSUPPORTED'; data?: Record<string, unknown> } = {}): AuthOutcome => ({
-      ok: false,
-      reason,
-      replay: extra.replay ?? false,
-      ...(extra.deviceId ? { deviceId: extra.deviceId } : {}),
-      ...(extra.principalClaimed ? { principalClaimed: extra.principalClaimed } : {}),
-      ...(extra.tokenId ? { tokenId: extra.tokenId } : {}),
-      ...refusalWith(extra.code ?? 'AUTH', reason, message, extra.data),
-    });
+    const fail = (reason: string, message: string, extra: AuthFailExtra = {}): AuthOutcome => authFail(reason, message, extra);
     if (conn.phase === 'authenticated') return fail('already-authenticated', 'this connection is already authenticated; its nonce is spent', { replay: true });
     if (conn.phase !== 'hello' || !conn.nonce || conn.nonceAt === undefined) return fail('no-hello', 'auth needs a hello on this connection first');
     // Any attempt consumes the nonce. (Every failure also closes the connection,
@@ -229,9 +280,15 @@ export class SocketAuthenticator {
     conn.nonceAt = undefined;
     if (this.#now() - nonceAt > this.#ttl) return fail('nonce-expired', `the hello nonce is valid ${this.#ttl / 1000} s`);
     if (!isObj(params)) return fail('auth-params', 'auth params must be an object');
-    if ('tokenId' in params || 'token' in params) return this.#authToken(conn, nonce, params, opts, fail);
+    if ('tokenId' in params || 'token' in params) {
+      // Aegis C3: a read token authenticates on the unix socket only (one live connection per token cannot span two
+      // endpoints' dispatchers); the GUI needs only launchToken and reconnect.
+      if (opts.web) return fail('auth-params', 'read tokens authenticate on the unix socket only, not on the web endpoint');
+      return this.#authToken(conn, nonce, params, opts, fail);
+    }
     if ('launchToken' in params || 'reconnect' in params) {
-      return fail('web-auth-not-implemented', 'GUI launch/reconnect auth arrives with #web-endpoint (M1.4)', { code: 'UNSUPPORTED', data: { milestone: 'M1.4' } });
+      if (opts.web) return opts.web(conn, params);
+      return fail('web-auth-not-implemented', 'GUI launch/reconnect auth is accepted on the web endpoint only (#web-endpoint)', { code: 'UNSUPPORTED', data: { transport: 'socket' } });
     }
     const { principal, deviceId, sig } = params;
     const devOk = typeof deviceId === 'string' && DEVICE_ID_PATTERN.test(deviceId);

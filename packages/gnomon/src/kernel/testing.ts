@@ -1,6 +1,7 @@
 /**
  * @symbol #kernel-log
  * @symbol #identity
+ * @symbol #web-endpoint
  *
  * INTERNAL TEST ENTRY (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The one module that hands out the
@@ -9,7 +10,10 @@
  *     keystore anchor (`keystoreAnchor`) and boot session (`bootSession`), and
  *     the S33-10 recovery open;
  *   - acknowledgeGap: the presence-gated daemon.log.gap acknowledgement;
- *   - mintTestPresence: a PresenceToken with `method: 'test-seam'`.
+ *   - mintTestPresence: a PresenceToken with `method: 'test-seam'`;
+ *   - createWebEndpointForTest: a #web-endpoint whose transport child runs
+ *     WITHOUT the `transport` sandbox profile (the only such path; tests on
+ *     every OS) and/or against another bundle pin.
  *
  * NEVER IMPORTED BY PRODUCTION CODE. It is not a tsup entry and no index
  * re-exports it; test/seams-fence.test.ts proves that no file under src/
@@ -25,6 +29,8 @@ import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log
 import './log/kernel-log.js'; // registers the 'log' seams (class static block)
 import { PresenceToken, type PresenceMethod, type PresencePurpose } from './identity/presence.js';
 import { seamsOf, type KernelLogSeamOptions } from './internal-seams.js';
+import { WebEndpoint, type WebEndpointOptions, type WebEndpointSeams } from './web/endpoint.js'; // registers the 'web' seams
+import type { ChildLaunchPlan, TransportLaunchInput } from './sandbox/transport.js';
 
 /** Marker string: test/seams-fence.test.ts asserts it never appears in dist/. */
 export const GNOMON_INTERNAL_TEST_ENTRY = 'gnomon:internal-test-entry:v1' as const;
@@ -63,3 +69,15 @@ export function mintTestPresence(purpose: PresencePurpose = 'log.gap.acknowledge
 }
 
 export { PresenceToken };
+
+/** The transport child as a plain `node <script>` child: NO sandbox (tests only). */
+export function unsandboxedLauncher(input: TransportLaunchInput): ChildLaunchPlan {
+  const env: Record<string, string> = {};
+  if (process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT; // win32 Node needs it to start
+  return { command: input.nodePath ?? process.execPath, args: [input.scriptPath], env, sandbox: 'none', profile: null, profileHash: null };
+}
+
+/** A #web-endpoint with substituted seams (default launcher: unsandboxed). */
+export function createWebEndpointForTest(opts: WebEndpointOptions, seams: WebEndpointSeams = {}): WebEndpoint {
+  return seamsOf('web').create(opts, { launcher: unsandboxedLauncher, ...seams });
+}

@@ -60,6 +60,8 @@ components:
       - "#kernel-log"
       - "#identity"
       - "#ref-resolver"
+      - "#web-endpoint"
+      - "#oracle-sandbox"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -238,7 +240,10 @@ components:
       token connection, retrying a failed key.token.revoked write and keeping
       it pending (daemon.token.revocation.unrecorded event) — never dropped;
       every reason the kernel sends is registered (test/refusal-reasons.test.ts
-      scans socket/, refs/, redaction.ts).
+      scans socket/, web/, refs/, redaction.ts). M1.4 #web-endpoint: auth.ts
+      takes a `web` hook for {launchToken}/{reconnect} (credential 'gui',
+      human class); on the unix socket those forms stay UNSUPPORTED
+      web-auth-not-implemented.
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
@@ -251,6 +256,113 @@ components:
       - test/refusal-reasons.test.ts
     aspects: ["~ample-internal-logs"]
     oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
+
+  web-endpoint:
+    description: >-
+      #web-endpoint (spec §2.1, §4.9 WebSocket paragraph, §11.2, §15.5
+      `transport`, §2.4 linger; M1.4). The kernel half (src/kernel/web/) and
+      the `gnomon-web` transport child (src/transport/). The CHILD parses
+      bytes only: node:http on the 127.0.0.1 literal (ephemeral port), the
+      RFC 6455 upgrade and zero-dep framing (ws-codec.ts: text only — binary
+      1003; no fragmentation — FIN=0/continuation 1009; no extension ever
+      negotiated — RSV bits 1002; masking required 1002; invalid UTF-8 1007;
+      >4 MiB 1009 from the header; close mirrored; pings every 30 s, closes
+      after 2 missed pongs), and static serving of the bundle bytes it hashed
+      at start (held in memory). It forwards {rid, method, path, headers} /
+      {rid, data} records over stdio (protocol.ts) and writes back only what
+      the kernel says; its import closure is framing + channel + bundle hash
+      (test/seams-fence.test.ts). The KERNEL decides every rule (rules.ts):
+      Host = 127.0.0.1:<port> else 421 (host) before routing; Origin =
+      http://127.0.0.1:<port> on every upgrade and non-static request else
+      403 (origin); Sec-Fetch-Site same-origin|none else 403; no cookies, no
+      ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response,
+      no-store on non-static; traversal refused; /blob raster-only by content
+      sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag
+      ≤ 64 KiB to <home>/logs/gui.log; /blob and /diag are POST (a
+      same-origin GET carries no Origin; the page sends them with
+      referrerPolicy same-origin), GET/HEAD 405; /rpc and /diag match
+      exactly, only /blob/ is a prefix; no HTTP RPC. Every child record is
+      validated against the closed shape set (protocol.ts
+      validateChildRecord) and the child is SIGKILLed on the first violation
+      or on any throw in record handling (Aegis C1); a compromised child is a
+      compromise of the GUI sessions it relays (spec §A.7). Child-written
+      503/404 carry the rule-6 default headers. Per connection: the child
+      starts at a 16 KiB inbound cap, raised by a kernel `limit` record on
+      authentication; unsent bytes are reported as pressure/drain (the
+      dispatcher's writableLength/onDrain are per connection) and over 8 MiB
+      the child closes 1008; more than 32 queued requests close 1008. Read
+      tokens do not authenticate on the web endpoint (Aegis C3). WebSocket: hello then
+      auth within 5 s else 1008, frames before auth never dispatched as verbs;
+      ≤ 64 live (non-closing) connections, at the cap the oldest live
+      unauthenticated one is closed (1013), never an authenticated GUI one
+      (503 instead); ≤ 5 auth
+      attempts/min/connection. Its own dispatcher (authenticator signs
+      ws://127.0.0.1:<port>/rpc) with a `web` auth hook (launch.ts): a
+      single-use 60 s launch token minted in-process for an authenticated
+      human device connection (DaemonHandle.requestWebLaunch — §5 names no
+      verb for `gnomon open`), exchanged for a 32-byte GUI token held as a
+      digest; a second presentation inside the TTL is theft (refused, the
+      consuming session revoked, socket.auth.theft + socket.gui.session.ended
+      {theft}); after the TTL a replay (socket.auth.replay only); both answer
+      `replayed-transcript`. Reconnect logs socket.auth.reconnect.requested
+      and is refused UNSUPPORTED web-auth-not-implemented {milestone M1.3,
+      cause presence-unavailable} until the signed helper's presence. GUI
+      sessions live as long as their socket (≤ 12 h; revoke-all; daemon
+      exit). Bundle pin (bundle.ts): gnomon-bundle-tree:v1 hash; until
+      M1.10/M1.3 the placeholder bundle pinned by the PLACEHOLDER_BUNDLE_HASH
+      literal, materialized under <home>/gui/; a mismatch logs
+      socket.web.bundle.mismatch and never opens. Supervision: restart cap
+      3/10 min (socket.web.transport.exited, then socket.web.stop
+      {transport-restart-cap}; a failed respawn ⇒ {transport-restart-failed};
+      both clear the timers); 2-min linger after the last GUI session
+      (socket.web.linger, socket.web.stop{no-sessions}). Production spawn
+      only through the platform's `transport` sandbox profile
+      (#oracle-sandbox); the unsandboxed child exists only via the internal
+      seam `web` (testing.ts createWebEndpointForTest). Event kinds emitted
+      (§9.1 socket namespace): socket.web.listen, socket.web.bundle.mismatch,
+      socket.web.linger, socket.web.stop, socket.web.transport.exited,
+      socket.gui.token.issued, socket.gui.session.ended, socket.auth.theft,
+      socket.auth.replay, socket.auth.reconnect.requested, socket.auth.fail
+      {origin|host|sec-fetch-site|gui-token}. The spec declares no signals.
+    path: src/kernel/web/
+    type: module
+    tags: [gnomon, kernel, web-endpoint, transport, paradigm-8, m1-4]
+    tests:
+      - test/web-units.test.ts
+      - test/web-endpoint.test.ts
+      - test/web-child.test.ts
+      - test/web-sandbox.test.ts
+      - test/seams-fence.test.ts
+      - test/refusal-reasons.test.ts
+    oracles: [G-WEB-01, G-WEB-02, G-WEB-03, G-WEB-04, G-WEB-05, G-WEB-06, G-WEB-07, G-WEB-08]
+
+  oracle-sandbox:
+    description: >-
+      #oracle-sandbox (spec §15.5) — the kernel's sandbox profiles. M1.4
+      lands the `transport` profile for gnomon-web (src/kernel/sandbox/
+      transport.ts): profile data, the darwin sandbox-exec SBPL generator
+      (default-deny; read of `/`, /usr/lib, /System/Library, the node binary
+      and its install's lib/ — never the prefix — plus Homebrew's Cellar, opt
+      and etc/openssl@3; refused `sandbox-unavailable` if any granted read
+      subpath equals or contains $HOME, the gnomon home or its keys dir
+      (Aegis C2);
+      the child's entry dir and package.json ancestors, the pinned bundle;
+      metadata of their ancestors; sysctl-read; loopback bind/inbound; exec
+      of node only; no fork, no write, no mach-lookup, no outbound; every
+      path realpath'd; env empty). Platform registry TRANSPORT_BACKENDS
+      (G-WIN-05): darwin only; win32 is the Windows parity phase (P8-D78);
+      any platform without a backend refuses `sandbox-unavailable` (fail
+      closed). Residuals: SBPL `localhost:*` also admits ::1 (the child binds
+      127.0.0.1 only); ancestor metadata is visible; node may re-exec itself.
+      The other seven profiles land with their milestones (session M1.7,
+      oracle M2.3, …).
+    path: src/kernel/sandbox/
+    type: module
+    tags: [gnomon, kernel, sandbox, paradigm-8, m1-4]
+    tests:
+      - test/web-sandbox.test.ts
+      - test/web-units.test.ts
+    oracles: [G-WEB-07]
 
   ref-resolver:
     description: >-
@@ -575,8 +687,10 @@ flows:
       SIGTERM/SIGINT take the same path with reason 'signal'. Since M1.4
       slice 2 every log.read{follow} subscription is an idle holder
       ('subscriber') and the hub is closed first at shutdown. Not yet built:
-      sessions/timers as holders, mod and transport-child stop,
-      orphan sweep, the Windows pipe.
+      sessions/timers as holders, mod stop, orphan sweep, the Windows pipe.
+      M1.4: the #web-endpoint is started by requestWebLaunch, its WebSocket
+      connections are idle holders, and it is stopped (child ended) before
+      the socket closes at shutdown.
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"

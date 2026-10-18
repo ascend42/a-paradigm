@@ -4,7 +4,7 @@
  * in clientApiId), and every routed socket reason is actually sent — or is a
  * named, deliberate future-stable placeholder.
  *
- * WIRE SCOPE: src/kernel/socket/** and src/kernel/refs/** (every refusal there
+ * WIRE SCOPE: src/kernel/socket/**, src/kernel/web/** and src/kernel/refs/** (every refusal there
  * reaches a client), src/kernel/log/redaction.ts (the read projection's
  * refusal travels through asRpcRefusal), and the kernel log's read-side
  * `closed`. The rest of #kernel-log's refusals are in-process only: the socket
@@ -73,7 +73,8 @@ const PLACEHOLDERS: Record<string, string> = {
 
 /** client.ts is the CLIENT side: its reasons are synthesized locally, never sent by the kernel. */
 const CLIENT_FILE = path.join(SRC, 'socket', 'client.ts');
-const wireFiles = [...tsFiles(path.join(SRC, 'socket')).filter((f) => f !== CLIENT_FILE), ...tsFiles(path.join(SRC, 'refs')), path.join(SRC, 'log', 'redaction.ts')];
+// src/kernel/web/** (#web-endpoint, M1.4): its auth hook and WebSocket replies reach GUI clients.
+const wireFiles = [...tsFiles(path.join(SRC, 'socket')).filter((f) => f !== CLIENT_FILE), ...tsFiles(path.join(SRC, 'refs')), ...tsFiles(path.join(SRC, 'web')), path.join(SRC, 'log', 'redaction.ts')];
 
 describe('refusal reasons on the wire are registered (P8-D89)', () => {
   const sent = reasonsIn(wireFiles);

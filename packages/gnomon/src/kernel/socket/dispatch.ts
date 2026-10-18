@@ -47,6 +47,15 @@
  * namespace-ownership gate (log-append.ts, G-SOCK-04): every cell refuses in
  * M1.4. status lists only next verbs the caller's class may call.
  *
+ * M1.4 #web-endpoint: the web endpoint runs its OWN dispatcher (its
+ * authenticator signs the ws:// endpoint path) with a `web` hook that serves
+ * `auth {launchToken}` / `{reconnect}` (web/endpoint.ts). A GUI connection is
+ * matrix class `human`; its auth.ok row is followed by socket.gui.token.issued
+ * and both are written before the `{guiToken, principal, connId}` reply (the
+ * session is withdrawn if either write fails). An auth refusal may carry rows
+ * to write first (socket.auth.reconnect.requested) and its own row kind
+ * (socket.auth.theft).
+ *
  * Pre-auth limits (Aegis round 2): a connection with no hello after
  * `helloTimeoutMs` (10 s) or not authenticated after `preAuthTimeoutMs` (the
  * 30 s nonce TTL) is closed; at most `maxPreAuth` (64) unauthenticated
@@ -69,7 +78,7 @@ import {
 } from '@a-company/gnomon-contracts';
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
-import type { ConnAuthState, SocketAuthenticator } from './auth.js';
+import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
@@ -165,9 +174,19 @@ export interface KernelStatusSource {
   log(): Record<string, unknown>;
   kernelKey(): { keyId: string; custody: 'full' | 'partial'; source: string };
   root(): { state: string; rootKeyId: string | null };
+  /** The web endpoint's status block (#web-endpoint; absent ⇒ `{listening:false}`). */
+  web?(): Record<string, unknown>;
 }
 
-export type SocketLogKind = 'socket.hello' | 'socket.auth.ok' | 'socket.auth.fail' | 'socket.auth.replay' | 'socket.disconnect';
+export type SocketLogKind =
+  | 'socket.hello'
+  | 'socket.auth.ok'
+  | 'socket.auth.fail'
+  | 'socket.auth.replay'
+  | 'socket.auth.theft'
+  | 'socket.auth.reconnect.requested'
+  | 'socket.gui.token.issued'
+  | 'socket.disconnect';
 
 export type PreAuthCloseReason = 'hello-timeout' | 'pre-auth-timeout' | 'pre-auth-cap' | 'unauthenticated-call';
 
@@ -200,6 +219,8 @@ export interface DispatcherOptions {
   status: KernelStatusSource;
   /** The kernel log read side + the subscription hub (M1.4 slice 2). Absent ⇒ log.read/ref.resolve stay not-implemented. */
   reads?: { log: ReadLog; hub: SubscriptionHub };
+  /** The web endpoint's launch/reconnect auth handler (#web-endpoint dispatcher only). */
+  web?: WebAuthHook;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
@@ -266,7 +287,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
       root: o.status.root(),
-      web: { listening: false },
+      web: o.status.web?.() ?? { listening: false },
       subscriptions: { n: o.reads?.hub.count() ?? 0, onThisConnection: o.reads?.hub.count(s.connId) ?? 0, perConnectionMax: MAX_SUBSCRIPTIONS_PER_CONNECTION, backlogCap: o.reads?.hub.cap ?? SUBSCRIPTION_BACKLOG_CAP },
       clients: [...conns.values()]
         .filter((c) => c.phase === 'authenticated')
@@ -334,18 +355,28 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (m === 'auth') {
       const out = o.authenticator.authenticate(s, frame.params, {
         tokenInUse: (tokenId) => [...conns.values()].some((c) => c !== s && c.phase === 'authenticated' && c.tokenId === tokenId),
+        ...(o.web ? { web: o.web } : {}),
       });
       if (!out.ok) {
+        for (const row of out.preRows ?? []) await o.log(row.kind, row.payload, { connId: s.connId }).catch(() => undefined);
         await o
-          .log(out.replay ? 'socket.auth.replay' : 'socket.auth.fail', { reason: out.reason, ...(out.principalClaimed ? { principalClaimed: out.principalClaimed } : {}), ...(out.tokenId ? { tokenId: out.tokenId } : {}) }, {
-            connId: s.connId,
-            ...(out.deviceId ? { deviceId: out.deviceId } : {}),
-          })
+          .log(
+            out.logKind ?? (out.replay ? 'socket.auth.replay' : 'socket.auth.fail'),
+            out.logPayload ?? { reason: out.reason, ...(out.principalClaimed ? { principalClaimed: out.principalClaimed } : {}), ...(out.tokenId ? { tokenId: out.tokenId } : {}) },
+            {
+              connId: s.connId,
+              ...(out.deviceId ? { deviceId: out.deviceId } : {}),
+            },
+          )
           .catch(() => undefined); // the refusal and the close happen regardless
         throw RpcRefusal.from(out, { closeAfter: true });
       }
       try {
-        if (out.credential === 'device') {
+        if (out.credential === 'gui') {
+          const surface = s.client?.surface ?? null;
+          await o.log('socket.auth.ok', { principal: out.principal, principalKind: 'human', credential: 'gui', client: 'gui', via: out.via, surface }, { connId: s.connId, deviceId: out.deviceId });
+          await o.log('socket.gui.token.issued', { via: out.via, surface, client: 'gui' }, { connId: s.connId, deviceId: out.deviceId });
+        } else if (out.credential === 'device') {
           await o.log('socket.auth.ok', { principal: out.principal, principalKind: out.principalKind, keyId: out.keyId, surface: s.client?.surface ?? null }, { connId: s.connId, deviceId: out.deviceId });
         } else {
           // the token id only — never the token or a digest of it
@@ -353,11 +384,13 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         }
       } catch {
         s.phase = 'closed'; // never authenticated without the row
+        if (out.credential === 'gui') out.abort();
         throw new RpcRefusal('ENGINE', 'log-write-failed', 'the kernel log refused the auth row; not authenticated', undefined, { closeAfter: true });
       }
-      if (ctx.closed || conns.get(s.connId) !== s) {
-        // the connection went away during the awaited auth.ok write: no timers, no lifted cap
+      if (ctx.closed || conns.get(s.connId) !== s || s.phase !== 'authenticated') {
+        // the connection went away (or was revoked) during the awaited auth.ok write: no timers, no lifted cap
         s.phase = 'closed';
+        if (out.credential === 'gui') out.abort();
         throw new RpcRefusal('ENGINE', 'gone', 'the connection closed during authentication');
       }
       clearTimers(s.connId);
@@ -365,6 +398,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (out.credential === 'read-token') {
         armTokenTimers(s, ctx);
         return { principal: out.principal, connId: s.connId, credential: 'read-token', expiresAt: out.expiresAt };
+      }
+      if (out.credential === 'gui') {
+        out.commit();
+        return { guiToken: out.guiToken, principal: out.principal, connId: s.connId };
       }
       return { principal: out.principal, connId: s.connId };
     }

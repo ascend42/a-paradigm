@@ -21,7 +21,7 @@ import { extractSpecifiers, PKG_ROOT, rel, walk } from './helpers.js';
 const SRC = path.join(PKG_ROOT, 'src');
 const TEST_ENTRY = 'src/kernel/testing.ts';
 const CHANNEL = 'src/kernel/internal-seams.ts';
-const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', TEST_ENTRY];
+const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', 'src/kernel/web/endpoint.ts', TEST_ENTRY];
 /** Files that may name the gated recovery API in code (the implementation, the channel, the test entry). */
 const MAY_NAME_RECOVERY = new Set(['src/kernel/log/kernel-log.ts', CHANNEL, TEST_ENTRY]);
 const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsOf|mintTestPresence)\b/;
@@ -187,5 +187,13 @@ describe('seam fence: dist/ (what ships)', () => {
     const vsig = /declare function verifyLog\([^)]*\)/.exec(dts)?.[0] ?? '';
     expect(vsig).toContain('VerifyLogOptions');
     expect(vsig).not.toMatch(/keystoreAnchor/);
+  });
+});
+
+describe('transport-child isolation (§2.1, §11.2 rule 1b, A24-1)', () => {
+  it('gnomon-web reaches no key, log, auth, identity or kernel state: its import closure is the framing, the channel and the bundle hash only', () => {
+    expect([...closure('src/transport/gnomon-web.ts')].sort()).toEqual(
+      ['src/kernel/socket/framing.ts', 'src/kernel/web/bundle.ts', 'src/kernel/web/protocol.ts', 'src/transport/gnomon-web.ts', 'src/transport/web-child.ts', 'src/transport/ws-codec.ts', 'src/version.ts'].sort(),
+    );
   });
 });

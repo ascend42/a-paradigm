@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 /**
- * gnomon-web — the transport child (spec §2.1, §11.2): loopback HTTP + RFC 6455
- * framing over node:http, forwarding records to the kernel over stdio. PR-0
- * placeholder only.
+ * @symbol #web-endpoint
+ *
+ * gnomon-web — the transport child entry (spec §2.1, §11.2 rule 1b). Spawned
+ * by the kernel from its own package under the `transport` sandbox profile
+ * (§15.5); talks to the kernel over stdio only (web-child.ts). Takes no
+ * arguments beyond `--version`: its configuration is the first stdin record,
+ * and no token ever reaches it on argv or env.
  */
-import { runPlaceholderBin } from '../cli/placeholder.js';
+import { GNOMON_VERSION } from '../version.js';
+import { runWebChild } from './web-child.js';
 
-process.exitCode = runPlaceholderBin('gnomon-web', process.argv.slice(2));
+if (process.argv.includes('--version')) {
+  process.stdout.write(`gnomon-web ${GNOMON_VERSION}\n`);
+} else {
+  runWebChild({ input: process.stdin, output: process.stdout, exit: (code) => process.exit(code) });
+}

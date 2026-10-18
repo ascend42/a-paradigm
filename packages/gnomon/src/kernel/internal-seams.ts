@@ -1,6 +1,7 @@
 /**
  * @symbol #kernel-log
  * @symbol #identity
+ * @symbol #web-endpoint
  *
  * Internal seam channel (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The kernel's TEST SEAMS — the
@@ -11,8 +12,10 @@
  * (src/kernel/testing.ts).
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
- * import graph): kernel-log.ts and identity/presence.ts (to register) and
- * testing.ts (to read). Nothing reachable from a production entry (the
+ * import graph): kernel-log.ts, identity/presence.ts and web/endpoint.ts (to
+ * register) and testing.ts (to read). The `web` slot (#web-endpoint, M1.4)
+ * is the ONLY way to run the transport child without its sandbox profile or
+ * against another bundle pin. Nothing reachable from a production entry (the
  * package index, the gnomon / gnomond CLIs, gnomon-web) imports testing.ts,
  * and no index re-exports this file, so production code cannot open a log
  * with a substituted keystore anchor or boot id, open one for recovery, or
@@ -25,6 +28,7 @@
 import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
+import type { WebEndpoint, WebEndpointOptions, WebEndpointSeams } from './web/endpoint.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -47,9 +51,15 @@ export interface PresenceSeams {
   mint(purpose: PresencePurpose, opts?: { method?: PresenceMethod; mintedAt?: number }): PresenceToken;
 }
 
+/** #web-endpoint: construct an endpoint with a substituted launcher (the unsandboxed child, tests on every OS) or bundle pin. */
+export interface WebSeams {
+  create(opts: WebEndpointOptions, seams: WebEndpointSeams): WebEndpoint;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
+  web?: WebSeams;
 }
 
 const slots: Slots = {};

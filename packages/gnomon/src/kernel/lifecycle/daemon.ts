@@ -23,14 +23,28 @@
  * at shutdown. socket.hello and socket.auth.fail are RATE-LIMITED: the first
  * `preAuthRowsPerWindow` (8) of each per window are written individually, the
  * rest are folded into that window's signed counter row of the same kind
- * (byOutcome / byReason). socket.auth.ok / .replay stay individual. So an
+ * (byOutcome / byReason); since #web-endpoint socket.auth.replay and
+ * socket.auth.reconnect.requested are folded the same way. socket.auth.ok
+ * stays individual. So an
  * unauthenticated flood adds at most 8 + 1 rows per kind per window. The keystore item
  * behind the signed helper is #identity M1.3. ROOT SEAM: `opts.rootAuthority`
  * defaults to UnprovisionedRootAuthority (no device can authenticate before
  * M1.3); the dev/test root is programmatic only, never env/argv (§15.3).
  *
- * Not yet here: sessions, mods, timers, the web endpoint, orphan sweep and an
- * approved `stop` (#approval-broker, M1.6).
+ * M1.4 #web-endpoint: `requestWebLaunch(connId)` — the kernel side of
+ * `gnomon open` for an authenticated HUMAN device connection on the unix
+ * socket — starts the web endpoint on first use (web/endpoint.ts: the
+ * `gnomon-web` transport child under the `transport` sandbox profile, the
+ * pinned bundle) and mints a single-use launch token that is returned to the
+ * caller in-process, never on any argv, env or file. The web endpoint runs its
+ * own dispatcher (same verbs, log, status and read-token store rules; its
+ * authenticator signs `ws://127.0.0.1:<port>/rpc`). It lingers 2 min after the
+ * last GUI session and stops with the daemon. NOTE: §5 names no verb for
+ * `gnomon open` and adding one is the M1.4 falsifier, so this is an
+ * in-process API until the spec names the wire path (reported).
+ *
+ * Not yet here: sessions, mods, timers, orphan sweep and an approved `stop`
+ * (#approval-broker, M1.6).
  */
 import { KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
@@ -44,6 +58,7 @@ import {
   type SocketServerHandle,
   type SubscriptionStats,
 } from '../socket/index.js';
+import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
@@ -92,6 +107,8 @@ export interface DaemonOptions {
   tokenRecheckMs?: number;
   maxInFlight?: number;
   writeHighWater?: number;
+  /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
+  web?: { lingerMs?: number; authDeadlineMs?: number };
 }
 
 export interface DaemonStatus {
@@ -119,6 +136,10 @@ export interface DaemonHandle {
   /** Resolves once the daemon has fully stopped. */
   readonly exited: Promise<DaemonExitReason>;
   shutdown(reason: DaemonExitReason): Promise<void>;
+  /** `gnomon open` (kernel side): start the web endpoint if needed and mint a launch token for an authenticated human device connection. */
+  requestWebLaunch(connId: string): Promise<LaunchGrant>;
+  /** The web endpoint, once started (null before the first launch). */
+  web(): WebEndpoint | null;
 }
 
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
@@ -172,16 +193,22 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     refused: new Map<string, number>(),
     preAuthClosed: new Map<string, number>(),
     individual: new Map<string, number>(), // kind → individual rows written this window
-    folded: { 'socket.hello': new Map<string, number>(), 'socket.auth.fail': new Map<string, number>() } as Record<string, Map<string, number>>,
+    // Aegis C4: the web endpoint's Reconnect and post-TTL replay rows are attacker-triggerable too
+    folded: {
+      'socket.hello': new Map<string, number>(),
+      'socket.auth.fail': new Map<string, number>(),
+      'socket.auth.replay': new Map<string, number>(),
+      'socket.auth.reconnect.requested': new Map<string, number>(),
+    } as Record<string, Map<string, number>>,
   };
   const perWindow = opts.preAuthRowsPerWindow ?? 8;
   /** Rate-limited pre-auth rows: individual up to `perWindow`, then a counter increment. */
-  const logSocketRow = (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }): Promise<void> => {
+  const logSocketRow = (kind: SocketLogKind | `socket.${string}`, payload: Record<string, unknown>, ids: { connId?: string; deviceId?: string } = {}): Promise<void> => {
     const folded = diag.folded[kind];
     if (folded) {
       const n = diag.individual.get(kind) ?? 0;
       if (n >= perWindow) {
-        bump(folded, String(kind === 'socket.hello' ? payload.outcome : payload.reason));
+        bump(folded, String(kind === 'socket.hello' ? payload.outcome : (payload.reason ?? payload.surface ?? kind)));
         return Promise.resolve();
       }
       diag.individual.set(kind, n + 1);
@@ -233,6 +260,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       idle.stop();
       emit({ kind: 'daemon.exit', reason });
       try {
+        await web?.stop('daemon-exit').catch(() => undefined);
         hub.close();
         await server?.close();
         clearInterval(diagTimer);
@@ -309,22 +337,54 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     onDropped: (connId, payload) => void appendRow('socket.subscription.dropped', payload, { connId }).catch(() => undefined),
     ...(opts.subscriptionBacklogCap !== undefined ? { backlogCap: opts.subscriptionBacklogCap } : {}),
   });
-  const dispatcher = createKernelDispatcher({
-    authenticator,
+  let web: WebEndpoint | null = null;
+  const statusSource = {
+    daemon: () => ({ ...status() }),
+    log: () => ({ ...log.head() }),
+    kernelKey: () => ({ keyId: kernelSigner.keyId, custody: 'partial' as const, source: kernelKeySource }),
+    root: () => ({ state: authority.state, rootKeyId: authority.rootKeyId }),
+    web: () => web?.status() ?? { listening: false },
+  };
+  const dispatcherCommon = {
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
     ...(opts.maxPreAuth !== undefined ? { maxPreAuth: opts.maxPreAuth } : {}),
     ...(opts.tokenRecheckMs !== undefined ? { tokenRecheckMs: opts.tokenRecheckMs } : {}),
-    onPreAuthClose: (why) => bump(diag.preAuthClosed, why),
+    onPreAuthClose: (why: Parameters<NonNullable<Parameters<typeof createKernelDispatcher>[0]['onPreAuthClose']>>[0]) => bump(diag.preAuthClosed, why),
     log: logSocketRow,
-    status: {
-      daemon: () => ({ ...status() }),
-      log: () => ({ ...log.head() }),
-      kernelKey: () => ({ keyId: kernelSigner.keyId, custody: 'partial', source: kernelKeySource }),
-      root: () => ({ state: authority.state, rootKeyId: authority.rootKeyId }),
-    },
-  });
+    status: statusSource,
+  };
+  const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherCommon });
+  const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
+  const requestWebLaunch = async (connId: string): Promise<LaunchGrant> => {
+    const asker = dispatcher.clients().find((c) => c.connId === connId);
+    if (!asker) throw new LifecycleRefusal('web-launch-refused', 'no authenticated unix-socket connection with that connId', { connId });
+    if (typeof kernelPem !== 'string') throw new LifecycleRefusal('web-launch-refused', 'the kernel key has no public PEM to hand the page (keystore custody is M1.3)');
+    web ??= WebEndpoint.create({
+      home,
+      kernelPublicKeyPem: kernelPem,
+      log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
+      holdIdle: () => idle.hold('connection'),
+      ...(opts.web?.lingerMs !== undefined ? { lingerMs: opts.web.lingerMs } : {}),
+      ...(opts.web?.authDeadlineMs !== undefined ? { authDeadlineMs: opts.web.authDeadlineMs } : {}),
+      dispatcher: (endpointPath, webHook) =>
+        createKernelDispatcher({
+          ...dispatcherCommon,
+          web: webHook,
+          authenticator: new SocketAuthenticator({
+            home,
+            endpointPath,
+            kernelSigner,
+            trust: authority,
+            // revocations are recorded by the socket authenticator's store (and its timer); this store honours them
+            readTokens: { revoked: chainRevoked, onRevoked: () => undefined, onUntrusted: () => undefined },
+            ...(opts.clock ? { clock: opts.clock } : {}),
+          }),
+        }),
+    });
+    return web.requestLaunch(asker);
+  };
   const onSocketEvent = (e: SocketEvent): void => {
     emit(e);
     if (e.kind === 'socket.connect') diag.connects++;
@@ -371,5 +431,5 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     kernelKeyCustody: 'partial',
     root: authority.state,
   });
-  return { pidfile, via: choice.via, log, kernelSigner, kernelPrincipal, flushDiagnostics, server: server!, subscriptions: () => hub.stats(), status, exited, shutdown };
+  return { pidfile, via: choice.via, log, kernelSigner, kernelPrincipal, flushDiagnostics, server: server!, subscriptions: () => hub.stats(), status, exited, shutdown, requestWebLaunch, web: () => web };
 }

@@ -13,7 +13,12 @@ export type LifecycleRefusalReason =
   | 'unsafe-home'
   | 'no-safe-endpoint'
   | 'endpoint-busy'
-  | 'endpoint-acl';
+  | 'endpoint-acl'
+  // #web-endpoint (M1.4): in-process refusals of the web endpoint's start and launch (no wire path yet — see web/endpoint.ts)
+  | 'sandbox-unavailable'
+  | 'web-bundle-mismatch'
+  | 'web-transport-failed'
+  | 'web-launch-refused';
 
 export class LifecycleRefusal extends Error {
   readonly reason: LifecycleRefusalReason;
