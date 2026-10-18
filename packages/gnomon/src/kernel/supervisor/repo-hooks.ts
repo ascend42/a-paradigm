@@ -203,6 +203,10 @@ export function mergeHooks(a: unknown, b: Record<string, unknown[]>): Record<str
 export const REPO_HOOK_WARNING = 'approving trusts the command and every file it runs; a repo change, a pull, or a session edit can change what runs';
 
 /** The card for one hook: the install-card rendering (count line first, one line for the hook, never cut). */
+/** Hook events whose hook can answer a tool permission itself (p01b (i)), so the card warns about it. */
+export const TOOL_APPROVING_EVENTS: readonly string[] = Object.freeze(['PreToolUse', 'PermissionRequest']);
+export const TOOL_APPROVAL_WARNING = 'This hook can approve tool uses with no card: a PreToolUse or PermissionRequest hook that answers allow runs the tool without asking you (P8-D96).';
+
 export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: RepoHook, root: string): { detail: Record<string, unknown>; lines: string[]; block: Record<string, unknown> } {
   const i = set.hooks.indexOf(h) + 1;
   const lines = [
@@ -212,6 +216,8 @@ export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: Rep
     `hooks: ${h.source}: ${h.event}${h.matcher !== null ? ` [${h.matcher}]` : ''}${h.timeout !== null ? ` (timeout ${h.timeout}s)` : ''}: ${h.command}`,
     // Aegis C2 (kernel-written, every card): the pin is the command string, not the code it runs (spec §A.9, T-2026-10-18-027)
     REPO_HOOK_WARNING,
+    // P8-D96 (Aegis): p01b (i) — a PreToolUse/PermissionRequest hook answering allow runs the tool with no card
+    ...(TOOL_APPROVING_EVENTS.includes(h.event) ? [TOOL_APPROVAL_WARNING] : []),
     'allow: this hook runs in this repo\'s sessions until the hook set changes. deny: it never runs (edit-in-place is deferred).',
   ];
   return {
