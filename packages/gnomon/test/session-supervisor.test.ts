@@ -11,7 +11,7 @@
  *     permit.reserve; G-SUB-05: a settings layer written mid-session stops
  *     the session within 2 s with billing.api.refused;
  *   S2: every stdout line is a turn.event before turn.usage / budget.usage;
- *   usage from stream events only, no double count; ask-user card;
+ *   usage from stream events only, no double count; no card from a tool_use block (P8-D96);
  *   G-RUN-03: interrupt = the control_request line; stop kills the group,
  *     also when the child ignores SIGTERM;
  *   T-008: generated plugin bytes are verified against the kernel-held record.
@@ -307,7 +307,7 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     for (const p of [node, path.join(extra, 'nodeinst'), dir]) expect(pol, p).toContain(p);
     expect(s.backend).toBe('claude-code');
   });
-  it('S2 + usage: turn.event before usage; tokens charged once against the spawn permit; ask-user card raised', async () => {
+  it('S2 + usage: turn.event before usage; tokens charged once against the spawn permit; an assistant tool_use raises NO card (P8-D96: cards come from the request path)', async () => {
     const r = rig();
     setMode(w, { tool: 'AskUserQuestion' });
     const s = await open(r.sup);
@@ -320,9 +320,9 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     expect(charged).toBe(10 + 25 + 100); // result total, never double counted
     const spawnPermit = r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload.permitId;
     expect(new Set(r.kinds('budget.usage').map((x) => x.payload.permitId))).toEqual(new Set([spawnPermit]));
-    expect(r.cards).toHaveLength(1);
-    expect(r.cards[0]).toMatchObject({ kind: 'ask-user', hsid: s.hsid, attended: true });
-    expect(r.kinds('turn.ask-user')[0]!.payload.cardId).toBe('card:1');
+    // falsifier 12 moved: the ask-user row lives on the can_use_tool path (test/permission-session.test.ts)
+    expect(r.cards).toHaveLength(0);
+    expect(r.kinds('turn.ask-user')).toEqual([]);
     expect(r.kinds('permit.grant').map((x) => (x.payload.permit as { kind: string }).kind)).toEqual(['session.spawn', 'turn']);
   });
   it('G-RUN-03 interrupt is the control_request line; stop kills the group and releases the permits', async () => {
@@ -581,7 +581,7 @@ describe('M1.7 slice 2 (deferred)', () => {
   it.todo('Aegis M3 optional per-session byte cap on stdout (slice 2)');
   it.todo('G-SUB-05 non-law-7 layer change ⇒ gate-class card (slice 2); fs.watch/ReadDirectoryChangesW instead of the 500 ms hash poll');
   it.todo('G-RUN-05 idle respawn with --resume charged as a launch (a session.spawn permit), crash cap 3/10 min, claude_binary_changed on respawn wired');
-  it.todo('ask-user / plan card decisions written back to the child (answer / approve-plan) — needs the broker decision path to the session (slice 2)');
+  it.todo('the ask-user answer picker in the GUI (P8-D96 slice denies AskUserQuestion with "ask in your reply")');
   it.todo('api-token billing (billing.api.active per turn, G-SUB-03) injected into exactly one session child (slice 2; refused today)');
   it.todo('session principals (p:<ns>/s-<short>) authenticated on the socket: session.send/stop for agent/session classes, permit.reserve "own scope"');
   it.todo('the gnomon-mods MCP bridge spawned beside the session under the same profile (M1.11)');

@@ -65,7 +65,8 @@ describe.skipIf(!SANDBOX_OK)('#gnomon-up end to end: identity init → gnomon up
   it('a GUI approve goes broker → one helper presence prompt → decisionSig that verifies under the approvals key', async () => {
     const w = sessionWorld();
     cleanups.push(() => w.cleanup());
-    setMode(w, { tool: 'ExitPlanMode' }); // the fake claude proposes a plan: the broker raises a `plan` card
+    // P8-D96: the fake claude asks can_use_tool for ExitPlanMode (p01b shape): the broker raises a `plan` card
+    setMode(w, { permissionAsk: { steps: [{ request: { id: 'plan-1', tool: 'ExitPlanMode', input: { plan: '1. write plan.txt' } } }], hold: true } });
     const uh = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gue-')));
     cleanups.push(() => removeTree(uh));
     const home = path.join(uh, '.gnomon');
@@ -162,4 +163,90 @@ describe.skipIf(!SANDBOX_OK)('#gnomon-up end to end: identity init → gnomon up
     const other = approveMessage({ cardId: cardId!, decision: 'reject', cardContentHash: card, approverPrincipalId: rec.principalId });
     expect(ring.verify(keyId, 'approve', other, Buffer.from(String(row.decisionSig), 'base64'))).not.toBe('ok');
   }, 60_000);
+
+  it('P8-D96: the session asks to Write → a permission card → the GUI allows → one fresh presence (Touch ID) → the fake claude\'s Write runs', async () => {
+    const w = sessionWorld();
+    cleanups.push(() => w.cleanup());
+    const target = path.join(w.cwd, 'written-by-claude.txt');
+    setMode(w, { permissionAsk: { steps: [{ request: { id: 'write-1', tool: 'Write', input: { file_path: target, content: 'hello from the session' } } }] } });
+    const uh = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gue-')));
+    cleanups.push(() => removeTree(uh));
+    const home = path.join(uh, '.gnomon');
+
+    // 1. gnomon identity init (the real code) over the fake Secure Enclave
+    const fake = new FakeHelper(null);
+    const helperExe = path.join(uh, 'gnomon-helper');
+    fs.writeFileSync(helperExe, `#!${process.execPath}\n`);
+    fs.chmodSync(helperExe, 0o755);
+    const init = await runIdentityCommand(['init', '--home', home, '--helper', helperExe, '--name', 'matt', '--host', 'mac'], { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough() }, {
+      env: {},
+      verifier: DEV,
+      handleSignals: false,
+      start: () => (fake.revive(), view(fake)),
+      once: () => (req) => fake.handle(req),
+    });
+    expect(init).toBe(0);
+    const rec = readIdentity(home)!;
+
+    // 2. gnomon up's kernel on that home
+    const k: UpKernel = await startUpKernel(fs.realpathSync.native(home), {
+      userHome: uh,
+      verifier: DEV,
+      startHelper: () => (fake.revive(), view(fake)),
+      start: (o) =>
+        startDaemonForTest(o, {
+          supervisor: { claudePath: w.claude, allowScripts: true, userHome: w.userHome, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }) },
+          billing: { env: () => ({}), layers: () => [] },
+        }),
+    });
+    cleanups.push(() => k.stop());
+    expect(k.client.serverVerified).toBe(true);
+
+    // 3. the launch URL, then the GUI's WebSocket with the token from the fragment
+    const g = await k.launch();
+    const m = /^http:\/\/127\.0\.0\.1:(\d+)\/#launch=([A-Za-z0-9_-]{43})&k=[A-Za-z0-9_-]+$/.exec(g.url);
+    expect(m).not.toBeNull();
+    const ws = await wsConnect(Number(m![1]), GOOD(Number(m![1])));
+    cleanups.push(() => ws.end());
+    ws.sendJson(rpc(1, 'hello', HELLO('browser')));
+    expect((await reply(ws, 1)).result).toBeDefined();
+    ws.sendJson(rpc(2, 'auth', { launchToken: m![2] }));
+    const auth = (await reply(ws, 2)).result as { principal: string; connId: string };
+    expect(auth.principal).toBe(rec.principalId);
+
+    // 4. a session on the fake claude; its plan raises a card
+    ws.sendJson(rpc(3, 'session.open', { cwd: w.cwd, attended: true }));
+    const opened = (await reply(ws, 3)).result as { hsid: string; state: string };
+    expect(opened.state).toBe('running');
+    ws.sendJson(rpc(4, 'session.send', { hsid: opened.hsid, content: [{ text: 'write the file' }] }));
+    expect((await reply(ws, 4)).result).toBeDefined();
+    // the card the kernel raised for the request (approval.request carries it)
+    let card: { cardId: string; kind: string; contentHash: string } | null = null;
+    const deadline = Date.now() + 10_000;
+    while (!card && Date.now() < deadline) {
+      for (const v of k.handle.log.read({ reader: { class: 'human' }, kinds: ['approval.request'] })) {
+        const p = v.view === 'full' ? (v.event.payload as { card?: { cardId: string; kind: string; contentHash: string; hsid?: string } }) : undefined;
+        if (p?.card?.hsid === opened.hsid) card = p.card;
+      }
+      if (!card) await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(card).toMatchObject({ kind: 'permission' });
+    expect(fs.existsSync(target)).toBe(false); // the card is the gate
+
+    // the GUI allows exactly as gnomon-gui does: {cardId, decision}; one fresh presence prompt
+    const promptsBefore = fake.prompts.length;
+    ws.sendJson(rpc(5, 'approve', { cardId: card!.cardId, decision: 'allow' }));
+    const decided = await reply(ws, 5);
+    expect(decided.error, JSON.stringify(decided.error)).toBeUndefined();
+    expect(decided.result).toMatchObject({ cardId: card!.cardId, state: 'decided', presence: 'fresh', via: 'gui' });
+    expect(fake.prompts.length).toBe(promptsBefore + 1);
+
+    // the kernel answers allow with the kernel-held input; the fake claude's Write runs under the session profile
+    const end = Date.now() + 10_000;
+    while (!fs.existsSync(target) && Date.now() < end) await new Promise((r) => setTimeout(r, 50));
+    expect(fs.readFileSync(target, 'utf8')).toBe('hello from the session');
+    const inject = [...k.handle.log.read({ reader: { class: 'human' }, kinds: ['session.inject'] })].flatMap((v) => (v.view === 'full' ? [v.event.payload as Record<string, unknown>] : [])).find((p) => p.origin === 'kernel' && p.requestId === 'write-1');
+    expect(inject).toMatchObject({ answer: 'allow', cardId: card!.cardId });
+  }, 60_000);
+
 });

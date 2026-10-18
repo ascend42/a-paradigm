@@ -1216,7 +1216,14 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
-      src/kernel/broker/. classes.ts — valid decisions per card kind and the
+      src/kernel/broker/. P8-D96: RaiseInput.decisions limits a card's signed
+      actions (permission slice cards: allow|deny, no always); approve
+      refuses any other decision bad-params; expire(cardId, why) logs
+      approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect
+      from kernel observation). Aegis A3: approve claims the decision
+      synchronously after its last re-check (CardRecord.claim); expire()
+      refuses a claimed card and defers while #deciding (applied in
+      approve's finally if the decision did not settle). classes.ts — valid decisions per card kind and the
       BASE presence class of each (cached: allow/deny on permission, answer,
       approve-plan, reject on plan/reconsider/inbound handoff, deny on
       strictness, incident; fresh: everything else the spec names, incl.
@@ -1503,7 +1510,32 @@ components:
   supervisor:
     description: >-
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
-      src/kernel/supervisor/. P8-D94 / G-SUB-07 (M1.7 slice 2, founder
+      src/kernel/supervisor/. P8-D96 PERMISSION CHANNEL (probe p01b):
+      sessions run --permission-prompts host --permission-prompt-tool stdio;
+      each can_use_tool request is answered exactly once (pending map per
+      session, cap 64, entry deleted before the answer; card raised inside
+      the stdout queue, decision awaited outside it). permission.ts (pure)
+      composes the card (Bash full command; Edit path + old/new; Write path,
+      bytes, excerpt, inputHash; other tools capped canonical JSON; detail
+      {tool, toolUseId, requestId, inputHash, repo, path?}), auto-denies
+      writes under denyWrite and AskUserQuestion ("ask in your reply"), and
+      maps the outcome: only allow / approve-plan allow. updatedInput is the
+      kernel-held input; never updatedPermissions. Deny on no broker, raise
+      failure, expiry, cancel (control_cancel_request => expire
+      'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
+      (expire 'session-exited', nothing written). Every answer is logged
+      session.inject{origin:'kernel', hash, bytes} first. A permit never
+      means allow (P8-D92). ROUND 2 (Aegis): the card block is wrappedBlock
+      (never cut); every input field shown (key=value); MultiEdit per edit,
+      NotebookEdit source in full, Write the only excerpt; auto-deny
+      sandbox-escape / bad-input / too-large; deniedWrite case-folds on
+      darwin+win32; policy.json permissions.ask for ALWAYS_ASK_TOOLS;
+      control_request turn.event rows hash-only; a malformed body under a
+      valid id is denied, a bad id logs approval.suspect
+      malformed-permission-request; the ungated-tool-use detector
+      (tool_result of a gated tool with no request); pending entries carry
+      closedWhy (the expire why); repo-hook cards for PreToolUse /
+      PermissionRequest carry TOOL_APPROVAL_WARNING. P8-D94 / G-SUB-07 (M1.7 slice 2, founder
       ruling): repo-hooks.ts extracts the repo's project/local hooks (strict;
       O_NOFOLLOW + fstat; events allow-listed to CLAUDE_HOOK_EVENTS;
       COMMAND_UNSAFE, unknown keys, non-command types refused by id;
@@ -1620,7 +1652,11 @@ components:
   claude-adapter:
     description: >-
       #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
-      src/adapters/claude-code/adapter.ts. SLICE 2 (T-2026-10-18-010 L4):
+      src/adapters/claude-code/adapter.ts. P8-D96: argv --permission-prompts
+      host --permission-prompt-tool stdio (assertPermissionChannel throws on
+      any other value); events permission-request / control-cancel /
+      control-request-unknown; stdin permissionAllowLine /
+      permissionDenyLine / controlErrorLine (never updatedPermissions). SLICE 2 (T-2026-10-18-010 L4):
       SESSION_HOOKS_MODES all|user-only|none and settingSourcesFor(mode) ->
       --setting-sources; the mode is the root-signed config.sessions.hooks
       (budget/config.ts parseSessionsSection; default all; rollback/invalid

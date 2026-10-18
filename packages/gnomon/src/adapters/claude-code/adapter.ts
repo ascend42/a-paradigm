@@ -7,7 +7,10 @@
  *
  *   buildClaudeArgv — the §3.3 argv: `-p`, stream-json in and out, verbose,
  *     replayed user messages, partial messages, `--permission-mode default`,
- *     `--permission-prompts none`, `--session-id|--resume <uuid>`,
+ *     `--permission-prompts host --permission-prompt-tool stdio` (P8-D96: the
+ *     tool-permission channel; probe p01b found `host` ALONE delivers no
+ *     request, and `none` wins over `stdio`; any other value or a second copy
+ *     throws), `--session-id|--resume <uuid>`,
  *     `--settings <policy.json>`, an EXPLICIT `--setting-sources`, `--mcp-config
  *     <mcp.json> --strict-mcp-config`, optional system prompt and model.
  *     FORBIDDEN_FLAGS throw (`agents.ts:40,456`), checked on the final argv
@@ -25,6 +28,17 @@
  *   controlInterrupt / userMessage — the stdin lines: interrupt is the
  *     stream-json `control_request{subtype:'interrupt'}` on every OS, never a
  *     signal (A23-4).
+ *   P8-D96 permission channel (shapes measured by probe p01b, claude 2.1.302):
+ *     stdout `control_request{request_id, request:{subtype:'can_use_tool',
+ *     tool_name, input, tool_use_id, …}}` ⇒ `permission-request`;
+ *     `control_cancel_request{request_id}` ⇒ `control-cancel`; any other
+ *     control_request subtype ⇒ `control-request-unknown`. A can_use_tool line
+ *     with a valid request id but a bad body is `permission-malformed`
+ *     (answered deny); one with a bad id is `malformed` (cannot be answered;
+ *     the supervisor logs approval.suspect). stdin answers:
+ *     permissionAllowLine / permissionDenyLine / controlErrorLine. None of them
+ *     ever carries `updatedPermissions`, and Claude's `permission_suggestions`
+ *     are never read: every rule lives in the kernel log.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -63,6 +77,22 @@ export function settingSourcesFor(mode: SessionHooksMode): readonly SettingSourc
       return [];
     default:
       throw new TypeError(`#claude-adapter: unknown session hooks mode ${String(mode)}`);
+  }
+}
+
+/** P8-D96: the only permission-channel values (p01b: `host` needs `--permission-prompt-tool stdio`). */
+export const PERMISSION_PROMPTS = 'host' as const;
+export const PERMISSION_PROMPT_TOOL = 'stdio' as const;
+
+/** Exactly one `--permission-prompts host` and one `--permission-prompt-tool stdio` (also in `--flag=value` form); anything else throws. */
+export function assertPermissionChannel(argv: readonly string[]): void {
+  for (const [flag, want] of [['--permission-prompts', PERMISSION_PROMPTS], ['--permission-prompt-tool', PERMISSION_PROMPT_TOOL]] as const) {
+    const values: string[] = [];
+    argv.forEach((a, i) => {
+      if (a === flag) values.push(argv[i + 1] ?? '');
+      else if (a.startsWith(`${flag}=`)) values.push(a.slice(flag.length + 1));
+    });
+    if (values.length !== 1 || values[0] !== want) throw new TypeError(`#claude-adapter: ${flag} must appear once as ${want} (P8-D96), got ${JSON.stringify(values)}`);
   }
 }
 
@@ -106,7 +136,8 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
     '--replay-user-messages',
     '--include-partial-messages',
     '--permission-mode', 'default',
-    '--permission-prompts', 'none',
+    '--permission-prompts', PERMISSION_PROMPTS,
+    '--permission-prompt-tool', PERMISSION_PROMPT_TOOL,
     i.resume ? '--resume' : '--session-id', i.uuid,
     '--settings', i.policyPath,
     '--setting-sources', i.settingSources.join(','),
@@ -117,6 +148,7 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
     ...(i.extra ?? []),
   ];
   assertNoForbiddenFlags(argv);
+  assertPermissionChannel(argv);
   return argv;
 }
 
@@ -130,6 +162,20 @@ export function controlInterruptLine(requestId: string = randomUUID()): string {
   return `${JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'interrupt' } })}\n`;
 }
 
+/** P8-D96 allow: `updatedInput` is ALWAYS the kernel-held input of the request (never a client's); no updatedPermissions. */
+export function permissionAllowLine(requestId: string, updatedInput: unknown): string {
+  return `${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: { behavior: 'allow', updatedInput } } })}\n`;
+}
+
+export function permissionDenyLine(requestId: string, message: string, interrupt?: boolean): string {
+  return `${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: { behavior: 'deny', message, ...(interrupt === true ? { interrupt: true } : {}) } } })}\n`;
+}
+
+/** The answer to a control_request subtype the kernel does not serve. */
+export function controlErrorLine(requestId: string, error: string): string {
+  return `${JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: requestId, error } })}\n`;
+}
+
 /* ── stdout events ───────────────────────────────────────────────────────── */
 
 export interface Usage {
@@ -140,11 +186,25 @@ export type AdapterEvent =
   | { kind: 'init'; type: string; sessionId: string | null; model: string | null; apiKeySource: string | null }
   | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number } }
   | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean }
-  | { kind: 'user'; type: string; replay: boolean }
+  | { kind: 'user'; type: string; replay: boolean; toolResults: ToolResultSeen[] }
   | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; costUsd: number | null; permissionDenials: number; quota: boolean }
   | { kind: 'control'; type: string; subtype: string | null; requestId: string | null }
+  | { kind: 'permission-request'; type: 'control_request.can_use_tool'; requestId: string; toolName: string; toolUseId: string | null; input: Record<string, unknown> }
+  | { kind: 'control-cancel'; type: 'control_cancel_request'; requestId: string }
+  | { kind: 'permission-malformed'; type: 'control_request.can_use_tool'; requestId: string }
+  | { kind: 'control-request-unknown'; type: string; subtype: string; requestId: string | null }
   | { kind: 'unknown'; type: string }
-  | { kind: 'malformed'; type: 'malformed'; bytes: number };
+  | { kind: 'malformed'; type: string; bytes: number };
+
+/** One tool_result in a `user` line: its tool_use id, is_error, and Claude's permission decision (`accept` | `reject`) when reported. */
+export interface ToolResultSeen {
+  toolUseId: string;
+  isError: boolean;
+  decision: string | null;
+}
+
+/** A control request id we answer: printable, bounded (p01b: Claude sends UUIDs). */
+export const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 
 const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -190,8 +250,17 @@ export function parseStreamLine(line: string): AdapterEvent {
       const quota = str(o.error) !== null && QUOTA.test(String(o.error));
       return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota };
     }
-    case 'user':
-      return { kind: 'user', type: 'user', replay: o.isReplay === true };
+    case 'user': {
+      // Aegis detector (P8-D96): the tool_result ids, with Claude's own permission decision when it reports one
+      const m = obj(o.message);
+      const content = Array.isArray(m?.content) ? (m!.content as unknown[]) : [];
+      const metas = Array.isArray(o.tool_result_meta) ? (o.tool_result_meta as unknown[]).map(obj) : [];
+      const toolResults = content.map(obj).filter((c): c is Record<string, unknown> => c !== null && c.type === 'tool_result' && typeof c.tool_use_id === 'string').map((c) => {
+        const meta = metas.find((x) => x !== null && x.id === c.tool_use_id);
+        return { toolUseId: c.tool_use_id as string, isError: c.is_error === true, decision: str(obj(meta?.permission_decision)?.decision) };
+      });
+      return { kind: 'user', type: 'user', replay: o.isReplay === true, toolResults };
+    }
     case 'result': {
       const isError = o.is_error === true;
       const text = `${str(o.subtype) ?? ''} ${str(o.result) ?? ''} ${String(o.api_error_status ?? '')}`;
@@ -205,6 +274,28 @@ export function parseStreamLine(line: string): AdapterEvent {
         permissionDenials: Array.isArray(o.permission_denials) ? o.permission_denials.length : 0,
         quota: isError && QUOTA.test(text),
       };
+    }
+    case 'control_request': {
+      const r = obj(o.request);
+      const subtype = str(r?.subtype) ?? '(none)';
+      const requestId = str(o.request_id);
+      if (subtype === 'can_use_tool') {
+        const input = obj(r?.input);
+        const toolName = str(r?.tool_name);
+        const toolUseId = r?.tool_use_id === undefined ? null : str(r?.tool_use_id);
+        // Aegis A5: a bad request id cannot be answered (`malformed`); a good id with a bad body is answered deny
+        if (requestId === null || !REQUEST_ID.test(requestId)) return { kind: 'malformed', type: 'control_request.can_use_tool', bytes: Buffer.byteLength(line) };
+        if (toolName === null || toolName === '' || toolName.length > 256 || input === null || (r?.tool_use_id !== undefined && toolUseId === null)) {
+          return { kind: 'permission-malformed', type: 'control_request.can_use_tool', requestId };
+        }
+        return { kind: 'permission-request', type: 'control_request.can_use_tool', requestId, toolName, toolUseId, input };
+      }
+      return { kind: 'control-request-unknown', type: `control_request.${subtype}`, subtype, requestId: requestId !== null && REQUEST_ID.test(requestId) ? requestId : null };
+    }
+    case 'control_cancel_request': {
+      const requestId = str(o.request_id);
+      if (requestId === null || !REQUEST_ID.test(requestId)) return { kind: 'malformed', type: 'control_cancel_request', bytes: Buffer.byteLength(line) };
+      return { kind: 'control-cancel', type: 'control_cancel_request', requestId };
     }
     case 'control_response': {
       const r = obj(o.response);

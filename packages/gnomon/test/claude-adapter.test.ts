@@ -20,7 +20,9 @@ describe('G-RUN-01 argv and forbidden flags', () => {
     expect(a.slice(0, 1)).toEqual(['-p']);
     for (const f of ['--input-format', '--output-format', '--verbose', '--replay-user-messages', '--include-partial-messages', '--strict-mcp-config']) expect(a).toContain(f);
     expect(a[a.indexOf('--permission-mode') + 1]).toBe('default');
-    expect(a[a.indexOf('--permission-prompts') + 1]).toBe('none');
+    expect(a[a.indexOf('--permission-prompts') + 1]).toBe('host');
+    expect(a[a.indexOf('--permission-prompt-tool') + 1]).toBe('stdio');
+    expect(a).not.toContain('none');
     expect(a[a.indexOf('--session-id') + 1]).toBe(base.uuid);
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('user,project,local');
     expect(a[a.indexOf('--settings') + 1]).toBe('/s/policy.json');
@@ -74,6 +76,10 @@ describe('G-ADP-01 transcript replay (Claude Code 2.1.302 shapes, p10m-claude-co
     expect(parseStreamLine('not json').kind).toBe('malformed');
     expect(parseStreamLine('[1,2]').kind).toBe('malformed');
     expect(parseStreamLine('{"type":"result","is_error":true,"result":"Claude AI usage limit reached"}')).toMatchObject({ kind: 'result', quota: true });
+  });
+  it('a user line exposes its tool_result ids with Claude\'s permission decision (P8-D96 detector)', () => {
+    const l = '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"},{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"no"}]},"tool_result_meta":[{"id":"tu1","permission_decision":{"decision":"accept","source":"config"}}]}';
+    expect(parseStreamLine(l)).toEqual({ kind: 'user', type: 'user', replay: false, toolResults: [{ toolUseId: 'tu1', isError: false, decision: 'accept' }, { toolUseId: 'tu2', isError: true, decision: null }] });
   });
   it('AskUserQuestion ⇒ ask-user, ExitPlanMode ⇒ plan; other tools ⇒ no card', () => {
     expect([cardKindOfTool('AskUserQuestion'), cardKindOfTool('ExitPlanMode'), cardKindOfTool('Bash')]).toEqual(['ask-user', 'plan', null]);

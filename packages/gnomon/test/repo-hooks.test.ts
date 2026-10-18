@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, REPO_HOOK_WARNING, repoHookCard, repoHookDecisionsFrom, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
+import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, REPO_HOOK_WARNING, repoHookCard, TOOL_APPROVAL_WARNING, repoHookDecisionsFrom, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
 
 let root = '';
 afterEach(() => {
@@ -166,6 +166,16 @@ describe('card + policy rendering', () => {
     expect(c.detail).toMatchObject({ event: 'repo-hook', setHash: s.setHash, hookId: s.hooks[0]!.hookId, command: s.hooks[0]!.command });
     const text = (c.block.children as Array<{ text: string }>).map((x) => x.text.replace(/^ {2}↳ /, '')).join('');
     expect(text).toContain('y'.repeat(300)); // wrapped, never truncated
+  });
+  it('P8-D96: a PreToolUse or PermissionRequest hook card says it can approve tool uses with no card; other events do not', () => {
+    for (const [event, warns] of [['PreToolUse', true], ['PermissionRequest', true], ['PostToolUse', false], ['UserPromptSubmit', false]] as const) {
+      const s = extractRepoHooks([repo({ hooks: { [event]: [{ hooks: [{ type: 'command', command: 'echo a' }] }] } })]);
+      if (s.status !== 'ok') throw new Error('expected ok');
+      const lines = repoHookCard(s, s.hooks[0]!, root).lines;
+      expect(lines.includes(TOOL_APPROVAL_WARNING), event).toBe(warns);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+    expect(TOOL_APPROVAL_WARNING).toContain('can approve tool uses with no card');
   });
   it('hooksBlock + mergeHooks: generated hooks first, approved repo hooks appended', () => {
     const s = extractRepoHooks([repo(one('echo a'))]);

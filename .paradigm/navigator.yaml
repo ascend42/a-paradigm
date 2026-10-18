@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T21:14:39.164Z'
+generated: '2026-10-18T22:30:57.073Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -272,6 +271,7 @@ symbols:
   '#purpose-component-ref-resolver': packages/gnomon/
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-dev-launch': packages/gnomon/
+  '#purpose-component-gnomon-up': packages/gnomon/
   '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-gnomon-ts-client': packages/gnomon/
@@ -1345,6 +1345,7 @@ symbols:
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
+  '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
