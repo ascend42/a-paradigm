@@ -116,6 +116,12 @@ export interface SessionPolicyInput {
 export function localRunnerDenies(r: { node: string; dir: string }, userHome?: string): PolicyPath[] {
   const node = realpathLoose(r.node);
   let prefix = path.dirname(path.dirname(node));
+  // Homebrew (Aegis): node loads sibling kegs' dylibs via <prefix>/opt/*/lib (libuv, llhttp, ada-url, simdjson, …),
+  // so a Cellar node denies the WHOLE Homebrew prefix — the parent of `Cellar` (/opt/homebrew, /usr/local,
+  // /home/linuxbrew/.linuxbrew) — covering Cellar/, opt/ and lib/. Consequence: sessions cannot brew install/upgrade.
+  const parts = node.split(path.sep);
+  const cellar = parts.lastIndexOf('Cellar');
+  if (cellar > 0) prefix = parts.slice(0, cellar).join(path.sep) || path.sep;
   const uh = userHome ? realpathLoose(userHome) : null;
   const above = (a: string, b: string): boolean => a === b || b.startsWith(a.endsWith(path.sep) ? a : a + path.sep);
   if (prefix === path.parse(prefix).root || (uh && above(prefix, uh))) prefix = path.dirname(node);

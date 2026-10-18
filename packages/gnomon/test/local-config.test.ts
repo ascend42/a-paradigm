@@ -242,6 +242,15 @@ describe('round 3 (Aegis H1, node half): every session profile denies writes to 
     expect(narrowed).toContain(fs.realpathSync.native(path.join(uh, 'bin')));
     expect(narrowed).not.toContain(fs.realpathSync.native(uh));
   });
+  it('Homebrew: a Cellar node denies the whole Homebrew prefix (the parent of Cellar) as a subpath', () => {
+    const brew = scratch();
+    const node = path.join(brew, 'Cellar', 'node', '22.0.0', 'bin', 'node');
+    fs.mkdirSync(path.dirname(node), { recursive: true });
+    fs.writeFileSync(node, 'x');
+    const d = localRunnerDenies({ node, dir: path.join(brew, 'src') }, path.join(path.dirname(brew), 'not-under-brew-uh'));
+    expect(d).toContainEqual({ path: fs.realpathSync.native(brew), match: 'subpath', class: 'binary' });
+    expect(d.some((x) => x.path === fs.realpathSync.native(path.join(brew, 'Cellar', 'node', '22.0.0')))).toBe(false);
+  });
 
   it('the local lane\'s profile (built with the loaded config) carries those denies', async () => {
     const home = scratch();
@@ -255,7 +264,8 @@ describe('round 3 (Aegis H1, node half): every session profile denies writes to 
     const nodeReal = fs.realpathSync.native(process.execPath);
     const denies = plans[0]!.policy.denyWrite.map((d) => d.path);
     expect(denies).toContain(nodeReal);
-    expect(denies).toContain(path.dirname(path.dirname(nodeReal)));
+    const cellar = nodeReal.split(path.sep).lastIndexOf('Cellar');
+    expect(denies).toContain(cellar > 0 ? nodeReal.split(path.sep).slice(0, cellar).join(path.sep) : path.dirname(path.dirname(nodeReal)));
     expect(denies).toContain(fs.realpathSync.native(pin.dir));
   });
 
