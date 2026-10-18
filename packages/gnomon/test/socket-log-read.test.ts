@@ -24,7 +24,8 @@ import {
   writeNewDeviceKey,
 } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kernel/lifecycle/index.js';
-import { KernelLog, projectForReader, projectionStats, sha256TaggedFast, SoftwareEd25519Signer, type AnchorStore, type HeadAnchor, type LogView } from '../src/kernel/log/index.js';
+import { projectForReader, projectionStats, sha256TaggedFast, SoftwareEd25519Signer, type AnchorStore, type HeadAnchor, type LogView } from '../src/kernel/log/index.js';
+import { openKernelLog } from '../src/kernel/testing.js';
 import { resolveRef } from '../src/kernel/refs/index.js';
 import {
   connectGnomon,
@@ -440,7 +441,7 @@ describe('log.read{follow} subscriptions (§4.9)', () => {
     const t = tempHome('gh-');
     cleanups.push(t.cleanup);
     mkdirSync(t.home, { recursive: true, mode: 0o700 });
-    const log = KernelLog.open({ home: t.home, kernelPrincipal: 'p:abcdefgh/kernel', signer: SoftwareEd25519Signer.generate() });
+    const log = openKernelLog({ home: t.home, kernelPrincipal: 'p:abcdefgh/kernel', signer: SoftwareEd25519Signer.generate() });
     cleanups.push(async () => void (await log.close()));
     const holds = { n: 0 };
     const dropped: Array<{ connId: string; payload: Res }> = [];
@@ -625,7 +626,7 @@ describe('round 2: no confirmation oracle in limited views (Aegis #1)', () => {
 describe('round 2: released head — D83 ordering for reads and tail delivery (Aegis #2)', () => {
   it('a critical row whose keystore anchor is pending is invisible (and so is every later row) to log.read, ref lookup and subscriptions until it resolves', async () => {
     const { g, ks } = gatedKeystore();
-    const log = KernelLog.open({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
+    const log = openKernelLog({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { warm: 1 } });
     const hub = new SubscriptionHub({ log });
@@ -658,7 +659,7 @@ describe('round 2: released head — D83 ordering for reads and tail delivery (A
 
   it('failed anchoring: the critical row never appears as effective; its daemon.anchor.failed marker does; later rows are released', async () => {
     const { g, ks } = gatedKeystore();
-    const log = KernelLog.open({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
+    const log = openKernelLog({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { warm: 1 } });
     g.hold = true;
@@ -678,7 +679,7 @@ describe('round 2: released head — D83 ordering for reads and tail delivery (A
 
 describe('round 2: backlog cap at subscribe and lag = head − cursor (reviewer #3)', () => {
   it('subscribe refuses BAD_REQUEST backlog-too-large when head − since > cap; following from a page cursor works', async () => {
-    const log = KernelLog.open({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
+    const log = openKernelLog({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     for (let i = 0; i < 30; i++) await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { i } });
     const hub = new SubscriptionHub({ log, backlogCap: 20 });
@@ -697,7 +698,7 @@ describe('round 2: backlog cap at subscribe and lag = head − cursor (reviewer 
 
 describe('round 2: commit-path fan-out is metadata-only (both reviewers #4)', () => {
   it('a commit projects nothing and hashes nothing per subscriber; work per commit is one O(1) check per subscriber', async () => {
-    const log = KernelLog.open({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
+    const log = openKernelLog({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     const hub = new SubscriptionHub({ log, maxTotal: 1000, maxPerConnection: 1000 });
     cleanups.push(() => hub.close());
@@ -742,7 +743,7 @@ describe('round 3', () => {
 
   it('lag counts only up to the released head: a held critical row does not drop subscribers while bulk rows queue behind it (reviewer)', async () => {
     const { g, ks } = gatedKeystore();
-    const log = KernelLog.open({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
+    const log = openKernelLog({ home: logHome(), kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate(), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { warm: 1 } });
     const hub = new SubscriptionHub({ log, backlogCap: 20 });
@@ -767,7 +768,7 @@ describe('round 3', () => {
 describe('round 2: nits', () => {
   it('getById: a tampered row is row-integrity only for a reader who could see it; NOT_FOUND (undefined) otherwise', async () => {
     const home = logHome();
-    const log = KernelLog.open({ home, kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
+    const log = openKernelLog({ home, kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     const e = (await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { x: 'a' } })).event;
     const db = new DatabaseSync(path.join(home, 'kernel.db'));
@@ -780,7 +781,7 @@ describe('round 2: nits', () => {
 
   it('prev linkage: a row rewritten with a recomputed hash breaks the next row\'s prev and that row is withheld (residual: the rewritten row itself)', async () => {
     const home = logHome();
-    const log = KernelLog.open({ home, kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
+    const log = openKernelLog({ home, kernelPrincipal: KP, signer: SoftwareEd25519Signer.generate() });
     cleanups.push(async () => void (await log.close().catch(() => undefined)));
     const a = (await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { x: 'a' } })).event;
     const b = (await log.append({ kind: 'socket.frame.dropped', principal: KP, payload: { x: 'c' } })).event;

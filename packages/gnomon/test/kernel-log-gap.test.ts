@@ -28,8 +28,8 @@ import {
   SoftwareEd25519Signer,
   type AnchorStore,
   type HeadAnchor,
-  type KernelLogOptions,
 } from '../src/kernel/log/index.js';
+import { openKernelLog, openKernelLogForRecovery, acknowledgeGap, mintTestPresence, type PresenceToken, type KernelLogTestOptions } from '../src/kernel/testing.js';
 
 const KERNEL = 'p:abcdefgh/kernel';
 const HSID = 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0';
@@ -77,10 +77,10 @@ function memKeystore(): MemKs {
 /** Let queued keystore writes (the open re-stamp) settle without writing any new anchor. */
 const drain = () => new Promise<void>((r) => setImmediate(r));
 
-const base = (home: string, ks: AnchorStore, bootSession: string): KernelLogOptions => ({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks, bootSession });
+const base = (home: string, ks: AnchorStore, bootSession: string): KernelLogTestOptions => ({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks, bootSession });
 
 function openLog(home: string, ks: AnchorStore, bootSession: string, recovery = false): KernelLog {
-  const log = (recovery ? KernelLog.openForRecovery : KernelLog.open)(base(home, ks, bootSession));
+  const log = (recovery ? openKernelLogForRecovery : openKernelLog)(base(home, ks, bootSession));
   opened.push(log);
   return log;
 }
@@ -124,7 +124,7 @@ const fileHead = (home: string): HeadAnchor => JSON.parse(readFileSync(headFile(
 async function crashedAfterCritical(): Promise<{ home: string; ks: MemKs; lostHash: string }> {
   const home = tmpHome();
   const ks = memKeystore();
-  const log = KernelLog.open(base(home, ks, BOOT_A)); // "dies" without close (closed only by afterEach, after the test)
+  const log = openKernelLog(base(home, ks, BOOT_A)); // "dies" without close (closed only by afterEach, after the test)
   opened.push(log);
   for (let i = 0; i < 5; i++) await log.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
   const r = await log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } });
@@ -147,7 +147,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     expect(log.report.integrity).toMatchObject({ state: 'truncated', cause: 'tamper' });
     const a = await rejection(log.append({ kind: 'session.open', principal: KERNEL }));
     expect([a.refusal.code, a.reason, a.refusal.data.cause]).toEqual(['INTEGRITY_BROKEN', 'truncated', 'tamper']);
-    const g = await rejection(log.acknowledgeGap({ presenceToken: 'present' }));
+    const g = await rejection(acknowledgeGap(log, { presenceToken: mintTestPresence() }));
     expect([g.refusal.code, g.reason]).toEqual(['FORBIDDEN', 'tamper']);
     await log.close();
     expect(ks.stored).toMatchObject({ seq: 6, boot: BOOT_A }); // the evidence is never overwritten
@@ -177,7 +177,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('(c) ahead, different boot, after a clean close ⇒ tamper (a clean close is durable)', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    const log = KernelLog.open(base(home, ks, BOOT_A));
+    const log = openKernelLog(base(home, ks, BOOT_A));
     for (let i = 0; i < 6; i++) await log.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
     await log.close();
     expect(ks.stored).toMatchObject({ seq: 6, boot: BOOT_A, closed: true });
@@ -190,7 +190,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('a clean-close keystore marker is cleared by the open re-stamp itself (so a later power cut is not misread as tamper)', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    const l1 = KernelLog.open(base(home, ks, BOOT_A));
+    const l1 = openKernelLog(base(home, ks, BOOT_A));
     await l1.append({ kind: 'session.open', principal: KERNEL });
     await l1.close();
     expect(ks.stored?.closed).toBe(true);
@@ -205,7 +205,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('S34-01: every open re-stamps the keystore anchor with the CURRENT boot; a truncation after an open in this boot reads tamper', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    const l1 = KernelLog.open(base(home, ks, BOOT_B)); // written in an earlier boot
+    const l1 = openKernelLog(base(home, ks, BOOT_B)); // written in an earlier boot
     for (let i = 0; i < 5; i++) await l1.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
     await l1.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } });
     await l1.close();
@@ -224,7 +224,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('S34-01: the first append waits for the re-stamp; if it fails, critical appends are refused until the head is re-anchored', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    await KernelLog.open(base(home, ks, BOOT_A)).close();
+    await openKernelLog(base(home, ks, BOOT_A)).close();
     ks.down = true;
     const log = openLog(home, ks, BOOT_B);
     const bulk = await log.append({ kind: 'session.open', principal: KERNEL }); // waited for the (failed) re-stamp
@@ -242,7 +242,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     const setup = async () => {
       const home = tmpHome();
       const ks = memKeystore();
-      const log = KernelLog.open(base(home, ks, BOOT_A));
+      const log = openKernelLog(base(home, ks, BOOT_A));
       opened.push(log);
       for (let i = 0; i < 4; i++) await log.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
       await log.flushAnchors();
@@ -258,7 +258,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     expect(refusalOf(() => openLog(a.home, a.ks, BOOT_B)).refusal.data).toMatchObject({ anchor: 'file', unauthenticatedLead: true });
     const rec = openLog(a.home, a.ks, BOOT_B, true);
     expect(rec.report.anchors).toEqual({ file: 'ahead', keystore: 'ok' });
-    const g = await rejection(rec.acknowledgeGap({ presenceToken: 'present' }));
+    const g = await rejection(acknowledgeGap(rec, { presenceToken: mintTestPresence() }));
     expect([g.refusal.code, g.reason]).toEqual(['FORBIDDEN', 'unauthenticated-lead']);
     // forked tail: the (non-ahead) keystore anchor's hash differs from the db row ⇒ anchor-mismatch, even in recovery
     const b = await setup();
@@ -275,12 +275,12 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('S34-05: any lag behind a clean-close KEYSTORE anchor ⇒ anchor-lag (even when the file anchor is exact)', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    const l1 = KernelLog.open(base(home, ks, BOOT_A));
+    const l1 = openKernelLog(base(home, ks, BOOT_A));
     for (let i = 0; i < 3; i++) await l1.append({ kind: 'session.open', principal: KERNEL, payload: { i } });
     await l1.close();
     const closedAt3 = { ...ks.stored! };
     expect(closedAt3).toMatchObject({ seq: 3, closed: true });
-    const l2 = KernelLog.open(base(home, ks, BOOT_A));
+    const l2 = openKernelLog(base(home, ks, BOOT_A));
     for (let i = 0; i < 2; i++) await l2.append({ kind: 'session.open', principal: KERNEL, payload: { i } });
     await l2.close();
     ks.stored = closedAt3; // the keystore says "cleanly closed at 3"; the db (and the file anchor) say 5
@@ -323,14 +323,14 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('(e) acknowledgeGap (presence stub) ⇒ exactly one kernel-signed daemon.log.gap; the chain verifies across it', async () => {
     const { home, ks, lostHash } = await crashedAfterCritical();
     const log = openLog(home, ks, BOOT_B, true);
-    for (const presenceToken of ['', '   ', undefined as unknown as string]) {
-      const g = await rejection(log.acknowledgeGap({ presenceToken }));
+    for (const presenceToken of ['', '   ', undefined, 'stub-presence', { purpose: 'log.gap.acknowledge', method: 'test-seam', mintedAt: Date.now() }] as unknown as PresenceToken[]) {
+      const g = await rejection(acknowledgeGap(log, { presenceToken }));
       expect([g.refusal.code, g.reason]).toEqual(['FORBIDDEN', 'presence-required']);
     }
     // daemon.log.gap is reserved to the log itself
     const forged = await rejection(log.append({ kind: 'daemon.log.gap', principal: KERNEL, payload: {} }));
     expect([forged.refusal.code, forged.reason]).toEqual(['INTEGRITY_BROKEN', 'truncated']);
-    const ack = await log.acknowledgeGap({ presenceToken: 'stub-presence' });
+    const ack = await acknowledgeGap(log, { presenceToken: mintTestPresence() });
     expect(ack).toMatchObject({ seq: 5, anchored: 'both' });
     expect(ack.event.kind).toBe('daemon.log.gap');
     expect(ack.event.payload).toEqual({ lostFrom: 5, lostTo: 6, lostHash, bootPrev: BOOT_A, bootNow: BOOT_B, fileLag: 0 });
@@ -341,7 +341,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     expect(fileHead(home)).toMatchObject({ seq: 5, hash: ack.hash, boot: BOOT_B });
     expect(log.report.integrity.state).toBe('truncated'); // the open report is history
     expect(log.truncation).toBeUndefined();
-    const again = await rejection(log.acknowledgeGap({ presenceToken: 'stub-presence' }));
+    const again = await rejection(acknowledgeGap(log, { presenceToken: mintTestPresence() }));
     expect([again.refusal.code, again.reason]).toEqual(['BAD_REQUEST', 'no-gap']);
     const reserved = await rejection(log.append({ kind: 'daemon.log.gap', principal: KERNEL, payload: {} }));
     expect([reserved.refusal.code, reserved.reason]).toEqual(['FORBIDDEN', 'reserved-kind']);
@@ -365,12 +365,12 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     const { home, ks } = await crashedAfterCritical();
     const log = openLog(home, ks, BOOT_B, true);
     ks.down = true;
-    const f = await rejection(log.acknowledgeGap({ presenceToken: 'present' }));
+    const f = await rejection(acknowledgeGap(log, { presenceToken: mintTestPresence() }));
     expect([f.refusal.code, f.reason, f.refusal.data.seq]).toEqual(['ENGINE', 'anchor-failed', 5]);
     expect(log.integrity.state).toBe('truncated');
     expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL }))).reason).toBe('truncated');
     ks.down = false;
-    const ack = await log.acknowledgeGap({ presenceToken: 'present' });
+    const ack = await acknowledgeGap(log, { presenceToken: mintTestPresence() });
     expect(ack.seq).toBe(5);
     expect(log.head().seq).toBe(5);
     expect(log.integrity).toEqual({ state: 'ok' });
@@ -382,7 +382,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     const home = tmpHome();
     const ks = memKeystore();
     const opts = { ...base(home, ks, BOOT_A), segmentRows: 4 };
-    const log = KernelLog.open(opts);
+    const log = openKernelLog(opts);
     for (let i = 0; i < 3; i++) await log.append({ kind: 'session.open', principal: KERNEL, payload: { i } }); // rows 1..3 + closing row 4
     await log.append({ kind: 'session.open', principal: KERNEL, payload: { i: 4 } }); // row 5 in segment 2
     await log.flushAnchors();
@@ -392,11 +392,11 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     // the lost tail: segment 2 never made it; segment 1 is back in kernel.db, rename not done
     for (const s of ['', '-wal', '-shm']) rmSync(path.join(home, `kernel.db${s}`), { force: true });
     renameSync(path.join(home, 'log', 'segments', '000001.db'), path.join(home, 'kernel.db'));
-    const rec = KernelLog.openForRecovery({ ...opts, bootSession: BOOT_B });
+    const rec = openKernelLogForRecovery({ ...opts, bootSession: BOOT_B });
     opened.push(rec);
     expect(rec.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', lostFrom: 5, lostTo: 5 });
     expect(rec.head()).toMatchObject({ segment: 1, seq: 4 });
-    const ack = await rec.acknowledgeGap({ presenceToken: 'present' });
+    const ack = await acknowledgeGap(rec, { presenceToken: mintTestPresence() });
     expect(ack).toMatchObject({ seq: 5 });
     expect(rec.head()).toMatchObject({ segment: 2, seq: 5 });
     expect(rec.verify().failures).toEqual([]);
@@ -407,7 +407,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     // log's home is refused on Windows, and that setup was unused)
     const h = tmpHome();
     const ks2 = memKeystore();
-    const w = KernelLog.open(base(h, ks2, BOOT_A));
+    const w = openKernelLog(base(h, ks2, BOOT_A));
     opened.push(w);
     for (let i = 0; i < 5; i++) await w.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
     const lost = await w.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }); // seq 6
@@ -415,7 +415,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     const rec = openLog(h, ks2, BOOT_B, true);
     expect(rec.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', lostFrom: 6, lostTo: 6 });
     ks2.down = true; // interrupted: the gap row commits, the keystore write never lands
-    expect((await rejection(rec.acknowledgeGap({ presenceToken: 'present' }))).reason).toBe('anchor-failed');
+    expect((await rejection(acknowledgeGap(rec, { presenceToken: mintTestPresence() }))).reason).toBe('anchor-failed');
     expect(ks2.stored).toMatchObject({ seq: 6, hash: lost.hash }); // keystore still names the LOST row 6
     ks2.down = false;
     // both entry points treat it as acknowledged-but-unanchored: no mismatch, no second gap row
@@ -440,7 +440,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     expect(refusalOf(() => openLog(home, ks, BOOT_A)).refusal.data).toMatchObject({ cause: 'tamper' });
     const diags: string[] = [];
     const h = tmpHome();
-    const l = KernelLog.open({ ...base(h, memKeystore(), 'not-a-uuid'), onDiagnostic: (d) => diags.push(d.what) });
+    const l = openKernelLog({ ...base(h, memKeystore(), 'not-a-uuid'), onDiagnostic: (d) => diags.push(d.what) });
     opened.push(l);
     expect(l.report.boot).toBe('unknown');
     expect(diags).toContain('boot.unknown');
@@ -454,12 +454,32 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('openForRecovery on a healthy log is a plain open; acknowledgeGap then has nothing to acknowledge', async () => {
     const home = tmpHome();
     const ks = memKeystore();
-    const l1 = KernelLog.open(base(home, ks, BOOT_A));
+    const l1 = openKernelLog(base(home, ks, BOOT_A));
     await l1.append({ kind: 'session.open', principal: KERNEL });
     await l1.close();
     const log = openLog(home, ks, BOOT_B, true);
     expect(log.report).toMatchObject({ integrity: { state: 'ok' }, boot: BOOT_B });
-    expect((await rejection(log.acknowledgeGap({ presenceToken: 'p' }))).reason).toBe('no-gap');
+    expect((await rejection(acknowledgeGap(log, { presenceToken: mintTestPresence() }))).reason).toBe('no-gap');
     await log.append({ kind: 'session.open', principal: KERNEL });
+  });
+});
+
+describe('acknowledgeGap needs a branded, fresh, single-use PresenceToken (T-2026-10-17-009(c), S34-10)', () => {
+  it('stale and already-used tokens refuse presence-required with the verdict; a fresh one acknowledges', async () => {
+    const { home, ks } = await crashedAfterCritical();
+    const log = openLog(home, ks, BOOT_B, true);
+    const stale = mintTestPresence('log.gap.acknowledge', { mintedAt: Date.now() - 61_000 });
+    const s = await rejection(acknowledgeGap(log, { presenceToken: stale }));
+    expect([s.refusal.code, s.reason, s.refusal.data?.presence]).toEqual(['FORBIDDEN', 'presence-required', 'stale']);
+    const token = mintTestPresence();
+    const ack = await acknowledgeGap(log, { presenceToken: token });
+    expect(ack.event.kind).toBe('daemon.log.gap');
+    await log.close();
+    // the same token on a second truncated log: burned
+    const other = await crashedAfterCritical();
+    const log2 = openLog(other.home, other.ks, BOOT_B, true);
+    const u = await rejection(acknowledgeGap(log2, { presenceToken: token }));
+    expect([u.refusal.code, u.reason, u.refusal.data?.presence]).toEqual(['FORBIDDEN', 'presence-required', 'used']);
+    expect(log2.truncation).toBeDefined();
   });
 });

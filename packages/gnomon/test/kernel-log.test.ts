@@ -39,9 +39,9 @@ import {
   SoftwareEd25519Signer,
   type AnchorStore,
   type HeadAnchor,
-  type KernelLogOptions,
   type Signer,
 } from '../src/kernel/log/index.js';
+import { openKernelLog, type KernelLogTestOptions } from '../src/kernel/testing.js';
 
 // 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
 const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
@@ -60,8 +60,8 @@ function tmpHome(): string {
   return h;
 }
 
-function openLog(home: string, extra: Partial<KernelLogOptions> = {}, signer: Signer | null = KERNEL_KEY): KernelLog {
-  const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer, ...extra });
+function openLog(home: string, extra: Partial<KernelLogTestOptions> = {}, signer: Signer | null = KERNEL_KEY): KernelLog {
+  const log = openKernelLog({ home, kernelPrincipal: KERNEL, signer, ...extra });
   open.push(log);
   return log;
 }
@@ -277,7 +277,7 @@ describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
   it('S34-18: reserved-kind rows are bound to the kernel principal + key; standalone verify says kernelBinding not-checked', async () => {
     const home = tmpHome();
     const impostor = 'p:abcdefgh/impostor';
-    const l1 = KernelLog.open({ home, kernelPrincipal: impostor, signer: KERNEL_KEY, segmentRows: 4 });
+    const l1 = openKernelLog({ home, kernelPrincipal: impostor, signer: KERNEL_KEY, segmentRows: 4 });
     await fill(l1, 3); // rows 1..3 + daemon.segment row 4 by the impostor principal
     await l1.close();
     const log = openLog(home, { segmentRows: 4 });
@@ -664,7 +664,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       const db = attacker(path.join(home, 'kernel.db'));
       db.prepare('DELETE FROM chain WHERE seq = ?').run(r.seq);
       db.close();
-      const refused = refusalOf(() => KernelLog.open({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks }));
+      const refused = refusalOf(() => openKernelLog({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks }));
       expect([refused.refusal.code, refused.reason], kind).toEqual(['INTEGRITY_BROKEN', 'truncated']);
     }
   }, SLOW_FSYNC_TIMEOUT);

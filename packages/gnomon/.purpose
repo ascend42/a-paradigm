@@ -257,12 +257,23 @@ components:
       (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and
       kernelKeyIds so verify works across restarts; same-user writable and not
       root-signed, so across restarts kernel signatures prove nothing against
-      a same-user forger until M1.3 (custody partial).
+      a same-user forger until M1.3 (custody partial). presence.ts
+      (T-2026-10-17-009(c), Aegis S34-10) — PresenceToken, a branded type
+      minted only by this module: private constructor guarded by a
+      module-private mint key, a `#state` private field and a `unique symbol`
+      brand (nominal by type; `PresenceToken.is` is a `#state in v` runtime
+      brand check no copy, prototype object or Proxy passes); bound to one
+      purpose (`log.gap.acknowledge`), single-use and fresh for 60 s
+      (`consumePresence` → ok | not-a-token | wrong-purpose | stale | used).
+      `requestPresence` refuses UNSUPPORTED{presence-unavailable, M1.3} until
+      the signed helper's prompt exists; the only mint before then is the
+      internal test seam (method `test-seam`).
     path: src/kernel/identity/
     type: module
     tags: [gnomon, kernel, identity, paradigm-8, m1.4]
     tests:
       - test/socket-auth.test.ts
+      - test/presence.test.ts
 
   kernel-log:
     description: >-
@@ -313,10 +324,10 @@ components:
       with data.cause `tamper` (same boot, clean close, or no comparable
       keystore boot — fails closed) or `unclean-reboot` (boot changed, not a
       clean close); a forged file-anchor boot/closed changes nothing.
-      KernelLog.openForRecovery opens such a log refusing every append and
-      writing no anchor; acknowledgeGap({presenceToken}) (presence = stub
-      seam, non-empty token, real presence wired at M1.3; unclean-reboot
-      only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
+      The recovery open (an internal seam, see SEAM HARDENING) opens such a
+      log refusing every append and writing no anchor; acknowledgeGap
+      ({presenceToken}) (a branded PresenceToken, identity/presence.ts;
+      unclean-reboot only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
       lostHash, bootPrev, bootNow, fileLag} (contracts kind added, reserved to the
       log) and re-anchors durably; the chain verifies across it. ROUND-2
       HARDENING (research 33 S34-xx): every non-recovery open re-stamps the
@@ -452,7 +463,21 @@ components:
       rename is parity-phase work (P8-D78). macOS/Linux: the file is reopened
       'r' and fsync(2)ed, the directory fsync(2)ed; an unsupported directory
       fsync (EINVAL/ENOTSUP/EOPNOTSUPP/EISDIR/EBADF, isBenignDirFsyncError) is
-      a no-op and any other error (EIO, …) is rethrown (S34-28). `npm run
+      a no-op and any other error (EIO, …) is rethrown (S34-28).
+      SEAM HARDENING (T-2026-10-17-009(c), Aegis S34-10, §19.1 release gate):
+      `keystoreAnchor` and `bootSession` are no longer KernelLogOptions keys
+      (KernelLog.open refuses them at runtime with a TypeError), and the
+      recovery open and acknowledgeGap are no longer public members. The log
+      registers them once (class static block) with the internal seam
+      channel src/kernel/internal-seams.ts, read only by the internal test
+      entry src/kernel/testing.ts (openKernelLog, openKernelLogForRecovery,
+      acknowledgeGap, mintTestPresence). test/seams-fence.test.ts proves: no
+      src file imports the test entry; only presence.ts, kernel-log.ts and
+      testing.ts import the channel; the closure of every tsup entry excludes
+      the test entry; no src/cli or $daemon-lifecycle file (nor any other src
+      file but the owners) names acknowledgeGap / openForRecovery; dist/
+      carries no test-entry marker and its KernelLog / KernelLogOptions types
+      expose no seam. `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
@@ -467,6 +492,7 @@ components:
       - test/kernel-log-open-order.test.ts
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
+      - test/seams-fence.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

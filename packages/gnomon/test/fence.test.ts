@@ -10,26 +10,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PKG_ROOT, rel, walk } from './helpers.js';
+import { extractSpecifiers, PKG_ROOT, rel, walk } from './helpers.js';
+
+export { extractSpecifiers };
 
 const CONTRACTS = '@a-company/gnomon-contracts';
-
-/** Static, re-export, side-effect, dynamic and require specifiers. */
-const SPECIFIER_PATTERNS = [
-  /\bimport\s+(?:type\s+)?[^'"`;]*?\bfrom\s*['"]([^'"]+)['"]/g,
-  /\bexport\s+(?:type\s+)?[^'"`;]*?\bfrom\s*['"]([^'"]+)['"]/g,
-  /\bimport\s*['"]([^'"]+)['"]/g,
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-];
-
-export function extractSpecifiers(source: string): string[] {
-  const out = new Set<string>();
-  for (const re of SPECIFIER_PATTERNS) {
-    for (const m of source.matchAll(re)) out.add(m[1]!);
-  }
-  return [...out];
-}
 
 const isRelative = (s: string) => s.startsWith('./') || s.startsWith('../');
 const isNodeBuiltin = (s: string) => s.startsWith('node:');

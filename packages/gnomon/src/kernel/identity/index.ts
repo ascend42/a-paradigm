@@ -4,3 +4,4 @@ export * from './root-authority.js';
 export * from './device-key.js';
 export * from './registry.js';
 export * from './kernel-pub.js';
+export * from './presence.js';
