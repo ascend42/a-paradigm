@@ -1,0 +1,35 @@
+id: L-2026-10-18-builder-164133-001
+type: milestone
+timestamp: '2026-10-18T16:41:33.131Z'
+author: builder
+title: Gnomon T-2026-10-18-015 + T-017 fixes landed on gnomon/fixes-015-017
+summary: Install-card lines never cut (mcp/hooks one per line, wrapped); conformance runner hardening + 3 falsifiers; dispatch pure move; T-017 investigated with a test-only retry
+symbols_touched:
+  - '#manifest-loader'
+  - '#approval-broker'
+  - '#client-conformance'
+  - '#socket'
+  - '#oracle-sandbox'
+files_modified:
+  - packages/gnomon/src/kernel/manifest/install.ts
+  - packages/gnomon/src/kernel/broker/card.ts
+  - packages/gnomon/src/kernel/broker/install-card.ts
+  - packages/gnomon/src/clients/conformance/runner.ts
+  - packages/gnomon/src/kernel/socket/dispatch.ts
+  - packages/gnomon/test/approval-broker.test.ts
+  - packages/gnomon/test/m112-conformance.test.ts
+  - packages/gnomon/test/web-sandbox.test.ts
+  - packages/gnomon/.purpose
+commit: 3ba2cabc
+learnings:
+  - pre-sanitizing display lines requires the flags to travel explicitly or hidden-chars and bidi are lost
+  - adding a card flag moves clientApiId so a no-truncation wrap was chosen over a cap and flag
+  - Node 26 on macOS binds long unix socket paths so the listen-error test injects the error
+body: 'Item 1 moved to T-016. Item 3 was already fixed (Array.from); a surrogate test was added. No install-card cap was needed: the card is bounded by the same manifest the full detail already carries, so no new CARD_FLAG and no ABI move.'
+linked_commits:
+  - 3ba2cabc
+  - 882684eb
+git_context:
+  ref: 882684eb23b351cafeaedbdc304cdb6d54a943ea
+  branch: gnomon/fixes-015-017
+  dirty: true
