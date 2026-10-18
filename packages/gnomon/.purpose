@@ -1071,7 +1071,25 @@ components:
       install card is rendered by the broker from re-derived lines, readPaths
       and linked source validated, presence bound to the decision; effect
       failures are recorded approval.suspect{why:effect-failed}
-      (approval.decide is a record, never authority).
+      (approval.decide is a record, never authority). Slice 2: with no
+      approvals key (before M1.3) approve answers UNSUPPORTED{presence}
+      before the decisionSig shape check, so the GUI (no signing path yet)
+      sees the presence refusal (T-2026-10-18-018 item 2); status.cards per
+      F4 — the human gets pendingForYou + byKind, every other class counts
+      only {n, pendingForYou: 0, held}; theft-card.ts — a logged
+      socket.auth.theft (#socket dispatch → port.authTheft) raises ONE
+      fresh-presence gate-class card per revoked connId naming it, no
+      timeout, no effect (the revocation stands either way). Round 2
+      (Aegis C2): the card's promise is stored before the raise awaits
+      (concurrent theft rows for one connId raise one card), at most
+      MAX_OPEN_THEFT_CARDS (8) theft cards are open — past that a theft
+      coalesces into the newest open card — a failed raise is forgotten so
+      the next theft row retries, and #socket raises only after the
+      socket.auth.theft row was written. The path #web-endpoint (revokes,
+      reports theft) → #socket (writes the row) → #approval-broker (raises
+      the card) is a one-row relay with no state of its own, documented
+      here and in theft-card.ts rather than as a $flow node (a new spec
+      node moves Appendix A's count; see lore).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]
@@ -1110,8 +1128,21 @@ components:
       chain); unsigned/invalid/older/missing-after-signed ⇒ defaults + a
       logged row; project.yaml fuse/budget/strictness/review keys ignored and
       logged. parseReserveParams: no usage params; agents never name
-      repo/loop/session/machine (kernel-bound, M1.7). DEFERRED: counters in
-      memory (boot rebuild beside S-L2). M1.7 note: api-token session turn
+      repo/loop/session/machine (kernel-bound, M1.7). Slice 2: restore(rows)
+      at boot rebuilds today's counters, the window, local sessions and the
+      announced rungs from budget.usage rows joined to their permit.grant
+      (grant-less, malformed, over-permit and non-stream rows count nothing);
+      day and window from the chain's last event time (S-L2,
+      KernelLog.lastEventAt), never the wall clock. Round 2: restore counts
+      only rows whose principal is a kernel principal AND whose keyId is a
+      kernel key (KernelLog.isKernelKey; Aegis C1 — these kinds are not
+      reserved), and a usage row's user must equal its grant's scope.user;
+      a turn counts under its own budget.usage row's `at` (the row is
+      written first; runtime and restore agree); chain times beyond wall +
+      MAX_CLOCK_SKEW_MS (5 min) are clamped to the wall clock and reported
+      once (onClockSkew → daemon event daemon.fuse.clock.skew, no row);
+      restore runs before daemon.start, so its "today" is the day of the
+      chain's last event. M1.7 note: api-token session turn
       permits are labelled subscription; per-turn billing.api.active needs
       usage against the spawn permit (G-SUB-03).
     path: src/kernel/budget/

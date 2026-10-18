@@ -456,7 +456,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       });
       if (!out.ok) {
         for (const row of out.preRows ?? []) await o.log(row.kind, row.payload, { connId: s.connId }).catch(() => undefined);
-        await o
+        const wrote = await o
           .log(
             out.logKind ?? (out.replay ? 'socket.auth.replay' : 'socket.auth.fail'),
             out.logPayload ?? { reason: out.reason, ...(out.principalClaimed ? { principalClaimed: out.principalClaimed } : {}), ...(out.tokenId ? { tokenId: out.tokenId } : {}) },
@@ -465,7 +465,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
               ...(out.deviceId ? { deviceId: out.deviceId } : {}),
             },
           )
-          .catch(() => undefined); // the refusal and the close happen regardless
+          .then(
+            () => true,
+            () => false,
+          ); // the refusal and the close happen regardless
+        // M1.6 slice 2: a WRITTEN theft row raises the broker's fresh-presence gate-class card naming the revoked connection
+        const revokedConnId = out.logKind === 'socket.auth.theft' ? out.logPayload?.revokedConnId : undefined;
+        if (wrote && typeof revokedConnId === 'string' && o.approvals) {
+          const surface = out.logPayload?.surface;
+          await o.approvals.authTheft({ connId: s.connId, revokedConnId, surface: typeof surface === 'string' ? surface : null }).catch(() => undefined);
+        }
         throw RpcRefusal.from(out, { closeAfter: true });
       }
       try {

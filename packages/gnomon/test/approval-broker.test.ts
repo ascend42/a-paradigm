@@ -17,6 +17,9 @@ import {
   ApiTokenBilling,
   approvalsKeyFrom,
   PresenceDenied,
+  raiseTheftCard,
+  MAX_OPEN_THEFT_CARDS,
+  type TheftCards,
   raiseInstallCard,
   verifyActions,
   verifyPresencePrompt,
@@ -26,6 +29,8 @@ import {
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
+import { createApprovalPort } from '../src/kernel/broker/port.js';
+import { BudgetFuse } from '../src/kernel/budget/index.js';
 import { MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
 
 const HUMAN = 'p:abcdefgh/matt';
@@ -562,6 +567,105 @@ describe('G-SUB-02 / G-SUB-03 the per-use api-token card', () => {
 describe('M1.6 residuals named by slice', () => {
   it.todo('G-BRK-04 — the spec names the id in M1.6’s row but defines no prose for it (v2 had G-BRK-01..03 only); reading pending (see report)');
   it.todo('presence prompt rendered natively or in a helper window (status.presencePromptText) — M1.3 (#identity helper, probe S29-07)');
-  it.todo('web endpoint theft raises a fresh-presence gate-class card naming the revoked connection — next M1.6 slice (#web-endpoint → broker hook)');
   it.todo('approval.suspect for a CLI decision whose pgid is a live session’s job — M1.7 (#supervisor supplies liveSessionPgids, peer credentials supply provenance)');
+});
+
+describe('M1.6 slice 2 — broker residuals', () => {
+  it('T-2026-10-18-018 (2): with no approvals key, an approve WITHOUT decisionSig (the GUI before M1.3) is refused UNSUPPORTED{presence}, not BAD_REQUEST', async () => {
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const rows: string[] = [];
+    const prod = new ApprovalBroker({ kernel, kernelPrincipal: KERNEL, log: async (k) => void rows.push(k) });
+    const c = await permission(prod);
+    expect(await refusal(prod.approve(H(), { cardId: c.cardId, decision: 'allow' }))).toMatchObject({ code: 'UNSUPPORTED', reason: 'presence', data: { milestone: 'M1.3', cardId: c.cardId } });
+    // the card and decision checks still come first: an unknown decision is still BAD_REQUEST, an unknown card NOT_FOUND
+    expect(await refusal(prod.approve(H(), { cardId: c.cardId, decision: 'install' }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(prod.approve(H(), { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', decision: 'allow' }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(rows).not.toContain('approval.decide');
+    // once an approvals key exists, a missing decisionSig is the caller's error again
+    const r = rig({ presence: touching() });
+    const c2 = await permission(r.broker);
+    expect(await refusal(r.broker.approve(H(), { cardId: c2.cardId, decision: 'allow' }))).toMatchObject({ code: 'BAD_REQUEST', reason: 'bad-params' });
+  });
+
+  it('F4 status.cards: the human gets the inbox by kind and pendingForYou; every other class gets counts only', async () => {
+    const r = rig();
+    await permission(r.broker);
+    await permission(r.broker);
+    await r.broker.raise({ kind: 'ask-user', requestedBy: AGENT, attended: true, detail: { q: 'which branch?' }, lines: ['which branch?'] });
+    expect(r.broker.status(true)).toEqual({ n: 3, pendingForYou: 3, held: 0, byKind: { permission: 2, 'ask-user': 1 } });
+    const other = r.broker.status(false);
+    expect(other).toEqual({ n: 3, pendingForYou: 0, held: 0 });
+    expect(other).not.toHaveProperty('byKind');
+    const port = createApprovalPort({ broker: r.broker, fuse: new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log: async () => undefined, billing: { env: () => ({}), layers: () => [] } }), kernelPrincipal: KERNEL });
+    for (const cls of ['agent', 'session', 'mod', 'voice', 'readToken', 'peer']) expect(port.cards(cls)).toEqual({ n: 3, pendingForYou: 0, held: 0 });
+    expect(port.cards('human')).toMatchObject({ byKind: { permission: 2, 'ask-user': 1 } });
+  });
+
+  const THIEF = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZT';
+  const VICTIM = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZV';
+
+  it('socket.auth.theft raises ONE fresh-presence gate-class card naming the revoked connection; it never expires and neither decision restores anything', async () => {
+    const seen: Array<{ text: string; connId: string }> = [];
+    const r = rig({ presence: touching(seen) });
+    const raised: TheftCards = new Map();
+    const card = await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM, surface: 'browser' }, raised);
+    expect(validateCardV1(card, { mode: 'strict' })).toEqual([]);
+    expect(card).toMatchObject({ kind: 'gate-class', requestedBy: KERNEL, attended: true, state: 'pending' });
+    expect(card.timeoutAt).toBeUndefined(); // silence decides nothing (B6)
+    const text = JSON.stringify(card.block);
+    expect(text).toContain(`Revoked GUI session: ${VICTIM}`);
+    expect(text).toContain(`Presented again by: ${THIEF}`);
+    expect(verifyActions(r.ring, card)).toBe(true);
+    expect(card.actions.map((a) => (a as { decision: string }).decision).sort()).toEqual(['allow', 'deny']);
+    // a second theft row for the same revoked connection: the same card, one approval.request
+    expect((await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)).cardId).toBe(card.cardId);
+    expect(r.kinds().filter((k) => k === 'approval.request')).toHaveLength(1);
+    // the GUI has no cached path to it: fresh presence every time, even with an open unlock on this connection
+    r.broker.unlocks.open(H().connId);
+    const decided = await r.broker.approve(H(), { cardId: card.cardId, decision: 'deny', decisionSig: r.sig(card.cardId, 'deny', card.contentHash) });
+    expect(decided).toMatchObject({ state: 'decided', presence: 'fresh' });
+    expect(seen).toHaveLength(1);
+    expect(r.kinds()).toContain('approval.decide');
+    await r.broker.expireDue();
+    expect(r.kinds()).not.toContain('approval.expire');
+  });
+
+  it('Aegis C2: concurrent theft rows for one revoked connection raise ONE card; past the ceiling thefts coalesce into the newest open card', async () => {
+    const r = rig({ presence: touching() });
+    const raised: TheftCards = new Map();
+    const same = await Promise.all([1, 2, 3, 4].map(() => raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)));
+    expect(new Set(same.map((c) => c.cardId)).size).toBe(1);
+    expect(r.kinds().filter((k) => k === 'approval.request')).toHaveLength(1);
+    // a flood of distinct revoked connections, all concurrent: never more than the ceiling open
+    const conn = (i: number) => `conn:01HZZZZZZZZZZZZZZZZZZZZ${String(i).padStart(3, '0').replace(/0/g, 'A').replace(/1/g, 'B').replace(/2/g, 'C').replace(/3/g, 'D').replace(/4/g, 'E').replace(/5/g, 'F').replace(/6/g, 'G').replace(/7/g, 'H').replace(/8/g, 'J').replace(/9/g, 'K')}`;
+    const flood = await Promise.all(Array.from({ length: 30 }, (_, i) => raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: conn(i) }, raised)));
+    const open = () => r.broker.cards().filter((c) => c.kind === 'gate-class' && c.state === 'pending');
+    expect(open()).toHaveLength(MAX_OPEN_THEFT_CARDS);
+    expect(new Set(flood.map((c) => c.cardId)).size).toBe(MAX_OPEN_THEFT_CARDS - 1); // VICTIM's card is the first of the 8
+    // deciding one frees a slot: the next new theft raises a new card
+    const first = open()[0]!;
+    await r.broker.approve(H(), { cardId: first.cardId, decision: 'allow', decisionSig: r.sig(first.cardId, 'allow', first.contentHash) });
+    const next = await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZW' }, raised);
+    expect(flood.map((c) => c.cardId)).not.toContain(next.cardId);
+    expect(open()).toHaveLength(MAX_OPEN_THEFT_CARDS);
+  });
+
+  it('a theft card whose approval.request row fails is not remembered: the next theft row raises it', async () => {
+    let failing = true;
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const broker = new ApprovalBroker({ kernel, kernelPrincipal: KERNEL, log: async () => { if (failing) throw new Error('log refused'); } });
+    const raised: TheftCards = new Map();
+    await expect(raiseTheftCard(broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)).rejects.toThrow('log refused');
+    await Promise.resolve();
+    expect(raised.has(VICTIM)).toBe(false);
+    failing = false;
+    await expect(raiseTheftCard(broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)).resolves.toMatchObject({ kind: 'gate-class' });
+  });
+
+  it('the theft card refuses ids that are not connections, and production refuses its decision until M1.3', async () => {
+    const r = rig();
+    expect(await refusal(raiseTheftCard(r.broker, KERNEL, { connId: 'x', revokedConnId: VICTIM }, new Map()))).toMatchObject({ code: 'BAD_REQUEST' });
+    const card = await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, new Map());
+    expect(await refusal(r.broker.approve(H(), { cardId: card.cardId, decision: 'allow', decisionSig: r.sig(card.cardId, 'allow', card.contentHash) }))).toMatchObject({ code: 'UNSUPPORTED', reason: 'presence' });
+  });
 });

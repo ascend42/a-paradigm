@@ -1,0 +1,18 @@
+id: L-2026-10-18-ascend-174450-001
+type: insight
+timestamp: '2026-10-18T17:44:50.393Z'
+author: ascend
+title: 'M1.6 slice 2 reading: the launch-token theft card has no effect'
+summary: 'The spec says theft raises a fresh-presence gate-class card naming the revoked connection but not what allow/deny do. Reading: the revocation already happened and stands either way; allow records ''that was me'', deny ''that was not me''; neither restores the session, so no decision can widen access. No timeout (B6: silence decides nothing). One card per revoked connId. Raised from #socket dispatch after the socket.auth.theft row, so web/* is untouched.'
+symbols_touched:
+  - '#approval-broker'
+  - '#socket'
+commit: 40ffb886
+tags:
+  - decision
+  - gnomon
+  - m1.6
+git_context:
+  ref: 40ffb88685a960df85148ab668497408864701b5
+  branch: gnomon/m16-slice2
+  dirty: false
