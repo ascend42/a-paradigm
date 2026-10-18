@@ -18,6 +18,7 @@
  * signature check are slice 2. The per-session file the kernel hands the
  * child is written as JSON (the JSON subset of YAML 1.2).
  */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { refuse, RefusedError } from '@a-company/gnomon-contracts';
 import { classifyEndpoint, type EndpointVerdict } from './endpoint.js';
@@ -75,10 +76,22 @@ export function validateLocalEndpoints(cfg: LocalLaneConfig, forbiddenPorts: rea
 
 const CLAUDE_NAME = /^claude(\.exe|\.cmd|\.js|\.mjs)?$/i;
 
-/** Law 7 / S8 mirror: the local runner is never `claude` (by command or by any argument naming a claude binary). */
+const real = (p: string): string => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+
+/**
+ * Law 7 / S8 mirror: the local runner is never `claude` — by command or any argument, checked on the path AS
+ * GIVEN and on its REALPATH (a symlink named gnomon-local pointing at claude is refused), and any path with an
+ * `@anthropic-ai/claude-code` segment (Aegis L3). Slice 2: a positive pin of the runner (hash, like the claude pin).
+ */
 export function assertNotClaude(r: LocalRunnerCommand): void {
-  for (const p of [r.command, ...(r.args ?? [])]) {
-    if (CLAUDE_NAME.test(path.basename(p)) || /(^|[\\/])claude-[0-9a-f]{16,}$/i.test(p)) {
+  for (const p of [r.command, ...(r.args ?? [])].flatMap((x) => [x, real(x)])) {
+    if (CLAUDE_NAME.test(path.basename(p)) || /(^|[\\/])claude-[0-9a-f]{16,}$/i.test(p) || /(^|[\\/])@anthropic-ai[\\/]claude-code([\\/]|$)/i.test(p)) {
       throw refused('PERMIT_REQUIRED', 'claude never runs under a backend:local permit (law 7, S8)', { why: 'claude-under-local-permit' });
     }
   }

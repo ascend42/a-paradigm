@@ -12,7 +12,7 @@ components:
     description: >-
       The gnomon-local child: src/endpoint.ts, compat.ts, client.ts (SSE
       streaming, no redirects), repair.ts, tools.ts (read_file, write_file,
-      list_dir), agent.ts, rpc.ts, cli.ts. Slice 2: compaction (~8k, fixed
+      list_dir; confined to realpath roots cwd+worktree, writes never under .git or through a symlink final component), agent.ts (sticky abort; surface none never runs tools), rpc.ts, cli.ts (exitCode, never process.exit after writes); client byte caps + idle timeout. Slice 2: compaction (~8k, fixed
       headings), JSONL session tree, bash tool.
     path: src/
     type: module

@@ -16,6 +16,8 @@ import type { AddressInfo } from 'node:net';
 export interface FakeReply {
   content?: string;
   toolCalls?: Array<{ name: string; arguments: string }>;
+  /** stream: after the content, a mid-stream {"error": …} chunk */
+  error?: string;
 }
 
 export interface FakeServer {
@@ -54,6 +56,10 @@ export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: st
       const text = reply.content ?? '';
       const third = Math.ceil(text.length / 3) || 1;
       for (let i = 0; i < text.length; i += third) send({ choices: [{ index: 0, delta: { content: text.slice(i, i + third) } }] });
+      if (reply.error) {
+        send({ error: { message: reply.error } });
+        return void res.end();
+      }
       calls.forEach((c, index) => {
         const half = Math.ceil(c.function.arguments.length / 2);
         send({ choices: [{ index: 0, delta: { tool_calls: [{ index, id: c.id, type: 'function', function: { name: c.function.name, arguments: c.function.arguments.slice(0, half) } }] } }] });

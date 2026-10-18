@@ -15,9 +15,15 @@ const emit = (ev: Record<string, unknown>): void => {
   process.stdout.write(`${JSON.stringify(ev)}\n`);
 };
 
+class Fatal extends Error {
+  constructor(readonly error: string, readonly code: number) {
+    super(error);
+  }
+}
+
+/** never process.exit after a write: the fatal line must drain, then the exit code stands */
 function fatal(error: string, code: number): never {
-  emit({ type: 'fatal', error });
-  process.exit(code);
+  throw new Fatal(error, code);
 }
 
 function main(argv: string[]): void {
@@ -57,9 +63,15 @@ function main(argv: string[]): void {
   const t = setInterval(() => {
     if (ended && !agent.running) {
       clearInterval(t);
-      process.exit(0);
+      process.exitCode = 0;
+      process.stdin.destroy();
     }
   }, 50);
 }
 
-main(process.argv.slice(2));
+try {
+  main(process.argv.slice(2));
+} catch (err) {
+  emit({ type: 'fatal', error: err instanceof Fatal ? err.error : (err as Error).message.slice(0, 200) });
+  process.exitCode = err instanceof Fatal ? err.code : 1;
+}

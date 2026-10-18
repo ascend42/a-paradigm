@@ -53,7 +53,7 @@ import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { buildSessionPolicy, policyHash, type SessionPolicy } from '../manifest/policy.js';
 import { defaultClaudeJson } from '../manifest/layers.js';
-import { sessionLaunchPlan } from '../sandbox/session.js';
+import { sessionLaunchPlan, type SessionLaunchInput, type SessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { managedFiles } from '../runner/preflight.js';
@@ -101,6 +101,8 @@ export interface LocalLaneOptions {
   /** TEST RIG ONLY: the probe's fetch */
   probeFetch?: ProbeFetch;
   probeTtlMs?: number;
+  /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
+  launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
 }
 
 interface LocalSession {
@@ -193,7 +195,9 @@ export class LocalLane {
     const first = eps[0];
     const caps = first ? await this.#probe({ id: first.ep.id, base: first.v.base, model: first.ep.model }) : null;
     const cap = capability(caps, cfg.ctxFloor ?? DEFAULT_CTX_FLOOR, first?.ep.textTools === true);
-    const route = routeModel(declared, cap, cfg.runner !== undefined);
+    let route = routeModel(declared, cap, cfg.runner !== undefined);
+    // an explicit backend pins the route: backend:'local' never falls through to Claude (reviewer, round 2)
+    if (route.chosen === 'claude' && req.backend === 'local') route = { chosen: 'fallback', reason: route.reason };
     if (route.chosen === 'claude') {
       await this.#o.log('session.routed', { hsid: null, declared, chosen: 'claude', reason: route.reason });
       return null;
@@ -277,6 +281,7 @@ export class LocalLane {
         schemaVersion: 'gnomon-local-session:v1',
         session: hsid,
         cwd: req.worktree ?? req.cwd,
+        roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])],
         endpoint: { base, model, compat: ep.compat },
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
         surface: ep.surface ?? 'compact',
@@ -287,7 +292,8 @@ export class LocalLane {
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
-      const plan = sessionLaunchPlan({ policy, binaryReal: runner.command, argv: [...(runner.args ?? []), ...buildLocalArgv({ configPath, hsid })], extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [...(runner.args ?? []), ...buildLocalArgv({ configPath, hsid })], extras };
+      const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
       child = spawn(plan.command, plan.args, { cwd: req.worktree ?? req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
       const c = child;
@@ -373,7 +379,9 @@ export class LocalLane {
         await this.#o.log('turn.partial', { hsid: s.hsid, bytes: ev.bytes }, { session: s.hsid });
         return;
       case 'message':
-        await usage('turn.usage', s.meter.message(ev.tokens));
+        // a message without usage is recorded as such (never silently zero)
+        if (ev.tokens === null) await this.#o.log('turn.usage', { hsid: s.hsid, usage: null, backend: 'local' }, { session: s.hsid });
+        else await usage('turn.usage', s.meter.message(ev.tokens));
         return;
       case 'end': {
         await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}) });

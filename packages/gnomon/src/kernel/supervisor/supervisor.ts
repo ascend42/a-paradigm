@@ -239,7 +239,8 @@ export class SessionSupervisor {
     if (req.principalClass !== 'human' || req.attended !== true) {
       throw refused('FORBIDDEN', 'M1.7 slice 1 opens attended, human-started sessions only (agent/session/unattended opens wait for the broker decision, law 5)', { principalClass: req.principalClass });
     }
-    if (req.backend === 'local' || req.model === 'local' || req.model === 'any') {
+    // an explicit backend pins the route: claude-code never spawns gnomon-local (model local + claude-code ⇒ BAD_REQUEST in the lane)
+    if (req.backend === 'local' || req.model === 'local' || (req.model === 'any' && req.backend !== 'claude-code')) {
       // §13.3: local ⇒ capable local or a fallback card; any ⇒ local if capable, else (null) Claude below
       const local = await this.#local.open(req, (r) => this.open(r));
       if (local) return local;

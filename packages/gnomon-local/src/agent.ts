@@ -30,6 +30,8 @@ export interface AgentOptions {
   nativeTools: boolean;
   surface: ToolSurface;
   cwd: string;
+  /** realpath'd session roots (cwd + worktree); tools refuse paths outside them */
+  roots: string[];
   maxSteps: number;
   maxTokens: number;
   systemPrompt?: string;
@@ -44,6 +46,8 @@ export class Agent {
   readonly #follow: string[] = [];
   #abort: AbortController | null = null;
   #running = false;
+  /** sticky until the run ends: an abort during tools or steering is never lost */
+  #aborted = false;
   #turn = 0;
 
   constructor(o: AgentOptions) {
@@ -70,12 +74,14 @@ export class Agent {
   }
 
   abort(): void {
+    if (this.#running) this.#aborted = true;
     this.#abort?.abort();
   }
 
   async prompt(text: string): Promise<void> {
     if (this.#running) throw new Error('agent is busy (use steer or follow_up)');
     this.#running = true;
+    this.#aborted = false;
     this.#messages.push({ role: 'user', content: text });
     const total = { input: 0, output: 0 };
     let stopReason = 'stop';
@@ -83,6 +89,10 @@ export class Agent {
     this.#o.emit({ type: 'agent_start' });
     try {
       for (let step = 0; ; step++) {
+        if (this.#aborted) {
+          stopReason = 'aborted';
+          break;
+        }
         if (step >= this.#o.maxSteps) {
           stopReason = 'max_steps';
           break;
@@ -94,7 +104,8 @@ export class Agent {
         const c = await complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
         this.#abort = null;
         const textCalls = !this.#o.nativeTools && this.#o.surface !== 'none' ? parseTextToolCalls(c.content) : { calls: [], rest: c.content };
-        const calls = this.#o.nativeTools ? c.toolCalls.map((t) => ({ id: t.id, name: t.name, arguments: t.arguments as unknown })) : textCalls.calls;
+        // surface 'none' ⇒ never execute a tool call, whatever the model emits (Aegis L4)
+        const calls = this.#o.surface === 'none' ? [] : this.#o.nativeTools ? c.toolCalls.map((t) => ({ id: t.id, name: t.name, arguments: t.arguments as unknown })) : textCalls.calls;
         if (c.usage) {
           total.input += c.usage.input;
           total.output += c.usage.output;
@@ -110,7 +121,7 @@ export class Agent {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const res = r.ok ? await runTool(t.name, r.value!, this.#o.cwd) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });
             return { t, res };
           }),
@@ -126,10 +137,12 @@ export class Agent {
       }
     } catch (err) {
       this.#abort = null;
-      stopReason = (err as Error).name === 'AbortError' ? 'aborted' : 'error';
+      stopReason = this.#aborted || (err as Error).name === 'AbortError' ? 'aborted' : 'error';
       error = (err as Error).message.slice(0, 500);
     }
+    if (this.#aborted) stopReason = 'aborted';
     this.#running = false;
+    this.#aborted = false;
     this.#o.emit({ type: 'agent_end', stopReason, usage: total, ...(error ? { error } : {}) });
     const next = this.#follow.shift();
     if (next !== undefined) await this.prompt(next);

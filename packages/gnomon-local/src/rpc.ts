@@ -17,6 +17,7 @@
  * outside loopback/LAN or a compat profile outside the allowlist is FATAL
  * (exit 3) — never a fallback to anything else.
  */
+import { realpathSync } from 'node:fs';
 import { Agent, type Emit } from './agent.js';
 import { COMPAT_ALLOWLIST, type ToolSurface } from './compat.js';
 import { classifyEndpoint } from './endpoint.js';
@@ -25,6 +26,8 @@ export interface LocalSessionConfig {
   schemaVersion: 'gnomon-local-session:v1';
   session: string;
   cwd: string;
+  /** realpath'd tool roots: cwd + worktree (default [cwd]) */
+  roots: string[];
   endpoint: { base: string; model: string; compat: string };
   capabilities: { tools: boolean; nCtx: number | null };
   surface: ToolSurface;
@@ -56,11 +59,22 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
   if (!v.ok) throw new ConfigError(`endpoint refused: ${v.why} (loopback/LAN only, law 7)`);
   if (!caps || typeof caps.tools !== 'boolean') throw new ConfigError('capabilities{tools} is required');
   const surface = typeof c.surface === 'string' && SURFACES.includes(c.surface) ? (c.surface as ToolSurface) : 'compact';
+  const real = (p: string): string => {
+    try {
+      return realpathSync(p);
+    } catch {
+      throw new ConfigError(`root ${p.slice(0, 200)} does not exist`);
+    }
+  };
+  const rawRoots = Array.isArray(c.roots) && c.roots.length ? c.roots : [c.cwd];
+  if (rawRoots.some((r) => typeof r !== 'string' || !r.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(r))) throw new ConfigError('roots must be absolute paths');
+  const roots = (rawRoots as string[]).map(real);
   const int = (x: unknown, d: number, max: number): number => (Number.isInteger(x) && (x as number) > 0 ? Math.min(x as number, max) : d);
   return {
     schemaVersion: 'gnomon-local-session:v1',
     session: c.session,
     cwd: c.cwd,
+    roots,
     endpoint: { base: v.base, model: ep.model, compat: ep.compat },
     capabilities: { tools: caps.tools, nCtx: typeof caps.nCtx === 'number' ? caps.nCtx : null },
     surface,
@@ -80,6 +94,7 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     nativeTools: cfg.capabilities.tools,
     surface: cfg.surface,
     cwd: cfg.cwd,
+    roots: cfg.roots,
     maxSteps: cfg.maxSteps,
     maxTokens: cfg.maxTokens,
     forbiddenPorts: cfg.forbiddenPorts,

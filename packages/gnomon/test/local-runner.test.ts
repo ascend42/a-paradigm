@@ -6,7 +6,12 @@
  */
 import { describe, expect, it, afterEach } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
-import { classifyEndpoint as childClassify, COMPAT_ALLOWLIST } from '../../gnomon-local/src/index.js';
+import * as fs from 'node:fs';
+import * as http from 'node:http';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { classifyEndpoint as childClassify, COMPAT_ALLOWLIST, parseSessionConfig, rpcSession } from '../../gnomon-local/src/index.js';
 import { ENDPOINT_TABLE } from '../../gnomon-local/test/endpoint-table.js';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { classifyEndpoint } from '../src/kernel/local/endpoint.js';
@@ -38,9 +43,9 @@ function lane(config: ConstructorParameters<typeof LocalLane>[0]['config']) {
 const req = (model: string) => ({ principal: HUMAN, principalClass: 'human', attended: true, cwd: process.cwd(), model });
 
 describe('G-SUB-06: gnomon-local endpoints are loopback/LAN only (kernel and child hold ONE table)', () => {
-  it.each(ENDPOINT_TABLE)('%s ⇒ %s (both copies)', (base, want) => {
-    const k = classifyEndpoint(base);
-    const c = childClassify(base);
+  it.each(ENDPOINT_TABLE)('%s ⇒ %s (forbidden %j; both copies)', (base, want, ports) => {
+    const k = classifyEndpoint(base, ports);
+    const c = childClassify(base, ports);
     expect(k.ok ? k.class : k.why).toBe(want);
     expect(c).toEqual(k);
   });
@@ -60,6 +65,17 @@ describe('G-SUB-06: gnomon-local endpoints are loopback/LAN only (kernel and chi
     }
     expect(() => assertNotClaude({ command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] })).not.toThrow();
   });
+  it('Aegis L3: realpath before the check (a symlink named gnomon-local → claude) and any @anthropic-ai/claude-code segment', () => {
+    const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lr-')));
+    try {
+      fs.writeFileSync(path.join(d, 'claude'), '');
+      fs.symlinkSync(path.join(d, 'claude'), path.join(d, 'gnomon-local'));
+      expect(() => assertNotClaude({ command: path.join(d, 'gnomon-local') })).toThrow(/claude never runs/);
+      expect(() => assertNotClaude({ command: process.execPath, args: ['/u/lib/node_modules/@anthropic-ai/claude-code/cli.js'] })).toThrow(/claude never runs/);
+    } finally {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
@@ -70,6 +86,34 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
     srv = await fakeOpenAI({ tools: false, slots: false, nCtx: 4096 });
     expect(await probeLocalEndpoint({ id: 'e', base: srv.base, model: 'm' })).toMatchObject({ ok: true, tools: false, nCtx: 4096, nCtxSource: 'props' });
     expect(await probeLocalEndpoint({ id: 'e', base: 'http://127.0.0.1:9', model: 'm' })).toMatchObject({ ok: false });
+  });
+  it('Aegis L2 / reviewer: the configured model id wins when /v1/models lists it; else data[0] (string ≤ 128)', async () => {
+    srv = await fakeOpenAI({ tools: true });
+    expect((await probeLocalEndpoint({ id: 'e', base: srv.base, model: 'fake-qwen-7b-q4' })).model).toBe('fake-qwen-7b-q4');
+    expect((await probeLocalEndpoint({ id: 'e', base: srv.base, model: 'not-listed' })).model).toBe('fake-qwen-7b-q4');
+  });
+  it('Aegis M1: a probe body is capped (an endpoint streaming forever is aborted, ok:false, bounded time)', async () => {
+    const s = http.createServer((req, res) => {
+      if (req.url === '/health') return res.end('{}');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      const chunk = Buffer.alloc(64 * 1024, 0x20);
+      const pump = (): void => {
+        while (!res.destroyed && res.write(chunk));
+        if (!res.destroyed) res.once('drain', pump);
+      };
+      pump();
+    });
+    await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
+    try {
+      const t0 = Date.now();
+      const caps = await probeLocalEndpoint({ id: 'e', base: `http://127.0.0.1:${(s.address() as AddressInfo).port}`, model: 'm' }, { timeoutMs: 20_000, toolTimeoutMs: 20_000 });
+      expect(Date.now() - t0).toBeLessThan(15_000);
+      expect(caps.nCtx).toBeNull();
+      expect(caps.tools).toBe(false);
+    } finally {
+      s.closeAllConnections();
+      s.close();
+    }
   });
   it('routing table', () => {
     const caps = { endpoint: 'e', base: 'b', ok: true, model: 'm', tools: true, templateTools: true, nCtx: 8192, nCtxSource: 'slots' as const };
@@ -113,34 +157,33 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
     expect(rows.at(-1)).toMatchObject({ kind: 'session.routed', payload: { declared: 'any', chosen: 'claude', reason: 'no-endpoint' } });
     await expect(l.open({ ...req('local'), backend: 'claude-code' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
   });
+  it('an explicit backend pins the route: backend local + any never falls through to Claude (fallback card instead)', async () => {
+    const { l, cards } = lane(undefined);
+    await expect(l.open({ ...req('any'), backend: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'MODEL_UNAVAILABLE' } });
+    expect(cards).toHaveLength(1);
+  });
 });
 
-describe('G-ADP-02: a recorded gnomon-local rpc transcript replays through the driver', () => {
-  const transcript = [
-    { type: 'model_capabilities', backend: 'local', model: 'qwen2.5-coder-7b', compat: 'llama.cpp', tools: true, ctx: 8192, textTools: false },
-    { type: 'response', id: 't1', command: 'prompt', success: true },
-    { type: 'agent_start' },
-    { type: 'turn_start', turn: 1 },
-    { type: 'message_update', delta: "I'll write the file." },
-    { type: 'message_end', message: { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'write_file' }] }, usage: { input: 412, output: 38 } },
-    { type: 'model_repair', toolCallId: 'c1', toolName: 'write_file', steps: ['single-quotes'] },
-    { type: 'tool_execution_start', toolCallId: 'c1', toolName: 'write_file' },
-    { type: 'tool_execution_end', toolCallId: 'c1', toolName: 'write_file', isError: false },
-    { type: 'turn_end', turn: 1 },
-    { type: 'message_end', message: { role: 'assistant', content: 'Done.', toolCalls: [] }, usage: { input: 470, output: 3 }, futureField: 1 },
-    { type: 'agent_end', stopReason: 'stop', usage: { input: 882, output: 41 } },
-    { type: 'some_future_event' },
-  ].map((o) => JSON.stringify(o));
-  it('kinds are tolerant; usage is charged once (messages, then only the remainder)', () => {
-    const evs = [...transcript, '[1,2]', 'not json'].map(parseLocalLine);
-    expect(evs.map((e) => e.kind)).toEqual(['capabilities', 'response', 'start', 'turn', 'partial', 'message', 'repair', 'tool', 'tool', 'turn', 'message', 'end', 'unknown', 'malformed', 'malformed']);
+describe('G-ADP-02: a transcript CAPTURED from gnomon-local (rpcSession × fake endpoint) replays through the driver', () => {
+  it('kinds are tolerant; usage is charged once (messages, then only the remainder)', async () => {
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-adp-')));
+    srv = await fakeOpenAI({ script: [{ content: "I'll write it.", toolCalls: [{ name: 'write_file', arguments: "{'path': 'out.txt', 'content': 'ok'}" }] }, { content: 'Done.' }] });
+    const lines: string[] = [];
+    const cfg = parseSessionConfig(JSON.stringify({ schemaVersion: 'gnomon-local-session:v1', session: 'hsid:v1:x', cwd, endpoint: { base: srv.base, model: 'm', compat: 'llama.cpp' }, capabilities: { tools: true, nCtx: 8192 } }));
+    const { onLine, agent } = rpcSession(cfg, (e) => lines.push(JSON.stringify(e)));
+    onLine('{"id":"t1","type":"prompt","message":"write out.txt"}');
+    await new Promise((r) => setTimeout(r, 10));
+    while (agent.running) await new Promise((r) => setTimeout(r, 10));
+    fs.rmSync(cwd, { recursive: true, force: true });
+    const evs = [...lines, '{"type":"some_future_event"}', '[1,2]', 'not json'].map(parseLocalLine);
+    expect(evs.map((e) => e.kind)).toEqual(['capabilities', 'response', 'start', 'turn', 'partial', 'partial', 'partial', 'message', 'repair', 'tool', 'tool', 'turn', 'turn', 'partial', 'partial', 'partial', 'message', 'turn', 'end', 'unknown', 'malformed', 'malformed']);
     const m = new LocalUsageMeter();
     let charged = 0;
     for (const e of evs) {
       if (e.kind === 'message') charged += m.message(e.tokens);
       if (e.kind === 'end') charged += m.end(e.tokens);
     }
-    expect(charged).toBe(882 + 41);
+    expect(charged).toBe(240);
   });
 });
 
@@ -160,7 +203,7 @@ describe('G-LAW-01c / G-LCL-04 (P8-D92 meter): local sessions get compute permit
 
 describe('deferred to slice 2 (manual oracles need a real model)', () => {
   it.todo('slice 2 / MANUAL ORACLE G-LCL-01: a model:local AUTOMATION completes end to end on llama.cpp (llama-server 9890 is installed; no GGUF on disk) with no Claude process started — needs a GGUF and attended scheduler runs (law 5 still refuses unattended)');
-  it.todo('slice 2: the fake-endpoint half of G-LCL-01 — a model:local session spawned under the darwin session profile writes a file through gnomon-local and ends with turn.result');
+  it.todo('slice 2: the fake-endpoint half of G-LCL-01 UNDER the darwin session profile (the unsandboxed spawn path is test/local-lane-spawn.test.ts)');
   it.todo('slice 2: G-LCL-06 — a sandboxed gnomon-local read_file of ~/.gnomon/keys returns isError (session profile)');
   it.todo('slice 2: root-signed local.yaml, `gnomon probe local`, per-task endpoint choice, compaction at ~8k, session.send{steer}');
 });

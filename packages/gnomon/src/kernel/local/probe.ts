@@ -13,7 +13,11 @@
  *           merely mentions tools is recorded (`templateTools`) but never
  *           turns tools on (§13.1: tools off unless detected).
  * Every request re-runs the loopback/LAN rule, follows no redirect and has a
- * timeout; any failure is `ok:false` with the reason — never an exception.
+ * timeout; every body is stream-read into a buffer capped at PROBE_BODY_CAP
+ * (1 MiB) and the request is aborted past it (Aegis M1, round 2); any failure
+ * is `ok:false` with the reason — never an exception. The model id is the
+ * CONFIGURED one when /v1/models lists it, else data[0].id when it is a
+ * string of ≤ 128 chars, else the configured one (Aegis L2).
  */
 import { classifyEndpoint } from './endpoint.js';
 
@@ -29,12 +33,33 @@ export interface LocalCapabilities {
   error?: string;
 }
 
+export const PROBE_BODY_CAP = 1 << 20;
+
 export type ProbeFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 async function getJson(f: ProbeFetch, url: string, init: RequestInit, ms: number): Promise<{ status: number; json: unknown }> {
   try {
-    const r = await f(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(ms) });
-    const text = await r.text();
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(new Error('timeout')), ms);
+    let text = '';
+    let status = 0;
+    try {
+      const r = await f(url, { ...init, redirect: 'error', signal: ctl.signal });
+      status = r.status;
+      const dec = new TextDecoder();
+      let n = 0;
+      for await (const part of (r.body ?? []) as AsyncIterable<Uint8Array>) {
+        n += part.length;
+        if (n > PROBE_BODY_CAP) {
+          ctl.abort(new Error('body cap'));
+          return { status: 0, json: { error: 'body-cap' } };
+        }
+        text += dec.decode(part, { stream: true });
+      }
+    } finally {
+      clearTimeout(t);
+    }
+    const r = { status };
     try {
       return { status: r.status, json: JSON.parse(text) as unknown };
     } catch {
@@ -59,7 +84,8 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
   const slotCtx = Array.isArray(slots.json) && typeof (slots.json[0] as { n_ctx?: unknown } | undefined)?.n_ctx === 'number' ? ((slots.json[0] as { n_ctx: number }).n_ctx) : null;
   const pj = props.json as { default_generation_settings?: { n_ctx?: unknown }; n_ctx?: unknown; chat_template?: unknown } | null;
   const propsCtx = typeof pj?.default_generation_settings?.n_ctx === 'number' ? pj.default_generation_settings.n_ctx : typeof pj?.n_ctx === 'number' ? pj.n_ctx : null;
-  const model = ((models.json as { data?: Array<{ id?: unknown }> } | null)?.data?.[0]?.id as string | undefined) ?? null;
+  const ids = ((models.json as { data?: Array<{ id?: unknown }> } | null)?.data ?? []).map((d) => d?.id).filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 128);
+  const model = ids.includes(ep.model) ? ep.model : (ids[0] ?? null);
   const chat = await getJson(f, `${v.base}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

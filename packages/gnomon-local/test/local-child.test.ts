@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Agent, buildRequest, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
+import { Agent, buildRequest, runTool, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
 import { ENDPOINT_TABLE } from './endpoint-table.js';
 import { fakeOpenAI, type FakeServer } from './fake-openai.js';
 
@@ -26,8 +26,8 @@ afterEach(async () => {
 const scratch = (): string => (tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-local-'))));
 
 describe('G-SUB-06 (child copy): loopback/LAN only', () => {
-  it.each(ENDPOINT_TABLE)('%s ⇒ %s', (base, want) => {
-    const v = classifyEndpoint(base);
+  it.each(ENDPOINT_TABLE)('%s ⇒ %s (forbidden %j)', (base, want, ports) => {
+    const v = classifyEndpoint(base, ports);
     expect(v.ok ? v.class : v.why).toBe(want);
   });
   it('refuses a forbidden port (the kernel web endpoint) and port 0', () => {
@@ -128,7 +128,7 @@ describe('the streaming client and the agent loop (fake server)', () => {
     fs.writeFileSync(path.join(cwd, 'in.txt'), 'forty-two');
     srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'read_file', arguments: '{"path":"in.txt"}' }, { name: 'write_file', arguments: "{'path': 'out.txt', 'content': 'ok'}" }] }, { content: 'All done.' }] });
     const evs: Array<Record<string, unknown>> = [];
-    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, maxSteps: 8, maxTokens: 256, emit: (e) => evs.push(e) });
+    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 8, maxTokens: 256, emit: (e) => evs.push(e) });
     await a.prompt('copy it');
     expect(fs.readFileSync(path.join(cwd, 'out.txt'), 'utf8')).toBe('ok');
     const types = evs.map((e) => e.type);
@@ -146,7 +146,7 @@ describe('the streaming client and the agent loop (fake server)', () => {
     const cwd = scratch();
     srv = await fakeOpenAI({ script: [{ content: '<tool_call>{"name":"write_file","arguments":{"path":"t.txt","content":"via text"}}</tool_call>' }, { content: 'ok' }] });
     const evs: Array<Record<string, unknown>> = [];
-    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST.ollama!, nativeTools: false, surface: 'compact', cwd, maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) });
+    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST.ollama!, nativeTools: false, surface: 'compact', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) });
     await a.prompt('write it');
     expect(fs.readFileSync(path.join(cwd, 't.txt'), 'utf8')).toBe('via text');
     expect(srv.requests[0]!.tools).toBeUndefined();
@@ -158,7 +158,7 @@ describe('the streaming client and the agent loop (fake server)', () => {
     const cwd = scratch();
     srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }] }, { toolCalls: [{ name: 'list_dir', arguments: '{}' }] }, { toolCalls: [{ name: 'list_dir', arguments: '{}' }] }] });
     const evs: Array<Record<string, unknown>> = [];
-    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, maxSteps: 2, maxTokens: 64, emit: (e) => {
+    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 2, maxTokens: 64, emit: (e) => {
       evs.push(e);
       if (e.type === 'turn_start' && e.turn === 1) a.steer('also be brief');
     } });
@@ -185,5 +185,74 @@ describe('the streaming client and the agent loop (fake server)', () => {
       { type: 'response', command: 'unknown', success: false, error: 'malformed line' },
     ]);
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
+  });
+});
+
+describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roots', () => {
+  const setup = () => {
+    const root = scratch();
+    const cwd = path.join(root, 'repo');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(path.join(cwd, '.git', 'hooks'), { recursive: true });
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'secret'), 'id_rsa');
+    fs.writeFileSync(path.join(cwd, 'ok.txt'), 'fine');
+    return { cwd, outside, ctx: { cwd, roots: [cwd] } };
+  };
+  it('reads inside the root work; reads outside (absolute, ../, symlinked dir) are refused', async () => {
+    const { cwd, outside, ctx } = setup();
+    expect(await runTool('read_file', { path: 'ok.txt' }, ctx)).toEqual({ content: 'fine', isError: false });
+    fs.symlinkSync(outside, path.join(cwd, 'link'));
+    for (const p of [path.join(outside, 'secret'), '../outside/secret', 'link/secret']) {
+      const r = await runTool('read_file', { path: p }, ctx);
+      expect(r.isError, p).toBe(true);
+      expect(r.content).not.toContain('id_rsa');
+    }
+    expect((await runTool('list_dir', { path: '..' }, ctx)).isError).toBe(true);
+  });
+  it('writes outside the root, via ../, absolute, a symlinked dir, a symlink final component, or under .git are refused', async () => {
+    const { cwd, outside, ctx } = setup();
+    fs.symlinkSync(outside, path.join(cwd, 'dirlink'));
+    fs.symlinkSync(path.join(outside, 'secret'), path.join(cwd, 'filelink'));
+    for (const p of [path.join(outside, 'x'), '../outside/x', 'dirlink/x', 'dirlink/new/deeper/x', 'filelink', '.git/hooks/pre-commit', '.git/config', 'sub/.git/hooks/x']) {
+      const r = await runTool('write_file', { path: p, content: 'pwn' }, ctx);
+      expect(r.isError, p).toBe(true);
+    }
+    expect(fs.readFileSync(path.join(outside, 'secret'), 'utf8')).toBe('id_rsa');
+    expect(fs.readdirSync(outside)).toEqual(['secret']);
+    expect(fs.existsSync(path.join(cwd, '.git', 'hooks', 'pre-commit'))).toBe(false);
+    expect(await runTool('write_file', { path: 'a/b/c.txt', content: 'ok' }, ctx)).toMatchObject({ isError: false });
+    expect(fs.readFileSync(path.join(cwd, 'a', 'b', 'c.txt'), 'utf8')).toBe('ok');
+  });
+});
+
+describe('round 2: surface none, sticky abort, mid-stream error', () => {
+  it("surface 'none' never executes a tool call the model emits (Aegis L4)", async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'write_file', arguments: '{"path":"x","content":"y"}' }] }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'none', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) }).prompt('go');
+    expect(fs.existsSync(path.join(cwd, 'x'))).toBe(false);
+    expect(evs.some((e) => e.type === 'tool_execution_start')).toBe(false);
+  });
+  it('an abort during tool execution is not lost: the run ends aborted', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }] }, { toolCalls: [{ name: 'list_dir', arguments: '{}' }] }] });
+    const evs: Array<Record<string, unknown>> = [];
+    const a: Agent = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 8, maxTokens: 64, emit: (e) => {
+      evs.push(e);
+      if (e.type === 'tool_execution_start') a.abort();
+    } });
+    await a.prompt('go');
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'aborted' });
+    expect(srv.requests).toHaveLength(1);
+  });
+  it('a mid-stream {"error":…} chunk ends the run with stopReason error', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ content: 'partial', error: 'slot unavailable' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) }).prompt('go');
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
+    expect(String(evs.at(-1)!.error)).toMatch(/slot unavailable/);
   });
 });

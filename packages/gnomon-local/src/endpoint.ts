@@ -49,8 +49,8 @@ function v6Class(h: string): EndpointClass | 'link-local' | 'unspecified' | 'pub
     const lo = parseInt(hex[2]!, 16);
     return v4Class(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
   }
-  if (/^f[cd][0-9a-f]{0,2}:/.test(x)) return 'lan';
-  if (/^fe[89ab][0-9a-f]?:/.test(x)) return 'link-local';
+  if (/^f[cd][0-9a-f]{2}:/.test(x)) return 'lan';
+  if (/^fe[89ab][0-9a-f]:/.test(x)) return 'link-local';
   return 'public';
 }
 

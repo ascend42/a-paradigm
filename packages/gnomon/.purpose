@@ -1177,7 +1177,7 @@ components:
       permit recorded with model + repo (P8-D92 meter, never capped) ->
       session profile -> intend/track kind local-runner; stdout turn.event
       first, model.capabilities/model.repair, usage against the spawn
-      permit). Slice 2: darwin e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child
+      permit). Round 2: tools confined to realpath roots (no .git, no symlink final component), probe bodies capped 1 MiB, configured model id preferred, assertNotClaude on realpaths + @anthropic-ai/claude-code, explicit backend pins the route, launchPlan TEST-RIG seam (test/local-lane-spawn.test.ts). Slice 2: darwin e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child
       G-LAW-01c), root-signed local.yaml, gnomon probe local, compaction,
       daemon config wiring, attended local automations.
     path: src/kernel/local/

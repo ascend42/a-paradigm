@@ -5,7 +5,7 @@
  * The compat ALLOWLIST (spec §13.1): only OpenAI-compatible LOCAL transports
  * — llama.cpp server, Ollama, LM Studio, vLLM, `mlx_lm.server`. pi-ai's
  * cloud providers are not in the build at all (this package has zero
- * dependencies; test/compat.test.ts scans src/ and dist/ for cloud SDKs and
+ * dependencies; test/local-child.test.ts scans src/ and dist/ for cloud SDKs and
  * hosts). A profile name outside this table is refused by the config loader.
  *
  * Every profile is seeded from the llama.cpp preset (pi-ai's compat flags,
