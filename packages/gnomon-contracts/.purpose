@@ -265,7 +265,7 @@ components:
     description: >-
       kitId and clientApiId (§12.3, §12.8). P8-D93 moved clientApiId once
       (hello clientNonce + session.compacted): sha256:fd576e6d… →
-      sha256:f998e8a8…3714; kitId unchanged. kitId = sha256(canonicalJson(kit:v1
+      sha256:c5cb75ce…3316 (round 2 adds the server-sig domain v2 and the closed compaction-reason enum); kitId unchanged. kitId = sha256(canonicalJson(kit:v1
       block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
       "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
       code map, ADDITIVE_ENUMS, every published client JSON Schema and the

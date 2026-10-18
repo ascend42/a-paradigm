@@ -439,6 +439,12 @@
       "tokensAfter"
     ]
   },
+  "x-gnomon-compaction-reasons": [
+    "threshold",
+    "overflow",
+    "manual",
+    "unspecified"
+  ],
   "type": "object",
   "properties": {
     "schemaVersion": {
