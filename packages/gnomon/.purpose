@@ -534,7 +534,17 @@ components:
       (dev-home-damaged). gnomond and a bare startDaemon never read these
       files: the production root stays unprovisioned (falsifier: device auth
       on a dev home without the dev root is refused root-unprovisioned). No
-      command prints key material.
+      command prints key material. `gnomon dev up [--home <abs>]`
+      (startDevKernel) runs startDaemon IN THE CLI'S OWN PROCESS with the dev
+      root and dev kernel key, connects as the registered human device through
+      the published TS client (kernel key pinned, serverSig verified before the
+      device signs), and mints the launch token through the existing
+      in-process `gnomon open` path (DaemonHandle.requestWebLaunch, §11.2 rule
+      2; the web endpoint's rules are untouched). The URL is printed ONLY to an
+      interactive terminal (a pipe or file gets the port and no token); Enter
+      mints a fresh one (Reconnect is UNSUPPORTED until M1.3), q / Ctrl-C stop
+      the kernel. The CLI's device connection is held open, so the kernel does
+      not idle out while dev up runs.
     path: src/cli/
     type: cli
     tags: [gnomon, dev-only, dogfood, identity, paradigm-8]

@@ -14,7 +14,8 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { startDaemon } from '../src/kernel/lifecycle/index.js';
 import { GnomonClient } from '../src/clients/ts/index.js';
 import { DEV_HOME_MARKER, DEV_ROOT_KEY_FILE, DevHomeRefusal, loadDevHome, looksLikeKeyMaterial } from '../src/cli/dev-home.js';
-import { runDevCommand, type DevCliIo } from '../src/cli/dev-cli.js';
+import { runDevCommand, startDevKernel, type DevCliIo } from '../src/cli/dev-cli.js';
+import type { DaemonHandle, DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { tempHome } from './daemon-helpers.js';
 import { PassThrough } from 'node:stream';
 
@@ -122,5 +123,50 @@ describe('#dev-launch: gnomon dev init', () => {
     );
     expect(err).not.toBeNull();
     expect(JSON.stringify((err as { refusal?: unknown }).refusal ?? String(err))).toContain('root-unprovisioned');
+  });
+});
+
+describe('#dev-launch: gnomon dev up', () => {
+  it('FALSIFIER: refuses a home that is not a dev home, and the production home; starts nothing', async () => {
+    const w = world();
+    let started = 0;
+    const start = async (o: DaemonOptions): Promise<DaemonHandle> => (started++, startDaemon(o));
+    const x = io();
+    expect(await runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start })).toBe(1);
+    expect(x.e.join('')).toContain('not-a-dev-home');
+    const y = io();
+    expect(await runDevCommand(['up', '--home', w.prodHome], y, { userHome: w.userHome, start })).toBe(1);
+    expect(y.e.join('')).toContain('production-home');
+    expect(started).toBe(0);
+  });
+
+  it('runs the kernel in-process with the dev-test root and connects as the registered human device', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    const k = await startDevKernel(w.devHome, { userHome: w.userHome });
+    cleanups.push(() => k.stop());
+    expect(k.client.serverVerified).toBe(true);
+    expect(k.client.principal).toBe(k.dev.device.principalId);
+    const st = (await k.client.call('status', {})) as { root?: { state?: string } };
+    expect(st.root?.state).toBe('dev-test');
+  });
+
+  it('never prints a launch token or key material when stdout is not a terminal; returns when the kernel exits', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    let h: DaemonHandle | null = null;
+    const start = async (o: DaemonOptions): Promise<DaemonHandle> => (h = await startDaemon(o));
+    const x = io();
+    const run = runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start });
+    const deadline = Date.now() + 15_000;
+    while (!x.o.join('').includes('gui ') && !x.e.join('').includes('web-launch') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    await h!.shutdown('signal');
+    expect(await run).toBe(0);
+    const all = x.o.join('') + x.e.join('');
+    expect(all).toContain('UP  dev kernel');
+    expect(all).toContain('DOWN  dev kernel');
+    expect(all).not.toMatch(/#launch=/);
+    expect(all).not.toMatch(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/);
+    expect(looksLikeKeyMaterial(all)).toBe(false);
   });
 });
