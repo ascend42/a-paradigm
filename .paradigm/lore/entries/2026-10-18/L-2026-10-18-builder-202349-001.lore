@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-202349-001
+type: insight
+timestamp: '2026-10-18T20:23:49.587Z'
+author: builder
+title: Dev launch runs the kernel in the CLI process with a persisted dev root; gnomond stays root-unprovisioned
+summary: 'gnomon dev up starts startDaemon in-process with a DevTestRootAuthority reloaded from a marked dev home, because the only gnomon-open path is the in-process requestWebLaunch and gnomond must never construct a dev root. Guards: production home, foreign registry and non-empty homes are refused; the production daemon on a dev home trusts nothing.'
+symbols_touched:
+  - '#dev-launch'
+  - '#identity'
+  - $daemon-lifecycle
+tags:
+  - decision
+  - gnomon
+  - dev-launch
+  - security
+body: 'Choices: (1) persist the software dev root as an ack-gated 0600 PEM in <home>/keys (session-read-denied) rather than adding a trust mechanism; (2) dev up runs the kernel in the gnomon CLI process, not via gnomond, so the production daemon never selects a dev root from a file; (3) the launch URL is printed only to a TTY, never to a pipe or file, because the signed-helper LaunchServices hand-off is M1.3 and /usr/bin/open would put the token on argv; (4) the smoke test reaches the supervisor fake-claude rig through a new internal-seams daemon slot that only testing.ts reads. Finding: socket device clients get the community-client projection, so the turn.event reply text is stubbed; only the GUI launch-token session sees it. No approval bypass was added: tool permissions are denied (not blocked) under --permission-prompts none, so attended text sessions run end to end without any card decision.'
+linked_commits:
+  - 1c4c33da
+  - 9b3b1a4a
+  - 94300fd0
+  - 029679d9
+confidence: 0.85
+git_context:
+  ref: 029679d92f06f248def8f788ffa966be3dad854c
+  branch: gnomon/dogfood-launch
+  dirty: false

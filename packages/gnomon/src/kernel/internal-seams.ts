@@ -14,7 +14,8 @@
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
  * import graph): kernel-log.ts, log/quarantine.ts, identity/presence.ts,
- * manifest/install.ts and web/endpoint.ts (to register) and testing.ts (to read).
+ * manifest/install.ts, web/endpoint.ts, modhost/host.ts and lifecycle/daemon.ts (to register) and testing.ts (to read).
+ * The `daemon` slot is the ONLY way to start a daemon whose supervisor runs a script (fake) claude.
  * The manifest slot holds the M1.5 install-card decision and the rollback until the
  * M1.6 broker owns cards. The `web` slot (#web-endpoint, M1.4) is the ONLY way to
  * run the transport child without its sandbox profile or against another bundle pin.
@@ -35,6 +36,7 @@ import type { WebEndpoint, WebEndpointOptions, WebEndpointSeams } from './web/en
 import type { DecideOptions, StagedRecord } from './manifest/install.js';
 import type { GrantInstallRow } from './manifest/grants.js';
 import type { ModHost, ModHostOptions, ModHostSeams } from './modhost/host.js';
+import type { DaemonHandle, DaemonOptions, DaemonSeams } from './lifecycle/daemon.js';
 import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
@@ -84,7 +86,13 @@ export interface ModHostSeamSlot {
   create(opts: ModHostOptions, seams: ModHostSeams): ModHost;
 }
 
+/** $daemon-lifecycle: start a daemon with the supervisor test rig (fake claude) and a substituted law-7 billing source (#dev-launch smoke test). */
+export interface DaemonSeamSlot {
+  start(opts: DaemonOptions, seams: DaemonSeams): Promise<DaemonHandle>;
+}
+
 interface Slots {
+  daemon?: DaemonSeamSlot;
   log?: KernelLogSeams;
   presence?: PresenceSeams;
   web?: WebSeams;

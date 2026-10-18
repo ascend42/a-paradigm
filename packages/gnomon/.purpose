@@ -515,6 +515,58 @@ components:
       - test/presence.test.ts
       - test/socket-abi.test.ts
 
+  dev-launch:
+    description: >-
+      #dev-launch (spec §2.4 rule 6) — the UNSIGNED, DEV-ONLY dogfood launch
+      path until #identity M1.3. src/cli/dev-home.ts + src/cli/dev-cli.ts.
+      `gnomon dev init [--home <abs>]` provisions a DEV home (default
+      ~/.gnomon-dev): a software P-256 dev-test root (DevTestRootAuthority
+      behind DEV_TEST_ROOT_ACK, persisted 0600 as keys/DEV-ONLY-root-p256.pem),
+      a software kernel key (keys/DEV-ONLY-kernel-ed25519.pem), the device key
+      and the root-signed registry rows for the kernel key and ONE human
+      device (p:<ns>/founder); the marker DEV-ONLY-gnomon-home.json is written
+      LAST. Refuses (falsifiers in test/dev-launch.test.ts): the production
+      home ~/.gnomon, anything inside or containing it (production-home); a
+      home holding a registry it did not write (production-root); any other
+      non-empty unmarked home (home-not-empty). The production-home check
+      (Aegis C1) covers ~/.gnomon lexically and realpath'd, its symlink target
+      (dangling included), and on darwin compares case-folded (~/.GNOMON); a
+      symlinked dev home is refused (unsafe-home). TRIPWIRE: gnomond (both
+      paths) and `gnomon daemon start` refuse loudly a home holding the marker
+      (daemon-cli.ts refuseDevHome). Loading (dev up) refuses a
+      home without the ack-bearing marker (not-a-dev-home) and one whose keys
+      do not match the marker or whose registry has ANY rejected row
+      (dev-home-damaged). gnomond and a bare startDaemon never read these
+      files: the production root stays unprovisioned (falsifier: device auth
+      on a dev home without the dev root is refused root-unprovisioned). No
+      command prints key material. `gnomon dev up [--home <abs>]`
+      (startDevKernel) runs startDaemon IN THE CLI'S OWN PROCESS with the dev
+      root and dev kernel key, connects as the registered human device through
+      the published TS client (kernel key pinned, serverSig verified before the
+      device signs), and mints the launch token through the existing
+      in-process `gnomon open` path (DaemonHandle.requestWebLaunch, §11.2 rule
+      2; the web endpoint's rules are untouched). The URL is printed ONLY to an
+      interactive terminal (a pipe or file gets the port and no token); Enter
+      mints a fresh one (Reconnect is UNSUPPORTED until M1.3), q / Ctrl-C stop
+      the kernel. The CLI's device connection is held open, so the kernel does
+      not idle out while dev up runs.
+      SMOKE (test/dev-launch-session.test.ts, darwin): dev init → startDevKernel
+      → launch URL → a second device client → session.open on the FAKE claude
+      under the real session profile → session.send → turn.result, with no
+      approval card on the path. The one seam is the internal-seams `daemon`
+      slot (lifecycle/daemon.ts registers it; only testing.ts's
+      startDaemonForTest reads it): the supervisor's test-rig options (script
+      claude, its path, a throwaway user home and env) and the fuse's law-7
+      billing source. A socket device connection is a community-client reader,
+      so turn.event (the reply text) reaches it as {kind, hsid} stubs; the
+      GUI's launch-token session is the first-party surface that sees it.
+    path: src/cli/
+    type: cli
+    tags: [gnomon, dev-only, dogfood, identity, paradigm-8]
+    tests:
+      - test/dev-launch.test.ts
+      - test/dev-launch-session.test.ts
+
   manifest-loader:
     description: >-
       #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,

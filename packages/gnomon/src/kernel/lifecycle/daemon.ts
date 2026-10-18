@@ -12,8 +12,12 @@
  * socket.auth.* outcome are appended to the log (and still reported to
  * `onEvent`; daemon.lock.refused stays callback-only — the refused daemon
  * does not hold the log). KERNEL KEY SEAM: the key is a software Ed25519 key
- * — `opts.kernelSigner`, or an EPHEMERAL in-memory key per daemon start,
- * never a file (§3.1); status reports custody `partial`. Only its PUBLIC half
+ * — `opts.kernelSigner`, or an EPHEMERAL in-memory key per daemon start;
+ * the daemon itself never reads a key file (§3.1). The ONE exception is the
+ * DEV-ONLY `gnomon dev up` (#dev-launch), which runs startDaemon in the
+ * `gnomon` CLI's own process and supplies a kernel key it read from a marked
+ * dev home; gnomond never does, and refuses a dev home outright
+ * (daemon-cli.ts refuseDevHome). Status reports custody `partial`. Only its PUBLIC half
  * is recorded in <home>/keys/kernel-pub.jsonl and every recorded key is loaded
  * into the log's key ring / kernelKeyIds, so verify works across restarts —
  * but across restarts a kernel signature proves nothing against a same-user
@@ -29,7 +33,9 @@
  * unauthenticated flood adds at most 8 + 1 rows per kind per window. The keystore item
  * behind the signed helper is #identity M1.3. ROOT SEAM: `opts.rootAuthority`
  * defaults to UnprovisionedRootAuthority (no device can authenticate before
- * M1.3); the dev/test root is programmatic only, never env/argv (§15.3).
+ * M1.3); the dev/test root is programmatic only, never env/argv (§15.3). The
+ * one non-test caller is `gnomon dev up` (#dev-launch), which reloads it from a
+ * marked DEV home file in the `gnomon` CLI process; gnomond never constructs it.
  *
  * M1.4 #web-endpoint: `requestWebLaunch(connId)` — the kernel side of
  * `gnomon open` for an authenticated HUMAN device connection on the unix
@@ -101,6 +107,8 @@ import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
+import type { BillingScanSource } from '../budget/billing.js';
+import { registerSeams } from '../internal-seams.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
 
@@ -206,7 +214,24 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
   return `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
 }
 
+/**
+ * TEST SEAMS (internal-seams.ts slot `daemon`, read only by src/kernel/testing.ts):
+ * the supervisor's test-rig options (a fake `#!` claude, its path, a throwaway
+ * user home and env) and the fuse's law-7 billing scan source. Production
+ * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
+ */
+export interface DaemonSeams {
+  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
+  billing?: BillingScanSource;
+}
+
+registerSeams('daemon', { start: (opts, seams) => startDaemonWith(opts, seams) });
+
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
+  return startDaemonWith(opts, {});
+}
+
+async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise<DaemonHandle> {
   const emit = (e: DaemonEvent): void => opts.onEvent?.(e);
   const idleMs = opts.idleMs ?? DEFAULT_IDLE_EXIT_MS;
   // T-2026-10-17-009(a): finish a quarantine interrupted between its two
@@ -481,7 +506,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     },
     // law 7 scan: the env a child would inherit and the user settings layer; the versioned per-OS
     // managed-policy list and the mid-session watch are M1.7 (#claude-adapter, G-SUB-01/05)
-    billing: {
+    billing: seams.billing ?? {
       env: () => ({ ...process.env }),
       layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
     },
@@ -521,6 +546,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
+    ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,

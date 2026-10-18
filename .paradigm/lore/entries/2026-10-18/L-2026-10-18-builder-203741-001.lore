@@ -1,0 +1,30 @@
+id: L-2026-10-18-builder-203741-001
+type: insight
+timestamp: '2026-10-18T20:37:41.336Z'
+author: builder
+title: 'Dev launch round 2: production-home guard is spelling-proof, gnomond refuses dev homes, CLI is never first-party before M1.3'
+summary: 'Review round 2 (reviewer blocking YAML fix; Aegis C1/C2). The production-home check now covers the realpath, the symlink target (dangling included) and darwin case-folding; a symlinked dev home is refused; gnomond and gnomon daemon start refuse any home holding the DEV-ONLY marker, so dev keys can only ever run in the gnomon CLI process. Spec §9.3: a self-declared CLI surface is first-party only after M1.3 helper attestation.'
+symbols_touched:
+  - '#dev-launch'
+  - $daemon-lifecycle
+  - '#identity'
+tags:
+  - decision
+  - gnomon
+  - dev-launch
+  - security
+  - review
+body: 'Decisions: (1) the tripwire lives in daemon-cli.ts (gnomond foreground + detaching activation), not in startDaemon, because dev up itself calls startDaemon; (2) the device key is read once through the owner-only check and the same bytes are verified and handed out (no TOCTOU re-read); (3) a stop that rejects after the kernel exited is awaited and reported, exit 1; (4) an interrupted dev init is detected by a dev root key without the marker, and every unmarked-home refusal carries the remove-and-re-run hint. Runbook now states the M1.3 gap plainly: same-user processes can read the dev keys, so dev-log signatures prove nothing; ptys and browser history capture the 60 s launch URL; unset NODE_OPTIONS; Claude Code still writes ~/.claude. Pre-existing upstream drift found (not ours): compile71 binds G-LNK-11 to $move-1 but Appendix A does not list it.'
+linked_commits:
+  - 2e7394c7
+  - fc7fc32e
+  - 7b4bc215
+  - c4dc461e
+  - 9b909cd6
+  - 9be9a77f
+  - 8b9e6d37
+confidence: 0.85
+git_context:
+  ref: 8b9e6d3743bdbadd837a5da03afa05f99503c636
+  branch: gnomon/dogfood-launch
+  dirty: false
