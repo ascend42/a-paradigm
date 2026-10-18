@@ -287,3 +287,22 @@ describe('session.compacted (T-2026-10-18-016, P8-D93)', () => {
     expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-compaction-reasons']).toEqual([...c.COMPACTION_REASONS]);
   });
 });
+
+describe('the auth wire format is a clientApiId input (P8-D93 round 3, Aegis)', () => {
+  it('domains and the exact preimage vectors are in the descriptor; changing a domain or a layout moves the id', async () => {
+    const c = await import('../src/index.js');
+    const a = c.CLIENT_API_DESCRIPTOR.auth;
+    expect(a.domains).toEqual({ server: 'gnomon:auth-server:v2', client: 'gnomon:auth:v1', token: 'gnomon:auth-token:v1' });
+    expect(a.vectors.server.preimage).toBe('gnomon:auth-server:v2\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(a.vectors.client.preimage).toBe('gnomon:auth:v1\nN\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(a.vectors.token.preimage).toBe('gnomon:auth-token:v1\nN\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');
+    const d = JSON.parse(JSON.stringify(c.CLIENT_API_DESCRIPTOR));
+    expect(c.computeClientApiId(d)).toBe(c.CLIENT_API_ID);
+    const domain = JSON.parse(JSON.stringify(d));
+    domain.auth.domains.server = 'gnomon:auth-server:v1';
+    expect(c.computeClientApiId(domain)).not.toBe(c.CLIENT_API_ID);
+    const layout = JSON.parse(JSON.stringify(d));
+    layout.auth.vectors.client.preimage = 'gnomon:auth:v1\nN\nk\np\nd\n/s';
+    expect(c.computeClientApiId(layout)).not.toBe(c.CLIENT_API_ID);
+  });
+});

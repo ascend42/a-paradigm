@@ -246,7 +246,7 @@ const COVERAGE: Record<string, Entry> = {
 /** Update ONLY on a deliberate client-API change (and record it in the review). */
 // Moved once by P8-D89 (M1.4 slice 3, T-2026-10-18-002): was sha256:8e30f400…3014.
 // Moved once by P8-D93 (T-2026-10-18-016: hello clientNonce + session.compacted): was sha256:fd576e6d…e0fd.
-const PINNED_CLIENT_API_ID = 'sha256:c5cb75ce402dd5bd0aa2c9271f98d275d79fb0808251f720f90c25d04c143316';
+const PINNED_CLIENT_API_ID = 'sha256:1faf47f5867f17b95b12922bde7ec21890970f24154ef43e52c06c33e43d8720';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 

@@ -10,7 +10,7 @@ import { chmodSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AUTH_SERVER_DOMAIN, CLIENT_API_ID, CLIENT_METHODS, KIT_ID, authServerMessage, isRefusalV1, validateHelloResult, type HelloResult } from '@a-company/gnomon-contracts';
+import { AUTH_CLIENT_DOMAIN, AUTH_SERVER_DOMAIN, AUTH_TOKEN_DOMAIN, CLIENT_API_ID, CLIENT_METHODS, KIT_ID, authServerMessage, isRefusalV1, validateHelloResult, type HelloResult } from '@a-company/gnomon-contracts';
 import {
   DEV_TEST_ROOT_ACK,
   DevTestRootAuthority,
@@ -169,6 +169,9 @@ describe('serverSig — the kernel proves itself before auth is sent', () => {
     expect(() => verifyServerHello(h.result, `${sock}.relay`, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
     // P8-D93 r2: the server-sig domain is v2 in the kernel signer AND the contracts; a v1-domain signature over the same message is refused
     expect(SIGNATURE_DOMAINS.authServer).toBe(AUTH_SERVER_DOMAIN);
+    // round 3: every auth domain is the contracts constant (which is a clientApiId input)
+    expect(SIGNATURE_DOMAINS.auth).toBe(AUTH_CLIENT_DOMAIN);
+    expect(SIGNATURE_DOMAINS.authToken).toBe(AUTH_TOKEN_DOMAIN);
     expect(AUTH_SERVER_DOMAIN).toBe('gnomon:auth-server:v2');
     const { generateKeyPairSync, sign: edSign } = await import('node:crypto');
     const kp = generateKeyPairSync('ed25519');

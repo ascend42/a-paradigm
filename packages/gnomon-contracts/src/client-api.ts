@@ -13,8 +13,10 @@
  * verbs + 2 relays (full descriptors), the JSON-RPC code map, the additive enum
  * table, every client JSON Schema this package publishes (which embed the
  * event-kind registry, ref schemes, refusal/card enums, the hello shape and
- * review-finding:v1 / change-note:v1), and the M1.1 reservations that have no
- * schema yet (verb param values, content parts, status fields).
+ * review-finding:v1 / change-note:v1), the M1.1 reservations that have no
+ * schema yet (verb param values, content parts, status fields), and (P8-D93
+ * round 3) the auth wire format: the three domains and one fixed preimage
+ * vector per auth form (AUTH_WIRE_DESCRIPTOR).
  * A change to any of them moves clientApiId; `modAbiId` is NOT an input
  * (a mod-ABI change never churns clients, A24-2).
  *
@@ -24,7 +26,22 @@
  */
 
 import { canonicalJson, deepFreeze, hex, sha256 } from './internal.js';
-import { VERBS, CLIENT_RELAYS, ADDITIVE_ENUMS, GNOMON_RPC_V1, FAIL_SAFE_VALUES, VERB_PARAM_VALUES, RESERVED_CONTENT_PARTS, STATUS_RESERVED_FIELDS } from './rpc.js';
+import {
+  VERBS,
+  CLIENT_RELAYS,
+  ADDITIVE_ENUMS,
+  GNOMON_RPC_V1,
+  FAIL_SAFE_VALUES,
+  VERB_PARAM_VALUES,
+  RESERVED_CONTENT_PARTS,
+  STATUS_RESERVED_FIELDS,
+  AUTH_SERVER_DOMAIN,
+  AUTH_CLIENT_DOMAIN,
+  AUTH_TOKEN_DOMAIN,
+  authServerPreimage,
+  authClientPreimage,
+  authTokenPreimage,
+} from './rpc.js';
 import { JSON_RPC_CODES } from './refusal.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
@@ -44,6 +61,31 @@ export const KIT_V1_BLOCKS = Object.freeze([
 
 export const KIT_V1_DESCRIPTOR = deepFreeze({ schemaVersion: KIT_V1, blocks: [...KIT_V1_BLOCKS] });
 
+/**
+ * The auth wire format (§4.9; Aegis ruling, T-2026-10-18-016 round 3, P8-D93):
+ * the three signature domains plus ONE fixed preimage vector per form — fixed
+ * inputs and the exact preimage string the helpers produce. A changed domain
+ * or a changed message layout changes these strings, so it moves clientApiId.
+ */
+const VECTOR_NEGOTIATED = { clientApi: GNOMON_RPC_V1, features: ['b', 'a'] } as const;
+export const AUTH_WIRE_DESCRIPTOR = deepFreeze({
+  domains: { server: AUTH_SERVER_DOMAIN, client: AUTH_CLIENT_DOMAIN, token: AUTH_TOKEN_DOMAIN },
+  vectors: {
+    server: {
+      inputs: { nonce: 'N', clientNonce: 'CN', endpointPath: '/s', negotiated: VECTOR_NEGOTIATED },
+      preimage: authServerPreimage('N', 'CN', '/s', VECTOR_NEGOTIATED),
+    },
+    client: {
+      inputs: { nonce: 'N', serverKeyId: 'k', principalId: 'p', deviceId: 'd', endpointPath: '/s', negotiated: VECTOR_NEGOTIATED },
+      preimage: authClientPreimage('N', 'k', 'p', 'd', '/s', VECTOR_NEGOTIATED),
+    },
+    token: {
+      inputs: { nonce: 'N', serverKeyId: 'k', tokenId: 'rtk:X', endpointPath: '/s', negotiated: VECTOR_NEGOTIATED },
+      preimage: authTokenPreimage('N', 'k', 'rtk:X', '/s', VECTOR_NEGOTIATED),
+    },
+  },
+});
+
 export const CLIENT_API_DESCRIPTOR = deepFreeze({
   clientApi: GNOMON_RPC_V1,
   verbs: VERBS,
@@ -56,6 +98,8 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   contentParts: RESERVED_CONTENT_PARTS,
   statusFields: STATUS_RESERVED_FIELDS,
   failSafe: FAIL_SAFE_VALUES,
+  // P8-D93 round 3 (Aegis): domains + one preimage vector per auth form
+  auth: AUTH_WIRE_DESCRIPTOR,
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {
