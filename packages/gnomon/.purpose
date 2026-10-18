@@ -1235,9 +1235,23 @@ components:
       private resolutions and calls lacking network refused). state.ts
       per-mod KV <home>/mods/<name>/state.db (sibling of state/, never granted; O_NOFOLLOW reads, random O_EXCL tmp; JSON in slice 1). Round 2 (Aegis): state/ and blobs/ must be real dirs at their expected paths before every profile build; tunnels closed at call end; proxy head deadline, connection cap, idle timeout, resolve-check-connect, wider non-public ranges; explicit verb-effect table; session.send pinned to the caller hsid, permitId stripped; channel caps in-flight mod requests at 16 with backpressure.
       Test seams (unsandboxed launcher, egress dialer) only via
-      kernel/testing.ts createModHostForTest. Slice 2: socket relays and
-      kernel.call wiring, folder watch, dev-mode cards, gnomon-mods MCP
-      bridge, gnomon mod CLI, Tier 0 templates, workshop, daemon wiring.
+      kernel/testing.ts createModHostForTest. SLICE 2: call-id binding
+      (host mints callId on view.render/command.run/tool.call, the SDK echoes
+      it on state.get/state.set/kernel.call; a foreign or ended callId is
+      FORBIDDEN modCode CALL + mod.effect.refused{why:call-id}; none = idle;
+      modAbiId moved 00ae702b -> 7aaf92f4, clientApiId unchanged);
+      bridge.ts createModKernelCall (log.append own modns clamped to
+      kind/payload<=16 KiB/audience/sensitivity, Aegis C2, appended under the
+      mod principal; every other verb via dispatcher.callAs as a
+      connection-less mod principal) and createModRelayPort (mod.view /
+      mod.command start the mod on first use; relayedFor stamped by the
+      dispatcher from the caller connection; GUI mod.command refused until a
+      gesture proof, M1.10); startDaemon constructs the host, status.mods +
+      status.modAbiId, stopAll before the children sweep at every exit;
+      folder watch on a running linked mod (fs.watch recursive, .git
+      ignored, 500 ms debounce => stop{changed} + loadMod pause + re-approve
+      card). Slice 3: spend from the caller permit, dev-mode cards/re-pin,
+      gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
     tags: [kernel, mods, sandbox, M1.11]
 flows:
   daemon-lifecycle:

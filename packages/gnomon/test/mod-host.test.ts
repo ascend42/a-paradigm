@@ -359,15 +359,44 @@ describe('the mod profile registry (G-WIN-05)', () => {
   });
 });
 
-describe('M1.11 slice 2 (named, not built)', () => {
-  it.todo('slice 2: relays + kernel.call wired through the socket dispatcher (mod principal, scopes intersected, spend from the caller permit; G-ABI-02 mod column)');
-  it.todo('slice 2: folder watch (fs.watch, 500 ms debounce) pausing a RUNNING linked mod + mod.repinned / rollback re-pin (G-MOD-08)');
-  it.todo('slice 2: dev mode cards, 8 h expiry scheduling, cwd/worktree exclusion, widening card in dev mode, dev badge (G-MOD-09, G-MOD-11)');
-  it.todo('slice 2: gnomon-mods MCP bridge per session writing inject.receipt (§3.8)');
-  it.todo('slice 2: gnomon mod new|types|test|inspect|install|link|unlink|dev|diff|rollback + fixtures→golden renders (G-MOD-04)');
-  it.todo('slice 2: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
-  it.todo('slice 2 (Aegis C2): log.append through kernel.call clamps payload fields/size and labels per the manifest');
-  it.todo('slice 2 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
-  it.todo('slice 2: bind each mod → host request to its call id (SDK echoes it; mismatch refused)');
-  it.todo('slice 2: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01); ModHost wired into startDaemon + idle exit');
+describe('call-id binding (M1.11 slice 2, Aegis)', () => {
+  it('a request echoing an ENDED call is refused CALL even when the call in force would allow it; mod.effect.refused{why:call-id}', async () => {
+    const { r, h } = await started();
+    expect(await h.callTool('probe', 'probe.write', { op: 'keep' })).toEqual({ ok: true, v: 'kept' });
+    // the kept api echoes the write call's id; that call has ended, and a later write tool is in force
+    expect(await h.callTool('probe', 'probe.write', { op: 'stale' })).toMatchObject({ ok: false });
+    expect(await h.callTool('probe', 'probe.read', { op: 'stale.get' })).toMatchObject({ ok: false });
+    const refusedRows = r.events.filter((e) => e.kind === 'mod.effect.refused' && e.payload.why === 'call-id');
+    expect(refusedRows.length).toBe(2);
+    expect(refusedRows[0]!.payload).toMatchObject({ name: 'probe', method: 'state.set', effect: 'call-id' });
+    // the live call's own id still works
+    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: true });
+  });
+});
+
+describe('folder watch (G-MOD-08, slice 2)', () => {
+  it('an edit to a RUNNING linked mod\'s folder stops it within the debounce and pauses it with a re-approve card', async () => {
+    const { r, h, folder } = await started({ linked: true });
+    expect(h.watching()).toEqual(['probe']);
+    fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited while running\n');
+    for (let i = 0; i < 40 && h.running().length; i++) await new Promise((res) => setTimeout(res, 100));
+    for (let i = 0; i < 20 && !kinds(r).includes('mod.paused'); i++) await new Promise((res) => setTimeout(res, 100));
+    expect(h.running()).toEqual([]);
+    expect(r.events.find((e) => e.kind === 'mod.stopped' && e.payload.reason === 'changed')).toBeTruthy();
+    expect(kinds(r)).toContain('mod.paused');
+    expect(h.status()).toMatchObject({ paused: [expect.objectContaining({ name: 'probe', why: 'changed' })] });
+    expect(h.watching()).toEqual([]);
+  });
+});
+
+describe('M1.11 slice 3 (named, not built)', () => {
+  it.todo('slice 3: spend from the caller permit and session principals for kernel.call session.send (M1.7 session principals; G-ABI-02 mod column)');
+  it.todo('slice 3: mod.repinned (dev re-pin) and the rollback re-pin of a running mod (G-MOD-08)');
+  it.todo('slice 3: dev mode cards, 8 h expiry scheduling, cwd/worktree exclusion, widening card in dev mode, dev badge (G-MOD-09, G-MOD-11)');
+  it.todo('slice 3: gnomon-mods MCP bridge per session writing inject.receipt (§3.8)');
+  it.todo('slice 3: gnomon mod new|types|test|inspect|install|link|unlink|dev|diff|rollback + fixtures→golden renders (G-MOD-04)');
+  it.todo('slice 3: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
+  it.todo('slice 3 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
+  it.todo('slice 3: mod.command relay from a GUI needs a provable user gesture (§11.5; M1.10)');
+  it.todo('slice 3: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01)');
 });

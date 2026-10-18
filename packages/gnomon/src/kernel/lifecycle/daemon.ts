@@ -51,8 +51,19 @@
  * exit BEFORE `daemon.exit` is written (falsifier: daemon exits with a live
  * child); the start-up orphan sweep stops what a crashed daemon left behind
  * (`session.orphaned`, G-DMN-04); an open GUI WebSocket counts as a
- * subscriber. Not yet here: the session runner itself (M1.7/M1.8), the mod
- * host (M1.11) and an approved `stop` (#approval-broker, M1.6).
+ * subscriber. Not yet here: the session runner itself (M1.7/M1.8) and an
+ * approved `stop` (#approval-broker, M1.6).
+ *
+ * M1.11 slice 2: #mod-host is constructed here (home, root authority,
+ * DaemonChildren, the kernel log as its event sink, the kernel principal for
+ * re-approve cards). Its `kernel.call` goes to the REAL dispatcher run as the
+ * mod principal (`dispatcher.callAs`) and its own-modns `log.append` to the
+ * log under the mod principal with the fields clamped (modhost/bridge.ts,
+ * Aegis C2); the client relays `mod.view` / `mod.command` reach it through
+ * both dispatchers (socket and web) with relayedFor stamped from the caller's
+ * connection; `status.mods` lists the running and paused mods. Mods start on
+ * first relay and never hold idle; every exit (idle included) stops them
+ * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
 import * as nodeOs from 'node:os';
 import { ApprovalBroker } from '../broker/broker.js';
@@ -74,6 +85,7 @@ import {
   type SocketLogKind,
   type SocketServerHandle,
   type SubscriptionStats,
+  type KernelDispatcher,
 } from '../socket/index.js';
 import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
@@ -86,6 +98,8 @@ import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { linkedFolders } from '../manifest/install.js';
+import { ModHost } from '../modhost/host.js';
+import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
 
@@ -170,6 +184,10 @@ export interface DaemonHandle {
   web(): WebEndpoint | null;
   /** Supervised children (sessions, local runners, mods): stopped and awaited before every exit. */
   readonly children: DaemonChildren;
+  /** #mod-host (M1.11): mods started on first relay, stopped at every exit. */
+  readonly mods: ModHost;
+  /** The unix-socket dispatcher (its `callAs` is the mods' kernel.call). */
+  readonly dispatcher: Pick<KernelDispatcher, 'callAs' | 'clients'>;
   /** #scheduler (log-derived timers, automations). */
   readonly scheduler: Scheduler;
   /** The start-up orphan sweep's result (G-DMN-04). */
@@ -312,6 +330,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       try {
         await scheduler.stop().catch(() => undefined); // an in-flight tick finishes before children stop
         // §2.4 rule 3: mod, session and transport children stop BEFORE daemon.exit — never exit with a live child
+        await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         emit({ kind: 'daemon.exit', reason });
@@ -486,7 +505,24 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     },
   });
   const sessions = createSessionPort(supervisor);
+  // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
+  const mods = new ModHost({
+    home,
+    trust: authority,
+    children,
+    emit: (kind, payload) => void appendRow(kind, payload).catch(() => undefined),
+    kernelPrincipal,
+    ...(opts.platform ? { platform: opts.platform } : {}),
+    kernelCall: createModKernelCall({
+      callAs: (principal, verb, params) => dispatcher.callAs(principal, verb, params),
+      append: async (row) => {
+        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}) });
+        return { seq: r.seq };
+      },
+    }),
+  });
   const dispatcherCommon = {
+    mods: createModRelayPort(mods),
     sessions,
     approvals,
     reads: { log, hub },
@@ -608,6 +644,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     requestWebLaunch,
     web: () => web,
     children,
+    mods,
+    dispatcher,
     scheduler,
     orphanSweep,
   };

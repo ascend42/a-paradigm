@@ -25,7 +25,11 @@ import * as net from 'node:net';
 import { serveMod } from './gnomon-mod-sdk.mjs';
 const attempt = async (f) => { try { const v = await f(); return { ok: true, v: v === undefined ? null : String(v).slice(0, 64) }; } catch (e) { return { ok: false, code: e && (e.code || e.message) } } };
 let held = null;
+let kept = null;
 const run = async (input, api) => {
+  if (input.op === 'keep') { kept = api; return { ok: true, v: 'kept' }; }
+  if (input.op === 'stale') return attempt(() => kept.state.set('k', 9));
+  if (input.op === 'stale.get') return attempt(async () => JSON.stringify(await kept.state.get('k')));
   if (input.op === 'state.set') return attempt(() => api.state.set('k', input.value ?? 1));
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));

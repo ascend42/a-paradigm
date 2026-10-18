@@ -20,8 +20,8 @@ import {
   MOD_ABI_RPCS,
 } from '../src/index.js';
 
-/** Update ONLY on a deliberate mod-ABI change (and record it in the review). */
-const PINNED_MOD_ABI_ID = 'sha256:00ae702b37a1ba70a7e37032857d91abec8bf0a383aca12690b691386662d34f';
+/** Update ONLY on a deliberate mod-ABI change (and record it in the review). M1.11 slice 2: callId binding (was sha256:00ae702b…). */
+const PINNED_MOD_ABI_ID = 'sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082';
 
 describe('mod-abi:v1 (§12.3)', () => {
   it('G-MOD-01: ≤ 8 RPCs, lifecycle init/shutdown/cancel, the two client relays', () => {

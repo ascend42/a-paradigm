@@ -342,8 +342,8 @@ describe('verb dispatch skeleton (§5)', () => {
       'contract.register': [-32000, 'not-implemented', 'M2.1'],
       'contract.claim': [-32000, 'not-implemented', 'M2.2'],
       'oracle.run': [-32000, 'not-implemented', 'M2.3'],
-      'mod.view': [-32000, 'not-implemented', 'M1.11'],
-      'mod.command': [-32000, 'not-implemented', 'M1.11'],
+      'mod.view': [-32600, 'bad-params', undefined], // served since M1.11 slice 2 (#mod-host relays): {} has no name/viewId
+      'mod.command': [-32600, 'bad-params', undefined],
     });
   });
 

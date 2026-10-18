@@ -31,11 +31,13 @@
  *   - `init{abi, features}` must answer `mod-abi:v1` and THIS `modAbiId`, else
  *     the child is stopped and the start refused ABI; then `mod.health{ok}`.
  *
- * CALLS: host → mod calls are SERIALIZED per mod, so a mod → host request is
- * attributed to the call in force when it ARRIVES (effects.ts). Residual,
- * stated: a request a mod delays past its call's end is judged against the
- * idle context (read only), which can only narrow, never widen; binding each
- * request to a call id is slice 2. Each call
+ * CALLS: host → mod calls are SERIALIZED per mod, and every `view.render`,
+ * `command.run` and `tool.call` carries a host-minted `callId` (M1.11 slice
+ * 2). A mod → host request is judged against the call it ECHOES: the
+ * `callId` of the call in force ⇒ that call's effects; no `callId` ⇒ idle
+ * (`read` only — narrows, never widens); any other `callId` (another call,
+ * an ended call, a guess) ⇒ FORBIDDEN `CALL` + `mod.effect.refused{why:
+ * 'call-id'}`. Each call
  * has a timeout; on expiry the host sends `cancel{cancelToken}` and, if the
  * call is not settled within the cancel grace, restarts the child (§12.3).
  * mod → host: `state.get` (read), `state.set` (write), `kernel.call` (by verb;
@@ -52,11 +54,22 @@
  * (cap 3 per 10 min, then the mod stays down until started again); a crash
  * never reaches the kernel (G-MOD-03): every channel error is contained.
  *
- * SLICE 2 (named, not built): the socket wiring of the relays and of
- * kernel.call (the dispatcher's mod principal, scopes intersected, spend from
- * the caller's permit), the folder watch (fs.watch, 500 ms debounce), dev-mode
- * cards/expiry scheduling/cwd exclusion, the `gnomon-mods` MCP bridge, Tier 0
- * templates, `gnomon mod …` CLI, and wiring the host into startDaemon.
+ * FOLDER WATCH (G-MOD-08, slice 2): a RUNNING linked mod's source folder is
+ * watched (`fs.watch` recursive — FSEvents on macOS, ReadDirectoryChangesW on
+ * Windows — `.git/**` ignored, FOLDER_DEBOUNCE_MS = 500 ms). A change stops
+ * the child (`mod.stopped{reason:'changed'}`) and re-runs the start, whose
+ * loadMod full rehash pauses the mod (`mod.paused`) and stages the re-approve
+ * card — nothing from the changed tree loads; a no-op change (the tree still
+ * hashes to the pin) simply restarts from the same snapshot. The watcher is
+ * closed when the mod stops, pauses or the host stops.
+ *
+ * DAEMON (slice 2): startDaemon constructs the host (bridge.ts wires
+ * kernel.call to the real dispatcher and the relays into it), lists it in
+ * `status.mods`, and stops every mod before the children sweep at every exit.
+ *
+ * STILL NAMED, NOT BUILT: dev-mode cards/expiry scheduling/cwd exclusion and
+ * the dev re-pin (`mod.repinned`), the `gnomon-mods` MCP bridge, Tier 0
+ * templates, the Workshop mod, `/blob` serving.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -94,6 +107,8 @@ export const MOD_ENTRIES = Object.freeze(['index.mjs', 'index.js']);
 export const DEFAULT_CALL_TIMEOUT_MS = 5_000;
 export const DEFAULT_CANCEL_GRACE_MS = 1_000;
 export const RESTART_CAP = Object.freeze({ n: 3, windowMs: 10 * 60_000 });
+/** §12.5: a linked folder's change is acted on after this quiet period. */
+export const FOLDER_DEBOUNCE_MS = 500;
 
 export interface ModChildrenPort {
   track(input: TrackInput): Promise<void>;
@@ -148,6 +163,8 @@ interface Running {
   sandbox: 'full' | 'none';
   profileHash: string | null;
   ctx: CallContext;
+  /** the callId of the host → mod call in force (null while idle) */
+  callId: string | null;
   stopping: boolean;
 }
 
@@ -174,6 +191,7 @@ export class ModHost {
   readonly #restarts = new Map<string, number[]>();
   readonly #stderr = new Map<string, string>();
   readonly #starting = new Map<string, Promise<ModStartResult>>();
+  readonly #watchers = new Map<string, { close(): void }>();
   #closed = false;
   #seams: ModHostSeams = {};
 
@@ -203,6 +221,56 @@ export class ModHost {
   /** Names of mods with a live child. */
   running(): string[] {
     return [...this.#running.keys()].sort();
+  }
+
+  /** `status.mods` (§12.3 "status reports all three" ids; the running and paused mods). */
+  status(): Record<string, unknown> {
+    return {
+      modAbiId: MOD_ABI_ID,
+      running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
+      paused: [...this.#paused.values()].map((p) => ({ name: p.name, why: p.why, cardId: p.cardId })).sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }
+
+  /** Mods whose linked folder is being watched (tests / inspect). */
+  watching(): string[] {
+    return [...this.#watchers.keys()].sort();
+  }
+
+  #watch(name: string, folder: string): void {
+    if (this.#watchers.has(name) || this.#closed) return;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const w = fs.watch(folder, { recursive: true, persistent: false }, (_e, file) => {
+        const f = typeof file === 'string' ? file.split(path.sep).join('/') : '';
+        if (f === '.git' || f.startsWith('.git/')) return; // never hashed (§12.5 S25-L4)
+        clearTimeout(timer);
+        timer = setTimeout(() => void this.#onFolderChanged(name), FOLDER_DEBOUNCE_MS);
+        timer.unref();
+      });
+      w.on('error', () => undefined);
+      this.#watchers.set(name, {
+        close: () => {
+          clearTimeout(timer);
+          w.close();
+        },
+      });
+    } catch {
+      // no watch on this folder (removed, unreadable): the full rehash at every start still pauses a changed tree
+      this.#emit('mod.health', { name, ok: true, why: 'watch-unavailable' });
+    }
+  }
+
+  #unwatch(name: string): void {
+    this.#watchers.get(name)?.close();
+    this.#watchers.delete(name);
+  }
+
+  /** G-MOD-08: a watched folder changed — stop the child, then let loadMod's full rehash decide (pause + card, or the same pin). */
+  async #onFolderChanged(name: string): Promise<void> {
+    if (this.#closed || !this.#running.has(name)) return;
+    await this.stop(name, 'changed');
+    await this.start(name).catch(() => undefined); // a refused start is already logged
   }
 
   /** Start (or return) the child for `name`. Paused mods return their pause; nothing from a changed tree loads. */
@@ -308,7 +376,7 @@ export class ModHost {
         await this.#o.children.stop(child, 'shutdown');
         throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
       }
-      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, stopping: false };
+      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, callId: null, stopping: false };
       const r = running;
       this.#running.set(name, r);
       child.once('exit', (code, signal) => void this.#onExit(r, code, signal));
@@ -324,6 +392,7 @@ export class ModHost {
         throw new ModRefusal('ABI', `${name} answered abi ${String(init?.abi)} / modAbiId ${String(init?.modAbiId)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
       this.#emit('mod.health', { name, ok: true });
+      if (linked.length) this.#watch(name, linked[0]!);
       return this.#runningResult(r);
     } catch (err) {
       if (!running) await proxy?.close();
@@ -372,6 +441,7 @@ export class ModHost {
   }
 
   async stop(name: string, reason = 'stopped'): Promise<void> {
+    this.#unwatch(name);
     const r = this.#running.get(name);
     if (!r) return;
     r.stopping = true;
@@ -386,6 +456,7 @@ export class ModHost {
 
   async stopAll(reason = 'shutdown'): Promise<void> {
     this.#closed = true;
+    for (const n of [...this.#watchers.keys()]) this.#unwatch(n);
     await Promise.allSettled([...this.#starting.values()]); // reviewer #2: an in-flight start finishes (or refuses) before the sweep
     await Promise.all([...this.#running.keys()].map((n) => this.stop(n, reason)));
   }
@@ -397,7 +468,7 @@ export class ModHost {
     throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });
   }
 
-  /** Serialize host → mod calls per mod: a mod → host request is judged by the call in force when it ARRIVES (call-id binding is slice 2). */
+  /** Serialize host → mod calls per mod: one call (one callId) is in force at a time. */
   #enqueue<T>(name: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.#queues.get(name) ?? Promise.resolve();
     const next = prev.then(fn, fn);
@@ -454,11 +525,14 @@ export class ModHost {
     return this.#enqueue(name, async () => {
       const r = this.#require(name);
       const cancelToken = method === 'view.render' || method === 'tool.call' ? randomUUID() : null;
+      const callId = method === 'view.render' || method === 'tool.call' || method === 'command.run' ? randomUUID() : null;
       r.ctx = ctx;
+      r.callId = callId;
       try {
-        return await this.#withTimeout(r, r.channel.request(method, { ...params, ...(cancelToken ? { cancelToken } : {}) }), opts.timeoutMs ?? this.#o.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS, cancelToken, opts.signal);
+        return await this.#withTimeout(r, r.channel.request(method, { ...params, ...(cancelToken ? { cancelToken } : {}), ...(callId ? { callId } : {}) }), opts.timeoutMs ?? this.#o.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS, cancelToken, opts.signal);
       } finally {
         r.ctx = { kind: 'idle' };
+        r.callId = null;
         r.proxy?.closeTunnels(); // Aegis F2: a tunnel never outlives the call that opened it
       }
     });
@@ -521,14 +595,24 @@ export class ModHost {
     return true;
   }
 
-  /** mod → host requests, under the effects of the call in force. */
+  /** The call a mod → host request is bound to: its echoed callId must name the call in force; none ⇒ idle. */
+  #boundContext(r: Running, method: string, params: Record<string, unknown>): CallContext {
+    const cid = params.callId;
+    if (cid === undefined) return { kind: 'idle' };
+    if (typeof cid === 'string' && r.callId !== null && cid === r.callId) return r.ctx;
+    throw new ModRefusal('CALL', `${r.name} sent ${method} for a call that is not in force (callId mismatch)`, { name: r.name, method, why: 'call-id' });
+  }
+
+  /** mod → host requests, under the effects of the call they are bound to (its echoed callId). */
   async #onModRequest(name: string, method: string, params: Record<string, unknown>): Promise<unknown> {
     const r = this.#running.get(name);
     if (!r) throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });
     let effect: ToolEffect;
+    let ctx: CallContext = { kind: 'idle' };
     try {
+      ctx = this.#boundContext(r, method, params);
       effect = methodEffect(method, params);
-      const allowed = effectsFor(r.manifest, r.ctx, r.dev);
+      const allowed = effectsFor(r.manifest, ctx, r.dev);
       if (!allowed.has(effect)) throw new ModRefusal('EFFECT', `${name} called ${method}${method === 'kernel.call' ? ` ${String(params.verb)}` : ''} needing \`${effect}\` outside its effects in force [${[...allowed].sort().join(', ')}]${r.dev ? ' (dev mode: read only)' : ''}`, { name, method, effect });
       if (method === 'kernel.call') {
         const verb = String(params.verb);
@@ -537,7 +621,7 @@ export class ModHost {
           const kind = vp.kind;
           if (typeof kind !== 'string' || !kind.startsWith(`modns.${name}.`) || !r.manifest.provides?.events?.includes(kind)) throw new ModRefusal('VERB', `${name} may append only its own declared modns.${name}.* kinds`, { name, verb, kind: typeof kind === 'string' ? kind : null });
         }
-        const hsid = r.ctx.kind === 'tool' ? r.ctx.hsid : undefined;
+        const hsid = ctx.kind === 'tool' ? ctx.hsid : undefined;
         if (verb === 'session.send') {
           // Aegis C1: the session is the CALLER's (context hsid), never one the mod names; the permit is the caller's, never the mod's
           if (!hsid) throw new ModRefusal('VERB', 'session.send through kernel.call needs the calling session (a tool call with its hsid)', { name, verb });
@@ -549,8 +633,8 @@ export class ModHost {
         return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}) }) };
       }
     } catch (err) {
-      if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB')) {
-        this.#emit('mod.effect.refused', { name, effect: err.detail.effect ?? (err.modCode === 'APPROVE' ? 'approve' : 'verb'), method, ...(method === 'kernel.call' ? { verb: String(params.verb) } : {}) });
+      if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {
+        this.#emit('mod.effect.refused', { name, effect: err.detail.effect ?? (err.modCode === 'APPROVE' ? 'approve' : err.modCode === 'CALL' ? 'call-id' : 'verb'), method, ...(err.modCode === 'CALL' ? { why: 'call-id' } : {}), ...(method === 'kernel.call' ? { verb: String(params.verb) } : {}) });
       }
       throw err;
     }

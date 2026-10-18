@@ -9,8 +9,10 @@
  * calling session's permit). The DECLARED set of a mod is the union of its
  * tools' `effects` (manifest:v1 declares effects per tool; views and commands
  * carry none). The set in force for a mod → host call is the set of the
- * host → mod call it happens inside (the host serializes calls per mod; a
- * request arriving after its call ended falls to idle = read, which only narrows):
+ * host → mod call it is BOUND to by its echoed `callId` (M1.11 slice 2): a
+ * request naming the call in force gets that call's set; one carrying no
+ * `callId` is idle (read, which only narrows); one naming any other call —
+ * ended, foreign or guessed — is refused (host.ts, FORBIDDEN `CALL`):
  *   - `tool.call{name}` → that tool's effects;
  *   - `command.run`     → the mod's declared set (a user command, §12.3);
  *   - `view.render`     → `read` only (views are pure, §12.2);

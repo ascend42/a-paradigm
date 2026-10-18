@@ -22,7 +22,7 @@ function serve(def: ModDefinition) {
     }
     throw new Error(`no reply ${id}`);
   };
-  return { send, reply };
+  return { send, reply, lines };
 }
 
 describe('serveMod', () => {
@@ -39,5 +39,20 @@ describe('serveMod', () => {
     m.send({ id: 3, method: 'tool.call', params: { name: 'slow', input: null, cancelToken: 't1' } });
     m.send({ method: 'cancel', params: { cancelToken: 't1' } });
     expect((await m.reply(3)).result).toEqual({ result: 'aborted' });
+  });
+
+  it('call-id binding (M1.11 slice 2): mod → host requests echo the callId of the call they are made in; the event api carries none', async () => {
+    const m = serve({
+      tools: { t: async (_i, _c, api) => (void api.state.get('k'), 'ok') },
+      onEvent: (_e, api) => void api.state.get('e'),
+    });
+    m.send({ id: 5, method: 'tool.call', params: { name: 't', input: null, cancelToken: 'c', callId: 'call-1' } });
+    await m.reply(5);
+    const fromTool = m.lines.find((l) => l.method === 'state.get' && (l.params as Record<string, unknown>).key === 'k');
+    expect(fromTool?.params).toEqual({ key: 'k', callId: 'call-1' });
+    m.send({ method: 'event', params: { event: { kind: 'modns.x.y' } } });
+    await new Promise((res) => setTimeout(res, 20));
+    const fromEvent = m.lines.find((l) => l.method === 'state.get' && (l.params as Record<string, unknown>).key === 'e');
+    expect(fromEvent?.params).toEqual({ key: 'e' });
   });
 });
