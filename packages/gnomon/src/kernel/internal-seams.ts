@@ -34,6 +34,7 @@ import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/
 import type { WebEndpoint, WebEndpointOptions, WebEndpointSeams } from './web/endpoint.js';
 import type { DecideOptions, StagedRecord } from './manifest/install.js';
 import type { GrantInstallRow } from './manifest/grants.js';
+import type { ModHost, ModHostOptions, ModHostSeams } from './modhost/host.js';
 import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
@@ -78,12 +79,18 @@ export interface QuarantineSeams {
   quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void, fsOps?: QuarantineFsOps): Promise<QuarantineReport>;
 }
 
+/** #mod-host: construct a host with an unsandboxed launcher and/or a substituted egress dialer (M1.11). */
+export interface ModHostSeamSlot {
+  create(opts: ModHostOptions, seams: ModHostSeams): ModHost;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
   web?: WebSeams;
   manifest?: ManifestSeams;
   quarantine?: QuarantineSeams;
+  modhost?: ModHostSeamSlot;
 }
 
 const slots: Slots = {};

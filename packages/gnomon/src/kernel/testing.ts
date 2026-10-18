@@ -18,6 +18,8 @@
  *   - decideInstallCard / rollbackModSnapshot: the #manifest-loader install-card
  *     decision and the human rollback (M1.5), until the M1.6 broker owns cards.
  *   - quarantineWithSteps: `gnomon log quarantine` with crash injection.
+ *   - createModHostForTest: a #mod-host whose children run WITHOUT the `mod`
+ *     profile (unsandboxedModLauncher) and/or with a substituted egress dialer.
  *
  * NEVER IMPORTED BY PRODUCTION CODE. It is not a tsup entry and no index
  * re-exports it; test/seams-fence.test.ts proves that no file under src/
@@ -40,6 +42,8 @@ import { PresenceToken, type PresenceMethod, type PresencePurpose } from './iden
 import { seamsOf, type KernelLogSeamOptions } from './internal-seams.js';
 import { WebEndpoint, type WebEndpointOptions, type WebEndpointSeams } from './web/endpoint.js'; // registers the 'web' seams
 import type { ChildLaunchPlan, TransportLaunchInput } from './sandbox/transport.js';
+import { ModHost, type ModHostOptions, type ModHostSeams } from './modhost/host.js'; // registers the 'modhost' seams
+import type { ModLaunchInput } from './sandbox/mod.js';
 
 /** Marker string: test/seams-fence.test.ts asserts it never appears in dist/. */
 export const GNOMON_INTERNAL_TEST_ENTRY = 'gnomon:internal-test-entry:v1' as const;
@@ -111,4 +115,17 @@ export function unsandboxedLauncher(input: TransportLaunchInput): ChildLaunchPla
 /** A #web-endpoint with substituted seams (default launcher: unsandboxed). */
 export function createWebEndpointForTest(opts: WebEndpointOptions, seams: WebEndpointSeams = {}): WebEndpoint {
   return seamsOf('web').create(opts, { launcher: unsandboxedLauncher, ...seams });
+}
+
+/** A mod child as a plain `node <entry>` child: NO sandbox (tests only; every OS). */
+export function unsandboxedModLauncher(input: ModLaunchInput): ChildLaunchPlan {
+  const env: Record<string, string> = { ...input.env };
+  if (process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT; // win32 Node needs it to start
+  return { command: input.nodePath ?? process.execPath, args: [input.entry], env, sandbox: 'none', profile: null, profileHash: null };
+}
+
+/** A #mod-host with substituted seams (no default: pass `launcher: unsandboxedModLauncher` explicitly to drop the profile). */
+export function createModHostForTest(opts: ModHostOptions, seams: ModHostSeams = {}): ModHost {
+  void ModHost; // keep the owner module loaded (its static block registers the seam)
+  return seamsOf('modhost').create(opts, seams);
 }

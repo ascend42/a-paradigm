@@ -1176,6 +1176,40 @@ components:
       - test/claude-adapter.test.ts
     oracles: [G-RUN-01, G-ADP-01]
 
+  mod-host:
+    description: >-
+      #mod-host (spec §3.8, §12.1-§12.3, §15.5 row mod; §19.1 M1.11 slice 1)
+      in src/kernel/modhost/. host.ts ModHost - one child per mod, started
+      ONLY via #manifest-loader loadMod (root-signed grant.install, snapshot
+      integrity, manifestHash, grants; a changed linked folder pauses and
+      stages the re-approve card instead of loading, G-MOD-08); effects in
+      force = union of tool effects, capped at read while grant.install{dev}
+      is live, an expired dev period pauses (mod.dev.expired, fail closed);
+      spawns node <index.mjs|index.js> from the pinned snapshot under the
+      default-deny mod profile (sandbox/mod.ts registry +
+      platform/darwin/mod-sbpl.ts; same floor as sessions: macOS 15+ and SIP;
+      other platforms refuse sandbox-unavailable), env GNOMON_MOD_NAME +
+      GNOMON_EGRESS_PROXY only; tracked by DaemonChildren kind mod IN MEMORY
+      (no mod.spawned/mod.exited kind: adding one moves clientApiId);
+      init must echo mod-abi:v1 and MOD_ABI_ID. channel.ts - JSON-RPC 2.0
+      NDJSON over stdio (1 MiB frames, stderr tail). Calls serialized per mod
+      so mod->host requests are attributed exactly; effects.ts enforces
+      state.get=read, state.set=write, kernel.call by verb (approve never,
+      log.append only own declared modns, session.send only inside a tool
+      call with the caller hsid) => FORBIDDEN + mod.effect.refused. Timeout =>
+      cancel{cancelToken}, unhonoured => restart; crash => mod.health{ok:false}
+      + restart (cap 3/10 min). block.ts closed kit:v1 gate (256 KiB / 2000
+      nodes, sanitizeLine, Button command id only, Image alt + sha256 blob,
+      Canvas names a ds). relayView/relayCommand stamp relayedFor from the
+      caller. egress-proxy.ts per-mod loopback CONNECT proxy (443 only;
+      granted declared hosts; IP literals, private names, Anthropic hosts,
+      private resolutions and calls lacking network refused). state.ts
+      per-mod KV state/kv.json (size-capped; node:sqlite state.db is slice 2).
+      Test seams (unsandboxed launcher, egress dialer) only via
+      kernel/testing.ts createModHostForTest. Slice 2: socket relays and
+      kernel.call wiring, folder watch, dev-mode cards, gnomon-mods MCP
+      bridge, gnomon mod CLI, Tier 0 templates, workshop, daemon wiring.
+    tags: [kernel, mods, sandbox, M1.11]
 flows:
   daemon-lifecycle:
     description: >-

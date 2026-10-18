@@ -28,3 +28,4 @@ export * from './card.js';
 export * from './rpc.js';
 export * from './schemas.js';
 export * from './client-api.js';
+export * from './mod-abi.js';
