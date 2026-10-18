@@ -43,6 +43,9 @@ import {
   type Signer,
 } from '../src/kernel/log/index.js';
 
+// 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
+const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
+
 const KERNEL = 'p:abcdefgh/kernel';
 const HUMAN = 'p:abcdefgh/founder';
 const HSID = 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0';
@@ -879,7 +882,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
     ks.frozen = false;
     const k = refusalOf(() => openLog(home2, { keystoreAnchor: ks }, null));
     expect([k.refusal.code, k.reason]).toEqual(['FORBIDDEN', 'kernel-key-required']);
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 });
 
 describe('#kernel-log segments (L5, §9.4)', () => {

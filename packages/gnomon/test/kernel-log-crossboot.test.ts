@@ -28,6 +28,9 @@ import {
   type Signer,
 } from '../src/kernel/log/index.js';
 
+// 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
+const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
+
 const KERNEL = 'p:abcdefgh/kernel';
 const KERNEL_KEY = SoftwareEd25519Signer.generate();
 const BOOT_A = 'AAAAAAAA-0000-4000-8000-00000000000A';
@@ -399,5 +402,5 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     expect(lagRows(r).map((e) => e.payload)).toEqual([{ rows: seg - 1, which: 'file', bootPrev: BOOT_A, bootNow: BOOT_B }]);
     await r.flushAnchors();
     expect(r.verify().ok).toBe(true);
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 });
