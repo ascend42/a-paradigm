@@ -6,6 +6,11 @@ browser and drive a real Claude Code session. It uses a separate dev home with a
 the hardware root and the presence prompt come with M1.3, and this path is
 removed when they land (spec §2.4 rule 6, `#dev-launch`).
 
+**With M1.3 on your Mac, use the real path instead:** `gnomon identity init`, then
+`gnomon up`. Approvals work there, with Touch ID. See
+[Real identity: `gnomon up`](#real-identity-gnomon-up) at the end. The
+prerequisites below apply to both paths.
+
 ## Before you start
 
 - macOS 15 or later, with SIP enabled. The session sandbox refuses to start otherwise.
@@ -149,3 +154,112 @@ the port and no token.
 - `dev up` runs the kernel from your terminal, so its sessions inherit that
   terminal app's TCC grants (spec §2.4 rule 2, §A.2(v)). That is acceptable for
   dogfooding, but it is not the production posture.
+
+## Real identity: `gnomon up`
+
+This is the production counterpart of `dev up` (spec §2.4 rule 7, `#gnomon-up`).
+It runs on your real home, `~/.gnomon`, with the **hardware root and approvals
+key in the Secure Enclave**, behind the signed helper. Approvals work: every
+card decision you make in the GUI takes a Touch ID prompt from the helper, and
+the kernel logs the signed decision. The dev path above is unchanged and stays
+available.
+
+The prerequisites in [Before you start](#before-you-start) still apply. Above
+all, `unset NODE_OPTIONS`: `gnomon up` also runs the kernel in your own Node
+process.
+
+### Once: build the signed helper and provision the root
+
+From the clone root (details in `packages/gnomon-helper/README.md`):
+
+```sh
+npm run build:gnomon
+node packages/gnomon-helper/scripts/build-darwin.mjs     # Developer ID signed; login password, Always Allow
+node packages/gnomon/dist/cli/gnomon.js identity init --name matt
+node packages/gnomon/dist/cli/gnomon.js identity status
+```
+
+`identity init` asks for **two** Touch ID prompts: the root signs your
+approvals key, then this device. Each prompt ends with a 12-character digest,
+and stderr names the same digest. Check that they match before you touch. On
+success, `identity status` shows `"state":"hardware"`, the root key id, your
+principal (`p:<ns>/matt`) and the device id.
+
+If you ran the hardware test (`GNOMON_HW_TESTS=1`, in the helper README), run
+it **before** `identity init`. The helper refuses a new key generation while
+another one exists.
+
+### Each time: run it
+
+```sh
+node packages/gnomon/dist/cli/gnomon.js up
+```
+
+There is no `DEV ONLY` banner. It prints:
+
+```
+UP  kernel (in this process)
+  home        /Users/<you>/.gnomon
+  socket      /Users/<you>/.gnomon/gnomon.sock
+  root        hardware <rootKeyId> (Secure Enclave, signed helper)
+  device      <deviceId> as p:<ns>/matt
+  approve     from the GUI: Touch ID per decision (the helper prompt names Gnomon)
+  kernel key  ephemeral for this run (other socket clients report serverVerified:false)
+```
+
+It then prints the launch URL. As with `dev up`, the URL goes only to an
+interactive terminal, works once and expires after 60 s. Enter gives a fresh
+URL, and `q` or Ctrl-C stops the kernel.
+
+`--home /absolute/path` runs a different provisioned home. `gnomon up` never
+reads `GNOMON_HOME`. If you ran `identity init` with `GNOMON_HOME` set, pass that
+path with `--home`.
+
+### Drive a session where an approval matters
+
+Open a session as in [Driving a session](#driving-a-session). Then raise a card
+and decide it:
+
+- **Most deterministic: a repo hook.** Use a scratch project whose
+  `.claude/settings.json` declares a hook, for example
+  `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo gnomon-hook-ok"}]}]}}`.
+  Opening a session there raises one `gate-class` card per hook (allow / deny).
+  Click **allow**. You get **one Touch ID prompt** whose text names Gnomon and the
+  card. After you touch, the card shows decided. The next session you open in
+  that project runs the approved hook.
+- **A question card.** Ask the session to use the AskUserQuestion tool. That
+  raises an `ask-user` card, and **answer** takes Touch ID the first time. Later
+  cached-class decisions on the same GUI connection can use the unlock without
+  a prompt. A reload ends that unlock.
+- **A cancelled prompt** is refused (`presence`) and decides nothing. The card
+  stays pending, and you can decide it again.
+
+What still does not work on this path: tool-permission cards (sessions still
+run with `--permission-prompts none`, so Edit, Write and Bash are denied, not
+asked); writing an ask-user answer or a plan decision back into the running
+session (it is logged and signed, but the child does not wait for it); Reconnect
+after a reload (press Enter for a fresh URL); and `gnomon open` against a
+separately running `gnomond`.
+
+### Refusals
+
+| Message | Meaning | Next |
+|---|---|---|
+| `REFUSED  UP  unprovisioned` | No home, or no `keys/identity.json` | `gnomon identity init` |
+| `REFUSED  UP  dev-home` | The home carries the DEV-ONLY marker | `gnomon dev up --home <it>` |
+| `REFUSED  UP  daemon-running` | A kernel already runs on this home (`gnomond` or another `up`) | Stop it with Ctrl-C in its terminal, or let it exit on idle. `gnomon open` has no wire verb yet. |
+| `REFUSED  UP  identity-<reason>` | The helper is not the pinned signed one, or the Secure Enclave keys do not match identity.json | Rebuild the helper; check with `gnomon identity status` |
+| `REFUSED  UP  unsafe-home` | The home is a symlink or not a directory | Name the real directory with `--home` |
+| `REFUSED  UP  device-unregistered` / `registry-damaged` | The device key or registry does not verify under this root | `gnomon identity init --rotate` |
+
+Notes:
+
+- `gnomon up` runs the kernel from your terminal. Its sessions inherit that
+  terminal app's TCC grants (spec §2.4 rule 2, §A.2(v)). That is acceptable for
+  this first test, but it is not the production posture: launchd or the signed app is.
+- The kernel key is still a fresh in-memory key on every start, with no
+  root-signed row (the keystore item). The GUI pins it from the launch URL and
+  `gnomon up` pins it in-process. Other socket clients, such as
+  `gnomon daemon status`, report `serverVerified:false`.
+- Stopping works as with `dev up`. Stopping the kernel also closes the helper,
+  and that drops every cached unlock.
