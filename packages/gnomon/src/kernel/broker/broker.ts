@@ -48,6 +48,7 @@ import {
   RefusedError,
   validateCardV1,
   type CardFlag,
+  type CardDecision,
   type CardKind,
   type CardV1,
   type RefusalCode,
@@ -161,6 +162,12 @@ export interface RaiseInput {
   /** presence purpose/binding override (install: mod.install bound to {cardId, contentHash}) */
   presence?: { purpose: PresencePurpose; binding: (decision: string) => PresenceBinding; consumedByEffect: boolean };
   effect?: CardEffect;
+  /**
+   * P8-D96: the decisions this card offers, a subset of its kind's (permission
+   * slice cards: allow | deny, never `always`). Only these are signed as
+   * actions; `approve` refuses any other with bad-params.
+   */
+  decisions?: readonly CardDecision[];
 }
 
 export interface DecideContext {
@@ -188,6 +195,8 @@ interface CardRecord {
   effect?: CardEffect;
   waiters: Array<(d: string) => void>;
   outcome?: string;
+  decisions?: readonly string[];
+  note?: string;
 }
 
 /** tool.permission default timeout (expires into deny). Other kinds wait. */
@@ -239,6 +248,10 @@ export class ApprovalBroker {
     const cardId = input.cardId ?? mintId('card');
     if (!ID_PATTERNS.card.test(cardId)) throw fail('BAD_REQUEST', 'bad-params', 'cardId must be card:<ULID>');
     if (this.#cards.has(cardId)) return this.#cards.get(cardId)!.card;
+    if (input.decisions !== undefined) {
+      const valid = validDecisions(input.kind);
+      if (input.decisions.length === 0 || input.decisions.some((d) => !valid.includes(d))) throw fail('BAD_REQUEST', 'bad-params', `decisions must be a non-empty subset of ${valid.join(', ')}`);
+    }
     const rendered = blockOf(input.lines);
     const flags = [...new Set<CardFlag>([...(input.flags ?? []), ...rendered.flags])].sort();
     const contentHash = input.contentHash ?? contentHashOf({ kind: input.kind, requestedBy: input.requestedBy, ...(input.hsid ? { hsid: input.hsid } : {}), detail: input.detail, flags });
@@ -255,7 +268,7 @@ export class ApprovalBroker {
       block: input.block ?? rendered.block,
       contentHash,
       ...(flags.length ? { flags } : {}),
-      actions: signActions(this.#o.kernel, cardId, input.kind, contentHash),
+      actions: signActions(this.#o.kernel, cardId, input.kind, contentHash, input.decisions),
       state: 'pending',
       ...(timeoutMs !== undefined ? { timeoutAt: new Date(now + timeoutMs).toISOString() } : {}),
     };
@@ -263,7 +276,7 @@ export class ApprovalBroker {
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
-    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), waiters: [] });
     return card;
   }
 
@@ -281,6 +294,32 @@ export class ApprovalBroker {
     if (!r) return Promise.resolve('deny');
     if (r.outcome) return Promise.resolve(r.outcome);
     return new Promise((res) => r.waiters.push(res));
+  }
+
+  /** The human's note on a decided card (P8-D96: a plan reject's note goes back to the session). */
+  noteOf(cardId: string): string | undefined {
+    return this.#cards.get(cardId)?.note;
+  }
+
+  /**
+   * Expire ONE pending card now (P8-D96: the session cancelled the request, or
+   * exited). Into deny, never allow; logged approval.expire{…, into, why}.
+   * A card that already has an outcome is left alone (false).
+   */
+  async expire(cardId: string, why: string): Promise<boolean> {
+    const r = this.#cards.get(cardId);
+    if (!r || r.outcome || r.card.state !== 'pending') return false;
+    const into = 'deny';
+    r.outcome = into; // claimed before the await: a racing approve re-checks r.outcome and refuses
+    await this.#o.log('approval.expire', { cardId, kind: r.card.kind, into, why }, r.card.hsid ? { session: r.card.hsid } : {}).catch(() => undefined);
+    r.card = { ...r.card, state: 'expired' };
+    for (const w of r.waiters.splice(0)) w(into);
+    return true;
+  }
+
+  /** approval.suspect from the kernel's own observation (B3: only the broker appends approval.*). */
+  async suspect(why: string, data: Record<string, unknown>, hsid?: string): Promise<void> {
+    await this.#o.log('approval.suspect', { why, ...data }, hsid ? { session: hsid } : {});
   }
 
   /** The presence prompt the helper would show for (card, decision) on a connection. */
@@ -376,6 +415,7 @@ export class ApprovalBroker {
     if (decision === 'always' && flags.includes('peer')) throw fail('FORBIDDEN', 'peer-always', 'a peer-flagged card never takes always', { gate: 'link', cardId });
     const cls = baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
+    if (r.decisions && decision !== 'withdraw' && !r.decisions.includes(decision)) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not one of this card's actions (${r.decisions.join(', ')})`, { cardId });
 
     // 3. decisionSig by the approvals key (approver in the preimage, Q5). No key at all (before M1.3) is
     //    answered FIRST, so a decision with no decisionSig (the GUI has no signing path yet) sees the
@@ -493,6 +533,7 @@ export class ApprovalBroker {
         throw err;
       }
     }
+    if (typeof p.note === 'string' && p.note) r.note = p.note;
     r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence, via, cli };
     this.#settle(r, decision);
     return r.card;

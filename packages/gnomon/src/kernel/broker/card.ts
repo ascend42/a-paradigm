@@ -70,8 +70,8 @@ export function actionMessage(cardId: string, decision: string, contentHash: str
   return [cardId, decision, contentHash].join('\n');
 }
 
-export function signActions(kernel: Signer, cardId: string, kind: string, contentHash: string): SignedAction[] {
-  return validDecisions(kind).map((decision) => ({
+export function signActions(kernel: Signer, cardId: string, kind: string, contentHash: string, only?: readonly string[]): SignedAction[] {
+  return validDecisions(kind).filter((d) => !only || only.includes(d)).map((decision) => ({
     decision,
     keyId: kernel.keyId,
     sig: Buffer.from(kernel.sign('cardAction', actionMessage(cardId, decision, contentHash))).toString('base64'),

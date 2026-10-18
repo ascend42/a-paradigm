@@ -20,7 +20,9 @@ describe('G-RUN-01 argv and forbidden flags', () => {
     expect(a.slice(0, 1)).toEqual(['-p']);
     for (const f of ['--input-format', '--output-format', '--verbose', '--replay-user-messages', '--include-partial-messages', '--strict-mcp-config']) expect(a).toContain(f);
     expect(a[a.indexOf('--permission-mode') + 1]).toBe('default');
-    expect(a[a.indexOf('--permission-prompts') + 1]).toBe('none');
+    expect(a[a.indexOf('--permission-prompts') + 1]).toBe('host');
+    expect(a[a.indexOf('--permission-prompt-tool') + 1]).toBe('stdio');
+    expect(a).not.toContain('none');
     expect(a[a.indexOf('--session-id') + 1]).toBe(base.uuid);
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('user,project,local');
     expect(a[a.indexOf('--settings') + 1]).toBe('/s/policy.json');
