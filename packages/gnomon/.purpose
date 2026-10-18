@@ -981,7 +981,17 @@ components:
       scan still run (only the injected key ignored); resume is a logged
       one-window allowance; root config carries a version counter (older ⇒
       corrupt). Day/window counters are in memory (rebuild at boot deferred
-      beside S-L2).
+      beside S-L2). Round 3: one pause/unpause predicate (used ≥ 70 % or no
+      window headroom), the outstanding budget card is withdrawn when the
+      pause clears (a late resume grants nothing); the human reserve applies
+      on the USER rung for every backend (armada ≤ 70 % of each user cap and
+      ≤ min(cap−1, ⌊0.7·cap⌋) user concurrency; Aegis N1); the kernel binds
+      machine for agents; never a permit with limits ≤ 0; permit.reserve rows
+      record the attributed user (attributed: root-human); config rollback
+      high-water from the last signed config.loaded on the chain (N2).
+      M1.7 note: turn permits of an api-token session are labelled
+      subscription; per-turn billing.api.active needs the supervisor to
+      report usage against the spawn permit (G-SUB-03).
     path: src/kernel/budget/
     type: module
     tags: [gnomon, kernel, budget, fuse, law-7, paradigm-8, m1.6]

@@ -382,7 +382,13 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     guiSessions: () => ((web?.status() as { guiSessions?: { n?: number } } | undefined)?.guiSessions?.n ?? 0),
   });
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
-  const fuseCfg = loadFuseConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined));
+  // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
+  let chainHighWater = 0;
+  for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
+    const p = v.view === 'full' ? (v.event.payload as { signed?: unknown; version?: unknown } | undefined) : undefined;
+    if (p?.signed === true && typeof p.version === 'number' && p.version > chainHighWater) chainHighWater = p.version;
+  }
+  const fuseCfg = loadFuseConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater });
   const fuse = new BudgetFuse({
     kernel: kernelSigner,
     logId: log.head().log,

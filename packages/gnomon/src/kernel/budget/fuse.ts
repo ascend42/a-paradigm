@@ -23,6 +23,17 @@
  * the outstanding headroom of live permits, and a new permit's limits are
  * clamped to what is left (Aegis C6).
  *
+ * HUMAN RESERVE ON THE USER RUNG (Aegis N1, with P8-D91's one bucket): for
+ * EVERY backend an armada request (agent/session principal or unattended
+ * work) may bring used + committed to at most 70 % of each user cap (tokens,
+ * USD) and to at most min(cap - 1, floor(0.7 × cap)) user concurrency, so an
+ * attended human always keeps a slot and 30 % of the day.
+ *
+ * M1.7 NOTE: `turn` permits of an api-token session are labelled
+ * `subscription` (api billing is selected only on the kernel spawn); the
+ * per-turn `billing.api.active` row (G-SUB-03) depends on the supervisor
+ * reporting usage against the SPAWN permit.
+ *
  * DEFERRED (reported): the day and window counters live in memory; rebuilding
  * them from `budget.usage` rows at boot is the next slice (beside S-L2), so a
  * daemon restart today forgets the day's usage.
@@ -80,6 +91,8 @@ export interface ReserveRequest {
    * an api-token card may bill (Aegis C3).
    */
   kernelSpawn?: { hsid: string };
+  /** P8-D91 pre-M1.7: the user rung was attributed to the root's human principal (recorded on permit.reserve). */
+  attributed?: 'root-human';
 }
 
 export interface PermitV1 {
@@ -197,7 +210,7 @@ export class BudgetFuse {
 
   async reserve(req: ReserveRequest): Promise<PermitV1> {
     if (!(PERMIT_KINDS as readonly string[]).includes(req.kind)) throw fuseFail('BAD_REQUEST', `unknown permit kind ${String(req.kind).slice(0, 64)}`, { kinds: [...PERMIT_KINDS] });
-    await this.#o.log('permit.reserve', { kind: req.kind, principal: req.principal, scope: req.scope, backend: req.backend ?? null }, req.scope.session ? { session: req.scope.session } : {});
+    await this.#o.log('permit.reserve', { kind: req.kind, principal: req.principal, scope: req.scope, backend: req.backend ?? null, user: req.scope.user, ...(req.attributed ? { attributed: req.attributed } : {}) }, req.scope.session ? { session: req.scope.session } : {});
     if (this.#corrupt) return this.#deny(req, 'BUDGET_DENIED', 'corrupt-state');
     const backend = req.backend ?? 'claude-code';
     // law 7 (inside the broker): no API-billing path for a kernel-spawned Claude session
@@ -220,13 +233,18 @@ export class BudgetFuse {
     const live = (h: Held): boolean => !h.released && Date.parse(h.permit.expiresAt) > now;
     const headroomOf = (h: Held, dim: 'tokens' | 'usd'): number => Math.max(0, h.permit.limits[dim] - h.used[dim]);
     let windowLeft = Number.POSITIVE_INFINITY;
-    if (backend === 'claude-code' && BudgetFuse.isArmada(req)) {
+    const armada = BudgetFuse.isArmada(req);
+    if (backend === 'claude-code' && armada) {
       const threshold = (1 - HUMAN_RESERVE) * this.#cfg.subscription.windowTokens;
       const committed = [...this.#permits.values()].filter((h) => live(h) && h.permit.backend === 'claude-code').reduce((a, h) => a + headroomOf(h, 'tokens'), 0);
       const used = this.#windowUsed();
-      windowLeft = threshold - used - committed;
-      if (used < threshold && this.#armadaPaused) await this.#unpauseArmada('window');
-      if (now >= this.#allowanceUntil && (used >= threshold || windowLeft <= 0)) {
+      const inAllowance = now < this.#allowanceUntil;
+      // during a human-granted allowance the armada may use the human's 30 % for one window (N3); never beyond the window
+      windowLeft = (inAllowance ? this.#cfg.subscription.windowTokens : threshold) - used - committed;
+      const over = used >= threshold || windowLeft <= 0; // ONE predicate for pause and unpause (reviewer round 3)
+      if (!over && this.#armadaPaused) await this.#unpauseArmada('window');
+      if (inAllowance && windowLeft <= 0) return this.#deny(req, 'BUDGET_DENIED', 'subscription-window', { used: { n: used, of: this.#cfg.subscription.windowTokens }, allowance: true });
+      if (!inAllowance && over) {
         await this.#pauseArmada(used);
         return this.#deny(req, 'BUDGET_DENIED', 'subscription-window', { used: { n: used, of: this.#cfg.subscription.windowTokens }, reservedForHuman: HUMAN_RESERVE, ...(this.#budgetCardId ? { cardId: this.#budgetCardId } : {}) });
       }
@@ -236,7 +254,10 @@ export class BudgetFuse {
       const spawns = [...this.#permits.values()].filter((h) => live(h) && h.permit.kind === 'session.spawn');
       for (const [name, id] of this.#scopes(req.scope)) {
         const n = spawns.filter((h) => (h.permit.scope as Record<string, string | null>)[name] === id).length;
-        if (n >= this.#cfg.concurrent[name]) return this.#deny(req, 'BUDGET_DENIED', 'concurrent', { scope: name, n: { n, of: this.#cfg.concurrent[name] } });
+        const cap = this.#cfg.concurrent[name];
+        // N1: the armada never takes the human's last user slot
+        const of = armada && name === 'user' ? Math.max(0, Math.min(cap - 1, Math.floor(cap * (1 - HUMAN_RESERVE)))) : cap;
+        if (n >= of) return this.#deny(req, 'BUDGET_DENIED', 'concurrent', { scope: name, n: { n, of }, ...(of !== cap ? { reservedForHuman: cap - of } : {}) });
       }
       if (backend === 'local') {
         const n = spawns.filter((h) => h.permit.backend === 'local' && h.permit.scope.machine === (req.scope.machine ?? null)).length;
@@ -250,7 +271,8 @@ export class BudgetFuse {
     for (const [name, id] of this.#scopes(req.scope)) {
       for (const dim of ['tokens', 'usd'] as const) {
         const used = this.#day.get(`${day}|${dim}|${name}|${id}`) ?? 0;
-        const of = this.#cfg[dim][name];
+        const cap = this.#cfg[dim][name];
+        const of = armada && name === 'user' ? cap * (1 - HUMAN_RESERVE) : cap; // N1: 30 % of every user cap stays the human's
         const committed = [...this.#permits.values()].filter((h) => live(h) && (h.permit.scope as Record<string, string | null>)[name] === id).reduce((a, h) => a + headroomOf(h, dim), 0);
         if (used + committed >= of) return this.#deny(req, 'BUDGET_DENIED', dim, { scope: name, used: { n: used, of }, committed });
         left[dim] = Math.min(left[dim], of - used - committed);
@@ -280,6 +302,8 @@ export class BudgetFuse {
       ladder,
       decision: 'allow',
     };
+    // N3: never a permit with nothing to spend
+    if (!(limits.tokens > 0) || !(limits.usd > 0)) return this.#deny(req, 'BUDGET_DENIED', limits.tokens > 0 ? 'usd' : 'tokens', { headroom: { tokens: Math.max(0, limits.tokens), usd: Math.max(0, limits.usd) } });
     const permit: PermitV1 = { ...unsigned, sig: Buffer.from(this.#o.kernel.sign('permit', canonicalJson(unsigned))).toString('base64') };
     // held synchronously with the checks above (no await between them), so concurrent reserves cannot all pass one limit
     this.#permits.set(permit.permitId, { permit, released: false, used: { tokens: 0, usd: 0 }, breached: false });
@@ -369,13 +393,17 @@ export class BudgetFuse {
         requestedBy: this.#o.kernelPrincipal ?? 'p:00000000/kernel',
         attended: false,
         detail: { reason: 'subscription-window', used, of: this.#cfg.subscription.windowTokens, reservedForHuman: HUMAN_RESERVE },
-        lines: [`Armada paused: subscription window at ${Math.round((used / this.#cfg.subscription.windowTokens) * 100)} %`, `${Math.round(HUMAN_RESERVE * 100)} % is reserved for your interactive sessions`],
+        lines: [
+          `Armada paused: subscription window at ${Math.round((used / this.#cfg.subscription.windowTokens) * 100)} %`,
+          `${Math.round(HUMAN_RESERVE * 100)} % is reserved for your interactive sessions`,
+          `resume lets the armada use your ${Math.round(HUMAN_RESERVE * 100)} % for one window`,
+        ],
       });
       this.#budgetCardId = card.cardId;
-      // resume ⇒ one-window allowance; deny/expired ⇒ stay paused until the window falls under the threshold
+      // resume ⇒ one-window allowance, only while THIS card is still the outstanding one (a withdrawn card's late resume grants nothing)
       void this.#o.broker
         .decisionOf(card.cardId)
-        .then((d) => (d === 'resume' ? this.resume('card') : undefined))
+        .then((d) => (d === 'resume' && this.#budgetCardId === card.cardId ? this.resume('card') : undefined))
         .catch(() => undefined);
     }
   }
@@ -389,7 +417,9 @@ export class BudgetFuse {
   /** The window fell under the threshold: the pause ends; a re-crossing raises a new card. */
   async #unpauseArmada(by: string): Promise<void> {
     this.#armadaPaused = false;
+    const stale = this.#budgetCardId;
     this.#budgetCardId = null;
+    if (stale && this.#o.broker) await this.#o.broker.withdrawByKernel(stale, 'window-cleared');
     await this.#o.log('budget.resume', { by: `kernel:${by}` });
   }
 
@@ -404,7 +434,10 @@ export class BudgetFuse {
     this.#allowanceUntil = this.#clock() + this.#cfg.subscription.windowMs;
     this.#armadaPaused = false;
     this.#budgetCardId = null;
-    await this.#o.log('budget.resume', { by, allowance: { until: new Date(this.#allowanceUntil).toISOString(), windowMs: this.#cfg.subscription.windowMs } });
+    await this.#o.log('budget.resume', {
+      by,
+      allowance: { until: new Date(this.#allowanceUntil).toISOString(), windowMs: this.#cfg.subscription.windowMs, note: `the armada may use the human's ${Math.round(HUMAN_RESERVE * 100)} % for one window` },
+    });
   }
 
   status(): Record<string, unknown> {
@@ -457,6 +490,7 @@ export function parseReserveParams(principal: string, principalClass: string, pa
   const user = principalClass === 'human' ? principal : userOf(principal, principalClass);
   if (!user) throw bad('bad-params', `no human principal to attribute a ${principalClass} principal's spend to (P8-D91)`);
   const scope: PermitScope = { user };
+  const attributed = principalClass !== 'human' ? ('root-human' as const) : undefined;
   if (p.scope !== undefined) {
     if (p.scope === null || typeof p.scope !== 'object' || Array.isArray(p.scope)) throw bad('bad-params', 'scope must be an object');
     for (const [k, v] of Object.entries(p.scope as Record<string, unknown>)) {
@@ -466,7 +500,7 @@ export function parseReserveParams(principal: string, principalClass: string, pa
       }
       if (!(SCOPE_KEYS as readonly string[]).includes(k) || typeof v !== 'string' || v.length === 0 || v.length > 256) throw bad('bad-params', `bad scope.${k}`);
       // Aegis C3/C6: the kernel binds an agent's repo/loop/session (from its session, M1.7); a caller-chosen one is refused
-      if (principalClass !== 'human' && k !== 'machine') throw bad('bad-params', `scope.${k} is bound by the kernel for a ${principalClass} principal (M1.7), never named by the caller`);
+      if (principalClass !== 'human') throw bad('bad-params', `scope.${k} is bound by the kernel for a ${principalClass} principal (M1.7), never named by the caller`);
       (scope as unknown as Record<string, string>)[k] = v;
     }
   }
@@ -489,6 +523,7 @@ export function parseReserveParams(principal: string, principalClass: string, pa
       attended: principalClass === 'human',
       kind: p.kind,
       scope,
+      ...(attributed ? { attributed } : {}),
       ...(p.backend ? { backend: p.backend as 'claude-code' | 'local' } : {}),
       ...(typeof p.model === 'string' ? { model: p.model } : {}),
       ...(limits ? { limits } : {}),

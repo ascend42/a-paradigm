@@ -102,43 +102,57 @@ export function mergeFuse(section: unknown): FuseConfig | null {
 }
 
 /** Load the fuse config of `home`: only a row signed by `root` is applied. */
-export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEvent = () => undefined): LoadedFuseConfig {
+/**
+ * Load the fuse config of `home`: only a row signed by `root` is applied.
+ * ROLLBACK (Aegis N2): the high-water version is the max of the sidecar and
+ * `chainHighWater` (the last signed `config.loaded{version}` on the
+ * hash-chained log, which a sidecar edit cannot rewind). Once it is > 0 a
+ * missing, unsigned or older config makes the fuse corrupt (deny), never the
+ * looser defaults. Every config.loaded row carries version + hash.
+ */
+export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEvent = () => undefined, opts: { chainHighWater?: number } = {}): LoadedFuseConfig {
   const file = path.join(home, ROOT_CONFIG_FILE);
+  const seenFile = path.join(home, CONFIG_SEEN_FILE);
+  let sidecar = 0;
+  try {
+    sidecar = Number((JSON.parse(fs.readFileSync(seenFile, 'utf8')) as { version?: unknown }).version ?? 0) || 0;
+  } catch {
+    sidecar = 0;
+  }
+  const chain = opts.chainHighWater ?? 0;
+  const seen = Math.max(sidecar, chain);
+  const rollback = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
+    emit('config.loaded', { hash, signed: false, corrupt: true, version: typeof version === 'number' ? version : null, highWater: seen, why, ...(sidecar !== chain && opts.chainHighWater !== undefined ? { sidecar, chain } : {}) });
+    return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: true, hash };
+  };
   let raw: string;
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch {
+    if (seen > 0) return rollback('missing', null, null);
     return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
   }
   let doc: { row?: { schemaVersion?: unknown; config?: { fuse?: unknown } }; signer?: unknown; sig?: unknown };
   try {
     doc = JSON.parse(raw) as typeof doc;
   } catch {
+    if (seen > 0) return rollback('unparseable', null, null);
     emit('config.unsigned', { file: ROOT_CONFIG_FILE, why: 'unparseable' });
     return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
   }
   const ok = doc?.row?.schemaVersion === ROOT_CONFIG_SCHEMA && typeof doc.signer === 'string' && typeof doc.sig === 'string' && root.verifyRow(doc.signer, doc.row, doc.sig);
   if (!ok) {
+    if (seen > 0) return rollback('unsigned', null, null);
     emit('config.unsigned', { file: ROOT_CONFIG_FILE, why: 'signature' });
     return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
   }
   const hash = `sha256:${hex(sha256(canonicalJson(doc.row)))}`;
   // version counter (Aegis C7): a signed config older than the newest one this home has applied is a rollback ⇒ corrupt (deny)
   const version = (doc.row as { version?: unknown }).version ?? 0;
-  const seenFile = path.join(home, CONFIG_SEEN_FILE);
-  let seen = 0;
-  try {
-    seen = Number((JSON.parse(fs.readFileSync(seenFile, 'utf8')) as { version?: unknown }).version ?? 0);
-  } catch {
-    seen = 0;
-  }
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) {
-    emit('config.loaded', { hash, signed: true, corrupt: true, version: String(version), seen });
-    return { config: structuredClone(DEFAULT_FUSE), signed: true, corrupt: true, hash };
-  }
-  if (version > seen) fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return rollback('older', hash, version);
+  if (version > sidecar) fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
   const merged = mergeFuse(doc.row!.config?.fuse);
-  emit('config.loaded', { hash, signed: true, ...(merged ? {} : { corrupt: true }) });
+  emit('config.loaded', { hash, signed: true, version, highWater: seen, ...(merged ? {} : { corrupt: true }) });
   return merged ? { config: merged, signed: true, corrupt: false, hash } : { config: structuredClone(DEFAULT_FUSE), signed: true, corrupt: true, hash };
 }
 

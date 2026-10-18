@@ -109,7 +109,7 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
 
   it('hidden characters and bidi controls are escaped visibly and flag the card (§4.5)', async () => {
     const r = rig();
-    const c = await permission(r.broker, ['rm‮-rf​ /']);
+    const c = await permission(r.broker, ['rm\u202E-rf\u200B /']);
     expect(c.flags).toEqual(['bidi', 'hidden-chars']);
     // tag characters are stripped and flag hidden-chars; C1 controls (incl. CSI U+009B) are escaped like C0
     const t = await permission(r.broker, [`ok${String.fromCodePoint(0xe0041, 0xe0042)} ${String.fromCharCode(0x9b)}31m ${String.fromCharCode(0x85)}x`]);
@@ -118,7 +118,7 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
     expect(text).not.toMatch(/[\u{E0000}-\u{E007F}\u0080-\u009F]/u);
     expect(text).toContain('\\\\u{9B}');
     expect(text).toContain('\\\\u{85}');
-    expect(JSON.stringify(c.block)).not.toMatch(/[‮​]/);
+    expect(JSON.stringify(c.block)).not.toMatch(/[\u202E\u200B]/);
     expect(JSON.stringify(c.block)).toContain('\\\\u{202E}');
   });
 
