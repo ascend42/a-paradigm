@@ -1,3 +1,4 @@
+import { TEST_CLIENT_NONCE } from './daemon-helpers.js';
 /**
  * Raw HTTP / RFC 6455 client helpers for the #web-endpoint tests (spec §11.2,
  * §4.9). Raw sockets on purpose: the tests must send headers a browser would
@@ -182,4 +183,4 @@ export function wsConnect(port: number, headers: Record<string, string> = GOOD(p
 }
 
 export const rpc = (id: number, method: string, params?: unknown): Record<string, unknown> => ({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id, method, ...(params !== undefined ? { params } : {}) });
-export const HELLO = (surface = 'browser'): Record<string, unknown> => ({ clientApis: ['gnomon-rpc:v1'], features: [], client: { name: 'gnomon-gui-test', version: '0.0.0', surface } });
+export const HELLO = (surface = 'browser'): Record<string, unknown> => ({ clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: { name: 'gnomon-gui-test', version: '0.0.0', surface } });

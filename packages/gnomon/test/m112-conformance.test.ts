@@ -5,13 +5,13 @@
  * conformance runner driving it through the language-neutral driver protocol.
  * Every CONFORMANCE_CHECKS `run` check passes; `slice-2` checks are `todo`.
  */
-import { generateKeyPairSync } from 'node:crypto';
+import { createPublicKey, generateKeyPairSync, verify as edVerify } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLIENT_API_ID, CLIENT_METHODS, CONFORMANCE_CHECKS, RefusedError, conformanceReportHash, type ClientMethod } from '@a-company/gnomon-contracts';
+import { CLIENT_API_ID, CLIENT_METHODS, CONFORMANCE_CHECKS, RefusedError, authServerPreimage, conformanceReportHash, type ClientMethod, type HelloResult } from '@a-company/gnomon-contracts';
 import {
   DEV_TEST_ROOT_ACK,
   DevTestRootAuthority,
@@ -25,7 +25,7 @@ import {
 import { deviceKeyPath } from '../src/kernel/identity/device-key.js';
 import { startDaemon } from '../src/kernel/lifecycle/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
-import { ClientAuthError, GnomonClient, ed25519KeyIdOf, type ClientLogPort } from '../src/clients/ts/index.js';
+import { ClientAuthError, GnomonClient, ed25519KeyIdOf, newClientNonce, type ClientLogPort } from '../src/clients/ts/index.js';
 import * as net from 'node:net';
 import { SubprocessDriver, TsClientDriver } from '../src/clients/conformance/driver.js';
 import { declaredConformance } from '../src/kernel/socket/dispatch.js';
@@ -182,7 +182,7 @@ describe('#client-conformance falsifiers (the runner can fail)', () => {
           buf = buf.slice(nl + 1);
         }
       });
-      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT } })}\n`);
+      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: newClientNonce(), client: CLIENT } })}\n`);
       while (!frames.length) await new Promise((r) => setTimeout(r, 10));
       const ok = (frames[0]!.result as { serverKeyId?: string } | undefined)?.serverKeyId === keyId;
       if (ok) sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 2, method: 'auth', params: { principal: f.device.principalId, deviceId: f.device.deviceId, sig: 'AAAA' } })}\n`);
@@ -225,7 +225,7 @@ describe('#client-conformance falsifiers (the runner can fail)', () => {
           buf = buf.slice(nl + 1);
         }
       });
-      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT } })}\n`);
+      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: newClientNonce(), client: CLIENT } })}\n`);
       while (!frames.length) await new Promise((r) => setTimeout(r, 10));
       const serverKeyId = (frames[0]!.result as { serverKeyId?: string } | undefined)?.serverKeyId;
       const ok = serverKeyId === pin.keyId && ed25519KeyIdOf(pin.publicKeyPem) === pin.keyId;
@@ -259,8 +259,83 @@ describe('#client-conformance falsifiers (the runner can fail)', () => {
     const report = await runConformance(noSig, f, { client: { name: 'pin-only', version: '0' } });
     const failed = report.checks.filter((c) => c.result === 'fail');
     expect(failed.map((c) => c.id)).toEqual(['hello.server-sig-mismatch']);
-    expect(failed[0]!.detail).toMatch(/forged serverSig was accepted/); // (a) and (b) passed; (c) caught it
+    expect(failed[0]!.detail).toMatch(/replayed hello \(verbatim\) was accepted/); // (a) and (b) passed; (c) caught it
     expect(report.pass).toBe(false);
+  });
+
+  it('T-2026-10-18-016: a client that verifies serverSig but skips the clientNonce check (trusts the echoed nonce) fails ONLY hello.server-sig-mismatch, at the verbatim replay', async () => {
+    const f = await kernelRig();
+    const inner = new TsClientDriver();
+    cleanups.push(() => inner.stop());
+    /** hello on a raw socket with a fresh clientNonce; the signature is verified over the ECHOED clientNonce, never compared to the one sent. */
+    const echoTrusting = async (socketPath: string, endpointPath: string, pin: { keyId: string; publicKeyPem: string }): Promise<{ ok: boolean; send: (frame: unknown) => void; done: () => void }> => {
+      const sock = net.connect(socketPath);
+      await new Promise((res, rej) => sock.once('connect', res).once('error', rej));
+      sock.on('error', () => undefined);
+      const frames: Array<Record<string, unknown>> = [];
+      let buf = '';
+      sock.on('data', (ch) => {
+        buf += ch.toString('utf8');
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          frames.push(JSON.parse(buf.slice(0, nl)));
+          buf = buf.slice(nl + 1);
+        }
+      });
+      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: newClientNonce(), client: CLIENT } })}\n`);
+      while (!frames.length) await new Promise((r) => setTimeout(r, 10));
+      const h = frames[0]!.result as HelloResult | undefined;
+      let ok = false;
+      if (h && h.serverKeyId === pin.keyId && ed25519KeyIdOf(pin.publicKeyPem) === pin.keyId) {
+        const pre = Buffer.from(authServerPreimage(h.nonce, h.clientNonce, endpointPath, { clientApi: h.clientApi, features: h.features }), 'utf8');
+        try {
+          ok = edVerify(null, pre, createPublicKey(pin.publicKeyPem), Buffer.from(h.serverSig, 'base64'));
+        } catch {
+          ok = false;
+        }
+      }
+      return { ok, send: (frame) => sock.write(`${JSON.stringify(frame)}\n`), done: () => sock.destroy() };
+    };
+    const skipNonce = {
+      language: 'typescript',
+      stop: () => inner.stop(),
+      request: async (r: Parameters<TsClientDriver['request']>[0]) => {
+        if (r.op === 'connect' && r.credential && r.kernelKey) {
+          const h = await echoTrusting(String(r.socketPath), String(r.endpointPath ?? r.socketPath), r.kernelKey as { keyId: string; publicKeyPem: string });
+          if (!h.ok) {
+            h.done();
+            return { id: r.id, ok: false, error: { kind: 'client' as const, reason: 'bad-server-sig', message: 'serverSig does not verify' } };
+          }
+          if (String(r.socketPath) === f.socketPath) {
+            // against the real kernel the echo IS this connection's nonce: behave as the real client
+            h.done();
+            return inner.request(r);
+          }
+          h.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 2, method: 'auth', params: { principal: f.device.principalId, deviceId: f.device.deviceId, sig: 'AAAA' } });
+          await new Promise((res) => setTimeout(res, 30));
+          h.done();
+          return { id: r.id, ok: true, conn: 'x', serverVerified: true };
+        }
+        return inner.request(r);
+      },
+    };
+    const report = await runConformance(skipNonce, f, { client: { name: 'skip-nonce', version: '0' } });
+    const failed = report.checks.filter((c) => c.result === 'fail');
+    expect(failed.map((c) => c.id)).toEqual(['hello.server-sig-mismatch']);
+    expect(failed[0]!.detail).toMatch(/replayed hello \(verbatim\) was accepted/); // (a), (b) passed; the replay of a genuine hello caught it
+    expect(report.pass).toBe(false);
+  });
+
+  it('T-2026-10-18-016: the TS client refuses a replayed genuine hello locally — verbatim (client-nonce-mismatch) and echo-rewritten (bad-server-sig)', async () => {
+    const f = await kernelRig();
+    const real = await GnomonClient.connect({ socketPath: f.socketPath, client: CLIENT, kernelKey: f.kernelKey });
+    const recorded = real.hello;
+    await real.close();
+    const { verifyHelloSignature } = await import('../src/clients/ts/index.js');
+    expect(() => verifyHelloSignature(recorded, f.socketPath, f.kernelKey, recorded.clientNonce)).not.toThrow();
+    const mine = newClientNonce();
+    expect(() => verifyHelloSignature(recorded, f.socketPath, f.kernelKey, mine)).toThrow(expect.objectContaining({ reason: 'client-nonce-mismatch' }));
+    expect(() => verifyHelloSignature({ ...recorded, clientNonce: mine }, f.socketPath, f.kernelKey, mine)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
   });
 
   it('T-2026-10-18-015 item 6: a client that keeps a live connection after the AUTH refusal fails auth.device-refused', async () => {

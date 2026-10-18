@@ -19,7 +19,7 @@ import { createWebEndpointForTest, unsandboxedLauncher } from '../src/kernel/tes
 import { GUI_BUNDLE_HASH, guiBundleFiles, materializePlaceholderBundle, PLACEHOLDER_BUNDLE_HASH, type BlobSource, type WebEndpoint, type WebEndpointSeams } from '../src/kernel/web/index.js';
 import { encodeClientFrame, OP } from '../src/transport/ws-codec.js';
 import { PKG_ROOT } from './helpers.js';
-import { tempHome } from './daemon-helpers.js';
+import { tempHome, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 import { GOOD, HELLO, rawHttp, rpc, wsConnect, type RawWs } from './web-helpers.js';
 
 const CHILD = path.join(PKG_ROOT, 'dist', 'transport', 'gnomon-web.js');
@@ -260,7 +260,7 @@ describe('G-WEB-05 launch token → GUI token; theft inside the TTL; replay afte
     expect(grant.url).toBe(`http://127.0.0.1:${ep.port}/#launch=${grant.launchToken}&k=${grant.kernelPublicKey}`);
     expect(grant.bundleHash).toBe(GUI_BUNDLE_HASH);
     const { ws, hello, auth } = await attach(ep, grant.launchToken, 'wrapper');
-    expect(() => verifyServerHello(hello.result as never, ep.endpointPath, { keyId: kernel.keyId, publicKeyPem: kernel.publicKeyPem })).not.toThrow();
+    expect(() => verifyServerHello(hello.result as never, ep.endpointPath, { keyId: kernel.keyId, publicKeyPem: kernel.publicKeyPem }, TEST_CLIENT_NONCE)).not.toThrow();
     const res = auth.result as { guiToken: string; principal: string; connId: string };
     expect(res.principal).toBe(HUMAN.principal);
     expect(res.guiToken).toMatch(/^[A-Za-z0-9_-]{43}$/);

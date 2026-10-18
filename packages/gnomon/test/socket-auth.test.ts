@@ -39,7 +39,7 @@ import {
   type RpcResponseFrame,
   type ServerKeyPin,
 } from '../src/kernel/socket/index.js';
-import { rawConnect, tempHome } from './daemon-helpers.js';
+import { rawConnect, tempHome, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 import { appendFileSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createKernelDispatcher, encodeFrame, listenSocket, requestFrame, SocketAuthenticator } from '../src/kernel/socket/index.js';
 import { readKernelPubs } from '../src/kernel/identity/index.js';
@@ -107,7 +107,7 @@ describe('hello negotiation (§4.9)', () => {
     expect(s.serverVerified).toBe(true);
     expect(s.clientApiIdMatches).toBe(true);
     // hello is answered once per connection
-    const again = await s.conn.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    const again = await s.conn.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(errReason(again)).toBe('hello-repeated');
   });
 
@@ -115,10 +115,10 @@ describe('hello negotiation (§4.9)', () => {
     const r = await rig();
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    const resp = await c.call('hello', { clientApis: ['gnomon-rpc:v2', 'gnomon-rpc:v3'], features: [], client: CLIENT });
+    const resp = await c.call('hello', { clientApis: ['gnomon-rpc:v2', 'gnomon-rpc:v3'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(resp).toMatchObject({ error: { code: -32005, data: { schemaVersion: 'refusal:v1', code: 'UNSUPPORTED', data: { offered: ['gnomon-rpc:v2', 'gnomon-rpc:v3'], supported: ['gnomon-rpc:v1'] } } } });
     expect(isRefusalV1((resp as { error: { data: unknown } }).error.data, { mode: 'tolerant' })).toBe(true);
-    const ok = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    const ok = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect('result' in ok).toBe(true);
     await settle();
     const hellos = rows(r.home).filter((x) => x.kind === 'socket.hello').map((x) => x.env.payload);
@@ -134,22 +134,22 @@ describe('serverSig — the kernel proves itself before auth is sent', () => {
     const r = await rig();
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const sock = r.d.pidfile.socketPath;
-    expect(() => verifyServerHello(h.result, sock, r.pin)).not.toThrow();
+    expect(() => verifyServerHello(h.result, sock, r.pin, TEST_CLIENT_NONCE)).not.toThrow();
     // forged: a signature by another Ed25519 key, labelled with the real serverKeyId
     const impostor = SoftwareEd25519Signer.generate('kernel');
     const forged = { ...h.result, serverSig: Buffer.from(impostor.sign('authServer', `${h.result.nonce}\n${sock}`)).toString('base64') };
-    expect(() => verifyServerHello(forged, sock, r.pin)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
+    expect(() => verifyServerHello(forged, sock, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
     // a flipped byte
     const raw = Buffer.from(h.result.serverSig, 'base64');
     raw[0] = raw[0]! ^ 1;
-    expect(() => verifyServerHello({ ...h.result, serverSig: raw.toString('base64') }, sock, r.pin)).toThrow(ServerAuthError);
+    expect(() => verifyServerHello({ ...h.result, serverSig: raw.toString('base64') }, sock, r.pin, TEST_CLIENT_NONCE)).toThrow(ServerAuthError);
     // impostor kernel presenting its own key id: not the registered kernel key
     const impHello = { ...h.result, serverKeyId: impostor.keyId, serverSig: forged.serverSig };
-    expect(() => verifyServerHello(impHello, sock, r.pin)).toThrow(expect.objectContaining({ reason: 'server-key-mismatch' }));
+    expect(() => verifyServerHello(impHello, sock, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'server-key-mismatch' }));
     // a relay answering on another endpoint path: the client checks over ITS path
-    expect(() => verifyServerHello(h.result, `${sock}.relay`, r.pin)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
+    expect(() => verifyServerHello(h.result, `${sock}.relay`, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
     // the kernel key never signs the client auth domain (no signing oracle)
     expect(() => r.d.kernelSigner.sign('auth', 'x')).toThrow(/may not sign/);
   });
@@ -225,7 +225,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     expect(err).toMatchObject({ refusal: { code: 'AUTH', data: { reason: 'unknown-device' } } });
     // a registered deviceId with the wrong key: bad-signature
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const bad = await c.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth({ ...r.cred, signer: stranger }, h.result, r.d.pidfile.socketPath) });
     expect(bad).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'bad-signature' } } } });
     const after = await c.call('status', {});
@@ -244,12 +244,12 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     const r = await rig();
     const a = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => a.close());
-    const h = (await a.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await a.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const authParams = { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, h.result, r.d.pidfile.socketPath) };
     expect(await a.call('auth', authParams)).toMatchObject({ result: { principal: r.cred.principalId } });
     // captured transcript replayed on a fresh connection (after its own hello)
     const b = await RpcConnection.open(r.d.pidfile.socketPath);
-    await b.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await b.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     const replay = await b.call('auth', authParams);
     expect(replay).toMatchObject({ error: { code: -32001, data: { data: { reason: 'replayed-transcript' } } } });
     expect(errReason(await b.call('status'))).toBe('connection-closed');
@@ -268,11 +268,11 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     const r = await rig();
     const ok = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => ok.close());
-    const h1 = (await ok.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h1 = (await ok.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     r.now.t += 29_999;
     expect(await ok.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, h1.result, r.d.pidfile.socketPath) })).toMatchObject({ result: { principal: r.cred.principalId } });
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     r.now.t += 30_001;
     const late = await c.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, h.result, r.d.pidfile.socketPath) });
     expect(errReason(late)).toBe('nonce-expired');
@@ -288,15 +288,15 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
       [`${r.cred.principalId}@0123abcd`, 'foreign-principal'],
     ] as const) {
       const c = await RpcConnection.open(r.d.pidfile.socketPath);
-      const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+      const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
       const resp = await c.call('auth', { principal, deviceId: r.cred.deviceId, sig: signAuth({ ...r.cred, principalId: principal }, h.result, r.d.pidfile.socketPath) });
       expect(errReason(resp)).toBe(want);
     }
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
-    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(errReason(await c.call('auth', { deviceId: r.cred.deviceId }))).toBe('auth-params');
     const t = await RpcConnection.open(r.d.pidfile.socketPath);
-    await t.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await t.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     // read tokens are proof of possession since M1.4 slice 3 (socket-abi.test.ts): a bearer {token} is never accepted
     expect(await t.call('auth', { token: 'x' })).toMatchObject({ error: { code: -32001, data: { data: { reason: 'auth-params' } } } });
   });
@@ -309,13 +309,13 @@ describe('verb dispatch skeleton (§5)', () => {
       const c = await RpcConnection.open(r.d.pidfile.socketPath);
       cleanups.push(() => c.close());
       expect(errReason(await c.call(m, {}))).toBe('unauthenticated');
-      expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT }))).toBe('connection-closed');
+      expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toBe('connection-closed');
       expect(c.closed).toBe(true);
     }
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
     expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } }); // unknown: refused, connection kept
-    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(await c.call('status', {})).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
     expect(errReason(await c.call('status', {}))).toBe('connection-closed');
     expect(c.closed).toBe(true);
@@ -397,7 +397,7 @@ describe('#identity seams: production root, registry trust, device key file', ()
     cleanups.push(() => d.shutdown('signal'));
     expect(d.kernelPrincipal).toBe('p:00000000/kernel');
     const c = await RpcConnection.open(d.pidfile.socketPath);
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const resp = await c.call('auth', { principal: 'p:abcdefgh/founder', deviceId: 'dev:abcdefgh/mac-1', sig: Buffer.from(key.sign('auth', h.result.nonce)).toString('base64') });
     expect(resp).toMatchObject({ error: { code: -32001, data: { data: { reason: 'root-unprovisioned', milestone: 'M1.3' } } } });
   });
@@ -446,7 +446,7 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
     const r = await rig();
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     expect(rows(r.home).map((x) => x.kind)).toContain('socket.hello');
     const a = await c.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, h.result, r.d.pidfile.socketPath) });
     expect('result' in a).toBe(true);
@@ -474,14 +474,14 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
     cleanups.push(() => srv.close());
     const cred = { principalId: entry.principalId, deviceId: entry.deviceId, signer: devKey };
     const c = await RpcConnection.open(sock);
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const a = await c.call('auth', { principal: cred.principalId, deviceId: cred.deviceId, sig: signAuth(cred, h.result, sock) });
     expect(a).toMatchObject({ error: { code: -32000, data: { code: 'ENGINE', data: { reason: 'log-write-failed' } } } });
     expect(errReason(await c.call('status'))).toBe('connection-closed');
     expect(dispatcher.clients()).toEqual([]);
     failKind = 'socket.hello';
     const c2 = await RpcConnection.open(sock);
-    expect(errReason(await c2.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT }))).toBe('log-write-failed');
+    expect(errReason(await c2.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toBe('log-write-failed');
     expect(errReason(await c2.call('status'))).toBe('connection-closed');
   });
 
@@ -504,7 +504,7 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
     const t0 = Date.now();
     const idle = await RpcConnection.open(r.d.pidfile.socketPath);
     const helloOnly = await RpcConnection.open(r.d.pidfile.socketPath);
-    await helloOnly.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await helloOnly.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     const capped = await RpcConnection.open(r.d.pidfile.socketPath);
     await waitFor(() => capped.closed, 2000);
     expect(capped.closed).toBe(true); // third pre-auth connection over the cap of 2
@@ -560,7 +560,7 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
     cleanups.push(t.cleanup);
     const d1 = await startDaemon({ home: t.home, idleMs: 60_000 });
     const c = await RpcConnection.open(d1.pidfile.socketPath);
-    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     await c.close();
     await d1.shutdown('signal');
     const d2 = await startDaemon({ home: t.home, idleMs: 60_000 });
@@ -594,7 +594,7 @@ describe('round 3: pre-auth row rate limit, frame cap, hello-not-offered', () =>
     const stranger = SoftwareEd25519Signer.generate('device');
     for (let i = 0; i < 200; i++) {
       const c = await RpcConnection.open(r.d.pidfile.socketPath);
-      const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+      const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
       const bad = await c.call('auth', { principal: r.cred.principalId, deviceId: 'dev:' + r.root.ns + '/ghost', sig: signAuth({ ...r.cred, deviceId: 'dev:' + r.root.ns + '/ghost', signer: stranger }, h.result, r.d.pidfile.socketPath) });
       expect(errReason(bad)).toBe('unknown-device');
       await c.close();
@@ -643,6 +643,30 @@ describe('round 3: pre-auth row rate limit, frame cap, hello-not-offered', () =>
         handle: () => ({ ...result, nonce: 'n', serverKeyId: 'gkey:v1:' + '0'.repeat(64), serverSig: 'AA==', clientApiId: CLIENT_API_ID, kitId: KIT_ID }),
       });
       await expect(connectGnomon({ socketPath: sock, client: CLIENT })).rejects.toMatchObject({ reason: 'hello-not-offered' });
+      await srv.close();
+    }
+  });
+
+  it('T-2026-10-18-016: a genuine hello recorded on one connection and replayed from a squatted socket is refused before auth — verbatim (client-nonce-mismatch) and echo-rewritten (bad-server-sig)', async () => {
+    const r = await rig();
+    const real = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin });
+    const recorded = real.hello;
+    await real.conn.close();
+    expect(recorded.clientNonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const sock = path.join(r.home, 'squat.sock');
+    for (const [mode, reason] of [['verbatim', 'client-nonce-mismatch'], ['echo-rewrite', 'bad-server-sig']] as const) {
+      let auths = 0;
+      const srv = await listenSocket({
+        socketPath: sock,
+        handle: (frame: { method: string; params?: { clientNonce?: string } }) => {
+          if (frame.method === 'auth') auths++;
+          return mode === 'verbatim' ? recorded : { ...recorded, clientNonce: frame.params?.clientNonce };
+        },
+      } as never);
+      // the client derives the REAL endpoint path, so only the nonce differs from the recorded transcript
+      await expect(connectGnomon({ socketPath: sock, endpointPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred })).rejects.toMatchObject({ reason });
+      await new Promise((res) => setTimeout(res, 30));
+      expect(auths).toBe(0);
       await srv.close();
     }
   });

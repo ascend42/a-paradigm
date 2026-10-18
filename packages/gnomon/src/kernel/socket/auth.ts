@@ -4,8 +4,9 @@
  *
  * #socket mutual authentication (spec §4.9, S-H4; §3.1 device keys).
  *
- *   hello → {clientApi, features, nonce, serverKeyId, serverSig, clientApiId, kitId}
- *           serverSig = kernel key over 'gnomon:auth-server:v1\n'+nonce+'\n'+endpointPath
+ *   hello {clientApis, features, clientNonce, client}
+ *         → {clientApi, features, nonce, clientNonce, serverKeyId, serverSig, clientApiId, kitId}
+ *           serverSig = kernel key over 'gnomon:auth-server:v1\n'+nonce+'\n'+clientNonce+'\n'+endpointPath
  *                       +'\n'+clientApi+'\n'+canonicalJson(features)
  *   auth  {principal, deviceId, sig}
  *           sig = device key over 'gnomon:auth:v1\n'+nonce+'\n'+serverKeyId+'\n'+principalId+'\n'+deviceId+'\n'+endpointPath
@@ -17,6 +18,14 @@
  * the hello offer cannot pick a version neither signature covers. The
  * contracts carry it since M1.4 slice 3 (authServerMessage/authClientMessage);
  * the spec §4.9 text still needs the same change (T-2026-10-17-017).
+ *
+ * CLIENT NONCE (T-2026-10-18-016): the client sends a fresh random
+ * `clientNonce`; the kernel echoes it and binds it into serverSig. Before it,
+ * serverSig covered only a nonce the SERVER picked, so a same-user process
+ * that recorded one genuine hello could replay it verbatim from a squatted
+ * endpoint and pass every client check. Now each client verifies the
+ * signature over the nonce IT sent: a replayed hello carries another
+ * connection's clientNonce and fails (client-nonce-mismatch / bad-server-sig).
  *
  * The nonce is per connection, single-use (ANY auth attempt consumes it) and
  * valid 30 s. The device must resolve in the ROOT-signed registry (registry.ts,
@@ -103,8 +112,8 @@ export interface ConnAuthState {
 }
 
 /** serverSig message (after the signer's `gnomon:auth-server:v1\n` domain prefix) — the contracts definition. */
-export function serverSigMessage(nonce: string, endpointPath: string, clientApi: string, features: readonly string[]): string {
-  return authServerMessage(nonce, endpointPath, { clientApi, features });
+export function serverSigMessage(nonce: string, clientNonce: string, endpointPath: string, clientApi: string, features: readonly string[]): string {
+  return authServerMessage(nonce, clientNonce, endpointPath, { clientApi, features });
 }
 
 /** Client auth message (after the signer's `gnomon:auth:v1\n` domain prefix) — the contracts definition. */
@@ -255,7 +264,9 @@ export class SocketAuthenticator {
       };
     }
     const nonce = randomBytes(32).toString('base64url');
-    const serverSig = Buffer.from(this.#o.kernelSigner.sign('authServer', serverSigMessage(nonce, this.#o.endpointPath, n.clientApi, n.features))).toString('base64');
+    // T-2026-10-18-016: the client's own nonce is echoed and signed over (validated by validateHelloParams)
+    const clientNonce = p.clientNonce;
+    const serverSig = Buffer.from(this.#o.kernelSigner.sign('authServer', serverSigMessage(nonce, clientNonce, this.#o.endpointPath, n.clientApi, n.features))).toString('base64');
     conn.phase = 'hello';
     conn.nonce = nonce;
     conn.nonceAt = this.#now();
@@ -264,7 +275,7 @@ export class SocketAuthenticator {
     conn.client = p.client;
     return {
       ok: true,
-      result: { clientApi: n.clientApi, features: n.features, nonce, serverKeyId: this.serverKeyId, serverSig, clientApiId: CLIENT_API_ID, kitId: KIT_ID },
+      result: { clientApi: n.clientApi, features: n.features, nonce, clientNonce, serverKeyId: this.serverKeyId, serverSig, clientApiId: CLIENT_API_ID, kitId: KIT_ID },
     };
   }
 
