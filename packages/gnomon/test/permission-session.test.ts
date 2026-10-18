@@ -339,6 +339,22 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(r.broker.cards()).toEqual([]);
   });
 
+  it('Aegis detector: a gated tool that runs with no can_use_tool request ⇒ approval.suspect{ungated-tool-use}; a requested one and an ungated Read do not', async () => {
+    const r = rig();
+    const other = path.join(w.cwd, 'ungated.txt');
+    await r.open([
+      { ungated: { tool: 'Write', toolUseId: 'toolu_ung', input: { file_path: other, content: 'x' } } },
+      { ungated: { tool: 'Read', toolUseId: 'toolu_read', input: { file_path: other } } },
+      writeReq('ok-1'),
+    ], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    await r.approve(r.pending()[0]!.cardId, 'allow');
+    expect(await waitFor(() => fs.existsSync(marker()))).toBe(true);
+    await new Promise((res) => setTimeout(res, 200));
+    const sus = r.kinds('approval.suspect').map((x) => x.payload);
+    expect(sus).toEqual([expect.objectContaining({ why: 'ungated-tool-use', tool: 'Write', toolUseId: 'toolu_ung', decision: 'accept' })]);
+  });
+
   it('control_cancel_request (an interrupt while pending) expires the card "cancelled" and answers nothing', async () => {
     const r = rig();
     await r.open([writeReq('c-1'), { line: { type: 'control_cancel_request', request_id: 'c-1' } }], { hold: true });

@@ -75,7 +75,7 @@ import { hsidShort, mintHsid, refuse, RefusedError, turnId, type RefusalCode } f
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { buildSessionPolicy, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, buildSessionPolicy, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
@@ -100,6 +100,16 @@ export const EVENT_LINE_CAP = 64 * 1024;
 export const QUEUE_HIGH = 256;
 export const QUEUE_LOW = 32;
 export const HISTORY_CAP = 32;
+/** the detector's per-session memory of tool_use ids (oldest forgotten first) */
+export const TOOL_ID_CAP = 1024;
+function bounded(m: Map<string, string>, k: string, v: string): void {
+  m.set(k, v);
+  while (m.size > TOOL_ID_CAP) m.delete(m.keys().next().value!);
+}
+function boundedSet(m: Set<string>, k: string): void {
+  m.add(k);
+  while (m.size > TOOL_ID_CAP) m.delete(m.values().next().value!);
+}
 
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
 
@@ -175,6 +185,9 @@ interface Session {
   watch: NodeJS.Timeout | null;
   /** P8-D96: unanswered can_use_tool requests by requestId (bounded: MAX_PENDING_PERMISSIONS) */
   pending: Map<string, PendingPermission>;
+  /** Aegis detector: tool names by tool_use id (assistant messages) and the ids a can_use_tool request named — both bounded */
+  toolNames: Map<string, string>;
+  requested: Set<string>;
   policy: SessionPolicy;
 }
 
@@ -413,7 +426,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), policy,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), policy,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -574,6 +587,7 @@ export class SessionSupervisor {
         if (ev.usage) await usage('turn.usage', s.meter.message(ev.usage.messageId, ev.usage.tokens));
         return;
       case 'message':
+        for (const t of ev.toolUses) if (t.id !== null) bounded(s.toolNames, t.id, t.name);
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
@@ -585,7 +599,18 @@ export class SessionSupervisor {
         return;
       }
       case 'permission-request':
+        if (ev.toolUseId !== null) boundedSet(s.requested, ev.toolUseId);
         await this.#onPermission(s, ev);
+        return;
+      case 'user':
+        // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
+        for (const r of ev.toolResults) {
+          const tool = s.toolNames.get(r.toolUseId);
+          if (!tool || !(ALWAYS_ASK_TOOLS as readonly string[]).includes(tool) || s.requested.has(r.toolUseId)) continue;
+          if (r.decision === 'accept' || (r.decision === null && !r.isError)) {
+            await this.#o.broker?.suspect?.('ungated-tool-use', { hsid: s.hsid, tool, toolUseId: r.toolUseId, decision: r.decision }, s.hsid).catch(() => undefined);
+          }
+        }
         return;
       case 'permission-malformed': {
         // Aegis A5: a good id with a bad body is denied, never left hanging; one pending under that id is denied with it

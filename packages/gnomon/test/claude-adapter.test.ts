@@ -77,6 +77,10 @@ describe('G-ADP-01 transcript replay (Claude Code 2.1.302 shapes, p10m-claude-co
     expect(parseStreamLine('[1,2]').kind).toBe('malformed');
     expect(parseStreamLine('{"type":"result","is_error":true,"result":"Claude AI usage limit reached"}')).toMatchObject({ kind: 'result', quota: true });
   });
+  it('a user line exposes its tool_result ids with Claude\'s permission decision (P8-D96 detector)', () => {
+    const l = '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"ok"},{"type":"tool_result","tool_use_id":"tu2","is_error":true,"content":"no"}]},"tool_result_meta":[{"id":"tu1","permission_decision":{"decision":"accept","source":"config"}}]}';
+    expect(parseStreamLine(l)).toEqual({ kind: 'user', type: 'user', replay: false, toolResults: [{ toolUseId: 'tu1', isError: false, decision: 'accept' }, { toolUseId: 'tu2', isError: true, decision: null }] });
+  });
   it('AskUserQuestion ⇒ ask-user, ExitPlanMode ⇒ plan; other tools ⇒ no card', () => {
     expect([cardKindOfTool('AskUserQuestion'), cardKindOfTool('ExitPlanMode'), cardKindOfTool('Bash')]).toEqual(['ask-user', 'plan', null]);
   });

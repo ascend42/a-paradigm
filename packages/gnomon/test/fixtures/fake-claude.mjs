@@ -90,8 +90,11 @@ process.stdin.on('data', (c) => {
       trace({ t: 'perm-answer', id, known: !!req, subtype: m.response?.subtype, behavior: m.response?.response?.behavior ?? null, updatedInput: m.response?.response?.updatedInput, message: m.response?.response?.message, keys: Object.keys(m.response?.response ?? {}).sort() });
       if (!req) continue;
       perm.open.delete(id);
-      if (m.response?.subtype === 'success' && m.response?.response?.behavior === 'allow') runAllowed(req, m.response.response.updatedInput ?? {});
+      const allowed = m.response?.subtype === 'success' && m.response?.response?.behavior === 'allow';
+      if (allowed) runAllowed(req, m.response.response.updatedInput ?? {});
       else perm.denied.push({ tool_name: req.tool, tool_use_id: req.toolUseId, tool_input: req.input });
+      // the tool_result line real claude writes after the decision (p01b: permission_decision user_temporary / user_reject)
+      out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: req.toolUseId, content: allowed ? 'ok' : 'denied', ...(allowed ? {} : { is_error: true }) }] }, tool_result_meta: [{ id: req.toolUseId, permission_decision: { decision: allowed ? 'accept' : 'reject', source: allowed ? 'user_temporary' : 'user_reject' } }] });
       finishPerm();
       continue;
     }
@@ -103,6 +106,15 @@ process.stdin.on('data', (c) => {
       let k = 0;
       for (const st of mode.permissionAsk.steps ?? []) {
         if (st.line !== undefined) { out(st.line); continue; }
+        if (st.ungated) {
+          // a gated tool that runs with NO can_use_tool request (an allow rule / hook would do this in real claude)
+          const u = st.ungated;
+          const tu = u.toolUseId ?? `toolu_ungated_${n}_${++k}`;
+          out({ type: 'assistant', message: { id: `${id}_u${k}`, content: [{ type: 'tool_use', id: tu, name: u.tool, input: u.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
+          runAllowed({ tool: u.tool }, u.input);
+          out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu, content: 'ok' }] }, tool_result_meta: [{ id: tu, permission_decision: { decision: 'accept', source: 'config', reason_type: 'rule' } }] });
+          continue;
+        }
         const r = st.request;
         const reqId = r.id ?? `req-${n}-${++k}`;
         const toolUseId = r.toolUseId ?? `toolu_${n}_${k}`;

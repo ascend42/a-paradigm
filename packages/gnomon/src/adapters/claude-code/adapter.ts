@@ -186,7 +186,7 @@ export type AdapterEvent =
   | { kind: 'init'; type: string; sessionId: string | null; model: string | null; apiKeySource: string | null }
   | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number } }
   | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean }
-  | { kind: 'user'; type: string; replay: boolean }
+  | { kind: 'user'; type: string; replay: boolean; toolResults: ToolResultSeen[] }
   | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; costUsd: number | null; permissionDenials: number; quota: boolean }
   | { kind: 'control'; type: string; subtype: string | null; requestId: string | null }
   | { kind: 'permission-request'; type: 'control_request.can_use_tool'; requestId: string; toolName: string; toolUseId: string | null; input: Record<string, unknown> }
@@ -195,6 +195,13 @@ export type AdapterEvent =
   | { kind: 'control-request-unknown'; type: string; subtype: string; requestId: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: string; bytes: number };
+
+/** One tool_result in a `user` line: its tool_use id, is_error, and Claude's permission decision (`accept` | `reject`) when reported. */
+export interface ToolResultSeen {
+  toolUseId: string;
+  isError: boolean;
+  decision: string | null;
+}
 
 /** A control request id we answer: printable, bounded (p01b: Claude sends UUIDs). */
 export const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -243,8 +250,17 @@ export function parseStreamLine(line: string): AdapterEvent {
       const quota = str(o.error) !== null && QUOTA.test(String(o.error));
       return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota };
     }
-    case 'user':
-      return { kind: 'user', type: 'user', replay: o.isReplay === true };
+    case 'user': {
+      // Aegis detector (P8-D96): the tool_result ids, with Claude's own permission decision when it reports one
+      const m = obj(o.message);
+      const content = Array.isArray(m?.content) ? (m!.content as unknown[]) : [];
+      const metas = Array.isArray(o.tool_result_meta) ? (o.tool_result_meta as unknown[]).map(obj) : [];
+      const toolResults = content.map(obj).filter((c): c is Record<string, unknown> => c !== null && c.type === 'tool_result' && typeof c.tool_use_id === 'string').map((c) => {
+        const meta = metas.find((x) => x !== null && x.id === c.tool_use_id);
+        return { toolUseId: c.tool_use_id as string, isError: c.is_error === true, decision: str(obj(meta?.permission_decision)?.decision) };
+      });
+      return { kind: 'user', type: 'user', replay: o.isReplay === true, toolResults };
+    }
     case 'result': {
       const isError = o.is_error === true;
       const text = `${str(o.subtype) ?? ''} ${str(o.result) ?? ''} ${String(o.api_error_status ?? '')}`;
