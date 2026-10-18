@@ -195,6 +195,10 @@ interface CardRecord {
   effect?: CardEffect;
   waiters: Array<(d: string) => void>;
   outcome?: string;
+  /** Aegis A3: the decision claimed synchronously after approve's last re-check (before approval.decide); cleared if that row or the effect fails */
+  claim?: string;
+  /** an expire() that arrived while a decision was in flight: applied if that decision does not settle the card */
+  expireAfter?: string;
   decisions?: readonly string[];
   note?: string;
 }
@@ -304,11 +308,18 @@ export class ApprovalBroker {
   /**
    * Expire ONE pending card now (P8-D96: the session cancelled the request, or
    * exited). Into deny, never allow; logged approval.expire{…, into, why}.
-   * A card that already has an outcome is left alone (false).
+   * A card that already has an outcome (or a claimed decision) is left alone
+   * (false). Like expireDue, a card with a decision in flight is not expired
+   * under it (Aegis A3): the expiry is remembered and applied when that
+   * decision ends without settling the card.
    */
   async expire(cardId: string, why: string): Promise<boolean> {
     const r = this.#cards.get(cardId);
-    if (!r || r.outcome || r.card.state !== 'pending') return false;
+    if (!r || r.outcome || r.claim || r.card.state !== 'pending') return false;
+    if (this.#deciding.has(cardId)) {
+      r.expireAfter ??= why;
+      return false;
+    }
     const into = 'deny';
     r.outcome = into; // claimed before the await: a racing approve re-checks r.outcome and refuses
     await this.#o.log('approval.expire', { cardId, kind: r.card.kind, into, why }, r.card.hsid ? { session: r.card.hsid } : {}).catch(() => undefined);
@@ -335,7 +346,7 @@ export class ApprovalBroker {
     const now = this.#clock();
     const out: string[] = [];
     for (const r of this.#cards.values()) {
-      if (r.card.state !== 'pending' || r.outcome || !r.card.timeoutAt || Date.parse(r.card.timeoutAt) > now) continue;
+      if (r.card.state !== 'pending' || r.outcome || r.claim || !r.card.timeoutAt || Date.parse(r.card.timeoutAt) > now) continue;
       if (this.#deciding.has(r.card.cardId)) continue; // a decision is in flight: it settles the card (or the next sweep expires it)
       const into = 'deny'; // never into allow (B6); tool.permission expires into deny
       await this.#o.log('approval.expire', { cardId: r.card.cardId, kind: r.card.kind, into }, r.card.hsid ? { session: r.card.hsid } : {});
@@ -384,7 +395,15 @@ export class ApprovalBroker {
     try {
       return await this.#approve(ctx, params);
     } finally {
-      if (typeof id === 'string') this.#deciding.delete(id);
+      if (typeof id === 'string') {
+        this.#deciding.delete(id);
+        const r = this.#cards.get(id);
+        if (r?.expireAfter && !r.outcome && !r.claim) {
+          const why = r.expireAfter;
+          delete r.expireAfter;
+          await this.expire(id, why);
+        }
+      }
     }
   }
 
@@ -515,7 +534,29 @@ export class ApprovalBroker {
     const cli = isCli ? (prov ?? { client: 'cli', connId: ctx.connId }) : { client: 'gui', connId: ctx.connId };
     // re-check after the last await (expiry, a racing decision, a closed connection): exactly one terminal row
     live();
-    if (r.outcome || r.card.state !== 'pending' || !isCardDecidable(r.card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is no longer pending`, { cardId, state: String(r.card.state) });
+    if (r.outcome || r.claim || r.card.state !== 'pending' || !isCardDecidable(r.card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is no longer pending`, { cardId, state: String(r.card.state) });
+    // Aegis A3: claimed SYNCHRONOUSLY after the re-check — no expire() can interleave from here to the settle
+    r.claim = decision;
+    try {
+      await this.#decideAndApply(r, ctx, p, { cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card });
+    } catch (err) {
+      delete r.claim; // the row or the effect failed: the card stays pending (approval.decide is a record, never authority)
+      throw err;
+    }
+    if (typeof p.note === 'string' && p.note) r.note = p.note;
+    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence, via, cli };
+    delete r.claim;
+    this.#settle(r, decision);
+    return r.card;
+  }
+
+  async #decideAndApply(
+    r: CardRecord,
+    ctx: DecideContext,
+    p: Record<string, unknown>,
+    d: { cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1 },
+  ): Promise<void> {
+    const { cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card } = d;
     await this.#o.log(
       'approval.decide',
       { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(rootSig ? { rootSig } : {}), ...(p.note ? { note: p.note } : {}) },
@@ -533,10 +574,6 @@ export class ApprovalBroker {
         throw err;
       }
     }
-    if (typeof p.note === 'string' && p.note) r.note = p.note;
-    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence, via, cli };
-    this.#settle(r, decision);
-    return r.card;
   }
 
   /** Use this connection's unlock; an idle one is dropped and logged (approval.unlock.dropped{idle}). */
