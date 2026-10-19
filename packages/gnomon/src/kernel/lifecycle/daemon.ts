@@ -76,6 +76,8 @@ import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperTransport } from '../identity/helper.js';
 import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
+import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
+import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
 import { loadFuseConfig } from '../budget/config.js';
@@ -96,6 +98,7 @@ import {
   type HumanDeviceVerbPorts,
 } from '../socket/index.js';
 import { createGuiOpenHandler } from '../socket/gui-open.js';
+import { createDaemonStopHandler } from '../socket/daemon-stop-verb.js';
 import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
@@ -119,7 +122,8 @@ import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 
-export type DaemonExitReason = 'idle' | 'signal' | 'error';
+/** `stop`: an accepted daemon-stop card (§3.1 I3, F3). B1 adds `upgrade` (§2.4 rule 11). Every reason here exits 0 (no restart). */
+export type DaemonExitReason = 'idle' | 'signal' | 'error' | 'stop';
 
 /** Events named after the §9.1 `daemon` and `socket` kinds; the kernel log takes them at M1.2. */
 export type DaemonEvent =
@@ -223,6 +227,12 @@ export interface DaemonHandle {
   /** Resolves once the daemon has fully stopped. */
   readonly exited: Promise<DaemonExitReason>;
   shutdown(reason: DaemonExitReason): Promise<void>;
+  /**
+   * `gnomon daemon stop` (kernel side, T-2026-10-19-014 B0): raise (or return the pending) signed daemon-stop card
+   * for an authenticated human device connection. The kernel shuts down with `reason` only when the human accepts
+   * it with fresh presence; reject or expiry keeps it running. Any other connection is FORBIDDEN{matrix}.
+   */
+  requestStop(connId: string, reason?: DaemonStopReason): Promise<CardV1>;
   /** `gnomon open` (kernel side): start the web endpoint if needed and mint a launch token for an authenticated human device connection. */
   requestWebLaunch(connId: string, via?: LaunchAsker): Promise<LaunchGrant>;
   /** The web endpoint, once started (null before the first launch). */
@@ -619,6 +629,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
+  // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason (B1 adds upgrade)
+  const stopCards = new DaemonStopCards(broker, (reason) => void shutdown(reason));
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;
   for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
@@ -806,16 +818,23 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // unix dispatcher alone (dispatcherOptionsFor), so the web dispatcher has no port for them: its status reports
   // them unavailable and a call is refused not-implemented. gui.open is the in-process launch path, under the
   // endpoint's shared launch-grant cap as a `socket` asker (its own share, launch-cap.ts).
-  // One handler module per verb (socket/<verb>.ts), one key per verb here.
+  // One handler module per verb (socket/<verb>.ts; daemon.stop is socket/daemon-stop-verb.ts), one key per verb here.
   const humanVerbs: HumanDeviceVerbPorts = {
     'rules.revoke': createRulesRevokeHandler({
       lookup: (ruleId) => syncRuleBook().get(ruleId),
       append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
     }),
     'gui.open': createGuiOpenHandler({ requestLaunch: (connId: string) => requestWebLaunch(connId, 'socket'), withdrawLaunch: (t: string) => void web?.withdrawLaunch(t) }),
+    // T-2026-10-19-014 B0 (TD-2026-10-19-339): raises the signed daemon-stop card; stops only on a Touch ID accept
+    'daemon.stop': createDaemonStopHandler({ requestStop: (connId, reason) => requestStop(connId, reason) }),
   };
   const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherOptionsFor('unix', dispatcherCommon, { humanVerbs }) });
   const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
+  const requestStop = (connId: string, reason: DaemonStopReason = 'stop'): Promise<CardV1> => {
+    const c = dispatcher.clients().find((x) => x.connId === connId && x.phase === 'authenticated');
+    const cls = c?.credential === 'read-token' ? 'readToken' : (c?.principalKind ?? 'none');
+    return stopCards.request({ connId, principal: c?.principal, principalClass: cls, credential: c?.credential }, reason);
+  };
   const requestWebLaunch = async (connId: string, via: LaunchAsker = 'in-process'): Promise<LaunchGrant> => {
     const asker = dispatcher.clients().find((c) => c.connId === connId);
     if (!asker) throw new LifecycleRefusal('web-launch-refused', 'no authenticated unix-socket connection with that connId', { connId });
@@ -924,6 +943,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     status,
     exited,
     shutdown,
+    requestStop,
     requestWebLaunch,
     web: () => web,
     children,

@@ -121,7 +121,7 @@ export async function runRulesCommand(argv: readonly string[], io: { stdout: Out
 }
 
 /** This home's human device credential: device.key and its root-signed human registry row (fail closed). */
-function humanDeviceOf(home: string): DeviceCredential | string {
+export function humanDeviceOf(home: string): DeviceCredential | string {
   let signer;
   try {
     signer = loadDeviceCredential(home).signer;

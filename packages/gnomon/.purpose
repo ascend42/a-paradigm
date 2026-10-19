@@ -388,8 +388,8 @@ components:
       takes a `web` hook for {launchToken}/{reconnect} (credential 'gui',
       human class); on the unix socket those forms stay UNSUPPORTED
       web-auth-not-implemented. P8-D98 (T-2026-10-19-001 A0): the registry
-      (methods.ts) also registers the two human-device verbs gui.open and
-      rules.revoke (human tier only, every other class false, deny by
+      (methods.ts) also registers the three human-device verbs gui.open,
+      rules.revoke and daemon.stop (human tier only, every other class false, deny by
       default); dispatch.ts refuses any non-human class FORBIDDEN{matrix},
       refuses a human GUI launch-token connection the same way, and routes a
       human DEVICE connection to DispatcherOptions.humanVerbs (one handler
@@ -2429,6 +2429,32 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    daemon-stop: >-
+      PARTLY BUILT (T-2026-10-19-014 B0, TD-2026-10-19-528 F3, spec §3.1 I3).
+      Kernel side built: DaemonHandle.requestStop(connId, reason='stop') raises
+      (or returns the one pending) signed daemon-stop card through
+      broker/daemon-stop.ts DaemonStopCards, only for an authenticated human
+      principal on a device connection (every other class, a read token and a
+      GUI launch-token connection: FORBIDDEN{matrix}, no card). accept is fresh
+      presence (Touch ID; a cached unlock never decides it) and calls
+      shutdown(reason) on the next event-loop turn; reject, a declined prompt
+      or expiry (2 min, into deny) keep the kernel running. DaemonExitReason
+      gains 'stop' (daemon.exit{reason:'stop'}; gnomond exits 0, the
+      no-restart class). Concurrent requests share the in-flight raise
+      (#raising, Aegis L5): two at once get ONE card. The client path
+      (TD-2026-10-19-339) is the human-device verb daemon.stop{reason?}
+      (socket/daemon-stop-verb.ts createDaemonStopHandler), on the UNIX
+      dispatcher's humanVerbs only (the web dispatcher reports it unavailable);
+      connId is the dispatcher's own connection context, never a param (Aegis
+      L6); reason is checked against DAEMON_STOP_REASONS (unknown ⇒
+      BAD_REQUEST bad-params; upgrade ⇒ ENGINE not-implemented until B1); the
+      result is {cardId, state}. `gnomon daemon stop` pins the kernel key
+      (kernelPinOf), authenticates as the home's human device (rules-cli
+      humanDeviceOf), calls daemon.stop, prints CARD RAISED with "approve it in
+      Gnomon with Touch ID" and exits 0 without waiting; no kernel ⇒ REFUSED
+      ENGINE not-running; no human device ⇒ REFUSED FORBIDDEN no-human-device.
+      B1 widens DaemonStopReason with 'upgrade' and passes it through requestStop.
+      Falsifiers in test/daemon-stop.test.ts, test/daemon-stop-verb.test.ts and test/daemon-lifecycle.test.ts.
     upgrade-drain: >-
       PLANNED, not built (TD-2026-10-19-908, T-2026-10-19-014; spec §2.4
       rule 11, before dogfood GA). A kernel update drains and resumes:

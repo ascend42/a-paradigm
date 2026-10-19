@@ -17,9 +17,11 @@
  * claimed nested under `unverified`. A hello whose key IS known but whose
  * signature does not verify is refused. The pidfile pid is shown as a
  * diagnostic only (§2.4: never trusted). `gnomon daemon stop` is
- * approval-signed (§3.1 I3) and refused locally until #approval-broker (M1.6):
- * there is no `daemon.stop` verb — the socket surface is exactly 12 verbs + 2
- * relays.
+ * approval-signed (§3.1 I3, F3): the kernel raises a daemon-stop card
+ * (DaemonHandle.requestStop) and stops only on a fresh-presence accept. The
+ * CLI pins the kernel key, authenticates as the home's human device and calls
+ * the human-device verb daemon.stop (TD-2026-10-19-339); it exits 0 once the
+ * card is raised. With no kernel it refuses REFUSED ENGINE not-running.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,10 +47,12 @@ import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
 import { IdentityError, openHardwareIdentity, readKernelPubs, readRegistry } from '../kernel/identity/index.js';
 import type { ServerKeyPin } from '../kernel/socket/client.js';
 import { homeTrust } from './mod-cli.js';
-import { refuse, refusalOf, RefusedError } from '@a-company/gnomon-contracts';
+import { refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
 import { DEV_HOME_MARKER } from './dev-home.js';
+import { heading, readout, refused } from './readout.js';
+import { humanDeviceOf } from './rules-cli.js';
 
 /**
  * #dev-launch tripwire: gnomond (foreground or detaching) and `gnomon daemon start` refuse,
@@ -261,13 +265,7 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
     process.stderr.write('gnomon: no safe endpoint path for this home\n');
     return EXIT_REFUSED;
   }
-  if (sub === 'stop') {
-    const refusal = refuse({ code: 'ENGINE', data: { reason: 'not-implemented', verb: 'daemon stop', milestone: 'M1.6' } });
-    process.stderr.write(
-      `${JSON.stringify({ code: -32000, message: 'daemon stop is approval-signed (§3.1 I3); it arrives with #approval-broker (M1.6). The daemon exits on idle.', data: refusal })}\n`,
-    );
-    return EXIT_REFUSED;
-  }
+  if (sub === 'stop') return runDaemonStop(home, sock);
   const client = { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' as const };
   try {
     // 1) an unpinned hello only learns which key the server CLAIMS to hold
@@ -317,6 +315,71 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
     const st = daemonState(home, sock);
     process.stdout.write(`${JSON.stringify({ running: false, state: st.state })}\n`);
     return EXIT_NOT_RUNNING;
+  }
+}
+
+/**
+ * `gnomon daemon stop` (T-2026-10-19-014 B0, founder rulings F3 of TD-2026-10-19-528 and TD-2026-10-19-339).
+ * No kernel answering: REFUSED ENGINE not-running. A kernel answering: its hello must verify against a key this
+ * home records (kernelPinOf; an unrecorded key gets nothing sent to it), then the CLI authenticates as this home's
+ * human device and calls the human-device verb `daemon.stop{reason:'stop'}`. The kernel raises its signed
+ * daemon-stop card; this exits 0 once the card is raised and does NOT wait for the decision. The kernel stops only
+ * when the human accepts the card with Touch ID. It is never stopped by a signal or the pidfile pid from here.
+ */
+async function runDaemonStop(home: string, sock: string): Promise<number> {
+  const client = { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' as const };
+  let keyId: string;
+  try {
+    const probe = await connectGnomon({ socketPath: sock, client });
+    await probe.conn.close();
+    keyId = probe.hello.serverKeyId;
+  } catch (err) {
+    if (err instanceof RefusedError || err instanceof ServerAuthError) {
+      refused(process.stderr, err instanceof RefusedError ? err.refusal.code : 'AUTH', err instanceof RefusedError ? String(err.refusal.data?.reason ?? 'refused') : 'server-auth', err.message);
+      return EXIT_REFUSED;
+    }
+    refused(process.stderr, 'ENGINE', 'not-running', `no daemon answers on ${home}; nothing to stop`);
+    return EXIT_REFUSED;
+  }
+  const found = kernelPinOf(home, keyId);
+  if (!found) {
+    refused(process.stderr, 'AUTH', 'unverified-server', "the process answering this home's socket names a kernel key this home does not record; nothing is sent to it");
+    return EXIT_REFUSED;
+  }
+  const device = humanDeviceOf(home);
+  if (typeof device === 'string') {
+    refused(process.stderr, 'FORBIDDEN', 'no-human-device', device, ['gnomon setup']);
+    return EXIT_REFUSED;
+  }
+  let s: Awaited<ReturnType<typeof connectGnomon>>;
+  try {
+    s = await connectGnomon({ socketPath: sock, client, serverKey: found.pin, device });
+  } catch (err) {
+    if (err instanceof RefusedError) {
+      refused(process.stderr, err.refusal.code, String(err.refusal.data?.reason ?? 'refused'), err.message);
+      return EXIT_REFUSED;
+    }
+    refused(process.stderr, 'AUTH', 'server-auth', (err as Error).message);
+    return EXIT_REFUSED;
+  }
+  try {
+    const r = await s.conn.call('daemon.stop', { reason: 'stop' });
+    if ('error' in r) {
+      const data = refusalOf(r);
+      refused(process.stderr, data?.code ?? 'ENGINE', String(data?.data?.reason ?? 'refused'), r.error.message);
+      return EXIT_REFUSED;
+    }
+    const card = r.result as { cardId?: unknown; state?: unknown };
+    heading(process.stdout, 'card raised', String(card.cardId ?? ''));
+    readout(process.stdout, [
+      ['kind', 'daemon-stop (signed)'],
+      ['state', String(card.state ?? 'pending')],
+      ['next', 'approve it in Gnomon with Touch ID; the kernel stops only on accept'],
+      ['else', 'reject, or no answer in 2 min, keeps it running'],
+    ]);
+    return EXIT_OK;
+  } finally {
+    await s.conn.close();
   }
 }
 

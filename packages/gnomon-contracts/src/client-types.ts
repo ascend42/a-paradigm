@@ -203,6 +203,17 @@ export interface RulesRevokeResult extends Open {
   revoked: boolean;
 }
 
+/** P8-D98 human-device verb 15 (TD-2026-10-19-528 F3, TD-2026-10-19-339): raises the daemon-stop card. */
+export interface DaemonStopParams {
+  /** `stop` (default) or `upgrade` (reserved for the drain, slice B1). */
+  reason?: 'stop' | 'upgrade';
+}
+export interface DaemonStopResult extends Open {
+  cardId: string;
+  /** The card's state when raised: `pending` (a second request while one is pending returns the same card). */
+  state: string;
+}
+
 export interface ModViewParams {
   name: string;
   viewId: string;
@@ -214,7 +225,7 @@ export interface ModCommandParams {
   args?: unknown;
 }
 
-/** method → params, for the whole client-callable surface (12 verbs + 2 human-device verbs + 2 relays). */
+/** method → params, for the whole client-callable surface (12 verbs + 3 human-device verbs + 2 relays). */
 export interface ClientMethodParams {
   status: Record<string, never>;
   'session.open': SessionOpenParams;
@@ -230,6 +241,7 @@ export interface ClientMethodParams {
   'ref.resolve': RefResolveParams;
   'gui.open': GuiOpenParams;
   'rules.revoke': RulesRevokeParams;
+  'daemon.stop': DaemonStopParams;
   'mod.view': ModViewParams;
   'mod.command': ModCommandParams;
 }
@@ -250,6 +262,7 @@ export interface ClientMethodResults {
   'ref.resolve': RefResolveResult;
   'gui.open': GuiOpenResult;
   'rules.revoke': RulesRevokeResult;
+  'daemon.stop': DaemonStopResult;
   'mod.view': Open;
   'mod.command': Open;
 }

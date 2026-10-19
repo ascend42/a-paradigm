@@ -373,8 +373,9 @@ describe('verb dispatch skeleton (§5)', () => {
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred });
     cleanups.push(() => s.conn.close());
     const got: Record<string, unknown> = {};
-    // gui.open is served since T-2026-10-19-001 A3 (test/gui-open.test.ts): it mints a launch grant, so it is not in this loop
-    for (const m of CLIENT_METHODS.filter((x) => x !== 'status' && x !== 'log.read' && x !== 'ref.resolve' && x !== 'gui.open')) {
+    // gui.open is served since T-2026-10-19-001 A3 (test/gui-open.test.ts): it mints a launch grant, so it is not in this loop;
+    // daemon.stop is served since T-2026-10-19-014 B0 (test/daemon-stop-verb.test.ts): it raises a daemon-stop card, likewise
+    for (const m of CLIENT_METHODS.filter((x) => x !== 'status' && x !== 'log.read' && x !== 'ref.resolve' && x !== 'gui.open' && x !== 'daemon.stop')) {
       const f = await s.conn.call(m, {});
       expect('error' in f).toBe(true);
       const e = (f as { error: { code: number; data: { data: { reason: string; milestone?: string } } } }).error;

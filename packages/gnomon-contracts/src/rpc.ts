@@ -111,6 +111,9 @@ export const VERB_NAMES = Object.freeze(VERBS.map((v) => v.verb)) as readonly st
  *   13 `gui.open{cwdHint?}` → a single-use launch grant, the in-process requestWebLaunch's rules (§2.4 rule 8).
  *   14 `rules.revoke{ruleId}` → revokes a standing `always` rule; writes approval.rule.revoked. No presence prompt:
  *      revoking only narrows (TD-2026-10-19-528 F1).
+ *   15 `daemon.stop{reason?}` → raises the kernel's signed `daemon-stop` card (§3.1 I3, TD-2026-10-19-528 F3,
+ *      ruling TD-2026-10-19-339); the kernel stops only on a fresh-presence (Touch ID) accept. `reason` is one of
+ *      DAEMON_STOP_REASONS: `stop` (the default) or `upgrade` (reserved: the §2.4 rule 11 drain, slice B1).
  * Each handler is its own module behind a dispatcher port; until it lands the call is ENGINE{not-implemented}.
  */
 export const HUMAN_DEVICE_ACCESS = 'verified human device' as const;
@@ -123,10 +126,21 @@ export const HUMAN_DEVICE_VERBS: readonly VerbDescriptor[] = deepFreeze([
     n: 14, verb: 'rules.revoke', params: ['ruleId'], result: '{ruleId, revoked}', refusals: ['FORBIDDEN', 'NOT_FOUND', 'BAD_REQUEST', 'ENGINE'], humanOnly: true,
     access: { human: HUMAN_DEVICE_ACCESS, agent: false, session: false, mod: false, voice: false, readToken: false, peer: false },
   },
+  {
+    n: 15, verb: 'daemon.stop', params: ['reason?'], result: '{cardId, state}', refusals: ['FORBIDDEN', 'BAD_REQUEST', 'ENGINE'], humanOnly: true,
+    access: { human: HUMAN_DEVICE_ACCESS, agent: false, session: false, mod: false, voice: false, readToken: false, peer: false },
+  },
 ] satisfies VerbDescriptor[]);
 export const HUMAN_DEVICE_VERB_NAMES = Object.freeze(HUMAN_DEVICE_VERBS.map((v) => v.verb)) as readonly string[];
 /** `gui.open.cwdHint` cap in UTF-8 bytes (§2.4 rule 8). */
 export const GUI_OPEN_CWD_HINT_MAX_BYTES = 1024;
+/**
+ * `daemon.stop.reason` values (closed, TD-2026-10-19-339): `stop` (the default) asks to stop the kernel; `upgrade`
+ * is reserved for the §2.4 rule 11 drain-and-resume (slice B1) — until the kernel builds it the call is refused
+ * `ENGINE{reason:'not-implemented'}`. Any other value is `BAD_REQUEST{reason:'bad-params'}`.
+ */
+export const DAEMON_STOP_REASONS = Object.freeze(['stop', 'upgrade'] as const);
+export type DaemonStopReasonValue = (typeof DAEMON_STOP_REASONS)[number];
 
 export interface RelayDescriptor {
   relay: string;
@@ -168,7 +182,7 @@ export const STATUS_RESERVED_FIELDS = deepFreeze({
   unobservedRefWrites: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
 });
 
-/** The client-callable surface: 12 kernel verbs + 2 human-device verbs + 2 relays (§5, P8-D98). */
+/** The client-callable surface: 12 kernel verbs + 3 human-device verbs + 2 relays (§5, P8-D98). */
 export const CLIENT_METHODS = Object.freeze([...VERB_NAMES, ...HUMAN_DEVICE_VERB_NAMES, ...RELAY_NAMES]) as readonly string[];
 
 /**
@@ -201,6 +215,7 @@ export function validateLogReadCursor(value: unknown): string[] {
 export const D98_CLOSED_VALUES = deepFreeze({
   'approval.rule.learned.match': [...ALWAYS_RULE_MATCHES],
   'session.drained.reason': [...DRAIN_REASONS],
+  'daemon.stop.reason': [...DAEMON_STOP_REASONS],
 });
 
 /* ── the compatible-additive rule (§4.9, §12.8) ───────────────────────────── */

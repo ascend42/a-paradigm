@@ -482,14 +482,14 @@ describe('G-ABI-01 ≤ 12: twelve kernel verbs + two relays is the whole client-
   it('the frozen list is 12 verbs (n = 1..12) + 2 relays, status lists exactly those, and no other name is a verb (incl. no token/daemon verbs)', async () => {
     expect(VERBS.map((v) => v.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(CLIENT_RELAYS.map((x) => x.relay)).toEqual(['mod.view', 'mod.command']);
-    expect(CLIENT_METHODS).toHaveLength(16); // + the two P8-D98 human-device verbs, not kernel verbs (law 3)
-    expect(HUMAN_DEVICE_VERBS.map((v) => v.verb)).toEqual(['gui.open', 'rules.revoke']);
+    expect(CLIENT_METHODS).toHaveLength(17); // + the three P8-D98 human-device verbs, not kernel verbs (law 3)
+    expect(HUMAN_DEVICE_VERBS.map((v) => v.verb)).toEqual(['gui.open', 'rules.revoke', 'daemon.stop']);
     const r = await rig();
     const s = await asDevice(r, 'human');
     const st = ok(await s.conn.call('status', {}));
     expect((st.verbs as Array<{ verb: string }>).map((v) => v.verb)).toEqual(VERBS.map((v) => v.verb));
     expect((st.relays as Array<{ relay: string }>).map((v) => v.relay)).toEqual(['mod.view', 'mod.command']);
-    for (const extra of ['daemon.stop', 'daemon.status', 'token.mint', 'readToken.mint', 'auth.token', 'log.tail', 'log.write', 'session.list', 'grant', 'kernel.call', 'mod.install', 'approve.batch', 'status.full', 'rpc.discover']) {
+    for (const extra of ['daemon.status', 'daemon.shutdown', 'token.mint', 'readToken.mint', 'auth.token', 'log.tail', 'log.write', 'session.list', 'grant', 'kernel.call', 'mod.install', 'approve.batch', 'status.full', 'rpc.discover']) {
       expect(errOf(await s.conn.call(extra, {}))).toMatchObject({ code: -32601, c: 'UNKNOWN_VERB' });
     }
   });

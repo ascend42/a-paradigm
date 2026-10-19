@@ -131,5 +131,5 @@ export function buildKernelMethodRegistry(): MethodRegistry {
   return r.seal();
 }
 
-/** The kernel's registry: exactly the 12 verbs + 2 human-device verbs + 2 relays, sealed. */
+/** The kernel's registry: exactly the 12 verbs + 3 human-device verbs + 2 relays, sealed. */
 export const KERNEL_METHODS: MethodRegistry = buildKernelMethodRegistry();

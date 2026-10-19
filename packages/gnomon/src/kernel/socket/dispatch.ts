@@ -311,11 +311,14 @@ export type HumanDeviceVerbHandler = (ctx: HumanDeviceVerbContext, params: unkno
 export interface HumanDeviceVerbPorts {
   'gui.open'?: HumanDeviceVerbHandler;
   'rules.revoke'?: HumanDeviceVerbHandler;
+  /** daemon.stop (TD-2026-10-19-339, T-2026-10-19-014 B0): raises the daemon-stop card. */
+  'daemon.stop'?: HumanDeviceVerbHandler;
 }
 /** Where each human-device verb lands (T-2026-10-19-001 slices). */
 export const HUMAN_DEVICE_VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
   'gui.open': 'T-2026-10-19-001',
   'rules.revoke': 'T-2026-10-19-001',
+  'daemon.stop': 'T-2026-10-19-014',
 });
 
 /** The mod host's side of the client relays (modhost/bridge.ts createModRelayPort). */
