@@ -52,7 +52,8 @@ import { refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
 import { DEV_HOME_MARKER } from './dev-home.js';
-import { spawnSuccessor, successorPlanOf } from '../kernel/lifecycle/successor.js';
+import { readKernelKeyStdin, spawnSuccessor, successorPlanOf } from '../kernel/lifecycle/successor.js';
+import { SoftwareEd25519Signer } from '../kernel/log/index.js';
 import { heading, readout, refused } from './readout.js';
 import { humanDeviceOf } from './rules-cli.js';
 
@@ -85,6 +86,8 @@ export interface DaemonArgs {
   readyFifo?: string;
   /** TD-2026-10-19-063: an upgrade successor asks for its predecessor's web port first (127.0.0.1, exclusive). */
   preferPort?: number;
+  /** TD-2026-10-19-063: the predecessor hands this successor its kernel key on the stdin pipe. */
+  kernelKeyStdin?: boolean;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -109,7 +112,8 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       const v = argv[++i];
       if (!v || !path.isAbsolute(v)) return '--ready-fifo needs an absolute path';
       out.readyFifo = v;
-    } else if (a === '--prefer-port') {
+    } else if (a === '--kernel-key-stdin') out.kernelKeyStdin = true;
+    else if (a === '--prefer-port') {
       const v = Number(argv[++i]);
       if (!Number.isInteger(v) || v < 1 || v > 65535) return '--prefer-port needs a port 1..65535';
       out.preferPort = v;
@@ -177,7 +181,18 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       throw e;
     }
     opened = hw;
+    // TD-2026-10-19-063: an upgrade successor runs on the key its predecessor minted (the GUI was told its public half)
+    let kernelSigner: SoftwareEd25519Signer | undefined;
+    if (args.kernelKeyStdin) {
+      const pem = await readKernelKeyStdin();
+      if (pem === null) {
+        process.stderr.write('gnomond: --kernel-key-stdin given but no kernel key arrived on stdin [kernel-key-stdin]\n');
+        return exitCodeOfClass(STARTUP_FAULT_CLASS.identity);
+      }
+      kernelSigner = new SoftwareEd25519Signer(pem, 'kernel');
+    }
     const handle = await startDaemon({
+      ...(kernelSigner ? { kernelSigner } : {}),
       home,
       ...(hw ? { rootAuthority: hw.root, approvalsKey: hw.approvals, helper: hw.helper } : {}),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
@@ -198,7 +213,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     process.off('SIGINT', onSignal);
     // TD-2026-10-19-063: an ACCEPTED upgrade drained, released the lock and socket; now ONE detached successor, then exit
     const handoff = handle.upgradeHandoff();
-    if (reason === 'upgrade' && handoff) spawnSuccessor(successorPlanOf(home, handoff.preferPort, args.idleMs));
+    if (reason === 'upgrade' && handoff) spawnSuccessor(successorPlanOf(home, handoff.preferPort, args.idleMs, process.argv[1], handoff.successorKeyPem));
     return exitCodeOfExitReason(reason); // upgrade: ok, 0, no restart (EXIT_REASON_CLASS)
   } catch (err) {
     await opened?.helper.close().catch(() => undefined);

@@ -72,6 +72,7 @@
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
 import * as nodeOs from 'node:os';
+import { generateKeyPairSync } from 'node:crypto';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperPush, HelperTransport } from '../identity/helper.js';
 import { VoiceArmCustody } from '../broker/arm-custody.js';
@@ -102,7 +103,7 @@ import {
 } from '../socket/index.js';
 import { createGuiOpenHandler } from '../socket/gui-open.js';
 import { createDaemonStopHandler } from '../socket/daemon-stop-verb.js';
-import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
+import { spkiBase64Url, WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
@@ -213,6 +214,16 @@ export interface DaemonOptions {
   update?: { stampPath?: string | null; pollMs?: number; helper?: { check(): Promise<unknown> | unknown } };
 }
 
+/**
+ * TD-2026-10-19-063: what an accepted, drained upgrade hands the successor. `successorKeyPem` is the successor's
+ * software kernel key (PKCS#8), minted by THIS kernel at accept so the GUI can be told its public half over the
+ * already-verified channel (gui.resume); it reaches the successor on its stdin pipe only (never argv, env or a file).
+ */
+export interface UpgradeHandoff {
+  preferPort: number | null;
+  successorKeyPem: string;
+}
+
 export interface DaemonStatus {
   pid: number;
   startedAt: string;
@@ -274,7 +285,7 @@ export interface DaemonHandle {
   /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
   readonly resume: Promise<ResumeReport>;
   /** TD-2026-10-19-063: set once an upgrade card was ACCEPTED and drained: the successor asks for this web port. */
-  upgradeHandoff(): { preferPort: number | null } | null;
+  upgradeHandoff(): UpgradeHandoff | null;
   /** TD-2026-10-19-063 #update-watch (null when no build stamp was loaded). */
   readonly updateWatch: UpdateWatch | null;
   /** The build stamp this kernel loaded (null: none). */
@@ -533,7 +544,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   let server: SocketServerHandle | null = null;
   let stopping: Promise<void> | null = null;
   let updateWatch: UpdateWatch | null = null;
-  let upgradeHandoff: { preferPort: number | null } | null = null;
+  let upgradeHandoff: UpgradeHandoff | null = null;
   let resolveExited!: (r: DaemonExitReason) => void;
   const exited = new Promise<DaemonExitReason>((r) => (resolveExited = r));
 
@@ -693,7 +704,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     if (stopping) return;
     const gui = web?.access.session(ctx.connId);
     const resumeToken = gui ? mintResumeToken() : null;
-    if (gui && resumeToken) web?.notifyConn(ctx.connId, 'gui.resume', { resumeToken, ttlMs: RESUME_TOKEN_TTL_MS });
+    const successorKeyPem = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const successorPub = new SoftwareEd25519Signer(successorKeyPem, 'kernel').publicKeyPem;
+    if (gui && resumeToken) web?.notifyConn(ctx.connId, 'gui.resume', { resumeToken, ttlMs: RESUME_TOKEN_TTL_MS, kernelPublicKey: spkiBase64Url(successorPub) });
     const st = web?.status() as { listening?: boolean; port?: number } | undefined;
     const preferPort = st?.listening && typeof st.port === 'number' ? st.port : null;
     void supervisor
@@ -707,7 +720,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
             /* no hand-off: the reloaded GUI asks for presence instead (never a silent reattach) */
           }
         }
-        upgradeHandoff = { preferPort };
+        upgradeHandoff = { preferPort, successorKeyPem };
         return shutdown('upgrade');
       });
   });

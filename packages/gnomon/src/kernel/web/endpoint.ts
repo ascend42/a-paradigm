@@ -220,7 +220,7 @@ export function defaultChildScript(): string | null {
   return null;
 }
 
-function spkiBase64Url(pem: string): string {
+export function spkiBase64Url(pem: string): string {
   return createPublicKey(pem).export({ type: 'spki', format: 'der' }).toString('base64url');
 }
 

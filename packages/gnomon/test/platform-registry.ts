@@ -67,6 +67,7 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // spec §2.4 rule 10 auto-open: the real osascript smoke and the GUI setup endpoint on a terminal.
   { test: 'test/open-browser-darwin.test.ts', platforms: ['darwin'], sibling: 'test/open-browser.test.ts', na: 'auto-open is macOS only (osascript + LaunchServices); elsewhere the URL is printed as before, which the platform-free sibling covers with an injected platform and spawner' },
   // TD-2026-10-19-063 self-update: the 0600 hand-off files and the helper re-pin fixture (POSIX modes); the pure half is self-update.test.ts.
+  { test: 'test/self-update-e2e.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/self-update.test.ts', na: 'Windows parity phase (P8-D78): a real daemon on the unix-socket endpoint (named pipe waits for probe P03)' },
   { test: 'test/self-update-posix.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/self-update.test.ts', na: 'POSIX file modes (0600 hand-off, executable helper fixture); Windows ACL custody is the Windows parity phase (P8-D78)' },
   // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
   { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
