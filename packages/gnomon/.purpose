@@ -2103,7 +2103,8 @@ components:
       daemon's RuleBook (kernel-signed rows only, shared with the
       supervisor's exact-match check via syncRuleBook) else NOT_FOUND; then
       the kernel appends approval.rule.revoked{ruleId, repoKey, tool, connId}
-      (connId stamped from THIS connection) and re-folds, so the next exact
+      (connId stamped from THIS connection; a CRITICAL kind, anchor-policy.ts
+      Aegis M1, so the append resolves only once anchored) and re-folds, so the next exact
       match raises the card. Revokes run one at a time (a concurrent double
       revoke writes one row). Result {ruleId, revoked: true}.
     path: src/kernel/socket/rules-revoke.ts
