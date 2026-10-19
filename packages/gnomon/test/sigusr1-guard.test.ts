@@ -56,7 +56,7 @@ describe('the kernel requires --disable-sigusr1', () => {
 
   it('both bins carry the shebang that passes the flag (source and the built dist)', () => {
     for (const f of ['src/cli/gnomon.ts', 'src/cli/gnomond.ts', 'dist/cli/gnomon.js', 'dist/cli/gnomond.js']) {
-      const first = readFileSync(path.join(PKG_ROOT, f), 'utf8').split('\n')[0];
+      const first = readFileSync(path.join(PKG_ROOT, f), 'utf8').split(/\r?\n/)[0] // a Windows checkout has CRLF;
       expect(first, f).toBe('#!/usr/bin/env -S node --disable-sigusr1');
     }
   });
