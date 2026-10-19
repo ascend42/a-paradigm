@@ -79,6 +79,8 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
   for (const f of layers) { try { allow.push(...(JSON.parse(readFileSync(f, 'utf8'))?.permissions?.allow ?? [])); } catch { /* none */ } }
   trace({ t: 'allow', allow });
 }
+// M2: try writes at start (under the session profile): each path is reported allowed or blocked
+for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' }));
 const session = args[args.indexOf('--session-id') + 1] ?? 'none';

@@ -75,6 +75,8 @@ function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['lo
   return { rows, fuse, children, cards, sup, kinds, idx };
 }
 
+/** every --add-dir value (repeated flags or one variadic flag) */
+const addDirsOf = (args: string[]): string[] => args.flatMap((a, i) => (a === '--add-dir' ? args.slice(i + 1).filter((_, j, rest) => rest.slice(0, j + 1).every((x) => !x.startsWith('-'))) : []));
 const open = (s: SessionSupervisor, over: Record<string, unknown> = {}) => s.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd, ...over });
 async function refusal(p: Promise<unknown>): Promise<RefusedError> {
   const e = await p.then(() => undefined, (x: unknown) => x);
@@ -302,6 +304,27 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
     expect(JSON.stringify(row)).not.toContain('repo-env-value');
     // the repo-hook card shows the non-hook settings as informational
     expect((r2.cards[0]!.lines as string[]).some((l) => l.startsWith('not loaded from this repo') && l.includes('env REPO_ENV_PROBE'))).toBe(true);
+  }, 30_000);
+  it('M2: cwd a subdirectory — the git top-level CLAUDE.md is read under the sandbox and loaded; neither dir can be written', async () => {
+    const r = rig();
+    const sub = path.join(w.cwd, 'packages', 'p');
+    fs.mkdirSync(sub, { recursive: true });
+    fs.writeFileSync(path.join(w.cwd, 'CLAUDE.md'), 'top token ZEBRA-top\n');
+    fs.writeFileSync(path.join(sub, 'CLAUDE.md'), 'sub token ZEBRA-sub\n');
+    const topReal = fs.realpathSync.native(w.cwd);
+    const subReal = fs.realpathSync.native(sub);
+    setMode(w, { startWrites: [path.join(topReal, 'CLAUDE.md'), path.join(subReal, 'CLAUDE.md'), path.join(topReal, '.claude', 'planted.md'), path.join(subReal, 'ok.txt')] });
+    const s = await r.sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: sub });
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'allow'))).toBe(true);
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    const args = trace(w).find((t) => t.t === 'argv')!.args as string[];
+    expect(addDirsOf(args)).toEqual([topReal, subReal]);
+    const mem = trace(w).filter((t) => t.t === 'memory').map((t) => String(t.text));
+    expect(mem.some((m) => m.includes('ZEBRA-top'))).toBe(true); // the sandbox lets the session read the git top's CLAUDE.md
+    expect(mem.some((m) => m.includes('ZEBRA-sub'))).toBe(true);
+    const writes = Object.fromEntries(trace(w).filter((t) => t.t === 'start-write').map((t) => [String(t.path), t.result]));
+    expect(writes).toEqual({ [path.join(topReal, 'CLAUDE.md')]: 'blocked', [path.join(subReal, 'CLAUDE.md')]: 'blocked', [path.join(topReal, '.claude', 'planted.md')]: 'blocked', [path.join(subReal, 'ok.txt')]: 'allowed' });
+    expect(fs.readFileSync(path.join(w.cwd, 'CLAUDE.md'), 'utf8')).toBe('top token ZEBRA-top\n');
   }, 30_000);
   it('an approved repo hook runs beside the staged context; mode user-only and none stage nothing; mode all loads the repo natively', async () => {
     const r = rig();

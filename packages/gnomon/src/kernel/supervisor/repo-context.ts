@@ -9,6 +9,8 @@
  * runs `--setting-sources user`, so the repo's settings layers never reach
  * Claude raw. Instead:
  *
+ *   worktree: memory and the plugin come from the cwd only (Claude runs there);
+ *     a worktree root is a sandbox and hook root, not a context source (M2).
  *   memory: `--add-dir <dir>` for the cwd and each ancestor up to the git
  *     top-level that holds a CLAUDE.md, `.claude/CLAUDE.md` or `.claude/rules`,
  *     with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` in the child env.
