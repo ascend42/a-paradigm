@@ -109,7 +109,7 @@ describe('gnomon identity init', () => {
     // H3: what stderr told the human to look for is what the helper line shows
     const told = [...r.err.join('').matchAll(/must end with ([0-9a-f]{12})/g)].map((m) => m[1]);
     expect(told.length).toBe(2);
-    told.forEach((d, i) => expect(fake.shown[i]!.endsWith(d!)).toBe(true));
+    told.forEach((d, i) => expect(fake.shown[i]!.split('; ')[0]!.endsWith(d!)).toBe(true)); // the helper line BEGINS with the digest part (MEDIUM-3)
     const rec = readIdentity(home)!;
     expect((fs.statSync(identityPath(home)).mode & 0o777).toString(8)).toBe('600');
     const reg = readRegistry(home, (await opened(home, fake))!.root);

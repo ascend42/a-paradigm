@@ -160,7 +160,8 @@ function renderPresence(io: LaunchTtyIo): (e: ProvisionEvent) => void {
     if (e.digest12) {
       // I2: the expected digest goes to the user's own launch surface (this terminal) and nowhere else
       io.stdout.write(`\n        ${groupDigest(e.digest12)}\n\n`);
-      io.stdout.write(`  The LAST line of the Touch ID dialog must read "Gnomon Helper: root key signs 1: ${e.digest12}".\n  If it doesn't, press Cancel.\n`);
+      // MEDIUM-3: the real helper appends "; row <schemaVersion> <kind>", so the line BEGINS with this
+      io.stdout.write(`  The LAST line of the Touch ID dialog must BEGIN with "Gnomon Helper: root key signs 1: ${e.digest12}".\n  If it doesn't, press Cancel.\n`);
     }
   };
 }

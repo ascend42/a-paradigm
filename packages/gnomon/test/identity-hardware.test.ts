@@ -119,7 +119,7 @@ describe('HardwareRootAuthority', () => {
     const d = root.digestFor(row);
     expect(h.prompts[0]!.endsWith(`[check ${d}]`)).toBe(true);
     expect(h.prompts[0]!.length).toBeLessThanOrEqual(500);
-    expect(h.shown[0]!.endsWith(d)).toBe(true);
+    expect(h.shown[0]!.split('; ')[0]!.endsWith(d)).toBe(true); // the real helper appends '; row …' (MEDIUM-3)
   });
 
   it('M1: the root never signs a presence attestation (helper and kernel both refuse the domain)', async () => {
@@ -212,7 +212,7 @@ describe('HelperApprovalsKey', () => {
     // H3: the kernel's text carries the same digests the helper's own line shows
     const check = /\[check ([0-9a-f]{12}) ([0-9a-f]{12})\]$/.exec(helper.prompts[0]!)!;
     expect(helper.prompts[0]!.startsWith('Gnomon: allow')).toBe(true);
-    expect(helper.shown[0]!.endsWith(`${check[1]} ${check[2]}`)).toBe(true);
+    expect(helper.shown[0]!.split('; ')[0]!.endsWith(`${check[1]} ${check[2]}`)).toBe(true);
     expect(approvals.verify(HUMAN, message, r.decisionSig)).toBe('ok');
     expect(approvals.verify('p:abcdefgh/other', message, r.decisionSig)).toBe('bad');
     expect(consumeBoundPresence(r.token, 'approval.decide', bind)).toBe('ok');

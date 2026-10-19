@@ -128,7 +128,7 @@ describe('gnomon setup (#first-run)', () => {
     expect(told.length).toBe(2);
     told.forEach((d, i) => {
       expect(t).toContain(`        ${groupDigest(d)}\n`);
-      expect(lastLine(fake.shown[i]!)).toBe(`Gnomon Helper: root key signs 1: ${d}`); // the helper's line is LAST
+      expect(lastLine(fake.shown[i]!)).toMatch(new RegExp(`^Gnomon Helper: root key signs 1: ${d}; row \\S`)); // the helper's real line is LAST and BEGINS with it
     });
     // I2: the digest is on the terminal only, never in a file of the home; the lock is gone
     for (const f of fs.readdirSync(path.join(homeOf(u), 'keys'))) for (const d of told) expect(fs.readFileSync(path.join(homeOf(u), 'keys', f), 'utf8')).not.toContain(d);
