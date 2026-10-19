@@ -272,8 +272,9 @@ function sized(v: LogView): { row: LogView | OversizeView; bytes: number } {
 
 export function readOnePage(log: ReadLog, grant: ReaderGrant, p: LogReadParams): Record<string, unknown> {
   const logId = log.logId;
-  const head = log.head().seq;
-  if (p.since > head) throw bad('since-ahead', `since ${p.since} is past the head ${head}`);
+  // Aegis L6: since-ahead is judged against the RELEASED head, as subscribe does (an unreleased row is not a reader's)
+  const released = log.releasedHead();
+  if (p.since > released) throw bad('since-ahead', `since ${p.since} is past the released head ${released}`);
   const rows: Array<LogView | OversizeView> = [];
   let total = 0;
   const page = log.readPage({

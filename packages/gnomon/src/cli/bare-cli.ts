@@ -27,6 +27,7 @@
  *     BEFORE the call, rule 7), and the `already-running` refusal (exit 3).
  * Also `gnomon help | --help | -h` (GNOMON_HELP). Zero deps (G-SEC-01).
  */
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -196,12 +197,13 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
         // the folder rides as cwdHint only when it fits the fragment (HINT_MAX_BYTES, the same cap gui.open applies)
         g = await requestRunningLaunch(home, suffix !== null ? folder : undefined);
       } catch (x) {
-        if (x instanceof UpRefusal) return alreadyRunning(`, and it did not hand this terminal a launch URL (${x.reason}: ${x.message})`, x.next);
+        if (x instanceof UpRefusal) return alreadyRunning(`, and it did not hand this terminal a launch URL (${sanitizeDisplayText(x.reason).text}: ${sanitizeDisplayText(x.message).text})`, x.next);
         throw x;
       }
       io.stdout.write(`ATTACHED  gnomon (to the running kernel: ${which})\n`);
       readout(io.stdout, [['home', home], ['folder', `${shown}  (${where}${note}; a suggestion: the GUI asks before opening)`]]);
-      const hint = typeof g.cwdHint === 'string' ? hintSuffix(g.cwdHint) ?? '' : '';
+      // Aegis L4: the fragment is built from THIS process's already-capped folder, never the kernel's echoed cwdHint
+      const hint = suffix ?? '';
       await presentUrl(io.stdout, `${g.url}${hint}`, upOpener(deps, { noOpen }), 'open this in your browser within 60 s (single use)');
       return 0;
     },

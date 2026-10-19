@@ -858,7 +858,13 @@ components:
       caller's connection closed during the mint is withdrawn
       (GuiAccess.withdraw via WebEndpoint.withdrawLaunch, Aegis L2), never
       left pending. Falsified in test/gui-open.test.ts and
-      test/human-device-verbs.test.ts.
+      test/human-device-verbs.test.ts. Hardening: requestRunningLaunch
+      refuses a gui.open grant whose url fails isOpenableUrl
+      (gui-open-bad-grant) and sanitizes the server's refusal text
+      (sanitizeDisplayText); bare entry builds `&cwd=` from its own capped
+      folder, never the kernel's echoed cwdHint (Aegis L3, L4). log.read's
+      one-page since-ahead is judged against releasedHead(), as subscribe
+      does (Aegis L6).
       Also `gnomon help|--help|-h` (GNOMON_HELP, one line per verb) and an
       unknown verb → usage exit 64 without echoing it.
       scripts/install-darwin.mjs is the idempotent installer (build, link

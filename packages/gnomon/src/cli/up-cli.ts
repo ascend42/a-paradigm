@@ -38,7 +38,8 @@
  */
 import { hasIdentityFile } from '../kernel/identity/index.js';
 import { runGuiSetup, type GuiSetupDeps } from './setup-cli.js';
-import { terminalOpener, type BrowserOpener } from './open-browser.js';
+import { isOpenableUrl, terminalOpener, type BrowserOpener } from './open-browser.js';
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { deviceRegistered } from '../kernel/setup/setup-endpoint.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -241,9 +242,13 @@ export async function requestRunningLaunch(home: string, cwdHint: string | undef
       if ('error' in r) {
         const d = (r.error.data ?? {}) as { reason?: unknown; data?: { reason?: unknown } };
         const why = typeof d.data?.reason === 'string' ? d.data.reason : typeof d.reason === 'string' ? d.reason : 'refused';
-        throw new UpRefusal(`gui-open-${why}`, `the running kernel refused gui.open: ${r.error.message}`);
+        // Aegis L3: the server's words are display text, sanitized before any terminal sees them
+        throw new UpRefusal(`gui-open-${why}`, `the running kernel refused gui.open: ${sanitizeDisplayText(String(r.error.message)).text}`);
       }
-      return r.result as RunningLaunchGrant;
+      const g = r.result as RunningLaunchGrant;
+      // Aegis L3: a URL that is not the openable loopback launch URL is never printed or opened
+      if (!g || typeof g !== 'object' || !isOpenableUrl(g.url)) throw new UpRefusal('gui-open-bad-grant', 'the running kernel answered gui.open with a URL that is not an openable loopback launch URL; nothing is printed or opened');
+      return g;
     } finally {
       await s.conn.close().catch(() => undefined);
     }
