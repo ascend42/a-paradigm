@@ -275,6 +275,8 @@ interface Session {
   spawnPermit: PermitV1;
   /** FIFO: the head is the turn the next result closes */
   turnPermits: string[];
+  /** kernel clock (ms) when the last model turn closed (its result), for the #gnomon-voice busy guard (V2a) */
+  lastTurnEndAt?: number;
   watchHash: string;
   gitHash: string;
   layerInput: Law7Input;
@@ -856,6 +858,7 @@ export class SessionSupervisor {
       case 'result': {
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError });
         const head = s.turnPermits.shift(); // reviewer 7: FIFO — this result closes the oldest turn only
+        s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         this.#wake(); // §2.4 rule 11: a turn boundary
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
@@ -1083,6 +1086,16 @@ export class SessionSupervisor {
     const s = typeof hsid === 'string' ? this.#sessions.get(hsid) : undefined;
     if (!s || s.owner !== principal) throw refused('NOT_FOUND', 'no such session for this principal', { reason: 'not-found' });
     return s;
+  }
+
+  /**
+   * #gnomon-voice V2a kernel-side busy (TD-2026-10-19-298): is the session's model turn streaming now (from turn.sent
+   * until its result), and when (kernel clock) did the last turn close. The supervisor's own state, never a client claim.
+   */
+  turnBusy(hsid: string): { streaming: boolean; endedAt: number | null } {
+    const s = this.#sessions.get(hsid);
+    if (s) return { streaming: s.state === 'running' && s.turnPermits.length > 0, endedAt: s.lastTurnEndAt ?? null };
+    return this.#local.turnBusy(hsid);
   }
 
   /** The owner principal of a live session (Claude or local), or undefined (#gnomon-voice attachment, V1). */

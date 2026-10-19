@@ -60,6 +60,8 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'budget.subscriptionWindow.windowMs': 'limit',
   'web.port': 'ordinal',
   'voice.echoTailMs': 'limit', // configured echo tail (spec §14.7 config)
+  'voice.ambientIdleMs': 'limit', // configured idle auto-off of a conversation ceiling (V2a, spec §14.7 config)
+  'voice.turns.n': 'gauge', // voice.turn.user rows of the current attachment
 });
 
 export interface StatusNumberFinding {

@@ -124,6 +124,8 @@ interface LocalSession {
   exited: Promise<void>;
   spawnPermit: PermitV1;
   turnPermits: string[];
+  /** kernel clock (ms) when the last model turn closed (#gnomon-voice busy guard, V2a) */
+  lastTurnEndAt?: number;
   state: 'running' | 'stopping' | 'exited';
   turns: number;
   seq: number;
@@ -506,6 +508,7 @@ export class LocalLane {
       case 'end': {
         await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}) });
         const head = s.turnPermits.shift();
+        s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         return;
       }
@@ -523,6 +526,12 @@ export class LocalLane {
     const s = typeof hsid === 'string' ? this.#sessions.get(hsid) : undefined;
     if (!s || s.owner !== principal) throw refused('NOT_FOUND', 'no such session for this principal', { reason: 'not-found' });
     return s;
+  }
+
+  /** #gnomon-voice V2a: the local session's model turn is streaming now / when its last turn closed (kernel clock). */
+  turnBusy(hsid: string): { streaming: boolean; endedAt: number | null } {
+    const s = this.#sessions.get(hsid);
+    return { streaming: !!s && s.state === 'running' && s.turnPermits.length > 0, endedAt: s?.lastTurnEndAt ?? null };
   }
 
   /** The owner of a live local session, or undefined (#gnomon-voice attachment). */
