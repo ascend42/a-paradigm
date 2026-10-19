@@ -355,7 +355,10 @@ export class SessionSupervisor {
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
+        claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
       });
+      // fail closed, reported: no transcript carve-back means this session cannot be resumed
+      if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
         if (!b) return {};

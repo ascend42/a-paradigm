@@ -16,7 +16,8 @@ import http from 'node:http';
 import net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
 import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin/session-sbpl.js';
@@ -103,6 +104,8 @@ echo hi > ./wrote.txt 2>/dev/null && echo "write_work=ok" || echo "write_work=fa
 (echo x > "${w.linked}/x") 2>/dev/null && echo "write_linked=allowed" || echo "write_linked=blocked"
 (echo x > "${w.userHome}/.claude/settings.json") 2>/dev/null && echo "write_user_claude=allowed" || echo "write_user_claude=blocked"
 (echo x > "${w.userHome}/.claude.json") 2>/dev/null && echo "write_claude_json=allowed" || echo "write_claude_json=blocked"
+mkdir -p "${w.userHome}/.claude/projects/-enc-dir" 2>/dev/null && echo '{"a":1}' > "${w.userHome}/.claude/projects/-enc-dir/t.jsonl" 2>/dev/null && echo '{"b":2}' >> "${w.userHome}/.claude/projects/-enc-dir/t.jsonl" 2>/dev/null && echo "write_transcript=ok" || echo "write_transcript=fail"
+(echo x > "${w.userHome}/.claude/plugins.json") 2>/dev/null && echo "write_claude_other=allowed" || echo "write_claude_other=blocked"
 (echo x > "${w.cwd}/.claude/settings.json") 2>/dev/null && echo "write_project_claude=allowed" || echo "write_project_claude=blocked"
 (echo x > "${w.cwd}/CLAUDE.md") 2>/dev/null && echo "write_claude_md=allowed" || echo "write_claude_md=blocked"
 (echo x > "${w.cwd}/.git/hooks/pre-commit") 2>/dev/null && echo "write_git_hook=allowed" || echo "write_git_hook=blocked"
@@ -144,7 +147,7 @@ sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_s
 `,
     { mode: 0o755 },
   );
-  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port, bd, [{ path: own, match: 'subpath' }, { path: path.join(w.home, 'bin', 'claude-copy'), match: 'literal' }]), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
+  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port, bd, [{ path: own, match: 'subpath' }, { path: path.join(w.home, 'bin', 'claude-copy'), match: 'literal' }], { claudeTranscripts: true }), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
   const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: w.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });
   out = Object.fromEntries(r.stdout.split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
 }, 90_000);
@@ -244,5 +247,61 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
   });
   it('G-SBX-04 osascript, G-SBX-05 launchctl, G-SBX-06 open — and lsregister — cannot exec (P8-D80)', () => {
     for (const k of ['osascript_exit', 'launchctl_exit', 'open_exit', 'lsregister_exit']) expect(out[k], k).toBe('126');
+  });
+});
+
+describe.skipIf(!SANDBOX_OK)('TD-2026-10-19-814 item 1: Claude Code transcripts are writable, the rest of ~/.claude is not (darwin, macOS 15+, SIP enabled; probe p-resume)', () => {
+  it('world home: a transcript under ~/.claude/projects is created and appended; ~/.claude/settings.json, ~/.claude.json and another ~/.claude file stay unwritable', () => {
+    expect(out).toMatchObject({ write_transcript: 'ok', write_user_claude: 'blocked', write_claude_json: 'blocked', write_claude_other: 'blocked' });
+    expect(fs.readFileSync(path.join(w.userHome, '.claude', 'projects', '-enc-dir', 't.jsonl'), 'utf8')).toBe('{"a":1}\n{"b":2}\n');
+  });
+
+  // the REAL $HOME (the path Claude Code writes): only uniquely named temp entries, removed after; no real ~/.claude file is touched
+  const realHome = fs.realpathSync(os.homedir());
+  const realClaude = path.join(realHome, '.claude');
+  const tag = `gnomon-sbx-probe-${process.pid}-${randomBytes(6).toString('hex')}`;
+  const probeDir = path.join(realClaude, 'projects', tag);
+  const probeDenied = path.join(realClaude, tag);
+  const created: string[] = [];
+  let x: SessionWorld | null = null;
+  afterEach(() => {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+    fs.rmSync(probeDenied, { recursive: true, force: true });
+    for (const d of created.reverse()) {
+      try {
+        fs.rmdirSync(d); // only dirs THIS test made, and only if still empty
+      } catch {
+        /* not empty: something else wrote there since; leave it */
+      }
+    }
+    created.length = 0;
+    x?.cleanup();
+    x = null;
+  });
+  it('real $HOME: a sandboxed process creates and appends $HOME/.claude/projects/<unique>/t.jsonl; $HOME/.claude/<unique> is refused', () => {
+    for (const d of [realClaude, path.join(realClaude, 'projects')]) {
+      if (!fs.existsSync(d)) {
+        fs.mkdirSync(d); // a CI runner without ~/.claude: the kernel's world, minus Claude Code having run once
+        created.push(d);
+      }
+    }
+    x = sessionWorld();
+    const policy = worldPolicy(x, null, [], [], { claudeTranscripts: true, userClaudeDir: realClaude });
+    expect(policy.allowWrite.map((a) => a.path)).toEqual([path.join(realClaude, 'projects')]);
+    const script = path.join(x.root, 'transcripts.sh');
+    fs.writeFileSync(
+      script,
+      `#!/bin/bash
+mkdir "${probeDir}" 2>/dev/null && echo '{"a":1}' > "${probeDir}/t.jsonl" 2>/dev/null && echo '{"b":2}' >> "${probeDir}/t.jsonl" 2>/dev/null && echo "real_transcript=ok" || echo "real_transcript=fail"
+(echo x > "${probeDenied}") 2>/dev/null && echo "real_claude_other=allowed" || echo "real_claude_other=blocked"
+`,
+      { mode: 0o755 },
+    );
+    const plan = sessionLaunchPlan({ policy, binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: realHome, roots: [x.cwd] } }, 'darwin');
+    const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: realHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 30_000 });
+    const res = Object.fromEntries(r.stdout.split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+    expect(res).toMatchObject({ real_transcript: 'ok', real_claude_other: 'blocked' });
+    expect(fs.readFileSync(path.join(probeDir, 't.jsonl'), 'utf8')).toBe('{"a":1}\n{"b":2}\n');
+    expect(fs.existsSync(probeDenied)).toBe(false);
   });
 });

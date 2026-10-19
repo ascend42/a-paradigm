@@ -1928,6 +1928,21 @@ components:
       grants of the responsible process + the reachable pasteboard are spec
       §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed
       app); the csrutil parser test keeps the exact macOS 15 stdout fixture.
+      TRANSCRIPTS (TD-2026-10-19-814 item 1, probe p-resume darwin; profile
+      v5): a Claude Code session (supervisor claudeTranscripts: true; local
+      sessions never) gets policy.allowWrite = [<userClaudeDir>/projects,
+      subpath], rendered (allow file-write* ...) AFTER the ~/.claude write
+      deny (SBPL last match wins), then (deny file-write* ...) again on
+      policy.denyWriteAlways (denies inside the carve-back) + the T-008 git
+      regexes; no later rule allows writes. ~/.claude/settings*, plugins,
+      CLAUDE.md, the rest of ~/.claude and ~/.claude.json stay denied. The
+      allow is derived from the user Claude dir only (a flag, never an input
+      path: no manifest can widen it) and WITHHELD fail closed
+      (allowWriteRefused, logged session.sandbox{phase:'transcripts-withheld'})
+      when projects resolves elsewhere (symlink) or another deny covers it.
+      policy.json's Edit deny on ~/.claude/** is unchanged. Residual: Claude
+      Code auto-memory (~/.claude/projects/<cwd>/memory/) is inside the
+      carve-back. Linux/Windows: data only, no backend.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

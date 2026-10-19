@@ -33,6 +33,13 @@
  *     worktree `.claude/**` and `CLAUDE*.md` (prefix), and the same pair for
  *     every memory-chain dir (P8-D97, `memoryDirs`); every input layersHash
  *     reads is covered (test-proved);
+ *   - transcripts (write ALLOW, TD-2026-10-19-814 item 1, probe p-resume
+ *     darwin): `<userClaudeDir>/projects/**` is carved back out of the
+ *     `~/.claude` write deny for a Claude session (`claudeTranscripts`), so
+ *     Claude Code saves transcripts and `--resume` works; the rest of
+ *     `~/.claude` and `~/.claude.json` stay denied, any other deny inside the
+ *     carve-back is re-denied after it (`denyWriteAlways`), and the allow is
+ *     withheld (`allowWriteRefused`) if the dir links elsewhere;
  *   - git (write, Aegis F9; a spec amendment to §15.5): `.git/hooks/**`,
  *     `.git/config`, `.git/info/**` of the cwd and worktree (and the common
  *     git dir of a linked worktree) — the gitHash inputs;
@@ -78,7 +85,7 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts';
 }
 
 export interface SessionPolicy {
@@ -97,6 +104,16 @@ export interface SessionPolicy {
   /** re-denied AFTER allowRead (belt and braces: keys + the kernel log stay unreadable whatever is allowed) */
   denyReadAlways: PolicyPath[];
   denyWrite: PolicyPath[];
+  /**
+   * TD-2026-10-19-814 item 1 (probe p-resume, darwin): writes carved back out of denyWrite, rendered AFTER it (last
+   * match wins). Only ever `<userClaudeDir>/projects` (subpath) — Claude Code's transcripts, so `--resume` works —
+   * and only for a Claude session (`claudeTranscripts`). Never an input path: no manifest or caller can name one.
+   */
+  allowWrite: PolicyPath[];
+  /** denyWrite entries lying inside an allowWrite path, re-denied AFTER it so the carve-back reopens nothing else */
+  denyWriteAlways: PolicyPath[];
+  /** why the transcript carve-back was withheld (fail closed: no allow), when `claudeTranscripts` asked for it */
+  allowWriteRefused?: string;
   /** outbound loopback connects refused to these ports (the web endpoint) */
   denyLoopbackPorts: number[];
   /** process-info on every process but self (process-info*, sysctl process lists, the sysmond lookup on macOS) */
@@ -163,6 +180,29 @@ export interface SessionPolicyInput {
    * settings-class write-deny literal, so a session cannot plant or rewrite what an approved memory file imports.
    */
   memoryImports?: readonly string[];
+  /**
+   * TD-2026-10-19-814 item 1: a Claude Code session — carve `<userClaudeDir>/projects` (its transcripts) back out of
+   * the `~/.claude` write deny. A flag, not a path: the carve-back is derived here and nowhere else, so nothing a
+   * project supplies can widen it to another `~/.claude` path. Withheld (allowWriteRefused) when its realpath is not
+   * exactly `realpath(userClaudeDir)/projects` or another write deny covers it.
+   */
+  claudeTranscripts?: boolean;
+}
+
+/** The one write carve-back (TD-2026-10-19-814): Claude Code's transcript dir, relative to the user Claude dir. */
+export const CLAUDE_TRANSCRIPTS_REL = 'projects';
+
+/** Does deny `d` cover path `p` (equal, or an ancestor for subpath / a string prefix for prefix)? Regex matches are judged by the caller. */
+function covers(d: PolicyPath, p: string): boolean {
+  if (d.match === 'literal') return d.path === p;
+  if (d.match === 'prefix') return p.startsWith(d.path);
+  if (d.match === 'subpath') return p === d.path || p.startsWith(d.path.endsWith(path.sep) ? d.path : d.path + path.sep);
+  return false;
+}
+
+/** Is `p` at or below `root`? */
+function within(p: string, root: string): boolean {
+  return p === root || p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
 }
 
 /** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
@@ -287,6 +327,22 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
   });
   const git = gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git')]);
+  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]);
+  // TD-2026-10-19-814 item 1: the transcript carve-back. Fail closed (no allow) when ~/.claude/projects is a link
+  // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
+  // `.claude` dirs anywhere) covers it — the allow must reopen exactly ~/.claude/projects and nothing else.
+  const allowWrite: PolicyPath[] = [];
+  let allowWriteRefused: string | undefined;
+  if (inp.claudeTranscripts) {
+    const claudeReal = realpathLoose(inp.userClaudeDir);
+    const want = path.join(claudeReal, CLAUDE_TRANSCRIPTS_REL);
+    const real = realpathLoose(path.join(inp.userClaudeDir, CLAUDE_TRANSCRIPTS_REL));
+    const other = denyWrite.filter((d) => d.match !== 'steering' && d.match !== 'dep-steering' && !(d.match === 'subpath' && d.path === claudeReal) && covers(d, real));
+    if (real !== want) allowWriteRefused = `transcript dir resolves outside the user Claude dir (${real})`;
+    else if (other.length) allowWriteRefused = `transcript dir is covered by another write deny (${other.map((d) => `${d.class}:${d.match}:${d.path}`).join(', ')})`;
+    else allowWrite.push({ path: real, match: 'subpath', class: 'transcripts' });
+  }
+  const denyWriteAlways = uniq(denyWrite.filter((d) => allowWrite.some((a) => d.path !== a.path && within(d.path, a.path))));
   if (inp.endpointPort !== null && !(Number.isInteger(inp.endpointPort) && inp.endpointPort > 0 && inp.endpointPort < 65536)) {
     throw new TypeError(`#manifest-loader: endpoint port must be 1..65535 or null, got ${String(inp.endpointPort)}`);
   }
@@ -297,7 +353,10 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     allowRead: uniq(allowRead),
     allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
     denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),
-    denyWrite: uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]),
+    denyWrite,
+    allowWrite,
+    denyWriteAlways,
+    ...(allowWriteRefused ? { allowWriteRefused } : {}),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',
     launchers: 'deny',

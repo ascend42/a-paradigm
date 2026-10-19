@@ -15,7 +15,9 @@
  *   - `file-write*` deny on
  *     policy.denyWrite + the T-008 git denies (a `.git` POINTER FILE literal,
  *     `<gitDir>/config.worktree`, `<commonDir>/modules/**​/{hooks,config,info}`
- *     by regex);
+ *     by regex), then `allow file-write*` on policy.allowWrite (only
+ *     `~/.claude/projects`, TD-2026-10-19-814) and `file-write*` deny again on
+ *     policy.denyWriteAlways (denies inside the carve-back);
  *   - `network-outbound (remote ip "localhost:<port>")` per endpoint port;
  *   - `process-info*` denied except self, `kern.proc` sysctl, and the
  *     `com.apple.sysmond` mach-lookup (without it pgrep reads every argv);
@@ -62,7 +64,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 4; // 4: T-2026-10-18-028 M5 helper exec/read denies
+export const SESSION_PROFILE_VERSION = 5; // 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -193,6 +195,16 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   if (policy.allowReadMetadata.length) lines.push(`(allow file-read-metadata ${policy.allowReadMetadata.map(filter).join(' ')})`);
   if (policy.denyReadAlways.length) lines.push(`(deny file-read* ${policy.denyReadAlways.map(filter).join(' ')})`);
   lines.push(`(deny file-write* ${[...policy.denyWrite.map(filter), ...git.filters].join(' ')})`);
+  // TD-2026-10-19-814 item 1 (probe p-resume): the transcript carve-back AFTER the ~/.claude deny (last match wins),
+  // then every deny inside it again (and the T-008 git denies, whose regexes cannot be judged by path: harmless
+  // repeats); no later rule in this profile allows file-write*
+  // a policy object without the fields (built before TD-2026-10-19-814) renders no carve-back: fail closed
+  const allowWrite = policy.allowWrite ?? [];
+  if (allowWrite.length) {
+    lines.push(`(allow file-write* ${allowWrite.map(filter).join(' ')})`);
+    const again = [...(policy.denyWriteAlways ?? []).map(filter), ...git.filters];
+    if (again.length) lines.push(`(deny file-write* ${again.join(' ')})`);
+  }
   for (const port of policy.denyLoopbackPorts) lines.push(`(deny network-outbound (remote ip "localhost:${port}"))`);
   if (policy.processInfo === 'deny-others') {
     lines.push('(deny process-info*)', '(allow process-info* (target self))', '(deny sysctl-read (sysctl-name-prefix "kern.proc"))', '(deny mach-lookup (global-name "com.apple.sysmond"))');
