@@ -2406,6 +2406,15 @@ flows:
       deadline. macOS keeps the sealed fd (kqueue never reports the FIFO
       writer's close, losing the no-ready-line fallback). Residual: win32
       handle inheritance; pid + socketPath pin applies on every channel.
+      `gnomon daemon status` PINS (T-2026-10-19-016(a)): an unpinned hello
+      learns only the CLAIMED serverKeyId; the pin is read from the home
+      (root-signed registry kernel row, else keys/kernel-pub.jsonl =
+      pinSource home-kernel-pub, same-user custody partial) and a fresh
+      pinned hello must verify, then `running:true, serverVerified:true,
+      pinSource`. A key the home does not know prints `running:null,
+      answering:true, serverVerified:false` with clientApi/serverKeyId only
+      under `unverified` (exit 0); a known key whose serverSig fails is
+      refused (exit 1). Never running:true on an unverified hello.
       Exit codes are defined ONLY in
       lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
       75 transient, 78 config; config/superseded never restart, transient

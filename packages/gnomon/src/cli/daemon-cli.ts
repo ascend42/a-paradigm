@@ -5,11 +5,17 @@
  * Writes to stdio directly: the kernel has zero deps (G-SEC-01) and cannot use
  * the Paradigm logger; #kernel-log brings structured logging at M1.2.
  *
- * M1.4 slice 1: `gnomon daemon status` sends `hello` only. It does NOT
- * verify serverSig (that needs a root-signed kernel-key row, #identity M1.3)
- * and does NOT authenticate or call `status` (no registered device before
- * M1.3): it reports `running` from the hello with `serverVerified:false,
- * authenticated:false` and the reason; the pidfile pid is shown as a
+ * `gnomon daemon status` sends `hello` and does NOT authenticate or call
+ * `status`. It PINS the hello's serverSig (T-2026-10-19-016(a)): the
+ * kernel key the hello names must be in this home's root-signed registry
+ * (pinSource `registry`) or in the home's own `keys/kernel-pub.jsonl`
+ * (pinSource `home-kernel-pub`: same-user, not root-signed — custody
+ * `partial`), and a fresh pinned hello must verify against it. Only then is
+ * `running:true` printed. A hello whose key the home does not know is NOT
+ * proof of a kernel (a socket squatter can claim any key id): it prints
+ * `running:null, answering:true, serverVerified:false` with what the server
+ * claimed nested under `unverified`. A hello whose key IS known but whose
+ * signature does not verify is refused. The pidfile pid is shown as a
  * diagnostic only (§2.4: never trusted). `gnomon daemon stop` is
  * approval-signed (§3.1 I3) and refused locally until #approval-broker (M1.6):
  * there is no `daemon.stop` verb — the socket surface is exactly 12 verbs + 2
@@ -36,7 +42,9 @@ import {
   startDaemon,
 } from '../kernel/lifecycle/index.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
-import { IdentityError, openHardwareIdentity } from '../kernel/identity/index.js';
+import { IdentityError, openHardwareIdentity, readKernelPubs, readRegistry } from '../kernel/identity/index.js';
+import type { ServerKeyPin } from '../kernel/socket/client.js';
+import { homeTrust } from './mod-cli.js';
 import { refuse, refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
@@ -260,10 +268,33 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
     );
     return EXIT_REFUSED;
   }
+  const client = { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' as const };
   try {
-    const session = await connectGnomon({ socketPath: sock, client: { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' } });
-    await session.conn.close();
+    // 1) an unpinned hello only learns which key the server CLAIMS to hold
+    const probe = await connectGnomon({ socketPath: sock, client });
+    await probe.conn.close();
     const st = daemonState(home, sock);
+    const diagnosticPid = st.state === 'running' ? st.pidfile.pid : null;
+    const found = kernelPinOf(home, probe.hello.serverKeyId);
+    if (!found) {
+      // never `running:true` on an unverified hello: a squatter can claim any key id
+      process.stdout.write(
+        `${JSON.stringify({
+          running: null,
+          answering: true,
+          socketPath: sock,
+          serverVerified: false,
+          authenticated: false,
+          unverified: { clientApi: probe.hello.clientApi, serverKeyId: probe.hello.serverKeyId },
+          reason: 'unverified-server: the key this server names is in neither the root-signed registry nor this home\'s kernel-pub.jsonl, so its hello proves nothing',
+          diagnosticPid,
+        })}\n`,
+      );
+      return EXIT_OK;
+    }
+    // 2) a fresh hello (new clientNonce) whose serverSig must verify against the pin
+    const session = await connectGnomon({ socketPath: sock, client, serverKey: found.pin });
+    await session.conn.close();
     process.stdout.write(
       `${JSON.stringify({
         running: true,
@@ -271,9 +302,10 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
         clientApi: session.hello.clientApi,
         serverKeyId: session.hello.serverKeyId,
         serverVerified: session.serverVerified,
+        pinSource: found.source,
         authenticated: false,
-        reason: 'root-unprovisioned: no root-signed kernel-key or device row until #identity M1.3',
-        diagnosticPid: st.state === 'running' ? st.pidfile.pid : null,
+        reason: 'status sends hello only; it does not authenticate',
+        diagnosticPid,
       })}\n`,
     );
     return EXIT_OK;
@@ -286,6 +318,22 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
     process.stdout.write(`${JSON.stringify({ running: false, state: st.state })}\n`);
     return EXIT_NOT_RUNNING;
   }
+}
+
+/**
+ * The pin for `keyId`, read from the home (never from the server): the
+ * root-signed registry first, else the home's same-user kernel-pub.jsonl.
+ */
+export function kernelPinOf(home: string, keyId: string): { pin: ServerKeyPin; source: 'registry' | 'home-kernel-pub' } | null {
+  if (typeof keyId !== 'string' || keyId === '') return null;
+  try {
+    const pem = readRegistry(home, homeTrust(home)).kernelKeys.get(keyId);
+    if (pem) return { pin: { keyId, publicKeyPem: pem }, source: 'registry' };
+  } catch {
+    /* no registry: fall through */
+  }
+  const pub = readKernelPubs(home).find((k) => k.keyId === keyId);
+  return pub ? { pin: { keyId, publicKeyPem: pub.publicKeyPem }, source: 'home-kernel-pub' } : null;
 }
 
 function usage(msg: string): number {

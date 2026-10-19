@@ -33,6 +33,7 @@ import {
   SUN_PATH_SAFE,
   type DaemonHandle,
 } from '../src/kernel/lifecycle/index.js';
+import { readKernelPubs, recordKernelPub } from '../src/kernel/identity/index.js';
 import { PKG_ROOT } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
 
@@ -336,7 +337,9 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
       running: true,
       socketPath: ready.socketPath,
       clientApi: 'gnomon-rpc:v1',
-      serverVerified: false,
+      // T-2026-10-19-016(a): pinned against the key this home's daemon recorded
+      serverVerified: true,
+      pinSource: 'home-kernel-pub',
       authenticated: false,
       diagnosticPid: ready.pid,
     });
@@ -348,6 +351,47 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     const after = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
     expect(after.status).toBe(3);
     expect(JSON.parse(after.stdout)).toEqual({ running: false, state: 'stopped' });
+  });
+
+  it('T-2026-10-19-016(a): a squatter whose key the home does not know is never reported running:true; a known key with a bad sig is refused', async () => {
+    // the "squatter": a proxy on h1's endpoint that relays to a real kernel of an UNRELATED home h2
+    const h1 = home();
+    const h2 = home();
+    const real = await daemon(h2);
+    ensureGnomonHome(h1);
+    const sel = selectSocketPath({ home: h1 });
+    if (!sel.ok) throw new Error(sel.reason);
+    const proxy = net.createServer((c) => {
+      c.on('error', () => undefined);
+      const up = net.connect(real.pidfile.socketPath!);
+      up.on('error', () => c.destroy());
+      c.pipe(up);
+      up.pipe(c);
+    });
+    proxy.on('error', () => undefined);
+    await new Promise<void>((r) => proxy.listen(sel.path, () => r()));
+    cleanups.push(() => new Promise<void>((r) => proxy.close(() => r())));
+    const run = (): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+      new Promise((resolve) => {
+        const c = spawn(process.execPath, [GNOMON, 'daemon', 'status', '--home', h1], { stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        c.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+        c.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+        c.on('close', (code) => resolve({ code, stdout, stderr }));
+      });
+    const r1 = await run();
+    expect(r1.code, r1.stderr).toBe(0);
+    const out = JSON.parse(r1.stdout) as Record<string, unknown>;
+    expect(out.running).not.toBe(true);
+    expect(out).toMatchObject({ running: null, answering: true, serverVerified: false, unverified: { clientApi: 'gnomon-rpc:v1' } });
+    expect(out).not.toHaveProperty('serverKeyId');
+    // now h1 "knows" h2's key, but the relayed serverSig is bound to h2's endpoint: refused, not running
+    recordKernelPub(h1, readKernelPubs(h2)[0]!.publicKeyPem);
+    const r2 = await run();
+    expect(r2.code).toBe(1);
+    expect(r2.stdout).toBe('');
+    expect(JSON.parse(r2.stderr)).toMatchObject({ refused: true });
   });
 
   it('G-DMN-03 + G-DMN-05: --detach activates a daemon with the clean env (no NODE_OPTIONS / GNOMON_*), which then idles out', async () => {
