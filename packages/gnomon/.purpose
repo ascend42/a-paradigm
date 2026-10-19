@@ -137,6 +137,21 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    ownership: >-
+      T-2026-10-19-009 item 2 (spec §2.4 rule 1, Orca audit Adopt 2): never
+      treat "can't tell" as "dead". listenSocket refuses a socket directory
+      that is not ours and 0700 (assertPrivateDir: no bind-then-chmod
+      window), binds a private random sibling name (.s<8 hex>), chmods and
+      reads it back, then publishes: link() when the public name is free,
+      else rename() over it only after probeSocketHolder proved the old
+      holder dead (ECONNREFUSED). A connect = live holder; timeout, EPERM or
+      any other error = undecided; both refused endpoint-busy{holder} and the
+      old socket is left in place. Node's server.close() unlinks only the
+      private bind name; close() removes the public name only while its
+      dev+ino equal the socket we published (pinned by our live listener).
+      pidfile.ts no longer unlinks the socket (acquire or release). Peer uid:
+      Node has no getpeereid — 0700 dir + 0600 socket + M1.4 mutual auth are
+      the boundary. Tests: test/socket-ownership.test.ts (POSIX, registry row).
     status-numbers: >-
       M1.12 slice 3 (§9.1 G-HON-03, §9.6, G-HON-07): status-numbers.ts declares
       every numeric status leaf that is neither {n, of} nor a gauge `n` —
@@ -2245,6 +2260,7 @@ flows:
       - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
       - test/daemon-children-tree.test.ts
+      - test/socket-ownership.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 

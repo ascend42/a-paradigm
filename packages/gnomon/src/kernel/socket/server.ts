@@ -13,14 +13,32 @@
  * `closeAfter` is answered, then the connection is ended and every later frame
  * on it is ignored (§4.9: failed auth closes after one AUTH refusal).
  *
+ * Socket ownership (T-2026-10-19-009 item 2, Orca audit "Adopt 2"): the
+ * directory must be ours and 0700 (assertPrivateDir), so there is no
+ * bind-then-chmod window. The server binds a PRIVATE random sibling name,
+ * chmods and reads it back, then publishes it: link() when the public name is
+ * free, else rename() over it only after a connect probe proved the old
+ * holder dead (ECONNREFUSED). A connect that succeeds is a live holder; a
+ * timeout, EPERM or any other error is "undecided" — both are refused
+ * (`endpoint-busy`, detail.holder) and the old socket is never deleted.
+ * Node's server.close() silently unlinks the BIND name; that is the private
+ * name, so close never unlinks the public one. close() removes the public
+ * name itself only while its dev+ino still equal the socket we published
+ * (pinned by our still-bound listener, so not recycled): a successor's socket
+ * is never removed. Peer uid: Node has no getpeereid/SO_PEERCRED; the 0700
+ * directory plus the 0600 socket and the M1.4 mutual signatures are the
+ * boundary (documented, not a runtime uid check).
+ *
  * M1.4 slice 2: the context also exposes server→client NOTIFICATIONS
  * (`notify`, used by log.read{follow} subscriptions), the connection's unsent
  * byte count and high-water mark, a drain hook, and `afterReply` (run right
  * after the current request's reply is written, so a subscription's first
  * `event` can never overtake the reply that names it).
  */
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
+import * as path from 'node:path';
 import { monotonicUlidFactory, mintId } from '@a-company/gnomon-contracts';
 import { currentUid } from '../lifecycle/home.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
@@ -66,6 +84,8 @@ export type SocketEvent =
 
 export interface SocketServerOptions {
   socketPath: string;
+  /** How long a connect probe may take before the old holder is "undecided" (default 1 s). */
+  holderProbeMs?: number;
   handle: RpcHandler;
   maxFrameBytes?: number;
   /** Inbound frame cap before auth (default 16 KiB, never above maxFrameBytes). */
@@ -99,6 +119,87 @@ export function verifySocketAcl(socketPath: string, mode: number = SOCKET_MODE):
   if (got !== mode) {
     throw new LifecycleRefusal('endpoint-acl', `${socketPath} mode ${got.toString(8)} is not ${mode.toString(8)}`);
   }
+}
+
+export const DEFAULT_HOLDER_PROBE_MS = 1_000;
+
+/** The socket directory must be ours and 0700 (no group/other bits): no bind-then-chmod window exists inside it. */
+export function assertPrivateDir(dir: string): void {
+  const st = fs.lstatSync(dir);
+  const uid = currentUid();
+  if (!st.isDirectory()) throw new LifecycleRefusal('endpoint-acl', `${dir} is not a directory`);
+  if (uid !== null && st.uid !== uid) throw new LifecycleRefusal('endpoint-acl', `${dir} is owned by uid ${st.uid}, not ${uid}`);
+  if (uid !== null && (st.mode & 0o077) !== 0) throw new LifecycleRefusal('endpoint-acl', `${dir} mode ${(st.mode & 0o777).toString(8)} is not 0700: the socket would be reachable during bind`);
+}
+
+/** A short random sibling name (sun_path is ~104 bytes): `.s<8 hex>` beside the public name. */
+function privateBindName(socketPath: string): string {
+  return path.join(path.dirname(socketPath), `.s${randomBytes(4).toString('hex')}`);
+}
+
+export type HolderProbe = { holder: 'alive' } | { holder: 'dead' } | { holder: 'gone' } | { holder: 'undecided'; why: string };
+
+/**
+ * Prove the holder of a unix socket dead by connecting (§2.4 rule 1, Orca audit "Adopt 2"): ECONNREFUSED is the
+ * ONLY proof of death; ENOENT means nothing is there; a connect is alive; a timeout, EPERM, EACCES or anything
+ * else is UNDECIDED — "can't tell" is never "dead".
+ */
+export function probeSocketHolder(socketPath: string, timeoutMs: number = DEFAULT_HOLDER_PROBE_MS, connect: (p: string) => net.Socket = (p) => net.createConnection(p)): Promise<HolderProbe> {
+  return new Promise((resolve) => {
+    let done = false;
+    const s = connect(socketPath);
+    const finish = (r: HolderProbe): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      s.destroy();
+      resolve(r);
+    };
+    const t = setTimeout(() => finish({ holder: 'undecided', why: 'timeout' }), timeoutMs);
+    s.once('connect', () => finish({ holder: 'alive' }));
+    s.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ECONNREFUSED') finish({ holder: 'dead' });
+      else if (err.code === 'ENOENT') finish({ holder: 'gone' });
+      else finish({ holder: 'undecided', why: err.code ?? 'error' });
+    });
+  });
+}
+
+/**
+ * Publish the privately bound socket at `target`: link() when the name is free (never replaces anything); when
+ * the name is taken, replace it by rename() ONLY after probeSocketHolder proved the old holder dead. A live or
+ * undecided holder is refused and its socket is left in place.
+ */
+async function publishSocket(bindPath: string, target: string, probeMs: number): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.linkSync(bindPath, target);
+      fs.unlinkSync(bindPath);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST' && code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'EOPNOTSUPP') throw err;
+      // EPERM/ENOTSUP: no link() on this filesystem — fall through to probe + rename
+    }
+    let st: fs.Stats | null = null;
+    try {
+      st = fs.lstatSync(target);
+    } catch {
+      st = null;
+    }
+    if (st && !st.isSocket()) throw new LifecycleRefusal('endpoint-busy', `${target} exists and is not a socket; not touching it`, { socketPath: target, holder: 'not-a-socket' });
+    const probe: HolderProbe = st ? await probeSocketHolder(target, probeMs) : { holder: 'gone' };
+    if (probe.holder === 'alive') throw new LifecycleRefusal('endpoint-busy', `${target} is held by a live process that answers connect`, { socketPath: target, holder: 'alive' });
+    if (probe.holder === 'undecided') {
+      throw new LifecycleRefusal('endpoint-busy', `cannot prove the holder of ${target} dead (${probe.why}); refusing to reclaim it — stop the other process or remove the socket by hand once it is surely dead`, { socketPath: target, holder: 'undecided', why: probe.why });
+    }
+    if (probe.holder === 'dead' || st === null) {
+      fs.renameSync(bindPath, target); // atomic replace of a proven-dead (or absent) name
+      return;
+    }
+    // 'gone' while lstat saw it: raced away — retry the link
+  }
+  throw new LifecycleRefusal('endpoint-busy', `${target}: persistent race while publishing the socket`, { socketPath: target });
 }
 
 /** process.umask(mask) throws in worker threads; the chmod + read-back still holds there. */
@@ -261,6 +362,10 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     });
   });
 
+  // A named pipe (Windows parity phase) has no directory, link or rename: bind it directly.
+  const pipe = opts.socketPath.startsWith('\\\\.\\pipe\\') || opts.socketPath.startsWith('\\\\?\\pipe\\');
+  if (!pipe) assertPrivateDir(path.dirname(opts.socketPath));
+  const bindPath = pipe ? opts.socketPath : privateBindName(opts.socketPath);
   await new Promise<void>((resolve, reject) => {
     const previous = trySetUmask(0o177);
     const restore = (): void => {
@@ -272,23 +377,48 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
         reject(new LifecycleRefusal('endpoint-busy', `${opts.socketPath} is in use`, { socketPath: opts.socketPath }));
       } else reject(err);
     });
-    server.listen(opts.socketPath, () => {
+    server.listen(bindPath, () => {
       restore();
       resolve();
     });
   });
 
+  /** dev+ino of the socket WE published at socketPath; pinned while our listener is bound, so it cannot be recycled before close. */
+  let published: { dev: number; ino: number } | null = null;
   const close = (): Promise<void> =>
     new Promise<void>((resolve) => {
       for (const s of sockets) s.destroy();
+      // libuv unlinks the BIND name on close; that is the private name, never socketPath. The public name is
+      // removed only here, and only while it is still the inode our live listener pins (a successor's socket is a different inode).
+      if (published && !pipe) {
+        try {
+          const st = fs.lstatSync(opts.socketPath);
+          if (st.dev === published.dev && st.ino === published.ino) fs.unlinkSync(opts.socketPath);
+        } catch {
+          /* already gone */
+        }
+      }
       server.close(() => resolve());
     });
 
   try {
-    fs.chmodSync(opts.socketPath, SOCKET_MODE);
-    verifySocketAcl(opts.socketPath);
+    fs.chmodSync(bindPath, SOCKET_MODE);
+    verifySocketAcl(bindPath);
+    if (!pipe) {
+      await publishSocket(bindPath, opts.socketPath, opts.holderProbeMs ?? DEFAULT_HOLDER_PROBE_MS);
+      const st = fs.lstatSync(opts.socketPath);
+      published = { dev: st.dev, ino: st.ino };
+      verifySocketAcl(opts.socketPath);
+    }
   } catch (err) {
     await close();
+    if (!pipe) {
+      try {
+        fs.unlinkSync(bindPath);
+      } catch {
+        /* libuv already removed it */
+      }
+    }
     throw err;
   }
 

@@ -102,14 +102,14 @@ export function daemonState(home: string, socketPath?: string): DaemonState {
   return { state: 'stopped' };
 }
 
-/** Unlink `p` only if it is a unix socket (never an arbitrary file at that path). */
-export function unlinkStaleSocket(p: string): void {
-  try {
-    if (fs.lstatSync(p).isSocket()) fs.unlinkSync(p);
-  } catch {
-    /* gone — the common case */
-  }
-}
+/*
+ * The socket is NOT touched here (T-2026-10-19-009 item 2): a stale socket is
+ * reclaimed by #socket's listenSocket only after a connect probe proves its
+ * holder dead (ECONNREFUSED; a timeout or EPERM declines), and the public name
+ * is removed only by the owning server's close(). The old unlinkStaleSocket
+ * deleted on "can't tell", and releaseDaemonLock unlinked the socket AFTER the
+ * pidfile, so a successor that won the lock in between lost its socket.
+ */
 
 /** Remove the judged-dead pidfile only if it is still the same inode we judged. */
 function removeIfSameInode(pp: string, ino: number): void {
@@ -174,8 +174,7 @@ export function acquireDaemonLock(home: string, pid: number, opts: AcquireOption
       } finally {
         fs.closeSync(fd);
       }
-      // Won: a socket left by a crashed predecessor can be cleared now.
-      unlinkStaleSocket(opts.socketPath);
+      // Won. A socket left by a crashed predecessor is reclaimed by listenSocket after a connect probe proves it dead.
       return row;
     }
 
@@ -202,12 +201,11 @@ export function acquireDaemonLock(home: string, pid: number, opts: AcquireOption
     }
     // Dead holder or unreadable residue: clean (inode-checked) and re-race.
     removeIfSameInode(pp, ino);
-    if (read.kind === 'ok' && read.pidfile.socketPath === opts.socketPath) unlinkStaleSocket(opts.socketPath);
   }
   throw new LifecycleRefusal('lock-race', 'could not acquire the pidfile (persistent race)');
 }
 
-/** Release the lock — unlinks pidfile + socket ONLY if the pidfile is ours. */
+/** Release the lock — unlinks the pidfile ONLY if it is ours. The socket is the server's (its close() removes only its own inode). */
 export function releaseDaemonLock(home: string, owner: Pick<DaemonPidfile, 'pid' | 'startedAt' | 'socketPath'>): boolean {
   const pf = readPidfile(home);
   if (!pf || pf.pid !== owner.pid || pf.startedAt !== owner.startedAt) return false;
@@ -216,6 +214,5 @@ export function releaseDaemonLock(home: string, owner: Pick<DaemonPidfile, 'pid'
   } catch {
     /* already gone */
   }
-  unlinkStaleSocket(owner.socketPath);
   return true;
 }
