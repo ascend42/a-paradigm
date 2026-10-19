@@ -86,6 +86,7 @@ import type { ConnectionContext } from '../socket/server.js';
 import { PRE_AUTH_MAX_FRAME_BYTES } from '../socket/server.js';
 import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
+import { LaunchGrantCap } from './launch-cap.js';
 import {
   CHANNEL_MAX_RECORD_BYTES,
   encodeRecord,
@@ -220,6 +221,8 @@ export class WebEndpoint {
   readonly #bundle: { dir: string; hash: string };
   readonly #now: () => number;
   readonly access: GuiAccess;
+  /** The ONE launch-grant cap (launch-cap.ts): terminal Enter, the wrapper channel and gui.open all draw on it. */
+  readonly launchCap: LaunchGrantCap;
   readonly #nextUlid = monotonicUlidFactory();
   #child: ChildProcess | null = null;
   #plan: ChildLaunchPlan | null = null;
@@ -255,6 +258,7 @@ export class WebEndpoint {
     this.#o = opts;
     this.#now = opts.now ?? Date.now;
     this.access = new GuiAccess(this.#now);
+    this.launchCap = new LaunchGrantCap(this.#now);
     const platform = opts.platform ?? process.platform;
     this.#launcher = seams.launcher ?? ((input) => transportLaunchPlan(input, platform));
     this.#bundle = seams.bundle ?? { dir: '', hash: GUI_BUNDLE_HASH };
@@ -307,6 +311,11 @@ export class WebEndpoint {
     if (asker.phase !== 'authenticated' || asker.credential !== 'device' || asker.principalKind !== 'human' || !asker.deviceId || !asker.principal) {
       throw new LifecycleRefusal('web-launch-refused', 'a launch token is minted only for an authenticated human device connection (§11.2 rule 2)', { connId: asker.connId });
     }
+    // the shared cap (busy | rate) is checked synchronously, before the endpoint starts or a token exists
+    return this.launchCap.run(() => this.#mintLaunch(asker as Required<Pick<ConnAuthState, 'connId' | 'principal' | 'deviceId'>>));
+  }
+
+  async #mintLaunch(asker: Required<Pick<ConnAuthState, 'connId' | 'principal' | 'deviceId'>>): Promise<LaunchGrant> {
     await this.ensureListening();
     if (!this.listening) throw new LifecycleRefusal('web-transport-failed', 'the web endpoint stopped while it was starting');
     const binding: LaunchBinding = { deviceId: asker.deviceId, principal: asker.principal, askedBy: asker.connId };

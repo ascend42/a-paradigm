@@ -173,7 +173,7 @@ describe('#gnomon-up refusals (each guard falsified)', () => {
     expect(await runUpCommand(['--home', home], x, deps)).toBe(1);
     const err = x.e.join('');
     expect(err).toContain('REFUSED  UP  daemon-running');
-    expect(err).toContain('gnomon open');
+    expect(err).toContain('gui.open'); // bare `gnomon` reaches a running kernel over gui.open (T-2026-10-19-001 A3)
     expect(n).toEqual({ helper: 0, kernel: 0, closed: 0 });
   });
 

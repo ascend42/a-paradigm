@@ -50,6 +50,7 @@ export const REFUSAL_EXIT_CLASS: Readonly<Record<LifecycleRefusalReason, DaemonE
   'web-bundle-mismatch': 'config',
   'web-transport-failed': 'transient',
   'web-launch-refused': 'transient',
+  'web-launch-capped': 'transient',
   'quarantine-pending': 'config',
 });
 

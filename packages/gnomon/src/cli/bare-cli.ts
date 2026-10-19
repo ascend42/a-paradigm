@@ -18,11 +18,13 @@
  *     UTF-8 decoded to U+FFFD, very long) is ESCAPED and CAPPED for display
  *     here and in the GUI, and a path that needs escaping is never prefilled;
  *     over HINT_MAX_BYTES it is not carried at all;
- *   - a kernel already running (Gnomon.app, another `gnomon up`, gnomond) is
- *     NOT joined and no second one starts: `already-running` (exit 3) with
- *     which instance and how to open this folder in it. Reaching a running
- *     kernel to mint a URL needs a `gnomon open` wire verb, which moves
- *     clientApiId: queued with the batched bump (T-2026-10-19-001), not here.
+ *   - a kernel already running (Gnomon.app, another `gnomon up`, gnomond):
+ *     no second one starts. On an interactive terminal bare `gnomon` asks it
+ *     for a launch grant over the P8-D98 human-device verb `gui.open`
+ *     (requestRunningLaunch in up-cli.ts; T-2026-10-19-001 A3) with this
+ *     folder as `cwdHint`, and prints/opens that URL with the same fragment
+ *     hint. Not a terminal: nothing on stdout, no RPC (the TTY check comes
+ *     BEFORE the call, rule 7), and the `already-running` refusal (exit 3).
  * Also `gnomon help | --help | -h` (GNOMON_HELP). Zero deps (G-SEC-01).
  */
 import { execFileSync } from 'node:child_process';
@@ -30,9 +32,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
-import { refused } from './readout.js';
+import { readout, refused } from './readout.js';
 import type { LaunchTtyIo } from './launch-tty.js';
-import { runUp, type UpDeps, type UpRefusal } from './up-cli.js';
+import { requestRunningLaunch, runUp, upOpener, UpRefusal, type UpDeps } from './up-cli.js';
+import { presentUrl } from './open-browser.js';
 import { isDevHome } from './dev-home.js';
 import { runGuiSetup, runSetup, type GuiSetupDeps } from './setup-cli.js';
 import { resolveGnomonHome } from '../kernel/lifecycle/index.js';
@@ -175,14 +178,32 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
     noOpen,
     rows: [['folder', `${shown}  (${where}${note}; a suggestion: the GUI asks before opening)`]],
     ...(suffix !== null ? { urlSuffix: suffix } : {}),
-    onRunning: (e: UpRefusal, home: string) => {
+    onRunning: async (e: UpRefusal, home: string) => {
       const pid = /\bpid (\d+)/.exec(e.message);
-      refused(io.stderr, 'gnomon', 'already-running', `Gnomon is already running on ${displayPath(home)}: ${instanceOf(pid ? Number(pid[1]) : undefined)}; bare gnomon does not start a second kernel`, [
-        `open a session for this folder in that window: "+ new" (Cmd-N), cwd: ${shown}`,
-        'or stop that instance (quit Gnomon.app, or Ctrl-C in its terminal) and run `gnomon` here again',
-        'opening this folder in a running kernel from the terminal needs `gnomon open` (queued, T-2026-10-19-001)',
-      ]);
-      return BARE_EXIT_ALREADY_RUNNING;
+      const which = instanceOf(pid ? Number(pid[1]) : undefined);
+      const alreadyRunning = (why: string, extra: readonly string[] = []): number => {
+        refused(io.stderr, 'gnomon', 'already-running', `Gnomon is already running on ${displayPath(home)}: ${which}; bare gnomon does not start a second kernel${why}`, [
+          `open a session for this folder in that window: "+ new" (Cmd-N), cwd: ${shown}`,
+          'or stop that instance (quit Gnomon.app, or Ctrl-C in its terminal) and run `gnomon` here again',
+          ...extra,
+        ]);
+        return BARE_EXIT_ALREADY_RUNNING;
+      };
+      // rule 7's TTY check BEFORE the call: with nothing to show a URL on, no grant is asked for and nothing is printed
+      if (io.stdout.isTTY !== true) return alreadyRunning('', ['run `gnomon` in an interactive terminal to open this folder in it (gnomon open: the URL is shown only on a terminal)']);
+      let g;
+      try {
+        // the folder rides as cwdHint only when it fits the fragment (HINT_MAX_BYTES, the same cap gui.open applies)
+        g = await requestRunningLaunch(home, suffix !== null ? folder : undefined);
+      } catch (x) {
+        if (x instanceof UpRefusal) return alreadyRunning(`, and it did not hand this terminal a launch URL (${x.reason}: ${x.message})`, x.next);
+        throw x;
+      }
+      io.stdout.write(`ATTACHED  gnomon (to the running kernel: ${which})\n`);
+      readout(io.stdout, [['home', home], ['folder', `${shown}  (${where}${note}; a suggestion: the GUI asks before opening)`]]);
+      const hint = typeof g.cwdHint === 'string' ? hintSuffix(g.cwdHint) ?? '' : '';
+      await presentUrl(io.stdout, `${g.url}${hint}`, upOpener(deps, { noOpen }), 'open this in your browser within 60 s (single use)');
+      return 0;
     },
   });
 }

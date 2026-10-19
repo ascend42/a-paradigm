@@ -10,10 +10,10 @@
  * interactive terminal only (launch-tty.ts, shared with dev up). Approvals
  * from the GUI go broker → helper presence prompt (Touch ID) → decisionSig.
  *
- * WHY IN-PROCESS (not `gnomon open` against a running gnomond): §5 names no
- * wire verb for `gnomon open`; adding one moves clientApiId. The in-process
- * path calls the kernel's existing `requestWebLaunch` API directly, exactly as
- * dev up does, so the socket ABI does not move.
+ * WHY IN-PROCESS: `gnomon up` runs its OWN kernel and calls its
+ * `requestWebLaunch` directly, exactly as dev up does. A kernel that already
+ * runs is reached by bare `gnomon` over the P8-D98 `gui.open` verb instead
+ * (requestRunningLaunch below): the same grant under the same shared cap.
  *
  * GUARDS (each has a falsifier in test/up-cli.test.ts), in this order, on a
  * home resolved ONCE (lstat: a plain directory, never a symlink; then
@@ -60,6 +60,11 @@ import {
   type PinnedHelper,
 } from '../kernel/identity/index.js';
 import type { SoftwareEd25519Signer } from '../kernel/log/signer.js';
+import type { RowVerifier } from '../kernel/identity/registry.js';
+import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
+import { RefusedError } from '@a-company/gnomon-contracts';
+import { kernelPinOf } from './daemon-cli.js';
+import { homeTrust } from './mod-cli.js';
 
 export const UP_EXIT_OK = 0;
 export const UP_EXIT_REFUSED = 1;
@@ -164,7 +169,7 @@ export async function refuseUnfitHome(home: string, isDefault: boolean): Promise
     const pid = st.state === 'running' ? ` (pidfile pid ${st.pidfile.pid}, diagnostic only)` : '';
     throw new UpRefusal('daemon-running', `a kernel already runs on ${home}${pid}; gnomon up runs its own kernel in this process`, [
       'stop it first: Ctrl-C in its terminal (gnomond --foreground / gnomon up), or let it exit on idle',
-      'attaching a GUI to a running gnomond needs `gnomon open`, which has no wire verb yet (spec §11.2)',
+      'or open the GUI on it: bare `gnomon` in a terminal asks the running kernel for a launch URL (gui.open)',
     ]);
   }
   let rec;
@@ -177,7 +182,9 @@ export async function refuseUnfitHome(home: string, isDefault: boolean): Promise
 }
 
 /** This home's device credential, checked against its root-signed human registry row (fail closed). */
-function deviceOf(home: string, hw: OpenedIdentity): { kind: 'device'; deviceId: string; principalId: string; privateKeyPem: string } {
+type UpDevice = { kind: 'device'; deviceId: string; principalId: string; privateKeyPem: string; signer: SoftwareEd25519Signer };
+/** Shared by the in-process launch (startUpKernel) and the running-kernel launch (requestRunningLaunch). */
+function deviceOf(home: string, hw: Pick<OpenedIdentity, 'record'> & { root: RowVerifier }): UpDevice {
   let cred: { signer: SoftwareEd25519Signer; privateKeyPem: string };
   try {
     cred = loadDeviceCredential(home);
@@ -192,8 +199,62 @@ function deviceOf(home: string, hw: OpenedIdentity): { kind: 'device'; deviceId:
   if (!row || row.principalKind !== 'human' || row.principalId !== hw.record.principalId || row.keyId !== cred.signer.keyId) {
     throw new UpRefusal('device-unregistered', 'this device key has no matching human registry row signed by this root', [`gnomon setup   (it finishes an interrupted setup; otherwise re-provision: gnomon identity init --rotate)`]);
   }
-  return { kind: 'device', deviceId: row.deviceId, principalId: row.principalId, privateKeyPem: cred.privateKeyPem };
+  return { kind: 'device', deviceId: row.deviceId, principalId: row.principalId, privateKeyPem: cred.privateKeyPem, signer: cred.signer };
 }
+
+/** The `gui.open` RPC's grant (#socket gui-open.ts): the url, when it expires, the hint echoed verbatim. */
+export interface RunningLaunchGrant {
+  url: string;
+  expiresAt: string;
+  cwdHint?: string;
+}
+
+/**
+ * The launch grant from a kernel that ALREADY runs on `home` (#bare-entry, spec §2.4 rule 8, T-2026-10-19-001 A3):
+ * the same grant the in-process launch mints (the kernel's requestWebLaunch, single-use, at most 60 s, under the
+ * endpoint's ONE launch-grant cap), asked for over the socket with `gui.open`. This home's device key and its
+ * root-signed human row are checked exactly as startUpKernel checks them (deviceOf, verified against identity.json's
+ * root, no helper spawned); the kernel's hello must verify against a key the HOME names (root-signed registry, else
+ * keys/kernel-pub.jsonl) before the device signs anything. Throws UpRefusal; never prints, never logs the token.
+ */
+export async function requestRunningLaunch(home: string, cwdHint: string | undefined): Promise<RunningLaunchGrant> {
+  let rec;
+  try {
+    rec = readIdentity(home);
+  } catch (e) {
+    throw new UpRefusal('identity-malformed', e instanceof Error ? e.message : 'identity.json is unreadable');
+  }
+  if (!rec) throw new UpRefusal('unprovisioned', `${home} has no hardware identity (keys/identity.json)`, ['gnomon setup']);
+  const device = deviceOf(home, { record: rec, root: homeTrust(home) });
+  const sock = selectSocketPath({ home });
+  if (!sock.ok) throw new UpRefusal('no-safe-endpoint', `no safe endpoint path for ${home}: ${sock.reason}`);
+  const client = { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' as const };
+  try {
+    // 1) an unpinned hello only learns which key the server CLAIMS to hold; 2) a fresh hello must verify against the home's pin
+    const probe = await connectGnomon({ socketPath: sock.path, client });
+    await probe.conn.close();
+    const found = kernelPinOf(home, probe.hello.serverKeyId);
+    if (!found) throw new UpRefusal('unverified-server', 'the running kernel names a key this home does not record, so its hello proves nothing; no device key is sent to it');
+    const s = await connectGnomon({ socketPath: sock.path, client, serverKey: found.pin, device: { principalId: device.principalId, deviceId: device.deviceId, signer: device.signer } });
+    try {
+      const r = await s.conn.call('gui.open', cwdHint !== undefined ? { cwdHint } : {}, GUI_OPEN_TIMEOUT_MS);
+      if ('error' in r) {
+        const d = (r.error.data ?? {}) as { reason?: unknown; data?: { reason?: unknown } };
+        const why = typeof d.data?.reason === 'string' ? d.data.reason : typeof d.reason === 'string' ? d.reason : 'refused';
+        throw new UpRefusal(`gui-open-${why}`, `the running kernel refused gui.open: ${r.error.message}`);
+      }
+      return r.result as RunningLaunchGrant;
+    } finally {
+      await s.conn.close().catch(() => undefined);
+    }
+  } catch (e) {
+    if (e instanceof UpRefusal) throw e;
+    if (e instanceof RefusedError || e instanceof ServerAuthError) throw new UpRefusal('gui-open-refused', `the running kernel refused this device: ${e.message}`);
+    throw new UpRefusal('gui-open-failed', `could not reach the running kernel: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+/** gui.open may start the web endpoint (a sandboxed child): longer than a plain RPC. */
+export const GUI_OPEN_TIMEOUT_MS = 30_000;
 
 /**
  * Open the hardware identity (the gnomond path), start the kernel in-process
@@ -248,8 +309,8 @@ export interface UpRun {
   urlSuffix?: string;
   /** `--no-open`: print the launch URL only, never open the browser (GNOMON_NO_OPEN=1 does the same). */
   noOpen?: boolean;
-  /** #bare-entry: a kernel already running on the home is reported by the caller (another instance, not a fault). */
-  onRunning?: (e: UpRefusal, home: string) => number;
+  /** #bare-entry: a kernel already running on the home is handled by the caller (gui.open into it, or a refusal). */
+  onRunning?: (e: UpRefusal, home: string) => number | Promise<number>;
 }
 
 export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, deps: UpDeps = {}): Promise<number> {
@@ -316,7 +377,7 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
     k = await startUpKernel(resolved.home, deps);
   } catch (e) {
     if (e instanceof UpRefusal) {
-      if (e.reason === 'daemon-running' && run.onRunning && home !== undefined) return run.onRunning(e, home);
+      if (e.reason === 'daemon-running' && run.onRunning && home !== undefined) return await run.onRunning(e, home);
       return report(io, e, wrapper, code);
     }
     if (isLifecycleRefusal(e)) {

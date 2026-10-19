@@ -94,6 +94,7 @@ import {
   type SubscriptionStats,
   type KernelDispatcher,
 } from '../socket/index.js';
+import { createGuiOpenHandler } from '../socket/gui-open.js';
 import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
@@ -784,6 +785,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     sessions,
     approvals,
     reads: { log, hub },
+    // P8-D98 gui.open (#socket, §2.4 rule 8): the in-process launch path, under the endpoint's shared launch-grant cap
+    humanVerbs: { 'gui.open': createGuiOpenHandler({ requestLaunch: (connId: string) => requestWebLaunch(connId) }) },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
     ...(opts.maxPreAuth !== undefined ? { maxPreAuth: opts.maxPreAuth } : {}),

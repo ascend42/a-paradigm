@@ -21,6 +21,8 @@ export type LifecycleRefusalReason =
   | 'web-bundle-mismatch'
   | 'web-transport-failed'
   | 'web-launch-refused'
+  // the shared launch-grant cap (web/launch-cap.ts): one mint in flight, LAUNCH_GRANT_CAP a minute
+  | 'web-launch-capped'
   | 'quarantine-pending';
 
 export class LifecycleRefusal extends Error {
