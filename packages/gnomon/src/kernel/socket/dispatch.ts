@@ -98,7 +98,6 @@ import {
   CLIENT_RELAYS,
   KIT_ID,
   RELAY_NAMES,
-  VERB_NAMES,
   VERBS,
   canonicalJson,
   hex,
@@ -106,8 +105,8 @@ import {
   sha256,
   type Access,
   type PrincipalKind,
-  type VerbDescriptor,
 } from '@a-company/gnomon-contracts';
+import { KERNEL_METHODS, type MatrixClass, type MethodRegistry } from './methods.js';
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
@@ -189,8 +188,6 @@ export const NEXT_LEGAL_TABLE: ReadonlyArray<{ when: readonly string[]; verbs: r
 /** abiId = sha256(canonical {verbs, relays, nextLegal}) — the descriptors.ts:383-393 pattern. */
 export const ABI_ID: string = `sha256:${hex(sha256(canonicalJson({ verbs: VERBS, relays: CLIENT_RELAYS, nextLegal: NEXT_LEGAL_TABLE })))}`;
 
-type MatrixClass = keyof VerbDescriptor['access'];
-
 export function matrixClass(kind: PrincipalKind): MatrixClass {
   switch (kind) {
     case 'human':
@@ -210,11 +207,13 @@ export function matrixClassOf(s: Pick<ConnAuthState, 'credential' | 'principalKi
   return s.principalKind ? matrixClass(s.principalKind) : 'peer';
 }
 
-/** Access of a method (verb or relay) for a class; relays are `caller principal` except for peers and read tokens (§5). */
-export function accessOf(method: string, cls: MatrixClass): Access {
-  const verb = VERBS.find((v) => v.verb === method);
-  if (verb) return verb.access[cls];
-  return cls === 'peer' || cls === 'readToken' ? false : 'caller principal';
+/**
+ * Access of a method (verb or relay) for a class, from the method registry
+ * (methods.ts): relays are `caller principal` except for peers and read
+ * tokens (§5). Fails CLOSED: an unknown method or an undefined tier is `false`.
+ */
+export function accessOf(method: string, cls: MatrixClass, methods: MethodRegistry = KERNEL_METHODS): Access {
+  return methods.tier(method, cls);
 }
 
 export function nextLegalVerbs(facts: ReadonlySet<string>): string[] {
@@ -284,6 +283,8 @@ export interface DispatcherOptions {
   sessions?: SessionPort;
   /** #mod-host (M1.11 slice 2): the client relays. Absent ⇒ mod.view / mod.command stay not-implemented. */
   mods?: ModRelayPort;
+  /** The method registry (default KERNEL_METHODS: the 12 verbs + 2 relays). Test seam for the fail-closed check. */
+  methods?: MethodRegistry;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
@@ -323,6 +324,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   const helloMs = o.helloTimeoutMs ?? HELLO_TIMEOUT_MS;
   const preAuthMs = o.preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS;
   const maxPreAuth = o.maxPreAuth ?? MAX_PRE_AUTH;
+  const methods = o.methods ?? KERNEL_METHODS;
+  const accessOf_ = (method: string, cls: MatrixClass): Access => accessOf(method, cls, methods);
   const clearTimers = (connId: string): void => {
     for (const t of timers.get(connId) ?? []) clearTimeout(t);
     timers.delete(connId);
@@ -360,10 +363,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       credential: s.credential ?? 'device',
       ...(s.credential === 'read-token' ? { token: { tokenId: s.tokenId, expiresAt: s.tokenExpiresAt } } : {}),
       nextLegalVerbs: nextLegalVerbs(facts)
-        .filter((v) => accessOf(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
+        .filter((v) => accessOf_(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
         .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
-      verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access[cls], available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
-      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
+      verbs: VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
+      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf_(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
       ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
       daemon: o.status.daemon(),
       log: o.status.log(),
@@ -390,7 +393,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   };
 
   const relayAvailable = (relay: string, s: ConnAuthState): boolean =>
-    o.mods !== undefined && accessOf(relay, matrixClassOf(s)) !== false && !(relay === 'mod.command' && s.credential === 'gui');
+    o.mods !== undefined && accessOf_(relay, matrixClassOf(s)) !== false && !(relay === 'mod.command' && s.credential === 'gui');
 
   const recheckMs = o.tokenRecheckMs ?? TOKEN_RECHECK_MS;
   /** A read-token connection whose token died: log (best-effort), then close. Returns the refusal to answer with. */
@@ -512,7 +515,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       return { principal: out.principal, connId: s.connId };
     }
 
-    const known = VERB_NAMES.includes(m) || RELAY_NAMES.includes(m);
+    const known = methods.has(m); // the registry: every method declared a tier for every class
     if (!known) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(m.slice(0, 64))}`);
     if (s.phase !== 'authenticated') {
       // G-SOCK-01: unauthenticated ⇒ AUTH + close (a client that calls before auth is not one we keep talking to)
@@ -533,8 +536,9 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   /** The post-auth dispatch: the §5 matrix, then each served cell (shared by the socket and a mod's kernel.call). */
   const serve = async (s: ConnAuthState, m: string, frame: RpcRequestFrame, ctx: ConnectionContext): Promise<unknown> => {
     const cls = matrixClassOf(s);
-    const access: Access = accessOf(m, cls);
-    if (access === false) throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is not callable by a ${cls} principal (§5)`, { verb: m, principalClass: cls });
+    const access: Access = accessOf_(m, cls);
+    // default deny: only a declared non-empty tier passes (an undefined permission is never "no restriction")
+    if (typeof access !== 'string' || access.length === 0) throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is not callable by a ${cls} principal (§5)`, { verb: m, principalClass: cls });
     if (READ_METHODS.includes(m)) {
       const reads = o.reads;
       if (!reads) throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${VERB_MILESTONES[m]})`, { verb: m, milestone: VERB_MILESTONES[m] });
@@ -622,7 +626,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
 
   /** A mod's kernel.call (§12.3): matrix class `mod`, no connection (so no subscription), relays and log.append excluded. */
   const callAs = async (principal: string, verb: string, params: Record<string, unknown>): Promise<unknown> => {
-    if (!VERB_NAMES.includes(verb)) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(verb.slice(0, 64))}`);
+    if (methods.kindOf(verb) !== 'verb') throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(verb.slice(0, 64))}`);
     const s: ConnAuthState = { connId: `kernel.call:${principal}`, phase: 'authenticated', principal, principalKind: 'mod', credential: 'device' };
     if (verb === 'status') {
       // the mod column's `own view`: who it is, the ids, and what it may call — nothing about other principals

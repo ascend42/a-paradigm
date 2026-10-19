@@ -4,6 +4,7 @@ export * from './framing.js';
 export * from './rpc.js';
 export * from './server.js';
 export * from './auth.js';
+export * from './methods.js';
 export * from './dispatch.js';
 export * from './client.js';
 export * from './log-read.js';

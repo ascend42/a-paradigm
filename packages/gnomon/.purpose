@@ -137,6 +137,19 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    method-registry: >-
+      T-2026-10-19-009 item 4 (spec §5, Orca audit Adopt 4): methods.ts
+      MethodRegistry — every gnomon-rpc:v1 method (12 verbs + 2 relays) is
+      REGISTERED with a tier for every matrix class (false or a non-empty
+      access string); a missing/undefined/empty tier, an unknown class key, a
+      duplicate or a post-seal registration throws MethodRegistrationError.
+      KERNEL_METHODS is built from the contracts' VERBS + CLIENT_RELAYS
+      (RELAY_TIERS: caller principal, readToken/peer false) at module load
+      and sealed. tier()/accessOf FAIL CLOSED: unknown method, unknown class
+      or any stored tier that is not false/non-empty string ⇒ false; serve()
+      refuses FORBIDDEN{matrix} unless the tier is a non-empty string (Orca's
+      check fails open on undefined). DispatcherOptions.methods is a test
+      seam. Tests: test/verb-access.test.ts (every platform).
     ownership: >-
       T-2026-10-19-009 item 2 (spec §2.4 rule 1, Orca audit Adopt 2): never
       treat "can't tell" as "dead". listenSocket refuses a socket directory
@@ -321,6 +334,7 @@ components:
       - test/socket-log-read.test.ts
       - test/socket-abi.test.ts
       - test/refusal-reasons.test.ts
+      - test/verb-access.test.ts
     aspects: ["~ample-internal-logs"]
     oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
 
