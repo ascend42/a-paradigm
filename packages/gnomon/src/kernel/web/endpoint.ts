@@ -96,6 +96,7 @@ import {
   WS_MAX_SOCKET_BUFFER,
   WS_PRE_AUTH_MAX_FRAME_BYTES,
   WS_WRITE_HIGH_WATER,
+  WS_WRITE_LOW_WATER,
   WS_MISSED_PONGS,
   WS_PING_MS,
   type ChildRecord,
@@ -543,6 +544,7 @@ export class WebEndpoint {
         maxBodyBytes: HTTP_MAX_BODY_BYTES,
         maxSocketBuffer: WS_MAX_SOCKET_BUFFER,
         writeHighWater: WS_WRITE_HIGH_WATER,
+        writeLowWater: WS_WRITE_LOW_WATER,
         defaultHeaders: childDefaultHeaders(),
       },
       child,
@@ -813,6 +815,7 @@ export class WebEndpoint {
       // per connection: the bytes the child reports unsent on THIS WebSocket (pressure/drain records)
       writableLength: () => c.pressure,
       writeHighWater: WS_WRITE_HIGH_WATER,
+      writeLowWater: WS_WRITE_LOW_WATER,
       onDrain: (fn) => {
         c.drainers.add(fn);
         return () => void c.drainers.delete(fn);

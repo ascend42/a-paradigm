@@ -146,7 +146,8 @@ export class RpcConnection {
     });
     conn.on('close', () => {
       this.#closed = true;
-      for (const cb of this.#pending.values()) cb({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: null, error: closedError() });
+      // every pending request was written: the kernel may or may not have acted on it (T-2026-10-19-009 item 6)
+      for (const cb of this.#pending.values()) cb({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: null, error: deliveryUnknownError() });
       this.#pending.clear();
     });
     conn.on('error', () => undefined);
@@ -202,6 +203,19 @@ export class RpcConnection {
       this.#conn.destroy();
     });
   }
+}
+
+/**
+ * The connection dropped after the request was written and before its reply:
+ * the call may or may not have taken effect. Distinct from `connection-closed`
+ * (never sent, so certainly not delivered) and from any kernel answer. A
+ * caller must re-read state before retrying a non-idempotent call. Client-local,
+ * like connection-closed: it never crosses the wire.
+ */
+export const DELIVERY_UNKNOWN = 'delivery-unknown' as const;
+
+function deliveryUnknownError(): RpcErrorFrame['error'] {
+  return { code: JSON_RPC_CODES.ENGINE, message: 'connection dropped before the reply: delivery unknown', data: refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }) };
 }
 
 function closedError(): RpcErrorFrame['error'] {

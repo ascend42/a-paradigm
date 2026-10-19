@@ -400,6 +400,8 @@ export class SubscriptionHub {
     if (s.offDrain || s.dead) return;
     s.offDrain = s.ctx.onDrain(() => {
       s.offDrain = undefined;
+      // hysteresis (T-2026-10-19-009 item 6): a pump stopped at the high mark resumes only at or below the low mark
+      if (s.ctx.writableLength() > (s.ctx.writeLowWater ?? s.ctx.writeHighWater)) return this.#waitDrain(s);
       this.#schedule(s);
     });
   }

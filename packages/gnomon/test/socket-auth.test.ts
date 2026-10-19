@@ -44,6 +44,9 @@ import { appendFileSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createKernelDispatcher, encodeFrame, listenSocket, requestFrame, SocketAuthenticator } from '../src/kernel/socket/index.js';
 import { readKernelPubs } from '../src/kernel/identity/index.js';
 
+/** A call racing a server-side close: never served — `connection-closed` if the client saw the close first, `delivery-unknown` if it was written into the dying socket (T-2026-10-19-009 item 6). */
+const GONE = /^(connection-closed|delivery-unknown)$/;
+
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -261,7 +264,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     const bad = await c.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth({ ...r.cred, signer: stranger }, h.result, r.d.pidfile.socketPath) });
     expect(bad).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'bad-signature' } } } });
     const after = await c.call('status', {});
-    expect(errReason(after)).toBe('connection-closed'); // one AUTH refusal, then closed
+    expect(errReason(after)).toMatch(GONE); // one AUTH refusal, then closed
     expect(c.closed).toBe(true);
     await settle();
     const fails = rows(r.home).filter((x) => x.kind === 'socket.auth.fail');
@@ -284,7 +287,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     await b.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     const replay = await b.call('auth', authParams);
     expect(replay).toMatchObject({ error: { code: -32001, data: { data: { reason: 'replayed-transcript' } } } });
-    expect(errReason(await b.call('status'))).toBe('connection-closed');
+    expect(errReason(await b.call('status'))).toMatch(GONE);
     // replayed on the original connection: its nonce is spent
     const again = await a.call('auth', authParams);
     expect(errReason(again)).toBe('already-authenticated');
@@ -308,7 +311,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     r.now.t += 30_001;
     const late = await c.call('auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, h.result, r.d.pidfile.socketPath) });
     expect(errReason(late)).toBe('nonce-expired');
-    expect(errReason(await c.call('status'))).toBe('connection-closed');
+    expect(errReason(await c.call('status'))).toMatch(GONE);
     expect(c.closed).toBe(true);
     expect(rows(r.home).filter((x) => x.kind === 'socket.auth.fail').map((x) => x.env.payload?.reason)).toEqual(['nonce-expired']);
   });
@@ -341,7 +344,7 @@ describe('verb dispatch skeleton (§5)', () => {
       const c = await RpcConnection.open(r.d.pidfile.socketPath);
       cleanups.push(() => c.close());
       expect(errReason(await c.call(m, {}))).toBe('unauthenticated');
-      expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toBe('connection-closed');
+      expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toMatch(GONE);
       expect(c.closed).toBe(true);
     }
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
@@ -349,7 +352,7 @@ describe('verb dispatch skeleton (§5)', () => {
     expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } }); // unknown: refused, connection kept
     await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(await c.call('status', {})).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
-    expect(errReason(await c.call('status', {}))).toBe('connection-closed');
+    expect(errReason(await c.call('status', {}))).toMatch(GONE);
     expect(c.closed).toBe(true);
   });
 
@@ -509,12 +512,12 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
     const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const a = await c.call('auth', { principal: cred.principalId, deviceId: cred.deviceId, sig: signAuth(cred, h.result, sock) });
     expect(a).toMatchObject({ error: { code: -32000, data: { code: 'ENGINE', data: { reason: 'log-write-failed' } } } });
-    expect(errReason(await c.call('status'))).toBe('connection-closed');
+    expect(errReason(await c.call('status'))).toMatch(GONE);
     expect(dispatcher.clients()).toEqual([]);
     failKind = 'socket.hello';
     const c2 = await RpcConnection.open(sock);
     expect(errReason(await c2.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toBe('log-write-failed');
-    expect(errReason(await c2.call('status'))).toBe('connection-closed');
+    expect(errReason(await c2.call('status'))).toMatch(GONE);
   });
 
   it('a qualified access value (mod: own view) is refused ENGINE not-implemented naming the milestone, never the full status', async () => {

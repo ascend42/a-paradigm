@@ -61,6 +61,12 @@ export interface ConnectionContext {
   writableLength(): number;
   /** The connection's write high-water mark (bytes), never below the socket's own writableHighWaterMark (so 'drain' always follows a pause). */
   readonly writeHighWater: number;
+  /**
+   * The low-water mark (≤ writeHighWater): a writer that stopped at the high
+   * mark resumes only once the unsent bytes are at or below this (hysteresis,
+   * T-2026-10-19-009 item 6). Absent ⇒ writeHighWater (no hysteresis).
+   */
+  readonly writeLowWater?: number;
   /** Call `fn` once on the next 'drain'; returns an unregister function. */
   onDrain(fn: () => void): () => void;
   /** Run `fn` right after the reply to the request being handled is written. */
@@ -73,6 +79,8 @@ export const PRE_AUTH_MAX_FRAME_BYTES = 16 * 1024;
 /** Per-connection flow control (Aegis round 2): queued requests and unsent reply bytes. */
 export const DEFAULT_MAX_IN_FLIGHT = 32;
 export const DEFAULT_WRITE_HIGH_WATER = 1024 * 1024;
+/** Resume reading / pumping once unsent bytes are back at or below this (high/low hysteresis). */
+export const DEFAULT_WRITE_LOW_WATER = 256 * 1024;
 
 export type RpcHandler = (frame: RpcRequestFrame, ctx: ConnectionContext) => unknown | Promise<unknown>;
 
@@ -94,6 +102,8 @@ export interface SocketServerOptions {
   maxInFlight?: number;
   /** Unsent reply bytes on one connection before reading pauses (default 1 MiB). */
   writeHighWater?: number;
+  /** Unsent bytes at or below which a paused connection resumes (default 256 KiB, clamped to writeHighWater). */
+  writeLowWater?: number;
   onConnect?: (ctx: ConnectionContext) => void;
   onDisconnect?: (ctx: ConnectionContext) => void;
   onEvent?: (event: SocketEvent) => void;
@@ -217,6 +227,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
   const maxInFlight = opts.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT;
   const preAuthMax = opts.preAuthMaxFrameBytes ?? PRE_AUTH_MAX_FRAME_BYTES;
   const writeHighWater = opts.writeHighWater ?? DEFAULT_WRITE_HIGH_WATER;
+  const writeLowWater = Math.min(opts.writeLowWater ?? DEFAULT_WRITE_LOW_WATER, writeHighWater);
   const stats = { pauses: 0, maxQueued: 0 };
   const nextUlid = monotonicUlidFactory();
   const mintConnId = (): string => mintId('conn', nextUlid());
@@ -243,6 +254,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       },
       writableLength: () => conn.writableLength,
       writeHighWater: Math.max(writeHighWater, conn.writableHighWaterMark),
+      writeLowWater,
       onDrain: (fn) => {
         conn.once('drain', fn);
         return () => void conn.off('drain', fn);
@@ -260,6 +272,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     let queued = 0;
     let paused = false;
     const pressure = (): boolean => queued >= maxInFlight || conn.writableLength > writeHighWater;
+    // resume below the LOW mark only (hysteresis): no pause/resume flapping around one threshold
+    const relieved = (): boolean => queued < maxInFlight && conn.writableLength <= writeLowWater;
     const maybePause = (): void => {
       if (!paused && pressure() && !conn.destroyed) {
         paused = true;
@@ -269,7 +283,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       if (queued > stats.maxQueued) stats.maxQueued = queued;
     };
     const maybeResume = (): void => {
-      if (paused && !pressure() && !conn.destroyed) {
+      if (paused && relieved() && !conn.destroyed) {
         paused = false;
         conn.resume();
       }

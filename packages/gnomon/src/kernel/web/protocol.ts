@@ -24,11 +24,11 @@
  *   frame     {rid, data}                       one complete, valid UTF-8 text frame (base64 of its bytes)
  *   closed    {rid, code, why}                  a WebSocket ended (either side)
  *   pressure  {rid, bytes}                      a WebSocket's unsent bytes passed the high-water mark
- *   drain     {rid}                             …and drained again
+ *   drain     {rid}                             …and drained to the LOW-water mark (hysteresis)
  *   fatal     {why}                             the child cannot continue (it exits next)
  * Kernel → child (stdin):
  *   config    {bundleDir, pingMs, missedPongs, maxFrameBytes, preAuthMaxFrameBytes,
- *              maxBodyBytes, maxSocketBuffer, writeHighWater, defaultHeaders}   first record, once
+ *              maxBodyBytes, maxSocketBuffer, writeHighWater, writeLowWater, defaultHeaders}   first record, once
  *
  * The kernel VALIDATES every child record (validateChildRecord): a record
  * outside the closed shape set means the child is no longer trusted and is
@@ -61,6 +61,8 @@ export const WS_PRE_AUTH_MAX_FRAME_BYTES = 16 * 1024;
 export const WS_MAX_SOCKET_BUFFER = 8 * 1024 * 1024;
 /** Unsent bytes at which the child reports `pressure` for a connection. */
 export const WS_WRITE_HIGH_WATER = 1024 * 1024;
+/** Unsent bytes a pressured connection must drain to before `drain` is reported (T-2026-10-19-009 item 6: high/low hysteresis, no flapping). */
+export const WS_WRITE_LOW_WATER = 256 * 1024;
 
 export type HeaderMap = Record<string, string>;
 
@@ -84,6 +86,8 @@ export interface ChildConfig {
   maxBodyBytes: number;
   maxSocketBuffer: number;
   writeHighWater: number;
+  /** `drain` only once a pressured connection is at or below this (≤ writeHighWater). */
+  writeLowWater: number;
   /** Headers on every response the child writes on its own (503, 404): the rule-6 set. */
   defaultHeaders: HeaderMap;
   /** How long the child waits for the kernel's answer to a request before its own 503 (default 10 s). */

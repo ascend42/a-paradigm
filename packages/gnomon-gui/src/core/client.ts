@@ -119,7 +119,8 @@ export class GnomonClient {
       this.#closed = true;
       for (const p of this.#pending.values()) {
         if (p.timer) clearTimeout(p.timer);
-        p.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: `the connection closed (${code})`, next: [], data: null }));
+        // sent, never answered: the kernel may or may not have acted on it — distinct from CLOSED (never sent) (T-2026-10-19-009 item 6)
+        p.reject(new RpcError({ code: 'DELIVERY_UNKNOWN', reason: 'delivery-unknown', message: `the connection closed (${code}) before the answer: it is unknown whether the kernel acted on it`, next: [], data: null }));
       }
       this.#pending.clear();
       for (const fn of this.#closeListeners) fn(code);

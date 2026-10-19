@@ -137,6 +137,21 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    backpressure: >-
+      T-2026-10-19-009 item 6 (spec §11.2 rule 12, Orca audit Adopt 6):
+      high/low watermarks — server.ts pauses reading above writeHighWater
+      (1 MiB) and resumes only at or below writeLowWater (256 KiB,
+      DEFAULT_WRITE_LOW_WATER, clamped to the high mark); the context
+      exposes writeLowWater; the log.read{follow} pump (log-read.ts) stopped
+      at the high mark re-waits a drain until the buffer is at or below the
+      low mark (no flapping). Delivery unknown: RpcConnection (client.ts)
+      answers every pending (written, unanswered) call with ENGINE
+      {reason:'delivery-unknown'} when the connection closes;
+      connection-closed only for a call made after the close (never sent).
+      Same in src/clients/ts/client.ts and the GUI client
+      (DELIVERY_UNKNOWN). Client-local, not wire reasons. Tests:
+      test/web-backpressure.test.ts (every platform), gnomon-gui
+      test/gui.test.ts.
     method-registry: >-
       T-2026-10-19-009 item 4 (spec §5, Orca audit Adopt 4): methods.ts
       MethodRegistry — every gnomon-rpc:v1 method (12 verbs + 2 relays) is
@@ -335,10 +350,20 @@ components:
       - test/socket-abi.test.ts
       - test/refusal-reasons.test.ts
       - test/verb-access.test.ts
+      - test/web-backpressure.test.ts
     aspects: ["~ample-internal-logs"]
     oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
 
   web-endpoint:
+    watermarks: >-
+      T-2026-10-19-009 item 6 (§11.2 rule 12): the transport child reports
+      `pressure` above writeHighWater (WS_WRITE_HIGH_WATER 1 MiB) and `drain`
+      only at or below writeLowWater (WS_WRITE_LOW_WATER 256 KiB, a new
+      ChildConfig field); 1008 past 8 MiB unchanged. The GUI WebSocket
+      connection context carries writeLowWater for the log.read{follow}
+      pump. The built-in GUI bundle was re-embedded (gui-bundle.ts) for the
+      GUI client's DELIVERY_UNKNOWN change. Tests:
+      test/web-backpressure.test.ts, test/web-child.test.ts.
     description: >-
       #web-endpoint (spec §2.1, §4.9 WebSocket paragraph, §11.2, §15.5
       `transport`, §2.4 linger; M1.4). The kernel half (src/kernel/web/) and

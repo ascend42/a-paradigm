@@ -14,7 +14,8 @@
  *
  * Per connection: the inbound frame cap starts at the pre-auth 16 KiB and is
  * raised only by a kernel `limit` record (sent on authentication); unsent
- * bytes above `writeHighWater` are reported as `pressure` (then `drain`), and
+ * bytes above `writeHighWater` are reported as `pressure`, and `drain` only
+ * once they are back at or below `writeLowWater` (hysteresis), and
  * a connection whose unsent bytes pass `maxSocketBuffer` (8 MiB) is closed
  * 1008 (backpressure).
  *
@@ -179,7 +180,7 @@ export function runWebChild(io: WebChildIo): void {
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(p.key)}\r\n\r\n`);
     const c: WsConn = { socket, pressured: false, decoder: new FrameDecoder(config!.preAuthMaxFrameBytes), missed: 0, timer: null, reported: false, closing: false };
     socket.on('drain', () => {
-      if (c.pressured && (socket.writableLength ?? 0) <= config!.writeHighWater) {
+      if (c.pressured && (socket.writableLength ?? 0) <= Math.min(config!.writeLowWater ?? config!.writeHighWater, config!.writeHighWater)) {
         c.pressured = false;
         emit({ t: 'drain', rid });
       }

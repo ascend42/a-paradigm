@@ -422,6 +422,17 @@ describe('block buttons and the client (C6, I5)', () => {
     expect(seen).toEqual(['BAD_REQUEST:malformed-json']);
     await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'TIMEOUT', reason: 'call-timeout' } });
   });
+  it('FALSIFIER (T-2026-10-19-009 item 6): a drop after send rejects DELIVERY_UNKNOWN, a call after the drop CLOSED; never success', async () => {
+    const sent: string[] = [];
+    const t = { send: (s: string) => void sent.push(s), close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
+    const c = new GnomonClient(t, { callTimeoutMs: 5000 });
+    const inFlight = c.call('approve', { cardId: 'card:x', decision: 'allow' });
+    expect(sent.length).toBe(1);
+    t.onClose!(1006);
+    await expect(inFlight).rejects.toMatchObject({ refusal: { code: 'DELIVERY_UNKNOWN', reason: 'delivery-unknown' } });
+    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'CLOSED', reason: 'socket-closed' } });
+    expect(sent.length).toBe(1);
+  });
   it('T-2026-10-18-016 r2: an engine whose RNG throws fails the hello stage visibly and sends nothing (connect never throws)', async () => {
     const sent: string[] = [];
     const t = { send: (s: string) => void sent.push(s), close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };

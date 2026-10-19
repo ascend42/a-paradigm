@@ -44,7 +44,10 @@ components:
       sig check, auth {launchToken}|{reconnect}, calls, notifications,
       gnomonPost for POST /diag and /blob with X-Gnomon-Token and
       referrerPolicy same-origin; per-call timeout; id:null error frames
-      surface as a notice + /diag) - swapped for the published #client-ts
+      surface as a notice + /diag; a call written and unanswered when the
+      socket closes rejects DELIVERY_UNKNOWN{delivery-unknown}, a call after
+      the close CLOSED{socket-closed}, T-2026-10-19-009 item 6; setup treats
+      both as stopped) - swapped for the published #client-ts
       (M1.12) in slice 2. The GUI defines NO sanitizer (Aegis C1): every
       string goes through gnomon-contracts sanitizeDisplayText (display.ts,
       tested with conformance/display.v1.json through the render path, plus

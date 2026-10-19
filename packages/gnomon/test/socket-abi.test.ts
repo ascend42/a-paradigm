@@ -76,6 +76,9 @@ import {
 import { sleep, tempHome, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 
+/** A call racing a server-side close: never served — `connection-closed` if the client saw the close first, `delivery-unknown` if it was written into the dying socket (T-2026-10-19-009 item 6). */
+const GONE = /^(connection-closed|delivery-unknown)$/;
+
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -261,7 +264,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     const expectRefused = async (params: (h: HelloResult) => unknown, reason: string): Promise<void> => {
       const { c, hello } = await helloOn(r);
       expect(errOf(await c.call('auth', params(hello))), reason).toMatchObject({ code: -32001, c: 'AUTH', reason });
-      expect(errOf(await c.call('status'))).toMatchObject({ reason: 'connection-closed' });
+      expect(errOf(await c.call('status'))).toMatchObject({ reason: expect.stringMatching(GONE) });
     };
     const sock = r.d.pidfile.socketPath;
     await expectRefused(() => ({ token: live.token }), 'auth-params'); // the bearer form is never accepted
@@ -410,7 +413,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     const s2 = await asToken(r, b.token);
     r.now.t += 10 * 60_000;
     expect(errOf(await s2.conn.call('status', {}))).toMatchObject({ c: 'AUTH', reason: 'token-expired' });
-    expect(errOf(await s2.conn.call('status', {}))).toMatchObject({ reason: 'connection-closed' });
+    expect(errOf(await s2.conn.call('status', {}))).toMatchObject({ reason: expect.stringMatching(GONE) });
     await settle();
     const disc = rows(r.home).filter((x) => x.kind === 'socket.disconnect').map((x) => x.env.payload);
     expect(disc).toEqual([

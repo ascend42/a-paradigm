@@ -363,8 +363,9 @@ export class GnomonClient {
 
   #onClose(): void {
     this.#closed = true;
-    const closed = { error: { code: -32000, message: 'connection closed', data: refuse({ code: 'ENGINE', data: { reason: 'connection-closed' } }) } };
-    for (const cb of this.#pending.values()) cb(closed);
+    // every pending request was written and got no reply: delivery unknown, never success or a plain close (T-2026-10-19-009 item 6)
+    const unknown = { error: { code: -32000, message: 'connection dropped before the reply: delivery unknown', data: refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }) } };
+    for (const cb of this.#pending.values()) cb(unknown);
     this.#pending.clear();
     for (const s of this.#subs.values()) s.h.end?.({ reason: 'closed', since: s.cursor });
     this.#subs.clear();
