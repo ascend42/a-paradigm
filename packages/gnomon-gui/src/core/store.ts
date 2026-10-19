@@ -154,7 +154,15 @@ export class GuiStore {
       this.kernelFeed.push(r);
       what.add('feed');
     }
-    if (r.kind === 'approval.request') {
+    if (r.kind === 'daemon.start') {
+      // §2.4 rule 11 (T-2026-10-19-014 B2): a kernel (re)started; every card raised before it belonged to the old
+      // process (its broker is gone, an old card id is refused), so none stays clickable
+      if (this.cards.size) {
+        for (const id of this.cards.keys()) what.add(`card-out:${id}`);
+        this.cards.clear();
+        what.add('cards');
+      }
+    } else if (r.kind === 'approval.request') {
       const card = (p.card && typeof p.card === 'object' ? p.card : null) as Record<string, unknown> | null;
       if (card && typeof card.cardId === 'string') {
         this.cards.set(card.cardId, {

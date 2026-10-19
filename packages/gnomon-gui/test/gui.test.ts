@@ -602,7 +602,7 @@ describe('#gui log.read cursor (journal.cursor)', () => {
   const epoch = () => new RpcError({ code: 'BAD_REQUEST', reason: 'cursor-epoch', message: 'the cursor names another log', next: [], data: { reason: 'cursor-epoch' } });
 
   it('the hello offers journal.cursor', () => {
-    expect(GUI_FEATURES).toEqual(['journal.cursor']);
+    expect(GUI_FEATURES).toEqual(['journal.cursor', 'session.resume']);
   });
 
   it('every resume sends the {logId, seq} cursor, never a bare seq', async () => {
@@ -669,5 +669,20 @@ describe('#gui log.read cursor (journal.cursor)', () => {
     expect(store.head).toBe(0);
     expect(store.kernelFeed).toHaveLength(0);
     expect(store.cursor()).toBeUndefined();
+  });
+});
+
+/* ── §2.4 rule 11 (T-2026-10-19-014 B2): an old kernel's cards are dropped on the new kernel's daemon.start ── */
+describe('#gui store after an upgrade', () => {
+  it('a new daemon.start drops every card raised before it, so a stale card id cannot be clicked', () => {
+    const s = new GuiStore();
+    const card = (seq: number, cardId: string): Row => ({ seq, kind: 'approval.request', payload: { card: { cardId, kind: 'daemon-stop' } } });
+    s.apply([card(1, 'card:01JAAAAAAAAAAAAAAAAAAAAAAA')]);
+    expect(s.stack().map((c) => c.cardId)).toEqual(['card:01JAAAAAAAAAAAAAAAAAAAAAAA']);
+    const what = s.apply([{ seq: 2, kind: 'daemon.start', payload: { pid: 1 } }]);
+    expect(what.has('card-out:card:01JAAAAAAAAAAAAAAAAAAAAAAA')).toBe(true);
+    expect(s.stack()).toEqual([]);
+    s.apply([card(3, 'card:01JBBBBBBBBBBBBBBBBBBBBBBB')]); // a card of the new kernel stays
+    expect(s.stack().map((c) => c.cardId)).toEqual(['card:01JBBBBBBBBBBBBBBBBBBBBBBB']);
   });
 });
