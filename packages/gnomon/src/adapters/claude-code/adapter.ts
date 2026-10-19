@@ -55,7 +55,11 @@ export type SettingSource = (typeof SETTING_SOURCES)[number];
  *   - `audited` (DEFAULT, founder ruling P8-D94): user only, plus the repo's
  *     project/local hooks the KERNEL extracted and the human approved per
  *     hook (kernel/supervisor/repo-hooks.ts), written into the session's own
- *     policy.json (`--settings`); unapproved, denied or unsafe hooks never run;
+ *     policy.json (`--settings`); unapproved, denied or unsafe hooks never run.
+ *     P8-D97: the repo's CONTEXT still loads — `--add-dir` memory dirs (with
+ *     REPO_CONTEXT_ENV) and a kernel-staged `--plugin-dir` of its skills,
+ *     agents and commands with frontmatter hooks stripped
+ *     (kernel/supervisor/repo-context.ts; probe p10m-repo-context);
  *   - `all` (the slice-1 behaviour): user, project, local — your hooks AND
  *     any hooks committed in the repo's `.claude/settings.json`, raw;
  *   - `user-only`: user — your own hooks, never the repo's;
@@ -65,6 +69,11 @@ export type SettingSource = (typeof SETTING_SOURCES)[number];
 export const SESSION_HOOKS_MODES = Object.freeze(['audited', 'all', 'user-only', 'none'] as const);
 export type SessionHooksMode = (typeof SESSION_HOOKS_MODES)[number];
 export const DEFAULT_SESSION_HOOKS: SessionHooksMode = 'audited';
+
+/** P8-D97: only `audited` loads the repo's context through the kernel (`all` loads it natively; the others not at all). */
+export function repoContextFor(mode: SessionHooksMode): boolean {
+  return mode === 'audited';
+}
 
 export function settingSourcesFor(mode: SessionHooksMode): readonly SettingSource[] {
   switch (mode) {
@@ -114,6 +123,10 @@ export interface ClaudeArgvInput {
   settingSources: readonly SettingSource[];
   appendSystemPrompt?: string;
   model?: string;
+  /** P8-D97: kernel-staged plugin dirs (`--plugin-dir`, each once) — the repo's stripped skills, agents, commands. */
+  pluginDirs?: readonly string[];
+  /** P8-D97: memory dirs (`--add-dir`, each once) — loaded as CLAUDE.md dirs with REPO_CONTEXT_ENV. */
+  addDirs?: readonly string[];
   /** Extra flags (never a forbidden one). */
   extra?: readonly string[];
 }
@@ -143,6 +156,8 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
     '--setting-sources', i.settingSources.join(','),
     '--mcp-config', i.mcpConfigPath,
     '--strict-mcp-config',
+    ...[...new Set(i.pluginDirs ?? [])].flatMap((d) => ['--plugin-dir', d]),
+    ...[...new Set(i.addDirs ?? [])].flatMap((d) => ['--add-dir', d]),
     ...(i.appendSystemPrompt !== undefined ? ['--append-system-prompt', i.appendSystemPrompt] : []),
     ...(i.model !== undefined ? ['--model', i.model] : []),
     ...(i.extra ?? []),

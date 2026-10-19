@@ -421,3 +421,14 @@ export function repoSettingsLines(info: RepoSettingsInfo): string[] {
   if (info.unreadable.length) parts.push(`unreadable ${info.unreadable.join(', ')}`);
   return parts.length ? [`not loaded from this repo (informational, P8-D97): ${parts.join('; ')}`] : [];
 }
+
+/** The `gate-class.detected{what:'repo-context'}` payload (names and counts only, bounded). */
+export function repoContextRow(hsid: string, ctx: RepoContext, info: RepoSettingsInfo): Record<string, unknown> {
+  const cap = <T>(l: readonly T[]): T[] => l.slice(0, 64);
+  return {
+    what: 'repo-context', hsid, plugin: ctx.pluginDir !== null, memoryDirs: ctx.memoryDirs.length,
+    skills: cap(ctx.skills), agents: cap(ctx.agents), commands: cap(ctx.commands),
+    refused: cap(ctx.refused), dropped: cap(ctx.dropped), frontmatterHooks: cap(ctx.frontmatterHooks), run: 0,
+    notLoaded: { permissions: info.permissions, envKeys: cap(info.envKeys), otherKeys: cap(info.otherKeys), unreadable: info.unreadable },
+  };
+}

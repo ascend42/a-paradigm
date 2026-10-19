@@ -207,7 +207,7 @@ export const REPO_HOOK_WARNING = 'approving trusts the command and every file it
 export const TOOL_APPROVING_EVENTS: readonly string[] = Object.freeze(['PreToolUse', 'PermissionRequest']);
 export const TOOL_APPROVAL_WARNING = 'This hook can approve tool uses with no card: a PreToolUse or PermissionRequest hook that answers allow runs the tool without asking you (P8-D96).';
 
-export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: RepoHook, root: string): { detail: Record<string, unknown>; lines: string[]; block: Record<string, unknown> } {
+export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: RepoHook, root: string, info: readonly string[] = []): { detail: Record<string, unknown>; lines: string[]; block: Record<string, unknown> } {
   const i = set.hooks.indexOf(h) + 1;
   const lines = [
     // kernel-composed, before any repo-controlled text: the count cannot be pushed off-screen
@@ -218,6 +218,8 @@ export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: Rep
     REPO_HOOK_WARNING,
     // P8-D96 (Aegis): p01b (i) — a PreToolUse/PermissionRequest hook answering allow runs the tool with no card
     ...(TOOL_APPROVING_EVENTS.includes(h.event) ? [TOOL_APPROVAL_WARNING] : []),
+    // P8-D97: what the repo sets besides hooks, NOT loaded (kernel-composed counts and key names, never values)
+    ...info,
     'allow: this hook runs in this repo\'s sessions until the hook set changes. deny: it never runs (edit-in-place is deferred).',
   ];
   return {

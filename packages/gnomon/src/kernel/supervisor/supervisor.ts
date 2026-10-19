@@ -84,12 +84,13 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
 import { answerFor, composePermission, MAX_PENDING_PERMISSIONS } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
+import { buildRepoContext, REPO_CONTEXT_ENV, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -304,7 +305,7 @@ export class SessionSupervisor {
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     // reviewer 9: the child's HOME IS the user home whose layers were scanned
-    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
@@ -347,6 +348,12 @@ export class SessionSupervisor {
       const policyPath = path.join(dir, 'policy.json');
       const mcpConfigPath = path.join(dir, 'mcp.json');
       const hooksMode = this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS;
+      // P8-D97: the repo's CLAUDE.md dirs and a kernel-staged plugin of its skills/agents/commands (hooks stripped)
+      let repoCtx: RepoContext | null = null;
+      if (repoContextFor(hooksMode)) {
+        repoCtx = buildRepoContext({ cwd: req.cwd, userHome, outDir: path.join(dir, 'context') });
+        await this.#o.log('gate-class.detected', repoContextRow(hsid, repoCtx, repoSettingsInfo([req.cwd, ...(req.worktree ? [req.worktree] : [])])), { session: hsid });
+      }
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
@@ -399,7 +406,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources, ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -490,7 +497,7 @@ export class SessionSupervisor {
         continue;
       }
       if (!this.#o.broker) continue;
-      const c = repoHookCard(set, h, roots.join(' + '));
+      const c = repoHookCard(set, h, roots.join(' + '), repoSettingsLines(repoSettingsInfo(roots)));
       try {
         const card = await this.#o.broker.raise({
           kind: 'gate-class', requestedBy: this.#o.kernelPrincipal, hsid, attended: true, detail: c.detail, lines: c.lines, block: c.block,
