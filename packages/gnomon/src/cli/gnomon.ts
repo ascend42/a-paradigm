@@ -21,6 +21,7 @@ import { runReplayCommand } from './replay-cli.js';
 import { runTraceCommand } from './trace-cli.js';
 import { runRulesCommand } from './rules-cli.js';
 import { runModeCommand } from './mode-cli.js';
+import { runVoiceCommand } from './voice-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runSetupCommand } from './setup-cli.js';
 import { runUp, runUpCommand } from './up-cli.js';
@@ -49,6 +50,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'rules') {
   // gui-complete item 2: `gnomon rules list|revoke` (standing always-allow rules, rules-cli.ts)
   runRulesCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'voice') {
+  // voice slice V1 (#gnomon-voice): `gnomon voice setup | enrol | forget` (root-signed, voice-cli.ts)
+  runVoiceCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

@@ -54,7 +54,7 @@ export type ReaderClass =
   | { class: 'mod'; name: string; grantedKinds?: readonly string[] }
   | { class: 'peer' }
   | { class: 'agent' }
-  | { class: 'voice' };
+  | { class: 'voice'; hsid?: string | null };
 
 /** `{kind, hsid, at, hash}` — what a redacting reader gets for a sensitive-column row (§9.3). */
 export interface LogStub {
@@ -144,6 +144,8 @@ export function mayBeVisible(e: Pick<EventV1, 'kind' | 'sensitivity' | 'session'
       return e.session === reader.hsid;
     case 'mod':
       return !columnKind && sens === 'normal' && (e.kind.startsWith(`modns.${reader.name}.`) || (reader.grantedKinds ?? []).includes(e.kind));
+    case 'voice':
+      return sens !== 'secret' && ((reader.hsid != null && e.session === reader.hsid) || e.kind.startsWith('voice.'));
     default:
       return false;
   }
@@ -189,8 +191,16 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
     }
     case 'peer':
       return undefined;
+    case 'voice': {
+      // voice slice V1 (#gnomon-voice): own attached session + voice.*, REDACTED — the read-token row restricted to that
+      // scope (secret hidden, a sensitive-column kind a stub, a sensitive-labelled row hidden, never-fields limited)
+      const inScope = (reader.hsid != null && e.session === reader.hsid) || e.kind.startsWith('voice.');
+      if (!inScope || sens === 'secret') return undefined;
+      if (columnKind) return { seq, view: 'stub', stub: stubOf(e) };
+      if (sens === 'sensitive') return undefined;
+      return { seq, view: 'full', event: limitedView(e) };
+    }
     case 'agent':
-    case 'voice':
       throw logRefusal('UNSUPPORTED', 'reader-unsupported', `the ${reader.class} read projection needs the session tree / voice arms (M1.7, M4.x)`);
   }
 }

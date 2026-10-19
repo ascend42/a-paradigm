@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T21:42:53.811Z'
+generated: '2026-10-19T22:02:09.409Z'
 structure: {}
 key_files:
   config:
@@ -286,6 +286,7 @@ symbols:
   '#purpose-component-gnomon-ts-client': packages/gnomon/
   '#purpose-component-client-conformance': packages/gnomon/
   '#purpose-component-approval-broker': packages/gnomon/
+  '#purpose-component-gnomon-voice': packages/gnomon/
   '#purpose-component-budget-fuse': packages/gnomon/
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
@@ -1358,7 +1359,6 @@ symbols:
   ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
-  '#purpose-ref-component-gnomon-voice': packages/gnomon-contracts/
   $purpose-ref-flow-voice-approval: packages/gnomon-contracts/
   '#purpose-ref-component-ns-hint': packages/gnomon-gui/
   '#purpose-ref-component-ns-cwd': packages/gnomon-gui/
@@ -1375,6 +1375,7 @@ symbols:
   '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
+  $purpose-ref-flow-voice-turn: packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/

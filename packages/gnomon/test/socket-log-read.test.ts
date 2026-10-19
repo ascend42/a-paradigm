@@ -159,8 +159,8 @@ describe('G-ABI-02 rows: status, log.read, ref.resolve for every constructible p
       },
       voice: {
         status: 'served',
-        logRead: { code: -32005, c: 'UNSUPPORTED', reason: 'reader-unsupported', milestone: 'Move 4' },
-        refEv: { code: -32005, c: 'UNSUPPORTED', reason: 'reader-unsupported', milestone: 'Move 4' },
+        logRead: 'served:voice',
+        refEv: { code: -32004, c: 'NOT_FOUND', reason: 'not-found', milestone: undefined },
         refSym: noResolver,
       },
     });

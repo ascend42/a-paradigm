@@ -17,7 +17,7 @@
  *      first-party yet (the GUI launch token / wrapper arrive with
  *      #web-endpoint), so the human's request.* stays FORBIDDEN{kernel-owned,
  *      needs: first-party human-class connection}; the voice cell (arms,
- *      Move 4) refuses ENGINE{not-implemented}; every other class is
+ *      voice slice V7) refuses ENGINE{not-implemented}; every other class is
  *      FORBIDDEN{kernel-owned}.
  *   3. Userland namespaces (`paradigm.* inject.* … modns.<name>.*`):
  *      human/agent need a `grant.bind` listing the kind; no grant row can
@@ -26,7 +26,8 @@
  *      A mod appends only its own `modns.<name>.*` (labels from its manifest,
  *      written by the mod host) ⇒ ENGINE{not-implemented, M1.11} for its own,
  *      FORBIDDEN{modns-not-own} for anything else. Voice appends only
- *      `voice.*` ⇒ ENGINE{not-implemented, Move 4}; anything else FORBIDDEN.
+ *      `voice.*` ⇒ served by #gnomon-voice before this gate (voice slice V1; without
+ *      the port ENGINE{not-implemented}); anything else FORBIDDEN.
  *
  * P8-D86/D87: ONE request kind is served — `request.mode.set` from the human
  * on a first-party connection (credential `gui`, the launch-token GUI session,
@@ -82,7 +83,8 @@ export function refuseAppend(cls: AppendClass, principal: string | undefined, pa
       });
     }
     if (cls === 'voice' && VOICE_REQUEST_KINDS.includes(kind)) {
-      throw new RpcRefusal('ENGINE', 'not-implemented', `${kind} needs voice arms; it lands with Move 4`, { ...data, milestone: 'Move 4' });
+      // voice slice V1 is talk-only: arms (and so request.voice.arm) land in voice slice V7 (T-2026-10-19-026)
+      throw new RpcRefusal('ENGINE', 'not-implemented', `${kind} needs voice arms; Gnomon voice is talk-only until voice slice V7`, { ...data, milestone: 'voice V7' });
     }
     return kernelOwned();
   }
@@ -98,7 +100,8 @@ export function refuseAppend(cls: AppendClass, principal: string | undefined, pa
       throw new RpcRefusal('FORBIDDEN', 'modns-not-own', 'a mod appends only its own modns.<name>.* kinds (§5)', data);
     }
     case 'voice':
-      if (kind.startsWith('voice.')) throw new RpcRefusal('ENGINE', 'not-implemented', 'voice kinds need the voice principal\'s session binding; it lands with Move 4', { ...data, milestone: 'Move 4' });
+      // served by #gnomon-voice (dispatch.ts `voice` port) BEFORE this gate; without the port it stays refused
+      if (kind.startsWith('voice.')) throw new RpcRefusal('ENGINE', 'not-implemented', 'voice kinds need the kernel voice port (voice slice V1)', { ...data, milestone: 'voice V1' });
       throw new RpcRefusal('FORBIDDEN', 'ungranted', 'the voice principal appends only voice.* and request.voice.arm (§5)', data);
     default:
       throw new RpcRefusal('FORBIDDEN', 'ungranted', `${kind} needs a grant.bind listing it; signed grants (M1.3) over a loaded manifest (M1.5)`, { ...data, needs: 'grant.bind', milestone: 'M1.5' });

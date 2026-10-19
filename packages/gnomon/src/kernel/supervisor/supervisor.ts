@@ -1073,7 +1073,14 @@ export class SessionSupervisor {
     return s;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean }): Promise<{ turn: string; steered?: boolean }> {
+  /** The owner principal of a live session (Claude or local), or undefined (#gnomon-voice attachment, V1). */
+  ownerOf(hsid: string): string | undefined {
+    const s = this.#sessions.get(hsid);
+    if (s) return s.state === 'running' ? s.owner : undefined;
+    return this.#local.ownerOf(hsid);
+  }
+
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice' }): Promise<{ turn: string; steered?: boolean }> {
     this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
@@ -1109,7 +1116,7 @@ export class SessionSupervisor {
     const n = ++s.turns;
     const contentHash = turnContentHash(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...(p.source === 'voice' ? { source: 'voice' } : {}) }, { session: s.hsid });
     this.#stdin(s, userMessageLine(p.text));
     return { turn: turnId(s.hsid, n) };
   }
