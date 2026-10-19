@@ -3,8 +3,8 @@
   "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; it pins the helper by its code-signing requirement plus the version floor (identity/helper.ts). A timestamped signature changes the sha on every build.",
   "binaries": {
     "bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper": {
-      "sha256": "4416f657fd3ef18f3212d83586363e022418edae94fee174bab8b2a15090096c",
-      "version": "1.3.0",
+      "sha256": "53369208c192f7cc010790c6859c34c0d8648a6c5a6f4bb00f4a13572369e1a5",
+      "version": "1.4.0",
       "signed": true,
       "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
       "team": "SW4BMQ8PNL",
