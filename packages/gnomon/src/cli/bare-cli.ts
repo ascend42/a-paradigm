@@ -70,14 +70,16 @@ const ESCAPE = { test: (c: string): boolean => !SAFE_CP.test(c) || HIDDEN_CP.tes
 
 /** Escape what a terminal or a page could interpret or hide, then cap. Pure; the same rule the GUI applies. */
 export function displayPath(p: string, cap: number = DISPLAY_CAP): string {
-  const cps = [...p];
-  const shown = cps.slice(0, cap).map((c) => (c === '\\' ? '\\\\' : ESCAPE.test(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c));
-  return shown.join('') + (cps.length > cap ? `… (+${cps.length - cap} chars)` : '');
+  // Aegis round 3: checked and shown as q = NFC(p) (a decomposed name composes, an orphan or uncomposable mark
+  // stays and is escaped); the code-point cap is counted on the ORIGINAL p; the prefill (GUI) is p byte for byte
+  const n = [...p].length;
+  const shown = [...p.normalize('NFC')].slice(0, Math.min(cap, n)).map((c) => (c === '\\' ? '\\\\' : ESCAPE.test(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c));
+  return shown.join('') + (n > cap ? `… (+${n - cap} chars)` : '');
 }
 
-/** True when a path needs escaping to be shown: such a path is shown, never prefilled. */
+/** True when a path needs escaping to be shown (checked on NFC(p)): such a path is shown, never prefilled. */
 export function needsEscape(p: string): boolean {
-  return [...p].some((c) => ESCAPE.test(c));
+  return [...p.normalize('NFC')].some((c) => ESCAPE.test(c));
 }
 
 /** The folder a session would open in: the nearest ancestor holding `.git` (dir or file), else the cwd itself. */

@@ -223,7 +223,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:f7f0734c07b609e199a959b0db3b51fd71fcff2f4e5cfaf210f8aa31aabe53db');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:671026ddf7a38622ea90dcf48c9fb3040a17321b38fdc33870b269fa0b017b78');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));

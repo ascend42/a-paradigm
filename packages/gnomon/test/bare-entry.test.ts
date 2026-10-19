@@ -220,6 +220,7 @@ describe('#bare-entry: the shared prefill/escape vectors (Aegis L3)', () => {
     for (const v of vectors.cases) {
       const p = String.fromCodePoint(...v.cps);
       expect(!needsEscape(p), v.name).toBe(v.prefill);
+      if (v.prefill) expect(Buffer.from(hintSuffix(p)!.slice(5), 'base64url').equals(Buffer.from(p, 'utf8')), v.name).toBe(true); // the hint carries the original bytes
       for (const e of v.escaped) expect(displayPath(p), v.name).toContain(e);
     }
   });

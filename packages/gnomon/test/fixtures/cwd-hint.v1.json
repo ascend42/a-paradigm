@@ -1,6 +1,6 @@
 {
   "schema": "gnomon-cwd-hint-vectors:v1",
-  "note": "#bare-entry prefill/escape rule (Aegis L3): prefill iff every code point is shown as itself; read by packages/gnomon/test/bare-entry.test.ts and packages/gnomon-gui/test/gui.test.ts",
+  "note": "#bare-entry prefill/escape rule (Aegis L3): prefill iff every code point is shown as itself; read by packages/gnomon/test/bare-entry.test.ts and packages/gnomon-gui/test/gui.test.ts; checked and displayed on NFC(p), prefilled as p byte for byte, caps counted on p",
   "cases": [
     {
       "name": "plain",
@@ -394,10 +394,50 @@
         101,
         769
       ],
+      "prefill": true,
+      "escaped": [],
+      "note": "composes under NFC to U+00E9: checked and shown as NFC, prefilled as the original bytes"
+    },
+    {
+      "name": "orphan-combining-mark",
+      "cps": [
+        47,
+        114,
+        47,
+        769,
+        97
+      ],
       "prefill": false,
       "escaped": [
         "\\u{301}"
       ]
+    },
+    {
+      "name": "uncomposable-mark",
+      "cps": [
+        47,
+        114,
+        47,
+        120,
+        769
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{301}"
+      ]
+    },
+    {
+      "name": "nfd-hangul-composes",
+      "cps": [
+        47,
+        114,
+        47,
+        4370,
+        4449,
+        4523
+      ],
+      "prefill": true,
+      "escaped": []
     }
   ]
 }

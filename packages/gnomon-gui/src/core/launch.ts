@@ -72,9 +72,12 @@ export function cwdHintOf(b64: string): CwdHint | null {
   }
   if (bytes.length === 0 || bytes.length > CWD_HINT_MAX_BYTES) return null;
   const p = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  const cps = [...p];
-  const display = cps.slice(0, CWD_DISPLAY_CAP).map((c) => (c === '\\' ? '\\\\' : escapes(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c)).join('') + (cps.length > CWD_DISPLAY_CAP ? `… (+${cps.length - CWD_DISPLAY_CAP} chars)` : '');
-  const why = cps.some(escapes) ? 'it holds characters that had to be escaped to show it; type the path yourself' : !p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p) ? 'it is not an absolute path' : null;
+  // Aegis round 3 (the CLI's displayPath/needsEscape rule): checked and shown as q = NFC(p); the code-point cap is
+  // counted on the ORIGINAL p (the byte cap above is on p's bytes); the prefill is p itself, byte for byte
+  const n = [...p].length;
+  const q = [...p.normalize('NFC')];
+  const display = q.slice(0, Math.min(CWD_DISPLAY_CAP, n)).map((c) => (c === '\\' ? '\\\\' : escapes(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c)).join('') + (n > CWD_DISPLAY_CAP ? `… (+${n - CWD_DISPLAY_CAP} chars)` : '');
+  const why = q.some(escapes) ? 'it holds characters that had to be escaped to show it; type the path yourself' : !p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p) ? 'it is not an absolute path' : null;
   return { display, prefill: why ? null : p, why };
 }
 
@@ -144,10 +147,10 @@ export function decidePin(fragmentKey: string | null, pinned: string | null): Pi
   if (fragmentKey) {
     if (!pinned) return { ok: true, verifyWith: fragmentKey, store: fragmentKey, notice: null };
     if (pinned === fragmentKey) return { ok: true, verifyWith: fragmentKey, store: null, notice: null };
-    return { ok: true, verifyWith: fragmentKey, store: fragmentKey, notice: 'kernel key changed since this page last pinned it; the new key came from `gnomon open` and is pinned now' };
+    return { ok: true, verifyWith: fragmentKey, store: fragmentKey, notice: 'kernel key changed since this page last pinned it; the new key came with this launch and is pinned now' };
   }
   if (pinned) return { ok: true, verifyWith: pinned, store: null, notice: null };
-  return { ok: false, reason: 'no-pin', message: 'no pinned kernel key on this page: run `gnomon open`' };
+  return { ok: false, reason: 'no-pin', message: 'no pinned kernel key on this page: run `gnomon` (or `gnomon up`) in a terminal' };
 }
 
 /**

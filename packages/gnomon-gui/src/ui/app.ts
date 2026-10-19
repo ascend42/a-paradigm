@@ -297,7 +297,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   try {
     t = await webSocketTransport(endpointPath);
   } catch {
-    return showReconnect('the endpoint is not reachable: run `gnomon open`');
+    return showReconnect('the endpoint is not reachable: run `gnomon` (or `gnomon up`) in a terminal');
   }
   const c = new GnomonClient(t);
   const out = await c.connect({ surface: SURFACE, endpointPath, verifyKey: pin.verifyWith, auth, subtle: globalThis.crypto?.subtle });
@@ -324,7 +324,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
     const from = shortKeyId(previousPin);
     const to = shortKeyId(pin.verifyWith);
-    put($('repin-text'), `kernel key re-pinned from ${from} to ${to} (the new key came through \`gnomon open\`)`);
+    put($('repin-text'), `kernel key re-pinned from ${from} to ${to} (the new key came with a launch from \`gnomon\` or \`gnomon up\`)`);
     $('repin').hidden = false;
     void gnomonPost(fetch, '/diag', out.session.guiToken, `kernel key re-pinned from ${from} to ${to}`).catch(() => undefined);
   }

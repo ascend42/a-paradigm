@@ -528,6 +528,7 @@ describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
       const p = String.fromCodePoint(...v.cps);
       const h = cwdHintOf(Buffer.from(p, 'utf8').toString('base64url'))!;
       expect(h.prefill !== null, v.name).toBe(v.prefill);
+      if (v.prefill) expect(Buffer.from(h.prefill!, 'utf8').equals(Buffer.from(p, 'utf8')), v.name).toBe(true); // the ORIGINAL bytes, not NFC
       for (const e of v.escaped) expect(h.display, v.name).toContain(e);
     }
   });
@@ -560,5 +561,16 @@ describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
     expect(submit).toMatch(/if \(!e\.isTrusted\) return;[\s\S]*clearCwdHint\(hintTarget\(\)\)[\s\S]*openSession\(/);
     const neu = app.slice(app.indexOf("id === 'session.new'"), app.indexOf("id === 'composer.focus'"));
     expect(neu).toContain('clearCwdHint(hintTarget())');
+  });
+});
+
+describe('#gui messages name a command that exists (round 3)', () => {
+  it('no page text tells the user to run `gnomon open` (it has no verb yet); NFD input is shown composed and prefilled as is', () => {
+    for (const f of [path.join(ROOT, 'src', 'core', 'launch.ts'), path.join(ROOT, 'src', 'ui', 'app.ts')]) expect(readFileSync(f, 'utf8')).not.toMatch(/run `gnomon open`|came (from|through) \\?`gnomon open/);
+    expect(decidePin(null, null)).toMatchObject({ ok: false, message: expect.stringContaining('run `gnomon` (or `gnomon up`) in a terminal') });
+    const nfd = '/r/cafe' + String.fromCodePoint(0x301);
+    const h = cwdHintOf(Buffer.from(nfd, 'utf8').toString('base64url'))!;
+    expect(h.display).toBe('/r/caf' + String.fromCodePoint(0xe9));
+    expect(h.prefill).toBe(nfd);
   });
 });
