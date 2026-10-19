@@ -44,7 +44,16 @@ type Cdp = { send: (method: string, params?: Record<string, unknown>, sessionId?
 
 /** Headless Chrome with a private profile; resolves the browser's CDP connection. */
 async function chrome(): Promise<Cdp> {
-  const profile = tmp('gch-');
+  // Chrome's helper processes (crashpad, GPU) can still write the profile after the browser exits:
+  // retry the removal and never fail the test on it (CI 39275468949: ENOTEMPTY on macos-15)
+  const profile = fs.realpathSync.native(fs.mkdtempSync(path.join(privateTmpRoot(), 'gch-')));
+  cleanups.push(() => {
+    try {
+      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {
+      /* a lingering Chrome helper: the OS tmp reaper takes it */
+    }
+  });
   const p: ChildProcess = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   cleanups.push(() => new Promise<void>((r) => (p.exitCode !== null ? r() : (p.once('exit', () => r()), p.kill('SIGKILL')))));
   const wsUrl = await new Promise<string>((resolve, reject) => {
