@@ -11,8 +11,8 @@
  * misrenders a check weakens nothing.
  *
  * Checks: helper (signed, pinned, answers; not run from a sandboxed shell),
- * touch-id (warn "unknown until first prompt": no non-prompting probe op in
- * helper 1.3.x — TODO presence.available), macos, sip, claude (resolved +
+ * touch-id (helper 1.4.0 `presence.available`: LAContext canEvaluatePolicy,
+ * never a prompt → pass / fail), macos, sip, claude (resolved +
  * pin none/match/mismatch; law-7 billing env), runtime (NODE_OPTIONS / node
  * flags), node (floor), generations (leftover Secure Enclave keys → purge,
  * never adopt), home (dev marker, symlink, malformed identity.json: shown,
@@ -100,6 +100,7 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
 
   // helper: pinned (signature), answers key.list (no prompt)
   let leftover: string[] = [];
+  let touch: PreflightCheck = { id: 'touch-id', status: 'fail', detail: 'unknown: the helper did not answer', fix: 'reinstall Gnomon (the signed GnomonHelper.app ships with it)' };
   if (i.env.GNOMON_HSID || i.env.APP_SANDBOX_CONTAINER_ID) {
     add({ id: 'helper', status: 'fail', detail: 'this shell runs inside a Gnomon session or an app sandbox', fix: 'run setup from your own terminal' });
   } else {
@@ -109,6 +110,10 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
       helper = i.start ? i.start(pin) : HelperProcess.start(pin);
       const keys = await listHelperKeys(helper);
       leftover = leftoverGens(keys, existing);
+      const p = await helper.request({ op: 'presence.available' });
+      touch = p.available === true
+        ? { id: 'touch-id', status: 'pass', detail: p.biometrics === true ? 'Touch ID is available (asked without a prompt)' : 'presence is available (passcode; no Touch ID enrolled)' }
+        : { id: 'touch-id', status: 'fail', detail: `presence is not available${typeof p.error === 'string' ? ` (${p.error})` : ''}`, fix: 'enable Touch ID in System Settings → Touch ID & Password' };
       add({ id: 'helper', status: 'pass', detail: `signed helper pinned: ${pin.exe}` });
     } catch (e) {
       add({ id: 'helper', status: 'fail', detail: e instanceof Error ? e.message : 'the helper could not be pinned', fix: 'reinstall Gnomon (the signed GnomonHelper.app ships with it)' });
@@ -116,9 +121,7 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
       await helper?.close().catch(() => undefined);
     }
   }
-  // TODO(T-2026-10-19-005 MVP-b): a non-prompting `presence.available` helper op (LAContext canEvaluatePolicy)
-  // needs a re-signed helper and a MIN_HELPER_VERSION bump; until then this is unknown.
-  add({ id: 'touch-id', status: 'warn', detail: 'unknown until the first prompt (the helper cannot ask without prompting yet)', fix: 'enable Touch ID in System Settings → Touch ID & Password' });
+  add(touch);
   add({ id: 'generations', status: leftover.length ? 'warn' : 'pass', detail: leftover.length ? `the Secure Enclave holds Gnomon keys of generation(s) ${leftover.join(', ')} that this home does not use` : 'no leftover Gnomon keys', ...(leftover.length ? { fix: 'purge them (one Touch ID per key); setup never adopts them' } : {}) });
 
   if (platform === 'darwin') {

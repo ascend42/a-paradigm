@@ -45,6 +45,8 @@ export function helperLine(key: string, msgs: readonly Buffer[]): string {
 }
 
 export interface FakeHelperOptions {
+  /** presence.available: false = no Touch ID / passcode on this Mac */
+  touchId?: boolean;
   /** false = the human declines every prompt */
   touch?: boolean;
   /** sign with this key instead of the real one (an impostor / broken helper) */
@@ -139,6 +141,8 @@ export class FakeHelper implements HelperTransport {
     }
     const k = this.keys.get(`${String(req.gen)}.${String(req.key)}`);
     switch (req.op) {
+      case 'presence.available':
+        return { available: this.opts.touchId !== false, biometrics: this.opts.touchId !== false };
       case 'key.list':
         return { ok: true, keys: [...this.keys.keys()].map((t) => ({ gen: t.split('.')[0], key: t.split('.')[1] })) };
       case 'key.create': {

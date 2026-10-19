@@ -24,15 +24,17 @@
 //                                               process created itself (failed-provision cleanup)
 //   sign        {key, gen, mode: fresh|cached, connId?, keep?, reason, messages[]}
 //                                             → {sigs[], kept}
+//   presence.available                        → {available, biometrics, error?}  (LAContext canEvaluatePolicy; NEVER a prompt)
 //   unlock.drop {connId}                      → {dropped}
 //   unlock.drop-all                           → {dropped: n}
 //
 // Refuses to run sandboxed (P8-D68): {"ok":false,"error":"sandboxed"}, exit 3.
 
 import Foundation
+import LocalAuthentication
 import Security
 
-let gnomonHelperVersion = "1.3.0"
+let gnomonHelperVersion = "1.4.0"
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {
@@ -78,6 +80,18 @@ func handle(_ req: Json) throws -> Json {
     switch op {
     case "info":
         return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": unlocks.count]
+
+    case "presence.available":
+        // #setup-preflight (T-2026-10-19-005 MVP-b): canEvaluatePolicy only asks whether a prompt COULD run; it never shows one
+        let ctx = LAContext()
+        var bioErr: NSError?
+        let bio = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &bioErr)
+        var anyErr: NSError?
+        let any = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &anyErr)
+        ctx.invalidate()
+        var r: Json = ["available": any, "biometrics": bio]
+        if let e = bioErr ?? anyErr { r["error"] = "LAError \(e.code)" }
+        return r
 
     case "key.list":
         return ["keys": listKeys().map { ["gen": $0.gen, "key": $0.key.rawValue] }]

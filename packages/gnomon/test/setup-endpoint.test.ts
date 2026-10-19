@@ -231,4 +231,16 @@ describe('#setup-endpoint', () => {
     expect(fs.existsSync(identityPath(home))).toBe(false);
     expect([...fake.keys.keys()]).toEqual([]);
   });
+
+  it('touch-id: presence.available (helper 1.4.0, no prompt) makes the row pass or fail, never warn', async () => {
+    for (const [touchId, status, ok] of [[true, 'pass', true], [false, 'fail', false]] as const) {
+      const { ep } = rig({ fake: new FakeHelper(null, { touchId }) });
+      const g = await ep.start();
+      const { ws } = await attach(g);
+      const r = (await call(ws, 3, 'setup.preflight')).result as { ok: boolean; checks: Array<{ id: string; status: string }> };
+      expect(r.checks.find((c) => c.id === 'touch-id')?.status).toBe(status);
+      expect(r.ok).toBe(ok);
+      await ep.stop();
+    }
+  });
 });

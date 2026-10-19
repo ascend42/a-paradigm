@@ -777,8 +777,8 @@ components:
     description: >-
       #setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no
       key, no file write, no prompt; only key.list): helper signed+pinned and
-      not from a sandboxed shell, touch-id (warn "unknown until first prompt":
-      no presence.available op in helper 1.3.x, TODO), macos, sip (csrutil;
+      not from a sandboxed shell, touch-id (helper 1.4.0 presence.available:
+      LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil;
       off = warn), claude (resolved, pin none/match/mismatch → `gnomon session
       repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags),
       node floor, leftover generations (purge, never adopt), home state (dev
