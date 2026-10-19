@@ -748,6 +748,27 @@ components:
       - test/identity-cli.test.ts
       - test/setup.test.ts
 
+  setup-endpoint:
+    description: >-
+      #setup-endpoint (spec §11.2 rule 11, §2.4 rule 9; T-2026-10-19-005
+      MVP-b) — the SETUP MODE loopback endpoint: a #web-endpoint (same
+      gnomon-web transport child, rules.ts, 127.0.0.1 only, the SAME pinned
+      #gui bundle) whose dispatcher is the closed gnomon-setup:v1 protocol
+      (gnomon-contracts setup.ts, own SETUP_API_ID; clientApiId unchanged):
+      hello / auth {setupToken} / setup.preflight / setup.name / setup.begin /
+      setup.purge {gen} / setup.finish, events setup.state and setup.presence
+      {n,of,purpose,digest12}. No gnomon-rpc verb is reachable. An ephemeral
+      Ed25519 setup key signs serverSig. One setup connection; a closed
+      socket aborts the #provisioner at its next step boundary. Exact params
+      key sets: the page carries only name, a server-listed gen, and clicks.
+      Entry: bare gnomon / gnomon setup on a TTY print the setup URL (and
+      every expected digest: the terminal is the surface to trust); gnomon
+      setup --cli keeps the prompts; up --wrapper emits {t:setup,...} and then
+      continues into {t:up}. Falsified in test/setup-endpoint.test.ts
+      (G-SET-08..14) and test/wrapper-channel.test.ts.
+    file: src/kernel/setup/setup-endpoint.ts
+    gates: ["^setup-token", "^unprovisioned-only"]
+    tags: [kernel, setup, web]
   setup-preflight:
     description: >-
       #setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no
@@ -2179,6 +2200,15 @@ flows:
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 gates:
+  setup-token:
+    description: >-
+      ^setup-token (spec §11.2 rule 11) — the one-shot setup token of the
+      #setup-endpoint: 32 bytes, 60 s TTL, single use, carried only in the URL
+      fragment #setup=<tok>&k=<spki>[&cwd=…] on the TTY line or the wrapper's
+      channel pipe; never argv, env, files or logs. A reuse inside the TTL
+      aborts provisioning and journals setup.token-reuse (no token in it); a
+      second setup connection is refused.
+    prizes: []
   unprovisioned-only:
     description: >-
       ^unprovisioned-only (spec §2.4 rule 9): #first-run provisions only a

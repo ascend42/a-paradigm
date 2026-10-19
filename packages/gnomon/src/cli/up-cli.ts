@@ -36,6 +36,8 @@
  * pins it from the launch fragment and this CLI pins it in-process; other
  * socket clients report serverVerified:false.
  */
+import { hasIdentityFile } from '../kernel/identity/index.js';
+import { runGuiSetup, type GuiSetupDeps } from './setup-cli.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -102,6 +104,18 @@ export interface UpKernel extends InProcessKernel {
 /** #first-run: the default home is set up by the guided `gnomon setup` (bare `gnomon` runs it on a terminal). */
 const initHint = (home: string, dflt: boolean): string => (dflt ? 'gnomon setup   (or just `gnomon` in a repo: it sets this Mac up first)' : `gnomon identity init --home ${home}`);
 /** Gnomon.app (MVP-a): the app has no setup screens yet, so it names the step without a command to paste. */
+/** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json. */
+function unprovisionedHome(userHome?: string): boolean {
+  const h = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(h);
+  } catch {
+    return true;
+  }
+  return st.isDirectory() && !isDevHome(h) && !hasIdentityFile(h);
+}
+
 export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet. In-app setup is coming; until then, run gnomon once in Terminal and it walks you through it';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
@@ -257,6 +271,10 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
   }
   const unsafe = unsafeRuntime(deps.runtime);
   if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper, code);
+  if (wrapper && given === undefined && unprovisionedHome(deps.userHome)) {
+    const s = await runGuiSetup(io, { ...(deps as GuiSetupDeps), handleSignals: false }, 'wrapper');
+    if (!s.provisioned) return UP_EXIT_REFUSED;
+  }
   let k: UpKernel;
   let home: string | undefined;
   try {

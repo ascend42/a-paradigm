@@ -48,13 +48,16 @@ import {
   type ProvisionEvent,
 } from '../kernel/identity/index.js';
 import { runPreflight, type PreflightCheck } from '../kernel/setup/preflight.js';
+import { SetupEndpoint, type SetupEndpointOptions, type SetupGrant } from '../kernel/setup/setup-endpoint.js';
+import { readIdentity } from '../kernel/identity/provision.js';
+import { channelLine, channelRefused } from './launch-tty.js';
 
 export const SETUP_EXIT_OK = 0;
 export const SETUP_EXIT_REFUSED = 1;
 export const SETUP_EXIT_USAGE = 64;
 
 export const SETUP_USAGE = `gnomon ${GNOMON_VERSION} setup — set up Gnomon on this Mac (guided; two Touch ID prompts)
-usage: gnomon setup        (the home is ~/.gnomon; GNOMON_HOME and --home are not read: use \`gnomon identity init\` for those)
+usage: gnomon setup [--cli]  (default: the setup screens in your browser; --cli: prompts in this terminal. the home is ~/.gnomon; GNOMON_HOME and --home are not read: use \`gnomon identity init\` for those)
 `;
 
 export const WELCOME = `Welcome to Gnomon.
@@ -310,12 +313,104 @@ export async function runSetupCommand(argv: readonly string[], io: LaunchTtyIo, 
     io.stdout.write(SETUP_USAGE);
     return SETUP_EXIT_OK;
   }
-  if (argv.length > 0) {
-    io.stderr.write(`gnomon setup: unknown argument (${argv.length}); setup takes none\n${SETUP_USAGE}`);
+  const cli = argv[0] === '--cli';
+  if (argv.length > (cli ? 1 : 0)) {
+    io.stderr.write(`gnomon setup: unknown argument (${argv.length}); setup takes only --cli\n${SETUP_USAGE}`);
     return SETUP_EXIT_USAGE;
   }
-  const r = await runSetup(io, deps);
+  const r = cli || (deps as GuiSetupDeps).surface === 'cli' ? await runSetup(io, deps) : await runGuiSetup(io, deps, 'tty');
   if (r.code !== SETUP_EXIT_OK || !r.provisioned || !deps.continueUp) return r.code;
   io.stdout.write('\nStarting Gnomon…\n');
   return deps.continueUp();
+}
+
+/** #setup-endpoint seams (tests): the transport child entry and the #web-endpoint factory. */
+export interface GuiSetupDeps extends SetupDeps {
+  /** 'cli' = the terminal prompts (`gnomon setup --cli`); default 'gui' = the setup screens */
+  surface?: 'gui' | 'cli';
+  scriptPath?: string;
+  createWeb?: SetupEndpointOptions['createWeb'];
+  /** tests: called with the grant once the endpoint listens (the page side) */
+  onGrant?: (g: SetupGrant) => void;
+}
+
+export const GUI_SETUP_TRUST =
+  'This terminal is the surface to trust: before each Touch ID prompt it prints the code the dialog must show.\n' +
+  'If the page and this terminal ever disagree, believe this terminal and press Cancel. Cancelling is always safe.\n';
+
+/**
+ * #setup-endpoint from a launch surface: the TTY (bare `gnomon`, `gnomon setup`) prints the setup URL on ONE
+ * terminal line (printLaunch rules: only to a TTY; the token nowhere else) and every expected digest; the wrapper
+ * (`up --wrapper`) gets `{t:'setup',port,setupToken,setupPublicKey,bundleHash,expiresAt}` on its channel pipe.
+ */
+export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty' | 'wrapper', urlSuffix = ''): Promise<SetupResult> {
+  const env = deps.runtime?.env ?? process.env;
+  const fail = (reason: string, message: string, next: readonly string[] = []): SetupResult => {
+    if (via === 'wrapper') channelRefused(io, 'setup', reason, message, next);
+    else refused(io.stderr, 'setup', reason, message, next);
+    return { code: SETUP_EXIT_REFUSED, provisioned: false };
+  };
+  if (env.GNOMON_HSID) return fail('forbidden', 'gnomon setup is a human-only verb; it is refused from a kernel-spawned shell');
+  if (via === 'tty' && (deps.isTty ?? (io.stdin.isTTY === true && io.stdout.isTTY === true)) !== true) return fail('not-interactive', 'the setup URL carries a single-use token: it is printed only to an interactive terminal');
+  let home: string;
+  try {
+    home = resolveSetupHome(deps.userHome);
+  } catch (e) {
+    if (e instanceof SetupRefusal) return fail(e.reason, e.message, e.next);
+    throw e;
+  }
+  if (fs.existsSync(home) && daemonState(home).state === 'running') return fail('daemon-running', `a kernel already runs on ${home}`);
+  const ep = new SetupEndpoint({
+    home,
+    userHome: deps.userHome ?? os.homedir(),
+    helperPath: deps.helperPath ?? defaultHelperPath(),
+    host: sanitizeHost(os.hostname()),
+    defaultName: sanitizeName(os.userInfo().username),
+    env,
+    unsafe: unsafeRuntime(deps.runtime),
+    ...(deps.verifier ? { verifier: deps.verifier } : {}),
+    ...(deps.startHelper ? { start: deps.startHelper } : {}),
+    ...(deps.once ? { once: deps.once } : {}),
+    ...(deps.exec ? { exec: deps.exec } : {}),
+    ...(deps.platform ? { platform: deps.platform } : {}),
+    ...(deps.scriptPath ? { scriptPath: deps.scriptPath } : {}),
+    ...(deps.createWeb ? { createWeb: deps.createWeb } : {}),
+    // Aegis: started from a terminal, the terminal ALSO prints each expected digest, and is the surface to trust
+    ...(via === 'tty' ? { onEvent: renderPresence(io) } : {}),
+  });
+  let g: SetupGrant;
+  try {
+    g = await ep.start();
+  } catch (e) {
+    await ep.stop();
+    return fail('setup-endpoint', e instanceof Error ? e.message : 'the setup endpoint did not start', via === 'tty' ? ['gnomon setup --cli'] : []);
+  }
+  deps.onGrant?.(g);
+  if (via === 'wrapper') channelLine(io.stdout, { t: 'setup', port: g.port, setupToken: g.setupToken, setupPublicKey: g.setupPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
+  else io.stdout.write(`${WELCOME}\n  open this in your browser within 60 s (single use) to set up Gnomon on screens:\n\n  ${g.url}${urlSuffix}\n\n${GUI_SETUP_TRUST}  (prefer prompts here? Ctrl-C, then: gnomon setup --cli)\n`);
+  const onSigint = (): void => void ep.stop();
+  if (deps.handleSignals !== false) process.on('SIGINT', onSigint);
+  // the wrapper channel: `quit` or EOF (the app went away) aborts setup; the provisioner cleans up at its next step
+  let buf = '';
+  const onData = (d: Buffer | string): void => {
+    buf += String(d);
+    if (buf.split('\n').some((l) => l.trim() === 'quit')) void ep.stop();
+  };
+  const onEnd = (): void => void ep.stop();
+  if (via === 'wrapper') {
+    io.stdin.on('data', onData);
+    io.stdin.on('end', onEnd);
+  }
+  try {
+    const r = await ep.done;
+    if (!r.ok) return fail(r.reason, r.message, ['gnomon setup']);
+    const rec = readIdentity(home);
+    if (via === 'tty' && rec) summary(io, home, rec);
+    return { code: SETUP_EXIT_OK, provisioned: true, home };
+  } finally {
+    if (deps.handleSignals !== false) process.off('SIGINT', onSigint);
+    io.stdin.off('data', onData);
+    io.stdin.off('end', onEnd);
+    await ep.stop();
+  }
 }

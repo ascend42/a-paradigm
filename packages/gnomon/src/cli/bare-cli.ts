@@ -33,7 +33,7 @@ import { refused } from './readout.js';
 import type { LaunchTtyIo } from './launch-tty.js';
 import { runUp, type UpDeps, type UpRefusal } from './up-cli.js';
 import { isDevHome } from './dev-home.js';
-import { runSetup, type SetupDeps } from './setup-cli.js';
+import { runGuiSetup, runSetup, type GuiSetupDeps } from './setup-cli.js';
 import { resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { hasIdentityFile } from '../kernel/identity/index.js';
 
@@ -130,7 +130,7 @@ export interface BareDeps extends UpDeps {
   /** The working directory (default process.cwd()). */
   cwd?: string;
   /** #first-run test seams (helper path, fake helper, the TTY verdict). */
-  setup?: SetupDeps;
+  setup?: GuiSetupDeps;
 }
 
 /** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json at all. */
@@ -155,7 +155,8 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
   // then this same process continues into up with the folder hint. Not a TTY: up's own refusal, unchanged.
   const tty = deps.setup?.isTty ?? (io.stdin.isTTY === true && io.stdout.isTTY === true);
   if (tty && unprovisionedDefaultHome(deps.userHome)) {
-    const s = await runSetup(io, { ...deps, ...deps.setup });
+    const sd = { ...deps, ...deps.setup } as GuiSetupDeps;
+    const s = sd.surface === 'cli' ? await runSetup(io, sd) : await runGuiSetup(io, sd, 'tty', hintSuffix(folderOf(deps.cwd ?? process.cwd()).folder) ?? '');
     if (!s.provisioned) return s.code;
     io.stdout.write('\nStarting Gnomon…\n');
   }

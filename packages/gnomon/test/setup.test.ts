@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runBareCommand } from '../src/cli/bare-cli.js';
-import { groupDigest, runSetup, type SetupDeps } from '../src/cli/setup-cli.js';
+import { groupDigest, runSetup, type GuiSetupDeps } from '../src/cli/setup-cli.js';
 import {
   acceptUnsignedHelperForTests,
   DEV_TEST_HELPER_ACK,
@@ -84,13 +84,14 @@ function view(fake: FakeHelper, ops: string[], gate?: (r: Record<string, unknown
   };
 }
 
-function deps(userHome: string, fake: FakeHelper, ops: string[] = [], extra: Partial<SetupDeps> = {}): SetupDeps {
+function deps(userHome: string, fake: FakeHelper, ops: string[] = [], extra: Partial<GuiSetupDeps> = {}): GuiSetupDeps {
   return {
     userHome,
     verifier: DEV,
     startHelper: view(fake, ops),
     once: () => (req) => fake.handle(req),
     helperPath: exe(tmp()),
+    surface: 'cli',
     isTty: true,
     handleSignals: false,
     runtime: { env: {}, execArgv: ['--disable-sigusr1'] },
