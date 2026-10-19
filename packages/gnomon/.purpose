@@ -1563,6 +1563,14 @@ components:
       repo's non-hook settings are NOT loaded: repoSettingsInfo /
       repoSettingsLines put counts and key names (never values) on each
       repo-hook card and on gate-class.detected{what:'repo-context'}.
+      ROUND 2 (Aegis): auditMemoryDir refuses a memory dir with a symlinked
+      memory file or an @ import (importTargets, Claude's grammar, depth 5)
+      reaching outside the git top-level (memoryRefused, on cards via
+      repoContextLines); hasShellPreprocessing refuses skills/commands with
+      !`...` or ```! and policy.json gets REPO_CONTEXT_SETTINGS
+      (disableSkillShellExecution); every SKILL.md at any depth sanitized; M3
+      continuation/control-character rules; memoryChainOf feeds the policy's
+      memoryDirs write-denies (M1); dotfiles skipped, readdir failures refused.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
@@ -1679,7 +1687,9 @@ components:
       after a signed config => none), wired by the daemon into #supervisor
       and logged as session.sandbox.settingSources. P8-D97: pluginDirs
       (--plugin-dir) and addDirs (--add-dir), deduped; repoContextFor(mode)
-      is true for audited only. The §3.3 argv with FORBIDDEN_FLAGS
+      is true for audited only. Q6: EXTRA_FLAGS allow-list (--max-turns,
+      --no-session-persistence) and ARGV_GRAMMAR/assertArgv (each kernel flag
+      once; --agents/--tools never; one variadic --add-dir). The §3.3 argv with FORBIDDEN_FLAGS
       throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
       TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
       `malformed` — the falsifier); UsageMeter charges each message id once
