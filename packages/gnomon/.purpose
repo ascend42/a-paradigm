@@ -661,8 +661,18 @@ components:
 
   gnomon-up:
     description: >-
-      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>]`, the
+      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>] [--wrapper]`, the
       production counterpart of `gnomon dev up`: the REAL-HOME GUI launcher.
+      M1.13 (#gnomon-wrapper): `--wrapper` (also on `gnomon dev up`) is the
+      mode Gnomon.app spawns: launch-tty.ts serveWrapperChannel speaks
+      gnomon-wrapper-channel:v1 NDJSON on stdout (up / launch{port,
+      launchToken, kernelPublicKey, bundleHash, expiresAt} / launch-failed /
+      refused{code,reason,message,next} / down) and reads `launch` | `quit`
+      on stdin (EOF = quit); human lines go to stderr; a stdout or stdin that
+      is a terminal or a regular file is refused `wrapper-channel` before any
+      kernel starts. The token is on that pipe only — never argv, env, a file
+      or a log (test/wrapper-channel.test.ts, P07-style ps argv+env sampler
+      with a positive control).
       src/cli/up-cli.ts; the in-process launcher and terminal loop are shared
       with #dev-launch in src/cli/launch-tty.ts (attachInProcess, printLaunch,
       serveInProcess: one copy of the launch rules). Runs startDaemon IN THE

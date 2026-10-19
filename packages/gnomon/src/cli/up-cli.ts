@@ -42,7 +42,7 @@ import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
 import { isDevHome } from './dev-home.js';
-import { attachInProcess, serveInProcess, unsafeRuntime, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
+import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 import { canConnectSocket, daemonState, isLifecycleRefusal, resolveGnomonHome, selectSocketPath, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
 import {
   IdentityError,
@@ -62,8 +62,9 @@ export const UP_EXIT_REFUSED = 1;
 export const UP_EXIT_USAGE = 64;
 
 export const UP_USAGE = `gnomon ${GNOMON_VERSION} up — run the kernel on your provisioned home and open the GUI
-usage: gnomon up [--home <abs>]   (default ~/.gnomon; GNOMON_HOME is not read)
+usage: gnomon up [--home <abs>] [--wrapper]   (default ~/.gnomon; GNOMON_HOME is not read)
   Needs \`gnomon identity init\` first. Refuses a dev home and a home whose kernel already runs.
+  --wrapper: spawned by Gnomon.app (#gnomon-wrapper): the launch grant goes on the stdout pipe the app holds, never a terminal.
 `;
 
 /** Test seams, programmatic only (gnomon.ts passes none): never env, never argv. */
@@ -192,13 +193,15 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
   return { ...k, home, identity: hw, deviceId: device.deviceId };
 }
 
-function report(io: LaunchTtyIo, e: UpRefusal): number {
-  refused(io.stderr, 'up', e.reason, e.message, e.next);
+function report(io: LaunchTtyIo, e: UpRefusal, wrapper = false): number {
+  if (wrapper) channelRefused(io, 'up', e.reason, e.message, e.next);
+  else refused(io.stderr, 'up', e.reason, e.message, e.next);
   return UP_EXIT_REFUSED;
 }
 
 export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, deps: UpDeps = {}): Promise<number> {
   let given: string | undefined;
+  let wrapper = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === '--help' || a === '-h') {
@@ -212,29 +215,40 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
         return UP_EXIT_USAGE;
       }
       given = path.resolve(v);
+    } else if (a === '--wrapper') {
+      wrapper = true;
     } else {
       io.stderr.write(`gnomon up: unknown argument ${a}\n${UP_USAGE}`);
       return UP_EXIT_USAGE;
     }
   }
   // Aegis C1: before any home is read or the helper opens, the process that will hold the keys must be clean
+  // #gnomon-wrapper: the channel must be the parent's pipe BEFORE anything else (a refusal itself goes on it)
+  if (wrapper) {
+    const bad = wrapperChannelProblem(io);
+    if (bad) {
+      refused(io.stderr, 'up', 'wrapper-channel', bad, ['open Gnomon.app, or run `gnomon up` without --wrapper in a terminal']);
+      return UP_EXIT_REFUSED;
+    }
+  }
   const unsafe = unsafeRuntime(deps.runtime);
-  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']));
+  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper);
   let k: UpKernel;
   try {
     const { home, isDefault } = resolveUpHome(given, deps.userHome);
     await refuseUnfitHome(home, isDefault);
     k = await startUpKernel(home, deps);
   } catch (e) {
-    if (e instanceof UpRefusal) return report(io, e);
+    if (e instanceof UpRefusal) return report(io, e, wrapper);
     if (isLifecycleRefusal(e)) {
-      refused(io.stderr, 'up', e.reason, e.message);
+      if (wrapper) channelRefused(io, 'up', e.reason, e.message);
+      else refused(io.stderr, 'up', e.reason, e.message);
       return UP_EXIT_REFUSED;
     }
     throw e;
   }
   const r = k.identity.record;
-  const code = await serveInProcess(k, io, {
+  const code = await (wrapper ? serveWrapperChannel : serveInProcess)(k, io, {
     code: 'up',
     noun: 'kernel',
     rows: [

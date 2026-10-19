@@ -20,6 +20,7 @@
  * nothing in this module chooses a home, a root or a key. Writes plain text
  * to the streams it is given (zero deps, G-SEC-01; readout.ts voice).
  */
+import * as fs from 'node:fs';
 import * as readline from 'node:readline';
 import { DISABLE_SIGUSR1, selectSocketPath, sigusr1Refusal, type DaemonHandle } from '../kernel/lifecycle/index.js';
 import type { LaunchGrant } from '../kernel/web/endpoint.js';
@@ -180,5 +181,112 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   rl?.close();
   for (const s of STOP_SIGNALS) process.off(s, onSignal);
   io.stdout.write(`DOWN  ${o.noun} (${reason})\n`);
+  return stopFailed ? 1 : 0;
+}
+
+/* ── the wrapper channel (#gnomon-wrapper, spec §11.1, §11.2 rule 2; M1.13) ─────────────────── */
+
+/**
+ * `--wrapper`: the parent is the desktop wrapper (Gnomon.app), which spawned
+ * this process with a clean env and holds BOTH ends of its stdio pipes. The
+ * channel is newline-delimited JSON (`gnomon-wrapper-channel:v1`):
+ *   child → wrapper, on stdout:  {v:1,t:'up'} · {v:1,t:'launch',port,launchToken,kernelPublicKey,bundleHash,expiresAt}
+ *                                · {v:1,t:'launch-failed',message} · {v:1,t:'refused',code,reason,message,next} · {v:1,t:'down',reason}
+ *   wrapper → child, on stdin:   `launch` (mint a fresh single-use token) · `quit`; EOF = quit (the wrapper went away)
+ * The token travels ONLY on that pipe: never argv, never env, never a file,
+ * never a log line. The human-readable lines go to stderr.
+ * A stdout or stdin that is a terminal or a regular file is refused
+ * (`wrapper-channel`): the channel is a pipe or a socket the parent holds.
+ */
+export const WRAPPER_CHANNEL = 'gnomon-wrapper-channel:v1';
+
+/** What an fd-backed stream is (a stream with no fd is in-memory: only tests build one; the CLI passes process stdio). */
+export function channelKind(s: { fd?: unknown; isTTY?: boolean }): 'pipe' | 'socket' | 'tty' | 'file' | 'other' | 'in-memory' {
+  if (s.isTTY === true) return 'tty';
+  if (typeof s.fd !== 'number') return 'in-memory';
+  let st: fs.Stats;
+  try {
+    st = fs.fstatSync(s.fd);
+  } catch {
+    return 'other';
+  }
+  if (st.isFIFO()) return 'pipe';
+  if (st.isSocket()) return 'socket';
+  if (st.isCharacterDevice()) return 'tty';
+  if (st.isFile()) return 'file';
+  return 'other';
+}
+
+/** Null when stdin/stdout form a private parent channel; else why not. */
+export function wrapperChannelProblem(io: LaunchTtyIo): string | null {
+  const ok = (k: string): boolean => k === 'pipe' || k === 'socket' || k === 'in-memory';
+  const out = channelKind(io.stdout as { fd?: unknown; isTTY?: boolean });
+  const inp = channelKind(io.stdin as { fd?: unknown; isTTY?: boolean });
+  if (!ok(out)) return `stdout is a ${out}: --wrapper writes the launch token only to a pipe its parent holds (Gnomon.app spawns this)`;
+  if (!ok(inp)) return `stdin is a ${inp}: --wrapper reads its commands only from the parent's pipe`;
+  return null;
+}
+
+/** One channel line. Never pass anything but the fields named in WRAPPER_CHANNEL. */
+export function channelLine(out: Out, msg: Record<string, unknown>): void {
+  out.write(`${JSON.stringify({ v: 1, ...msg })}\n`);
+}
+
+/** A refusal on the channel (for the wrapper's window) AND as text on stderr (for its log). */
+export function channelRefused(io: LaunchTtyIo, code: string, reason: string, message: string, next: readonly string[] = []): void {
+  refused(io.stderr, code, reason, message, next);
+  channelLine(io.stdout, { t: 'refused', code, reason, message, next: [...next] });
+}
+
+/**
+ * Serve an in-process kernel to the wrapper over its stdio channel until it
+ * exits: `up`, then one `launch` grant per `launch` command, `quit` / EOF /
+ * SIGINT / SIGTERM / SIGHUP stop. Same stop rules as serveInProcess.
+ * Returns 0, or 1 when the stop itself failed.
+ */
+export async function serveWrapperChannel(k: InProcessKernel, io: LaunchTtyIo, o: ServeOptions): Promise<number> {
+  let stopping = false;
+  let stopFailed = false;
+  let stopped: Promise<void> = Promise.resolve();
+  const stop = (): void => {
+    if (stopping) return;
+    stopping = true;
+    io.stderr.write(`STOPPING  ${o.noun}\n`);
+    stopped = k.stop().catch((e: unknown) => {
+      stopFailed = true;
+      refused(io.stderr, o.code, 'stop-failed', e instanceof Error ? e.message : String(e));
+    });
+  };
+  const onSignal = (): void => stop();
+  for (const s of STOP_SIGNALS) process.on(s, onSignal);
+  io.stderr.write(`UP  ${o.noun} (in this process, wrapper channel)\n`);
+  readout(io.stderr, o.rows);
+  channelLine(io.stdout, { t: 'up' });
+  const mint = async (): Promise<void> => {
+    if (stopping) return;
+    try {
+      const g = await k.launch();
+      // the grant's own fields only: the url is rebuilt by the wrapper (it never needs a second copy of the token)
+      channelLine(io.stdout, { t: 'launch', port: g.port, launchToken: g.launchToken, kernelPublicKey: g.kernelPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      refused(io.stderr, o.code, 'web-launch', m);
+      channelLine(io.stdout, { t: 'launch-failed', message: m });
+    }
+  };
+  const rl = readline.createInterface({ input: io.stdin, terminal: false });
+  rl.on('line', (l) => {
+    const cmd = l.trim();
+    if (cmd === 'quit') stop();
+    else if (cmd === 'launch') void mint();
+    else io.stderr.write(`  ignored an unknown wrapper command (${cmd.length} chars)\n`);
+  });
+  rl.on('close', () => stop()); // EOF: the wrapper went away, so does its kernel
+  const reason = await k.handle.exited;
+  await stopped;
+  rl.close();
+  for (const s of STOP_SIGNALS) process.off(s, onSignal);
+  io.stderr.write(`DOWN  ${o.noun} (${reason})\n`);
+  channelLine(io.stdout, { t: 'down', reason: String(reason) });
   return stopFailed ? 1 : 0;
 }
