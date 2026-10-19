@@ -59,6 +59,7 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'subscriptions.backlogCap': 'limit',
   'budget.subscriptionWindow.windowMs': 'limit',
   'web.port': 'ordinal',
+  'voice.echoTailMs': 'limit', // configured echo tail (spec §14.7 config)
 });
 
 export interface StatusNumberFinding {

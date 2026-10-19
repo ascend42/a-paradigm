@@ -38,7 +38,7 @@ components:
       drops a connId's unlock and every arm naming it. SessionWatch.swift
       observes screen lock, screensaver, display sleep, system sleep and
       user switch (distributed + NSWorkspace notifications, IOKit power, a
-      250 ms CGSession poll), invalidates every arm and unlock, bumps the
+      CGSession poll at a 250 ms cadence), invalidates every arm and unlock, bumps the
       epoch (a prompt open across the event is never kept), then pushes an
       unsolicited {push:'session', cause, arms, unlocks, seq} line. serve
       runs requests on a reader thread and the main run loop for the
