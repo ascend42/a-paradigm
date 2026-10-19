@@ -101,10 +101,10 @@ export function takeRestart(s: StorageLike): { resumeToken: string; kernelPublic
 }
 
 /** Poll the page's own origin until it answers (the successor's static bundle); false after `tries`. */
-export async function waitForOrigin(fetchFn: (u: string) => Promise<{ ok: boolean }>, origin: string, o: { intervalMs?: number; tries?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<boolean> {
-  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+export async function waitForOrigin(fetchFn: (u: string) => Promise<{ ok: boolean }>, origin: string, o: { intervalMs?: number; tries?: number; between?: (ms: number) => Promise<void> } = {}): Promise<boolean> {
+  const between = o.between ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let i = 0; i < (o.tries ?? ORIGIN_POLL_TRIES); i++) {
-    await sleep(o.intervalMs ?? ORIGIN_POLL_MS);
+    await between(o.intervalMs ?? ORIGIN_POLL_MS);
     try {
       if ((await fetchFn(`${origin}/`)).ok) return true;
     } catch {

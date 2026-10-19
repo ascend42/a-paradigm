@@ -42,9 +42,9 @@ describe('#gui restart', () => {
 
   it('origin poll: true once it answers; false after the tries (then guidance in plain words)', async () => {
     let n = 0;
-    const sleep = async () => undefined;
-    expect(await waitForOrigin(async () => ({ ok: ++n >= 3 }), 'http://127.0.0.1:1', { sleep, tries: 5 })).toBe(true);
-    expect(await waitForOrigin(async () => { throw new Error('down'); }, 'http://127.0.0.1:1', { sleep, tries: 3 })).toBe(false);
+    const between = async () => undefined;
+    expect(await waitForOrigin(async () => ({ ok: ++n >= 3 }), 'http://127.0.0.1:1', { between, tries: 5 })).toBe(true);
+    expect(await waitForOrigin(async () => { throw new Error('down'); }, 'http://127.0.0.1:1', { between, tries: 3 })).toBe(false);
     expect(RESTART_GUIDANCE).toMatch(/Gnomon\.app/);
   });
 });

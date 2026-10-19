@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T22:17:27.616Z'
+generated: '2026-10-19T22:55:44.996Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -276,6 +275,8 @@ symbols:
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-dev-launch': packages/gnomon/
   '#purpose-component-wrapper-channel': packages/gnomon/
+  '#purpose-component-update-watch': packages/gnomon/
+  '#purpose-component-gui-resume': packages/gnomon/
   '#purpose-component-bare-entry': packages/gnomon/
   '#purpose-component-provisioner': packages/gnomon/
   '#purpose-component-setup-endpoint': packages/gnomon/
@@ -1370,6 +1371,7 @@ symbols:
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
+  '!purpose-ref-signal-daemon-update-detected': packages/gnomon/
   $purpose-ref-flow-USER: packages/gnomon/
   ^purpose-ref-gate-unprovisioned-only.: packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
