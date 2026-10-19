@@ -225,3 +225,34 @@ export function collectGitInputs(repo: string): HashInput[] {
 export function gitHash(repo: string): string {
   return digestInputs(GIT_HASH_SCHEMA, collectGitInputs(repo));
 }
+
+/**
+ * §15.7 gate-class, as a PATH test (P8-D87 run mode `auto-edits`): the hashes above detect a gate-class change
+ * after the fact; an edit the kernel is asked to pass with no card is tested BEFORE it runs, on its path relative
+ * to the session root. The set is the hashed layers' (`.claude/**`, `CLAUDE.md`, `CLAUDE.local.md`, `.git/**`,
+ * `.gitattributes`) plus the rest of §15.7's list (`.gnomon/**`, test config, `package.json` and lockfiles,
+ * pipeline files) and the files that run or route code at the repo's say (`.husky/**`, `.mcp.json`, npm/yarn rc).
+ * Case-folded and segment-wise, so `.Claude/x`, `sub/.git/hooks/y` and `docs/Claude-notes.md` all count; every
+ * name the steering deny covers (`claude*.md`, any case, anywhere) counts. Returns the matched rule, or null.
+ * Conservative on purpose: a false positive costs one card, a false negative an unasked write.
+ */
+const GATE_DIRS: ReadonlySet<string> = new Set(['.claude', '.gnomon', '.git', '.github', '.gitlab', '.circleci', '.husky', '.buildkite']);
+const GATE_FILES: ReadonlySet<string> = new Set([
+  '.gitattributes', '.gitmodules', '.gitlab-ci.yml', '.travis.yml', 'azure-pipelines.yml', 'jenkinsfile', 'bitbucket-pipelines.yml',
+  'package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bun.lock', 'bun.lockb',
+  '.npmrc', '.yarnrc', '.yarnrc.yml', '.mcp.json', 'pytest.ini', 'tox.ini', 'conftest.py', 'noxfile.py',
+]);
+const GATE_TEST_CONFIG = /^(vitest|vite|jest|playwright|cypress|karma|mocha|ava|wdio|nightwatch)\.(config|workspace)(\.[a-z0-9]+)+$|^\.mocharc(\.[a-z0-9]+)*$|^babel\.config(\.[a-z0-9]+)+$/;
+const GATE_MEMORY_NAME = /^claude[^/\\]*\.md$/;
+
+export function gateClassPathRule(relPath: string): string | null {
+  const segs = relPath.split(/[\\/]+/).filter((s) => s !== '' && s !== '.').map((s) => s.normalize('NFC').toLowerCase());
+  if (segs.length === 0 || segs.includes('..')) return 'outside-root';
+  for (const s of segs.slice(0, -1)) if (GATE_DIRS.has(s)) return `dir:${s}`;
+  const base = segs[segs.length - 1]!;
+  if (GATE_DIRS.has(base)) return `dir:${base}`;
+  if (GATE_MEMORY_NAME.test(base)) return 'memory-file';
+  if (GATE_FILES.has(base)) return `file:${base}`;
+  if (GATE_TEST_CONFIG.test(base)) return 'test-config';
+  return null;
+}

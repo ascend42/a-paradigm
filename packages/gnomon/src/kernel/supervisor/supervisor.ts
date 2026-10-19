@@ -106,6 +106,9 @@ import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTING
 import type { LocalLaneConfig } from '../local/config.js';
 import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
+import { autoEditPass } from './auto-edits.js';
+import { WRITE_EXEC_TOOLS } from '../broker/run-mode.js';
+import type { RunMode } from '@a-company/gnomon-contracts';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -218,6 +221,11 @@ export interface SupervisorOptions {
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
   alwaysRule?: (repoKey: string, tool: string, inputHash: string) => { ruleId: string } | null;
+  /**
+   * P8-D87 run modes (broker/run-mode.ts RunModeControl.view): the session's EFFECTIVE mode (stricter of the chosen
+   * mode and the strictness ceiling), read at every permission request. Absent ⇒ `ask` (Move 1's behaviour).
+   */
+  runMode?: (hsid: string, repoKey: string) => { effective: RunMode; source?: string } | null;
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
@@ -244,6 +252,8 @@ export interface OpenRequest {
   backend?: 'claude-code' | 'local';
   model?: string;
   systemPrompt?: string;
+  /** P8-D86 session.open{runMode}: the mode set for this session at open (written on the session.open row); a looser one is never passed here (it takes a card) */
+  runMode?: RunMode;
 }
 
 interface Session {
@@ -282,6 +292,9 @@ interface Session {
   drained?: DrainOutcome;
   /** #trace-capture: the raw stream tee when the cwd is traced */
   trace: TraceStream | null;
+  /** P8-D87 manual: the effective mode seen at the last permission request, and whether a plan was approved since manual began */
+  lastMode: RunMode | null;
+  planApproved: boolean;
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -477,7 +490,7 @@ export class SessionSupervisor {
     const principalId = this.#principalFor(hsid);
     const uuid = r?.uuid ?? randomUUID();
     const userHome = this.#o.userHome ?? os.homedir();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid, principalClass: req.principalClass, ...(r ? { resume: { drainedEventId: r.drainedEventId, outcome: r.outcome } } : {}) }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid, principalClass: req.principalClass, ...(req.runMode ? { runMode: req.runMode } : {}), ...(r ? { resume: { drainedEventId: r.drainedEventId, outcome: r.outcome } } : {}) }, { session: hsid });
     const row = claudeCodePlatform(this.#platform);
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
@@ -635,7 +648,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -906,6 +919,39 @@ export class SessionSupervisor {
     }
     const b = this.#o.broker;
     const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
+    // P8-D87 run modes: the EFFECTIVE mode, read now (a change takes effect at the next request)
+    let mode: RunMode = 'ask';
+    try {
+      mode = this.#o.runMode?.(s.hsid, repoKey)?.effective ?? 'ask';
+    } catch {
+      mode = 'manual'; // an unreadable mode never loosens anything
+    }
+    if (mode !== s.lastMode) {
+      if (mode === 'manual') s.planApproved = false; // manual is plan-first from the moment it applies
+      s.lastMode = mode;
+    }
+    if (mode === 'manual' && WRITE_EXEC_TOOLS.has(ev.toolName) && !s.planApproved) {
+      // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
+      await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
+      return;
+    }
+    if (mode === 'auto-edits' && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
+      const pass = autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines);
+      if (pass.ok) {
+        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
+        let logged = false;
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, path: pass.path, inputHash: plan.inputHash, modeRef: 'mode:auto-edits' });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+        if (logged) {
+          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: 'mode:auto-edits' });
+          return;
+        }
+      }
+    }
     if (plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
       // S-L1: an exact (repo, tool, inputHash) match of a kernel-derived `always` rule ⇒ allow with no card, approval.auto first
       let rule: { ruleId: string } | null = null;
@@ -986,6 +1032,7 @@ export class SessionSupervisor {
         return;
       }
     }
+    if (e.cardKind === 'plan' && decision === 'approve-plan') s.planApproved = true; // manual: writes and exec may now raise cards
     const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
     const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
     await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
@@ -1216,6 +1263,18 @@ export class SessionSupervisor {
       ...this.#history,
       ...this.#local.status(),
     ];
+  }
+
+  /** P8-D87: a LIVE Claude session's mode scope (repo key over its roots, cwd); null when unknown or exited. */
+  scopeOf(hsid: string): { hsid: string; repoKey: string; cwd: string } | null {
+    const s = this.#sessions.get(hsid);
+    if (!s || s.state === 'exited') return null;
+    return { hsid: s.hsid, repoKey: repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]), cwd: s.cwd };
+  }
+
+  /** P8-D87: every live Claude session's mode scope (status.runModes). */
+  liveScopes(): Array<{ hsid: string; repoKey: string; cwd: string }> {
+    return [...this.#sessions.keys()].map((h) => this.scopeOf(h)).filter((x): x is { hsid: string; repoKey: string; cwd: string } => x !== null);
   }
 
   /** One session's state (tests, status): running | stopping | exited | null. */

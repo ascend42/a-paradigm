@@ -186,6 +186,17 @@ no card (${tick('approval.auto')}). It needs fresh presence every time, so under
 cached unlock it is refused ${tick('FORBIDDEN{presence}')} and the presence prompt is
 raised instead.
 
+Run modes (${tick('runMode')} on ${tick('session.open')}, or ${tick('request.mode.set')} from the human):
+${tick('manual')} holds writes and commands until a ${tick('plan')} card is approved; ${tick('ask')} (the
+default) raises a ${tick('permission')} card for each; ${tick('auto-edits')} passes file edits inside
+the session's own folder with no card, each logged ${tick('approval.auto')}, while Bash,
+network, edits outside the folder and gate-class paths still raise a card. A
+session takes its repo's mode unless one is set for it. A stricter mode
+applies at once (${tick('approval.mode.set')}); a looser one raises a ${tick('strictness')} card
+that takes fresh presence. A mode over the repo's strictness ceiling is
+refused ${tick('FORBIDDEN{strictness-mode}')}; strictness levels are not built yet, so
+today every mode is under the ceiling. As an agent you never set a mode.
+
 Deny-safe settlement: anything other than a decoded allow is deny. A cancel
 from the session settles the card into deny, once. An ${tick('approve')} on a card
 that is no longer pending is refused before any prompt, and a card the

@@ -292,10 +292,24 @@ export interface DispatcherOptions {
    * device connection (credential 'device'); the handler owns its own params check.
    */
   humanVerbs?: HumanDeviceVerbPorts;
+  /**
+   * §5 `request.*` append exception, served kinds (P8-D86/D87): `log.append{kind:'request.mode.set', payload}` from
+   * a HUMAN on a first-party connection — the GUI launch-token session (credential `gui`) or this home's human device
+   * (credential `device`, `gnomon mode`) — goes to the run-mode control (broker/run-mode.ts), which writes the
+   * kernel-signed request row and answers. Every other request kind keeps log-append.ts's refusal. Absent ⇒ refused.
+   * `status()` is the human class's `status.runModes`.
+   */
+  requests?: HumanRequestPort;
   /** The method registry (default KERNEL_METHODS: the 12 verbs + 2 relays). Test seam for the fail-closed check. */
   methods?: MethodRegistry;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
+}
+
+/** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
+export interface HumanRequestPort {
+  modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+  status(): Record<string, unknown>;
 }
 
 /** The connection a human-device verb runs for (stamped from THIS connection, never from params). */
@@ -406,6 +420,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       sessions: { n: 0 },
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
+      ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -630,7 +645,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     }
     // M1.7 slice 1: session.open/send/stop for a human principal (attended, human-started sessions only)
     if (SESSION_METHODS.includes(m) && cls === 'human' && o.sessions) {
-      const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [] };
+      const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [], connId: s.connId, ...(s.credential ? { credential: s.credential } : {}) };
       try {
         return await (m === 'session.open' ? o.sessions.open(sctx, frame.params) : m === 'session.send' ? o.sessions.send(sctx, frame.params) : o.sessions.stop(sctx, frame.params));
       } catch (err) {
@@ -665,6 +680,17 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     }
 
     if (m === 'log.append') {
+      // P8-D86/D87: request.mode.set from the human on a first-party connection (GUI launch token or human device)
+      const pa = frame.params !== null && typeof frame.params === 'object' && !Array.isArray(frame.params) ? (frame.params as Record<string, unknown>) : null;
+      if (pa?.kind === 'request.mode.set' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.modeSet({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       try {
         refuseAppend(cls as AppendClass, s.principal, frame.params);
       } catch (err) {

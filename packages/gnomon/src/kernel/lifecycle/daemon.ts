@@ -77,6 +77,8 @@ import type { HelperTransport } from '../identity/helper.js';
 import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
+import { modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
+import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
@@ -718,7 +720,22 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     catchUp(ruleBook, ruleSourceOf(log));
     return ruleBook;
   };
-  const supervisor = new SessionSupervisor({
+  // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
+  // persists across sessions and restarts); strictness levels are not built (no level source ⇒ the ceiling permits
+  // every mode). The control is the request.mode.set handler (dispatcher `requests`) and the session port's runMode.
+  const modeBook = new RunModeBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const syncModeBook = (): RunModeBook => {
+    catchUp(modeBook, modeSourceOf(log));
+    return modeBook;
+  };
+  const runModes = new RunModeControl({
+    broker,
+    book: syncModeBook,
+    sessions: { scope: (hsid) => supervisor.scopeOf(hsid), live: () => supervisor.liveScopes() },
+    logRequest: (payload, ids) => log.append({ kind: 'request.mode.set', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
+    repoKeyOfPath: (abs) => repoKeyOf([abs]),
+  });
+  const supervisor: SessionSupervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
     hooksMode: fuseCfg.sessions.hooks,
@@ -734,6 +751,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ),
     // S-L1: standing `always` rules, folded incrementally from KERNEL-signed approval.* rows only (rules.ts)
     alwaysRule: (repoKey, tool, hash) => syncRuleBook().match(repoKey, tool, hash),
+    // P8-D87: the effective run mode at each permission request
+    runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
@@ -754,7 +773,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       }
     },
   });
-  const sessions = createSessionPort(supervisor);
+  const sessions = createSessionPort(supervisor, runModes);
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
     home,
@@ -822,6 +841,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     mods: createModRelayPort(mods),
     sessions,
     approvals,
+    requests: { modeSet: (asker: Parameters<RunModeControl['request']>[0], payload: unknown) => runModes.request(asker, payload), status: () => runModes.status() },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
