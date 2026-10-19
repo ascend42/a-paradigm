@@ -1,0 +1,244 @@
+// @gnomon-platform: darwin, linux
+/**
+ * #gnomon-trace — `gnomon trace` joins the kernel-log rows of a session, its
+ * Claude Code transcript and the raw capture into one time-ordered timeline,
+ * checks every turn.sent contentHash against the transcript prompt, writes
+ * nothing; `gnomon trace on|off|status` keeps per-project trace mode.
+ * Throwaway homes and a throwaway Claude dir only (never the real ~/.claude).
+ */
+import * as fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, describe, expect, it } from 'vitest';
+import { KeyRing, SoftwareEd25519Signer, type KernelLog } from '../src/kernel/log/index.js';
+import { recordKernelPub } from '../src/kernel/identity/index.js';
+import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
+import { openKernelLog } from '../src/kernel/testing.js';
+import { turnContentHash } from '../src/kernel/supervisor/supervisor.js';
+import { setTraceMode, traceModeOf, tracedFolders } from '../src/kernel/trace/mode.js';
+import { encodeClaudeProjectDir, runTraceCommand, type TraceSession } from '../src/cli/trace-cli.js';
+
+const KERNEL = kernelPrincipalOf();
+const HSID = 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0';
+const UUID = '1b4e28ba-2fa1-11d2-883f-0016d3cca427';
+const PROMPT = 'write out.txt\nthen list the folder';
+const T0 = Date.parse('2026-10-19T10:00:00.000Z');
+const iso = (s: number) => new Date(T0 + s * 1000).toISOString();
+
+const dirs: string[] = [];
+const logs: KernelLog[] = [];
+afterEach(async () => {
+  for (const l of logs.splice(0)) await l.close().catch(() => undefined);
+  for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
+});
+
+function tmp(prefix: string): string {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  dirs.push(d);
+  return d;
+}
+
+async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boolean } = {}) {
+  const home = tmp('gnomon-trace-home-');
+  const claudeDir = tmp('gnomon-trace-claude-');
+  const work = tmp('gnomon-trace-work-');
+  const key = SoftwareEd25519Signer.generate('kernel');
+  recordKernelPub(home, key.publicKeyPem);
+  const ring = new KeyRing();
+  ring.addEd25519(key.publicKeyPem);
+  let now = T0;
+  const log = openKernelLog({ home, kernelPrincipal: KERNEL, signer: key, keyRing: ring, clock: () => now });
+  logs.push(log);
+  const at = async (s: number, kind: string, payload: Record<string, unknown>, session: string | undefined = HSID) => {
+    now = T0 + s * 1000;
+    await log.append({ kind, principal: KERNEL, ...(session ? { session } : {}), payload });
+  };
+  await at(0, 'daemon.start', { pid: 1 }, undefined);
+  await at(1, 'session.open', { hsid: HSID, principalId: 'p', by: 'human:founder', cwd: work, worktree: null, backend: 'claude-code', model: 'claude', attended: true, uuid: UUID, principalClass: 'human' });
+  await at(2, 'session.inject', { hsid: HSID, origin: 'client', hash: turnContentHash(PROMPT), bytes: Buffer.byteLength(PROMPT) });
+  await at(2, 'turn.sent', { hsid: HSID, turn: `turn:${HSID}/1`, permitId: 'pmt:1', contentHash: turnContentHash(PROMPT) });
+  await at(5, 'approval.request', { card: { cardId: 'card:1', kind: 'permission', hsid: HSID }, tool: 'Bash' });
+  await at(6, 'approval.decide', { cardId: 'card:1', decision: 'allow', approver: 'human:founder' }, undefined);
+  await at(8, 'turn.result', { hsid: HSID, usage: { tokens: 1234 }, cost: 0.0123, subtype: 'success', isError: false });
+  await at(9, 'session.exited', { hsid: HSID, pid: 2, code: 0, signal: null }, undefined);
+  await at(10, 'daemon.exit', { reason: 'idle' }, undefined);
+  await log.close();
+
+  const project = path.join(claudeDir, 'projects', encodeClaudeProjectDir(work));
+  fs.mkdirSync(project, { recursive: true });
+  const reply = opts.escape ? 'done \u001b]0;pwned\u0007\u001b[31mred' : 'done';
+  const lines = [
+    { type: 'user', timestamp: iso(3), message: { role: 'user', content: [{ type: 'text', text: opts.tamper ? 'write evil.txt' : PROMPT }] } },
+    { type: 'assistant', timestamp: iso(4), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'touch out.txt' } }] } },
+    { type: 'user', timestamp: iso(7), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] } },
+    { type: 'assistant', timestamp: iso(7.5), message: { role: 'assistant', content: [{ type: 'text', text: reply }] } },
+  ];
+  fs.writeFileSync(path.join(project, `${UUID}.jsonl`), `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  if (opts.capture) {
+    const cdir = path.join(work, '.gnomon', 'trace');
+    fs.mkdirSync(cdir, { recursive: true });
+    const name = HSID.replace(/[^A-Za-z0-9._-]/g, '_'); // the filename-safe spelling (':' is not a legal Windows name)
+    fs.writeFileSync(path.join(cdir, `${name}.jsonl`), `${JSON.stringify({ t: iso(2.5), dir: 'in', line: { type: 'user' } })}\nnot json\n${JSON.stringify({ t: iso(7.8), dir: 'out', line: { type: 'result', subtype: 'success' } })}\n`);
+  }
+  return { home, claudeDir, work };
+}
+
+const io = () => {
+  const out: string[] = [];
+  const err: string[] = [];
+  return { out, err, io: { stdout: { write: (s: string) => (out.push(s), true) }, stderr: { write: (s: string) => (err.push(s), true) } } };
+};
+
+async function traceJson(f: { home: string; claudeDir: string }, extra: string[] = []): Promise<TraceSession> {
+  const o = io();
+  expect(await runTraceCommand(['--home', f.home, '--json', ...extra], o.io, { claudeDir: f.claudeDir })).toBe(0);
+  const lines = o.out.join('').trim().split('\n');
+  expect(lines).toHaveLength(1);
+  return JSON.parse(lines[0]!) as TraceSession;
+}
+
+function snapshot(roots: string[]): Map<string, string> {
+  const m = new Map<string, string>();
+  const walk = (p: string) => {
+    const st = fs.statSync(p);
+    m.set(p, `${st.mtimeMs}:${st.size}`);
+    if (st.isDirectory()) for (const c of fs.readdirSync(p)) walk(path.join(p, c));
+  };
+  for (const r of roots) walk(r);
+  return m;
+}
+
+describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
+  it('joins the log rows and the transcript in time order, with the --json shape', async () => {
+    const f = await fixture();
+    const s = await traceJson(f);
+    expect(s.session).toEqual({ hsid: HSID, uuid: UUID, cwd: f.work, principal: 'human:founder' });
+    expect(Object.keys(s).sort()).toEqual(['capture', 'events', 'log', 'session', 'transcript', 'turns', 'usage']);
+    for (const e of s.events) {
+      expect(typeof e.t).toBe('string');
+      expect(['log', 'transcript', 'capture']).toContain(e.source);
+      expect(typeof e.kind).toBe('string');
+    }
+    expect(s.events.map((e) => `${e.source}:${e.kind}`)).toEqual([
+      'log:daemon.start',
+      'log:session.open',
+      'log:session.inject',
+      'log:turn.sent',
+      'transcript:prompt',
+      'transcript:tool_use',
+      'log:approval.request',
+      'log:approval.decide',
+      'transcript:tool_result',
+      'transcript:reply',
+      'log:turn.result',
+      'log:session.exited',
+      'log:daemon.exit',
+    ]);
+    expect(s.log).toMatchObject({ hashChain: 'ok', breaks: 0, signatures: 'not-checked', chainRows: 9, rows: 9 });
+    expect(s.usage).toEqual({ tokens: 1234, costUsd: 0.0123 });
+    expect(s.capture).toEqual({ path: null, lines: 0, skipped: 0 }); // an absent capture is fine
+    expect(s.transcript.lines).toBe(4);
+  });
+
+  it('reports the turn.sent hash as matching the transcript prompt, and a tampered transcript as a mismatch', async () => {
+    const ok = await traceJson(await fixture());
+    expect(ok.turns).toEqual({ sent: 1, matched: 1, mismatched: 0, unchecked: 0 });
+    expect(ok.events.find((e) => e.kind === 'turn.sent')?.verify).toBe('matches-log');
+    expect(ok.events.find((e) => e.kind === 'prompt')?.verify).toBe('matches-log');
+
+    const bad = await fixture({ tamper: true });
+    const t = await traceJson(bad);
+    expect(t.turns).toEqual({ sent: 1, matched: 0, mismatched: 1, unchecked: 0 });
+    expect(t.events.find((e) => e.kind === 'turn.sent')?.verify).toBe('hash-mismatch');
+    const o = io();
+    expect(await runTraceCommand(['--home', bad.home], o.io, { claudeDir: bad.claudeDir })).toBe(0);
+    expect(o.out.join('')).toContain('✗ hash mismatch');
+    const g = io();
+    const good = await fixture();
+    await runTraceCommand(['--home', good.home], g.io, { claudeDir: good.claudeDir });
+    expect(g.out.join('')).toContain('✓ matches log');
+  });
+
+  it('reports a rewritten log row as a broken hash chain', async () => {
+    const f = await fixture();
+    const db = new DatabaseSync(path.join(f.home, 'kernel.db'));
+    db.exec('DROP TRIGGER chain_no_update'); // what a same-user attacker can do (as kernel-log.test.ts)
+    db.prepare("UPDATE chain SET envelope = replace(envelope, 'pmt:1', 'pmt:2') WHERE kind = 'turn.sent'").run();
+    db.close();
+    const s = await traceJson(f);
+    expect(s.log.hashChain).toBe('broken');
+    expect(s.log.firstBreak).toMatch(/hash does not match/);
+    const o = io();
+    await runTraceCommand(['--home', f.home], o.io, { claudeDir: f.claudeDir });
+    expect(o.out.join('')).toContain('hash chain BROKEN');
+  });
+
+  it('sanitizes terminal escape sequences in the human output and truncates unless --full', async () => {
+    const f = await fixture({ escape: true });
+    const o = io();
+    expect(await runTraceCommand(['--home', f.home], o.io, { claudeDir: f.claudeDir })).toBe(0);
+    const text = o.out.join('');
+    expect(text).not.toMatch(/\u001b|\u0007/);
+    expect(text).toContain('contains prompt text');
+    expect(text).toContain('write out.txt ⏎ then list the folder'); // compact: newlines folded
+    const full = io();
+    await runTraceCommand(['--home', f.home, '--full'], full.io, { claudeDir: f.claudeDir });
+    expect(full.out.join('')).not.toMatch(/\u001b|\u0007/);
+  });
+
+  it('reads the raw capture from <project>/.gnomon/trace/ when present and skips unparsable lines', async () => {
+    const f = await fixture({ capture: true });
+    const s = await traceJson(f);
+    expect(s.capture.lines).toBe(3);
+    expect(s.capture.skipped).toBe(1);
+    const kinds = s.events.map((e) => `${e.source}:${e.kind}`);
+    expect(kinds.indexOf('capture:capture.in')).toBeGreaterThan(kinds.indexOf('log:turn.sent'));
+    expect(kinds.indexOf('capture:capture.in')).toBeLessThan(kinds.indexOf('transcript:prompt'));
+  });
+
+  it('writes nothing: the home, the Claude dir and the project keep their mtimes', async () => {
+    const f = await fixture({ capture: true });
+    const before = snapshot([f.home, f.claudeDir, f.work]);
+    for (const args of [[], ['--json'], ['--full'], ['--since', iso(0)], ['--session', 'ABCDEFG']]) {
+      const o = io();
+      expect(await runTraceCommand(['--home', f.home, ...args], o.io, { claudeDir: f.claudeDir })).toBe(0);
+    }
+    expect(snapshot([f.home, f.claudeDir, f.work])).toEqual(before);
+  });
+
+  it('refuses a session that is not in the log, and bad arguments, without echoing them', async () => {
+    const f = await fixture();
+    const o = io();
+    expect(await runTraceCommand(['--home', f.home, '--session', 'nope'], o.io, { claudeDir: f.claudeDir })).toBe(1);
+    expect(o.err.join('')).toContain('NOT_FOUND');
+    const u = io();
+    expect(await runTraceCommand(['--bogus\u001b[31m'], u.io)).toBe(64);
+    expect(u.err.join('')).not.toContain('\u001b');
+    expect(await runTraceCommand(['--last', '--since', iso(0)], io().io)).toBe(64);
+  });
+});
+
+describe('gnomon trace on | off | status (per-project trace mode)', () => {
+  it('switches a folder on and off by realpath and lists it, in a 0600 state file', async () => {
+    const home = tmp('gnomon-trace-mode-');
+    const folder = tmp('gnomon-trace-folder-');
+    const real = fs.realpathSync.native(folder);
+    expect(traceModeOf(home, folder)).toBe(false);
+    const on = io();
+    expect(await runTraceCommand(['on', '--home', home, '--folder', folder], on.io)).toBe(0);
+    expect(on.out.join('')).toContain(path.join(real, '.gnomon', 'trace'));
+    expect(on.out.join('')).toContain('new and resumed sessions');
+    expect(traceModeOf(home, real)).toBe(true);
+    expect(tracedFolders(home)).toEqual([real]);
+    expect(fs.statSync(path.join(home, 'trace-folders.json')).mode & 0o777).toBe(0o600);
+    const st = io();
+    expect(await runTraceCommand(['status', '--home', home, '--folder', folder], st.io)).toBe(0);
+    expect(st.out.join('')).toContain(`${real}  (this folder)`);
+    expect(await runTraceCommand(['off', '--home', home, '--folder', folder], io().io)).toBe(0);
+    expect(traceModeOf(home, folder)).toBe(false);
+    setTraceMode(home, folder, true);
+    expect(tracedFolders(home)).toEqual([real]);
+    expect(await runTraceCommand(['on', '--folder', 'relative'], io().io)).toBe(64);
+  });
+});

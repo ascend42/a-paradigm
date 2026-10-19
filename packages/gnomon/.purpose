@@ -2233,6 +2233,41 @@ components:
       - test/guide-cli.test.ts
       - test/honesty.test.ts
 
+  gnomon-trace:
+    description: >-
+      #gnomon-trace `gnomon trace [--home <abs>] [--last | --session <hsid> |
+      --since <ISO>] [--json] [--full]` (src/cli/trace-cli.ts) — a CLI-only,
+      READ-ONLY audit timeline of a session for dogfood audits by the founder
+      and by Claude. Not a socket method: abiId and clientApiId do not move.
+      Joins per hsid (a) the kernel-log rows of the session (envelope session
+      or payload hsid, approval rows of its cards by cardId, the daemon.start
+      before and daemon.exit after), read from the segment files with a
+      write-free open (immutable=1 when no -wal exists; readOnly beside a live
+      -wal) and a hash-chain check (envelope hash + prev link; signatures are
+      left to gnomon replay and the output says so); (b) the Claude Code
+      transcript <claude dir>/projects/<realpath cwd, non-alphanumerics to
+      '-'>/<uuid>.jsonl (prompts, replies, tool_use, tool_result); (c) the raw
+      capture <project>/.gnomon/trace/<hsid>.jsonl when present (unparsable
+      lines skipped). Ordered by time, stable per source. Each turn.sent
+      contentHash is checked against the transcript prompt with the
+      supervisor's own turnContentHash: "✓ matches log" / "✗ hash mismatch";
+      a prompt the log never sent is "not in log". Human output uses the
+      readout helpers and sanitizeDisplayText on every shown string,
+      truncated unless --full; --json is one
+      {session:{hsid,uuid,cwd,principal}, log, transcript, capture, turns,
+      usage, events:[{t, source: log|transcript|capture, kind, ...}]} per
+      session per line. The output contains prompt text (help says so).
+      Subcommands `gnomon trace on | off | status [--home] [--folder]` keep
+      per-project trace mode in <home>/trace-folders.json (0600, keyed by
+      realpath) via src/kernel/trace/mode.ts (setTraceMode, traceModeOf,
+      tracedFolders — a minimal copy reconciled at merge with the capture
+      builder's module); they are the only writes, and only to that file.
+    path: src/cli/trace-cli.ts
+    type: module
+    tags: [gnomon, cli, audit, read-only, paradigm-8, dogfood]
+    tests:
+      - test/trace-cli.test.ts
+
   local-runner:
     description: >-
       #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:

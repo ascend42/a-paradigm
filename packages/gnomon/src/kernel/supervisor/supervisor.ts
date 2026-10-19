@@ -302,6 +302,11 @@ function refused(code: RefusalCode, message: string, data: Record<string, unknow
 
 const sha = (s: string | Buffer): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
 
+/** The `turn.sent` / client `session.inject` contentHash of a turn's text (the exact bytes written to claude's stdin as the user message text). `gnomon trace` (#gnomon-trace) reuses it to check a transcript prompt against the log. */
+export function turnContentHash(text: string): string {
+  return sha(text);
+}
+
 /**
  * Aegis M1 (TD-2026-10-19-814): create `<userClaudeDir>/projects` (owner-only) when NOTHING is at that path. An
  * existing entry — a dir, or a link the policy then refuses to carve back — is left exactly as found.
@@ -1020,7 +1025,7 @@ export class SessionSupervisor {
     this.#usedTurnPermits.add(permit.permitId);
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
-    const contentHash = sha(p.text);
+    const contentHash = turnContentHash(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash }, { session: s.hsid });
     s.child.stdin?.write(userMessageLine(p.text));
