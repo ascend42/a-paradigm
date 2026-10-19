@@ -618,14 +618,33 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // M1.11 slice 3 (#mod-cli): what `gnomon mod install|link` staged on disk reaches the human only through the broker
   const kernelStaged = new Set<string>();
-  // the `event` feed to log.read-granted mods (feed.ts): a projection only, never a failing append
-  log.onCommit((e) => {
-    try {
-      mods.feed(e);
-    } catch {
-      /* a mod's feed never breaks an append */
+  // the `event` feed to log.read-granted mods (feed.ts): a projection only, and only of RELEASED rows
+  // (review: a mod never sees a row the log has not released to readers). Committed rows wait in a
+  // bounded queue until the release head passes them; overflow drops the oldest (display only).
+  const feedQueue: Array<{ seq: number; e: Parameters<typeof mods.feed>[0] }> = [];
+  let feedScheduled = false;
+  const flushFeed = (head: number): void => {
+    while (feedQueue.length && feedQueue[0]!.seq <= head) {
+      const { e } = feedQueue.shift()!;
+      try {
+        mods.feed(e);
+      } catch {
+        /* a mod's feed never breaks a release */
+      }
     }
+  };
+  // commit listeners run BEFORE the release (kernel-log.ts onCommit): deliver on the next turn, up to the released head
+  log.onCommit((e) => {
+    if (feedQueue.length >= 4096) feedQueue.shift();
+    feedQueue.push({ seq: e.seq, e });
+    if (feedScheduled) return;
+    feedScheduled = true;
+    setImmediate(() => {
+      feedScheduled = false;
+      flushFeed(log.releasedHead());
+    });
   });
+  log.onRelease((head) => flushFeed(head));
   const modPickup = new StagedCardPickup({
     home,
     broker,

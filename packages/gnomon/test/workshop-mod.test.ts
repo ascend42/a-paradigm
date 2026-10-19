@@ -72,14 +72,15 @@ let events = 0;
 serveMod({
   onEvent: () => { events++; },
   views: { 'hello.panel': async () => ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hello' }) },
-  commands: { 'hello.bump': async () => ({ ok: true }), 'hello.events': async () => ({ events }) },
+  commands: { 'hello.bump': async () => ({ ok: true }), 'hello.events': async () => ({ events }), 'hello.deaf': async () => { setInterval(() => {}, 1000); setTimeout(() => process.stdin.pause(), 20); return { deaf: true }; } },
   tools: { 'hello.greet': async () => ({ greeting: 'hello' }), 'hello.count': async () => ({ count: 0 }) },
 });
 `;
 
-async function installHello(w: { root: string; home: string; auth: DevTestRootAuthority }): Promise<void> {
+async function installHello(w: { root: string; home: string; auth: DevTestRootAuthority }, opts: { feed?: boolean } = {}): Promise<void> {
   const m = JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8'));
-  m.provides.commands.push({ id: 'hello.events', title: 'Events received' });
+  m.provides.commands.push({ id: 'hello.events', title: 'Events received' }, { id: 'hello.deaf', title: 'Stop reading stdin' });
+  if (opts.feed) m.requires.capabilities.push('log.read');
   const src = writeModFolder(path.join(w.root, 'hello'), m, HELLO_COUNTING);
   const st = stageInstall({ home: w.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: w.auth });
   if (st.state !== 'staged') throw new Error('expected staged');
@@ -206,5 +207,31 @@ describe('#workshop-mod', () => {
     await pickup.scan();
     expect(w.host.running()).toEqual(['hello', 'workshop']);
     expect(w.host.status().paused).toEqual([]);
+  });
+  it('turn.partial is coalesced to one edge per session; turn.result re-arms it', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('workshop');
+    const hsid = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(1);
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(0);
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(0);
+    expect(w.host.feed({ kind: 'turn.result', payload: { hsid } })).toBe(1);
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(1);
+  });
+
+  it('falsifier: a mod that stops reading its stdin gets notifications DROPPED past the high-water mark (the kernel never buffers without bound)', async () => {
+    const w = await installedWorkshop();
+    await installHello(w, { feed: true });
+    await new Promise((r) => setTimeout(r, 50));
+    await w.host.stop('workshop'); // only hello is fed
+    await w.host.start('hello');
+    await w.host.runCommand('hello', 'hello.deaf', null);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(w.host.restarts('hello')).toBe(0); // still the same (deaf) child
+    let reached = 0;
+    for (let i = 0; i < 20_000; i++) reached += w.host.feed({ kind: 'session.open', payload: { hsid: `hsid:v1:01HZZZZZZZZZZZZZZZZZZ${String(i).padStart(4, '0')}`, cwd: `/p/${i}` } });
+    const insp = w.host.inspect('hello') as { droppedNotifications: number };
+    expect(insp.droppedNotifications).toBeGreaterThan(0);
+    expect(reached + insp.droppedNotifications).toBe(20_000); // only hello is running and fed: each event reached it or was dropped
   });
 });

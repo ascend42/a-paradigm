@@ -126,6 +126,8 @@ export const RELAY_MISS_WINDOW_MS = 10_000;
 /** Aegis R2-1: mod.effect.refused rows per mod per window before folding. */
 export const EFFECT_REFUSED_ROWS_PER_WINDOW = 8;
 export const EFFECT_REFUSED_WINDOW_MS = 10_000;
+/** Sessions whose streaming edge the feed remembers (oldest forgotten first; a forgotten one just gets a second edge). */
+export const MAX_STREAMING_TRACKED = 4096;
 const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 export interface ModChildrenPort {
@@ -217,6 +219,8 @@ export class ModHost {
   /** mods out of restarts: refused DOWN to relays until an operator start() */
   readonly #down = new Set<string>();
   readonly #inflight = new Map<string, number>();
+  /** hsids whose turn.partial edge was already fed (bounded) */
+  readonly #streaming = new Set<string>();
   #misses!: RowFold;
   readonly #refusedFolds = new Map<string, RowFold>();
   #closed = false;
@@ -582,6 +586,7 @@ export class ModHost {
       ...(p ? { paused: { why: p.why, cardId: p.cardId } } : {}),
       restarts: this.restarts(name),
       protocolErrors: r?.channel.protocolErrors ?? 0,
+      droppedNotifications: r?.channel.droppedNotifications ?? 0,
       stderrTail: r?.channel.stderrTail ?? this.#stderr.get(name) ?? '',
     };
   }
@@ -759,11 +764,17 @@ export class ModHost {
   feed(event: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }): number {
     const projected = projectFeedEvent(event);
     if (!projected) return 0;
+    // review: turn.partial is coalesced to ONE edge per hsid (streaming started); turn.result / session.exited end it
+    const hsid = typeof projected.payload.hsid === 'string' ? projected.payload.hsid : null;
+    if (hsid && projected.kind === 'turn.partial') {
+      if (this.#streaming.has(hsid)) return 0;
+      if (this.#streaming.size >= MAX_STREAMING_TRACKED) this.#streaming.delete(this.#streaming.values().next().value!);
+      this.#streaming.add(hsid);
+    } else if (hsid && (projected.kind === 'turn.result' || projected.kind === 'session.exited')) this.#streaming.delete(hsid);
     let n = 0;
     for (const r of this.#running.values()) {
       if (r.stopping || !r.manifest.requires?.capabilities?.includes(FEED_CAPABILITY)) continue;
-      r.channel.notify('event', { event: projected });
-      n++;
+      if (r.channel.notify('event', { event: projected })) n++;
     }
     return n;
   }

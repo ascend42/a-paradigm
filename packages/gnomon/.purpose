@@ -1742,8 +1742,11 @@ components:
       a mod as code + reason only (generic message, no wrapped data).
       Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
       a <home>/mods/<name>/paused marker makes every start return
-      paused{why:user}. feed.ts: ModHost.feed (wired to log.onCommit in
-      startDaemon) forwards a fixed projection of session.open/exited,
+      paused{why:user}. feed.ts: ModHost.feed (startDaemon queues committed
+      rows, bounded 4096, and feeds only rows at or below the log's released
+      head; turn.partial coalesced to one edge per hsid; ModChannel.notify
+      drops past 256 KiB unread stdin, counted in inspect
+      droppedNotifications) forwards a fixed projection of session.open/exited,
       turn.partial/result, approval.request/decide/expire and warpline.knot
       (kernel fields only; project = a hue index from sha256(cwd)) to running
       mods requiring log.read - the #workshop-mod input. FIRST_PARTY_PACKAGE_HASHES
