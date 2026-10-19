@@ -239,10 +239,18 @@ describe('#gnomon-wrapper channel (real process, no token on any argv or env)', 
     const ctlEnv = randomBytes(32).toString('base64url');
     const ctl = spawn(process.execPath, ['-e', 'setTimeout(()=>{},20000)', ctlArgv], { env: { ...APP_ENV(w.userHome), GNOMON_CTL: ctlEnv }, stdio: 'ignore' });
     cleanups.push(() => ctl.kill('SIGKILL'));
-    await new Promise((r) => setTimeout(r, 300));
-    const seen = psAll();
+    // T-2026-10-19-012: under full-suite load the control may not be in the process table yet — re-snapshot until
+    // it is (bounded ~5 s). Only the control's VISIBILITY is retried; the live-token samples below are not.
+    const wantEnv = process.platform === 'darwin' || process.platform === 'linux';
+    let seen = '';
+    for (const end = Date.now() + 5_000; ; ) {
+      seen = psAll();
+      if (seen.includes(ctlArgv) && (!wantEnv || seen.includes(ctlEnv))) break;
+      if (Date.now() > end) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     expect(seen, 'control on argv').toContain(ctlArgv);
-    if (process.platform === 'darwin' || process.platform === 'linux') expect(seen, 'control in env').toContain(ctlEnv);
+    if (wantEnv) expect(seen, 'control in env').toContain(ctlEnv);
 
     const child = spawn(process.execPath, [...APP_NODE_FLAGS, CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', 'pipe', 'pipe'] });
     cleanups.push(() => child.kill('SIGKILL'));
