@@ -24,8 +24,4 @@
 {"ts":"2026-10-19T09:24:53.439Z","sessionId":"sp-11266","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts","claimant":"orchestrator"}
 {"ts":"2026-10-19T15:27:29.391Z","sessionId":"sp-11266","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts","claimant":"orchestrator"}
 {"ts":"2026-10-19T17:20:52.698Z","sessionId":"sp-11266","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts","claimant":"orchestrator"}
-{"ts":"2026-10-19T22:43:48.338Z","sessionId":"sp-45119","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}
-{"ts":"2026-10-19T22:45:40.463Z","sessionId":"sp-49692","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}
-{"ts":"2026-10-19T22:49:30.454Z","sessionId":"sp-56811","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}
-{"ts":"2026-10-19T22:53:57.706Z","sessionId":"sp-76586","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}
-{"ts":"2026-10-19T22:54:23.783Z","sessionId":"sp-80564","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}
+{"ts":"2026-10-19T22:43:16.650Z","sessionId":"sp-33646","type":"postflight-noop","journalsWritten":0,"promoted":0,"reason":"no-verdicts"}

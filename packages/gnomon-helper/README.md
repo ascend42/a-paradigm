@@ -105,6 +105,8 @@ packages/gnomon-helper/bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper 
 
 ## Manual oracle: an arm drops within 1 s of a screen lock
 
+Guided form (only Touch ID needed; three rounds, a summary table and `~/.gnomon/lock-check-<date>.json`): `node packages/gnomon-helper/scripts/lock-check.mjs` (`--no-arm` for the handshake only). The manual steps follow.
+
 No GUI arm path exists before V7, so drive the signed 1.6.0 helper directly. You need a provisioned approvals key; `key.list` gives its generation `<gen>`.
 
 0. Stay logged in at the console (the helper refuses `session-locked` otherwise).

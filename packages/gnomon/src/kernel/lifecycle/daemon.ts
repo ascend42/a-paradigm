@@ -116,6 +116,10 @@ import { DaemonChildren, sweepOrphans } from './children.js';
 import { planResume, resumeAfterUpgrade, type ResumeReport, type ResumeRow } from '../supervisor/resume.js';
 import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { ClaudeRepinCards, REPIN_POLL_MS } from '../runner/repin-card.js';
+import { resolveClaudeSource } from '../runner/preflight.js';
+import { claudeVerifierFor } from '../../platform/claude-verifier.js';
+import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
@@ -571,6 +575,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         clearInterval(diagTimer);
         clearInterval(tokenTimer);
         clearInterval(brokerTimer);
+        clearInterval(repinTimer);
         await flushDiagnostics();
         await appendRow('daemon.exit', { reason, liveChildren }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
@@ -812,7 +817,22 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // Aegis L2: every applied change reaches the live sessions at once (manual re-entered ⇒ the plan is dropped)
     onChange: () => supervisor.noteModeChange(),
   });
+  // TD-2026-10-19-063: the GUI re-pin of the claude binary. A refused open and a poll of the resolved source
+  // pre-stage ONE re-pin card per new sha; only its approved (fresh-presence) effect writes the pin.
+  const supSeams = seams.supervisor ?? {};
+  const claudeRow = claudeCodePlatform(process.platform);
+  const repin = new ClaudeRepinCards({
+    home,
+    broker,
+    requestedBy: kernelPrincipal,
+    verifier: claudeVerifierFor(process.platform),
+    source: () => (claudeRow ? (resolveClaudeSource({ ...(supSeams.claudePath ? { explicit: supSeams.claudePath } : {}), row: claudeRow, home: supSeams.userHome ?? nodeOs.homedir() })?.real ?? null) : null),
+    ...(supSeams.allowScripts ? { allowScripts: true } : {}),
+  });
+  const repinTimer = setInterval(() => void repin.poll().catch(() => undefined), REPIN_POLL_MS);
+  repinTimer.unref();
   const supervisor: SessionSupervisor = new SessionSupervisor({
+    onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
     hooksMode: fuseCfg.sessions.hooks,

@@ -9,6 +9,10 @@ description: >-
   (gnomon-bundle-tree:v1) and with --embed writes the generated
   packages/gnomon/src/kernel/web/gui-bundle.ts (opaque base64 + pin literal);
   --check (first step of `npm test`) fails when that file is stale.
+  TD-2026-10-19-063: a session.open refused claude_binary_changed shows a
+  [Re-pin] button in the red notice that focuses the kernel's pre-staged
+  re-pin card (never decides); a claim-mismatch card renders its first line
+  red and marks Deny as the default (focused) key.
 
 components:
   gui:
