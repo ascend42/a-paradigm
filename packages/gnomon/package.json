@@ -28,7 +28,8 @@
     "test:watch": "vitest",
     "probe": "node probes/run.mjs",
     "test:perf": "node scripts/test-perf.mjs",
-    "repin:first-party": "node scripts/repin-first-party.mjs"
+    "repin:first-party": "node scripts/repin-first-party.mjs",
+    "install:darwin": "node scripts/install-darwin.mjs"
   },
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",
