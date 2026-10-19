@@ -681,9 +681,15 @@ components:
       and moves clientApiId. GUARDS on a home resolved once (lstat plain
       directory, then realpath), each with a falsifier in
       test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
-      NODE_OPTIONS or any node interpreter flag (process.execArgv) →
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) other
+      than exactly --disable-sigusr1, or that flag MISSING (T-2026-10-18-030:
+      the bin shebang `env -S node --disable-sigusr1` passes it) →
       unsafe-env — refused, not re-executed, so no second process holds
-      the helper; missing home / no identity.json → unprovisioned;
+      the helper (scope: an AMBIENT unsafe runtime, not a hostile preload
+      already running as the user); a stdout/stderr 'error' (EIO after
+      SIGHUP) is handled as a stop so the shutdown sweep runs; the device
+      key opens O_NONBLOCK (a swapped-in FIFO cannot hang it,
+      test/device-key-fifo.test.ts); missing home / no identity.json → unprovisioned;
       symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
       live pidfile holder or an answering socket → daemon-running (and the
       O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail
@@ -1795,6 +1801,15 @@ flows:
       inside 10 min. Not yet built: the session runner and mod host that
       call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object
       and owner-only DACL read-back (G-WIN-02, parity phase P8-D78).
+      T-2026-10-18-030 (1): the clean re-exec passes exactly one node flag,
+      --disable-sigusr1 (env.ts DISABLE_SIGUSR1 / reexecArgs), and
+      runForeground refuses to start without it in execArgv
+      ([sigusr1-enabled]) — a same-user kill -USR1 would otherwise open the
+      V8 inspector in the key-holding process; a JS SIGUSR1 listener never
+      counts. Both bins use `#!/usr/bin/env -S node --disable-sigusr1`.
+      Falsifier: a running gnomond receiving SIGUSR1 opens no inspector and
+      keeps running (test/daemon-lifecycle.test.ts, control arm proves the
+      detector). A SEA must bake the flag into sea-config execArgv.
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
@@ -1807,6 +1822,7 @@ flows:
       - test/idle-exit.test.ts
       - test/home-resolution.test.ts
       - test/reexec-env.test.ts
+      - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]

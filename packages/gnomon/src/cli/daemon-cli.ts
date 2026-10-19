@@ -24,6 +24,7 @@ import {
   isLifecycleRefusal,
   resolveGnomonHome,
   selectSocketPath,
+  sigusr1Refusal,
   spawnDetachedDaemon,
   startDaemon,
 } from '../kernel/lifecycle/index.js';
@@ -98,9 +99,19 @@ export function daemonHomeOf(args: { home?: string }): string {
   return args.home ?? resolveGnomonHome({ env: {} });
 }
 
-/** `gnomond --foreground`: run until idle exit or a signal. */
-export async function runForeground(args: DaemonArgs): Promise<number> {
+/**
+ * `gnomond --foreground`: run until idle exit or a signal. Refuses to start
+ * unless `--disable-sigusr1` is an interpreter flag (T-2026-10-18-030 (1)):
+ * the clean re-exec passes it, and the bin's shebang passes it when gnomond
+ * is run directly.
+ */
+export async function runForeground(args: DaemonArgs, runtime: { execArgv: readonly string[] } = { execArgv: process.execArgv }): Promise<number> {
   if (refuseDevHome(daemonHomeOf(args))) return EXIT_REFUSED;
+  const sig = sigusr1Refusal(runtime.execArgv);
+  if (sig) {
+    process.stderr.write(`gnomond: ${sig} [sigusr1-enabled]\n  next: run gnomond via its bin (the shebang passes --disable-sigusr1) or \`node --disable-sigusr1 <gnomond.js> --foreground\` (Node >= 22.14)\n`);
+    return EXIT_REFUSED;
+  }
   let opened: { helper: { close(): Promise<void> } } | null = null;
   try {
     const home = daemonHomeOf(args);

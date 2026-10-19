@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-sigusr1
 /**
  * gnomon — the CLI. PR-5 implements `gnomon daemon status|stop|--detach`
  * ($daemon-lifecycle, spec §2.4); T-2026-10-17-009(a) adds `gnomon log

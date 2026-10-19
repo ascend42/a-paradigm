@@ -48,8 +48,9 @@ describe('G-DMN-05 cleanReexecEnv: the activator env never reaches the daemon', 
     },
   );
 
-  it('carries home and idle in argv, with no node flags', () => {
+  it('carries home and idle in argv, with exactly one node flag: --disable-sigusr1 (T-2026-10-18-030)', () => {
     expect(reexecArgs({ entry: '/x/gnomond.js', home: '/h', idleMs: 5 })).toEqual([
+      '--disable-sigusr1',
       '/x/gnomond.js',
       '--foreground',
       '--home',

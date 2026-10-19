@@ -80,10 +80,12 @@ export function loadDeviceCredential(home: string, file: string = deviceKeyPath(
   checkOwnerOnly(dir, dst, 'dir');
   // a symlink is refused here on every OS (Windows has no O_NOFOLLOW); on POSIX the open below refuses it again
   if (!lst.isFile()) throw new DeviceKeyError('not-a-file', `${file} is not a regular file`);
-  // open WITHOUT following a link, then judge and read THAT descriptor: no swap between the check and the read
+  // open WITHOUT following a link, then judge and read THAT descriptor: no swap between the check and the read.
+  // O_NONBLOCK (T-2026-10-18-030 (3)): a FIFO swapped in after the lstat must not hang the open (a FIFO with no
+  // writer blocks a blocking O_RDONLY open forever); the fstat below then refuses it. A regular file reads the same.
   let fd: number;
   try {
-    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') throw new DeviceKeyError('missing', `no device key at ${file}`);

@@ -21,13 +21,13 @@
  * to the streams it is given (zero deps, G-SEC-01; readout.ts voice).
  */
 import * as readline from 'node:readline';
-import { selectSocketPath, type DaemonHandle } from '../kernel/lifecycle/index.js';
+import { DISABLE_SIGUSR1, selectSocketPath, sigusr1Refusal, type DaemonHandle } from '../kernel/lifecycle/index.js';
 import type { LaunchGrant } from '../kernel/web/endpoint.js';
 import { GnomonClient, type ClientCredential, type KernelKeyPin } from '../clients/ts/index.js';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 
-type Out = { write(s: string): unknown; isTTY?: boolean };
+type Out = { write(s: string): unknown; isTTY?: boolean; on?(ev: 'error', l: (e: Error) => void): unknown };
 export interface LaunchTtyIo {
   stdin: NodeJS.ReadableStream & { isTTY?: boolean; setRawMode?: unknown };
   stdout: Out;
@@ -44,14 +44,24 @@ export interface RuntimeFacts {
  * Aegis C1 (round 2): an in-process kernel holds the keys in THIS Node process, which gnomond's clean
  * re-exec (§2.4 rule 2) would have scrubbed. So refuse, rather than inherit, anything that loads code
  * or opens a debugger in it: a non-empty NODE_OPTIONS, and ANY interpreter flag (process.execArgv —
- * --inspect*, --require, --import, --loader, …). Returns the refusal message, or null when clean.
+ * --inspect*, --require, --import, --loader, …) except exactly one, `--disable-sigusr1`, which is
+ * REQUIRED (T-2026-10-18-030 (1)): without it a same-user `kill -USR1` opens the V8 inspector at run
+ * time, past every check here. The bin's shebang (`#!/usr/bin/env -S node --disable-sigusr1`) passes
+ * it. Returns the refusal message, or null when clean.
  * Refusing (not re-executing) is deliberate: no second process ever holds the helper or the keys.
+ *
+ * Scope (spec §2.4 C1): this defends against an AMBIENT unsafe runtime (an exported NODE_OPTIONS, a
+ * stray flag). It does not defend against a hostile preload already running as the user, which can
+ * scrub env and execArgv before this check reads them.
  */
 export function unsafeRuntime(r: RuntimeFacts = { env: process.env, execArgv: process.execArgv }): string | null {
   const why: string[] = [];
   if (r.env.NODE_OPTIONS !== undefined && r.env.NODE_OPTIONS.trim() !== '') why.push('NODE_OPTIONS is set');
-  if (r.execArgv.length > 0) why.push(`node was started with interpreter flags (${r.execArgv.length})`);
-  return why.length ? `${why.join('; ')}: the kernel would run them inside the process that holds its keys` : null;
+  const other = r.execArgv.filter((a) => a !== DISABLE_SIGUSR1);
+  if (other.length > 0) why.push(`node was started with interpreter flags (${other.length})`);
+  if (r.execArgv.length - other.length > 1) why.push(`${DISABLE_SIGUSR1} was given more than once`);
+  if (sigusr1Refusal(r.execArgv)) why.push(`node was started without ${DISABLE_SIGUSR1} (a same-user SIGUSR1 would open the V8 inspector)`);
+  return why.length ? `${why.join('; ')}: the kernel would run inside the process that holds its keys` : null;
 }
 
 /** A kernel running in THIS process, with the CLI's own device connection held open. */
@@ -138,6 +148,17 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   // default kill that would skip the child sweep and the helper close; SIGHUP (terminal closed) stops the same way
   const onSignal = (): void => stop();
   for (const s of STOP_SIGNALS) process.on(s, onSignal);
+  // T-2026-10-18-030 (4): after SIGHUP the terminal is gone and a write to it fails EIO, emitted as a stream
+  // 'error'. Unhandled, that throws out of the event loop and skips the shutdown sweep (children, helper close).
+  // So a write error on either stream is swallowed and treated as a stop: nothing is left to show it on.
+  // The listeners stay installed after the kernel exits (the DOWN line can itself fail EIO a tick later);
+  // once it has exited they only swallow.
+  let exited = false;
+  const onStreamError = (): void => {
+    if (!exited) stop();
+  };
+  io.stdout.on?.('error', onStreamError);
+  io.stderr.on?.('error', onStreamError);
   io.stdout.write(`UP  ${o.noun} (in this process)\n`);
   readout(io.stdout, o.rows);
   try {
@@ -154,6 +175,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
     });
   }
   const reason = await k.handle.exited;
+  exited = true;
   await stopped; // a stop that rejects after the kernel exited is still reported
   rl?.close();
   for (const s of STOP_SIGNALS) process.off(s, onSignal);
