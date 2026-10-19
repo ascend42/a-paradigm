@@ -11,3 +11,6 @@ export * as sessionSandbox from './kernel/sandbox/session.js';
 export * as claudeAdapter from './adapters/claude-code/adapter.js';
 export { binaryDenies } from './kernel/supervisor/supervisor.js';
 export { CLAUDE_CODE_PLATFORMS } from './platform/claude-code.js';
+// P8-D97: the kernel's repo-context staging and hook extract, for the p10m-repo-context re-run under the production policy
+export * as repoContext from './kernel/supervisor/repo-context.js';
+export * as repoHooks from './kernel/supervisor/repo-hooks.js';
