@@ -826,14 +826,26 @@ components:
       test/fixtures/cwd-hint.v1.json, Aegis L3); the GUI
       (#gui, core/launch.ts cwdHintOf/applyCwdHint) applies the same rule,
       prefills only a clean absolute path and never submits. A kernel
-      already running on the home is NOT joined and no second one starts:
-      `REFUSED GNOMON already-running`, exit 3 (BARE_EXIT_ALREADY_RUNNING),
-      naming the instance from the pidfile pid classified via `ps -o
-      command=` (Gnomon.app / gnomon up / gnomond; never echoed; diagnostic
-      only) and how to open the folder in that window. DESIGN (lore):
-      minting a URL from a running kernel needs a `gnomon open` wire verb
-      that moves clientApiId — queued with the batched bump
-      T-2026-10-19-001 (design note in spec §2.4 rule 8), not added here.
+      already running on the home: no second one starts. On an interactive
+      terminal bare `gnomon` asks it for a launch grant over the P8-D98
+      human-device verb `gui.open {cwdHint}` (up-cli.ts requestRunningLaunch:
+      this home's device key + root-signed human row checked like
+      startUpKernel's deviceOf, the kernel hello verified against the home's
+      pin via kernelPinOf, then device auth; T-2026-10-19-001 A3) and
+      prints/opens that URL with the same `&cwd=` fragment (ATTACHED readout).
+      Not a terminal: the TTY check runs BEFORE the RPC, nothing on stdout,
+      no gui.open call, `REFUSED GNOMON already-running`, exit 3
+      (BARE_EXIT_ALREADY_RUNNING), naming the instance from the pidfile pid
+      classified via `ps -o command=` (diagnostic only). The kernel side is
+      #socket src/kernel/socket/gui-open.ts (createGuiOpenHandler, wired in
+      DispatcherOptions.humanVerbs by the daemon): verified human device
+      only; cwdHint ≤ 1024 UTF-8 bytes else BAD_REQUEST{cwd-hint-too-long},
+      returned verbatim, never read or logged; the grant is the in-process
+      requestWebLaunch's (single-use, at most 60 s) under the ONE shared
+      launch-grant cap src/kernel/web/launch-cap.ts (LaunchGrantCap on
+      WebEndpoint.requestLaunch: one in flight, 8 a minute across the
+      terminal, the wrapper channel and gui.open — shared, not added on
+      top; ENGINE{web-launch-capped}). Falsified in test/gui-open.test.ts.
       Also `gnomon help|--help|-h` (GNOMON_HELP, one line per verb) and an
       unknown verb → usage exit 64 without echoing it.
       scripts/install-darwin.mjs is the idempotent installer (build, link
