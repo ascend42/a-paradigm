@@ -34,6 +34,8 @@ import { PKG_ROOT } from './helpers.js';
 
 const CLEAN = { env: {}, execArgv: ['--disable-sigusr1'] as string[] };
 const TOKEN_RE = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
+// a launch grant needs the web endpoint, which needs the darwin `transport` sandbox profile: linux refuses web-launch (§15.5)
+const NO_TRANSPORT = process.platform !== 'darwin';
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -84,7 +86,7 @@ function channel() {
 }
 
 describe('#gnomon-wrapper channel (in-process)', () => {
-  it('the grant is on the channel only: up → launch → quit → down; stderr never carries the token', async () => {
+  it.skipIf(NO_TRANSPORT)('the grant is on the channel only: up → launch → quit → down; stderr never carries the token', async () => {
     const w = world();
     expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
     const c = channel();
@@ -109,7 +111,7 @@ describe('#gnomon-wrapper channel (in-process)', () => {
     expect((await c.next('down')).reason).toBe('signal');
   });
 
-  it('FALSIFIER: repeated launch commands are capped (one in flight, WRAPPER_LAUNCH_CAP a minute); quit mid-mint hands out no grant', async () => {
+  it.skipIf(NO_TRANSPORT)('FALSIFIER: repeated launch commands are capped (one in flight, WRAPPER_LAUNCH_CAP a minute); quit mid-mint hands out no grant', async () => {
     const w = world();
     expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
     const c = channel();
@@ -220,7 +222,7 @@ function readLines(child: ChildProcess): { lines: Record<string, unknown>[]; nex
 }
 
 describe('#gnomon-wrapper channel (real process, no token on any argv or env)', () => {
-  it('FALSIFIER (G-GUI-12): spawned as the app spawns it, the live token is on no process argv or env; the control is seen', async () => {
+  it.skipIf(NO_TRANSPORT)('FALSIFIER (G-GUI-12): spawned as the app spawns it, the live token is on no process argv or env; the control is seen', async () => {
     expect(fs.existsSync(CLI), 'dist/cli/gnomon.js (run npm run build:gnomon)').toBe(true);
     const w = world();
     expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
