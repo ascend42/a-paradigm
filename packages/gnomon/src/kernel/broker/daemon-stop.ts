@@ -13,7 +13,9 @@
  *     connection, and a GUI launch-token connection, are refused
  *     FORBIDDEN{matrix} and no card is raised.
  *   - One pending daemon-stop card at a time: a second request while one is
- *     pending gets the SAME card (no stacked Touch ID prompts).
+ *     pending gets the SAME card (no stacked Touch ID prompts). A request that
+ *     arrives while the first is still being raised shares that in-flight raise
+ *     (Aegis L5), so two at the same moment also get one card.
  *   - accept → `onAccept(reason)` runs on the next turn of the event loop, so
  *     the approve reply leaves before the kernel closes its socket.
  *   - reject, or expiry (DAEMON_STOP_TIMEOUT_MS, into deny): nothing happens;
@@ -52,6 +54,8 @@ export class DaemonStopCards {
   readonly #onAccept: (reason: DaemonStopReason) => void;
   readonly #timeoutMs: number;
   #pending: string | null = null;
+  /** The in-flight raise (Aegis L5): concurrent requests share it, so two at once still raise ONE card. */
+  #raising: Promise<CardV1> | null = null;
 
   constructor(broker: ApprovalBroker, onAccept: (reason: DaemonStopReason) => void, timeoutMs = DAEMON_STOP_TIMEOUT_MS) {
     this.#broker = broker;
@@ -67,7 +71,8 @@ export class DaemonStopCards {
     if (!DAEMON_STOP_REASONS.includes(reason)) throw fail('BAD_REQUEST', 'bad-params', `reason must be one of ${DAEMON_STOP_REASONS.join(', ')}`);
     const open = this.#pending ? this.#broker.card(this.#pending) : undefined;
     if (open && open.state === 'pending') return open;
-    const card = await this.#broker.raise({
+    if (this.#raising) return this.#raising;
+    const raising = this.#broker.raise({
       kind: 'daemon-stop',
       requestedBy: asker.principal,
       attended: true,
@@ -80,8 +85,14 @@ export class DaemonStopCards {
         setImmediate(() => this.#onAccept(reason));
       },
     });
-    this.#pending = card.cardId;
-    return card;
+    this.#raising = raising;
+    try {
+      const card = await raising;
+      this.#pending = card.cardId;
+      return card;
+    } finally {
+      this.#raising = null;
+    }
   }
 
   /** The pending daemon-stop card id, if any. */

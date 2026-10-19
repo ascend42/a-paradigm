@@ -10,3 +10,4 @@ export * from './client.js';
 export * from './log-read.js';
 export * from './status-numbers.js';
 export * from './gui-open.js';
+export * from './daemon-stop-verb.js';

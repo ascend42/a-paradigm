@@ -91,6 +91,15 @@ describe('daemon-stop card (F3)', () => {
     expect(r.stops).toEqual(['stop']);
   });
 
+  it('two requests at the same moment share the in-flight raise: one card, one approval.request row (Aegis L5)', async () => {
+    const r = rig();
+    const [a, b, c] = await Promise.all([r.cards.request(r.human), r.cards.request(r.human), r.cards.request(r.human)]);
+    expect(b.cardId).toBe(a.cardId);
+    expect(c.cardId).toBe(a.cardId);
+    expect(r.broker.cards().filter((x) => x.kind === 'daemon-stop')).toHaveLength(1);
+    expect(r.rows.map((x) => x.kind)).toEqual(['approval.request']);
+  });
+
   it('reject, a declined Touch ID and expiry all keep the kernel running', async () => {
     const touch = { on: false };
     const r = rig(touch);

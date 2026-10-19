@@ -107,7 +107,7 @@ describe('human-device verbs (P8-D98)', () => {
 describe('human-device verbs are unix-socket only (Aegis L1, structural)', () => {
   it('the web dispatcher gets no human-verb port: status reports them unavailable and a call is refused, the port never reached', async () => {
     const called: string[] = [];
-    const ports: HumanDeviceVerbPorts = { 'gui.open': async () => (called.push('gui.open'), {}), 'rules.revoke': async () => (called.push('rules.revoke'), {}) };
+    const ports: HumanDeviceVerbPorts = { 'gui.open': async () => (called.push('gui.open'), {}), 'rules.revoke': async () => (called.push('rules.revoke'), {}), 'daemon.stop': async () => (called.push('daemon.stop'), {}) };
     const web = rig(ports, 'web');
     const wcall = await web.connect({ kind: 'human' });
     const st = (await wcall('status')) as { humanDeviceVerbs: Array<{ verb: string; available: boolean }> };

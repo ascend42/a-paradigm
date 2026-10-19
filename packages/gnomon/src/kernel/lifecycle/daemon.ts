@@ -98,6 +98,7 @@ import {
   type HumanDeviceVerbPorts,
 } from '../socket/index.js';
 import { createGuiOpenHandler } from '../socket/gui-open.js';
+import { createDaemonStopHandler } from '../socket/daemon-stop-verb.js';
 import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
@@ -817,13 +818,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // unix dispatcher alone (dispatcherOptionsFor), so the web dispatcher has no port for them: its status reports
   // them unavailable and a call is refused not-implemented. gui.open is the in-process launch path, under the
   // endpoint's shared launch-grant cap as a `socket` asker (its own share, launch-cap.ts).
-  // One handler module per verb (socket/<verb>.ts), one key per verb here.
+  // One handler module per verb (socket/<verb>.ts; daemon.stop is socket/daemon-stop-verb.ts), one key per verb here.
   const humanVerbs: HumanDeviceVerbPorts = {
     'rules.revoke': createRulesRevokeHandler({
       lookup: (ruleId) => syncRuleBook().get(ruleId),
       append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
     }),
     'gui.open': createGuiOpenHandler({ requestLaunch: (connId: string) => requestWebLaunch(connId, 'socket'), withdrawLaunch: (t: string) => void web?.withdrawLaunch(t) }),
+    // T-2026-10-19-014 B0 (TD-2026-10-19-339): raises the signed daemon-stop card; stops only on a Touch ID accept
+    'daemon.stop': createDaemonStopHandler({ requestStop: (connId, reason) => requestStop(connId, reason) }),
   };
   const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherOptionsFor('unix', dispatcherCommon, { humanVerbs }) });
   const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;

@@ -2440,13 +2440,21 @@ flows:
       shutdown(reason) on the next event-loop turn; reject, a declined prompt
       or expiry (2 min, into deny) keep the kernel running. DaemonExitReason
       gains 'stop' (daemon.exit{reason:'stop'}; gnomond exits 0, the
-      no-restart class). NOT built: the client path. No client-API verb or
-      request kind asks the kernel for this card, and adding one moves
-      clientApiId, so `gnomon daemon stop` prints REFUSED ENGINE not-running
-      with no kernel (exit 1, as gnomon rules) and REFUSED ENGINE
-      not-implemented against a verified running kernel (exit 1). B1 widens
-      DaemonStopReason with 'upgrade' and passes it through requestStop.
-      Falsifiers in test/daemon-stop.test.ts and test/daemon-lifecycle.test.ts.
+      no-restart class). Concurrent requests share the in-flight raise
+      (#raising, Aegis L5): two at once get ONE card. The client path
+      (TD-2026-10-19-339) is the human-device verb daemon.stop{reason?}
+      (socket/daemon-stop-verb.ts createDaemonStopHandler), on the UNIX
+      dispatcher's humanVerbs only (the web dispatcher reports it unavailable);
+      connId is the dispatcher's own connection context, never a param (Aegis
+      L6); reason is checked against DAEMON_STOP_REASONS (unknown ⇒
+      BAD_REQUEST bad-params; upgrade ⇒ ENGINE not-implemented until B1); the
+      result is {cardId, state}. `gnomon daemon stop` pins the kernel key
+      (kernelPinOf), authenticates as the home's human device (rules-cli
+      humanDeviceOf), calls daemon.stop, prints CARD RAISED with "approve it in
+      Gnomon with Touch ID" and exits 0 without waiting; no kernel ⇒ REFUSED
+      ENGINE not-running; no human device ⇒ REFUSED FORBIDDEN no-human-device.
+      B1 widens DaemonStopReason with 'upgrade' and passes it through requestStop.
+      Falsifiers in test/daemon-stop.test.ts, test/daemon-stop-verb.test.ts and test/daemon-lifecycle.test.ts.
     upgrade-drain: >-
       PLANNED, not built (TD-2026-10-19-908, T-2026-10-19-014; spec §2.4
       rule 11, before dogfood GA). A kernel update drains and resumes:

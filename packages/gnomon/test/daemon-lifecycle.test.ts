@@ -328,7 +328,7 @@ describe('G-DMN-02 endpoint ACL and placement', () => {
 });
 
 describe('gnomon daemon status|stop (CLI over the socket)', () => {
-  it('status reports running, stop is refused (no client path to the daemon-stop card yet) and the kernel keeps running, status and stop after exit report not running', async () => {
+  it('status reports running, stop from a home with no human device is refused (daemon.stop is a verified-human-device verb; test/daemon-stop-verb.test.ts drives the card) and the kernel keeps running, status and stop after exit report not running', async () => {
     const h = home();
     const { child, ready } = await startChild(h);
     const status = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
@@ -345,8 +345,7 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     });
     const stop = spawnSync(process.execPath, [GNOMON, 'daemon', 'stop', '--home', h], { encoding: 'utf8' });
     expect(stop.status).toBe(1);
-    expect(stop.stderr).toContain('REFUSED  ENGINE  not-implemented');
-    expect(stop.stderr).toContain('Touch ID');
+    expect(stop.stderr).toContain('REFUSED  FORBIDDEN  no-human-device');
     const still = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
     expect(JSON.parse(still.stdout)).toMatchObject({ running: true });
     child.kill('SIGTERM');

@@ -460,11 +460,11 @@ describe('#gnomon-ts-client surface', () => {
     }
   });
 
-  it('call() is typed for exactly the 12 verbs + 2 human-device verbs + 2 relays (ClientMethodParams keys = CLIENT_METHODS)', () => {
+  it('call() is typed for exactly the 12 verbs + 3 human-device verbs + 2 relays (ClientMethodParams keys = CLIENT_METHODS)', () => {
     const typed: Record<ClientMethod, true> = {
       status: true, 'session.open': true, 'session.send': true, 'session.stop': true, 'log.append': true, 'log.read': true,
       'permit.reserve': true, approve: true, 'contract.register': true, 'contract.claim': true, 'oracle.run': true, 'ref.resolve': true,
-      'mod.view': true, 'mod.command': true, 'gui.open': true, 'rules.revoke': true,
+      'mod.view': true, 'mod.command': true, 'gui.open': true, 'rules.revoke': true, 'daemon.stop': true,
     };
     expect(Object.keys(typed).sort()).toEqual([...CLIENT_METHODS].sort());
   });
