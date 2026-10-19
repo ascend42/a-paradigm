@@ -31,6 +31,7 @@ import {
   createKernelDispatcher,
   SocketAuthenticator,
   listenSocket,
+  readerFor,
   requestFrame,
   signAuth,
   SubscriptionHub,
@@ -221,6 +222,17 @@ describe('§9.3 redaction matrix over the socket (G-ABI-05 rows reachable in M1.
     expect(ok(await s.conn.call('ref.resolve', { ref: injId.event.id }))).toMatchObject({ target: { view: 'stub' } });
     const secretId = ([...r.d.log.read({ reader: { class: 'human' }, fromSeq: seqs.secret, toSeq: seqs.secret })][0] as { event: EventV1 }).event.id;
     expect(errOf(await s.conn.call('ref.resolve', { ref: secretId }))).toMatchObject({ c: 'NOT_FOUND', reason: 'not-found' });
+  });
+
+  it('the GUI launch-token session (credential gui) is the first-party human surface: the full human row; a device key, a read token and a mod stay limited', () => {
+    // §9.3: "the one first-party human surface is the GUI session that consumed a launch token (§11.2 rule 2)"
+    expect(readerFor({ principal: 'p:00000000/founder', principalKind: 'human', credential: 'gui' })).toEqual({ reader: { class: 'human' }, projection: 'human' });
+    // the same human on a device key (CLI, dev path) is a community client until a log.read:sensitive grant exists
+    expect(readerFor({ principal: 'p:00000000/founder', principalKind: 'human', credential: 'device' })).toMatchObject({ reader: { class: 'community-client' }, projection: 'community-client' });
+    expect(readerFor({ principal: 'p:00000000/founder', principalKind: 'human' })).toMatchObject({ reader: { class: 'community-client' } });
+    // gui on a non-human principal never widens; a read token reads as a read token whatever its principal
+    expect(readerFor({ principal: 'p:00000000/mod-x', principalKind: 'mod', credential: 'gui' as never })).toMatchObject({ reader: { class: 'mod' } });
+    expect(readerFor({ principal: 'p:00000000/founder', principalKind: 'human', credential: 'read-token' })).toEqual({ reader: { class: 'read-token' }, projection: 'read-token' });
   });
 
   it('mod sees none of the kernel rows (own modns + granted kinds only); a mod principal not named mod-<name> is FORBIDDEN', async () => {
