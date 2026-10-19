@@ -760,7 +760,8 @@ components:
       #gui bundle) whose dispatcher is the closed gnomon-setup:v1 protocol
       (gnomon-contracts setup.ts, own SETUP_API_ID; clientApiId unchanged):
       hello / auth {setupToken} / setup.preflight / setup.name / setup.begin /
-      setup.purge {gen} / setup.finish, events setup.state and setup.presence
+      setup.purge {gen} / setup.complete (I10, the saved row, 0 prompts) /
+      setup.finish, events setup.state and setup.presence
       {n,of,purpose,digest12}. No gnomon-rpc verb is reachable. An ephemeral
       Ed25519 setup key signs serverSig. One setup connection; a closed
       socket aborts the #provisioner at its next step boundary. Exact params
@@ -769,8 +770,18 @@ components:
       every expected digest: the terminal is the surface to trust); gnomon
       setup --cli keeps the prompts; up --wrapper emits {t:setup,...} and then
       continues into {t:up}. Falsified in test/setup-endpoint.test.ts
-      (G-SET-08..14) and test/wrapper-channel.test.ts.
-    file: src/kernel/setup/setup-endpoint.ts
+      (G-SET-08..14) and test/wrapper-channel.test.ts. Never hangs: it
+      settles on finish (also for an already-set-up home), token expiry, a
+      10 min idle cap, socket close, transport stop or token reuse; a refused
+      purge (GNOMON_HOME guard, in-use / identity-malformed) or a failed
+      begin returns to the checks. The checks are read-only: setup state
+      lives in a private scratch dir and the home is created at begin.
+    path: src/kernel/setup/setup-endpoint.ts
+    type: service
+    related: ["#provisioner", "#setup-preflight", "#web-endpoint", "#gui-setup", "#first-run"]
+    tests:
+      - test/setup-endpoint.test.ts
+      - test/wrapper-channel.test.ts
     gates: ["^setup-token", "^unprovisioned-only"]
     tags: [kernel, setup, web]
   setup-preflight:
