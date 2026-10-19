@@ -191,6 +191,24 @@ export class HardwareRootAuthority implements RootAuthority {
     }
   }
 
+  /**
+   * #provisioner (I1): one fresh-presence root signature through the long-lived helper, returning the
+   * helper's own prompt line (`shown`, the dialog's last line) so the caller can check it named the digest
+   * it showed, plus the exact preimage and the helper's DER signature (a rotate statement needs both).
+   */
+  async signRowShown(row: unknown): Promise<{ signer: string; sig: string; shown: unknown; statement: string; helperSig: string }> {
+    if (!this.#helper) throw new RootUnavailableError('a root signature with its prompt line (no helper)');
+    const req = this.#request(row);
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request(req, HELPER_SIGN_TIMEOUT_MS);
+    } catch (e) {
+      throw rootError(e);
+    }
+    const out = this.#accept(row, reply);
+    return { ...out, shown: reply.shown, statement: (req.messages as string[])[0]!, helperSig: String((reply.sigs as string[])[0]) };
+  }
+
   async signRowAsync(row: unknown): Promise<{ signer: string; sig: string }> {
     if (!this.#helper) return this.signRow(row);
     try {

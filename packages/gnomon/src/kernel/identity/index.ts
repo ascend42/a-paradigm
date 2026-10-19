@@ -9,3 +9,4 @@ export * from './read-token.js';
 export * from './helper.js';
 export * from './hardware.js';
 export * from './provision.js';
+export * from './provisioner.js';
