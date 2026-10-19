@@ -90,7 +90,7 @@ import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/c
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
-import { buildRepoContext, REPO_CONTEXT_ENV, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
+import { buildRepoContext, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -357,7 +357,7 @@ export class SessionSupervisor {
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
-      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
+      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed

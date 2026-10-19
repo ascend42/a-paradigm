@@ -290,6 +290,10 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
     expect(fs.existsSync(settingsHookMarker())).toBe(false);
     // the repo's permissions.allow is NOT an effective rule (nor in policy.json)
     expect(trace(w).find((t) => t.t === 'allow')!.allow).not.toContain('Bash(touch:*)');
+    // H2: the session's policy.json disables skill/command shell preprocessing
+    const pol = JSON.parse(fs.readFileSync(args[args.indexOf('--settings') + 1]!, 'utf8'));
+    expect(pol.disableSkillShellExecution).toBe(true);
+    expect(pol.permissions.allow ?? []).not.toContain('Bash(touch:*)');
     // logged: what loaded, what was stripped, what was not loaded (names and counts only)
     const row = r2.kinds('gate-class.detected').find((x) => x.payload.what === 'repo-context')!.payload;
     expect(row).toMatchObject({ plugin: true, memoryDirs: 1, skills: ['x'], agents: ['y'], commands: ['z'], run: 0 });
@@ -316,6 +320,8 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
       expect(a.args as string[], mode).not.toContain('--plugin-dir');
       expect(a.args as string[], mode).not.toContain('--add-dir');
       expect(a.envKeys as string[], mode).not.toContain('CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD');
+      const as = a.args as string[];
+      expect(JSON.parse(fs.readFileSync(as[as.indexOf('--settings') + 1]!, 'utf8')).disableSkillShellExecution, mode).toBeUndefined();
     }
   }, 60_000);
 });

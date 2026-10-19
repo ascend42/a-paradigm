@@ -55,6 +55,17 @@ export const MAX_TREE_DEPTH = 6;
 /** A file or dir name the kernel copies: no dot-leading, separator, control or format character, bounded. */
 const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9._ +@-]{0,127}$/;
 
+/**
+ * H2 (Aegis): Claude Code runs `!`cmd`` and ```! fenced blocks in skills and commands BEFORE the model sees them.
+ * Fail closed: a skill or command that contains either is not loaded, and the session's policy.json also sets
+ * REPO_CONTEXT_SETTINGS.disableSkillShellExecution (2.1.303: "Commands are replaced with a placeholder").
+ */
+export function hasShellPreprocessing(text: string): boolean {
+  return text.includes('!`') || /^[ \t]*(?:`{3,}|~{3,})[ \t]*!/m.test(text);
+}
+/** Kernel settings merged into an audited session's policy.json (P8-D97, H2). */
+export const REPO_CONTEXT_SETTINGS = Object.freeze({ disableSkillShellExecution: true });
+
 export type SanitizeResult = { ok: true; text: string; dropped: string[]; hooks: boolean } | { ok: false; why: string };
 
 const FENCE = /^---[ \t]*$/;
@@ -370,8 +381,13 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
     return true;
   };
   const rel = (...p: string[]): string => ['.claude', ...p].join('/');
-  const sanitized = (relPath: string, buf: Buffer, keys: readonly string[]): string | null => {
-    const s = sanitizeFrontmatter(buf.toString('utf8'), keys);
+  const sanitized = (relPath: string, buf: Buffer, keys: readonly string[], shell = false): string | null => {
+    const raw = buf.toString('utf8');
+    if (shell && hasShellPreprocessing(raw)) {
+      ctx.refused.push({ path: relPath, why: 'shell preprocessing (!`…` or a ```! block) is not loaded (H2)' });
+      return null;
+    }
+    const s = sanitizeFrontmatter(raw, keys);
     if (!s.ok) {
       ctx.refused.push({ path: relPath, why: s.why });
       return null;
@@ -415,7 +431,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
           break;
         }
         if (f === 'SKILL.md') {
-          const t = sanitized(`${r}/SKILL.md`, got.buf, SKILL_KEYS);
+          const t = sanitized(`${r}/SKILL.md`, got.buf, SKILL_KEYS, true);
           if (t === null) {
             why = '';
             break;
@@ -465,7 +481,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
           ctx.refused.push({ path: r, why: got.ok ? 'over the context budget' : got.why });
           continue;
         }
-        const t = sanitized(r, got.buf, COMMAND_KEYS);
+        const t = sanitized(r, got.buf, COMMAND_KEYS, true);
         if (t === null) continue;
         writes.push({ dst: path.join('commands', f), data: t });
         ctx.commands.push(f.slice(0, -3).split(path.sep).join(':'));
