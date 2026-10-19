@@ -61,6 +61,7 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   log                log maintenance (quarantine)
   daemon             status | stop | --detach: the background kernel (gnomond)
   dev                init | up: the DEV ONLY unsigned launch path on a separate dev home
+  guide              how-to topics compiled into this binary (spawn, claims, cards, refusals)
   help               this listing        --version  the version
 
 first run: \`gnomon\` in a repo (it runs \`gnomon setup\` the first time); scripted: gnomon identity init

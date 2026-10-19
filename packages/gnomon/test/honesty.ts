@@ -40,10 +40,45 @@
  *             doc. The design spec docs/specs/gnomon.md is NOT scanned (stated
  *             residual: its measured lines cite probe arms and result files by
  *             prose, which a line rule cannot read).
+ *   G-HON-08  (the `gnomon guide` check, spec §5 and §9.7; T-2026-10-19-015 —
+ *             the spec assigns the id "when T-2026-10-19-015 builds it"; the
+ *             spec text is not yet amended, so the id is named here): a guide
+ *             topic that names a verb, flag or refusal reason the frozen
+ *             descriptors lack fails. scanGuides reads the guide markup
+ *             (src/cli/guide-topics.ts): every backtick span must classify —
+ *             `verb`, `verb{param, param:value}` (each param declared by that
+ *             verb), `CODE`, `CODE{reason}`, `gnomon guide <topic>`, or a
+ *             term the descriptors name (a param, gate, retriability, card
+ *             kind/state/decision/flag, additive-enum value, event kind,
+ *             refusal key, schema id). A `--flag` anywhere is a finding (no
+ *             frozen descriptor lists CLI flags). Outside backticks, a dotted
+ *             identifier must be a verb, relay or event kind, and an all-caps
+ *             token a refusal code. Durations go through scanLatencyDocs.
  */
 
+import {
+  ADDITIVE_ENUMS,
+  CARD_DECISIONS,
+  CARD_FLAGS,
+  CARD_KINDS,
+  CARD_STATES,
+  CARD_V1,
+  CLIENT_RELAYS,
+  EVENT_KIND_NAMES,
+  EVENT_V1,
+  REFUSAL_CODES,
+  REFUSAL_GATES,
+  REFUSAL_POINTER_KEYS,
+  REFUSAL_REASONS,
+  REFUSAL_SCHEMA,
+  REFUSAL_V1_KEYS,
+  RESERVED_REASON_ROUTES,
+  RETRIABILITIES,
+  VERBS,
+} from '@a-company/gnomon-contracts';
+
 export interface HonestyFinding {
-  rule: 'G-HON-02' | 'G-HON-05' | 'G-HON-06' | 'G-HON-07';
+  rule: 'G-HON-02' | 'G-HON-05' | 'G-HON-06' | 'G-HON-07' | 'G-HON-08';
   file: string;
   line: number;
   detail: string;
@@ -181,4 +216,90 @@ export function scanLatencyDocs(files: readonly SourceText[]): HonestyFinding[] 
     }
   }
   return out;
+}
+
+/* ── G-HON-08: the `gnomon guide` check ─────────────────────────────────── */
+
+export interface GuideText {
+  id: string;
+  summary: string;
+  body: string;
+}
+
+const stripOpt = (p: string): string => p.replace(/\?$/, '');
+const GUIDE_PARAMS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ...VERBS.map((v) => [v.verb, new Set(v.params.map(stripOpt))] as const),
+  ...CLIENT_RELAYS.map((r) => [r.relay, new Set(r.params.map(stripOpt))] as const),
+]);
+const GUIDE_CODES: ReadonlySet<string> = new Set(REFUSAL_CODES);
+const GUIDE_REASONS: ReadonlySet<string> = new Set([...REFUSAL_REASONS, ...Object.keys(RESERVED_REASON_ROUTES)]);
+const GUIDE_DOTTED: ReadonlySet<string> = new Set([...GUIDE_PARAMS.keys(), ...EVENT_KIND_NAMES]);
+const GUIDE_TERMS: ReadonlySet<string> = new Set<string>([
+  ...[...GUIDE_PARAMS.values()].flatMap((s) => [...s]),
+  ...GUIDE_REASONS,
+  ...REFUSAL_GATES,
+  ...RETRIABILITIES,
+  ...REFUSAL_V1_KEYS,
+  ...REFUSAL_POINTER_KEYS,
+  ...CARD_KINDS,
+  ...CARD_STATES,
+  ...CARD_DECISIONS,
+  ...CARD_FLAGS,
+  ...Object.values(ADDITIVE_ENUMS).flatMap((v) => [...(v as readonly string[])]),
+  REFUSAL_SCHEMA,
+  CARD_V1,
+  EVENT_V1,
+  ...VERBS.map((v) => v.result).filter((r) => /^[a-z-]+:v\d+$/.test(r)),
+]);
+
+/** Classify one backtick span; returns why it fails, or undefined when the descriptors name it. */
+function guideSpanProblem(span: string, topicIds: ReadonlySet<string>): string | undefined {
+  const s = span.trim();
+  if (/(^|\s)--[a-z]/i.test(s)) return `a CLI flag no frozen descriptor lists: ${s}`;
+  const cli = /^gnomon guide(?: (\S+))?$/.exec(s);
+  if (cli) return cli[1] === undefined || cli[1] === '<topic>' || topicIds.has(cli[1]) ? undefined : `an unknown guide topic: ${s}`;
+  if (/^gnomon\b/.test(s)) return `a CLI command the guide check cannot verify: ${s}`;
+  const call = /^([A-Za-z_][\w.]*)\{(.*)\}$/.exec(s);
+  if (call) {
+    const [, head, inner] = call as unknown as [string, string, string];
+    if (GUIDE_CODES.has(head)) {
+      const reason = inner.trim().replace(/^reason\s*:\s*/, '').replace(/^['"]|['"]$/g, '');
+      return GUIDE_REASONS.has(reason) ? undefined : `a refusal reason the descriptors lack: ${head}{${reason}}`;
+    }
+    const params = GUIDE_PARAMS.get(head);
+    if (!params) return `a verb the descriptors lack: ${head}`;
+    for (const part of inner.split(',').map((x) => x.trim()).filter(Boolean)) {
+      const key = part.split(':')[0]!.trim();
+      if (!params.has(key)) return `a param ${head} does not declare: ${key}`;
+    }
+    return undefined;
+  }
+  if (GUIDE_PARAMS.has(s)) return undefined; // a verb or relay by name
+  if (/^[A-Z][A-Z_]+$/.test(s)) return GUIDE_CODES.has(s) ? undefined : `a refusal code the descriptors lack: ${s}`;
+  if (/^[a-z][\w-]*(\.[a-z][\w-]*)+$/.test(s)) return GUIDE_DOTTED.has(s) ? undefined : `a verb or kind the descriptors lack: ${s}`;
+  return GUIDE_TERMS.has(s) ? undefined : `a term the descriptors do not name: ${s}`;
+}
+
+/** G-HON-08 over guide topics (the compiled-in GUIDE_TOPICS, or a planted fixture). */
+export function scanGuides(topics: readonly GuideText[]): HonestyFinding[] {
+  const out: HonestyFinding[] = [];
+  const ids = new Set(topics.map((t) => t.id));
+  for (const t of topics) {
+    const text = `${t.summary}\n${t.body}`;
+    const file = `guide:${t.id}`;
+    const at = (i: number): number => lineOf(text, i);
+    for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+      const why = guideSpanProblem(m[1]!, ids);
+      if (why) out.push({ rule: 'G-HON-08', file, line: at(m.index), detail: why });
+    }
+    const prose = text.replace(/`[^`\n]+`/g, (x) => ' '.repeat(x.length));
+    for (const m of prose.matchAll(/(?<![\w-])--[a-z][\w-]*/gi)) out.push({ rule: 'G-HON-08', file, line: at(m.index), detail: `a CLI flag no frozen descriptor lists: ${m[0]}` });
+    for (const m of prose.matchAll(/\b[a-z][a-zA-Z-]+(?:\.[a-z][a-zA-Z-]+)+\b/g)) {
+      if (!GUIDE_DOTTED.has(m[0])) out.push({ rule: 'G-HON-08', file, line: at(m.index), detail: `a verb or kind the descriptors lack: ${m[0]}` });
+    }
+    for (const m of prose.matchAll(/\b[A-Z][A-Z_]{3,}\b/g)) {
+      if (!GUIDE_CODES.has(m[0])) out.push({ rule: 'G-HON-08', file, line: at(m.index), detail: `a refusal code the descriptors lack: ${m[0]}` });
+    }
+  }
+  return [...out, ...scanLatencyDocs(topics.map((t) => ({ file: `guide:${t.id}`, text: `${t.summary}\n${t.body}` })))];
 }

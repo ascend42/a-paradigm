@@ -2055,6 +2055,35 @@ components:
       - test/always-rules.test.ts
     oracles: [G-BRK-05]
 
+  gnomon-guide:
+    description: >-
+      #gnomon-guide `gnomon guide [<topic>]` (src/cli/guide-cli.ts,
+      src/cli/guide-topics.ts; spec §5 "gnomon guide" paragraph and §9.7,
+      TD-2026-10-19-648 item 10, T-2026-10-19-015). A CLI-only, pull-only
+      verb: not a socket method, so abiId and clientApiId do not move
+      (§3.1 I3). Topics spawn, claims, cards and refusals are COMPILED IN:
+      built in guide-topics.ts from literals and from the frozen
+      @a-company/gnomon-contracts descriptors (verb refusal lists, card
+      kinds, decisions, refusal codes with gate, retriability, exit code and
+      default next step), bundled by tsup; no topic file exists on disk, in
+      the home or in a repo, and the guide modules read no file, env or cwd
+      (threat 11). Every rendered topic carries the abiId and clientApiId
+      this binary was built with. No topic lists the topics (exit 0); an
+      unknown topic or extra arguments are refused BAD_REQUEST usage,
+      exit 64, without echoing the argument. Nothing injects a guide into a
+      session, prompt, envelope or card, and a guide grants nothing; status
+      stays the man page (F4). Honesty check G-HON-08 (test/honesty.ts
+      scanGuides, gated in test/honesty.test.ts): a topic naming a verb,
+      param, refusal code or reason, or CLI flag the frozen descriptors lack
+      fails the build; durations go through the G-HON-07 docs scan. The id
+      G-HON-08 is named in the tests only; the spec assigns it when amended.
+    path: src/cli/guide-cli.ts
+    type: module
+    tags: [gnomon, cli, honesty, paradigm-8, move-1]
+    tests:
+      - test/guide-cli.test.ts
+      - test/honesty.test.ts
+
   local-runner:
     description: >-
       #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:

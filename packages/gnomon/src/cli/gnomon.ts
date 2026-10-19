@@ -6,11 +6,13 @@
  * #dev-launch adds `gnomon dev init|up` (dev-cli.ts, DEV ONLY until M1.3);
  * M1.3 slice 1 adds `gnomon identity init|status` (identity-cli.ts);
  * #gnomon-up adds `gnomon up` (up-cli.ts: the kernel on the provisioned home);
- * #bare-entry adds bare `gnomon` (bare-cli.ts: up + a folder hint) and `gnomon help`.
+ * #bare-entry adds bare `gnomon` (bare-cli.ts: up + a folder hint) and `gnomon help`;
+ * #gnomon-guide adds `gnomon guide [<topic>]` (guide-cli.ts: compiled-in, pull-only how-to text).
  */
 import { BARE_EXIT_USAGE, GNOMON_HELP, runBareCommand } from './bare-cli.js';
 import { gnomondEntryFrom, runDaemonCommand } from './daemon-cli.js';
 import { runDevCommand } from './dev-cli.js';
+import { runGuideCommand } from './guide-cli.js';
 import { runIdentityCommand } from './identity-cli.js';
 import { runLogCommand } from './log-cli.js';
 import { runModCommand } from './mod-cli.js';
@@ -131,6 +133,9 @@ if (argv[0] === 'daemon') {
       process.exitCode = 70;
     },
   );
+} else if (argv[0] === 'guide') {
+  // #gnomon-guide: `gnomon guide [<topic>]` — topics compiled into this binary, never read from disk (guide-cli.ts)
+  process.exitCode = runGuideCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr });
 } else if (argv.length === 0 || argv[0] === '--no-open') {
   // #bare-entry: bare `gnomon` in a folder = `gnomon up` with this folder as a GUI hint (bare-cli.ts); `--no-open` = print the URL only
   runBareCommand(argv, { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
