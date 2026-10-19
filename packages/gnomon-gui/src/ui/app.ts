@@ -6,7 +6,8 @@
  * → auth), Reconnect, the log.read backlog + follow subscription, the
  * virtualized transcript, the sessions sidebar with new-session, the decision
  * stack (approve on a user gesture only, `G-GUI-04`; refusals shown
- * verbatim), the composer (session.open / session.send), the palette,
+ * verbatim), the composer (session.open / session.send), the run-mode
+ * control (header menu, ⇧Tab, palette; core/modes.ts), the palette,
  * themes + auto + reduced motion, the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
@@ -19,6 +20,7 @@ import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
+import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -366,6 +368,7 @@ function schedule(what: Set<string>): void {
     if ([...w].some((x) => x === 'feed' || x.startsWith('transcript:'))) paintTranscript();
     if (w.has('sessions') || w.has('cards')) paintSessions();
     if (w.has('cards')) void paintStack(w);
+    if (w.has('modes')) void refreshStatus();
     paintShuttle();
   });
 }
@@ -442,6 +445,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   } catch {
     status = null;
   }
+  paintMode();
   try {
     await subscribe(c);
   } catch (err) {
@@ -485,19 +489,115 @@ function focus(hsid: string | null): void {
   if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
   closeDrawers();
-  put($('composer-mode'), hsid ? `to ${hsid.slice(-10)}` : 'no session focused');
+  closeModeMenu();
+  paintMode();
   resetTranscript();
   paintSessions();
   void paintStack();
 }
 
+/* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
+/** The control's state is the kernel's status.runModes only (never a guess): re-read on a mode row (store 'modes'). */
+async function refreshStatus(): Promise<void> {
+  if (!client) return;
+  try {
+    status = await client.call<Record<string, unknown>>('status');
+  } catch {
+    /* keep the last status; the control shows what it last knew */
+  }
+  paintMode();
+}
+
+const currentMode = () => sessionModeOf(status, focused);
+
+function paintMode(): void {
+  const v = currentMode();
+  const btn = $('mode-btn');
+  btn.hidden = !focused || !v; // the kernel feed and an exited session have no mode to set
+  put(btn, modeLabel(v));
+  btn.className = `key quiet mode-btn kernel-owned${v ? ` mode-${v.effective}` : ''}`;
+  put($('composer-mode'), focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused');
+  if (!$('mode-menu').hidden) paintModeMenu();
+}
+
+function paintModeMenu(): void {
+  const menu = $('mode-menu');
+  clear(menu);
+  const v = currentMode();
+  if (!v) return closeModeMenu();
+  for (const e of menuEntries(v)) {
+    const b = h(doc, 'button', { class: `mode-item${e.current ? ' current' : ''}`, type: 'button', role: 'menuitem', 'data-mode': e.mode, 'aria-disabled': String(e.disabled) }, h(doc, 'span', { class: 'mode-name' }, e.mode), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as HTMLButtonElement;
+    b.disabled = e.disabled;
+    menu.appendChild(b);
+  }
+  if (v.repo) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-mode-scope': 'repo' }, `set for this repo instead (now ${v.source === 'session' ? 'this session has its own mode' : `the session follows the repo`})…`) as unknown as Node);
+}
+
+function openModeMenu(): void {
+  if (!currentMode()) return;
+  $('mode-menu').hidden = false;
+  $('mode-btn').setAttribute('aria-expanded', 'true');
+  paintModeMenu();
+}
+function closeModeMenu(): void {
+  $('mode-menu').hidden = true;
+  $('mode-btn').setAttribute('aria-expanded', 'false');
+}
+
+let modeBusy = false;
+/**
+ * One gesture changes the mode (G-GUI-04: only on a trusted user event). A tightening applies on the kernel's
+ * answer; a loosening comes back as a pending strictness card that this same gesture decides `allow` — the kernel
+ * then asks for Touch ID (fresh presence; a cached unlock never carries it). A refusal is shown as given.
+ */
+async function setMode(to: RunMode, scope: 'session' | 'repo', trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  closeModeMenu();
+  if (!client) return notice('not connected: the run mode was not changed', true);
+  const v = currentMode();
+  if (!v) return notice('no live session focused: the run mode was not changed', true);
+  const plan = planChange(v, to);
+  if (plan.kind === 'blocked') return notice(`${to} is not allowed here: ${plan.reason}`, true);
+  if (scope === 'session' && plan.kind === 'same') return;
+  const req = modeRequest(v, to, scope);
+  if (!req) return notice('this session has no repo to set a mode for', true);
+  if (modeBusy) return;
+  modeBusy = true;
+  try {
+    const r = await client.call<Record<string, unknown>>('log.append', req);
+    if (r.pending === true && typeof r.cardId === 'string') {
+      notice(`run mode ${String(r.from)} → ${to}: confirm with Touch ID`);
+      try {
+        await client.call('approve', { cardId: r.cardId, decision: 'allow' });
+        notice(null);
+      } catch (err) {
+        notice(err instanceof RpcError ? `the run mode stays ${String(r.from)}: ${refusalText(err.refusal)}` : `the run mode stays ${String(r.from)}`, true);
+      }
+    } else notice(null);
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the run mode was not changed', true);
+  } finally {
+    modeBusy = false;
+    await refreshStatus();
+  }
+}
+
+/** ⇧Tab: the next mode in the cycle, skipping one the ceiling does not allow. */
+function cycleMode(trusted: boolean): void {
+  const v = currentMode();
+  if (!v) return notice(focused ? 'this session reports no run mode (it ended, or the kernel is older)' : 'no session focused: ⇧Tab cycles the focused session\'s run mode', true);
+  let to = nextRunMode(v.chosen);
+  if (planChange(v, to).kind === 'blocked') to = nextRunMode(to);
+  void setMode(to, 'session', trusted);
+}
+
 /* ── palette ────────────────────────────────────────────────────── */
 let palSel = 0;
 let palItems: Command[] = [];
-function openPalette(): void {
+function openPalette(prefix = ''): void {
   $('palette').hidden = false;
   const i = $<HTMLInputElement>('palette-input');
-  i.value = '';
+  i.value = prefix;
   paintPalette();
   i.focus();
 }
@@ -525,6 +625,8 @@ function run(id: string): void {
     $('new-session-dialog').hidden = false;
   }
   else if (id === 'composer.focus') $('composer-text').focus();
+  else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', true);
+  else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', true);
   else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
   else if (id === 'verb.status' && client) void client.call('status').then((s) => (status = s as Record<string, unknown>));
@@ -610,12 +712,32 @@ function wire(): void {
     t.value = '';
   });
   $('composer-text').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault(); // ⇧Tab cycles the run mode, as in Claude Code (§11.5)
+      cycleMode(e.isTrusted);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       $<HTMLFormElement>('composer').requestSubmit();
     }
   });
   $('new-session').addEventListener('click', () => run('session.new'));
+  $('mode-btn').addEventListener('click', () => ($('mode-menu').hidden ? openModeMenu() : closeModeMenu()));
+  $('mode-menu').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope]') as HTMLButtonElement | null;
+    if (!b || b.disabled) return;
+    if (b.dataset.modeScope === 'repo') {
+      // the repo scope: the same three choices in the palette (mode.repo.*), for every session of the repo with no mode of its own
+      closeModeMenu();
+      return openPalette('mode.repo.');
+    }
+    void setMode(b.dataset.mode as RunMode, 'session', e.isTrusted);
+  });
+  document.addEventListener('click', (e) => {
+    if ($('mode-menu').hidden) return;
+    if (!(e.target as HTMLElement).closest('.mode-wrap')) closeModeMenu();
+  });
   $('ns-cancel').addEventListener('click', () => {
     $('new-session-dialog').hidden = true;
     clearCwdHint(hintTarget());
@@ -628,7 +750,7 @@ function wire(): void {
     void openSession($<HTMLInputElement>('ns-cwd').value, $<HTMLSelectElement>('ns-model').value);
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
-  $('palette-btn').addEventListener('click', openPalette);
+  $('palette-btn').addEventListener('click', () => openPalette());
   $('repin-ack').addEventListener('click', (e) => {
     if (e.isTrusted) $('repin').hidden = true; // only a user click clears the re-pin notice
   });
@@ -653,6 +775,8 @@ function wire(): void {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openPalette();
+    } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
+      closeModeMenu();
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new');

@@ -12,6 +12,24 @@ description: >-
 
 components:
   gui:
+    run-modes: >-
+      P8-D86/D87 run-mode control (spec §11.4, §11.5): core/modes.ts (PURE)
+      reads the focused session's mode ONLY from status.runModes (unknown
+      values fail safe to manual), plans a choice (same | tighten | loosen |
+      blocked with its ceiling reason), cycles ⇧Tab manual → ask →
+      auto-edits → manual (skipping a blocked one) and builds the request
+      log.append{kind:'request.mode.set', payload:{hsid, to} | {repo, to}}.
+      ui/app.ts: a kernel-owned `mode: <mode> ▾` button + menu in the
+      transcript header, ⇧Tab in the composer, palette mode.* (session) and
+      mode.repo.* (repo), all on trusted gestures only (G-GUI-04); a
+      loosening's pending strictness card is approved `allow` in the same
+      gesture (the kernel asks for Touch ID), a refusal is shown as given;
+      status is re-read when the store flags `modes` (approval.mode.set,
+      request.mode.set, session.open, session.exited rows), never on a timer.
+      mode.* commands are excluded from BLOCK_SAFE_COMMANDS. The transcript
+      shows approval.auto as a subtle `auto-approved edit · <path>` line
+      (`auto-approved · <tool> (always rule)` for a rule) and
+      approval.mode.set as a system line. Tests: test/modes.test.ts.
     journal-cursor: >-
       Slice A4 (P8-D98): the hello offers journal.cursor; core/client.ts
       followLog pages then follows with the store's {logId, seq} cursor
@@ -146,6 +164,7 @@ components:
     tags: [gnomon, gui, paradigm-8, m1-10]
     tests:
       - test/gui.test.ts
+      - test/modes.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:
