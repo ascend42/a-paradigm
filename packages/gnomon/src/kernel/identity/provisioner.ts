@@ -140,12 +140,27 @@ export function helperLineShows(shown: unknown, key: 'root' | 'approvals', diges
 
 /** I8: the provisioning lock path, a sibling of the home. */
 export function provisionLockPath(home: string): string {
-  return `${home}${PROVISION_LOCK_SUFFIX}`;
+  // L5: one path per home however it is spelled: resolved, with the parent realpath'd (the home may not exist yet)
+  const abs = path.resolve(home);
+  let parent = path.dirname(abs);
+  try {
+    parent = fs.realpathSync.native(parent);
+  } catch {
+    /* a missing parent: the resolved spelling */
+  }
+  return path.join(parent, `${path.basename(abs)}${PROVISION_LOCK_SUFFIX}`);
 }
 
-/** I8: take the lock (O_EXCL); a dead holder's lock is removed once and re-raced. Returns the release. */
-export function acquireProvisionLock(home: string): () => void {
+/** The held lock: call it to release; verify() throws unless the lock file is still this run's (L4). */
+export interface ProvisionLock {
+  (): void;
+  verify(): void;
+}
+
+/** I8: take the lock (O_EXCL); a dead holder's lock is removed once (inode-checked) and re-raced. */
+export function acquireProvisionLock(home: string): ProvisionLock {
   const p = provisionLockPath(home);
+  const byHand = `if no other provisioning run is active, delete the stale lock by hand: rm ${p}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     let fd: number | null = null;
     try {
@@ -154,39 +169,56 @@ export function acquireProvisionLock(home: string): () => void {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw new ProvisionStop('provisioning-lock', `the provisioning lock ${p} cannot be created: ${(e as Error).message}`);
     }
     if (fd !== null) {
+      let ino: number;
       try {
         fs.writeSync(fd, `${JSON.stringify({ pid: process.pid, at: new Date().toISOString() })}\n`);
+        ino = fs.fstatSync(fd).ino;
       } finally {
         fs.closeSync(fd);
       }
-      const ino = fs.lstatSync(p).ino;
-      return () => {
+      const mine = (): boolean => {
         try {
-          if (fs.lstatSync(p).ino === ino) fs.unlinkSync(p);
+          return fs.lstatSync(p).ino === ino;
         } catch {
-          /* already gone */
+          return false;
         }
       };
+      const release = (() => {
+        if (mine()) {
+          try {
+            fs.unlinkSync(p);
+          } catch {
+            /* already gone */
+          }
+        }
+      }) as ProvisionLock;
+      release.verify = () => {
+        if (!mine()) throw new ProvisionStop('provisioning-locked', `the provisioning lock ${p} was taken over by another run; stopping before any key or record is written`, { lock: p });
+      };
+      return release;
     }
     let holder: number | undefined;
+    let seenIno: number;
     try {
       const st = fs.lstatSync(p);
-      if (!st.isFile()) throw new ProvisionStop('provisioning-locked', `${p} exists and is not a lock file; remove it by hand`);
+      if (!st.isFile()) throw new ProvisionStop('provisioning-locked', `${p} exists and is not a lock file; remove it by hand`, { lock: p });
+      seenIno = st.ino;
       const v = JSON.parse(fs.readFileSync(p, 'utf8')) as { pid?: unknown };
       holder = typeof v.pid === 'number' ? v.pid : undefined;
     } catch (e) {
       if (e instanceof ProvisionStop) throw e;
       // unreadable: a racer mid-write, treated as live
-      throw new ProvisionStop('provisioning-locked', `another provisioning run holds ${p}`, { lock: p });
+      throw new ProvisionStop('provisioning-locked', `another provisioning run holds ${p}; ${byHand}`, { lock: p });
     }
-    if (holder !== undefined && pidAlive(holder)) throw new ProvisionStop('provisioning-locked', `another provisioning run (pid ${holder}) holds ${p}`, { lock: p });
+    if (holder === undefined || pidAlive(holder)) throw new ProvisionStop('provisioning-locked', `another provisioning run${holder !== undefined ? ` (pid ${holder})` : ''} holds ${p}; ${byHand}`, { lock: p });
+    // L4: a crashed holder's lock is removed only if it is still the SAME file we judged; then re-race once
     try {
-      fs.unlinkSync(p); // a crashed holder: re-race once
+      if (fs.lstatSync(p).ino === seenIno) fs.unlinkSync(p);
     } catch {
       /* re-race */
     }
   }
-  throw new ProvisionStop('provisioning-locked', `the provisioning lock ${p} keeps being taken`, { lock: p });
+  throw new ProvisionStop('provisioning-locked', `the provisioning lock ${p} keeps being taken; ${byHand}`, { lock: p });
 }
 
 export class Provisioner extends EventEmitter {
@@ -260,9 +292,16 @@ export class Provisioner extends EventEmitter {
     const created: Array<'root' | 'approvals'> = [];
     const moved: Array<{ from: string; to: string }> = [];
     let recordWritten = false;
-    let release: (() => void) | null = null;
+    let release: ProvisionLock | null = null;
     try {
       release = acquireProvisionLock(home); // I8
+      // L6: the home is re-judged under the lock (a swap to a symlink after the caller resolved it refuses)
+      try {
+        const hs = fs.lstatSync(home);
+        if (hs.isSymbolicLink() || !hs.isDirectory()) return this.#refuse('unsafe-home', `${home} is not a plain directory`);
+      } catch {
+        /* not created yet: init creates it */
+      }
       let now: IdentityRecord | null;
       try {
         now = readIdentity(home);
@@ -296,6 +335,7 @@ export class Provisioner extends EventEmitter {
 
       // the Secure Enclave keys of the new generation (no prompt)
       const pubs: Record<'root' | 'approvals', string> = { root: '', approvals: '' };
+      release.verify(); // L4: still our lock before any key exists
       for (const k of ['root', 'approvals'] as const) {
         this.#step(`create-${k}`);
         const r = await helper.request({ op: 'key.create', key: k, gen, ...(rotation ? { rotate: { fromGen: existing!.gen, statement: rotation.statement, sig: rotation.sig } } : {}) });
@@ -347,6 +387,7 @@ export class Provisioner extends EventEmitter {
         ...(existing && mode === 'rotate' ? { rotatedFrom: existing.rootKeyId } : {}),
         ...(existing && mode === 'recover' ? { recoveredFrom: existing.rootKeyId } : {}),
       };
+      release.verify(); // L4: still our lock before the record
       writeIdentity(home, rec);
       recordWritten = true; // I10: from here on, keys are never deleted (R2): the record names them
       this.#o.fault?.('registry');
@@ -443,7 +484,7 @@ export class Provisioner extends EventEmitter {
     const pin = this.#pin();
     if ('ok' in pin) return pin;
     const helper = this.#startHelper(pin);
-    let release: (() => void) | null = null;
+    let release: ProvisionLock | null = null;
     try {
       release = acquireProvisionLock(this.#o.home);
       // Aegis MEDIUM-2: under the lock, no identity.json this run can see may name the generation (never purge blind)
@@ -490,7 +531,7 @@ export class Provisioner extends EventEmitter {
   async completeDevice(): Promise<ProvisionOutcome> {
     const home = this.#o.home;
     this.#budget = ROOT_PROMPT_BUDGET.complete;
-    let release: (() => void) | null = null;
+    let release: ProvisionLock | null = null;
     let hw: Awaited<ReturnType<typeof openHardwareIdentity>> = null;
     try {
       release = acquireProvisionLock(home);

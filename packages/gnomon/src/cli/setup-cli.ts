@@ -105,13 +105,16 @@ class SetupRefusal extends Error {
 }
 
 /** Aegis I4: `~/.gnomon` of the user's home, never from env; lstat (no symlink); may not exist yet. */
-export function resolveSetupHome(userHome: string = os.homedir()): string {
+export function resolveSetupHome(userHome: string = os.userInfo().homedir): string {
   const raw = resolveGnomonHome({ env: {}, homedir: userHome });
   let st: fs.Stats;
   try {
     st = fs.lstatSync(raw);
   } catch {
-    return path.join(fs.realpathSync.native(path.dirname(raw)), path.basename(raw));
+    // L6: created here, owner-only, then judged like an existing one (never a symlink)
+    const made = path.join(fs.realpathSync.native(path.dirname(raw)), path.basename(raw));
+    fs.mkdirSync(made, { mode: 0o700 });
+    st = fs.lstatSync(made);
   }
   if (st.isSymbolicLink()) throw new SetupRefusal('unsafe-home', `${raw} is a symlink; the home must be a plain directory`, ['replace the link with the real directory, then run gnomon setup']);
   if (!st.isDirectory()) throw new SetupRefusal('unsafe-home', `${raw} is not a directory`);
@@ -199,7 +202,7 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     io.stdout.write(WELCOME);
     const report = await runPreflight({
       home,
-      userHome: deps.userHome ?? os.homedir(),
+      userHome: deps.userHome ?? os.userInfo().homedir,
       helperPath: deps.helperPath ?? defaultHelperPath(),
       ...(deps.verifier ? { verifier: deps.verifier } : {}),
       ...(deps.startHelper ? { start: deps.startHelper } : {}),
@@ -261,7 +264,7 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     }
     if (!name) return stop(new SetupRefusal('bad-name', 'no valid name was given'));
 
-    io.stdout.write(`\nNext come EXACTLY 2 Touch ID prompts. Before each one this terminal shows a code;\nthe dialog's last line must show the same code. A third prompt during setup is an attack: press Cancel.\n`);
+    io.stdout.write(`\nNext come EXACTLY 2 Touch ID prompts. Before each one this terminal shows a code;\nthe dialog's last line must show the same code. A third prompt to SIGN during setup is an attack: press Cancel.\nIf something fails (for example the helper crashes), cleanup may ask extra Touch ID prompts to DELETE the keys\nthis run created; cancelling those is safe: the keys stay and the next setup offers to purge them.\n`);
     const r = await engine(deps.helperPath ?? defaultHelperPath()).provision({ mode: 'init', existing: null, name, host: sanitizeHost(os.hostname()) });
     if (!r.ok) {
       const leftover = typeof r.extra.leftoverGen === 'string' ? [`gnomon identity purge-keys --gen ${r.extra.leftoverGen}`] : [];

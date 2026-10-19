@@ -17,7 +17,8 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runBareCommand } from '../src/cli/bare-cli.js';
-import { groupDigest, runSetup, type GuiSetupDeps } from '../src/cli/setup-cli.js';
+import { groupDigest, runSetup, type GuiSetupDeps, type SetupDeps } from '../src/cli/setup-cli.js';
+import { runUp } from '../src/cli/up-cli.js';
 import {
   acceptUnsignedHelperForTests,
   DEV_TEST_HELPER_ACK,
@@ -243,6 +244,32 @@ describe('gnomon setup (#first-run)', () => {
     expect(ops2.filter((x) => x.startsWith('key.create'))).toEqual([]);
   });
 
+  it('G-SET-05 (L4, L5, L6): a dead holder\'s lock is taken over; a lock taken over mid-run stops before any key; one lock path per home; the home is created 0700', async () => {
+    const u = tmp();
+    const home = homeOf(u);
+    expect(provisionLockPath(`${home}${path.sep}`)).toBe(provisionLockPath(home));
+    expect(provisionLockPath(path.join(u, '.', '.gnomon'))).toBe(provisionLockPath(home));
+    fs.writeFileSync(provisionLockPath(home), JSON.stringify({ pid: 2147483646 })); // a holder that is not alive
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(u, fake))).code).toBe(0);
+    expect((fs.statSync(home).mode & 0o777).toString(8)).toBe('700');
+
+    const u2 = tmp();
+    const home2 = homeOf(u2);
+    const fake2 = new FakeHelper(null);
+    const ops: string[] = [];
+    const start = view(fake2, ops, (r) => {
+      if (r.op === 'key.list' && fs.existsSync(provisionLockPath(home2))) {
+        fs.rmSync(provisionLockPath(home2)); // another run takes the lock over
+        fs.writeFileSync(provisionLockPath(home2), JSON.stringify({ pid: process.pid }));
+      }
+    });
+    const p = new Provisioner({ home: home2, helperPath: exe(tmp()), verifier: DEV, start, once: () => (q) => fake2.handle(q) });
+    expect(await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' })).toMatchObject({ ok: false, reason: 'provisioning-locked' });
+    expect(ops.filter((x) => x.startsWith('key.create'))).toEqual([]);
+    expect(fs.existsSync(provisionLockPath(home2))).toBe(true); // the other run's lock is not removed
+  });
+
   it('G-SET-06 (I9): a fault at every step before commit leaves no record, no registry row, no keys and no lock', async () => {
     for (const step of ['create-root', 'create-approvals', 'sign-approvals-binding', 'sign-device-row', 'commit']) {
       const u = tmp();
@@ -313,6 +340,62 @@ describe('gnomon setup (#first-run)', () => {
       expect(fake.signs.length - before, what).toBe(0);
       expect(fs.existsSync(registryPath(home)) ? fs.readFileSync(registryPath(home), 'utf8').trim() : '', what).toBe('');
     }
+  });
+
+  it('L6: the engine re-judges the home under the lock — a symlinked home refuses unsafe-home before any key', async () => {
+    const u = tmp();
+    const real = tmp();
+    fs.symlinkSync(real, homeOf(u));
+    const fake = new FakeHelper(null);
+    const ops: string[] = [];
+    const p = new Provisioner({ home: homeOf(u), helperPath: exe(tmp()), verifier: DEV, start: view(fake, ops), once: () => (q) => fake.handle(q) });
+    expect(await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' })).toMatchObject({ ok: false, reason: 'unsafe-home' });
+    expect(ops.filter((x) => x.startsWith('key.'))).toEqual([]);
+    expect(fs.readdirSync(real)).toEqual([]);
+  });
+
+  it('L7: up on a home whose registry row is missing names gnomon setup', async () => {
+    const u = tmp();
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(u, fake, [], { fault: (s) => {
+      if (s === 'registry') throw new Error('crash');
+    } }))).code).toBe(1);
+    const o = io([]);
+    const code = await runUp(o.io, { userHome: u, verifier: DEV, startHelper: view(fake, []), runtime: { env: {}, execArgv: ['--disable-sigusr1'] }, start: () => Promise.reject(new Error('must not start')) }, {});
+    expect(code).toBe(1);
+    expect(o.errText()).toContain('device-unregistered');
+    expect(o.errText()).toContain('next: gnomon setup');
+  });
+
+  it('bare gnomon continues into up when setup finds the Mac already set up (another run won the race)', async () => {
+    const donor = tmp();
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(donor, fake))).code).toBe(0);
+    const u = tmp();
+    const out: string[] = [];
+    const base = io([]);
+    // the home is unprovisioned when bare checks; a racing run provisions it before setup reads it
+    const stdout = {
+      isTTY: true,
+      write: (s: string) => {
+        if (s.includes('Welcome to Gnomon') && !fs.existsSync(path.join(homeOf(u), 'keys'))) fs.cpSync(path.join(homeOf(donor), 'keys'), path.join(homeOf(u), 'keys'), { recursive: true }), fs.chmodSync(path.join(homeOf(u), 'keys'), 0o700);
+        out.push(s);
+        return true;
+      },
+    };
+    const run = runBareCommand([], { stdin: base.io.stdin, stdout, stderr: base.io.stderr }, {
+      userHome: u,
+      cwd: u,
+      verifier: DEV,
+      startHelper: view(fake, []),
+      runtime: { env: {}, execArgv: ['--disable-sigusr1'] },
+      start: () => Promise.reject(new Error('reached up')),
+      setup: deps(u, fake),
+    });
+    const got = await run.catch((e: Error) => e.message);
+    await new Promise((r) => setImmediate(r));
+    expect(got, base.errText()).toBe('reached up');
+    expect(out.join('')).toContain('Already set up');
   });
 
   it('routing: bare gnomon on a TTY with an unprovisioned home runs setup first; off a TTY it is up\'s refusal naming gnomon setup', async () => {
