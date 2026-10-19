@@ -42,7 +42,12 @@ components:
       epoch (a prompt open across the event is never kept), then pushes an
       unsolicited {push:'session', cause, arms, unlocks, seq} line. serve
       runs requests on a reader thread and the main run loop for the
-      observer; Output serializes stdout. Unit tests: darwin/Tests (swift
+      observer; Output serializes stdout. Aegis V5 fixes: arm.sign parses the
+      frozen gnomon:voice-decision:v1 preimage (gnomon-contracts
+      voice-decision.ts) and refuses unless it names this arm and pair;
+      arm.open and arm.sign fail closed on a locked, off-console or unknown
+      session (CGSessionProbe); maxSignatures required (ceiling 1024); the
+      helper arm line leads the prompt, caller text capped at 120. Unit tests: darwin/Tests (swift
       test). Later: the
       kernel-key keystore item, the keystore log anchor, XPC under launchd,
       the Windows pipe, job objects, WFP, launch-token hand-off.

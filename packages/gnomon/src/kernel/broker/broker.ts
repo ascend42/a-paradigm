@@ -78,6 +78,8 @@ import { HardwarePresenceDenied, HelperUnlockGone, type DecisionSignRequest, typ
 import { baseClass, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
+import { SESSION_DISARM_REASON } from './arm-custody.js';
+import type { HelperSessionCause } from '../identity/helper.js';
 
 /** A refusal thrown by the broker (reasons are registered refusal reasons; scanned by test/refusal-reasons.test.ts). */
 export function fail(code: RefusalCode, reason: string, message: string, data?: RefusalData & { gate?: RefusalGate }): RefusedError {
@@ -507,12 +509,12 @@ export class ApprovalBroker {
 
   /**
    * Helper 1.6.0 session push (screen lock, screensaver, display or system sleep, user switch; §14.7, §A.1):
-   * the helper has already invalidated every cached unlock, so the broker drops every reference it holds and
+   * logs approval.unlock.dropped{reason: SESSION_DISARM_REASON[cause], cause}, the same mapping as the disarm rows.
    * logs approval.unlock.dropped{reason: 'screen-lock'} (every session cause, as for the disarm rows).
    */
-  async helperSessionEnded(cause: string): Promise<void> {
+  async helperSessionEnded(cause: HelperSessionCause): Promise<void> {
     for (const connId of this.unlocks.connIds()) {
-      if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'screen-lock', cause }, { connId }).catch(() => undefined);
+      if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: SESSION_DISARM_REASON[cause], cause }, { connId }).catch(() => undefined);
     }
   }
 

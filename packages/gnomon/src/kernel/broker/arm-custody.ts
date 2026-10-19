@@ -8,25 +8,30 @@
  * arm record proper (class, repos, idle/hard/decision counts, the voice-arm
  * card) is V7.
  *
- * Disarm (`approval.voice.disarm{armId, reason}`, one row per arm the kernel
- * holds, appended by the broker's kernel-signed log):
- *   - helper push (protocol v2): screen lock, screensaver, display sleep,
- *     system sleep, user switch. The helper ALREADY invalidated every arm;
- *     the kernel ends EVERY arm it references, whatever the push lists
- *     (fail closed). reason `screen-lock` for every cause (founder ruling);
- *   - helper exit (EOF / crash): reason `helper-exit` (S29-K5, spec-literal);
+ * Disarm (`approval.voice.disarm{armId, reason, cause?}`, one row per arm the
+ * kernel holds, appended by the broker's kernel-signed log; reasons from the
+ * closed contracts VOICE_DISARM_REASONS):
+ *   - helper push (protocol v2): the helper ALREADY invalidated every arm; the
+ *     kernel ends EVERY arm it references, whatever the push lists (fail
+ *     closed). reason per SESSION_DISARM_REASON, `cause` = the push's cause
+ *     (Aegis L3, the same field approval.unlock.dropped carries);
+ *   - helper exit (EOF / crash): reason `helper-exit` (S29-K5);
  *   - a connection of the pair closed: reason `conn-closed`.
  */
-import type { HelperPush } from '../identity/helper.js';
+import type { VoiceDisarmReason } from '@a-company/gnomon-contracts';
+import type { HelperPush, HelperSessionCause } from '../identity/helper.js';
 import type { BrokerLog } from './broker.js';
 
-// TODO(V0 merge): import these from @a-company/gnomon-contracts VOICE_DISARM_REASONS (founder ruling, reserved on the
-// V0 branch: idle hard limit conn-closed voice-conn screen-lock policy config mode-set phrase gui cli unenrolled
-// daemon-exit helper-exit handle-miss challenge-miss refused-streak). Local literals until then.
-export const DISARM_REASON_HELPER_EXIT = 'helper-exit' as const;
-/** Every helper session cause (lock, screensaver, display sleep, system sleep, user switch) disarms as screen-lock. */
-export const DISARM_REASON_SESSION = 'screen-lock' as const;
-export const DISARM_REASON_CONN_CLOSED = 'conn-closed' as const;
+export const DISARM_REASON_HELPER_EXIT = 'helper-exit' satisfies VoiceDisarmReason;
+export const DISARM_REASON_CONN_CLOSED = 'conn-closed' satisfies VoiceDisarmReason;
+/** Helper session cause → reserved disarm reason (V0 reserved the distinct ones; a screensaver counts as a lock). */
+export const SESSION_DISARM_REASON: Readonly<Record<HelperSessionCause, VoiceDisarmReason>> = Object.freeze({
+  'screen-lock': 'screen-lock',
+  screensaver: 'screen-lock',
+  'display-sleep': 'display-sleep',
+  'system-sleep': 'system-sleep',
+  'user-switch': 'user-switch',
+});
 
 export interface ArmRef {
   armId: string;
@@ -62,17 +67,16 @@ export class VoiceArmCustody {
     return this.#arms.has(armId);
   }
 
-  async #disarm(ids: string[], reason: string): Promise<void> {
+  async #disarm(ids: string[], reason: VoiceDisarmReason, cause?: string): Promise<void> {
     for (const armId of ids) {
       if (!this.#arms.delete(armId)) continue;
-      await this.#log('approval.voice.disarm', { armId, reason }).catch(() => undefined);
+      await this.#log('approval.voice.disarm', { armId, reason, ...(cause ? { cause } : {}) }).catch(() => undefined);
     }
   }
 
   /** A protocol-v2 session push: every arm ends (the helper already invalidated them). */
   async helperPushed(p: HelperPush): Promise<void> {
-    void p; // the cause is diagnostic only; every session cause maps to one reserved reason
-    await this.#disarm(this.armIds(), DISARM_REASON_SESSION);
+    await this.#disarm(this.armIds(), SESSION_DISARM_REASON[p.cause], p.cause);
   }
 
   /** The helper exited: every arm's unlock is gone with it (S29-K5). */
@@ -87,7 +91,7 @@ export class VoiceArmCustody {
   }
 
   /** An explicit disarm (V7 callers: phrase, GUI, policy change): closes the helper side, then logs. */
-  async disarm(armId: string, reason: string): Promise<void> {
+  async disarm(armId: string, reason: VoiceDisarmReason): Promise<void> {
     if (!this.#arms.has(armId)) return;
     await this.#key?.closeArm(armId);
     await this.#disarm([armId], reason);

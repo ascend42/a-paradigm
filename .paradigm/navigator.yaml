@@ -1,9 +1,5 @@
 version: '1.0'
-<<<<<<< HEAD
-generated: '2026-10-19T21:41:43.267Z'
-=======
-generated: '2026-10-19T21:42:53.811Z'
->>>>>>> 45872e25
+generated: '2026-10-19T21:53:01.234Z'
 structure: {}
 key_files:
   config:

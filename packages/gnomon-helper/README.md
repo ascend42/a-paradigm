@@ -107,10 +107,11 @@ packages/gnomon-helper/bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper 
 
 No GUI arm path exists before V7, so drive the signed 1.6.0 helper directly. You need a provisioned approvals key; `key.list` gives its generation `<gen>`.
 
+0. Stay logged in at the console (the helper refuses `session-locked` otherwise).
 1. Start the helper with stdin held open and every output line timestamped:
    `mkfifo /tmp/gh.in; (cat /tmp/gh.in | <app>/Contents/MacOS/gnomon-helper serve | while read -r l; do echo "$(date +%T) $l"; done) & exec 3>/tmp/gh.in`
 2. Open an arm. One Touch ID prompt appears, and its last line names the arm, both connIds and the bounds:
-   `echo '{"id":1,"op":"arm.open","armId":"arm:01J0000000000000000000000A","gen":"<gen>","humanConnId":"conn:h","voiceConnId":"conn:v","hardSeconds":600,"reason":"oracle","messages":["Z25vbW9uOmFwcHJvdmU6djEKY2FyZDp4CmFsbG93CnNoYTI1NjowMApodW1hbg=="]}' >&3`
+   `echo '{"id":1,"op":"arm.open","armId":"arm:01J0000000000000000000000A","gen":"<gen>","humanConnId":"conn:h","voiceConnId":"conn:v","hardSeconds":600,"maxSignatures":5,"reason":"oracle","messages":["Z25vbW9uOmFwcHJvdmU6djEKY2FyZDp4CmFsbG93CnNoYTI1NjowMApodW1hbg=="]}' >&3`
    Expected: `"kept":true,"ok":true`. Sending `{"id":2,"op":"info"}` shows `"arms":1`.
 3. Look at a clock that shows seconds, then lock the screen (Ctrl-Cmd-Q). Unlock after about 5 s.
 4. Pass: a line such as `{"arms":["arm:01J0…"],"cause":"screen-lock","push":"session","seq":1,"unlocks":0}` is stamped within 1 s of the lock. More pushes with `"arms":[]` (screensaver, display-sleep) are fine. `{"id":3,"op":"info"}` now shows `"arms":0`.

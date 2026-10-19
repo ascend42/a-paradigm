@@ -49,8 +49,8 @@ describe('voice arm custody (helper 1.6.0)', () => {
     r.helper.sessionEvent('screen-lock');
     await tick();
     expect(r.disarms()).toEqual([
-      { armId: ARM1, reason: 'screen-lock' },
-      { armId: ARM2, reason: 'screen-lock' },
+      { armId: ARM1, reason: 'screen-lock', cause: 'screen-lock' },
+      { armId: ARM2, reason: 'screen-lock', cause: 'screen-lock' },
     ]);
     expect(r.arms.armIds()).toEqual([]);
     expect(r.helper.arms.size).toBe(0);
@@ -66,7 +66,7 @@ describe('voice arm custody (helper 1.6.0)', () => {
     r.helper.sessionEvent('user-switch');
     await tick();
     expect(r.broker.unlocks.size()).toBe(0);
-    expect(r.rows).toContainEqual({ kind: 'approval.unlock.dropped', payload: { connId: H, reason: 'screen-lock', cause: 'user-switch' } });
+    expect(r.rows).toContainEqual({ kind: 'approval.unlock.dropped', payload: { connId: H, reason: 'user-switch', cause: 'user-switch' } });
   });
 
   it('helper EOF (exit/crash) disarms every arm with reason helper-exit', async () => {
