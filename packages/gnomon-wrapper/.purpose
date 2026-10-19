@@ -46,6 +46,16 @@ components:
       contract, verify against TS-generated vectors, bundle, kernel env/argv),
       tests/live_kernel.rs (preflight vs a live dev kernel; a foreign key and
       another pin refused), tests/no_page_ipc.rs (config falsifiers).
+      Round 2: the child is `node --disable-sigusr1 …` (NODE_FLAGS, first and
+      only); the channel is #wrapper-channel; lines are capped at 64 KiB at
+      read time; at stdout EOF the phase returns to Status and an EOF without
+      a refusal/down line says "the kernel exited before starting" with the
+      status; Cmd-Q prevent_exit + worker-thread stop (try_wait, 10 s, kill);
+      src/logfile.rs opens kernel.log O_NOFOLLOW with fchmod/fstat checks and
+      a 0700 dir; tests/crafted_ipc.rs (Tauri mock runtime: keyless messages
+      dropped, keyed commands refused from both origins); subframes are
+      excluded by the kernel CSP frame-src 'none' (falsified statically and
+      on the live header).
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]
