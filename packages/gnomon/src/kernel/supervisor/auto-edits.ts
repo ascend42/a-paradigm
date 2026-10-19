@@ -67,6 +67,10 @@ export function autoEditPass(tool: string, input: Record<string, unknown>, roots
       const fb = fold(base);
       const fa = fold(abs);
       if (!(fa.startsWith(fb.endsWith(path.sep) ? fb : fb + path.sep))) continue;
+      // Aegis re-check: the write uses the request's OWN letter case; on a case-sensitive volume `/vol/PROJ` is not
+      // `/vol/proj`, so a prefix that matches only once case is folded goes to a card (the walk below checks `base`)
+      const prefix = base.endsWith(path.sep) ? base : base + path.sep;
+      if (!abs.startsWith(prefix)) return { ok: false, why: 'outside-root', rule: 'case-variant' };
       // inside this root: its rest, in the request's own letter case (segment counts survive case folding)
       const baseSegs = base.slice(path.parse(base).root.length).split(path.sep).filter(Boolean).length;
       const rest = absSegs.slice(baseSegs);

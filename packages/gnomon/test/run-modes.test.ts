@@ -65,6 +65,10 @@ describe('run modes: gate-class path rule (§15.7) and auto-edits eligibility (p
       fs.mkdirSync(path.join(root, '.git', 'hooks'), { recursive: true });
       fs.mkdirSync(path.join(root, 'real'));
       const lines = ['Write x'];
+      // Aegis re-check: a root prefix that matches only once case is folded (case-sensitive volume) goes to a card
+      const upper = path.join(path.dirname(root), path.basename(root).toUpperCase(), 'x.ts');
+      if (path.basename(root).toUpperCase() !== path.basename(root))
+        expect(autoEditPass('Write', { file_path: upper }, [root], lines, 'darwin')).toMatchObject({ ok: false, why: 'outside-root', rule: 'case-variant' });
       // a dangling link to .git/hooks/pre-commit (no hook yet): the Write would plant it
       if (link('../.git/hooks/pre-commit', path.join(root, 'scripts', 'precommit'), 'file')) {
         expect(autoEditPass('Write', { file_path: path.join(root, 'scripts', 'precommit') }, [root], lines, 'linux')).toMatchObject({ ok: false, why: 'symlink', rule: path.join('scripts', 'precommit') });
