@@ -480,7 +480,22 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
     put(path.join(root, 'elsewhere', 'CLAUDE.md'), '@~/.ssh/id\n');
     fs.symlinkSync(path.join(root, 'elsewhere'), path.join(w.repo, 'linked-dir'), 'dir');
-    expect(ctxOf(w).memoryDirs).toEqual([w.repo]); // a plain symlinked dir is not followed
+    // F1: a symlinked dir leading outside the repo refuses (Claude could lazy-load its CLAUDE.md through it)
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/linked-dir is a symlinked dir leading outside the repo/);
+  });
+  it.skipIf(!canSymlink)('F1: a symlinked dir inside the repo is fine (walked where it lives); one into node_modules refuses', () => {
+    let w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'docs', 'CLAUDE.md'), 'docs, fine\n');
+    fs.symlinkSync(path.join(w.repo, 'docs'), path.join(w.repo, 'docs-link'), 'dir');
+    fs.symlinkSync(path.join(root, 'nowhere'), path.join(w.repo, 'dangling'), 'dir');
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
+    fs.rmSync(root, { recursive: true, force: true });
+    w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'node_modules', 'dep', 'CLAUDE.md'), '@~/.ssh/id\n');
+    fs.symlinkSync(path.join(w.repo, 'node_modules', 'dep'), path.join(w.repo, 'vendored'), 'dir');
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/vendored is a symlinked dir leading into node_modules/);
   });
   it('over the subtree cap ⇒ the dir is refused (fail closed)', () => {
     const w = world();
