@@ -13,7 +13,7 @@
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
-import { decidePin, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
+import { decidePin, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
@@ -283,6 +283,9 @@ async function subscribe(c: GnomonClient): Promise<void> {
   await c.call('log.read', { since, follow: true });
 }
 
+/** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
+const SURFACE = hostSurface();
+
 async function attach(auth: { launchToken: string } | { reconnect: true }, fragmentKey: string | null): Promise<void> {
   const pin = decidePin(fragmentKey, localStorage.getItem(PIN_KEY));
   if (!pin.ok) return showReconnect(pin.message);
@@ -294,7 +297,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     return showReconnect('the endpoint is not reachable: run `gnomon open`');
   }
   const c = new GnomonClient(t);
-  const out = await c.connect({ surface: 'browser', endpointPath, verifyKey: pin.verifyWith, auth, subtle: globalThis.crypto?.subtle });
+  const out = await c.connect({ surface: SURFACE, endpointPath, verifyKey: pin.verifyWith, auth, subtle: globalThis.crypto?.subtle });
   if (!out.ok) {
     c.close();
     if (out.stage === 'server-sig') {
@@ -324,7 +327,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     void gnomonPost(fetch, '/diag', out.session.guiToken, `protocol error ${r.code} ${r.reason ?? ''} ${r.message}`).catch(() => undefined);
   });
   $('reconnect').hidden = true;
-  $('risk').hidden = false; // surface browser (wrapper detection lands with the wrapper)
+  $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
   c.onNotification((method, params) => {
     if (method !== 'event') return;

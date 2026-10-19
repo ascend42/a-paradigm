@@ -24,6 +24,24 @@ components:
       window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the
       GUI reads to declare hello surface wrapper and drop the extension-risk
       badge (display only). Hardened runtime with an EMPTY entitlements set.
+      Double-click flow (src/main.rs): the app spawns `node <dist>/cli/gnomon.js
+      up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR
+      SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*; node = local.signed.json
+      runner.node when its sha256 matches, else the build-time realpath of
+      `which node` compiled in by build.rs), stderr to
+      ~/Library/Logs/Gnomon/kernel.log (0600), reads gnomon-wrapper-channel:v1
+      (src/contract.rs; LaunchGrant Debug redacts token and key), and on a grant
+      runs the native preflight (src/loopback.rs): channel bundleHash == the pin
+      compiled from gui-bundle.ts (src/bundle.rs), its own WebSocket hello with
+      surface wrapper verified natively (src/verify.rs: ed25519-dalek strict,
+      exact SPKI, kernel keyId, sent clientNonce, gnomon:auth-server:v2), then
+      every pinned file and / re-hashed — only then Phase::Kernel and navigate.
+      Any refusal (unprovisioned shows `gnomon identity init`) stays on the
+      status page. Window close hides (kernel keeps running), Dock click
+      reopens, Cmd-Q sends quit, waits 10 s, kills. Tests: unit (nav, surface,
+      contract, verify against TS-generated vectors, bundle, kernel env/argv),
+      tests/live_kernel.rs (preflight vs a live dev kernel; a foreign key and
+      another pin refused), tests/no_page_ipc.rs (config falsifiers).
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]

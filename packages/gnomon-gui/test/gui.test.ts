@@ -13,7 +13,7 @@ import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
 import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
-import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
+import { decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
@@ -205,6 +205,21 @@ describe('launch fragment and key pin (§11.2 rule 2, §4.9)', () => {
     expect(ch.ok && ch.store === 'K2' && ch.notice).toBeTruthy();
     expect(decidePin(null, 'K1')).toEqual({ ok: true, verifyWith: 'K1', store: null, notice: null });
     expect(decidePin(null, null).ok).toBe(false);
+  });
+  it('N1 surface: wrapper only for the frozen marker the wrapper defines at document start; anything a page could set is browser', () => {
+    expect(hostSurface({})).toBe('browser');
+    const frozen = {};
+    Object.defineProperty(frozen, 'gnomonSurface', { value: 'wrapper', writable: false, configurable: false });
+    expect(hostSurface(frozen)).toBe('wrapper');
+    expect(hostSurface({ gnomonSurface: 'wrapper' })).toBe('browser'); // a plain assignment (writable, configurable)
+    const getter = {};
+    Object.defineProperty(getter, 'gnomonSurface', { get: () => 'wrapper', configurable: false });
+    expect(hostSurface(getter)).toBe('browser');
+    const other = {};
+    Object.defineProperty(other, 'gnomonSurface', { value: 'conductor', writable: false, configurable: false });
+    expect(hostSurface(other)).toBe('browser');
+    // the bundle itself never defines the marker
+    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8')).not.toMatch(/defineProperty\([^)]*gnomonSurface/);
   });
 });
 

@@ -18,7 +18,12 @@ components:
       before any other script, handing it to app.js once. core/launch.ts
       decides the key pin (localStorage holds only the kernel public key;
       a changed fragment key re-pins visibly; Reconnect verifies against the
-      pin; none ⇒ refuse). core/server-sig.ts verifies hello.serverSig with
+      pin; none ⇒ refuse); hostSurface() (T-2026-10-18-018 N1, M1.13) is
+      'wrapper' only for the frozen non-writable non-configurable
+      window.gnomonSurface the #gnomon-wrapper document-start script defines
+      (a plain browser cannot produce it under the kernel CSP), and then the
+      page sends hello surface wrapper and hides the extension-risk badge
+      (display only). core/server-sig.ts verifies hello.serverSig with
       WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; each
       hello carries a fresh clientNonce (getRandomValues, 32 bytes) that the
       result must echo (client-nonce-mismatch) and the signature must cover

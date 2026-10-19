@@ -66,3 +66,18 @@ export function decidePin(fragmentKey: string | null, pinned: string | null): Pi
   if (pinned) return { ok: true, verifyWith: pinned, store: null, notice: null };
   return { ok: false, reason: 'no-pin', message: 'no pinned kernel key on this page: run `gnomon open`' };
 }
+
+/**
+ * Which host the page runs in (T-2026-10-18-018 N1; #gnomon-wrapper, spec §11.1).
+ * 'wrapper' ONLY when the wrapper's document-start script defined
+ * `gnomonSurface` as a frozen own data property with the value 'wrapper'
+ * (non-writable, non-configurable). Under the kernel's CSP (`script-src
+ * 'self'`, no inline, no eval) no script but the pinned bundle runs in the
+ * page, and the bundle never defines it, so a plain browser cannot produce
+ * the marker. Display only (`hello.client.surface` and the extension-risk
+ * badge); the kernel never treats the surface as a security input.
+ */
+export function hostSurface(g: object = globalThis): 'browser' | 'wrapper' {
+  const d = Object.getOwnPropertyDescriptor(g, 'gnomonSurface');
+  return d !== undefined && 'value' in d && d.value === 'wrapper' && d.writable === false && d.configurable === false ? 'wrapper' : 'browser';
+}
