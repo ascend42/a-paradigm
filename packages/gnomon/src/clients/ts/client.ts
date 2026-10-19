@@ -71,6 +71,10 @@ export type ClientCredential =
   | { kind: 'device'; principalId: string; deviceId: string; privateKeyPem: string }
   | { kind: 'read-token'; token: string };
 
+function closedRefusal(): RefusedError {
+  return new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'connection-closed' } }), 'connection closed');
+}
+
 export class ClientAuthError extends Error {
   constructor(
     readonly reason: 'bad-hello' | 'hello-not-offered' | 'client-nonce-mismatch' | 'server-key-mismatch' | 'bad-server-sig' | 'unverified-server' | 'bad-credential',
@@ -285,7 +289,9 @@ export class GnomonClient {
   }
 
   #request(method: string, params: unknown, onResult?: (result: unknown) => void): Promise<unknown> {
-    if (this.#closed) return Promise.reject(new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'connection-closed' } }), 'connection closed'));
+    // provably never sent ⇒ connection-closed; delivery-unknown is only for a frame that was written (#onClose)
+    const sock = this.#sock;
+    if (this.#closed || sock.destroyed || !sock.writable || sock.writableEnded) return Promise.reject(closedRefusal());
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -294,13 +300,21 @@ export class GnomonClient {
       }, this.#timeoutMs);
       this.#pending.set(id, (f) => {
         clearTimeout(t);
-        if (f.error && typeof f.error === 'object') reject(refusedFrom(f.error as Frame));
+        if (f.local instanceof RefusedError) reject(f.local); // client-local (delivery-unknown): not a wire refusal, never re-validated as one
+        else if (f.error && typeof f.error === 'object') reject(refusedFrom(f.error as Frame));
         else {
           onResult?.(f.result);
           resolve(f.result);
         }
       });
-      this.#sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: GNOMON_RPC_V1, id, method, ...(params === undefined ? {} : { params }) })}\n`);
+      this.#sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: GNOMON_RPC_V1, id, method, ...(params === undefined ? {} : { params }) })}\n`, (err) => {
+        // the stream refused the bytes outright (destroyed / ended under us): not sent ⇒ connection-closed
+        const code = (err as NodeJS.ErrnoException | null | undefined)?.code;
+        if (code !== 'ERR_STREAM_DESTROYED' && code !== 'ERR_STREAM_WRITE_AFTER_END') return;
+        if (!this.#pending.delete(id)) return;
+        clearTimeout(t);
+        reject(closedRefusal());
+      });
     });
   }
 
@@ -364,7 +378,8 @@ export class GnomonClient {
   #onClose(): void {
     this.#closed = true;
     // every pending request was written and got no reply: delivery unknown, never success or a plain close (T-2026-10-19-009 item 6)
-    const unknown = { error: { code: -32000, message: 'connection dropped before the reply: delivery unknown', data: refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }) } };
+    // handed over as a RefusedError: refusedFrom's wire validation would turn the client-local reason into invalid-refusal
+    const unknown = { local: new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }), 'connection dropped before the reply: delivery unknown') };
     for (const cb of this.#pending.values()) cb(unknown);
     this.#pending.clear();
     for (const s of this.#subs.values()) s.h.end?.({ reason: 'closed', since: s.cursor });

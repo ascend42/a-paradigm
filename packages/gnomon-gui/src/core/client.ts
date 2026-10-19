@@ -23,6 +23,8 @@ export const GUI_CLIENT = Object.freeze({ name: 'gnomon-gui', version: '8.0.0-m1
 /** The message channel the client needs: one JSON text per message. */
 export interface Transport {
   send(text: string): void;
+  /** False once the channel can no longer send (WebSocket readyState !== OPEN); absent ⇒ assumed open. */
+  isOpen?(): boolean;
   close(): void;
   onMessage: ((text: string) => void) | null;
   onClose: ((code: number) => void) | null;
@@ -34,6 +36,7 @@ export function webSocketTransport(url: string, Ctor: typeof WebSocket = WebSock
     const ws = new Ctor(url);
     const t: Transport = {
       send: (s) => ws.send(s),
+      isOpen: () => ws.readyState === 1, // WebSocket.OPEN
       close: () => ws.close(1000),
       onMessage: null,
       onClose: null,
@@ -173,7 +176,8 @@ export class GnomonClient {
 
   /** One call; rejects with RpcError carrying the refusal. */
   call<T = unknown>(method: string, params?: unknown): Promise<T> {
-    if (this.#closed) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: 'the connection is closed', next: [], data: null }));
+    // provably never sent (closed, or the socket left OPEN) ⇒ CLOSED; DELIVERY_UNKNOWN is only for a sent frame
+    if (this.#closed || this.#t.isOpen?.() === false) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: 'the connection is closed', next: [], data: null }));
     const id = this.#nextId++;
     return new Promise<T>((resolve, reject) => {
       const timer =

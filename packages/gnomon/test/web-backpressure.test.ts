@@ -13,6 +13,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { DEFAULT_WRITE_LOW_WATER, DEFAULT_WRITE_HIGH_WATER, RpcConnection, SubscriptionHub, type ConnectionContext } from '../src/kernel/socket/index.js';
 import { WS_WRITE_HIGH_WATER, WS_WRITE_LOW_WATER } from '../src/kernel/web/protocol.js';
+import { GnomonClient } from '../src/clients/ts/client.js';
 import { tempHome } from './daemon-helpers.js';
 
 type Res = Record<string, unknown>;
@@ -76,11 +77,16 @@ describe('§11.2: high/low watermarks on the transcript stream', () => {
 /** A socket stand-in: records writes; the test answers or drops. */
 class FakeSock extends EventEmitter {
   writes: string[] = [];
+  destroyed = false;
+  writable = true;
+  writableEnded = false;
   write(b: Buffer | string): boolean {
     this.writes.push(String(b));
     return true;
   }
   destroy(): void {
+    this.destroyed = true;
+    this.writable = false;
     this.emit('close');
   }
 }
@@ -108,5 +114,37 @@ describe('delivery-unknown: a drop after send is neither success nor a plain fai
     // never sent: certainly not delivered
     expect(reasonOf((await conn.call('status')) as unknown as Res)).toBe('connection-closed');
     expect(sock.writes.length).toBe(2);
+  });
+
+  it('FALSIFIER: a call on a socket that can no longer write is connection-closed and writes nothing, even before the close event', async () => {
+    const sock = new FakeSock();
+    const conn = new (RpcConnection as unknown as new (s: unknown) => RpcConnection)(sock);
+    sock.writable = false; // ended under us; 'close' not seen yet
+    expect(reasonOf((await conn.call('status')) as unknown as Res)).toBe('connection-closed');
+    expect(sock.writes.length).toBe(0);
+  });
+
+  it('FALSIFIER: the TS GnomonClient rejects delivery-unknown for a written request whose reply never came; connection-closed only for one never sent', async () => {
+    const sock = new FakeSock();
+    const client = new (GnomonClient as unknown as new (s: unknown, log: undefined, timeoutMs: number) => GnomonClient)(sock, undefined, 5_000);
+    // control: a reply that arrives is the reply
+    const answered = client.callRaw('status');
+    const id0 = JSON.parse(sock.writes[0]!).id;
+    sock.emit('data', Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: id0, result: { ok: true } })}\n`));
+    expect(await answered).toEqual({ ok: true });
+    // sent, then the connection drops before the answer
+    const inFlight = client.callRaw('approve', { cardId: 'card:x', decision: 'allow' });
+    expect(sock.writes.length).toBe(2);
+    sock.emit('close');
+    await expect(inFlight).rejects.toMatchObject({ refusal: { code: 'ENGINE', data: { reason: 'delivery-unknown' } } });
+    // never sent: certainly not delivered
+    await expect(client.callRaw('status')).rejects.toMatchObject({ refusal: { data: { reason: 'connection-closed' } } });
+    expect(sock.writes.length).toBe(2);
+    // and a socket that stopped being writable before 'close' is also never-sent
+    const sock2 = new FakeSock();
+    const c2 = new (GnomonClient as unknown as new (s: unknown, log: undefined, timeoutMs: number) => GnomonClient)(sock2, undefined, 5_000);
+    sock2.writableEnded = true;
+    await expect(c2.callRaw('status')).rejects.toMatchObject({ refusal: { data: { reason: 'connection-closed' } } });
+    expect(sock2.writes.length).toBe(0);
   });
 });

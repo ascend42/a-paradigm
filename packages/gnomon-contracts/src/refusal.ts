@@ -151,8 +151,11 @@ export const CHANGE_NOTE_REFUSAL_REASONS = ['note-missing'] as const;
  * imported), routed to code + gate per §4.6/§4.9/§5. `malformed-<x>` =
  * framing.ts's three decode failures. Orchestrator rulings (round 2): the
  * socket code's `id`/`method`/`peer` are renamed `request-id`/`method-missing`/
- * `peer-not-client`; `connection-closed` is client-local (client.ts synthesizes
- * it, it never crosses the wire) and is NOT a wire reason; the
+ * `peer-not-client`; `connection-closed` and `delivery-unknown` are
+ * client-local (client.ts synthesizes them, they never cross the wire) and are
+ * NOT wire reasons — `connection-closed` = the call was provably never sent,
+ * `delivery-unknown` = it was written and the connection dropped before the
+ * reply (T-2026-10-19-009 item 6); the
  * not-implemented placeholders are kept as future-stable reasons.
  */
 export const SOCKET_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({

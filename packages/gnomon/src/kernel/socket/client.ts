@@ -172,7 +172,8 @@ export class RpcConnection {
   }
 
   call(method: string, params?: unknown, timeoutMs = 5000): Promise<RpcResponseFrame> {
-    if (this.#closed) return Promise.resolve({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: null, error: closedError() });
+    // provably never sent ⇒ connection-closed, never delivery-unknown (that is only for a frame that was written)
+    if (this.#closed || !writable(this.#conn)) return Promise.resolve({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: null, error: closedError() });
     const id = this.#nextId++;
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -183,7 +184,14 @@ export class RpcConnection {
         clearTimeout(t);
         resolve(f);
       });
-      this.#conn.write(encodeFrame(requestFrame(id, method, params)));
+      this.#conn.write(encodeFrame(requestFrame(id, method, params)), (err) => {
+        // the stream refused the bytes outright (destroyed / ended under us): not sent ⇒ connection-closed
+        const cb = err && neverSent(err) ? this.#pending.get(id) : undefined;
+        if (cb) {
+          this.#pending.delete(id);
+          cb({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id, error: closedError() });
+        }
+      });
     });
   }
 
@@ -216,6 +224,17 @@ export const DELIVERY_UNKNOWN = 'delivery-unknown' as const;
 
 function deliveryUnknownError(): RpcErrorFrame['error'] {
   return { code: JSON_RPC_CODES.ENGINE, message: 'connection dropped before the reply: delivery unknown', data: refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }) };
+}
+
+/** The socket can still take bytes: a write now is a real send (false ⇒ the call is provably never sent). */
+function writable(conn: net.Socket): boolean {
+  return !conn.destroyed && conn.writable && !conn.writableEnded;
+}
+
+/** Write errors that mean the stream never accepted the bytes (vs EPIPE etc., where some may have left). */
+export function neverSent(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code;
+  return code === 'ERR_STREAM_DESTROYED' || code === 'ERR_STREAM_WRITE_AFTER_END';
 }
 
 function closedError(): RpcErrorFrame['error'] {
