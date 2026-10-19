@@ -16,7 +16,7 @@ import { recordKernelPub } from '../src/kernel/identity/index.js';
 import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { turnContentHash } from '../src/kernel/supervisor/supervisor.js';
-import { setTraceMode, traceModeOf, tracedFolders } from '../src/kernel/trace/mode.js';
+import { setTraceMode, traceDirOf, traceFileName, traceModeOf, tracedFolders } from '../src/kernel/trace/index.js';
 import { encodeClaudeProjectDir, runTraceCommand, type TraceSession } from '../src/cli/trace-cli.js';
 
 const KERNEL = kernelPrincipalOf();
@@ -56,6 +56,7 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   };
   await at(0, 'daemon.start', { pid: 1 }, undefined);
   await at(1, 'session.open', { hsid: HSID, principalId: 'p', by: 'human:founder', cwd: work, worktree: null, backend: 'claude-code', model: 'claude', attended: true, uuid: UUID, principalClass: 'human' });
+  await at(1.5, 'session.sandbox', { hsid: HSID, phase: 'running', ...(opts.capture ? { traced: true } : {}) });
   await at(2, 'session.inject', { hsid: HSID, origin: 'client', hash: turnContentHash(PROMPT), bytes: Buffer.byteLength(PROMPT) });
   await at(2, 'turn.sent', { hsid: HSID, turn: `turn:${HSID}/1`, permitId: 'pmt:1', contentHash: turnContentHash(PROMPT) });
   await at(5, 'approval.request', { card: { cardId: 'card:1', kind: 'permission', hsid: HSID }, tool: 'Bash' });
@@ -76,10 +77,10 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   ];
   fs.writeFileSync(path.join(project, `${UUID}.jsonl`), `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
   if (opts.capture) {
-    const cdir = path.join(work, '.gnomon', 'trace');
+    const cdir = traceDirOf(fs.realpathSync.native(work));
     fs.mkdirSync(cdir, { recursive: true });
-    const name = HSID.replace(/[^A-Za-z0-9._-]/g, '_'); // the filename-safe spelling (':' is not a legal Windows name)
-    fs.writeFileSync(path.join(cdir, `${name}.jsonl`), `${JSON.stringify({ t: iso(2.5), dir: 'in', line: { type: 'user' } })}\nnot json\n${JSON.stringify({ t: iso(7.8), dir: 'out', line: { type: 'result', subtype: 'success' } })}\n`);
+    const redacted = { t: iso(4.5), dir: 'out', line: { redacted: 'secret-shaped', hash: 'sha256:00', bytes: 40 } };
+    fs.writeFileSync(path.join(cdir, traceFileName(HSID)), `${JSON.stringify({ t: iso(2.5), dir: 'in', line: { type: 'user' } })}\nnot json\n${JSON.stringify(redacted)}\n${JSON.stringify({ t: iso(7.8), dir: 'out', line: { type: 'result', subtype: 'success' } })}\n`);
   }
   return { home, claudeDir, work };
 }
@@ -114,7 +115,7 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
     const f = await fixture();
     const s = await traceJson(f);
     expect(s.session).toEqual({ hsid: HSID, uuid: UUID, cwd: f.work, principal: 'human:founder' });
-    expect(Object.keys(s).sort()).toEqual(['capture', 'events', 'log', 'session', 'transcript', 'turns', 'usage']);
+    expect(Object.keys(s).sort()).toEqual(['capture', 'events', 'log', 'session', 'traced', 'transcript', 'turns', 'usage']);
     for (const e of s.events) {
       expect(typeof e.t).toBe('string');
       expect(['log', 'transcript', 'capture']).toContain(e.source);
@@ -123,6 +124,7 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
     expect(s.events.map((e) => `${e.source}:${e.kind}`)).toEqual([
       'log:daemon.start',
       'log:session.open',
+      'log:session.sandbox',
       'log:session.inject',
       'log:turn.sent',
       'transcript:prompt',
@@ -135,9 +137,10 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
       'log:session.exited',
       'log:daemon.exit',
     ]);
-    expect(s.log).toMatchObject({ hashChain: 'ok', breaks: 0, signatures: 'not-checked', chainRows: 9, rows: 9 });
+    expect(s.log).toMatchObject({ hashChain: 'ok', breaks: 0, signatures: 'not-checked', chainRows: 10, rows: 10 });
     expect(s.usage).toEqual({ tokens: 1234, costUsd: 0.0123 });
     expect(s.capture).toEqual({ path: null, lines: 0, skipped: 0 }); // an absent capture is fine
+    expect(s.traced).toBeNull();
     expect(s.transcript.lines).toBe(4);
   });
 
@@ -190,7 +193,15 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
   it('reads the raw capture from <project>/.gnomon/trace/ when present and skips unparsable lines', async () => {
     const f = await fixture({ capture: true });
     const s = await traceJson(f);
-    expect(s.capture.lines).toBe(3);
+    expect(traceFileName(HSID)).toBe('hsid-v1-01JABCDEFGHJKMNPQRSTVWXYZ0.jsonl');
+    expect(s.capture.lines).toBe(4);
+    expect(s.events.find((e) => e.redacted)).toMatchObject({ source: 'capture', kind: 'capture.out', redacted: 'secret-shaped', bytes: 40 });
+    expect(s.events.find((e) => e.redacted)).not.toHaveProperty('line');
+    expect(s.traced).toEqual({ traced: true, refused: null });
+    const o = io();
+    await runTraceCommand(['--home', f.home], o.io, { claudeDir: f.claudeDir });
+    expect(o.out.join('')).toContain('[redacted] secret-shaped');
+    expect(o.out.join('')).toMatch(/traced +yes/);
     expect(s.capture.skipped).toBe(1);
     const kinds = s.events.map((e) => `${e.source}:${e.kind}`);
     expect(kinds.indexOf('capture:capture.in')).toBeGreaterThan(kinds.indexOf('log:turn.sent'));

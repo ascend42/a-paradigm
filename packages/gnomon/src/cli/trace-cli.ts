@@ -59,7 +59,7 @@ import { sanitizeDisplayText, sha256Tagged } from '@a-company/gnomon-contracts';
 import { resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import { ACTIVE_DB, listSealedSegments } from '../kernel/log/index.js';
 import { turnContentHash } from '../kernel/supervisor/supervisor.js';
-import { setTraceMode, traceModeOf, tracedFolders } from '../kernel/trace/mode.js';
+import { setTraceMode, traceDirOf, traceFileName, traceModeOf, tracedFolders } from '../kernel/trace/index.js';
 import { GNOMON_VERSION } from '../version.js';
 import { heading, readout, refused, type Out } from './readout.js';
 
@@ -112,6 +112,8 @@ export interface TraceEvent {
 
 export interface TraceSession {
   session: { hsid: string; uuid: string | null; cwd: string | null; principal: string | null };
+  /** From the session.sandbox row: was raw capture on for this session (and why it was refused)? null = no row says. */
+  traced: { traced: boolean; refused: string | null } | null;
   log: { rows: number; chainRows: number; hashChain: 'ok' | 'broken'; breaks: number; firstBreak: string | null; signatures: 'not-checked' };
   transcript: { path: string | null; lines: number };
   capture: { path: string | null; lines: number; skipped: number };
@@ -307,7 +309,7 @@ function transcriptEvents(file: string): { events: TraceEvent[]; lines: number }
   return { events, lines };
 }
 
-/** Raw capture candidates in `<project>/.gnomon/trace/`: `<hsid>.jsonl`, then filename-safe spellings (':' is not a legal filename character on Windows). */
+/** The raw capture of a session: `traceDirOf(<realpath cwd>)/traceFileName(hsid)` (kernel/trace/capture.ts). */
 function captureFile(cwd: string | null, hsid: string): string | null {
   if (!cwd) return null;
   let project = cwd;
@@ -316,16 +318,12 @@ function captureFile(cwd: string | null, hsid: string): string | null {
   } catch {
     /* a cwd that no longer exists keeps its recorded spelling */
   }
-  const dir = path.join(project, '.gnomon', 'trace');
-  for (const name of [hsid, hsid.replace(/[^A-Za-z0-9._-]/g, '_'), hsid.replace(/[^A-Za-z0-9._-]/g, '-')]) {
-    const f = path.join(dir, `${name}.jsonl`);
-    try {
-      if (fs.statSync(f).isFile()) return f;
-    } catch {
-      /* not there */
-    }
+  const f = path.join(traceDirOf(project), traceFileName(hsid));
+  try {
+    return fs.statSync(f).isFile() ? f : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function captureEvents(file: string): { events: TraceEvent[]; lines: number; skipped: number } {
@@ -349,7 +347,9 @@ function captureEvents(file: string): { events: TraceEvent[]; lines: number; ski
         continue;
       }
       const line = obj(o.line);
-      events.push({ t: o.t, source: 'capture', kind: `capture.${dir}`, type: line.type ?? null, subtype: line.subtype ?? null, line: o.line ?? null });
+      // a secret-shaped line is recorded as {redacted, hash, bytes}: shown as [redacted], never reconstructed
+      if (typeof line.redacted === 'string') events.push({ t: o.t, source: 'capture', kind: `capture.${dir}`, redacted: line.redacted, hash: line.hash ?? null, bytes: line.bytes ?? null });
+      else events.push({ t: o.t, source: 'capture', kind: `capture.${dir}`, type: line.type ?? null, subtype: line.subtype ?? null, line: o.line ?? null });
     } catch {
       skipped++;
     }
@@ -400,6 +400,8 @@ export function traceSession(rows: readonly LogRow[], chain: ChainCheck, hsid: s
   const uuid = str(open?.payload.uuid) ?? str(drained?.payload.uuid);
   const cwd = str(open?.payload.cwd);
   const principal = str(open?.payload.by);
+  const tracedRow = [...mine].reverse().find((r) => r.kind === 'session.sandbox' && typeof r.payload.traced === 'boolean');
+  const traced = tracedRow ? { traced: tracedRow.payload.traced === true, refused: tracedRow.payload.traceRefused === undefined ? null : String(tracedRow.payload.traceRefused) } : null;
 
   const logEvents = logRows.map(logEventOf);
   const tFile = findTranscript(claudeDir, cwd, uuid);
@@ -464,6 +466,7 @@ export function traceSession(rows: readonly LogRow[], chain: ChainCheck, hsid: s
   }
   return {
     session: { hsid, uuid, cwd, principal },
+    traced,
     log: { rows: logRows.length, chainRows: chain.rows, hashChain: chain.ok ? 'ok' : 'broken', breaks: chain.breaks, firstBreak: chain.firstBreak, signatures: 'not-checked' },
     transcript: { path: tFile, lines: tr.lines },
     capture: { path: cFile, lines: cap.lines, skipped: cap.skipped },
@@ -518,6 +521,7 @@ function detailOf(e: TraceEvent, full: boolean): string {
     case 'approval.expire':
       return show(`card ${String(p.cardId)}  into ${String(p.into ?? '?')}${p.why ? `  (${String(p.why)})` : ''}`, full);
     default:
+      if (e.source === 'capture' && typeof e.redacted === 'string') return show(`[redacted] ${e.redacted}  ${String(e.hash)}  ${String(e.bytes)} bytes`, full);
       if (e.source === 'capture') return show(`${String(e.type)}${e.subtype ? `/${String(e.subtype)}` : ''}${full ? `  ${JSON.stringify(e.line)}` : ''}`, full);
       return show(e.payload ?? '', full);
   }
@@ -532,6 +536,7 @@ function render(out: Out, s: TraceSession, n: number, of: number, full: boolean)
     ['principal', show(s.session.principal ?? '-', true)],
     ['log', `${s.log.rows} rows of this session; hash chain ${s.log.hashChain === 'ok' ? `ok over ${s.log.chainRows} rows` : `BROKEN: ${s.log.breaks} break(s), first ${show(s.log.firstBreak ?? '?', full)}`}; signatures not checked (gnomon replay verifies them)`],
     ['transcript', s.transcript.path ? `${show(s.transcript.path, true)}  (${s.transcript.lines} lines)` : 'not found'],
+    ['traced', s.traced === null ? 'not recorded' : s.traced.traced ? 'yes (raw capture on)' : `no${s.traced.refused ? ` (refused: ${show(s.traced.refused, full)})` : ''}`],
     ['capture', s.capture.path ? `${show(s.capture.path, true)}  (${s.capture.lines} lines${s.capture.skipped ? `, ${s.capture.skipped} skipped` : ''})` : 'absent'],
     ['turns', `${t.sent} sent  ${t.matched} ✓ matches log  ${t.mismatched} ✗ hash mismatch${t.unchecked ? `  ${t.unchecked} unchecked` : ''}`],
     ['usage', `tokens ${s.usage.tokens}  cost $${s.usage.costUsd.toFixed(4)}`],

@@ -2247,8 +2247,13 @@ components:
       left to gnomon replay and the output says so); (b) the Claude Code
       transcript <claude dir>/projects/<realpath cwd, non-alphanumerics to
       '-'>/<uuid>.jsonl (prompts, replies, tool_use, tool_result); (c) the raw
-      capture <project>/.gnomon/trace/<hsid>.jsonl when present (unparsable
-      lines skipped). Ordered by time, stable per source. Each turn.sent
+      capture traceDirOf(<realpath cwd>)/traceFileName(hsid) — that is
+      <project>/.gnomon/trace/<hsid with ':' as '-'>.jsonl — when present
+      (unparsable lines skipped; a redacted record {redacted, hash, bytes}
+      is shown as [redacted], never reconstructed). The header shows whether
+      the session was traced, from its session.sandbox row (traced /
+      traceRefused). src/kernel/trace/capture.ts mirrors the capture
+      builder's traceFileName/traceDirOf (reconciled at merge). Ordered by time, stable per source. Each turn.sent
       contentHash is checked against the transcript prompt with the
       supervisor's own turnContentHash: "✓ matches log" / "✗ hash mismatch";
       a prompt the log never sent is "not in log". Human output uses the
