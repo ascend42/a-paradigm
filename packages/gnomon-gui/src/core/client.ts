@@ -90,7 +90,7 @@ export function refusalFromError(error: unknown): ShownRefusal {
   };
 }
 
-export type AuthForm = { launchToken: string } | { reconnect: true };
+export type AuthForm = { launchToken: string } | { reconnect: true } | { resumeToken: string };
 
 export interface Session {
   hello: HelloResult;
