@@ -38,6 +38,7 @@
  */
 import { hasIdentityFile } from '../kernel/identity/index.js';
 import { runGuiSetup, type GuiSetupDeps } from './setup-cli.js';
+import { deviceRegistered } from '../kernel/setup/setup-endpoint.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -116,6 +117,19 @@ function unprovisionedHome(userHome?: string): boolean {
 }
 
 /** Gnomon.app: an unprovisioned home is set up in the app window (#setup-endpoint); a refusal names the step, never a command to paste. */
+/** identity.json exists but this device's registry row does not (a setup interrupted before its last step). */
+function unregisteredHome(userHome?: string): boolean {
+  const h = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  try {
+    const st = fs.lstatSync(h);
+    if (!st.isDirectory() || isDevHome(h)) return false;
+    const rec = readIdentity(h);
+    return rec !== null && !deviceRegistered(h, rec);
+  } catch {
+    return false;
+  }
+}
+
 export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet: quit and reopen Gnomon, and it walks you through setup in its window';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
@@ -271,9 +285,10 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
   }
   const unsafe = unsafeRuntime(deps.runtime);
   if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper, code);
-  if (wrapper && given === undefined && unprovisionedHome(deps.userHome)) {
+  // #setup-endpoint: the app sets up an unprovisioned home, and finishes an interrupted one (device-unregistered), in its window
+  if (wrapper && given === undefined && (unprovisionedHome(deps.userHome) || unregisteredHome(deps.userHome))) {
     const s = await runGuiSetup(io, { ...(deps as GuiSetupDeps), handleSignals: false }, 'wrapper');
-    if (!s.provisioned) return UP_EXIT_REFUSED;
+    if (s.code !== 0) return UP_EXIT_REFUSED;
   }
   let k: UpKernel;
   let home: string | undefined;

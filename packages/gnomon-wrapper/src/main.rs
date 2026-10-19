@@ -107,9 +107,6 @@ fn refusal_text(code: &str, reason: &str, message: &str, next: &[String]) -> (St
     for n in next {
         detail.push_str(&format!("\n\nnext: {n}"));
     }
-    if reason == "unprovisioned" {
-        detail.push_str("\n\nOpen Gnomon again: it walks you through setup in this window.");
-    }
     (head, detail)
 }
 

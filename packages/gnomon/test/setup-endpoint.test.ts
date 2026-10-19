@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { authServerPreimage, SETUP_API, SETUP_API_ID } from '@a-company/gnomon-contracts';
 import { acceptUnsignedHelperForTests, DEV_TEST_HELPER_ACK, identityJournalPath, identityPath, readIdentity, type HelperTransport } from '../src/kernel/identity/index.js';
 import { Provisioner } from '../src/kernel/identity/index.js';
-import { SetupEndpoint, type SetupGrant } from '../src/kernel/setup/setup-endpoint.js';
+import { SETUP_SCRATCH_MAX_AGE_MS, SetupEndpoint, sweepSetupScratch, type SetupGrant } from '../src/kernel/setup/setup-endpoint.js';
 import { createWebEndpointForTest } from '../src/kernel/testing.js';
 import { privateTmpRoot, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 import { FakeHelper } from './helper-fake.js';
@@ -205,9 +205,8 @@ describe('#setup-endpoint', () => {
     expect(reason(second.auth)).toBe('replayed-token');
     expect(await second.ws.closed()).toBe(1008);
     expect(await ep.done).toMatchObject({ ok: false, reason: 'token-reuse' });
-    const j = fs.readFileSync(identityJournalPath(home), 'utf8');
-    expect(j).toContain('setup.token-reuse');
-    expect(j).not.toContain(g.setupToken);
+    // Aegis L-B: no home yet ⇒ nothing is written (the terminal gets a notice instead)
+    expect(fs.existsSync(home)).toBe(false);
   });
 
   it('G-SET-13: closing the socket mid-provisioning aborts at the next step and cleans up', async () => {
@@ -360,5 +359,51 @@ describe('#setup-endpoint', () => {
     expect(fs.existsSync(home)).toBe(false);
     expect(r.checks.filter((c) => c.status === 'fail').map((c) => c.id)).toEqual(['helper']);
     expect(r.checks.find((c) => c.id === 'touch-id')?.status).toBe('warn');
+  });
+
+  it('Aegis L-B: with the home present as a plain dir, a token reuse is journaled (never the token)', async () => {
+    const u = tmp();
+    const home = path.join(u, '.gnomon');
+    fs.mkdirSync(home, { mode: 0o700 });
+    const { ep } = rig({ userHome: u });
+    const g = await ep.start();
+    await attach(g);
+    await attach(g);
+    expect(await ep.done).toMatchObject({ reason: 'token-reuse' });
+    const j = fs.readFileSync(identityJournalPath(home), 'utf8');
+    expect(j).toContain('setup.token-reuse');
+    expect(j).not.toContain(g.setupToken);
+  });
+
+  it('Aegis L-A: begin is capped at 2 attempts; the second failure ends setup and later calls say it was stopped', async () => {
+    const { ep } = rig({ gate: (r) => { if (r.op === 'sign') throw new Error('helper crashed'); } });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    await call(ws, 3, 'setup.preflight');
+    await call(ws, 4, 'setup.name', { name: 'founder' });
+    const f1 = await call(ws, 5, 'setup.begin');
+    expect((f1.error as { data: { data: Record<string, unknown> } }).data.data).toMatchObject({ final: false, attemptsLeft: 1 });
+    expect(ep.settled).toBe(false);
+    const f2 = await call(ws, 6, 'setup.begin');
+    expect((f2.error as { data: { data: Record<string, unknown> } }).data.data).toMatchObject({ final: true, attemptsLeft: 0 });
+    expect(await ep.done).toMatchObject({ ok: false });
+    expect(reason(await call(ws, 7, 'setup.preflight'))).toBe('setup-stopped');
+  });
+
+  it('Aegis L-C: the sweep removes only old, real, own .gnomon-setup-* dirs', () => {
+    const d = tmp();
+    const old = path.join(d, '.gnomon-setup-old');
+    const fresh = path.join(d, '.gnomon-setup-new');
+    const link = path.join(d, '.gnomon-setup-link');
+    const file = path.join(d, '.gnomon-setup-file');
+    fs.mkdirSync(old);
+    fs.mkdirSync(fresh);
+    fs.symlinkSync(old, link);
+    fs.writeFileSync(file, 'x');
+    const past = (Date.now() - SETUP_SCRATCH_MAX_AGE_MS - 60_000) / 1000;
+    fs.utimesSync(old, past, past);
+    fs.utimesSync(file, past, past);
+    expect(sweepSetupScratch(d)).toEqual([old]);
+    expect([fs.existsSync(fresh), fs.lstatSync(link).isSymbolicLink(), fs.existsSync(file)]).toEqual([true, true, true]);
   });
 });

@@ -52,7 +52,7 @@ const text = (els: SEl[]): string => els.map((e) => [(e as FE).textContent ?? ''
 const buttons = (els: SEl[]): FE[] => els.flatMap((e) => [...((e as FE).tag === 'button' ? [e as FE] : []), ...buttons((e as FE).kids)]);
 
 /** A fake setup server: answers like the #setup-endpoint, signing hello with an ephemeral key. */
-function server(o: { tamperSig?: boolean; failBegin?: string; failPurge?: boolean } = {}) {
+function server(o: { tamperSig?: boolean; failBegin?: string; failPurge?: boolean; finalBegin?: boolean } = {}) {
   const kp = generateKeyPairSync('ed25519');
   const spki = kp.publicKey.export({ type: 'spki', format: 'der' });
   const calls: Array<[string, unknown]> = [];
@@ -74,6 +74,7 @@ function server(o: { tamperSig?: boolean; failBegin?: string; failPurge?: boolea
         return { name: p.name } as T;
       }
       if (method === 'setup.purge' && o.failPurge) throw new RpcError({ code: 'FORBIDDEN', reason: 'in-use', message: 'generation g is the live identity of /x', next: [], data: null });
+      if (method === 'setup.begin' && o.finalBegin) throw new RpcError({ code: 'FORBIDDEN', reason: 'helper-line-mismatch', message: 'the line did not name the code', next: [], data: { reason: 'helper-line-mismatch', final: true } });
       if (method === 'setup.begin' && o.failBegin) throw new RpcError({ code: 'FORBIDDEN', reason: 'provision-failed', message: 'the helper crashed', next: [], data: { reason: 'provision-failed', leftoverGen: o.failBegin } });
       if (method === 'setup.begin') {
         note('setup.presence', { n: 1, of: 2, purpose: 'approvals-binding', digest12: '3f2a91c07be4' });
@@ -219,5 +220,19 @@ describe('#gui-setup recovery (the screens are the complete path)', () => {
     expect(f.state.phase).toBe('preflight');
     expect(f.state.notice).toContain('generation abcdefabcdef were left');
     expect(text(screenFor(DOC, f.state, f))).not.toContain('half-done');
+  });
+
+  it('Aegis L-A: a retryable begin says the retry shows 2 NEW codes; a final one ends setup as "setup was stopped"', async () => {
+    const a = await ready({ failBegin: 'abcdefabcdef' });
+    a.f.toName();
+    await a.f.submitName('founder');
+    await a.f.begin();
+    expect(a.f.state.notice).toContain('this retry shows 2 NEW codes');
+    const b = await ready({ finalBegin: true });
+    b.f.toName();
+    await b.f.submitName('founder');
+    await b.f.begin();
+    expect(b.f.state.phase).toBe('aborted');
+    expect(b.f.state.error?.message).toMatch(/^setup was stopped/);
   });
 });

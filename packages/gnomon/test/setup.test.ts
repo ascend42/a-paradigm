@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runBareCommand } from '../src/cli/bare-cli.js';
-import { groupDigest, runSetup, type GuiSetupDeps, type SetupDeps } from '../src/cli/setup-cli.js';
+import { groupDigest, runSetup, runSetupCommand, type GuiSetupDeps, type SetupDeps } from '../src/cli/setup-cli.js';
 import { runUp } from '../src/cli/up-cli.js';
 import {
   acceptUnsignedHelperForTests,
@@ -411,5 +411,17 @@ describe('gnomon setup (#first-run)', () => {
     expect(await runBareCommand([], o2.io, { userHome: u, cwd: u, runtime: { env: {}, execArgv: ['--disable-sigusr1'] } })).toBe(1);
     expect(o2.text()).not.toContain('Welcome to Gnomon');
     expect(o2.errText()).toContain('next: gnomon setup');
+  });
+});
+
+describe('round 3: gnomon setup on an already-set-up Mac continues into the launch', () => {
+  it('code 0 with a home calls continueUp even when nothing was provisioned this run', async () => {
+    const u = tmp();
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(u, fake))).provisioned).toBe(true);
+    let continued = 0;
+    const code = await runSetupCommand(['--cli'], io().io, { ...deps(u, fake), continueUp: async () => (continued++, 0) });
+    expect(code).toBe(0);
+    expect(continued).toBe(1);
   });
 });

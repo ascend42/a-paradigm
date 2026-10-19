@@ -119,7 +119,6 @@ export function resolveSetupHome(userHome: string = os.userInfo().homedir): stri
   return fs.realpathSync.native(raw);
 }
 
-/** `3f2a91c07be4` → `3f2a 91c0 7be4` */
 /** L6: create the strict home owner-only right before the first write (purge journal, provision); never a symlink. */
 export function ensureSetupHome(home: string): void {
   if (!fs.existsSync(home)) fs.mkdirSync(home, { mode: 0o700 });
@@ -127,6 +126,7 @@ export function ensureSetupHome(home: string): void {
   if (st.isSymbolicLink() || !st.isDirectory()) throw new SetupRefusal('unsafe-home', `${home} is not a plain directory`);
 }
 
+/** `3f2a91c07be4` → `3f2a 91c0 7be4` */
 export function groupDigest(d: string): string {
   return (d.match(/.{1,4}/g) ?? []).join(' ');
 }
@@ -344,7 +344,8 @@ export async function runSetupCommand(argv: readonly string[], io: LaunchTtyIo, 
     return SETUP_EXIT_USAGE;
   }
   const r = cli || (deps as GuiSetupDeps).surface === 'cli' ? await runSetup(io, deps) : await runGuiSetup(io, deps, 'tty');
-  if (r.code !== SETUP_EXIT_OK || !r.provisioned || !deps.continueUp) return r.code;
+  // also an already-set-up Mac (Start Gnomon): code 0 with a home continues into the launch
+  if (r.code !== SETUP_EXIT_OK || !r.home || !deps.continueUp) return r.code;
   io.stdout.write('\nStarting Gnomon…\n');
   return deps.continueUp();
 }

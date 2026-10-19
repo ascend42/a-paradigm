@@ -124,9 +124,11 @@ export class SetupFlow {
   /** A refusal setup survives: back to the checks (re-run, so a left-over generation shows its Delete button). */
   async #recover(e: unknown, what: string): Promise<void> {
     const r = refusalOf(e);
-    if (r.reason === 'socket-closed') return this.#fail(e);
+    // final refusals end setup (Aegis L-A: a wrong helper line, one prompt too many, the attempt cap)
+    if (r.reason === 'socket-closed' || r.reason === 'setup-stopped' || r.data.final === true) return this.#set({ phase: 'aborted', busy: false, presence: null, error: { reason: r.reason, message: `setup was stopped: ${r.message}` } });
     const gen = typeof r.data.leftoverGen === 'string' ? r.data.leftoverGen : null;
-    const notice = `${what} did not finish: ${r.message}.${gen ? ` Keys of generation ${gen} were left in the Secure Enclave: delete them below, then try again.` : ''}`;
+    const retry = what === 'Setup' ? ' If you try again, this retry shows 2 NEW codes.' : '';
+    const notice = `${what} did not finish: ${r.message}.${gen ? ` Keys of generation ${gen} were left in the Secure Enclave: delete them below, then try again.` : ''}${retry}`;
     this.#set({ busy: false, presence: null, phase: 'preflight', notice });
     await this.preflight(notice);
   }
@@ -164,6 +166,8 @@ export class SetupFlow {
       const r = await this.#c.call<Record<string, unknown>>('setup.preflight', {});
       this.#set({ phase: 'preflight', busy: false, notice, ...this.#report(r) });
     } catch (e) {
+      const r = refusalOf(e);
+      if (r.reason === 'setup-stopped') return this.#set({ phase: 'aborted', busy: false, error: { reason: r.reason, message: r.message } });
       this.#fail(e);
     }
   }

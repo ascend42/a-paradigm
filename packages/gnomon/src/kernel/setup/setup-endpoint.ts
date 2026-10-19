@@ -68,6 +68,50 @@ export type SetupOutcome = { ok: true; home: string; provisioned: boolean } | { 
 
 /** The idle cap after auth with nothing running (round 2: the server never hangs). */
 export const SETUP_IDLE_MS = 10 * 60_000;
+/** Aegis L-A: begin may run at most this many times per setup; each retry shows 2 NEW codes. */
+export const SETUP_BEGIN_ATTEMPTS = 2;
+/** Aegis L-A: these refusals end setup for good (a wrong helper line, one prompt too many). */
+export const SETUP_FINAL_REASONS: readonly string[] = Object.freeze(['helper-line-mismatch', 'root-prompt-budget', 'interrupted']);
+export const SETUP_SCRATCH_PREFIX = '.gnomon-setup-';
+export const SETUP_SCRATCH_MAX_AGE_MS = 60 * 60_000;
+
+/**
+ * Aegis L-C: remove stale setup scratch dirs (a hard-killed setup's) beside the home: only a REAL directory (lstat,
+ * never a symlink), owned by this user, older than SETUP_SCRATCH_MAX_AGE_MS. Anything else is left alone.
+ */
+export function sweepSetupScratch(parent: string, now: number = Date.now()): string[] {
+  const removed: string[] = [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(parent);
+  } catch {
+    return removed;
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  for (const n of names) {
+    if (!n.startsWith(SETUP_SCRATCH_PREFIX)) continue;
+    const p = path.join(parent, n);
+    try {
+      const st = fs.lstatSync(p);
+      if (st.isSymbolicLink() || !st.isDirectory() || (uid !== null && st.uid !== uid) || now - st.mtimeMs < SETUP_SCRATCH_MAX_AGE_MS) continue;
+      fs.rmSync(p, { recursive: true, force: true });
+      removed.push(p);
+    } catch {
+      /* raced or unreadable: left alone */
+    }
+  }
+  return removed;
+}
+
+/** Aegis L-B: the home exists as a plain directory (lstat): only then may setup write into it on its own. */
+function plainDir(p: string): boolean {
+  try {
+    const st = fs.lstatSync(p);
+    return st.isDirectory() && !st.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
 const HELLO_KEYS = ['client', 'clientApis', 'clientNonce', 'features'];
 
 export interface SetupEndpointOptions {
@@ -131,6 +175,8 @@ export class SetupEndpoint {
   #registered = false;
   #name: string | null = null;
   #provisioned = false;
+  #begins = 0;
+  #stopped: { reason: string; message: string } | null = null;
   #running: Promise<unknown> | null = null;
   #expiry: NodeJS.Timeout | null = null;
   #idle: NodeJS.Timeout | null = null;
@@ -148,7 +194,8 @@ export class SetupEndpoint {
     this.#key = { priv: kp.privateKey, pubPem, spki: kp.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'), keyId: ed25519KeyId(pubPem) };
     this.done = new Promise((r) => (this.#settle = r));
     // a sibling of the home (like the provisioning lock), owner-only: the transport sandbox reads the bundle there
-    this.#state = fs.mkdtempSync(path.join(path.dirname(o.home), '.gnomon-setup-'));
+    sweepSetupScratch(path.dirname(o.home), this.#now());
+    this.#state = fs.mkdtempSync(path.join(path.dirname(o.home), SETUP_SCRATCH_PREFIX));
   }
 
   get port(): number {
@@ -213,6 +260,7 @@ export class SetupEndpoint {
   }
 
   #abort(reason: string, message: string, leftoverGen?: string): void {
+    this.#stopped ??= { reason, message };
     this.#ac.abort();
     this.#finish({ ok: false, reason, message, ...(leftoverGen ? { leftoverGen } : {}) });
   }
@@ -339,7 +387,8 @@ export class SetupEndpoint {
         throw new RpcRefusal('BAD_REQUEST', 'setup-params', bad);
       }
       if (req.method === 'auth') return this.#auth(String(params.setupToken), ctx);
-      if (this.#active !== ctx.connId || this.#settled) throw POLICY('unauthenticated', 'authenticate with the setup token first');
+      if (this.#active === ctx.connId && this.#settled) throw POLICY('setup-stopped', `setup was stopped: ${this.#stopped?.message ?? 'it already ended'}`);
+      if (this.#active !== ctx.connId) throw POLICY('unauthenticated', 'authenticate with the setup token first');
       this.#touch();
       this.#o.onDispatch?.(req.method);
       switch (req.method) {
@@ -353,6 +402,7 @@ export class SetupEndpoint {
           if (this.#provisioned) throw new RpcRefusal('FORBIDDEN', 'setup-done', 'setup already committed; nothing to purge here');
           if (!this.#report?.leftover.includes(gen)) throw new RpcRefusal('BAD_REQUEST', 'not-leftover', 'only a leftover generation the checks listed can be purged');
           this.#purgeGuard(gen);
+          this.#ensureHome();
           const r = await this.#job(async () => {
             const p = this.#engine();
             p.on('event', relay(ctx));
@@ -368,6 +418,8 @@ export class SetupEndpoint {
           if (this.#provisioned) throw new RpcRefusal('FORBIDDEN', 'setup-done', 'setup already committed');
           if (!rep || !rep.ok || rep.existing || rep.leftover.length) throw new RpcRefusal('FORBIDDEN', 'preflight-failed', 'run the checks and fix every failing one first');
           if (!this.#name) throw new RpcRefusal('FORBIDDEN', 'no-name', 'choose your name first');
+          if (this.#begins >= SETUP_BEGIN_ATTEMPTS) throw new RpcRefusal('FORBIDDEN', 'begin-attempts', `setup was tried ${SETUP_BEGIN_ATTEMPTS} times; start it again later`);
+          this.#begins++;
           const r = await this.#job(async () => {
             this.#ensureHome();
             const p = this.#engine();
@@ -376,9 +428,10 @@ export class SetupEndpoint {
           });
           if (!r.ok) {
             const leftoverGen = typeof r.extra.leftoverGen === 'string' ? r.extra.leftoverGen : undefined;
-            if (r.reason === 'interrupted') this.#abort(r.reason, r.message, leftoverGen);
-            this.#o.onNotice?.(`setup stopped: ${r.message}${leftoverGen ? ` — keys of generation ${leftoverGen} were left in the Secure Enclave; delete them from the checks` : ' — nothing half-done was kept'}`);
-            throw new RpcRefusal('FORBIDDEN', r.reason, r.message, leftoverGen ? { leftoverGen } : undefined);
+            const final = SETUP_FINAL_REASONS.includes(r.reason) || this.#begins >= SETUP_BEGIN_ATTEMPTS;
+            if (final) this.#abort(r.reason, r.message, leftoverGen);
+            this.#o.onNotice?.(`setup stopped: ${r.message}${leftoverGen ? ` — keys of generation ${leftoverGen} were left in the Secure Enclave; delete them from the checks` : ' — nothing half-done was kept'}${final ? '' : '. If you try again, the retry shows 2 NEW codes.'}`);
+            throw new RpcRefusal('FORBIDDEN', r.reason, r.message, { ...(leftoverGen ? { leftoverGen } : {}), final, attemptsLeft: SETUP_BEGIN_ATTEMPTS - this.#begins });
           }
           this.#provisioned = true;
           return this.#resultView(r.record!);
@@ -427,7 +480,8 @@ export class SetupEndpoint {
       if (live) {
         // ^setup-token: a reuse inside the TTL is theft — abort the provisioning, journal it (never the token)
         try {
-          appendIdentityJournal(this.#o.home, { op: 'setup.token-reuse', at: new Date(this.#now()).toISOString(), aborted: true });
+          if (plainDir(this.#o.home)) appendIdentityJournal(this.#o.home, { op: 'setup.token-reuse', at: new Date(this.#now()).toISOString(), aborted: true });
+          else this.#o.onNotice?.('the setup link was used twice: setup was aborted (no home yet, so nothing was journaled)');
         } catch {
           /* the abort still happens */
         }
