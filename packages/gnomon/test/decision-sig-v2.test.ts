@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux
 /**
  * #approval-broker / #kernel-log — slice A2 of T-2026-10-19-001 (P8-D98, broker honesty):
  *   - decisionSig v2: an `answer` binds its text (answerDigest) in the decisionSig and the presence binding;

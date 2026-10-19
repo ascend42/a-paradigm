@@ -574,7 +574,9 @@ describe('G-ABI-02 matrix total: every principal class × every verb and both re
         else {
           expect(got, `${cls} × ${meth}`).not.toBe('FORBIDDEN:matrix');
           // a refusal of an allowed cell names its milestone, or is a params / ownership / resolver answer
-          if (got !== 'served') expect(got, `${cls} × ${meth}`).toMatch(/@|^BAD_REQUEST:|^FORBIDDEN:(kernel-owned|ungranted|modns-not-own|mod-principal-name|voice-off)|^UNSUPPORTED:no-resolver/);
+          // gui.open reaches the web endpoint, whose transport sandbox does not exist on linux yet: an environment refusal, not a matrix one
+          const env = meth === 'gui.open' ? '|^ENGINE:sandbox-unavailable$' : '';
+          if (got !== 'served') expect(got, `${cls} × ${meth}`).toMatch(new RegExp(`@|^BAD_REQUEST:|^FORBIDDEN:(kernel-owned|ungranted|modns-not-own|mod-principal-name|voice-off)|^UNSUPPORTED:no-resolver${env}`));
         }
       }
     }
