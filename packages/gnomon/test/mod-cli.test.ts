@@ -3,8 +3,12 @@
  * install|link|list|status|pause|start|uninstall` over #manifest-loader and
  * the on-disk control surface, and the kernel's StagedCardPickup that raises
  * what the CLI staged through the REAL #approval-broker (raiseInstallCard
- * re-derives the card from the pinned snapshot). Platform-independent: no
- * daemon, no keys/ dir; homes under privateTmpRoot.
+ * re-derives the card from the pinned snapshot). Platform-independent and
+ * run on win32 too (no G-WIN-05 row needed): no daemon, no keys/ dir, no
+ * POSIX mode asserted, no POSIX path fixture (paths are built with
+ * path.join and compared as fields, never matched inside JSON text), no ':'
+ * in any file name (staged files are card-<ULID>.json); homes under
+ * privateTmpRoot.
  */
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import * as fs from 'node:fs';

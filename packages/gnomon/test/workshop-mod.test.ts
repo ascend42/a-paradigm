@@ -6,6 +6,10 @@
  * from the host's projected kernel-event feed (modhost/feed.ts). Fixtures
  * render to golden blocks on every OS through a real ModHost (unsandboxed
  * test launcher; the darwin `mod` profile path is test/mod-sandbox.test.ts).
+ * Platform-independent and run on win32 too (no G-WIN-05 row needed): the
+ * pinned packageHash covers posix paths + sha256 + size only and the tree is
+ * LF-pinned (.gitattributes), children are plain node processes as in
+ * test/mod-host.test.ts, and no POSIX mode or path fixture is asserted.
  */
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import * as fs from 'node:fs';
