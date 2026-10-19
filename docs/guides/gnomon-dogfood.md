@@ -245,9 +245,16 @@ UP  kernel (in this process)
   kernel key  ephemeral for this run (other socket clients report serverVerified:false)
 ```
 
-It then prints the launch URL. As with `dev up`, the URL goes only to an
-interactive terminal, works once and expires after 60 s. Enter gives a fresh
-URL, and `q` or Ctrl-C stops the kernel.
+It then opens the GUI in your default browser (spec §2.4 rule 10) and prints
+`opened in your browser`, with the launch URL below it in case no tab
+appeared. As with `dev up`, the URL goes only to an interactive terminal, works
+once and expires after 60 s. Enter opens a fresh URL, and `q` or Ctrl-C stops
+the kernel. `gnomon setup` and the first run of bare `gnomon` open the setup
+screens the same way. The URL reaches the browser on the standard input of
+`/usr/bin/osascript` (`open location`), never on a command line or in the
+environment. `--no-open` (on `gnomon`, `gnomon up` and `gnomon setup`) or
+`GNOMON_NO_OPEN=1` prints the URL only; Gnomon.app (`up --wrapper`) never opens
+a browser. `gnomon dev up` still only prints.
 
 `--home /absolute/path` runs a different provisioned home. `gnomon up` never
 reads `GNOMON_HOME`. If you ran `identity init` with `GNOMON_HOME` set, pass that

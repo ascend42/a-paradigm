@@ -58,15 +58,21 @@ cd ~/code/my-repo
 gnomon
 ```
 
-`gnomon` starts the kernel in this terminal and prints a one-time URL. Open it
-in your browser within 60 seconds. The new-session form opens with this repo's
+`gnomon` starts the kernel in this terminal and opens Gnomon in your default
+browser. The terminal says `opened in your browser` and still prints the
+one-time URL below it: if no tab appeared, open that URL yourself within 60
+seconds. (`gnomon setup` and `gnomon up` open your browser the same way.
+`--no-open`, or `GNOMON_NO_OPEN=1` in scripts, prints the URL only. The URL
+reaches the browser on the standard input of `/usr/bin/osascript`, never on a
+command line, so `ps` cannot read it.) The new-session form opens with this repo's
 top folder filled in (or the current folder, if you are not in a git repo; it
 says so). Check the path, then click **open**. Nothing opens until you click.
 The path is only a suggestion from your terminal, so the page shows it in full,
 and it does not fill in a path with unusual characters; you type that yourself.
 
-In the terminal: **Enter** prints a fresh URL, and **q** or **Ctrl-C** stops the
-kernel and its sessions. The URL is printed only to an interactive terminal.
+In the terminal: **Enter** opens (and prints) a fresh URL, and **q** or
+**Ctrl-C** stops the kernel and its sessions. The URL is opened and printed only
+from an interactive terminal; Gnomon.app (`up --wrapper`) never opens a browser.
 
 Other commands (`gnomon help` lists them all):
 
