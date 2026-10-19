@@ -42,7 +42,8 @@ const canSymlink = ((): boolean => {
 })();
 
 /** win32: the @ import resolver's absolute forms (C:, \\?\, UNC) are re-reviewed in the parity phase (platform-registry, repo-context-imports row); POSIX-absolute cases skip there. */
-const WIN = process.platform === 'win32';
+// win32 path forms (drive letters, backslashes): the POSIX-absolute @ cases are the parity-phase resolver review
+const WIN = path.sep === '\\';
 
 describe('sanitizeFrontmatter (allow-list, fail closed)', () => {
   it('drops hooks, allowed-tools and unknown keys, keeps the allowed ones and the body', () => {
