@@ -131,7 +131,8 @@ describe('T-2026-10-18-010 the Gnomon home is read-denied; only the session\'s o
     const iAllow = sb.indexOf('(allow file-read* ');
     expect(sb.slice(iAllow, sb.indexOf('\n', iAllow))).toContain(`(subpath "${own(w)}")`);
     const iMeta = sb.indexOf('(allow file-read-metadata ');
-    const iRe = sb.lastIndexOf(`(deny file-read* `);
+    // the last deny that is not the M5 helper deny (T-2026-10-18-028), which is a regex line after everything
+    const iRe = sb.lastIndexOf(`(deny file-read* `, sb.indexOf('(deny file-read* (regex ') - 1);
     expect(sb.slice(iDeny, sb.indexOf('\n', iDeny))).toContain(`(subpath "${w.home}")`);
     expect(iDeny).toBeGreaterThanOrEqual(0);
     expect(iAllow).toBeGreaterThan(iDeny);
