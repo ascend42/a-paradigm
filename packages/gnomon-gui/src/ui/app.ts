@@ -22,7 +22,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { canAttach, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -724,6 +724,12 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   try {
     const r = await client.call<Record<string, unknown>>('log.append', req);
     if (r.pending === true && typeof r.cardId === 'string') {
+      // Aegis L (V2d): approve in this gesture ONLY the voice-widen presence card for this session; else the stack decides
+      if (!isVoiceWidenCard(store.cards.get(r.cardId), hsid)) {
+        focusCard(r.cardId);
+        notice(`Ambient for ${sessionName(hsid ?? '')}: decide the pending card in the stack`);
+        return;
+      }
       notice(`Ambient for ${sessionName(hsid ?? '')}: confirm with Touch ID`);
       try {
         await client.call('approve', { cardId: r.cardId, decision: 'allow' });

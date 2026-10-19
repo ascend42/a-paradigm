@@ -64,10 +64,7 @@ export function voiceStatusOf(status: unknown): VoiceView {
   if (v && typeof v.clientConnected === 'boolean') clientConnected = v.clientConnected;
   else if (v && typeof v.clients === 'number') clientConnected = v.clients > 0;
   else if (v && Array.isArray(v.clients)) clientConnected = v.clients.length > 0;
-  else if (Array.isArray(s?.clients)) clientConnected = (s.clients as unknown[]).some((c) => {
-    const o = obj(c);
-    return !!o && (o.principalKind === 'voice' || o.surface === 'voice' || (typeof o.principal === 'string' && o.principal.startsWith('voice:')));
-  });
+  // Aegis M (V2d): only an explicit kernel field decides; no guessing from client names (unsure ⇒ null)
   const level = a && typeof a.level === 'number' ? a.level : v && typeof v.level === 'number' ? v.level : null;
   return {
     known: v !== null,
@@ -103,15 +100,33 @@ export interface Pill {
   className: string;
 }
 
-/** The header pill: grey Mic off, blue hold-to-talk, red pulsing Listening; the voice app missing says so. */
+/**
+ * The header pill: grey Mic off, blue hold-to-talk, red pulsing Listening. Aegis M (V2d): never under-report a live
+ * mic — when attached and the kernel says the voice app is not connected, the attached state keeps its class, label
+ * and meter and gains "· voice app not connected"; only with nothing attached does the pill say "Voice app not running".
+ */
 export function pillOf(v: VoiceView): Pill {
   const target = v.hsid ? sessionName(v.hsid) : '';
-  if (v.clientConnected === false) {
-    return { state: 'noclient', label: 'Voice app not running', target, title: `The Gnomon voice app is not connected${target ? ` (voice is still attached to ${target})` : ''}. Start it to talk.`, className: 'voice-pill kernel-owned voice-noclient' };
-  }
-  if (v.state === 'ambient') return { state: 'ambient', label: 'Listening', target, title: `Ambient: the mic is open for ${target}. Click to switch to push-to-talk or off.`, className: 'voice-pill kernel-owned voice-ambient' };
-  if (v.state === 'ptt') return { state: 'ptt', label: `Hold ${v.hotkey} to talk`, target, title: `Push-to-talk to ${target}. Click to change.`, className: 'voice-pill kernel-owned voice-ptt' };
+  const gone = v.clientConnected === false;
+  const tail = gone ? ' · voice app not connected' : '';
+  const goneCls = gone ? ' voice-noclient' : '';
+  if (v.state === 'ambient') return { state: 'ambient', label: `Listening${tail}`, target, title: `Ambient: the mic is open for ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to switch to push-to-talk or off.`, className: `voice-pill kernel-owned voice-ambient${goneCls}` };
+  if (v.state === 'ptt') return { state: 'ptt', label: `Hold ${v.hotkey} to talk${tail}`, target, title: `Push-to-talk to ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to change.`, className: `voice-pill kernel-owned voice-ptt${goneCls}` };
+  if (gone) return { state: 'noclient', label: 'Voice app not running', target: '', title: 'The Gnomon voice app is not connected. Start it to talk.', className: 'voice-pill kernel-owned voice-off voice-noclient' };
   return { state: 'off', label: 'Mic off', target: '', title: v.known ? 'Voice is off. Click to attach it to the focused session.' : 'This kernel reports no voice status.', className: 'voice-pill kernel-owned voice-off' };
+}
+
+/**
+ * Aegis L (V2d): the pending card a voice.session.start returned is approved in the same gesture only when it IS the
+ * voice-widen presence card for the same session (kind strictness, detail.op voice.widen). Anything else is left to
+ * the human in the stack.
+ */
+export function isVoiceWidenCard(card: { kind: string; hsid: string | null; card: Record<string, unknown> } | undefined, hsid: string | null): boolean {
+  if (!card || !hsid || card.kind !== 'strictness') return false;
+  const d = obj(card.card.detail);
+  if (!d || d.op !== 'voice.widen') return false;
+  const cardHsid = str(d.hsid) ?? card.hsid;
+  return cardHsid === hsid;
 }
 
 const RANK: Readonly<Record<VoiceState, number>> = Object.freeze({ off: 0, ptt: 1, ambient: 2 });
@@ -196,11 +211,14 @@ export function idleNoteOf(kind: string, payload: unknown, defaultIdleMs: number
 /** `spk:<ns>/<name>` → name; `spk:unknown-3` → `unknown speaker 3`. */
 export function speakerName(id: unknown): string {
   if (typeof id !== 'string') return 'voice';
-  const u = /^spk:unknown-(\d+)$/.exec(id);
+  const u = /^spk:unknown-(\d{1,6})$/.exec(id);
   if (u) return `unknown speaker ${u[1]}`;
   const m = /^spk:[^/]*\/(.+)$/.exec(id);
-  return m ? m[1]! : id.replace(/^spk:/, '') || 'voice';
+  const name = (m ? m[1]! : id.replace(/^spk:/, '')).replace(/\s+/g, ' ').trim() || 'voice';
+  return name.length > SPEAKER_MAX ? `${name.slice(0, SPEAKER_MAX - 1)}…` : name; // Aegis L: capped
 }
+/** The longest speaker name shown (Aegis L, V2d). */
+export const SPEAKER_MAX = 32;
 
 /**
  * A voice refusal as one plain line (V2a reasons): voice-off with data.cause aec | ceiling | presence, and the busy

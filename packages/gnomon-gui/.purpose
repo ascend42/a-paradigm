@@ -48,8 +48,12 @@ components:
       attached session whose mode is not ptt reads as ambient
       (the indicator never under-reports a live mic). Three states: Mic off
       (grey), push-to-talk (slate blue, "Hold <hotkey> to talk"), ambient
-      (red edge, pulsing dot, "Listening", level meter); "Voice app not
-      running" when the status says the voice client is not connected.
+      (red edge, pulsing dot, "Listening", level meter). clientConnected is
+      only an explicit kernel field (null when unsure; no client-name
+      guesses); attached with the app not connected keeps the attached
+      state's class, label and meter plus "· voice app not connected"
+      (never under-reports a live mic); "Voice app not running" only with
+      nothing attached.
       planVoice: same | free (Off, narrowing, re-target) | presence (the
       first widening to ambient in a GUI login) | blocked (ceiling, nothing
       focused). voiceRequest builds log.append voice.session.start{hsid,
@@ -59,16 +63,21 @@ components:
       header pill + menu (Off / Push-to-talk / Ambient, Attach to focused),
       [Voice ▾] on the focused live session row, palette voice.off /
       voice.ptt / voice.ambient, all on trusted gestures (G-GUI-04); a
-      pending presence card from an ambient request is approved allow in the
-      same gesture (the kernel asks for Touch ID). Status is re-read when the
+      pending card from an ambient request is approved allow in the same
+      gesture only when isVoiceWidenCard (kind strictness, detail.op
+      voice.widen, the same hsid) holds for the card in the store; else it is
+      focused in the stack (the kernel asks for Touch ID). Status is re-read when the
       store flags `voice` (voice.session.start / .end / .mode, daemon.start),
       never on a timer; voice.turn.* rows only kick the meter. The kernel's
       idle auto-off (voice.session.end with reason idle) leaves a quiet
       "Ambient turned off after N min idle" note (store.voiceNote) until the
-      next attachment. Transcript: a sent voice turn is the user message
-      tagged with a mic and the speaker (claude's replay of it shows once;
-      turn.sent with source voice adds a line only when the voice row is
-      unreadable), partials in grey while they are the latest word on their
+      next attachment. Transcript: a voice turn is the user message
+      (one line, tagged with a mic and the speaker, capped at 32 chars) only
+      when the kernel's turn.sent{source: voice, voiceTurnSeq} cites it;
+      claude's replay of it shows once; until then the app's refusal /
+      intercepted / forwarded claims are shown attributed ("voice app says:
+      ..."); turn.sent adds its own line only when the voice row is
+      unreadable, partials in grey while they are the latest word on their
       turn, a speaker marker under a spoken reply, a refused voice turn's
       reason inline and subtle. voice.* are excluded from
       BLOCK_SAFE_COMMANDS. Contrast: ambient text is the fixture's

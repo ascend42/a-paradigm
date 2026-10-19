@@ -479,7 +479,7 @@ function reasonWithCause(p: Record<string, unknown>, reason: string): string {
  * A sent voice turn is the user's message with a 🎙 <speaker> tag; turn.sent{source:'voice'} adds one only when the
  * page cannot see the voice.turn.user row it cites (a stub view); a refusal shows its reason inline.
  */
-function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number> }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string }) | null | undefined {
+function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number> }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
   if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
   if (r.kind === 'turn.sent') {
@@ -498,11 +498,20 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
   }
   switch (r.kind) {
     case 'voice.turn.user': {
+      if (!text.trim()) return null;
+      // sent: the kernel's turn.sent cites this row ⇒ the user's message (one line: spoken text has no layout)
+      if (ctx.sentSeqs.has(r.seq)) return { role: 'user', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker };
+      // not (yet) sent: refusal / intercepted / forwarded are the voice app's claims, shown attributed (a distinct key,
+      // so the row repaints as the user's message once the kernel's turn.sent arrives)
       const why = voiceReasonOf(p);
-      if (why) return { role: 'voice-refused', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” not sent · ${reasonWithCause(p, why)}` };
-      if (p.intercepted === 'decision' || p.intercepted === 'control') return { role: 'voice-heard', text: `${speaker} · handled as a ${p.intercepted}: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker };
-      if (p.forwarded === false) return text.trim() ? { role: 'voice-heard', text: `${speaker} · heard, not sent: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker } : null;
-      return text.trim() ? { role: 'user', text: cap(text, CHAT_TEXT_MAX), speaker } : null;
+      const claim = why
+        ? `voice app says: not sent · ${reasonWithCause(p, why)}`
+        : p.intercepted === 'decision' || p.intercepted === 'control'
+          ? `voice app says: handled as a ${p.intercepted}`
+          : p.forwarded === false
+            ? 'voice app says: not sent'
+            : 'not sent to the session';
+      return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
     }
     case 'voice.turn.agent': {
       const spoken = typeof p.textSpoken === 'string' ? p.textSpoken : '';
@@ -585,8 +594,11 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const lastPartial = new Map<string, number>();
   const finals = new Set<string>();
   const shownVoiceSeqs = new Set<number>();
+  // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
+  const sentSeqs = new Set<number>();
   for (const r of rows) {
     const p = objOf(r.payload);
+    if (r.kind === 'turn.sent' && p?.source === 'voice' && typeof p.voiceTurnSeq === 'number') sentSeqs.add(p.voiceTurnSeq);
     const tid = p && typeof p.turnId === 'string' ? p.turnId : null;
     if (!tid) continue;
     if (isPartial(r, p)) lastPartial.set(tid, r.seq);
@@ -618,7 +630,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       its.forEach((it, i) => push(r, i, it));
       continue;
     }
-    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs });
+    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs });
     if (v !== undefined) {
       if (v === null) hidden++;
       else {
@@ -626,7 +638,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
           echoes.push(v.text.trim()); // claude's replay of the same words shows once
           shownVoiceSeqs.add(r.seq);
         }
-        push(r, 0, v);
+        push(r, v.part ?? 0, v);
       }
       continue;
     }

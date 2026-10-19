@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, idleNoteOf, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
+import { canAttach, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -36,17 +36,22 @@ describe('voice pill: state is the kernel status only', () => {
     expect(voiceStatusOf(human({ attached: false, hsid: null, ceiling: null })).state).toBe('off');
     // the V2a ceiling is the attachment's state, never a cap: push-to-talk may still widen (with Touch ID)
     expect(planVoice(voiceStatusOf(v2aAttached('ptt')), 'ambient', A, false)).toEqual({ kind: 'presence' });
-    expect(voiceStatusOf(v1Attached('ptt'))).toMatchObject({ state: 'ptt', hsid: A, voiceSessionId: VS, clientConnected: true });
+    expect(voiceStatusOf(v1Attached('ptt'))).toMatchObject({ state: 'ptt', hsid: A, voiceSessionId: VS, clientConnected: null }); // no explicit field: unsure
   });
   it('fails toward the louder indicator: an attached session with an unknown mode reads as ambient; no status reads as off', () => {
     expect(voiceStatusOf(v1Attached('whisper')).state).toBe('ambient');
     expect(voiceStatusOf(null)).toMatchObject({ known: false, state: 'off' });
     expect(voiceStatusOf({ voice: { attached: { mode: 'ptt' } } }).state).toBe('off'); // no hsid: not an attachment
   });
-  it('the voice app not connected ⇒ "Voice app not running" (from status.voice.clientConnected, else status.clients)', () => {
-    expect(pillOf(voiceStatusOf(v2aAttached('ptt', { clientConnected: false })))).toMatchObject({ state: 'noclient', label: 'Voice app not running' });
-    expect(pillOf(voiceStatusOf({ principalKind: 'human', voice: { attached: null }, clients: [{ principalKind: 'human' }] }))).toMatchObject({ label: 'Voice app not running' });
-    expect(voiceStatusOf({ principalKind: 'human', voice: { attached: null } }).clientConnected).toBeNull(); // unknown: not claimed missing
+  it('never under-reports a live mic: attached + voice app not connected keeps the state, class and meter, adding a note', () => {
+    expect(pillOf(voiceStatusOf(v2aAttached('conversation', { clientConnected: false })))).toMatchObject({ state: 'ambient', label: 'Listening · voice app not connected', className: expect.stringContaining('voice-ambient') });
+    expect(pillOf(voiceStatusOf(v2aAttached('ptt', { clientConnected: false })))).toMatchObject({ state: 'ptt', label: 'Hold ⌃⌥Space to talk · voice app not connected' });
+    expect(pillOf(voiceStatusOf(off({ clientConnected: false })))).toMatchObject({ state: 'noclient', label: 'Voice app not running' });
+  });
+  it('clientConnected is null when unsure: no client-name heuristic ever decides false', () => {
+    expect(voiceStatusOf({ principalKind: 'human', voice: { attached: null }, clients: [{ principalKind: 'human' }] }).clientConnected).toBeNull();
+    expect(voiceStatusOf({ principalKind: 'human', voice: { attached: null } }).clientConnected).toBeNull();
+    expect(pillOf(voiceStatusOf(off())).label).toBe('Mic off');
   });
   it('the pill never takes a voice row (the client) as its state: only status moves it', () => {
     const s = new GuiStore();
@@ -74,6 +79,15 @@ describe('voice: attach and switch send the right appends', () => {
     expect(planVoice(amb, 'ptt', A, false)).toEqual({ kind: 'free' });
     expect(planVoice(amb, 'off', A, false)).toEqual({ kind: 'free' });
     expect(planVoice(amb, 'ambient', A, false)).toEqual({ kind: 'same' });
+  });
+  it('only the voice-widen presence card for the same session is approved in the gesture (Aegis L)', () => {
+    const card = (kind: string, detail: Record<string, unknown>, hsid: string | null = A) => ({ kind, hsid, card: { cardId: 'card:1', kind, detail } });
+    expect(isVoiceWidenCard(card('strictness', { op: 'voice.widen', hsid: A }), A)).toBe(true);
+    expect(isVoiceWidenCard(card('strictness', { op: 'voice.widen' }), A)).toBe(true); // the card's own hsid
+    expect(isVoiceWidenCard(card('strictness', { op: 'voice.widen', hsid: B }), A)).toBe(false);
+    expect(isVoiceWidenCard(card('strictness', { op: 'mode.loosen', hsid: A }), A)).toBe(false);
+    expect(isVoiceWidenCard(card('tool', { op: 'voice.widen', hsid: A }), A)).toBe(false);
+    expect(isVoiceWidenCard(undefined, A)).toBe(false); // not in the store yet: the stack decides
   });
   it('ambient needs Touch ID the first time in a GUI login, not after (or when the kernel already holds the presence)', () => {
     const ptt = voiceStatusOf(v1Attached('ptt'));
@@ -144,6 +158,7 @@ describe('voice: the kernel idle auto-off', () => {
 
 describe('voice in the transcript', () => {
   const user = (seq: number, turnId: string, text: string, more: Record<string, unknown> = {}): Row => ({ seq, kind: 'voice.turn.user', session: A, view: 'full', payload: { turnId, t0: 1, t1: 2, mode: 'ptt', text, speakerId: 'spk:home/matt', speakerEnrolled: true, forwarded: true, ...more } });
+  const sent = (seq: number, voiceTurnSeq: number): Row => ({ seq, kind: 'turn.sent', session: A, view: 'full', payload: { source: 'voice', voiceSessionId: VS, voiceTurnSeq } });
   const replay = (seq: number, text: string): Row => ({ seq, kind: 'turn.event', session: A, view: 'full', payload: { line: JSON.stringify({ type: 'user', message: { content: text } }) } });
   it('a sent voice turn is the user message with a 🎙 speaker tag; claude\'s replay of it shows once; turn.sent{source: voice} adds nothing more', () => {
     const rows: Row[] = [user(1, '1', 'run the tests'), { seq: 2, kind: 'turn.sent', session: A, view: 'full', payload: { source: 'voice', voiceSessionId: VS, voiceTurnId: '1', voiceTurnSeq: 1 } }, replay(3, 'run the tests')];
@@ -159,30 +174,40 @@ describe('voice in the transcript', () => {
     const p1: Row = { seq: 1, kind: 'voice.turn.partial', session: A, view: 'full', payload: { turnId: '7', text: 'run the', speakerId: 'spk:home/matt' } };
     const p2: Row = { seq: 2, kind: 'voice.turn.user', session: A, view: 'full', payload: { turnId: '7', partial: true, text: 'run the tes', speakerId: 'spk:home/matt' } };
     expect(chatItems([p1, p2]).items.map((i) => [i.role, i.text])).toEqual([['voice-partial', 'run the tes']]);
-    expect(chatItems([p1, p2, user(3, '7', 'run the tests')]).items.map((i) => i.role)).toEqual(['user']);
+    expect(chatItems([p1, p2, user(3, '7', 'run the tests'), sent(4, 3)]).items.map((i) => i.role)).toEqual(['user']);
   });
   it('a reply the voice app spoke gets a 🔊 marker (in part when it stopped early)', () => {
     const agent = (spoken: string): Row => ({ seq: 9, kind: 'voice.turn.agent', session: A, view: 'full', payload: { turnId: '1', t0: 1, t1: 2, textPlanned: 'all tests pass', textSpoken: spoken } });
     expect(chatItems([agent('all tests pass')]).items.map((i) => [i.role, i.text])).toEqual([['spoken', '🔊 spoken aloud']]);
     expect(chatItems([agent('all')]).items[0]?.text).toBe('🔊 spoken aloud (in part)');
   });
-  it('a refused voice turn shows the refusal reason inline, subtly', () => {
-    expect(chatItems([user(1, '1', 'deploy it', { forwarded: false, refusal: { reason: 'voice-stale-utterance' } })]).items[0]).toMatchObject({ role: 'voice-refused', text: expect.stringContaining('not sent · voice-stale-utterance') });
+  it('a refused voice turn shows the refusal reason inline, subtly: the kernel\'s refusal as fact, the app\'s as an attributed hint', () => {
+    expect(chatItems([user(1, '1', 'deploy it', { forwarded: false, refusal: { reason: 'voice-stale-utterance' } })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “deploy it” · voice app says: not sent · voice-stale-utterance' });
     expect(chatItems([{ seq: 2, kind: 'session.send.refused', session: A, view: 'full', payload: { source: 'voice', reason: 'voice-speaker' } }]).items[0]).toMatchObject({ role: 'voice-refused', text: 'voice turn not sent · voice-speaker' });
     // a non-voice refusal is still an error line
     expect(chatItems([{ seq: 3, kind: 'session.refused', session: A, view: 'full', payload: { reason: 'budget' } }]).items[0]?.role).toBe('error');
   });
   it('a V2a voice-off refusal names its cause; the busy voice-playback says the kernel is still speaking', () => {
-    expect(chatItems([user(1, '1', 'go', { forwarded: false, refusal: { reason: 'voice-off', data: { cause: 'aec' } } })]).items[0]?.text).toContain('not sent · voice-off · aec');
+    expect(chatItems([user(1, '1', 'go', { forwarded: false, refusal: { reason: 'voice-off', data: { cause: 'aec' } } })]).items[0]?.text).toContain('voice app says: not sent · voice-off · aec');
     expect(voiceRefusalNote('voice-off', { cause: 'aec' })).toContain('echo cancellation');
     expect(voiceRefusalNote('voice-off', { cause: 'ceiling' })).toContain('ceiling');
     expect(voiceRefusalNote('voice-off', { cause: 'presence' })).toContain('Touch ID');
     expect(voiceRefusalNote('voice-playback', { clock: 'kernel', streaming: true })).toBe('the voice app is still speaking; try again when it finishes (voice-playback · streaming)');
     expect(voiceRefusalNote('budget', null)).toBeNull();
   });
-  it('heard-but-not-sent and intercepted turns are subtle lines, never the user message', () => {
-    expect(chatItems([user(1, '1', 'yes', { forwarded: false, intercepted: 'decision' })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt · handled as a decision: yes' });
-    expect(chatItems([user(1, '1', 'hm', { forwarded: false })]).items[0]?.role).toBe('voice-heard');
+  it('the voice app\'s claims (forwarded, intercepted) never make a user message; only the kernel\'s turn.sent does', () => {
+    expect(chatItems([user(1, '1', 'yes', { forwarded: false, intercepted: 'decision' })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “yes” · voice app says: handled as a decision' });
+    expect(chatItems([user(1, '1', 'hm', { forwarded: false })]).items[0]?.text).toBe('matt: “hm” · voice app says: not sent');
+    // forwarded: true with no turn.sent is still not a sent message
+    expect(chatItems([user(1, '1', 'run it')]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “run it” · not sent to the session' });
+    // the kernel's turn.sent turns it into the user's message (a new key, so the row repaints)
+    const both = chatItems([user(1, '1', 'run it'), sent(2, 1)]).items;
+    expect(both).toEqual([expect.objectContaining({ role: 'user', text: 'run it', speaker: 'matt', key: '1' })]);
+    expect(chatItems([user(1, '1', 'run it')]).items[0]?.key).toBe('1.1');
+  });
+  it('voice bubble text is one line (spoken text carries no layout); speaker names are capped at 32', () => {
+    expect(chatItems([user(1, '1', 'line one\n\n   line two'), sent(2, 1)]).items[0]?.text).toBe('line one line two');
+    expect(speakerName(`spk:home/${'x'.repeat(80)}`)).toHaveLength(32);
   });
   it('speaker names: spk:<ns>/<name> → name, spk:unknown-N → unknown speaker N', () => {
     expect(speakerName('spk:home/matt')).toBe('matt');
@@ -207,7 +232,7 @@ describe('voice: palette, blocks and page wiring', () => {
   });
   it('a choice is sent only on a trusted gesture; an ambient presence card is approved allow in the same gesture', () => {
     expect(app).toMatch(/async function setVoice\(to: VoiceState, hsid: string \| null, trusted: boolean\): Promise<void> \{\s*if \(!trusted\) return;/);
-    expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{\s*notice\(`Ambient[\s\S]{0,120}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
+    expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{[\s\S]{0,200}if \(!isVoiceWidenCard\(store\.cards\.get\(r\.cardId\), hsid\)\) \{\s*focusCard\(r\.cardId\);[\s\S]{0,200}return;[\s\S]{0,300}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
     expect(app).toContain('voicePresenceDone = false; // ambient\'s Touch ID is once per GUI login');
     // an undecided widen card (strictness, detail.op voice.widen) is focused in the stack
     expect(app).toMatch(/catch \(err\) \{\s*\/\/ the widen card[^\n]*\n\s*focusCard\(r\.cardId\);/);
