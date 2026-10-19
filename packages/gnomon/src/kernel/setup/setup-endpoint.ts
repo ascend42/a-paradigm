@@ -121,7 +121,7 @@ export class SetupEndpoint {
   readonly #key: { priv: KeyObject; pubPem: string; spki: string; keyId: string };
   #web: WebEndpoint | null = null;
   /** private scratch state (bundle, gui.log): the checks never write the home */
-  readonly #state = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-setup-'));
+  #state = '';
   #token: Buffer | null = null;
   #expiresAt = 0;
   #consumed = false;
@@ -147,6 +147,8 @@ export class SetupEndpoint {
     const pubPem = kp.publicKey.export({ type: 'spki', format: 'pem' }).toString();
     this.#key = { priv: kp.privateKey, pubPem, spki: kp.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'), keyId: ed25519KeyId(pubPem) };
     this.done = new Promise((r) => (this.#settle = r));
+    // a sibling of the home (like the provisioning lock), owner-only: the transport sandbox reads the bundle there
+    this.#state = fs.mkdtempSync(path.join(path.dirname(o.home), '.gnomon-setup-'));
   }
 
   get port(): number {
