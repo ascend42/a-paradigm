@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T01:42:24.834Z'
+generated: '2026-10-19T04:19:18.285Z'
 structure: {}
 key_files:
   config:
@@ -258,6 +258,7 @@ symbols:
   '#purpose-component-contract-gnomon-rpc-v1': packages/gnomon-contracts/
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
   '#purpose-component-gui': packages/gnomon-gui/
+  '#purpose-component-gui-setup': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
@@ -273,6 +274,11 @@ symbols:
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-dev-launch': packages/gnomon/
   '#purpose-component-wrapper-channel': packages/gnomon/
+  '#purpose-component-bare-entry': packages/gnomon/
+  '#purpose-component-provisioner': packages/gnomon/
+  '#purpose-component-setup-endpoint': packages/gnomon/
+  '#purpose-component-setup-preflight': packages/gnomon/
+  '#purpose-component-first-run': packages/gnomon/
   '#purpose-component-gnomon-up': packages/gnomon/
   '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
@@ -936,6 +942,8 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
+  ^purpose-gate-setup-token: packages/gnomon/
+  ^purpose-gate-unprovisioned-only: packages/gnomon/
   ^purpose-gate-subscription-only: packages/gnomon/
   ^gate-api-authenticated: ./
   ^gate-gate-check: ./
@@ -969,6 +977,7 @@ symbols:
   $purpose-flow-$agent-health-tracking: packages/conductor/
   $purpose-flow-$task-archive: packages/conductor/
   $purpose-flow-$sentinel-investigation: packages/conductor/
+  $purpose-flow-first-run: packages/gnomon/
   $purpose-flow-daemon-lifecycle: packages/gnomon/
   $purpose-flow-mcp-startup: packages/paradigm-mcp/
   $purpose-flow-tool-execution: packages/paradigm-mcp/
@@ -1343,16 +1352,22 @@ symbols:
   ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
+  '#purpose-ref-component-ns-hint': packages/gnomon-gui/
+  '#purpose-ref-component-ns-cwd': packages/gnomon-gui/
   '#purpose-ref-component-launch': packages/gnomon-gui/
   '#purpose-ref-component-client-ts': packages/gnomon-gui/
+  '#purpose-ref-component-setup': packages/gnomon-gui/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
+  $purpose-ref-flow-USER: packages/gnomon/
+  ^purpose-ref-gate-unprovisioned-only.: packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
   '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
+  ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
@@ -1425,7 +1440,6 @@ symbols:
   '@purpose-ref-aspect-zod-validated': packages/premise/core/
   '#purpose-ref-component-index.loaded': packages/premise/core/
   '#purpose-ref-component-index.count': packages/premise/core/
-  '#purpose-ref-component-setup': packages/premise/core/
   '#purpose-ref-component-Heading': packages/premise/core/
   ^purpose-ref-gate-block-id: packages/premise/core/
   '#purpose-ref-component-x': packages/premise/core/

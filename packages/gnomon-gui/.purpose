@@ -81,3 +81,25 @@ components:
       - test/gui.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
+  gui-setup:
+    description: >-
+      #gui-setup (spec §11.1, §11.2 rule 11; T-2026-10-19-005 MVP-b) — the
+      first-run setup screens over the #setup-endpoint's closed
+      gnomon-setup:v1 protocol: a `#setup=<tok>&k=<spki>[&cwd=…]` fragment
+      (core/launch.ts parseSetupFragment; never mixed with #launch=) runs
+      src/setup instead of the app. route.ts is the state machine (welcome →
+      preflight → name → identity 1 of 2 / 2 of 2 → success → handoff; any
+      refusal or a closed socket → aborted); hello is verified against the
+      fragment setup key with the launch path's verifyServerSig before auth,
+      and that key is never stored as the kernel pin. screens.ts renders by
+      textContent only; clicks only request steps; the page sends only the
+      name and a server-listed gen. digest.ts: the digest is the kernel's
+      setup.presence value, shown big and grouped; the copy says the Touch ID
+      dialog's last line must BEGIN with `Gnomon Helper: root key signs 1:
+      <d12>`, that exactly 2 prompts come, and that cancelling is safe.
+    path: src/setup/
+    type: module
+    gates: ["^setup-token"]
+    tags: [gnomon, gui, setup]
+    tests:
+      - test/setup.test.ts

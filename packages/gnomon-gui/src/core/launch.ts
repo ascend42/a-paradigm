@@ -131,6 +131,35 @@ export function parseLaunchFragment(hash: string): LaunchFragment | null {
   return { launchToken, kernelPublicKey };
 }
 
+/** #gui-setup: `#setup=<tok>&k=<spki>[&cwd=…]` from the #setup-endpoint (the token is 32 bytes base64url). */
+export interface SetupFragment {
+  setupToken: string;
+  /** the EPHEMERAL setup key: verifies this one hello, and is never stored as the kernel pin */
+  setupPublicKey: string;
+  cwd?: string;
+}
+
+/** Parse a setup fragment; null when it is not exactly one. The launch and setup forms never mix. */
+export function parseSetupFragment(hash: string): SetupFragment | null {
+  const h = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!h) return null;
+  const params = new Map<string, string>();
+  for (const part of h.split('&')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) return null;
+    const k = part.slice(0, eq);
+    if (params.has(k)) return null;
+    params.set(k, part.slice(eq + 1));
+  }
+  const setupToken = params.get('setup');
+  const setupPublicKey = params.get('k');
+  const cwd = params.get('cwd');
+  if (!setupToken || !setupPublicKey || params.size !== (cwd === undefined ? 2 : 3)) return null;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(setupToken) || !B64URL.test(setupPublicKey) || setupPublicKey.length > 256) return null;
+  if (cwd !== undefined && cwdHintOf(cwd) !== null) return { setupToken, setupPublicKey, cwd };
+  return { setupToken, setupPublicKey };
+}
+
 export type PinDecision =
   | { ok: true; verifyWith: string; store: string | null; notice: string | null }
   | { ok: false; reason: 'no-pin'; message: string };
