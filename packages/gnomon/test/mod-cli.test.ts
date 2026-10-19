@@ -137,6 +137,8 @@ describe('gnomon mod install / link (stage, never sign)', () => {
     const rec = pendingStaged(t.home)[0]!.record;
     expect(rec.card.hsid).toBe(hsid);
     expect(rec.card.attended).toBe(false);
+    // Aegis C4: the staged record's requestedBy / hsid / attended are printed as claims, never as facts
+    expect(t.text()).toContain(`│ claimed by the staged record (unverified): requested by p:${t.auth.ns}/cli · session ${hsid} · attended no`);
   });
 });
 
@@ -264,6 +266,8 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     expect(card.state).toBe('pending');
     expect(JSON.stringify(card.block)).toContain('Uninstall mod hello');
+    expect(JSON.stringify(card.block)).toContain('claimed by the uninstall request (unverified)');
+    expect(card.attended).toBe(true); // the CLI's claim, from the request file, not a kernel constant
     await b.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: b.sig(card.cardId, 'allow', card.contentHash) });
     expect(b.rows.find((r) => r.kind === 'approval.decide' && r.payload.cardId === card.cardId)?.payload.rootSig).toBeDefined();
     expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
@@ -296,9 +300,15 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     await b.broker.approve(H, { cardId: card.cardId, decision: 'deny', decisionSig: b.sig(card.cardId, 'deny', card.contentHash) });
     expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeDefined();
+    // a request written by any other process claims nothing: attended is false unless the file says so
+    fs.writeFileSync(path.join(t.home, 'mods', 'hello', 'uninstall.request'), JSON.stringify({ packageHash: effectiveInstall(readGrants(t.home, t.auth), 'hello')!.packageHash }));
+    await p.scan();
+    const unattended = b.broker.cards().filter((c) => c.kind === 'grant' && c.state === 'pending');
+    expect(unattended.map((c) => c.attended)).toEqual([false]);
+    await b.broker.approve(H, { cardId: unattended[0]!.cardId, decision: 'deny', decisionSig: b.sig(unattended[0]!.cardId, 'deny', unattended[0]!.contentHash) });
     fs.writeFileSync(path.join(t.home, 'mods', 'hello', 'uninstall.request'), JSON.stringify({ packageHash: `sha256:${'0'.repeat(64)}` }));
     await p.scan();
-    expect(b.broker.cards().filter((c) => c.kind === 'grant')).toHaveLength(1);
+    expect(b.broker.cards().filter((c) => c.kind === 'grant')).toHaveLength(2);
     expect(uninstallRequested(t.home, 'hello')).toBeNull();
   });
 

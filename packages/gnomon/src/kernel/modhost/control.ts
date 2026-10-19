@@ -48,6 +48,7 @@ import { raiseInstallCard } from '../broker/install-card.js';
 import type { ManifestEventSink } from '../manifest/refusal.js';
 import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js';
 import { appendGrantRow, effectiveInstall, readGrants } from '../manifest/grants.js';
+import { HSID_PATTERN, mintId } from '@a-company/gnomon-contracts';
 
 const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 const STAGED_FILE = /^card-[0-9A-HJKMNP-TV-Z]{26}\.json$/;
@@ -99,19 +100,21 @@ export function requestStart(home: string, name: string, at = new Date()): void 
   fs.writeFileSync(path.join(d, START_REQUEST), `${JSON.stringify({ at: at.toISOString() })}\n`, { mode: 0o600 });
 }
 
-export function requestUninstall(home: string, name: string, packageHash: string, at = new Date()): void {
+/** `claims` are what the requester SAYS (attended, its session); the card shows them as claims, never as facts. */
+export function requestUninstall(home: string, name: string, packageHash: string, at = new Date(), claims: { attended?: boolean; hsid?: string } = {}): void {
   const d = modDirOf(home, name);
   fs.mkdirSync(d, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(path.join(d, UNINSTALL_REQUEST), `${JSON.stringify({ packageHash, at: at.toISOString() })}\n`, { mode: 0o600 });
+  fs.writeFileSync(path.join(d, UNINSTALL_REQUEST), `${JSON.stringify({ packageHash, at: at.toISOString(), attended: claims.attended === true, ...(claims.hsid ? { hsid: claims.hsid } : {}) })}\n`, { mode: 0o600 });
 }
 
-export function uninstallRequested(home: string, name: string): { packageHash: string } | null {
+export function uninstallRequested(home: string, name: string): { packageHash: string; attended: boolean; hsid: string | null } | null {
   try {
     const p = path.join(modDirOf(home, name), UNINSTALL_REQUEST);
     const st = fs.lstatSync(p);
     if (!st.isFile() || st.size > 4096) return null;
-    const v = JSON.parse(fs.readFileSync(p, 'utf8')) as { packageHash?: unknown };
-    return typeof v.packageHash === 'string' && /^sha256:[0-9a-f]{64}$/.test(v.packageHash) ? { packageHash: v.packageHash } : null;
+    const v = JSON.parse(fs.readFileSync(p, 'utf8')) as { packageHash?: unknown; attended?: unknown; hsid?: unknown };
+    if (typeof v.packageHash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(v.packageHash)) return null;
+    return { packageHash: v.packageHash, attended: v.attended === true, hsid: typeof v.hsid === 'string' && HSID_PATTERN.test(v.hsid) ? v.hsid : null };
   } catch {
     return null;
   }
@@ -146,6 +149,11 @@ export function modNames(home: string): string[] {
     return [];
   }
   return names.filter((n) => MOD_NAME.test(n)).sort().slice(0, MAX_PICKUP_MODS);
+}
+
+/** The card line naming what a staged file only CLAIMS (Aegis C4): who asked, from which session, attended or not. */
+export function claimLine(what: string, requestedBy: string, hsid: string | null | undefined, attended: boolean): string {
+  return `claimed by ${what} (unverified): requested by ${requestedBy} · session ${hsid ?? 'none'} · attended ${attended ? 'yes' : 'no'}`;
 }
 
 export interface PendingStaged {
@@ -256,20 +264,24 @@ export class StagedCardPickup {
         continue;
       }
       const source = row.source;
+      const cardId = mintId('card'); // Aegis C4: the grant.uninstall row names exactly this card, never a fallback
       const card = await broker
         .raise({
           kind: 'grant',
+          cardId,
           requestedBy: `p:${authority.ns ?? '00000000'}/cli`,
-          attended: true,
-          detail: { action: 'mod.uninstall', name, packageHash: row.packageHash, manifestHash: row.manifestHash, source },
-          lines: [`Uninstall mod ${name}`, `packageHash ${row.packageHash}`, `source ${source}`, 'removes its install grant; its snapshots are kept for rollback'],
+          // Aegis C4: never asserted by the kernel; the request's claim, shown as a claim
+          attended: req.attended,
+          ...(req.hsid ? { hsid: req.hsid } : {}),
+          detail: { action: 'mod.uninstall', name, packageHash: row.packageHash, manifestHash: row.manifestHash, source, claimed: { attended: req.attended, hsid: req.hsid } },
+          lines: [`Uninstall mod ${name}`, `packageHash ${row.packageHash}`, `source ${source}`, 'removes its install grant; its snapshots are kept for rollback', claimLine('the uninstall request', `p:${authority.ns ?? '00000000'}/cli`, req.hsid, req.attended)],
           decisions: ['allow', 'deny'],
           effect: async (decision) => {
             dropUninstall(home, name);
             if (decision !== 'allow') return;
             const now = effectiveInstall(readGrants(home, authority), name);
             if (!now || now.packageHash !== row.packageHash) return; // re-pinned meanwhile: nothing to remove
-            appendGrantRow(home, authority, { kind: 'grant.uninstall', name, packageHash: row.packageHash, cardId: this.#uninstallCards.get(name) ?? row.cardId });
+            appendGrantRow(home, authority, { kind: 'grant.uninstall', name, packageHash: row.packageHash, cardId });
             await host.stop(name, 'uninstalled').catch(() => undefined);
             emit('manifest.uninstall', { name, diff: { removed: [row.packageHash] }, manifestHash: row.manifestHash });
             if (source.startsWith('linked:')) emit('mod.unlinked', { name });

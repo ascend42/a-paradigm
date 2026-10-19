@@ -285,7 +285,7 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
         refused(io.stderr, 'not_found', 'not-installed', `${name} is not installed`);
         return MOD_EXIT_REFUSED;
       }
-      requestUninstall(home, name, row.packageHash, deps.now?.());
+      requestUninstall(home, name, row.packageHash, deps.now?.(), { attended: true });
       io.stdout.write(`UNINSTALL REQUESTED  ${name}\n  the kernel raises an uninstall card (root key, Touch ID) in the GUI; nothing is removed until you allow it\n`);
       return MOD_EXIT_OK;
     }

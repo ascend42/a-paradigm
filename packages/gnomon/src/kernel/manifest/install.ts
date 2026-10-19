@@ -477,7 +477,11 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   }
   const shown = blockFor(derived);
   const children = (shown.block as { children: Array<{ text: string }> }).children;
-  return { record: rec, detail: derived, lines: children.map((c) => c.text), flags: shown.flags, detailHash: sha(canonicalJson(derived)) };
+  // Aegis C4: requestedBy / hsid / attended come from the writable staged file: shown as CLAIMS, after the kernel-composed lines
+  const claim = wrappedBlock([`claimed by the staged record (unverified): requested by ${rec.card.requestedBy} · session ${rec.card.hsid ?? 'none'} · attended ${rec.card.attended ? 'yes' : 'no'}`]);
+  const lines = [...children.map((c) => c.text), ...(claim.block as { children: Array<{ text: string }> }).children.map((c) => c.text)];
+  const flags = [...new Set([...shown.flags, ...claim.flags])].sort();
+  return { record: rec, detail: derived, lines, flags, detailHash: sha(canonicalJson(derived)) };
 }
 
 /**
