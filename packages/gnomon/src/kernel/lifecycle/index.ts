@@ -9,3 +9,5 @@ export * from './idle.js';
 export * from './process-control.js';
 export * from './children.js';
 export * from './daemon.js';
+export * from './exit-codes.js';
+export * from './ready.js';

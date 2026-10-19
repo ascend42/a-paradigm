@@ -82,10 +82,11 @@ export function sigusr1Refusal(execArgv: readonly string[] = process.execArgv): 
  * node flags in argv and must bake it into its sea-config `execArgv` — the
  * foreground guard refuses it otherwise (fail closed).
  */
-export function reexecArgs(opts: Pick<DetachOptions, 'entry' | 'home' | 'idleMs'>): string[] {
+export function reexecArgs(opts: Pick<DetachOptions, 'entry' | 'home' | 'idleMs'> & { readyFd?: number }): string[] {
   const args = opts.entry ? [DISABLE_SIGUSR1, opts.entry] : [];
   args.push('--foreground', '--home', opts.home);
   if (opts.idleMs !== undefined) args.push('--idle-ms', String(opts.idleMs));
+  if (opts.readyFd !== undefined) args.push('--ready-fd', String(opts.readyFd)); // ready.ts handshake
   return args;
 }
 

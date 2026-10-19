@@ -117,7 +117,7 @@ describe('G-DMN-01 one daemon per user', () => {
     const first = await startChild(h);
     expect(first.ready.pid).toBe(first.child.pid);
     const second = spawnSync(process.execPath, ['--disable-sigusr1', GNOMOND, '--foreground', '--home', h], { encoding: 'utf8', timeout: 10_000 });
-    expect(second.status).toBe(1);
+    expect(second.status).toBe(4); // DAEMON_EXIT.superseded (exit-codes.ts)
     expect(second.stderr).toMatch(/already running.*\[already-running\]/);
     expect(second.stderr).toContain('daemon.lock.refused');
     expect(readPidfile(h)!.pid).toBe(first.child.pid);
@@ -293,7 +293,7 @@ describe('T-2026-10-18-030 (1): SIGUSR1 cannot open the V8 inspector in the kern
   it('FALSIFIER: gnomond --foreground refuses to start without --disable-sigusr1 (no pidfile, no socket)', () => {
     const h = home();
     const r = spawnSync(process.execPath, [GNOMOND, '--foreground', '--home', h], { encoding: 'utf8', timeout: 10_000 });
-    expect(r.status).toBe(1);
+    expect(r.status).toBe(78); // DAEMON_EXIT.config: never restarted in a loop
     expect(r.stderr).toContain('[sigusr1-enabled]');
     expect(existsSync(pidPathOf(h))).toBe(false);
   });

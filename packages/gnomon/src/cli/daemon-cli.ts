@@ -19,13 +19,19 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   canConnectSocket,
+  DAEMON_EXIT,
   DEFAULT_IDLE_EXIT_MS,
+  exitCodeOfClass,
+  exitCodeOfLaunch,
+  exitCodeOfRefusal,
+  launchDaemon,
+  STARTUP_FAULT_CLASS,
+  writeReady,
   daemonState,
   isLifecycleRefusal,
   resolveGnomonHome,
   selectSocketPath,
   sigusr1Refusal,
-  spawnDetachedDaemon,
   startDaemon,
 } from '../kernel/lifecycle/index.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
@@ -51,12 +57,14 @@ export function refuseDevHome(home: string, err: { write(s: string): unknown } =
 export const EXIT_OK = 0;
 export const EXIT_REFUSED = 1;
 export const EXIT_NOT_RUNNING = 3;
-export const EXIT_USAGE = 64;
+export const EXIT_USAGE = DAEMON_EXIT.usage;
 
 export interface DaemonArgs {
   foreground: boolean;
   home?: string;
   idleMs?: number;
+  /** The activator's inherited ready pipe (§2.4 rule 2, ready.ts); set only by launchDaemon's re-exec. */
+  readyFd?: number;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -73,6 +81,10 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       const v = Number(argv[++i]);
       if (!Number.isInteger(v) || v < 0) return '--idle-ms needs a non-negative integer';
       out.idleMs = v;
+    } else if (a === '--ready-fd') {
+      const v = Number(argv[++i]);
+      if (!Number.isInteger(v) || v < 3) return '--ready-fd needs an inherited fd >= 3';
+      out.readyFd = v;
     } else return `unknown argument ${a}`;
   }
   return out;
@@ -106,12 +118,16 @@ export function daemonHomeOf(args: { home?: string }): string {
  * is run directly.
  */
 export async function runForeground(args: DaemonArgs, runtime: { execArgv: readonly string[] } = { execArgv: process.execArgv }): Promise<number> {
-  if (refuseDevHome(daemonHomeOf(args))) return EXIT_REFUSED;
+  // Exit codes are classified (exit-codes.ts): config faults never restart, transient ones may.
+  if (refuseDevHome(daemonHomeOf(args))) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
   const sig = sigusr1Refusal(runtime.execArgv);
   if (sig) {
     process.stderr.write(`gnomond: ${sig} [sigusr1-enabled]\n  next: run gnomond via its bin (the shebang passes --disable-sigusr1) or \`node --disable-sigusr1 <gnomond.js> --foreground\` (Node >= 22.14)\n`);
-    return EXIT_REFUSED;
+    return exitCodeOfClass(STARTUP_FAULT_CLASS['sigusr1-enabled']);
   }
+  // Launched by an activator: its stderr pipe goes away once we are ready, and a write to it then is EPIPE, not a crash.
+  let toStderr = (s: string): void => void process.stderr.write(s);
+  if (args.readyFd !== undefined) process.stderr.on('error', () => undefined);
   let opened: { helper: { close(): Promise<void> } } | null = null;
   try {
     const home = daemonHomeOf(args);
@@ -123,7 +139,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     } catch (e) {
       if (e instanceof IdentityError) {
         process.stderr.write(`gnomond: the hardware identity of ${home} cannot be opened: ${e.message} [identity-${e.reason}]\n`);
-        return EXIT_REFUSED;
+        return exitCodeOfClass(STARTUP_FAULT_CLASS.identity);
       }
       throw e;
     }
@@ -132,12 +148,16 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       home,
       ...(hw ? { rootAuthority: hw.root, approvalsKey: hw.approvals, helper: hw.helper } : {}),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
-      onEvent: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
+      onEvent: (e) => toStderr(`${JSON.stringify(e)}\n`),
     });
     const onSignal = (): void => void handle.shutdown('signal');
     process.once('SIGTERM', onSignal);
     process.once('SIGINT', onSignal);
     process.stdout.write(`${JSON.stringify({ ready: true, pid: handle.pidfile.pid, socketPath: handle.pidfile.socketPath })}\n`);
+    if (args.readyFd !== undefined) {
+      writeReady(args.readyFd, { pid: handle.pidfile.pid, startedAt: handle.pidfile.startedAt, socketPath: handle.pidfile.socketPath, kernelPrincipal: handle.kernelPrincipal });
+      toStderr = () => undefined; // the activator stopped reading; detached events went nowhere before the handshake too
+    }
     await handle.exited;
     process.off('SIGTERM', onSignal);
     process.off('SIGINT', onSignal);
@@ -146,44 +166,60 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     await opened?.helper.close().catch(() => undefined);
     if (isLifecycleRefusal(err)) {
       process.stderr.write(`${err.message} [${err.reason}]\n`);
-      return EXIT_REFUSED;
+      return exitCodeOfRefusal(err.reason);
     }
-    throw err;
+    throw err; // gnomond.ts maps it to DAEMON_EXIT.internal
   }
 }
 
 /**
- * Client activation (§2.4 rule 2): re-exec gnomond with the clean env and
- * wait for the socket (5 × 200 ms, then a little longer for a cold start).
+ * Client activation (§2.4 rule 2): re-exec gnomond with the clean env and wait
+ * for its `gnomonReady:v1` line on the inherited ready pipe (ready.ts). A
+ * kernel that dies first is reported with its stderr tail and classified exit
+ * code; an activator that lost the race attaches to the winner (exit 0).
  */
-export async function activateDetached(args: DaemonArgs, gnomondEntry: string, resolveHome: (a: { home?: string }) => string = homeOf): Promise<number> {
+export async function activateDetached(
+  args: DaemonArgs,
+  gnomondEntry: string,
+  resolveHome: (a: { home?: string }) => string = homeOf,
+  launch: typeof launchDaemon = launchDaemon,
+): Promise<number> {
   const home = resolveHome(args);
-  if (refuseDevHome(home)) return EXIT_REFUSED;
+  if (refuseDevHome(home)) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
   const sock = socketOf(home);
   if (!sock) {
     process.stderr.write('gnomond: no safe endpoint path for this home [no-safe-endpoint]\n');
-    return EXIT_REFUSED;
+    return exitCodeOfRefusal('no-safe-endpoint');
   }
   if (await canConnectSocket(sock)) {
     process.stdout.write(`gnomond already running at ${sock}\n`);
     return EXIT_OK;
   }
   const isSea = path.resolve(process.execPath) === path.resolve(gnomondEntry);
-  spawnDetachedDaemon({
+  const outcome = await launch({
     execPath: process.execPath,
     ...(isSea ? {} : { entry: gnomondEntry }),
     home,
+    socketPath: sock,
     ...(args.idleMs !== undefined ? { idleMs: args.idleMs } : {}),
   });
-  for (let i = 0; i < 25; i++) {
-    await new Promise((r) => setTimeout(r, 200));
-    if (await canConnectSocket(sock)) {
-      process.stdout.write(`gnomond started at ${sock}\n`);
-      return EXIT_OK;
-    }
+  switch (outcome.kind) {
+    case 'ready':
+      process.stdout.write(`gnomond started at ${outcome.identity.socketPath} (pid ${outcome.identity.pid})\n`);
+      break;
+    case 'attached':
+      process.stdout.write(`gnomond already running at ${outcome.socketPath}\n`);
+      break;
+    case 'exited':
+      process.stderr.write(
+        `gnomond: exited ${outcome.code ?? outcome.signal} before ready [${outcome.class}]\n${outcome.stderrTail.replace(/^/gm, '  | ')}${outcome.stderrTail.endsWith('\n') || outcome.stderrTail === '' ? '' : '\n'}`,
+      );
+      break;
+    case 'timeout':
+      process.stderr.write(`gnomond: not ready in time (pid ${outcome.pid ?? '?'} left running) [transient]\n${outcome.stderrTail.replace(/^/gm, '  | ')}\n`);
+      break;
   }
-  process.stderr.write('gnomond: did not come up within 5 s\n');
-  return EXIT_REFUSED;
+  return exitCodeOfLaunch(outcome);
 }
 
 /** `gnomon daemon status|stop|--detach`. */

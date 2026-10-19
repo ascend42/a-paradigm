@@ -221,8 +221,8 @@ describe('#dev-launch: production-home guard hardening (Aegis C1)', () => {
     const err: string[] = [];
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c: string | Uint8Array) => (err.push(String(c)), true));
     try {
-      expect(await runForeground({ foreground: true, home: w.devHome, idleMs: 1000 })).toBe(1);
-      expect(await activateDetached({ foreground: false, home: w.devHome }, path.join(w.userHome, 'no-such-gnomond.js'))).toBe(1);
+      expect(await runForeground({ foreground: true, home: w.devHome, idleMs: 1000 })).toBe(78); // DAEMON_EXIT.config
+      expect(await activateDetached({ foreground: false, home: w.devHome }, path.join(w.userHome, 'no-such-gnomond.js'))).toBe(78);
     } finally {
       spy.mockRestore();
     }

@@ -2178,7 +2178,7 @@ flows:
     description: >-
       $daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation —
       `gnomon daemon --detach` re-execs gnomond with the clean env and home in
-      argv, then waits for the socket; (2) one per user — home 0700 read back,
+      argv, then waits for its ready line (item 3 below); (2) one per user — home 0700 read back,
       endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired
       (live holder refuses with daemon.lock.refused, dead holder reclaimed);
       (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or
@@ -2245,6 +2245,23 @@ flows:
       exited | alive | unverifiable (no snapshot / failed re-check / win32
       ⇒ unverifiable, never folded). Residual: a descendant reparented to
       init before the stop began is unreachable; lstart is 1 s resolution.
+      T-2026-10-19-009 item 3 (readiness handshake, Orca Adopt 3): the
+      activator (lifecycle/ready.ts launchDaemon, used by `gnomon daemon
+      --detach` and plain gnomond) spawns the kernel with an inherited ready
+      pipe (`--ready-fd 3`) and a bounded stderr tail (8 KiB); the kernel
+      writes one gnomonReady:v1 {pid, startedAt, socketPath,
+      kernelPrincipal} line once it holds the lock and serves, then stops
+      writing events to the activator's stderr (EPIPE swallowed). No socket
+      polling. A child that exits superseded (lost lock race) or transient
+      before ready makes the activator wait for the winner's socket and
+      report `attached` (exit 0, no error); no ready line on a live child
+      (Windows fallback) = one socket wait. Exit codes are defined ONLY in
+      lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
+      75 transient, 78 config; config/superseded never restart, transient
+      and internal restart with backoff. Every LifecycleRefusalReason is
+      classified by a Record (a new reason is a compile error until it is).
+      Tests: test/daemon-ready.test.ts (POSIX, registry row),
+      test/daemon-exit-codes.test.ts (every platform).
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
@@ -2260,6 +2277,8 @@ flows:
       - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
       - test/daemon-children-tree.test.ts
+      - test/daemon-ready.test.ts
+      - test/daemon-exit-codes.test.ts
       - test/socket-ownership.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]

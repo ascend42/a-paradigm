@@ -48,7 +48,7 @@ describe('the kernel requires --disable-sigusr1', () => {
   it('FALSIFIER: gnomond --foreground refuses without the flag before it opens the home', async () => {
     const t = tempHome();
     try {
-      expect(await runForeground({ foreground: true, home: t.home, idleMs: 1000 }, { execArgv: [] })).toBe(1);
+      expect(await runForeground({ foreground: true, home: t.home, idleMs: 1000 }, { execArgv: [] })).toBe(78); // DAEMON_EXIT.config
     } finally {
       t.cleanup();
     }
