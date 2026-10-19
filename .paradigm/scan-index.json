@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-a146abdc087256f6e",
-    "generatedAt": "2026-10-19T17:13:06.248Z",
+    "generatedAt": "2026-10-19T17:54:33.790Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 106,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 124,
+      "module": 126,
       "cli": 3,
       "tool": 45,
       "tool-group": 10,
@@ -3233,6 +3233,19 @@
       ],
       "componentType": "module"
     },
+    "trace-capture": {
+      "id": "trace-capture",
+      "name": "Trace Capture",
+      "symbol": "#trace-capture",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-a146abdc087256f6e/packages/gnomon/.purpose",
+      "description": "#trace-capture (src/kernel/trace/): a CORE per-project audit mode, on every home and build. The human switches it on per project folder (mode.ts setTraceMode / traceModeOf / tracedFolders; the CLI is `gnomon trace on|off|status`). State lives ONLY in <home>/trace-folders.json (0600 in the 0700 home, keyed by realpath, temp + rename, O_NOFOLLOW; a damaged or wider file reads off); no project file or config can enable it, and the session profile read- and write-denies the whole Gnomon home, so a session cannot flip its own tracing. The supervisor reads the mode at every session.open and resume for the session cwd and, when on, tees every stdin line (#stdin) and every stdout line, as sent and received, plus kernel ctl notes (spawn argv with the system prompt redacted and env NAMES only, line-dropped, drain-interrupt, stdin-close, exit, dropped, capped, redacted) to <cwd-realpath>/.gnomon/trace/<hsid with ':' as '-'>.jsonl, one {t, dir:'in'|'out'|'ctl', line} per LF line. trace/ is 0700 with a .gitignore of '*' (the repo's own .gitignore is never touched); files are O_EXCL|O_NOFOLLOW 0600 (a resume reopens its own plain owner-only file); a symlink at .gnomon, trace or the file refuses trace-unsafe, reported on session.sandbox{traced:false, traceRefused} and the session runs untraced. Traced sessions carry traced:true on session.sandbox and in status. The writer never blocks a session: one async writer behind a bounded queue (1024 records / 8 MiB, configured bounds), drops counted into a ctl note; the file is bounded at 50 MiB (ctl capped, then stop); the exit path never awaits the writer. Every record is checked for key or token shapes (PEM private key, grt:v1:, sk-ant-, the session env's secret-named values) and such a line is replaced by {redacted, hash, bytes}. The session policy read- and write-denies <root>/.gnomon/trace (subpath, the dir included) and write-denies <root>/.gnomon (literal) for the cwd and worktree, always. Residuals: the file holds prompt and tool text in clear (git-ignored, session-denied, owner-only, but readable by any process of the user outside a session); renaming an ancestor of the cwd is not denied; exact-folder match only (a session opened in a subfolder is not traced); win32 has no POSIX modes (sessions there refuse sandbox-unavailable). The kernel cannot use the Paradigm logger (zero deps): visibility is the kernel log row.",
+      "visualTags": [],
+      "related": [
+        "#stdin"
+      ],
+      "componentType": "module"
+    },
     "rules-cli": {
       "id": "rules-cli",
       "name": "Rules Cli",
@@ -3265,6 +3278,17 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-a146abdc087256f6e/packages/gnomon/.purpose",
       "description": "#gnomon-guide `gnomon guide [<topic>]` (src/cli/guide-cli.ts, src/cli/guide-topics.ts; spec §5 \"gnomon guide\" paragraph and §9.7, TD-2026-10-19-648 item 10, T-2026-10-19-015). A CLI-only, pull-only verb: not a socket method, so abiId and clientApiId do not move (§3.1 I3). Topics spawn, claims, cards and refusals are COMPILED IN: built in guide-topics.ts from literals and from the frozen @a-company/gnomon-contracts descriptors (verb refusal lists, card kinds, decisions, refusal codes with gate, retriability, exit code and default next step), bundled by tsup; no topic file exists on disk, in the home or in a repo, and the guide modules read no file, env or cwd (threat 11). Every rendered topic carries the abiId and clientApiId this binary was built with. No topic lists the topics (exit 0); an unknown topic or extra arguments are refused BAD_REQUEST usage, exit 64, without echoing the argument. Nothing injects a guide into a session, prompt, envelope or card, and a guide grants nothing; status stays the man page (F4). Honesty check G-HON-08 (test/honesty.ts scanGuides, gated in test/honesty.test.ts): a topic naming a verb, param, refusal code or reason, or CLI flag the frozen descriptors lack fails the build; durations go through the G-HON-07 docs scan. The id G-HON-08 is named in the tests only; the spec assigns it when amended.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gnomon-trace": {
+      "id": "gnomon-trace",
+      "name": "Gnomon Trace",
+      "symbol": "#gnomon-trace",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-a146abdc087256f6e/packages/gnomon/.purpose",
+      "description": "#gnomon-trace `gnomon trace [--home <abs>] [--last | --session <hsid> | --since <ISO>] [--json] [--full]` (src/cli/trace-cli.ts) — a CLI-only, READ-ONLY audit timeline of a session for dogfood audits by the founder and by Claude. Not a socket method: abiId and clientApiId do not move. Joins per hsid (a) the kernel-log rows of the session (envelope session or payload hsid, approval rows of its cards by cardId, the daemon.start before and daemon.exit after), read from the segment files with a write-free open (immutable=1 when no -wal exists; readOnly beside a live -wal) and a hash-chain check (envelope hash + prev link; signatures are left to gnomon replay and the output says so); (b) the Claude Code transcript <claude dir>/projects/<realpath cwd, non-alphanumerics to '-'>/<uuid>.jsonl (prompts, replies, tool_use, tool_result); (c) the raw capture traceDirOf(<realpath cwd>)/traceFileName(hsid) — that is <project>/.gnomon/trace/<hsid with ':' as '-'>.jsonl — when present (unparsable lines skipped; a redacted record {redacted, hash, bytes} is shown as [redacted], never reconstructed). The header shows whether the session was traced, from its session.sandbox row (traced / traceRefused). src/kernel/trace/capture.ts mirrors the capture builder's traceFileName/traceDirOf (reconciled at merge). Ordered by time, stable per source. Each turn.sent contentHash is checked against the transcript prompt with the supervisor's own turnContentHash: \"✓ matches log\" / \"✗ hash mismatch\"; a prompt the log never sent is \"not in log\". Human output uses the readout helpers and sanitizeDisplayText on every shown string, truncated unless --full; --json is one {session:{hsid,uuid,cwd,principal}, log, transcript, capture, turns, usage, events:[{t, source: log|transcript|capture, kind, ...}]} per session per line. The output contains prompt text (help says so). Subcommands `gnomon trace on | off | status [--home] [--folder]` keep per-project trace mode in <home>/trace-folders.json (0600, keyed by realpath) via src/kernel/trace/mode.ts (setTraceMode, traceModeOf, tracedFolders — a minimal copy reconciled at merge with the capture builder's module); they are the only writes, and only to that file.",
       "visualTags": [],
       "related": [],
       "componentType": "module"
@@ -11441,6 +11465,16 @@
       "visualTags": [],
       "related": []
     },
+    "stdin": {
+      "id": "stdin",
+      "name": "Stdin",
+      "symbol": "#stdin",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-a146abdc087256f6e/packages/gnomon/.purpose",
+      "description": "Referenced from #trace-capture",
+      "visualTags": [],
+      "related": []
+    },
     "upgrade-handler": {
       "id": "upgrade-handler",
       "name": "Upgrade Handler",
@@ -19387,6 +19421,10 @@
       "category": "components",
       "id": "always-rules"
     },
+    "#trace-capture": {
+      "category": "components",
+      "id": "trace-capture"
+    },
     "#rules-cli": {
       "category": "components",
       "id": "rules-cli"
@@ -19398,6 +19436,10 @@
     "#gnomon-guide": {
       "category": "components",
       "id": "gnomon-guide"
+    },
+    "#gnomon-trace": {
+      "category": "components",
+      "id": "gnomon-trace"
     },
     "#local-runner": {
       "category": "components",
@@ -23714,6 +23756,10 @@
     "#rules-revoke.": {
       "category": "components",
       "id": "rules-revoke."
+    },
+    "#stdin": {
+      "category": "components",
+      "id": "stdin"
     },
     "~symbol-typed-logging": {
       "category": "aspects",

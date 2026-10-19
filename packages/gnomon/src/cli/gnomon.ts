@@ -18,6 +18,7 @@ import { runLogCommand } from './log-cli.js';
 import { runModCommand } from './mod-cli.js';
 import { runPlaceholderBin } from './placeholder.js';
 import { runReplayCommand } from './replay-cli.js';
+import { runTraceCommand } from './trace-cli.js';
 import { runRulesCommand } from './rules-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runSetupCommand } from './setup-cli.js';
@@ -125,6 +126,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'replay') {
   // M1.12 slice 3: `gnomon replay [<home>] [--expect <hash>]` (#kernel-log, replay-cli.ts, G-KRN-01)
   runReplayCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'trace') {
+  // #gnomon-trace: `gnomon trace` read-only audit timeline; `trace on|off|status` per-project trace mode (trace-cli.ts)
+  runTraceCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

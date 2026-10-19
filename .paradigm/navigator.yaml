@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T17:13:06.271Z'
+generated: '2026-10-19T17:54:33.814Z'
 structure: {}
 key_files:
   config:
@@ -290,9 +290,11 @@ symbols:
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
   '#purpose-component-always-rules': packages/gnomon/
+  '#purpose-component-trace-capture': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
   '#purpose-component-rules-revoke': packages/gnomon/
   '#purpose-component-gnomon-guide': packages/gnomon/
+  '#purpose-component-gnomon-trace': packages/gnomon/
   '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/
@@ -1372,6 +1374,7 @@ symbols:
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/
+  '#purpose-ref-component-stdin': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/
