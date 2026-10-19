@@ -6,9 +6,9 @@
 //!     Rust over the kernel's real hello; the served bundle re-hashes to the pin);
 //!   - another kernel key ⇒ refused (the listener is not "our" kernel);
 //!   - another bundle hash ⇒ refused before any connection.
-//! SKIPS (prints why, passes) when the build machine had no node or
-//! packages/gnomon/dist is not built: CI's native job does not build the TS
-//! side; the founder's machine and the gnomon test job do.
+//! SKIPS (prints why, passes) on a dev machine with no node or no built
+//! packages/gnomon/dist. Under CI=true it FAILS instead: the native job builds
+//! the kernel dist first (gnomon.yml), so a skip there would hide a regression.
 #![cfg(target_os = "macos")]
 
 use std::io::{BufRead, BufReader, Write};
