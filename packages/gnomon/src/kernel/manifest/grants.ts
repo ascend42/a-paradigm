@@ -174,6 +174,17 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
   }
   const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], pins: [], other: [], rejected: [] };
   const egressLines = new Map<string, number[]>();
+  // Aegis C1 (M1.11 slice 3): a pin row (install/uninstall) whose createdAt is not later than the newest pin
+  // row already seen for that name is a REPLAY (an old row re-appended) and never resolves. Rollback and
+  // re-pins sign a fresh createdAt, so they still apply. Deleting a line is the residual (§15.1 row 30).
+  const newestPin = new Map<string, number>();
+  const replayed = (r: { name: string; createdAt: string }): boolean => {
+    const t = Date.parse(r.createdAt);
+    const prev = newestPin.get(r.name);
+    if (!Number.isFinite(t) || (prev !== undefined && t <= prev)) return true;
+    newestPin.set(r.name, t);
+    return false;
+  };
   text.split('\n').forEach((raw, i) => {
     const line = i + 1;
     if (raw.trim() === '') return;
@@ -194,10 +205,12 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     const row = rec.row as unknown as GrantRow | { kind: GrantRowKind };
     switch (row.kind) {
       case 'grant.install':
+        if (replayed(row as GrantInstallRow)) return void out.rejected.push({ line, reason: 'replay' });
         out.installs.push(row as GrantInstallRow);
         out.pins.push(row as GrantInstallRow);
         break;
       case 'grant.uninstall':
+        if (replayed(row as GrantUninstallRow)) return void out.rejected.push({ line, reason: 'replay' });
         out.pins.push(row as GrantUninstallRow);
         break;
       case 'grant.capability': {

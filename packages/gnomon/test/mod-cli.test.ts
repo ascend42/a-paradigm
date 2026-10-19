@@ -272,6 +272,22 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     expect(uninstallRequested(t.home, 'hello')).toBeNull();
   });
 
+  it('Aegis C1 falsifier: an old install row re-appended after an uninstall is rejected `replay` and does not revive the mod', async () => {
+    const t = setup();
+    const { b, p } = await installed(t);
+    const file = path.join(t.home, 'grants.jsonl');
+    const installLine = fs.readFileSync(file, 'utf8').split('\n').find((l) => l.includes('"grant.install"'))!;
+    await t.run(['uninstall', 'hello']);
+    await p.scan();
+    const card = b.broker.cards().find((c) => c.kind === 'grant')!;
+    await b.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: b.sig(card.cardId, 'allow', card.contentHash) });
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
+    fs.appendFileSync(file, `${installLine}\n`);
+    const g = readGrants(t.home, t.auth);
+    expect(effectiveInstall(g, 'hello')).toBeUndefined();
+    expect(g.rejected.map((r) => r.reason)).toContain('replay');
+  });
+
   it('falsifier: an uninstall card denied leaves the install; a stale request (the pin moved) is dropped without a card', async () => {
     const t = setup();
     const { b, p } = await installed(t);
