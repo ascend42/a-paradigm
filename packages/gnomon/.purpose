@@ -2324,7 +2324,7 @@ flows:
       activator (lifecycle/ready.ts launchDaemon, used by `gnomon daemon
       --detach` and plain gnomond) spawns the kernel with an inherited ready
       pipe (`--ready-fd 3`) and a bounded stderr tail (8 KiB; after an exit
-      the tail is judged once stderr ends, capped at 250 ms); the kernel
+      the tail is judged once stderr ends, waiting at most 250 ms); the kernel
       writes one gnomonReady:v1 {pid, startedAt, socketPath,
       kernelPrincipal} line once it holds the lock and serves, then stops
       writing events to the activator's stderr (EPIPE swallowed). No socket
