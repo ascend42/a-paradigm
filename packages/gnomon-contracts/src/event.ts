@@ -336,6 +336,40 @@ export type ResumeRefusal = (typeof RESUME_REFUSALS)[number];
 export const TRACE_REFUSALS = ['trace-unsafe', 'trace-unavailable'] as const;
 export type TraceRefusalValue = (typeof TRACE_REFUSALS)[number];
 
+/**
+ * `approval.voice.disarm{armId, reason}` (§14.7 Disarm, §2.4 rule 11; TD-2026-10-19-194, founder ruling: reserved
+ * now, the one deliberate clientApiId move before any client ships). CLOSED. One value per §14.7 disarm trigger:
+ * idle / hard expiry, decision limit, either connection closing, a second voice connection, screen lock, display
+ * sleep, user switch, system sleep, voice-policy change, config change, any approval.mode.set, the disarm phrase,
+ * GUI / CLI Disarm, an unenrolled decision phrase, daemon exit (incl. the drain), helper exit, a gate-arm handle or
+ * challenge miss, 3 consecutive refused intents on a reversible arm. `display-sleep`, `user-switch` and
+ * `system-sleep` were added to the ruled list because §14.7 names them as triggers apart from screen lock.
+ */
+export const VOICE_DISARM_REASONS = [
+  'idle',
+  'hard',
+  'limit',
+  'conn-closed',
+  'voice-conn',
+  'screen-lock',
+  'display-sleep',
+  'user-switch',
+  'system-sleep',
+  'policy',
+  'config',
+  'mode-set',
+  'phrase',
+  'gui',
+  'cli',
+  'unenrolled',
+  'daemon-exit',
+  'helper-exit',
+  'handle-miss',
+  'challenge-miss',
+  'refused-streak',
+] as const;
+export type VoiceDisarmReason = (typeof VOICE_DISARM_REASONS)[number];
+
 /** Always-rule match modes (TD-2026-10-19-528 F2): closed; only an exact match of (repoKey, tool, inputHash). */
 export const ALWAYS_RULE_MATCHES = ['exact'] as const;
 export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];

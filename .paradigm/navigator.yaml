@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T17:54:33.814Z'
+generated: '2026-10-19T21:42:53.811Z'
 structure: {}
 key_files:
   config:
@@ -257,6 +257,7 @@ symbols:
   '#purpose-component-contract-card-v1': packages/gnomon-contracts/
   '#purpose-component-contract-gnomon-rpc-v1': packages/gnomon-contracts/
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
+  '#purpose-component-contract-voice-allowlist': packages/gnomon-contracts/
   '#purpose-component-gui': packages/gnomon-gui/
   '#purpose-component-gui-setup': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
@@ -292,6 +293,7 @@ symbols:
   '#purpose-component-always-rules': packages/gnomon/
   '#purpose-component-trace-capture': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
+  '#purpose-component-mode-cli': packages/gnomon/
   '#purpose-component-rules-revoke': packages/gnomon/
   '#purpose-component-gnomon-guide': packages/gnomon/
   '#purpose-component-gnomon-trace': packages/gnomon/
@@ -1356,6 +1358,8 @@ symbols:
   ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
+  '#purpose-ref-component-gnomon-voice': packages/gnomon-contracts/
+  $purpose-ref-flow-voice-approval: packages/gnomon-contracts/
   '#purpose-ref-component-ns-hint': packages/gnomon-gui/
   '#purpose-ref-component-ns-cwd': packages/gnomon-gui/
   '#purpose-ref-component-launch': packages/gnomon-gui/
@@ -1374,7 +1378,6 @@ symbols:
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/
-  '#purpose-ref-component-stdin': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/

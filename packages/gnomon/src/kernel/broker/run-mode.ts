@@ -52,8 +52,10 @@
  *     mode is looser gets its own `approval.mode.set` down to the repo's new
  *     mode, and a pending card loosening it is withdrawn;
  *   - loosening: a `strictness` card (allow | deny; allow is fresh presence
- *     and hand-only in classes.ts, so never a cached unlock, never `always`,
- *     never voice) whose first line names the scope and the step; on allow
+ *     in classes.ts, so never a cached unlock and never `always`; it is never
+ *     voice because gnomon-contracts' VOICE_ALLOWLIST — the authoritative
+ *     hand-only list, spec §14.7, TD-2026-10-19-194 — names no approving row
+ *     for `strictness`) whose first line names the scope and the step; on allow
  *     its effect re-checks the ceiling and writes `approval.mode.set{…,
  *     presence:'fresh'}`. One pending loosening card per scope: the same
  *     request gets the same card, a different one is refused until it is
