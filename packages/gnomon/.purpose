@@ -1676,6 +1676,10 @@ components:
       write-deny literal (memoryImports, MAX_IMPORT_TARGETS) and the repo
       context is staged before the policy; permission.ts deniedWrite matches
       `steering`, so those writes are auto-denied with no card.
+      F3a: an SBPL-inexpressible import target refuses only its dir; F4: the
+      subtree audit collects /^claude[^/]*\.md$/i (CLAUDE.local.md too); F1a:
+      dangling symlinked dirs resolved lexically (outside/node_modules refuse).
+      Residual: carded Bash can restructure ancestor dirs mid-session.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
