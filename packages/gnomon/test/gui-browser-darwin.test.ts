@@ -88,10 +88,14 @@ async function chrome(): Promise<Cdp> {
   };
 }
 
+/** The CDP session of the tab `render` opened last (for follow-up evaluations in the same page). */
+let lastSession = '';
+
 /** Open `url` in a new tab and poll `expr` (a string-valued JS expression) until `ok` holds; returns the last value. */
 async function render(cdp: Cdp, url: string, expr: string, ok: (v: string) => boolean): Promise<string> {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = (await cdp.send('Target.attachToTarget', { targetId, flatten: true })) as { sessionId: string };
+  lastSession = sessionId;
   await cdp.send('Page.navigate', { url }, sessionId);
   const end = Date.now() + RENDER_MS;
   let last = '';
@@ -155,6 +159,20 @@ describe.skipIf(!HAVE_CHROME)('#gui in headless Chrome (darwin smoke)', () => {
     const conn = await render(cdp, url, `(document.getElementById('conn')||{}).textContent||''`, (v) => v.includes('·'));
     expect(conn).toContain('·'); // `<principal> · <connId>`: set only after the authed hello
     expect(conn).not.toBe('connecting');
+    // dogfood 2026-10-19: the app sat in the top ~290 px of a 2000×1030 window. The desk (three columns) must grow
+    // to fill the viewport, and a narrow window must not scroll sideways.
+    const measure = async (width: number, height: number): Promise<{ desk: number; vh: number; sw: number; vw: number }> => {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, lastSession);
+      const expr = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(JSON.stringify({ desk: document.querySelector('.desk').getBoundingClientRect().height, vh: innerHeight, sw: document.documentElement.scrollWidth, vw: innerWidth })))))`;
+      const r = (await cdp.send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }, lastSession)) as { result?: { value?: unknown } };
+      return JSON.parse(String(r.result?.value)) as { desk: number; vh: number; sw: number; vw: number };
+    };
+    const wide = await measure(2000, 1030);
+    expect(wide.vh).toBe(1030);
+    expect(wide.desk).toBeGreaterThanOrEqual(0.8 * wide.vh);
+    const narrow = await measure(640, 900);
+    expect(narrow.desk).toBeGreaterThanOrEqual(0.7 * narrow.vh);
+    expect(narrow.sw).toBeLessThanOrEqual(narrow.vw);
   });
 });
 

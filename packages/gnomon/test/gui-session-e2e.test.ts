@@ -24,7 +24,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, type Transport } from '../../gnomon-gui/src/core/client.js';
 import { parseLaunchFragment } from '../../gnomon-gui/src/core/launch.js';
-import { GuiStore, rowSummary } from '../../gnomon-gui/src/core/store.js';
+import { chatItems, GuiStore, rowSummary } from '../../gnomon-gui/src/core/store.js';
 import { runDevCommand, startDevKernel, type DevCliIo, type DevKernel } from '../src/cli/dev-cli.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
@@ -124,5 +124,13 @@ describe.skipIf(!SANDBOX_OK)('#gui ⇄ real kernel: a GUI-credential page lists 
     await c.call('session.send', { hsid: opened.hsid, content: [{ text: 'second from the gui' }] });
     expect(await waitFor(() => results() >= 2, 20_000)).toBe(true);
     expect(store.transcript(opened.hsid).filter((r) => r.kind === 'turn.sent')).toHaveLength(2);
+    expect(store.liveCount()).toBe(1);
+
+    // the chat view (dogfood round 2): the conversation in order, the hook/partial/rate-limit noise hidden
+    const chat = chatItems(store.transcript(opened.hsid)).items.map((i) => [i.role, i.text]);
+    const conv = chat.filter(([role]) => role === 'user' || role === 'assistant');
+    expect(conv).toEqual([['user', 'first from the gui'], ['assistant', 'hi'], ['user', 'second from the gui'], ['assistant', 'hi']]);
+    expect(chat.filter(([role]) => role === 'result')).toHaveLength(2);
+    expect(chat.map(([, text]) => text).join('\n')).not.toMatch(/hook_started|stream_event|rate_limit/);
   }, 90_000);
 });
