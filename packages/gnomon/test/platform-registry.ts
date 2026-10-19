@@ -111,6 +111,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/web-sandbox.test.ts', platforms: ['darwin'], na: 'Windows parity phase (P8-D78): the restricted-token + job-object transport profile; linux has no transport profile in §15.5 (the endpoint refuses, asserted platform-independently in test/web-units.test.ts)' },
   // M1.11 #mod-host: the darwin default-deny `mod` profile with a real sandboxed mod child.
   { test: 'test/mod-sandbox.test.ts', platforms: ['darwin'], sibling: 'test/mod-host.test.ts', na: 'enforcement of the darwin `mod` profile under sandbox-exec; win32 (restricted token + ACL + job object) is the parity phase (P8-D78); linux has no mod profile and refuses sandbox-unavailable (asserted in test/mod-host.test.ts on every platform)' },
+  // T-2026-10-19-009 item 1: descendant sweep on stop over real processes (ps table, setsid escape).
+  { test: 'test/daemon-children-tree.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/daemon-children.test.ts', na: 'the sweep logic (witness re-check, pid reuse, unverifiable verdict) runs on every platform with a faked process table in test/daemon-children.test.ts; Windows has no ps or process groups, so its row has no snapshot and the verdict is unverifiable until the job-object parity phase (P8-D78)' },
   // PR-4 #kernel-log, macOS-first (P8-D78): file modes, kill -9, p99 + per-OS memory metric.
   { test: 'test/kernel-log-posix.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only ACLs instead of modes, and the private-bytes memory metric (§16 memory row) are measured there' },
   // T-2026-10-17-009(a) quarantine: completing a quarantine records the kernel pub into an owner-only keys/ dir (POSIX modes in #identity).

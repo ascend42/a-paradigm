@@ -21,11 +21,29 @@
  * TZ=UTC so the witness does not move with the system timezone. COST: on macOS
  * each read forks /bin/ps — call it only at track() and in the start-up
  * sweep, never on a hot path.
+ *
+ * `snapshot()` (descendant sweep, T-2026-10-19-009 item 1) lists the whole
+ * process table ASYNCHRONOUSLY (`ps -A -o pid=,ppid=,pgid=,lstart=`, TZ=UTC,
+ * absolute path, from the kernel — never from inside a session sandbox), so
+ * a stop can find a tool child that left the session's group (`setsid`,
+ * daemonize) and check each one's `lstart` witness before it is signalled.
+ * null = no snapshot (ps missing / failed / Windows) ⇒ the tree verdict is
+ * `unverifiable`, never `exited`. Witness resolution is one second: a pid
+ * recycled within the same wall-clock second as its predecessor started is
+ * indistinguishable (accepted, reported).
  */
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFile, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 
 export type GroupProbe = 'alive' | 'gone' | 'foreign' | 'unsupported';
+
+/** One row of a process-table snapshot; `start` is the lstart witness. */
+export interface ProcRow {
+  pid: number;
+  ppid: number;
+  pgid: number;
+  start: string;
+}
 
 export interface ProcessControl {
   fidelity: 'full' | 'partial';
@@ -34,6 +52,10 @@ export interface ProcessControl {
   signalGroup(pgid: number, signal: 'SIGTERM' | 'SIGKILL'): boolean;
   /** Start-time witness of `pid`, or null when it cannot be read. */
   startTime(pid: number): string | null;
+  /** Async process-table snapshot (POSIX), or null when none can be taken. Absent ⇒ tree verdict `unverifiable`. */
+  snapshot?(): Promise<ProcRow[] | null>;
+  /** Signal ONE pid (a descendant outside the group); false when gone or not signallable. */
+  signalPid?(pid: number, signal: 'SIGTERM' | 'SIGKILL'): boolean;
 }
 
 function errno(err: unknown): string | undefined {
@@ -60,6 +82,35 @@ function linuxStartTime(pid: number): string | null {
   }
 }
 
+const PS_PATHS = ['/bin/ps', '/usr/bin/ps'];
+
+/** Parse `ps -A -o pid=,ppid=,pgid=,lstart=` output; malformed lines are skipped. */
+export function parsePsTable(out: string): ProcRow[] {
+  const rows: ProcRow[] = [];
+  for (const line of out.split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S.*\S)\s*$/.exec(line);
+    if (m) rows.push({ pid: Number(m[1]), ppid: Number(m[2]), pgid: Number(m[3]), start: `lstart:${m[4]!.replace(/\s+/g, ' ')}` });
+  }
+  return rows;
+}
+
+function posixSnapshot(): Promise<ProcRow[] | null> {
+  const ps = PS_PATHS.find((p) => existsSync(p));
+  if (!ps) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    execFile(
+      ps,
+      ['-A', '-o', 'pid=,ppid=,pgid=,lstart='],
+      { encoding: 'utf8', env: { LC_ALL: 'C', TZ: 'UTC', PATH: '/usr/bin:/bin' }, timeout: 5_000, maxBuffer: 32 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return resolve(null);
+        const rows = parsePsTable(stdout);
+        resolve(rows.length > 0 ? rows : null);
+      },
+    );
+  });
+}
+
 const POSIX_BASE = {
   fidelity: 'full' as const,
   probeGroup(pgid: number): GroupProbe {
@@ -75,6 +126,16 @@ const POSIX_BASE = {
     if (!Number.isInteger(pgid) || pgid <= 1) return false;
     try {
       process.kill(-pgid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  snapshot: posixSnapshot,
+  signalPid(pid: number, signal: 'SIGTERM' | 'SIGKILL'): boolean {
+    if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return false;
+    try {
+      process.kill(pid, signal);
       return true;
     } catch {
       return false;

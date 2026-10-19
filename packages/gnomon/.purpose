@@ -2219,6 +2219,17 @@ flows:
       Falsifier: a running gnomond receiving SIGUSR1 opens no inspector and
       keeps running (test/daemon-lifecycle.test.ts, control arm proves the
       detector). A SEA must bake the flag into sea-config execArgv.
+      T-2026-10-19-009 item 1 (descendant sweep): before the first signal a
+      session / local-runner stop takes an ASYNC process-table snapshot from
+      the kernel (process-control snapshot(): `ps -A -o
+      pid=,ppid=,pgid=,lstart=`, TZ=UTC, execFile — never spawnSync on the
+      event loop), collects the leader's descendants (ppid walk) and group
+      members with their lstart witnesses, SIGTERMs out-of-group ones with
+      the group, and after the grace SIGKILLs only pids whose witness still
+      matches (a recycled pid is never signalled). session.exited{tree} =
+      exited | alive | unverifiable (no snapshot / failed re-check / win32
+      ⇒ unverifiable, never folded). Residual: a descendant reparented to
+      init before the stop began is unreachable; lstart is 1 s resolution.
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
@@ -2233,6 +2244,7 @@ flows:
       - test/reexec-env.test.ts
       - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
+      - test/daemon-children-tree.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 

@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { daemonHomeOf } from '../src/cli/daemon-cli.js';
-import { DaemonChildren, PROCESS_CONTROL, processControlFor, sweepOrphans, type GroupProbe, type ProcessControl } from '../src/kernel/lifecycle/index.js';
+import { DaemonChildren, descendantsOf, parsePsTable, PROCESS_CONTROL, processControlFor, sweepOrphans, type GroupProbe, type ProcessControl, type ProcRow } from '../src/kernel/lifecycle/index.js';
 
 const K = 'p:ab12/kernel';
 const UNPROV = 'p:00000000/kernel';
@@ -237,4 +237,82 @@ describe('§2.4 rule 1: the daemon learns its home only from --home', () => {
   it.todo('G-WIN-02: %USERPROFILE%\\.gnomon gets an owner-only DACL via the signed helper (icacls fallback), inheritance removed, and the ACL read back equals the expected one (Windows parity phase, P8-D78; ensureGnomonHome refuses unsafe-home on win32 until then)');
   it.todo('G-DMN-03 (Windows): client activation over the named pipe (Windows parity phase, P8-D78)');
   it.todo('G-DMN-05 (Windows): the clean re-exec env keeps the §16 Windows allowlist (USERPROFILE SYSTEMROOT …) and nothing else (Windows parity phase, P8-D78)');
+});
+
+describe('descendant sweep on stop (T-2026-10-19-009 item 1): tree verdict exited | alive | unverifiable', () => {
+  type TreeCtl = ReturnType<typeof childControl> & { pidSignals: string[] };
+  /** childControl plus a scripted process table: `table()` is consulted at every snapshot. */
+  function treeControl(table: () => ProcRow[] | null, onSignal?: (pid: number, sig: string) => void): TreeCtl {
+    const pidSignals: string[] = [];
+    return Object.assign(childControl(), {
+      pidSignals,
+      snapshot: async () => table(),
+      signalPid: (pid: number, sig: 'SIGTERM' | 'SIGKILL') => {
+        pidSignals.push(`${pid}:${sig}`);
+        onSignal?.(pid, sig);
+        return true;
+      },
+    });
+  }
+  let leader = 0;
+  const ESCAPED = 2_000_000_001; // a fake pid outside the leader's group (setsid)
+  async function stopOne(control: ReturnType<typeof childControl>): Promise<{ survivors: number; tree: unknown }> {
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const children = new DaemonChildren({ append: async (kind, payload) => void rows.push({ kind, payload }), control, boot: BOOT, graceMs: 150 });
+    const s = sleeper();
+    control.register(s);
+    leader = s.pid!;
+    await children.track({ kind: 'session', child: s, hsid: 'h-tree' });
+    const survivors = await children.stopAll('stop');
+    return { survivors, tree: rows.find((r) => r.kind === 'session.exited')?.payload.tree };
+  }
+  const L = (): ProcRow => ({ pid: leader, ppid: process.pid, pgid: leader, start: 'L' });
+
+  it('an escaped (setsid) descendant gets SIGTERM, then SIGKILL while its witness matches; verdict exited once gone', async () => {
+    let killed = false;
+    const control = treeControl(
+      () => [L(), ...(killed ? [] : [{ pid: ESCAPED, ppid: leader, pgid: ESCAPED, start: 'A' }])],
+      (_pid, sig) => void (sig === 'SIGKILL' && (killed = true)),
+    );
+    const r = await stopOne(control);
+    expect(control.pidSignals).toEqual([`${ESCAPED}:SIGTERM`, `${ESCAPED}:SIGKILL`]);
+    expect(r).toEqual({ survivors: 0, tree: 'exited' });
+  });
+
+  it('a pid reused with a different start time is never SIGKILLed', async () => {
+    let calls = 0;
+    const control = treeControl(() => {
+      calls++;
+      // first snapshot: our descendant started at A; afterwards the pid is a stranger started at B
+      return [L(), { pid: ESCAPED, ppid: calls === 1 ? leader : 1, pgid: ESCAPED, start: calls === 1 ? 'A' : 'B' }];
+    });
+    const r = await stopOne(control);
+    expect(control.pidSignals.filter((s) => s.endsWith('SIGKILL'))).toEqual([]);
+    expect(r.tree).toBe('exited');
+  });
+
+  it('a descendant that will not die is reported alive and counted as a survivor', async () => {
+    const control = treeControl(() => [L(), { pid: ESCAPED, ppid: leader, pgid: ESCAPED, start: 'A' }]);
+    expect(await stopOne(control)).toEqual({ survivors: 1, tree: 'alive' });
+  });
+
+  it('no snapshot (ps unavailable), a failed re-check and a control without snapshot are unverifiable, never exited', async () => {
+    expect((await stopOne(treeControl(() => null))).tree).toBe('unverifiable');
+    let n = 0;
+    const flaky = treeControl(() => (++n === 1 ? [L(), { pid: ESCAPED, ppid: leader, pgid: ESCAPED, start: 'A' }] : null));
+    expect((await stopOne(flaky)).tree).toBe('unverifiable');
+    expect((await stopOne(childControl())).tree).toBe('unverifiable'); // the Windows parity row has no snapshot
+  });
+
+  it('descendantsOf walks ppid and adds group members, never the root or init; parsePsTable reads lstart rows', () => {
+    const rows: ProcRow[] = [
+      { pid: 10, ppid: 1, pgid: 10, start: 'r' },
+      { pid: 11, ppid: 10, pgid: 10, start: 'a' },
+      { pid: 12, ppid: 11, pgid: 12, start: 'b' },
+      { pid: 13, ppid: 1, pgid: 10, start: 'c' },
+      { pid: 14, ppid: 1, pgid: 14, start: 'd' },
+    ];
+    expect(descendantsOf(rows, 10).map((r) => r.pid).sort()).toEqual([11, 12, 13]);
+    expect(parsePsTable('  10     1    10 Mon Oct 19 10:00:00 2026\njunk\n')).toEqual([{ pid: 10, ppid: 1, pgid: 10, start: 'lstart:Mon Oct 19 10:00:00 2026' }]);
+  });
 });
