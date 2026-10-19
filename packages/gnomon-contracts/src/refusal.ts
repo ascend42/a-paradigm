@@ -256,6 +256,8 @@ export const CLIENT_LOCAL_REFUSAL_REASONS = ['hello-not-offered', 'client-nonce-
  *   - `stale-claim`, `claim-expired`, `claim-superseded`: CAS_LOST on contract.claim (§7.4, TD-2026-10-19-648 item 11; M2.2).
  *   - `cursor-epoch`: BAD_REQUEST on log.read when the `since` cursor names another log (§5, item 8).
  *   - `draining`: a turn or session.open refused while the kernel drains for an upgrade (§2.4 rule 11, TD-2026-10-19-908).
+ *   - `cwd-hint-too-long`: BAD_REQUEST on gui.open when cwdHint passes 1024 UTF-8 bytes (§2.4 rule 8, slice A3).
+ *   - `connection-gone`: ENGINE on gui.open when the caller's connection closed while the launch grant was minted (A3).
  */
 export const D98_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({
   'stale-claim': { code: 'CAS_LOST', gate: 'claim' },
@@ -263,6 +265,8 @@ export const D98_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gat
   'claim-superseded': { code: 'CAS_LOST', gate: 'claim' },
   'cursor-epoch': { code: 'BAD_REQUEST', gate: 'usage' },
   draining: { code: 'ENGINE', gate: 'transport' },
+  'cwd-hint-too-long': { code: 'BAD_REQUEST', gate: 'usage' },
+  'connection-gone': { code: 'ENGINE', gate: 'transport' },
 });
 export const CAS_LOST_REASONS = ['stale-claim', 'claim-expired', 'claim-superseded'] as const;
 export const D98_REFUSAL_REASONS = Object.freeze(Object.keys(D98_REASON_ROUTES)) as readonly string[];
