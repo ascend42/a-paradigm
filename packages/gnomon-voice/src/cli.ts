@@ -8,7 +8,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { SpawnedAudioIO } from './audio-io.js';
+import { DARWIN_IO_BINARY, SpawnedAudioIO } from './audio-io.js';
+import { fileURLToPath } from 'node:url';
 import { recordEnrolment } from './enrol.js';
 import { createSherpaEngines, loadSherpa } from './engines/sherpa.js';
 import { GnomonKernelLink, nsOf, type VoiceConnectProfile } from './kernel-link.js';
@@ -64,7 +65,7 @@ function parse(argv: string[]): { pos: string[]; flags: Record<string, string | 
 }
 
 function defaultIoBinary(): string {
-  return process.env.GNOMON_VOICE_IO ?? 'gnomon-voice-io';
+  return process.env.GNOMON_VOICE_IO ?? fileURLToPath(new URL(`../${DARWIN_IO_BINARY}`, import.meta.url));
 }
 
 async function engines(home: string): Promise<VoiceEngines> {

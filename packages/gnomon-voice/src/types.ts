@@ -27,6 +27,10 @@ export interface RouteInfo {
   route: string;
   /** true when the capture path runs voice-processing AEC (or the route cannot echo, e.g. wired headphones) */
   aec: boolean;
+  /** the binary's AEC kind (gnomon-voice-io:v1 route/mic `aec`): vpio | headphones | none */
+  aecKind?: 'vpio' | 'headphones' | 'none';
+  /** output transport (e.g. built-in, bluetooth, usb) from the mic/route event */
+  transport?: string;
 }
 
 export interface PlaybackResult {

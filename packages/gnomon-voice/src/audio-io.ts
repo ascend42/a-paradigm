@@ -1,55 +1,81 @@
 /**
  * @symbol #gnomon-voice
  *
- * SpawnedAudioIO: the thin adapter over V2b's `gnomon-voice-io` Swift binary. ASSUMED wire (align once V2b
- * reports its protocol; everything protocol-specific lives in this file):
+ * SpawnedAudioIO: the thin adapter over V2b's `gnomon-voice-io` binary, protocol `gnomon-voice-io:v1`
+ * (packages/gnomon-voice/io-darwin; everything wire-specific lives in this file):
  *
- *   frame = u8 type · u32 BE payload length · payload        (both directions, stdin and stdout)
- *   type 0x01 PCM     payload = f64 BE t0 (wall ms of the first sample) · s16 LE mono samples
- *                     stdout: capture at the binary's rate; stdin: the samples of the last `play` control
- *   type 0x02 JSON    payload = UTF-8 JSON object
- *     from the binary:  {ev:'ready', sampleRate, route, aec} · {ev:'hotkey', down, at} · {ev:'mic', muted}
- *                       {ev:'route', route, aec} · {ev:'level', db} · {ev:'played', id, t0, t1, completed}
- *     to the binary:    {op:'play', id, sampleRate} (followed by one PCM frame) · {op:'stop'} · {op:'quit'}
+ *   frame = type:u8 · length:u32le · payload (max 1 MiB), both directions
+ *   0x01 JSON      stdin: commands {op, id?} — info, mic.on, mic.off, play.stop, play.end, route.get, hotkeys.set, quit;
+ *                  stdout: one {type:'reply', id, op, ok, error?, message?} per command, and
+ *                  {type:'event', event, tUs, …}: ready, mic, route{route, aec: vpio|headphones|none}, level{rmsDBFS,
+ *                  peakDBFS}, playback.start{audibleAtUs}, playback.end{reason, utteranceEnded, queuedMs}, hotkey{action,
+ *                  phase}, engine, error, exit
+ *   0x02 capture   stdout: hostTimeNs:u64le · sampleRate:u32le · s16le mono (16 kHz, after VPIO AEC)
+ *   0x03 playback  stdin: sampleRate:u32le · s16le mono (8–48 kHz)
  *
- * The binary never writes audio to disk and neither does this adapter (G-VOX-05): PCM moves pipe → memory only.
+ * Clocks: tUs / hostTimeNs are the binary's monotonic capture clock; they are mapped to wall ms by one offset taken
+ * at the first timed message (ASSUMED: hostTimeNs/1000 and tUs share that clock). A played chunk's window is
+ * [playback.start.audibleAtUs, playback.end.tUs] — the voice.turn.agent t0/t1. The binary only REPORTS hotkeys; this
+ * adapter sends mic.on at start and mic.off at close. PCM moves pipe → memory only (G-VOX-05).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { AudioIO, AudioIOEvents, PlaybackResult, RouteInfo } from './types.js';
 
-export const FRAME_PCM = 0x01;
-export const FRAME_JSON = 0x02;
-export const MAX_IO_FRAME = 4 * 1024 * 1024;
+export const PROTOCOL = 'gnomon-voice-io:v1' as const;
+export const FRAME_JSON = 0x01;
+export const FRAME_CAPTURE = 0x02;
+export const FRAME_PLAYBACK = 0x03;
+export const MAX_IO_FRAME = 1024 * 1024;
 
 export function encodeFrame(type: number, payload: Buffer): Buffer {
+  if (payload.length > MAX_IO_FRAME) throw new RangeError('#gnomon-voice: audio-io frame exceeds 1 MiB');
   const h = Buffer.alloc(5);
   h.writeUInt8(type, 0);
-  h.writeUInt32BE(payload.length, 1);
+  h.writeUInt32LE(payload.length, 1);
   return Buffer.concat([h, payload]);
 }
 
-export function encodePcm(t0: number, samples: Float32Array): Buffer {
-  const p = Buffer.alloc(8 + samples.length * 2);
-  p.writeDoubleBE(t0, 0);
-  for (let i = 0; i < samples.length; i++) p.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(samples[i]! * 32767))), 8 + i * 2);
-  return encodeFrame(FRAME_PCM, p);
+function s16(samples: Float32Array, into: Buffer, at: number): void {
+  for (let i = 0; i < samples.length; i++) into.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(samples[i]! * 32767))), at + i * 2);
 }
 
-export function decodePcm(payload: Buffer): { t0: number; samples: Float32Array } {
-  const t0 = payload.readDoubleBE(0);
-  const n = (payload.length - 8) >> 1;
+/** 0x02 capture frame (the binary's stdout; tests build them with this). */
+export function encodeCapture(hostTimeNs: bigint, sampleRate: number, samples: Float32Array): Buffer {
+  const p = Buffer.alloc(12 + samples.length * 2);
+  p.writeBigUInt64LE(hostTimeNs, 0);
+  p.writeUInt32LE(sampleRate, 8);
+  s16(samples, p, 12);
+  return encodeFrame(FRAME_CAPTURE, p);
+}
+
+export function decodeCapture(payload: Buffer): { hostTimeNs: bigint; sampleRate: number; samples: Float32Array } {
+  const n = (payload.length - 12) >> 1;
   const samples = new Float32Array(n);
-  for (let i = 0; i < n; i++) samples[i] = payload.readInt16LE(8 + i * 2) / 32768;
-  return { t0, samples };
+  for (let i = 0; i < n; i++) samples[i] = payload.readInt16LE(12 + i * 2) / 32768;
+  return { hostTimeNs: payload.readBigUInt64LE(0), sampleRate: payload.readUInt32LE(8), samples };
+}
+
+/** 0x03 playback frames for one chunk (split under the 1 MiB cap). */
+export function encodePlayback(sampleRate: number, samples: Float32Array): Buffer[] {
+  const per = Math.floor((MAX_IO_FRAME - 4) / 2);
+  const out: Buffer[] = [];
+  for (let i = 0; i < samples.length; i += per) {
+    const part = samples.subarray(i, Math.min(samples.length, i + per));
+    const p = Buffer.alloc(4 + part.length * 2);
+    p.writeUInt32LE(sampleRate, 0);
+    s16(part, p, 4);
+    out.push(encodeFrame(FRAME_PLAYBACK, p));
+  }
+  return out;
 }
 
 /** Incremental frame splitter; throws on an oversize frame (the stream is then unusable). */
 export class FrameReader {
-  #buf = Buffer.alloc(0);
+  #buf: Buffer = Buffer.alloc(0);
   push(chunk: Buffer, out: (type: number, payload: Buffer) => void): void {
     this.#buf = this.#buf.length ? Buffer.concat([this.#buf, chunk]) : chunk;
     while (this.#buf.length >= 5) {
-      const len = this.#buf.readUInt32BE(1);
+      const len = this.#buf.readUInt32LE(1);
       if (len > MAX_IO_FRAME) throw new RangeError(`#gnomon-voice: audio-io frame of ${len} bytes exceeds the cap`);
       if (this.#buf.length < 5 + len) return;
       const type = this.#buf.readUInt8(0);
@@ -73,37 +99,68 @@ export class Emitter {
   }
 }
 
+/** The bundled binary (V2b): packages/gnomon-voice/bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io. */
+export const DARWIN_IO_BINARY = 'bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io';
+
 export interface SpawnedAudioIOOptions {
-  /** path of the gnomon-voice-io binary */
   binary: string;
   args?: string[];
-  captureSampleRate?: number;
+  /** wall clock (ms); default Date.now */
+  now?: () => number;
+  /** spawn seam for tests */
+  spawnImpl?: typeof spawn;
+}
+
+export class AudioIOError extends Error {
+  constructor(readonly op: string, readonly code: string, message: string) {
+    super(message);
+    this.name = 'AudioIOError';
+  }
 }
 
 export class SpawnedAudioIO implements AudioIO {
-  readonly captureSampleRate: number;
+  readonly captureSampleRate = 16_000;
   readonly #o: SpawnedAudioIOOptions;
   readonly #ev = new Emitter();
+  readonly #now: () => number;
   #child: ChildProcess | undefined;
   #route: RouteInfo = { route: 'unknown', aec: false };
-  #pending: { id: string; resolve: (r: PlaybackResult) => void } | undefined;
+  #offsetMs: number | undefined;
+  #nextId = 1;
+  readonly #replies = new Map<string, { resolve: (r: Record<string, unknown>) => void; reject: (e: Error) => void }>();
+  #pending: { resolve: (r: PlaybackResult) => void; t0?: number } | undefined;
+  /** capture/level frames are dropped unless the mic is on (after mic.on ok; off once mic.off is sent or mic:false arrives) */
+  #micOn = false;
+  #disclaimed: boolean | undefined;
+  #killOnExit: (() => void) | undefined;
 
   constructor(o: SpawnedAudioIOOptions) {
     this.#o = o;
-    this.captureSampleRate = o.captureSampleRate ?? 16_000;
+    this.#now = o.now ?? Date.now;
   }
 
   on<E extends keyof AudioIOEvents>(event: E, cb: AudioIOEvents[E]): () => void {
     return this.#ev.on(event, cb);
   }
-
   routeInfo(): RouteInfo {
     return this.#route;
   }
 
+  /** monotonic µs → wall ms (one offset, fixed at the first timed message) */
+  #wall(us: number): number {
+    const ms = us / 1000;
+    this.#offsetMs ??= this.#now() - ms;
+    return ms + this.#offsetMs;
+  }
+
   async start(): Promise<void> {
-    const child = spawn(this.#o.binary, this.#o.args ?? [], { stdio: ['pipe', 'pipe', 'inherit'] });
+    // V2b Aegis duty 3: a clean env (the disclaim marker is the binary's own re-spawn signal, never inherited)
+    const env = { ...process.env };
+    delete env.GNOMON_VOICE_IO_DISCLAIMED;
+    const child = (this.#o.spawnImpl ?? spawn)(this.#o.binary, this.#o.args ?? [], { stdio: ['pipe', 'pipe', 'inherit'], env });
     this.#child = child;
+    this.#killOnExit = () => void child.kill();
+    process.once('exit', this.#killOnExit);
     const reader = new FrameReader();
     child.stdout!.on('data', (chunk: Buffer) => {
       try {
@@ -114,20 +171,62 @@ export class SpawnedAudioIO implements AudioIO {
       }
     });
     child.on('exit', (code, sig) => {
-      this.#pending?.resolve({ t0: Date.now(), t1: Date.now(), completed: false });
-      this.#pending = undefined;
+      this.#micOn = false;
+      if (this.#killOnExit) process.removeListener('exit', this.#killOnExit);
+      this.#settlePlayback(false);
+      for (const r of this.#replies.values()) r.reject(new AudioIOError('*', 'exit', 'gnomon-voice-io exited'));
+      this.#replies.clear();
       this.#ev.emit('closed', `gnomon-voice-io exited (${sig ?? code})`);
     });
     await new Promise<void>((resolve, reject) => {
       child.once('error', reject);
       child.once('spawn', () => resolve());
     });
+    // V2b Aegis duty 1: never start capture unless the binary disclaimed TCC responsibility (else the Microphone
+    // grant would attach to the parent app)
+    const info = await this.command('info');
+    if (info.disclaimed === false || this.#disclaimed === false) {
+      await this.close();
+      throw new AudioIOError('info', 'not-disclaimed', 'Gnomon voice will not turn the mic on: the mic permission would attach to the wrong app (gnomon-voice-io is not disclaimed).');
+    }
+    await this.command('mic.on');
+    this.#micOn = true;
+    const r = await this.command('route.get').catch(() => undefined);
+    if (r) this.#setRoute(r);
+  }
+
+  /** One command → its one reply; rejects with AudioIOError on ok:false (e.g. mic-denied, hotkey-taken). */
+  command(op: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const id = `c${this.#nextId++}`;
+    return new Promise((resolve, reject) => {
+      this.#replies.set(id, { resolve, reject });
+      this.#child?.stdin?.write(encodeFrame(FRAME_JSON, Buffer.from(JSON.stringify({ op, id, ...extra }))));
+    });
+  }
+
+  #setRoute(m: Record<string, unknown>): void {
+    const r = m.route as { kind?: unknown; transport?: unknown; device?: unknown } | string | undefined;
+    const name = typeof r === 'string' ? r : String(r?.kind ?? r?.transport ?? r?.device ?? 'unknown');
+    // aec claim: VoiceProcessingIO is on, or the route cannot echo (headphones)
+    const kind = m.aec === 'vpio' || m.aec === 'headphones' || m.aec === 'none' ? m.aec : undefined;
+    const transport = typeof m.transport === 'string' ? m.transport : typeof (r as { transport?: unknown })?.transport === 'string' ? String((r as { transport: string }).transport) : this.#route.transport;
+    this.#route = { route: name, aec: kind === 'vpio' || kind === 'headphones', ...(kind ? { aecKind: kind } : {}), ...(transport ? { transport } : {}) };
+    this.#ev.emit('route', this.#route);
+  }
+
+  #settlePlayback(completed: boolean, at?: number): void {
+    const p = this.#pending;
+    if (!p) return;
+    this.#pending = undefined;
+    const t1 = at ?? this.#now();
+    p.resolve({ t0: p.t0 ?? t1, t1, completed });
   }
 
   #onFrame(type: number, payload: Buffer): void {
-    if (type === FRAME_PCM) {
-      const { t0, samples } = decodePcm(payload);
-      this.#ev.emit('frame', { samples, sampleRate: this.captureSampleRate, t0 });
+    if (type === FRAME_CAPTURE) {
+      if (!this.#micOn) return; // duty 2
+      const c = decodeCapture(payload);
+      this.#ev.emit('frame', { samples: c.samples, sampleRate: c.sampleRate, t0: this.#wall(Number(c.hostTimeNs / 1000n)) });
       return;
     }
     if (type !== FRAME_JSON) return;
@@ -137,52 +236,68 @@ export class SpawnedAudioIO implements AudioIO {
     } catch {
       return;
     }
-    switch (m.ev) {
+    if (m.type === 'reply') {
+      const r = typeof m.id === 'string' ? this.#replies.get(m.id) : undefined;
+      if (!r) return;
+      this.#replies.delete(m.id as string);
+      if (m.ok === true) r.resolve(m);
+      else r.reject(new AudioIOError(String(m.op), String(m.error ?? 'error'), String(m.message ?? m.error ?? 'refused')));
+      return;
+    }
+    if (m.type !== 'event') return;
+    const at = typeof m.tUs === 'number' ? this.#wall(m.tUs) : this.#now();
+    switch (m.event) {
       case 'ready':
-      case 'route':
-        if (typeof m.route === 'string') this.#route = { route: m.route, aec: m.aec === true };
-        this.#ev.emit('route', this.#route);
+        if (typeof m.disclaimed === 'boolean') this.#disclaimed = m.disclaimed;
+        if (m.route !== undefined) this.#setRoute(m);
         break;
-      case 'hotkey':
-        this.#ev.emit('hotkey', m.down === true, typeof m.at === 'number' ? m.at : Date.now());
+      case 'route':
+        if (m.route !== undefined) this.#setRoute(m);
         break;
       case 'mic':
-        this.#ev.emit('mic', m.muted === true);
+        if (m.on !== true) this.#micOn = false; // duty 2
+        this.#ev.emit('mic', m.on !== true);
+        if (typeof m.aec === 'string') this.#setRoute({ route: this.#route.route, aec: m.aec, ...(m.transport !== undefined ? { transport: m.transport } : {}) });
         break;
       case 'level':
-        if (typeof m.db === 'number') this.#ev.emit('level', m.db);
+        if (this.#micOn && typeof m.rmsDBFS === 'number') this.#ev.emit('level', m.rmsDBFS);
         break;
-      case 'played':
-        if (this.#pending && m.id === this.#pending.id && typeof m.t0 === 'number' && typeof m.t1 === 'number') {
-          const p = this.#pending;
-          this.#pending = undefined;
-          p.resolve({ t0: m.t0, t1: m.t1, completed: m.completed === true });
-        }
+      case 'hotkey':
+        // only the talk key maps to push-to-talk; mic-toggle / mode-toggle are left to the controller UI (not wired yet)
+        if (m.action === 'talk') this.#ev.emit('hotkey', m.phase === 'down', at);
+        break;
+      case 'playback.start':
+        if (this.#pending && this.#pending.t0 === undefined) this.#pending.t0 = typeof m.audibleAtUs === 'number' ? this.#wall(m.audibleAtUs) : at;
+        break;
+      case 'playback.end':
+        if (m.reason === 'drained' && m.utteranceEnded !== true) break; // queue ran dry mid-utterance: keep waiting
+        this.#settlePlayback(m.reason === 'drained', at);
+        break;
+      case 'exit':
+        this.#ev.emit('closed', 'gnomon-voice-io exit event');
         break;
     }
-  }
-
-  #write(type: number, payload: Buffer): void {
-    this.#child?.stdin?.write(encodeFrame(type, payload));
   }
 
   play(chunk: { id: string; samples: Float32Array; sampleRate: number }): Promise<PlaybackResult> {
     if (this.#pending) return Promise.reject(new Error('#gnomon-voice: one chunk plays at a time'));
     return new Promise((resolve) => {
-      this.#pending = { id: chunk.id, resolve };
-      this.#write(FRAME_JSON, Buffer.from(JSON.stringify({ op: 'play', id: chunk.id, sampleRate: chunk.sampleRate })));
-      this.#child?.stdin?.write(encodePcm(Date.now(), chunk.samples));
+      this.#pending = { resolve };
+      for (const f of encodePlayback(chunk.sampleRate, chunk.samples)) this.#child?.stdin?.write(f);
+      void this.command('play.end').catch(() => undefined);
     });
   }
 
   stopPlayback(): void {
-    if (this.#pending) this.#write(FRAME_JSON, Buffer.from(JSON.stringify({ op: 'stop' })));
+    if (this.#pending) void this.command('play.stop').catch(() => undefined);
   }
 
   async close(): Promise<void> {
     const c = this.#child;
     if (!c || c.exitCode !== null) return;
-    this.#write(FRAME_JSON, Buffer.from(JSON.stringify({ op: 'quit' })));
+    this.#micOn = false; // duty 2: drop frames from the moment mic.off is sent
+    await Promise.race([this.command('mic.off').catch(() => undefined), new Promise((r) => setTimeout(r, 500))]);
+    c.stdin?.write(encodeFrame(FRAME_JSON, Buffer.from(JSON.stringify({ op: 'quit', id: 'quit' }))));
     c.stdin?.end();
     await new Promise<void>((resolve) => {
       const t = setTimeout(() => (c.kill(), resolve()), 2000);

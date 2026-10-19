@@ -11,6 +11,30 @@ description: >-
   never on Windows or Linux.
 
 components:
+  gnomon-voice:
+    description: >-
+      The voice client core in Node, @a-company/gnomon-voice (spec §14, slice
+      V2c, TD-2026-10-19-298, T-2026-10-19-026). It connects as the talk-only
+      voice principal p:<ns>/voice with keys/voice.key, reads the attachment
+      and the human's ceiling from status.voice, and runs modes OFF, PTT and
+      AMBIENT (it may narrow the mode locally, never widen it). Engines come
+      from sherpa-onnx-node 1.13.8, an optional native dependency: Silero VAD,
+      Parakeet TDT 0.6B v2 int8, Kokoro-82M int8 en and 3D-Speaker CAM++
+      speaker embeddings. Every engine is injected through the AudioIO,
+      VadEngine, SttEngine, TtsEngine, SpeakerEngine and KernelLink
+      interfaces. SpawnedAudioIO speaks gnomon-voice-io:v1 to the V2b binary.
+      It refuses to capture when the binary is not disclaimed, drops frames
+      after mic off, spawns the binary with a clean env, and takes the aec
+      claim and the transport from the route event. FakeAudioIO plays WAV
+      fixtures. voice-models.manifest.json pins each model's URL, sha256 and
+      size; `models fetch` verifies every download (0700) and refuses one
+      that does not match, and every model file is re-hashed before it is
+      loaded. Prints are embeddings only, stored in voice/prints/<name>/.
+      Audio is never written to disk (G-VOX-05).
+    path: src/
+    type: module
+    tags: [gnomon, voice, client, paradigm-8, v2c]
+    flows: [$voice-turn]
   gnomon-voice-io:
     description: >-
       The voice child's audio I/O, mic only (no keychain group, no network,
@@ -58,3 +82,22 @@ components:
     path: scripts/
     type: module
     tags: [gnomon, voice, signing, build, v2b]
+
+flows:
+  voice-turn:
+    description: >-
+      One spoken turn (spec §14.2). User side: AudioIO frames, then the PTT
+      held span or a VAD segment, then the gates (attached, mode within the
+      ceiling, outside every playback window plus 750 ms), then STT, then
+      speaker verification, then log.append voice.turn.user{turnId,
+      speakerId, speakerEnrolled, forwarded, mode, aec, aecTransport, t0,
+      t1, text}, then session.send content [{text}] for enrolled speakers
+      only. Unknown speakers are logged with no text. A refusal is shown
+      and never retried. Agent side: log.read follow, then the speakable
+      summary (the gnome line or the first paragraph; edits are said as
+      "edited N files"; ask-user questions are always read), then Kokoro
+      one sentence at a time, then play, then voice.turn.agent{t0, t1,
+      textPlanned, textSpoken}. Barge-in: 300 ms of speech, or the talk key,
+      stops playback and drops the rest of the reply.
+    steps: ["#gnomon-voice", "#gnomon-voice-io"]
+

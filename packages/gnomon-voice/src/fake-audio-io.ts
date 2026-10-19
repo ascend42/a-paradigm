@@ -65,7 +65,7 @@ export class FakeAudioIO implements AudioIO {
   readonly #ev = new Emitter();
   /** virtual wall clock (ms); pass `() => fake.clock` as the client's `now` */
   clock: number;
-  route: RouteInfo = { route: 'headphones', aec: true };
+  route: RouteInfo = { route: 'headphones', aec: true, aecKind: 'headphones', transport: 'wired' };
   readonly played: Array<{ id: string; t0: number; t1: number; completed: boolean }> = [];
   #playing: { id: string; durMs: number; t0: number; resolve: (r: PlaybackResult) => void } | undefined;
   started = false;

@@ -53,7 +53,7 @@ describe('$voice-turn user side', () => {
     expect(link.appends).toHaveLength(1);
     const p = link.appends[0]!;
     expect(p.kind).toBe('voice.turn.user');
-    expect(p.payload).toMatchObject({ speakerId: 'spk:abcd1234/matt', speakerEnrolled: true, forwarded: true, mode: 'ptt', aec: true, text: 'run the tests' });
+    expect(p.payload).toMatchObject({ speakerId: 'spk:abcd1234/matt', speakerEnrolled: true, forwarded: true, mode: 'ptt', aec: 'headphones', aecTransport: 'wired', text: 'run the tests' });
     expect(p.payload.t1 as number).toBeGreaterThan(p.payload.t0 as number);
     expect(String(p.payload.turnId)).toMatch(/^u\d{13}-\d{4}$/);
     expect(link.sends).toEqual([{ hsid: 'hs:01TEST', text: 'run the tests' }]);

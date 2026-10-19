@@ -43,8 +43,17 @@ export function nsOf(principalId: string): string {
   return m[1]!;
 }
 
+/**
+ * The attachment from `status.voice`. V2a shape: {attached: boolean, hsid, ceiling, voiceSessionId, since, idleAt, …}
+ * (the ceiling becomes `mode`); V1 shape: {attached: {voiceSessionId, hsid, mode} | null}.
+ */
 export function attachmentFromStatus(status: unknown): VoiceAttachment | null {
-  const a = (status as { voice?: { attached?: unknown } })?.voice?.attached as Partial<VoiceAttachment> | null | undefined;
+  const v = (status as { voice?: Record<string, unknown> })?.voice;
+  if (v && typeof v.attached === 'boolean') {
+    if (!v.attached || typeof v.hsid !== 'string' || typeof v.voiceSessionId !== 'string' || typeof v.ceiling !== 'string') return null;
+    return { hsid: v.hsid, voiceSessionId: v.voiceSessionId, mode: v.ceiling };
+  }
+  const a = v?.attached as Partial<VoiceAttachment> | null | undefined;
   if (!a || typeof a.hsid !== 'string' || typeof a.voiceSessionId !== 'string' || typeof a.mode !== 'string') return null;
   return { hsid: a.hsid, voiceSessionId: a.voiceSessionId, mode: a.mode };
 }

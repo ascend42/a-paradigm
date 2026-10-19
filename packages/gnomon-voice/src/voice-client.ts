@@ -305,8 +305,10 @@ export class VoiceClient {
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
     const turnId = turnStamp('u', ms, ++this.#turnN);
-    const aec = this.#o.audio.routeInfo().aec;
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: enrolled, mode: this.#wire[mode], aec, t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
+    const ri = this.#o.audio.routeInfo();
+    // the aec claim from the binary's route/mic event (kind when known), plus its transport (V2b Aegis duty 4)
+    const aec = ri.aecKind ?? ri.aec;
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
     try {
       await this.#o.link.append('voice.turn.user', payload);
     } catch (err) {
@@ -325,6 +327,12 @@ export class VoiceClient {
     } catch (err) {
       this.#refused(err, 'session.send'); // never retried blindly
     }
+  }
+
+  /** The turn's mode claim in the kernel's vocabulary: V2a names continuous listening 'ambient', V1 'conversation'. */
+  #wireMode(mode: 'ptt' | 'ambient', a: VoiceAttachment): string {
+    if (mode === 'ptt') return this.#wire.ptt;
+    return a.mode === 'ambient' || a.mode === 'conversation' ? a.mode : this.#wire.ambient;
   }
 
   // ---- speaking ------------------------------------------------------------------------------------------------
