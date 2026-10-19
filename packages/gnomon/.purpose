@@ -1773,7 +1773,11 @@ components:
       logs manifest.staged{via:cli} for cards the kernel did not stage
       itself, starts the mod on mod.installed; bounded (MAX_PICKUP_CARDS 32
       raised, 256 remembered refusals keyed by file stamp so a tampered
-      record is not retried until it changes). pause writes the paused marker
+      record is not retried until it changes; Aegis C5: files are listed by
+      readdir + lstat only (≤ 1024), raised / settled / refused-unchanged ids
+      are skipped before any read, ≤ 64 records READ per scan, 64 KiB per
+      record, manifest.refuse carries the ManifestRefusal code and is folded
+      8 per 10 s, and the grant table is read once per scan). pause writes the paused marker
       (narrows; allowed from a session), the pickup stops a running paused
       mod (mod.paused{reason:user}); start clears it and writes
       start.request (operator start, lifts DOWN); uninstall writes

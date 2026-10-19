@@ -47,7 +47,9 @@ import type { ApprovalBroker } from '../broker/broker.js';
 import { raiseInstallCard } from '../broker/install-card.js';
 import type { ManifestEventSink } from '../manifest/refusal.js';
 import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js';
-import { appendGrantRow, effectiveInstall, readGrants } from '../manifest/grants.js';
+import { appendGrantRow, effectiveInstall, readGrants, type ResolvedGrants } from '../manifest/grants.js';
+import { ManifestRefusal } from '../manifest/refusal.js';
+import { RowFold } from './fold.js';
 import { HSID_PATTERN, mintId } from '@a-company/gnomon-contracts';
 
 const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
@@ -62,6 +64,13 @@ export const MAX_PICKUP_REFUSED = 256;
 /** Mod directories looked at per scan. */
 export const MAX_PICKUP_MODS = 256;
 export const PICKUP_SCAN_MS = 2_000;
+/** Aegis C5: staged records READ per scan (listing is lstat only), a record's size cap, and files listed. */
+export const MAX_PICKUP_READS = 64;
+export const MAX_STAGED_BYTES = 64 * 1024;
+export const MAX_LISTED = 1024;
+/** manifest.refuse rows from the pickup: individual per window, the rest folded (fold.ts). */
+export const PICKUP_REFUSE_ROWS_PER_WINDOW = 8;
+export const PICKUP_REFUSE_WINDOW_MS = 10_000;
 
 export function modsRoot(home: string): string {
   return path.join(home, 'mods');
@@ -156,17 +165,18 @@ export function claimLine(what: string, requestedBy: string, hsid: string | null
   return `claimed by ${what} (unverified): requested by ${requestedBy} · session ${hsid ?? 'none'} · attended ${attended ? 'yes' : 'no'}`;
 }
 
-export interface PendingStaged {
+/** A staged card file seen by lstat only (no read). */
+export interface StagedEntry {
   name: string;
   cardId: string;
-  record: StagedRecord;
-  /** a fingerprint of the file (size + mtime) so a refused record is retried only after it changes */
+  file: string;
+  /** size + mtime: a refused record is retried only after it changes */
   stamp: string;
 }
 
-/** Every still-pending staged install card on disk (bounded per mod by MAX_PICKUP_CARDS). */
-export function pendingStaged(home: string): PendingStaged[] {
-  const out: PendingStaged[] = [];
+/** Every staged card FILE under the home, by readdir + lstat only (Aegis C5: no content read; bounded). */
+export function listStaged(home: string): StagedEntry[] {
+  const out: StagedEntry[] = [];
   for (const name of modNames(home)) {
     const dir = path.join(modsRoot(home), name, 'staged');
     let files: string[] = [];
@@ -176,18 +186,43 @@ export function pendingStaged(home: string): PendingStaged[] {
       continue;
     }
     for (const f of files) {
-      const p = path.join(dir, f);
+      const file = path.join(dir, f);
       try {
-        const st = fs.lstatSync(p);
-        if (!st.isFile() || st.size > 4 * 1024 * 1024) continue;
-        const rec = JSON.parse(fs.readFileSync(p, 'utf8')) as StagedRecord;
-        const cardId = f.slice(0, -5).replace('-', ':');
-        if (rec?.schemaVersion !== STAGED_RECORD_SCHEMA || rec.card?.state !== 'pending' || rec.card.cardId !== cardId || rec.detail?.name !== name) continue;
-        out.push({ name, cardId, record: rec, stamp: `${st.size}:${st.mtimeMs}` });
+        const st = fs.lstatSync(file);
+        if (!st.isFile() || st.size > MAX_STAGED_BYTES) continue;
+        out.push({ name, cardId: f.slice(0, -5).replace('-', ':'), file, stamp: `${st.size}:${st.mtimeMs}` });
       } catch {
-        /* unreadable: never raised */
+        /* vanished */
       }
+      if (out.length >= MAX_LISTED) return out;
     }
+  }
+  return out;
+}
+
+/** Read one listed record; null unless it is a pending card:v1 record that names itself and its mod. */
+export function readStagedEntry(e: StagedEntry): StagedRecord | null {
+  try {
+    const st = fs.lstatSync(e.file);
+    if (!st.isFile() || st.size > MAX_STAGED_BYTES) return null;
+    const rec = JSON.parse(fs.readFileSync(e.file, 'utf8')) as StagedRecord;
+    if (rec?.schemaVersion !== STAGED_RECORD_SCHEMA || rec.card?.state !== 'pending' || rec.card.cardId !== e.cardId || rec.detail?.name !== e.name) return null;
+    return rec;
+  } catch {
+    return null;
+  }
+}
+
+export interface PendingStaged extends StagedEntry {
+  record: StagedRecord;
+}
+
+/** Every still-pending staged install card (the CLI's list/status view; at most MAX_PICKUP_READS records read). */
+export function pendingStaged(home: string): PendingStaged[] {
+  const out: PendingStaged[] = [];
+  for (const e of listStaged(home).slice(0, MAX_PICKUP_READS)) {
+    const record = readStagedEntry(e);
+    if (record) out.push({ ...e, record });
   }
   return out;
 }
@@ -219,10 +254,19 @@ export class StagedCardPickup {
   readonly #uninstallCards = new Map<string, string>();
   readonly #refused = new Map<string, string>();
   #timer: NodeJS.Timeout | null = null;
+  readonly #refuseFold: RowFold;
   #scanning: Promise<void> | null = null;
 
   constructor(o: PickupOptions) {
     this.#o = o;
+    this.#refuseFold = new RowFold({
+      perWindow: PICKUP_REFUSE_ROWS_PER_WINDOW,
+      windowMs: PICKUP_REFUSE_WINDOW_MS,
+      now: () => Date.now(),
+      write: (payload) => (o.emit ?? (() => undefined))('manifest.refuse', payload),
+      base: { via: 'pickup' },
+      field: 'byKey',
+    });
   }
 
   /** Cards raised and not yet settled (status / tests). */
@@ -240,6 +284,7 @@ export class StagedCardPickup {
   stop(): void {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
+    this.#refuseFold.flush();
   }
 
   /** One pass (serialized). */
@@ -248,7 +293,7 @@ export class StagedCardPickup {
     return this.#scanning;
   }
 
-  async #uninstalls(emit: ManifestEventSink): Promise<void> {
+  async #uninstalls(emit: ManifestEventSink, grants: ResolvedGrants): Promise<void> {
     const { home, host, broker, authority } = this.#o;
     for (const [name, id] of [...this.#uninstallCards]) {
       const c = broker.card(id);
@@ -258,7 +303,7 @@ export class StagedCardPickup {
       const req = uninstallRequested(home, name);
       if (!req || this.#uninstallCards.has(name)) continue;
       if (this.#uninstallCards.size >= MAX_PICKUP_CARDS) break;
-      const row = effectiveInstall(readGrants(home, authority), name);
+      const row = effectiveInstall(grants, name);
       if (!row || row.packageHash !== req.packageHash) {
         dropUninstall(home, name); // stale: the pin it named is not the effective one
         continue;
@@ -308,20 +353,26 @@ export class StagedCardPickup {
     for (const name of modNames(home)) {
       if (!isUserPaused(home, name) && takeStartRequest(home, name)) await host.start(name).catch(() => undefined);
     }
-    await this.#uninstalls(emit);
+    await this.#uninstalls(emit, readGrants(home, this.#o.authority)); // Aegis C5: one grant-table read per scan
     // staged cards
-    const pending = pendingStaged(home);
-    const live = new Set(pending.map((p) => p.cardId));
+    const listed = listStaged(home);
+    const live = new Set(listed.map((p) => p.cardId));
     for (const id of [...this.#raised]) if (!live.has(id) && !this.#o.broker.card(id)) this.#raised.delete(id);
     for (const id of [...this.#raised]) {
       const c = this.#o.broker.card(id);
       if (c && c.state !== 'pending') this.#raised.delete(id);
     }
     for (const [id] of this.#refused) if (!live.has(id)) this.#refused.delete(id);
-    for (const p of pending) {
-      if (this.#raised.has(p.cardId) || this.#o.broker.card(p.cardId)) continue;
-      if (this.#refused.get(p.cardId) === p.stamp) continue;
-      if (this.#raised.size >= MAX_PICKUP_CARDS) break;
+    let reads = 0;
+    for (const e of listed) {
+      // skipped on lstat facts alone: raised, settled in the broker, or refused with the same stamp
+      if (this.#raised.has(e.cardId) || this.#o.broker.card(e.cardId)) continue;
+      if (this.#refused.get(e.cardId) === e.stamp) continue;
+      if (this.#raised.size >= MAX_PICKUP_CARDS || reads >= MAX_PICKUP_READS) break;
+      reads++;
+      const record = readStagedEntry(e);
+      if (!record) continue;
+      const p = { ...e, record };
       try {
         await raiseInstallCard(this.#o.broker, {
           home,
@@ -345,7 +396,8 @@ export class StagedCardPickup {
       } catch (err) {
         if (this.#refused.size >= MAX_PICKUP_REFUSED) this.#refused.delete(this.#refused.keys().next().value!);
         this.#refused.set(p.cardId, p.stamp);
-        emit('manifest.refuse', { name: p.name, cardId: p.cardId, code: 'INTEGRITY', via: 'pickup', reason: (err as Error)?.message?.slice(0, 200) ?? 'refused' });
+        const code = err instanceof ManifestRefusal ? err.manifestCode : 'REFUSED';
+        this.#refuseFold.hit(`${p.name}|${code}`, { name: p.name, cardId: p.cardId, code, via: 'pickup', reason: (err as Error)?.message?.slice(0, 200) ?? 'refused' });
       }
     }
   }

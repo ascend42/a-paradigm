@@ -14,7 +14,7 @@ import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider } from '../src/
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { effectiveInstall, linkedFolders, readGrants, removeTree } from '../src/kernel/manifest/index.js';
-import { isUserPaused, MAX_PICKUP_CARDS, pendingStaged, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
+import { isUserPaused, MAX_PICKUP_CARDS, MAX_PICKUP_READS, MAX_STAGED_BYTES, pendingStaged, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { runModCommand } from '../src/cli/mod-cli.js';
 import { privateTmpRoot } from './daemon-helpers.js';
@@ -180,6 +180,48 @@ describe('the pickup raises staged cards through the real broker', () => {
     await p.scan();
     expect(b.broker.card(cardId)).toBeUndefined();
     expect(rows.filter((r) => r.kind === 'manifest.refuse')).toHaveLength(1);
+  });
+
+  it('Aegis C5: a scan reads at most MAX_PICKUP_READS records, skips oversized and refused-unchanged ones on lstat, and folds manifest.refuse with the real code', async () => {
+    const t = setup();
+    await t.run(['install', t.copy()]);
+    const good = pendingStaged(t.home)[0]!;
+    const dir = path.dirname(good.file);
+    const body = fs.readFileSync(good.file, 'utf8');
+    // 3 mods x 30 forged records naming themselves: each fails re-derivation (no such snapshot / card)
+    const ids: string[] = [];
+    for (const m of ['aa', 'bb', 'cc']) {
+      const d = path.join(t.home, 'mods', m, 'staged');
+      fs.mkdirSync(d, { recursive: true });
+      for (let i = 0; i < 30; i++) {
+        const id = `card:01H${'Z'.repeat(19)}${m.toUpperCase()}${String(i).padStart(2, '0')}`;
+        const rec = JSON.parse(body);
+        rec.card.cardId = id;
+        rec.detail.name = m;
+        fs.writeFileSync(path.join(d, `${id.replace(':', '-')}.json`), JSON.stringify(rec));
+        ids.push(id);
+      }
+    }
+    fs.writeFileSync(path.join(dir, `card-01H${'Z'.repeat(23)}.json`), 'x'.repeat(MAX_STAGED_BYTES + 1)); // oversized: skipped on lstat
+    const b = brokerRig(t.auth);
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const p = new StagedCardPickup({ home: t.home, broker: b.broker, authority: t.auth, host: fakeHost(), emit: (kind, payload) => void rows.push({ kind, payload }) });
+    const total = () => rows.filter((r) => r.kind === 'manifest.refuse').reduce((n, r) => n + (r.payload.coalesced ? Number(r.payload.count) : 1), 0);
+    await p.scan();
+    p.stop(); // flushes the fold
+    // one scan reads at most MAX_PICKUP_READS records (the good one + forged ones), so at most that many refusals
+    expect(total()).toBeGreaterThan(0);
+    expect(total()).toBeLessThanOrEqual(MAX_PICKUP_READS);
+    await p.scan();
+    await p.scan();
+    await p.scan();
+    p.stop();
+    expect(total()).toBe(90); // every forged record refused exactly once (unchanged stamps are never re-read)
+    const individual = rows.filter((r) => r.kind === 'manifest.refuse' && !r.payload.coalesced);
+    expect(individual.length).toBeLessThanOrEqual(8);
+    expect(individual.every((r) => r.payload.code !== 'INTEGRITY' || typeof r.payload.reason === 'string')).toBe(true);
+    expect(new Set(individual.map((r) => r.payload.code)).has('REFUSED')).toBe(false); // ManifestRefusal codes, not a constant
+    expect(b.broker.card(good.cardId)).toBeDefined(); // the real card is still raised
   });
 
   it(`falsifier: at most ${MAX_PICKUP_CARDS} staged cards are raised at once (the staged dirs are attacker-growable)`, async () => {
