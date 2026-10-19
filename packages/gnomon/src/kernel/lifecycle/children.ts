@@ -364,6 +364,13 @@ export async function sweepOrphans(opts: {
   control: ProcessControl;
   graceMs?: number;
   pollMs?: number;
+  /**
+   * §2.4 rule 4 as amended by rule 11 (TD-2026-10-19-908, G-DMN-04; T-2026-10-19-014 B2): the hsids this boot
+   * resumes. A drained session's own exit already closed its old spawn, so it is never an orphan; this set also
+   * keeps a spawn of THIS boot for one of them (the resume's own child) from ever being swept. A drained session
+   * with no exit is not in it: its open spawn is swept like any crash orphan, and it is never resumed.
+   */
+  resuming?: ReadonlySet<string>;
 }): Promise<SweepResult> {
   const open = new Map<string, OpenSpawn>();
   const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -384,6 +391,7 @@ export async function sweepOrphans(opts: {
       });
     } else if (r.kind === 'session.exited' || r.kind === 'session.orphaned') open.delete(idOf(p));
   }
+  for (const [k, o] of open) if (o.hsid !== null && o.boot === opts.boot && opts.resuming?.has(o.hsid)) open.delete(k);
   const grace = opts.graceMs ?? DEFAULT_CHILD_GRACE_MS;
   const results = await Promise.all(
     [...open.values()].map(async (o): Promise<boolean> => {

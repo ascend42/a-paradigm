@@ -29,6 +29,7 @@ import {
   canConnectSocket,
   DEFAULT_IDLE_EXIT_MS,
   exitCodeOfClass,
+  exitCodeOfExitReason,
   exitCodeOfLaunch,
   exitCodeOfRefusal,
   launchDaemon,
@@ -183,10 +184,10 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       if (readyFd !== null) writeReady(readyFd, { pid: handle.pidfile.pid, startedAt: handle.pidfile.startedAt, socketPath: handle.pidfile.socketPath, kernelPrincipal: handle.kernelPrincipal });
       toStderr = () => undefined; // the activator stopped reading; detached events went nowhere before the handshake too
     }
-    await handle.exited;
+    const reason = await handle.exited;
     process.off('SIGTERM', onSignal);
     process.off('SIGINT', onSignal);
-    return EXIT_OK;
+    return exitCodeOfExitReason(reason); // upgrade: ok, 0, no restart (EXIT_REASON_CLASS)
   } catch (err) {
     await opened?.helper.close().catch(() => undefined);
     if (isLifecycleRefusal(err)) {

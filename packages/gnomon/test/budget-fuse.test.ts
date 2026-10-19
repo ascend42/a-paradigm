@@ -479,3 +479,59 @@ describe('restore trusts only the kernel (Aegis C1) and a future-dated chain nev
     expect((g.status() as { subscriptionWindow: { used: { n: number } } }).subscriptionWindow.used.n).toBe(9);
   });
 });
+
+describe('§2.4 rule 11 permit carry-over (founder ruling; T-2026-10-19-014 B2, Aegis M2/L3)', () => {
+  const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+  const LOG = 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+  const DRAINED = 'ev:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+  const TTL = 60 * 60_000;
+  const mk = (now: { t: number }) => {
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: LOG, log: async (kind, payload) => void rows.push({ kind, payload: payload as Record<string, unknown> }), billing: clean, clock: () => now.t, permitTtlMs: TTL });
+    return { fuse, rows };
+  };
+  const grant = async (t0: number) => {
+    const old = mk({ t: t0 });
+    return old.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN, session: HS }, backend: 'claude-code' });
+  };
+  const permitRows = (rows: Array<{ kind: string }>) => rows.filter((r) => r.kind.startsWith('permit.'));
+
+  it('a permit live at the drain but older than the TTL at resume is re-attributed with a fresh window; nothing minted', async () => {
+    const t0 = Date.parse('2026-10-19T10:00:00.000Z');
+    const permit = await grant(t0);
+    const drainedAt = new Date(t0 + TTL - 1000).toISOString(); // live at the drain
+    const now = { t: t0 + 3 * TTL }; // the resume runs long after the old expiry
+    const fresh = mk(now);
+    const out = await fresh.fuse.reattribute(permit, { hsid: HS, principal: HUMAN, drainedEventId: DRAINED, drainedAt });
+    expect(out.permitId).toBe(permit.permitId);
+    expect(out.expiresAt).toBe(new Date(now.t + TTL).toISOString());
+    expect(fresh.fuse.permit(permit.permitId)).toEqual(out);
+    expect(permitRows(fresh.rows)).toEqual([{ kind: 'permit.reattributed', payload: { permitId: permit.permitId, hsid: HS, drainedEventId: DRAINED, renewedByDrain: true, expiresAt: out.expiresAt } }]);
+    // the drain instant equal to the expiry is still "live at the drain"
+    const again = mk({ t: now.t });
+    await expect(again.fuse.reattribute(permit, { hsid: HS, principal: HUMAN, drainedEventId: DRAINED, drainedAt: permit.expiresAt })).resolves.toMatchObject({ permitId: permit.permitId });
+  });
+
+  it('a permit that expired BEFORE the drain is refused; nothing is minted or held', async () => {
+    const t0 = Date.parse('2026-10-19T10:00:00.000Z');
+    const permit = await grant(t0);
+    const fresh = mk({ t: t0 + 2 * TTL });
+    const e = await fresh.fuse.reattribute(permit, { hsid: HS, principal: HUMAN, drainedEventId: DRAINED, drainedAt: new Date(t0 + TTL + 1).toISOString() }).then(() => undefined, (x: unknown) => x);
+    expect(e).toBeInstanceOf(RefusedError);
+    expect((e as RefusedError).refusal).toMatchObject({ code: 'PERMIT_REQUIRED', data: { cause: 'expired-before-drain' } });
+    expect(permitRows(fresh.rows)).toEqual([]);
+    expect(fresh.fuse.permit(permit.permitId)).toBeUndefined();
+    // a missing drain time is not "live at the drain"
+    const e2 = await fresh.fuse.reattribute(permit, { hsid: HS, principal: HUMAN, drainedEventId: DRAINED, drainedAt: '' }).then(() => undefined, (x: unknown) => x);
+    expect((e2 as RefusedError).refusal.data).toMatchObject({ cause: 'expired-before-drain' });
+  });
+
+  it('L3: a permit held by another principal is refused (assertClaudePermit does not check the principal)', async () => {
+    const t0 = Date.parse('2026-10-19T10:00:00.000Z');
+    const permit = await grant(t0);
+    const fresh = mk({ t: t0 + 1000 });
+    const e = await fresh.fuse.reattribute(permit, { hsid: HS, principal: 'p:abcdefgh/mallory', drainedEventId: DRAINED, drainedAt: new Date(t0 + 500).toISOString() }).then(() => undefined, (x: unknown) => x);
+    expect((e as RefusedError).refusal).toMatchObject({ code: 'PERMIT_REQUIRED', data: { cause: 'not-this-principal' } });
+    expect(permitRows(fresh.rows)).toEqual([]);
+  });
+});

@@ -23,8 +23,8 @@ import type { GuiStore, Row } from './store.js';
 
 export const RPC = 'gnomon-rpc:v1' as const;
 export const GUI_CLIENT = Object.freeze({ name: 'gnomon-gui', version: '8.0.0-m1.10.1' });
-/** Hello features the GUI implements: the `{logId, seq}` log.read cursor (P8-D98, §5). */
-export const GUI_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
+/** Hello features the GUI implements: the `{logId, seq}` log.read cursor (P8-D98, §5) and resumed sessions (session.resume, §2.4 rule 11). */
+export const GUI_FEATURES: readonly string[] = Object.freeze(['journal.cursor', 'session.resume']);
 
 /** The message channel the client needs: one JSON text per message. */
 export interface Transport {

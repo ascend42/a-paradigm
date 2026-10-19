@@ -125,8 +125,8 @@ describe('human-device verbs are unix-socket only (Aegis L1, structural)', () =>
 });
 
 describe('reserved hello features are not advertised', () => {
-  it('SERVER_FEATURES advertises journal.cursor (built, slice A4) and not session.resume', () => {
-    expect(RESERVED_HELLO_FEATURES).toContain('journal.cursor');
-    expect(SERVER_FEATURES).toEqual(['journal.cursor']);
+  it('SERVER_FEATURES advertises journal.cursor (built, slice A4) and session.resume (built, T-2026-10-19-014 B2), each already reserved (no contracts move)', () => {
+    expect(SERVER_FEATURES).toEqual(['journal.cursor', 'session.resume']);
+    for (const f of SERVER_FEATURES) expect(RESERVED_HELLO_FEATURES).toContain(f);
   });
 });

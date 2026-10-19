@@ -228,6 +228,7 @@ import {
   defaultLabelsFor,
   INJECT_ORIGINS,
   validateSessionCompactedPayload,
+  validateKindPayload,
   isPlainObject,
   mintId,
   monotonicUlidFactory,
@@ -2114,6 +2115,11 @@ function checkPayload(kind: string, payload: unknown): void {
     if (!(INJECT_ORIGINS as readonly unknown[]).includes(payload.origin)) throw logRefusal('BAD_REQUEST', 'bad-payload', 'session.inject origin must be kernel|client|peer', { kind });
     if (typeof payload.hash !== 'string' || !SHA256_TAGGED.test(payload.hash)) throw logRefusal('BAD_REQUEST', 'bad-payload', 'session.inject hash must be sha256:<hex>', { kind });
     if (!Number.isSafeInteger(payload.bytes) || (payload.bytes as number) < 0) throw logRefusal('BAD_REQUEST', 'bad-payload', 'session.inject bytes must be a non-negative integer', { kind });
+  }
+  // P8-D98 / T-2026-10-19-014 B1: session.drained{uuid, reason} is closed and checked at append (§2.4 rule 11)
+  if (kind === 'session.drained') {
+    const errors = validateKindPayload(kind, payload);
+    if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-payload', `session.drained payload: ${errors.slice(0, 4).join('; ')}`, { kind });
   }
   // T-2026-10-18-016 (P8-D93): the typed compaction row is closed and checked at append
   if (kind === 'session.compacted') {

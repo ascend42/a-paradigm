@@ -22,16 +22,17 @@
  *     the kernel keeps running.
  *
  * `reason` is carried in the card's detail (inside contentHash, so the human
- * approves the reason they saw) and handed to `onAccept`. B0 raises only
- * `stop`; slice B1 adds `upgrade` (§2.4 rule 11 drain) to DaemonStopReason and
- * passes it through the same path.
+ * approves the reason they saw) and handed to `onAccept`. `stop` (B0) and
+ * `upgrade` (B1, the §2.4 rule 11 drain: the daemon drains every session and
+ * then exits with reason `upgrade`) ride the same path; each has its own card
+ * lines, so the human sees which one they are approving.
  */
-import type { CardV1 } from '@a-company/gnomon-contracts';
+import { DAEMON_STOP_REASONS as WIRE_REASONS, type CardV1, type DaemonStopReasonValue } from '@a-company/gnomon-contracts';
 import { fail, type ApprovalBroker } from './broker.js';
 
-/** Why the kernel is asked to stop. B1 adds 'upgrade' (drain and resume, §2.4 rule 11). */
-export type DaemonStopReason = 'stop';
-export const DAEMON_STOP_REASONS: readonly DaemonStopReason[] = Object.freeze(['stop'] as const);
+/** Why the kernel is asked to stop: `stop`, or `upgrade` (drain and resume, §2.4 rule 11; B1). The wire's closed set. */
+export type DaemonStopReason = DaemonStopReasonValue;
+export const DAEMON_STOP_REASONS: readonly DaemonStopReason[] = WIRE_REASONS;
 
 /** A daemon-stop card nobody decides expires into deny after this long; the kernel keeps running. */
 export const DAEMON_STOP_TIMEOUT_MS = 2 * 60_000;
@@ -47,6 +48,12 @@ export interface DaemonStopAsker {
 
 const LINES: Readonly<Record<DaemonStopReason, readonly string[]>> = Object.freeze({
   stop: ['Stop the Gnomon kernel (gnomond) on this home', 'Every running session and mod child is stopped first', 'Accept needs Touch ID; reject or no answer keeps it running'],
+  upgrade: [
+    'Stop the Gnomon kernel (gnomond) on this home for an UPGRADE',
+    'No new turn starts; each Claude session finishes its turn, a turn still running at the deadline is interrupted',
+    'Each Claude session is saved for the new kernel to resume, then stopped; its pending cards expire',
+    'Accept needs Touch ID; reject or no answer keeps it running',
+  ],
 });
 
 export class DaemonStopCards {
@@ -54,6 +61,8 @@ export class DaemonStopCards {
   readonly #onAccept: (reason: DaemonStopReason) => void;
   readonly #timeoutMs: number;
   #pending: string | null = null;
+  /** The reason of the pending (or raising) card: a request for a DIFFERENT reason never gets it (Aegis L2). */
+  #pendingReason: DaemonStopReason | null = null;
   /** The in-flight raise (Aegis L5): concurrent requests share it, so two at once still raise ONE card. */
   #raising: Promise<CardV1> | null = null;
 
@@ -70,8 +79,15 @@ export class DaemonStopCards {
     }
     if (!DAEMON_STOP_REASONS.includes(reason)) throw fail('BAD_REQUEST', 'bad-params', `reason must be one of ${DAEMON_STOP_REASONS.join(', ')}`);
     const open = this.#pending ? this.#broker.card(this.#pending) : undefined;
+    const inFlight = (open && open.state === 'pending') || this.#raising !== null;
+    // Aegis L2: one card at a time, and it answers ONE question — a request for another reason is refused, never
+    // handed a card that would do something else (a `stop` asker must not approve an upgrade, nor the reverse)
+    if (inFlight && this.#pendingReason !== reason) {
+      throw fail('BAD_REQUEST', 'bad-params', `a daemon-stop card for reason '${this.#pendingReason}' is already pending; decide it first`, { pendingReason: this.#pendingReason, ...(open && open.state === 'pending' ? { cardId: open.cardId } : {}) });
+    }
     if (open && open.state === 'pending') return open;
     if (this.#raising) return this.#raising;
+    this.#pendingReason = reason;
     const raising = this.#broker.raise({
       kind: 'daemon-stop',
       requestedBy: asker.principal,

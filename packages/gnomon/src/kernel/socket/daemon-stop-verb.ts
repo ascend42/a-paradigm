@@ -16,8 +16,8 @@
  *     the web dispatcher has no port for it (status reports it unavailable);
  *   - params: `{}` or `{reason}`; reason is one of DAEMON_STOP_REASONS
  *     (`stop`, the default, or `upgrade`). Anything else is BAD_REQUEST{bad-params};
- *   - `upgrade` is reserved for the §2.4 rule 11 drain (slice B1): until it is
- *     built the call is ENGINE{not-implemented} and no card is raised;
+ *   - `upgrade` (slice B1) raises the same card with the upgrade lines; an
+ *     accept drains every session (§2.4 rule 11) and exits with reason `upgrade`;
  *   - a second request while a daemon-stop card is pending returns that card.
  */
 import { DAEMON_STOP_REASONS, type DaemonStopReasonValue, type DaemonStopResult } from '@a-company/gnomon-contracts';
@@ -49,9 +49,6 @@ export function parseDaemonStopParams(params: unknown): { reason: DaemonStopReas
 export function createDaemonStopHandler(port: DaemonStopVerbPort): HumanDeviceVerbHandler {
   return async (ctx: HumanDeviceVerbContext, params: unknown): Promise<DaemonStopResult> => {
     const { reason } = parseDaemonStopParams(params);
-    if (reason === 'upgrade') {
-      throw new RpcRefusal('ENGINE', 'not-implemented', 'daemon.stop reason upgrade (drain and resume, §2.4 rule 11) lands with slice B1 of T-2026-10-19-014', { verb: 'daemon.stop', milestone: 'T-2026-10-19-014' });
-    }
     const card = await port.requestStop(ctx.connId, reason);
     return { cardId: card.cardId, state: card.state };
   };

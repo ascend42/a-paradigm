@@ -86,7 +86,10 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
 for (const f of mode.startReads ?? []) { try { readFileSync(f); trace({ t: 'start-read', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-read', path: f, result: e?.code === 'ENOENT' ? 'missing' : 'blocked', code: e?.code ?? null }); } }
 for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
-const session = args[args.indexOf('--session-id') + 1] ?? 'none';
+// §2.4 rule 11 (B2): `--resume <uuid>` keeps the session id (probe p-resume); traced so a test can tell a resume from a new session
+const resumeAt = args.indexOf('--resume');
+const session = resumeAt >= 0 ? args[resumeAt + 1] : args.indexOf('--session-id') >= 0 ? args[args.indexOf('--session-id') + 1] : 'none';
+if (resumeAt >= 0) trace({ t: 'resume', uuid: session });
 out({ type: 'system', subtype: 'hook_started', hook: 'x', futureField: { a: 1 } });
 out({ type: 'system', subtype: 'init', session_id: session, model: 'fake-model', apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });
 for (const l of mode.extraLines ?? []) out(l);

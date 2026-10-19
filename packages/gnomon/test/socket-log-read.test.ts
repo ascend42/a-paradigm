@@ -406,7 +406,7 @@ describe('journal.cursor: log.read resumes by {logId, seq}', () => {
   it('the kernel advertises journal.cursor inside the signed features; a client that offers it gets it', async () => {
     const r = await rig();
     const s = await session(r);
-    expect(s.hello.features).toEqual(['journal.cursor']);
+    expect(s.hello.features).toEqual(['journal.cursor', 'session.resume']);
   });
 
   it("a cursor from another log is refused BAD_REQUEST{cursor-epoch}, page and subscription", async () => {

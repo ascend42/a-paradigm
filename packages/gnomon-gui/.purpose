@@ -19,6 +19,13 @@ components:
       page from another log) GuiStore.reset() clears every row-derived
       state and the read starts over from the current log (once; a second
       refusal surfaces). Tests: test/gui.test.ts (journal.cursor).
+    session-resume: >-
+      T-2026-10-19-014 B2 (§2.4 rule 11): the hello also offers
+      session.resume (send/stop on a session the kernel resumed after an
+      upgrade). GuiStore drops every card it holds on a new daemon.start row,
+      so an old kernel's card id is never clickable (the new kernel refuses it
+      NOT_FOUND and retires it with approval.expire). Tests: test/gui.test.ts
+      (#gui store after an upgrade); bundle pin in gnomon test/web-units.test.ts.
     description: >-
       #gui (spec §11.1-§11.5, §4.5). #bare-entry (§2.4 rule 8): the fragment
       may carry an optional `cwd` folder hint (base64url UTF-8, ≤ 1024 bytes;

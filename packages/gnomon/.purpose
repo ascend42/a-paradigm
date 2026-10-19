@@ -2475,17 +2475,83 @@ flows:
       dispatcher's humanVerbs only (the web dispatcher reports it unavailable);
       connId is the dispatcher's own connection context, never a param (Aegis
       L6); reason is checked against DAEMON_STOP_REASONS (unknown ⇒
-      BAD_REQUEST bad-params; upgrade ⇒ ENGINE not-implemented until B1); the
+      BAD_REQUEST bad-params; upgrade raises the same card with its own
+      UPGRADE lines since B1); the
       result is {cardId, state}. `gnomon daemon stop` pins the kernel key
       (kernelPinOf), authenticates as the home's human device (rules-cli
       humanDeviceOf), calls daemon.stop, prints CARD RAISED with "approve it in
       Gnomon with Touch ID" and exits 0 without waiting; no kernel ⇒ REFUSED
       ENGINE not-running; no human device ⇒ REFUSED FORBIDDEN no-human-device.
-      B1 widens DaemonStopReason with 'upgrade' and passes it through requestStop.
-      Falsifiers in test/daemon-stop.test.ts, test/daemon-stop-verb.test.ts and test/daemon-lifecycle.test.ts.
+      B1: DaemonStopReason is the wire's DAEMON_STOP_REASONS (stop, upgrade);
+      an accepted upgrade card runs supervisor.drain() and then
+      shutdown('upgrade'). Falsifiers in test/daemon-stop.test.ts, test/daemon-stop-verb.test.ts and test/daemon-lifecycle.test.ts.
     upgrade-drain: >-
-      PLANNED, not built (TD-2026-10-19-908, T-2026-10-19-014; spec §2.4
-      rule 11, before dogfood GA). A kernel update drains and resumes:
+      OLD-KERNEL HALF BUILT (T-2026-10-19-014 B1; TD-2026-10-19-908,
+      TD-2026-10-19-528 F3/F4, TD-2026-10-19-814 item 2). daemon.stop{reason:
+      'upgrade'} raises the signed daemon-stop card (UPGRADE lines, reason in
+      contentHash); a Touch ID accept runs SessionSupervisor.drain({deadlineMs})
+      then shutdown('upgrade') (DaemonExitReason 'upgrade', EXIT_REASON_CLASS
+      ok: exit 0, no restart). drain(): idempotent; from its first call
+      session.open and session.send (Claude and gnomon-local) refuse
+      ENGINE{draining}; it waits for opens already past that check, then for
+      every Claude session's in-flight turns (turnPermits) to reach a result
+      line, up to the deadline (DRAIN_DEADLINE_MS default; no root-signed
+      config names one); a session still mid-turn gets the interrupt control
+      message, logged session.inject{channel:'drain', deadlineMs,
+      deadlineSource}. For EVERY live Claude session: pending cards expire
+      why session-drained (F4), session.drained{uuid, reason:'upgrade'} is
+      written (closed payload, checked in kernel-log checkPayload), then the
+      child stops and session.exited{reason} is written. THE B2 RECORD:
+      session.exited.reason is 'drain-clean' (at a boundary: resume normally)
+      or 'drain-interrupted' (mid-turn at the deadline: resume IDLE with a
+      "turn interrupted by update" note, never continue); DRAIN_EXIT_REASONS
+      in supervisor.ts; in-process also DrainReport and status().drained.
+      Then ApprovalBroker.expireSessionBound('session-drained') expires every
+      other pending card with an hsid; cards bound to no session (install,
+      api-token, fallback) stay pending for the new kernel to raise again.
+      gnomon-local sessions get no session.drained (they cannot resume until
+      B3) and are stopped by shutdown (session.exited{reason:'upgrade'}).
+      Falsifiers: test/session-drain.test.ts (darwin), the B1 case of
+      test/daemon-stop-verb.test.ts. NEW-KERNEL HALF BUILT (T-2026-10-19-014
+      B2): supervisor/resume.ts planResume() reads the kernel-signed rows
+      BEFORE the rule-4 sweep: session.drained followed by session.exited
+      {drain-clean|drain-interrupted}, with no later session.open or
+      permit.reattributed, is resumed; drained with no exit is left to the
+      sweep and never resumed. sweepOrphans{resuming} never sweeps a spawn of
+      this boot for a resumed hsid. SessionSupervisor.resume() runs the
+      ordinary spawn path with --resume <uuid> (same hsid, same uuid): sandboxed
+      preflight, law 7, binary pin, layersHash and gitHash must equal the
+      drained session's (else session.refused{resume:'layers-changed'|
+      'git-changed'}), and BudgetFuse.reattribute() re-attributes the old
+      permit.grant's permit (permit.reattributed{permitId, hsid,
+      drainedEventId}; no permit.reserve/grant; expired/other-log/not-this-
+      session refuse PERMIT_REQUIRED). Nothing is sent to the child; a
+      drain-interrupted session also gets session.sandbox{phase:'resume-note',
+      note:'turn interrupted by update'}. The new broker holds no unlocks.
+      resumeAfterUpgrade() retires every card an earlier kernel left pending
+      (ApprovalBroker.retireForeign: approval.expire{why:'cancelled'}); no kind
+      is rebuilt from the log (the row lacks the detail its effect needs);
+      install cards come back via #mod-host pickup from the staged record.
+      A decision against an old card id is NOT_FOUND. The hello feature
+      session.resume is advertised (SERVER_FEATURES, already reserved: no
+      contracts move); session.send/stop on a resumed session without it are
+      refused FORBIDDEN{matrix, needs:'session.resume'}. The daemon exposes
+      the run as handle.resume. Falsifiers: test/session-resume.test.ts
+      (darwin), test/resume-plan.test.ts (every platform).
+      Aegis fixes (T-2026-10-19-014 B1+B2 review): M2 founder carry-over
+      ruling — BudgetFuse.reattribute() takes drainedAt + principal; a permit
+      live at the drain (drainedAt <= expiresAt) is re-signed under the same
+      permitId with a fresh window and permit.reattributed{..., renewedByDrain:
+      true, expiresAt}; expired-before-drain refuses; nothing minted
+      (test/budget-fuse.test.ts). L1 a kernel-signed session.refused{resume}
+      (RESUME_REFUSALS) is terminal in planResume. L2 DaemonStopCards
+      refuses a request whose reason differs from the pending card's
+      BAD_REQUEST{bad-params, pendingReason, cardId}. L3 principal checked in
+      reattribute (assertClaudePermit does not). L4 principalClass carried
+      from session.open (resume refuses non-human 'not-human'). L5 a failed
+      drain interrupt write logs session.inject{channel:'drain', failed:true}.
+      L6 resumeAfterUpgrade retires old cards BEFORE resuming.
+      Original plan: A kernel update drains and resumes:
       the old kernel rides `gnomon daemon stop` with reason upgrade (no new
       verb), starts no new turn, drains each session to a turn boundary
       (interrupt after a deadline), writes session.drained{uuid,

@@ -630,7 +630,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     }
     // M1.7 slice 1: session.open/send/stop for a human principal (attended, human-started sessions only)
     if (SESSION_METHODS.includes(m) && cls === 'human' && o.sessions) {
-      const sctx = { principal: s.principal!, principalClass: cls };
+      const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [] };
       try {
         return await (m === 'session.open' ? o.sessions.open(sctx, frame.params) : m === 'session.send' ? o.sessions.send(sctx, frame.params) : o.sessions.stop(sctx, frame.params));
       } catch (err) {

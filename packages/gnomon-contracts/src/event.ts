@@ -231,13 +231,25 @@ function build(): Readonly<Record<string, EventKindSpec>> {
  * event:v1; this table is published in the event schema so clientApiId covers it.
  */
 export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<string, ReservationTag>>>> = Object.freeze({
-  'session.inject': Object.freeze({ peerRootKeyId: R9, briefId: R9 }),
+  // P8-D98 (§2.4 rule 11, T-2026-10-19-014 B1): the drain interrupt's row is session.inject{channel:'drain'
+  // (DRAIN_INJECT_CHANNELS), deadlineMs, deadlineSource (DRAIN_DEADLINE_SOURCES), failed?:true (the write failed)}.
+  'session.inject': Object.freeze({ peerRootKeyId: R9, briefId: R9, deadlineMs: D98, deadlineSource: D98, failed: D98 }),
   'session.tainted': Object.freeze({ taint: R9 }),
   'oracle.result': Object.freeze({ round: D86, range: D86, findings: D86 }),
   'contract.knot': Object.freeze({ reopenOf: D86 }),
   'contract.built': Object.freeze({ note: D86, responses: D86 }),
   'verdict.founder': Object.freeze({ override: D86 }),
-  'session.open': Object.freeze({ runMode: D86 }),
+  // P8-D98 (§2.4 rule 11, B2): a resumed open carries resume{drainedEventId, outcome} (DRAIN_OUTCOMES) and every
+  // open carries the opener's principalClass (a resume carries it over instead of assuming 'human').
+  'session.open': Object.freeze({ runMode: D86, resume: D98, principalClass: D98 }),
+  // P8-D98 (§2.4 rule 11, B2): a resumed session's sandbox row names resumedFrom (the session.drained ev: id) and
+  // drainOutcome (DRAIN_OUTCOMES); a drain-interrupted resume adds a row with phase:'resume-note' (SANDBOX_D98_PHASES),
+  // note (RESUME_NOTES) and drainedEventId.
+  // (the phase field already exists; its new value is published in D98_CLOSED_VALUES, as are the exit reasons
+  // a drained session's session.exited{reason} writes: DRAIN_EXIT_REASONS)
+  'session.sandbox': Object.freeze({ resumedFrom: D98, drainOutcome: D98, note: D98, drainedEventId: D98 }),
+  // P8-D98 (§2.4 rule 11, B2): every refusal of a resume names why (RESUME_REFUSALS); the row makes the refusal terminal.
+  'session.refused': Object.freeze({ resume: D98 }),
   // P8-D98 (TD-2026-10-19-648 item 11, §7.4): the per-node claim generation; built in M2.2.
   'contract.claimed': Object.freeze({ claimGen: D98 }),
   // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
@@ -287,7 +299,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'session.compacted': Object.freeze(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']),
   // P8-D98: closed payloads of the kinds reserved in the T-2026-10-19-001 move (validateKindPayload).
   'session.drained': Object.freeze(['uuid', 'reason']),
-  'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId']),
+  // renewedByDrain + expiresAt: the founder ruling on carry-over (§2.4 rule 11) — a permit live at the drain gets a fresh window.
+  'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId', 'renewedByDrain', 'expiresAt']),
   'approval.rule.revoked': Object.freeze(['ruleId', 'repoKey', 'tool', 'connId']),
   'approval.effect.failed': Object.freeze(['cardId', 'decision', 'effect', 'reason']),
 });
@@ -295,6 +308,27 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
 /** session.drained reasons (§2.4 rule 11): closed. An upgrade is the only drain in 8.0. */
 export const DRAIN_REASONS = ['upgrade'] as const;
 export type DrainReason = (typeof DRAIN_REASONS)[number];
+
+/**
+ * §2.4 rule 11 (P8-D98, T-2026-10-19-014 B1/B2): closed value sets of the drain-and-resume rows.
+ * - DRAIN_OUTCOMES: `session.open.resume.outcome` and `session.sandbox.drainOutcome`.
+ * - DRAIN_EXIT_REASONS: the `session.exited{reason}` a drained session's stop writes (drain-clean resumes normally;
+ *   drain-interrupted resumes idle with the resume note and is never continued). Other exit reasons are not drains.
+ * - DRAIN_INJECT_CHANNELS: `session.inject{channel}` of the drain interrupt.
+ * - DRAIN_DEADLINE_SOURCES: `session.inject{deadlineSource}` (no root-signed config names a drain deadline yet).
+ * - SANDBOX_D98_PHASES / RESUME_NOTES: the resume-note row's `phase` and `note`.
+ */
+export const DRAIN_OUTCOMES = ['clean', 'interrupted'] as const;
+export type DrainOutcomeValue = (typeof DRAIN_OUTCOMES)[number];
+export const DRAIN_EXIT_REASONS = ['drain-clean', 'drain-interrupted'] as const;
+export type DrainExitReason = (typeof DRAIN_EXIT_REASONS)[number];
+export const DRAIN_INJECT_CHANNELS = ['drain'] as const;
+export const DRAIN_DEADLINE_SOURCES = ['default', 'caller'] as const;
+export const SANDBOX_D98_PHASES = ['resume-note'] as const;
+export const RESUME_NOTES = ['turn interrupted by update'] as const;
+/** `session.refused{resume}` (closed): why a drained session was not resumed. Any such kernel-signed row uses up the drain record. */
+export const RESUME_REFUSALS = ['cwd-gone', 'not-human', 'transcripts-withheld', 'layers-changed', 'git-changed', 'permit-missing', 'permit-unfit', 'billing-refused', 'spawn-failed'] as const;
+export type ResumeRefusal = (typeof RESUME_REFUSALS)[number];
 
 /** Always-rule match modes (TD-2026-10-19-528 F2): closed; only an exact match of (repoKey, tool, inputHash). */
 export const ALWAYS_RULE_MATCHES = ['exact'] as const;
@@ -322,6 +356,10 @@ export interface PermitReattributedPayload {
   hsid: string;
   /** The `ev:` id of the session.drained row this re-attribution cites. */
   drainedEventId: string;
+  /** Always true: the permit was live at the drain and was carried over with a fresh window (never minted). */
+  renewedByDrain: true;
+  /** The carried-over permit's new expiry (ISO date-time). */
+  expiresAt: string;
 }
 export interface ApprovalRuleRevokedPayload {
   ruleId: string;
@@ -358,6 +396,8 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('permitId' in v) c.str('permitId', v.permitId, ID_PATTERNS.permit, 'permit:v1:<ULID>');
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('drainedEventId' in v) c.str('drainedEventId', v.drainedEventId, ID_PATTERNS.ev, 'ev:<ULID>');
+      if ('renewedByDrain' in v && v.renewedByDrain !== true) c.fail('renewedByDrain', 'must be true (a carried-over permit is always renewed)');
+      if ('expiresAt' in v) c.str('expiresAt', v.expiresAt, ISO_DATE_TIME, 'an ISO date-time');
       break;
     case 'approval.rule.revoked':
       if ('ruleId' in v) c.str('ruleId', v.ruleId, RULE_ID_PATTERN, 'card:<ULID> (the learning card)');

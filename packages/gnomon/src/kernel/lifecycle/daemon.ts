@@ -109,6 +109,7 @@ import { helloProbe } from './ready.js';
 import { LifecycleRefusal } from './refusal.js';
 import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
+import { planResume, resumeAfterUpgrade, type ResumeReport, type ResumeRow } from '../supervisor/resume.js';
 import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
@@ -122,8 +123,12 @@ import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 
-/** `stop`: an accepted daemon-stop card (§3.1 I3, F3). B1 adds `upgrade` (§2.4 rule 11). Every reason here exits 0 (no restart). */
-export type DaemonExitReason = 'idle' | 'signal' | 'error' | 'stop';
+/**
+ * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
+ * after the §2.4 rule 11 drain (T-2026-10-19-014 B1). The exit class of each is EXIT_REASON_CLASS (exit-codes.ts):
+ * every reason but `error` is ok, exit 0, no restart.
+ */
+export type DaemonExitReason = 'idle' | 'signal' | 'error' | 'stop' | 'upgrade';
 
 /** Events named after the §9.1 `daemon` and `socket` kinds; the kernel log takes them at M1.2. */
 export type DaemonEvent =
@@ -251,6 +256,8 @@ export interface DaemonHandle {
   readonly scheduler: Scheduler;
   /** The start-up orphan sweep's result (G-DMN-04). */
   readonly orphanSweep: { orphans: number; stopped: number };
+  /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
+  readonly resume: Promise<ResumeReport>;
 }
 
 /** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
@@ -267,6 +274,8 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
 export interface DaemonSeams {
   supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
   billing?: BillingScanSource;
+  /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
+  drainDeadlineMs?: number;
 }
 
 /** How long a live pidfile holder whose socket is silent is given (it may be the race winner mid-start) before `holder-silent`. */
@@ -629,8 +638,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
-  // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason (B1 adds upgrade)
-  const stopCards = new DaemonStopCards(broker, (reason) => void shutdown(reason));
+  // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason. B1: an `upgrade`
+  // accept drains every session first (§2.4 rule 11: session.drained before session.exited), then exits `upgrade`.
+  const stopCards = new DaemonStopCards(broker, (reason) => {
+    if (reason !== 'upgrade') return void shutdown(reason);
+    if (stopping) return;
+    void supervisor
+      .drain(seams.drainDeadlineMs !== undefined ? { deadlineMs: seams.drainDeadlineMs } : {})
+      .catch(() => undefined) // a drain that failed part way still exits: the new kernel sweeps what it left (rule 4)
+      .then(() => shutdown('upgrade'));
+  });
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;
   for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
@@ -644,7 +661,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     logId: log.head().log,
     // a turn counts under its own budget.usage row's chain time (the time restore reads back)
     log: (kind, payload, ids = {}) =>
-      log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}) }).then((r) => ({ at: r.event.at })),
+      log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}), ...(ids.session ? { session: ids.session } : {}) }).then((r) => ({ at: r.event.at })),
     onClockSkew: (d) => emit({ kind: 'daemon.fuse.clock.skew', chainAt: new Date(d.chainAt).toISOString(), wall: new Date(d.wall).toISOString() }),
     config: fuseCfg.config,
     apiTokens,
@@ -871,6 +888,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // socket.disconnect has no §9.1 kind: callback only (contract gap, reported).
   };
 
+  // §2.4 rule 11 (TD-2026-10-19-908, T-2026-10-19-014 B2): BEFORE the orphan sweep, read what an upgrade drained
+  // (drained + exited ⇒ resume; drained without an exit ⇒ the sweep's) and the cards the old kernel left pending
+  const resumePlan = planResume(
+    (function* (): Generator<ResumeRow> {
+      for (const v of log.read({ reader: { class: 'human' }, kinds: ['permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'session.refused', 'approval.request', 'approval.decide', 'approval.expire'] })) {
+        if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), at: v.event.at, payload: v.event.payload };
+      }
+    })(),
+    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+  );
   let orphanSweep: { orphans: number; stopped: number };
   try {
     // §2.4 rule 4: before serving anyone, stop what a crashed daemon left running
@@ -881,6 +908,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       append: (kind, payload) => appendRow(kind, payload),
       control,
       ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}),
+      resuming: new Set(resumePlan.resume.map((c) => c.hsid)),
     });
     server = await listenSocket({
       socketPath: choice.path,
@@ -929,6 +957,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     await shutdown('error');
     throw err;
   }
+  // §2.4 rule 11: resume the drained sessions and retire the old kernel's pending cards (background: never blocks serving)
+  const resume = resumeAfterUpgrade(resumePlan, { supervisor, broker }).catch((): ResumeReport => ({ resumed: [], refused: [], retired: [] }));
   modPickup.start(opts.modPickupMs);
   idle.start();
   return {
@@ -953,5 +983,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     dispatcher,
     scheduler,
     orphanSweep,
+    resume,
   };
 }

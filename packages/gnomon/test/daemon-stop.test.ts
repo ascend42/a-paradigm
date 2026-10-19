@@ -100,6 +100,22 @@ describe('daemon-stop card (F3)', () => {
     expect(r.rows.map((x) => x.kind)).toEqual(['approval.request']);
   });
 
+  it('Aegis L2: a request for a DIFFERENT reason is refused BAD_REQUEST{bad-params}, never handed the pending card', async () => {
+    const r = rig();
+    const card = await r.cards.request(r.human, 'stop');
+    const e = await r.cards.request(r.human, 'upgrade').then(() => undefined, (x: unknown) => x);
+    expect(e).toBeInstanceOf(RefusedError);
+    expect((e as RefusedError).refusal).toMatchObject({ code: 'BAD_REQUEST', data: { reason: 'bad-params', pendingReason: 'stop', cardId: card.cardId } });
+    // in flight too: the raise that has not landed yet answers only its own reason
+    const r2 = rig();
+    const [a, b] = await Promise.all([r2.cards.request(r2.human, 'upgrade'), r2.cards.request(r2.human, 'stop').then(() => undefined, (x: unknown) => x)]);
+    expect(a.kind).toBe('daemon-stop');
+    expect((b as RefusedError).refusal).toMatchObject({ code: 'BAD_REQUEST', data: { reason: 'bad-params', pendingReason: 'upgrade' } });
+    expect(r2.broker.cards().filter((x) => x.kind === 'daemon-stop')).toHaveLength(1);
+    // the same reason still gets the same card
+    expect((await r.cards.request(r.human, 'stop')).cardId).toBe(card.cardId);
+  });
+
   it('reject, a declined Touch ID and expiry all keep the kernel running', async () => {
     const touch = { on: false };
     const r = rig(touch);
