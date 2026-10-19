@@ -5,10 +5,13 @@
  * contracts RUN_MODES, `session.open{runMode}`, `request.mode.set`,
  * `approval.mode.set`, `approval.auto`). Kernel-owned, per repo and per session.
  *
- *   manual      the session acts only on the human's turn; writes and exec
- *               (Bash, PowerShell, Edit, Write, MultiEdit, NotebookEdit) wait
- *               on an approved `plan` card in that session (the supervisor
- *               denies them with no card until one is approved).
+ *   manual      the session acts only on the human's turn; writes, exec,
+ *               WebFetch and every `mcp__*` tool (Bash, PowerShell, Edit,
+ *               Write, MultiEdit, NotebookEdit; manualHolds) wait on an
+ *               approved `plan` card in that session (the supervisor denies
+ *               them with no card until one is approved). Re-entering manual
+ *               — on ANY applied change, not only at a request — drops the
+ *               approved plan (Aegis L2).
  *   ask         write and exec tools raise `permission` cards (Move 1's
  *               behaviour, the default).
  *   auto-edits  Edit / Write / MultiEdit / NotebookEdit of a path INSIDE the
@@ -17,6 +20,12 @@
  *               bidi characters on its card pass with no card, after
  *               `approval.auto{hsid, tool, path, inputHash, modeRef}`; Bash,
  *               network, every other tool and every other path still ask.
+ *
+ * HOME (Aegis M3): auto-edits is refused (FORBIDDEN{strictness,
+ * strictness-mode}) at admission for a folder that is the user's home, an
+ * ancestor of it, or `/`; autoEditPass refuses such a root again at each
+ * request (a repo key named without a path is checked there only). A git
+ * work tree is NOT required: non-git project folders may use auto-edits.
  *
  * SCOPE: a session takes its repo's mode unless one is set for it
  * (`session.open{runMode}` or `request.mode.set{hsid}`); a repo with no mode
@@ -38,7 +47,10 @@
  * `gnomon mode`). The kernel writes the request row, then
  *   - tightening (a stricter mode): `approval.mode.set{scope, from, to, by,
  *     presence:'none'}` at once — no presence, effective on the next
- *     permission request (the book is updated in-process);
+ *     permission request (the book is updated in-process). Tightening a REPO
+ *     is the emergency brake (Aegis M1): every live session of it whose own
+ *     mode is looser gets its own `approval.mode.set` down to the repo's new
+ *     mode, and a pending card loosening it is withdrawn;
  *   - loosening: a `strictness` card (allow | deny; allow is fresh presence
  *     and hand-only in classes.ts, so never a cached unlock, never `always`,
  *     never voice) whose first line names the scope and the step; on allow
@@ -47,6 +59,8 @@
  *     request gets the same card, a different one is refused until it is
  *     decided. Expiry (LOOSEN_TIMEOUT_MS) is deny: the mode stays.
  */
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { failSafeRunMode, HSID_PATTERN, RUN_MODES, type CardV1, type RunMode, type StrictnessLevel } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/index.js';
@@ -78,6 +92,34 @@ export function ceilingOf(level: StrictnessLevel | null): RunMode {
 export const AUTO_EDIT_TOOLS: Readonly<Record<string, string>> = Object.freeze({ Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' });
 /** Writes and exec: what `manual` holds until a plan is approved. */
 export const WRITE_EXEC_TOOLS: ReadonlySet<string> = new Set(['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+/** Aegis L2: manual also holds the network fetch and every MCP tool (an MCP server can write or run anything). */
+export function manualHolds(tool: string): boolean {
+  return WRITE_EXEC_TOOLS.has(tool) || tool === 'WebFetch' || tool.startsWith('mcp__');
+}
+
+const realOr = (p: string): string | null => {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Aegis M3: is `dir` the user's home, an ancestor of it, or a filesystem root? Such a folder never takes auto-edits
+ * (a session rooted there could auto-edit dotfiles, ~/Library, every repo). Compared at the realpaths, case-folded
+ * on darwin and win32.
+ */
+export function isHomeOrAbove(dir: string, home: string = os.homedir(), platform: string = process.platform): boolean {
+  const fold = platform === 'darwin' || platform === 'win32' ? (s: string) => s.toLowerCase() : (s: string) => s;
+  const d = realOr(dir) ?? path.resolve(dir);
+  if (d === path.parse(d).root) return true;
+  const h = fold(realOr(home) ?? path.resolve(home));
+  const fd = fold(d);
+  return h === fd || h.startsWith(fd.endsWith(path.sep) ? fd : fd + path.sep);
+}
+
+
 /** A loosening card nobody decides expires into deny after this long; the mode stays. */
 export const LOOSEN_TIMEOUT_MS = 2 * 60_000;
 /** Sessions remembered by the book (oldest forgotten first; a forgotten session reads its repo's mode). */
@@ -187,7 +229,7 @@ export interface ModeSessionScope {
 }
 
 export interface RunModeDeps {
-  broker: Pick<ApprovalBroker, 'raise' | 'card' | 'modeSet'>;
+  broker: Pick<ApprovalBroker, 'raise' | 'card' | 'modeSet'> & Partial<Pick<ApprovalBroker, 'expire'>>;
   /** the book, caught up with the chain */
   book: () => RunModeBook;
   /** a LIVE session's scope (null: unknown or exited) and every live session */
@@ -199,6 +241,10 @@ export interface RunModeDeps {
   /** a repo key for an absolute path (repo-hooks.ts repoKeyOf([path])) */
   repoKeyOfPath: (abs: string) => string;
   timeoutMs?: number;
+  /** the user's home (Aegis M3: auto-edits is refused for a folder that is it, above it, or `/`); default os.homedir() */
+  userHome?: string;
+  /** Aegis L2: told after every applied mode change (the supervisor records each live session's transition at once) */
+  onChange?: () => void;
 }
 
 export type ModeSetResult =
@@ -254,9 +300,26 @@ export class RunModeControl {
   admitOpen(cwd: string, runMode: unknown): { direct: RunMode | null; loosen: RunMode | null } {
     if (runMode === undefined) return { direct: null, loosen: null };
     if (!isRunMode(runMode)) throw fail('BAD_REQUEST', 'bad-params', `runMode is one of ${RUN_MODES.join(', ')}`);
+    if (runMode === 'auto-edits') this.#refuseHomeRoot(cwd);
     const r = this.repoView(this.#d.repoKeyOfPath(cwd));
     if (MODE_RANK[runMode] > MODE_RANK[r.ceiling]) throw this.#overCeiling(runMode, r.ceiling, r.level);
     return MODE_RANK[runMode] <= MODE_RANK[r.mode] ? { direct: runMode, loosen: null } : { direct: null, loosen: runMode };
+  }
+
+  /** Aegis M3: auto-edits never roots at the user's home, an ancestor of it, or `/` (FORBIDDEN{strictness, strictness-mode}). */
+  #refuseHomeRoot(dir: string): void {
+    if (isHomeOrAbove(dir, this.#d.userHome ?? os.homedir())) {
+      throw fail('FORBIDDEN', 'strictness-mode', `auto-edits is not available for ${dir}: it is your home folder, above it, or the filesystem root — open the session in a project folder`, { gate: 'strictness', ceiling: 'ask', home: true });
+    }
+  }
+
+  /** The applied change reaches the live sessions now (Aegis L2); a throwing listener never undoes the change. */
+  #changed(): void {
+    try {
+      this.#d.onChange?.();
+    } catch {
+      /* the mode row is written; the next permission request re-reads it */
+    }
   }
 
   #overCeiling(to: RunMode, ceiling: RunMode, level: StrictnessLevel | null): Error {
@@ -298,6 +361,11 @@ export class RunModeControl {
     const from = hsid ? this.view(hsid, repo).chosen : (this.#d.book().repoMode(repo) ?? DEFAULT_RUN_MODE);
     const scope = { repo, hsid };
     if (MODE_RANK[to] > MODE_RANK[ceiling]) throw this.#overCeiling(to, ceiling, level);
+    if (to === 'auto-edits') {
+      // M3: a session in its home folder, or a repo named by a home-ish path, never loosens to auto-edits
+      if (hsid) this.#refuseHomeRoot(this.#d.sessions.scope(hsid)!.cwd);
+      else if (typeof p.repo === 'string' && path.isAbsolute(p.repo)) this.#refuseHomeRoot(p.repo);
+    }
     if (to === from) return { changed: false, scope, mode: to, effective: stricterMode(to, ceiling) };
 
     const key = `${repo}|${hsid ?? ''}`;
@@ -317,12 +385,35 @@ export class RunModeControl {
       // tightening: one gesture, no presence (D86/D87)
       await this.#d.broker.modeSet({ scope, from, to, by: { principal: asker.principal, connId: asker.connId, via: asker.credential === 'gui' ? 'gui' : 'cli' }, presence: 'none' }, { connId: asker.connId, ...(hsid ? { session: hsid } : {}) });
       this.#d.book().apply(scope, to);
+      // Aegis M1: the emergency brake reaches every live session of the repo — one whose OWN mode is looser than the
+      // repo's new mode is brought down to it (its own approval.mode.set, presence none); a stricter own mode stays
+      if (!hsid) await this.#pullDown(asker, repo, to);
+      this.#changed();
       return { changed: true, applied: true, scope, from, to, effective: stricterMode(to, ceiling), presence: 'none' };
     }
     // loosening: one gesture plus fresh presence, through a strictness card
     const card = await this.#raiseLoosen(asker, scope, from, to);
     this.#pending.set(key, { cardId: card.cardId, to });
     return { changed: false, pending: true, cardId: card.cardId, scope, from, to };
+  }
+
+  async #pullDown(asker: ModeAsker, repo: string, to: RunMode): Promise<void> {
+    const book = this.#d.book();
+    for (const sc of this.#d.sessions.live()) {
+      if (sc.repoKey !== repo) continue;
+      const own = book.sessionMode(sc.hsid);
+      if (own === null || MODE_RANK[own] <= MODE_RANK[to]) continue;
+      const scope = { repo, hsid: sc.hsid };
+      await this.#d.broker.modeSet({ scope, from: own, to, by: { principal: asker.principal!, connId: asker.connId, via: asker.credential === 'gui' ? 'gui' : 'cli' }, presence: 'none' }, { connId: asker.connId, session: sc.hsid });
+      book.apply(scope, to);
+      // a pending card loosening this session would re-loosen it past the brake: it is withdrawn
+      const k = `${repo}|${sc.hsid}`;
+      const still = this.#pending.get(k);
+      if (still) {
+        this.#pending.delete(k);
+        await this.#d.broker.expire?.(still.cardId, 'mode-tightened').catch(() => false);
+      }
+    }
   }
 
   /** The loosening card for a session opened with a looser runMode (admitOpen's `loosen`). */
@@ -354,6 +445,7 @@ export class RunModeControl {
         const cur = scope.hsid ? this.view(scope.hsid, scope.repo).chosen : (this.#d.book().repoMode(scope.repo) ?? DEFAULT_RUN_MODE);
         await this.#d.broker.modeSet({ scope, from: cur, to, by: { principal: asker.principal!, connId: ctx.connId }, presence: 'fresh' }, { connId: ctx.connId, ...(scope.hsid ? { session: scope.hsid } : {}) });
         this.#d.book().apply(scope, to);
+        this.#changed();
       },
     });
   }

@@ -107,7 +107,7 @@ import type { LocalLaneConfig } from '../local/config.js';
 import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
 import { autoEditPass } from './auto-edits.js';
-import { WRITE_EXEC_TOOLS } from '../broker/run-mode.js';
+import { manualHolds } from '../broker/run-mode.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -920,23 +920,14 @@ export class SessionSupervisor {
     const b = this.#o.broker;
     const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
     // P8-D87 run modes: the EFFECTIVE mode, read now (a change takes effect at the next request)
-    let mode: RunMode = 'ask';
-    try {
-      mode = this.#o.runMode?.(s.hsid, repoKey)?.effective ?? 'ask';
-    } catch {
-      mode = 'manual'; // an unreadable mode never loosens anything
-    }
-    if (mode !== s.lastMode) {
-      if (mode === 'manual') s.planApproved = false; // manual is plan-first from the moment it applies
-      s.lastMode = mode;
-    }
-    if (mode === 'manual' && WRITE_EXEC_TOOLS.has(ev.toolName) && !s.planApproved) {
+    const mode = this.#modeTransition(s, repoKey);
+    if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
       await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
       return;
     }
     if (mode === 'auto-edits' && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
-      const pass = autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines);
+      const pass = autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#o.userHome ?? os.homedir());
       if (pass.ok) {
         // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
         let logged = false;
@@ -1263,6 +1254,36 @@ export class SessionSupervisor {
       ...this.#history,
       ...this.#local.status(),
     ];
+  }
+
+  /**
+   * P8-D87 (Aegis L2): read a session's effective mode and record the transition. Entering `manual` from any other
+   * mode drops the approved plan: manual is plan-first from the moment it applies, however briefly the session left it.
+   */
+  #modeTransition(s: Session, repoKey: string): RunMode {
+    let mode: RunMode = 'ask';
+    try {
+      mode = this.#o.runMode?.(s.hsid, repoKey)?.effective ?? 'ask';
+    } catch {
+      mode = 'manual'; // an unreadable mode never loosens anything
+    }
+    if (mode !== s.lastMode) {
+      if (mode === 'manual') s.planApproved = false;
+      s.lastMode = mode;
+    }
+    return mode;
+  }
+
+  /**
+   * P8-D87 (Aegis L2): a run mode changed (RunModeControl calls this after every applied change). Each live session
+   * records its transition NOW, not at its next permission request — so manual → ask → manual between two requests
+   * still re-requires a plan.
+   */
+  noteModeChange(): void {
+    for (const s of this.#sessions.values()) {
+      if (s.state === 'exited') continue;
+      this.#modeTransition(s, repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]));
+    }
   }
 
   /** P8-D87: a LIVE Claude session's mode scope (repo key over its roots, cwd); null when unknown or exited. */

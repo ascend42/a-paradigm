@@ -1776,13 +1776,26 @@ components:
       scope. session.open{runMode}: no looser than the repo ⇒ set by the open
       row; looser ⇒ opened at the repo's mode + a loosening card
       (result.runModeCard). Supervisor: manual denies Bash/PowerShell/Edit/
-      Write/MultiEdit/NotebookEdit with no card until a plan card in that
-      session is approved (reset whenever manual begins); auto-edits passes
-      Edit/Write/MultiEdit/NotebookEdit whose realpath'd path is inside the
-      session roots, not gate-class (layers.ts gateClassPathRule) and whose
-      card has no hidden/bidi flags, after broker.auto ⇒ approval.auto{hsid,
-      tool, path, inputHash, modeRef:'mode:auto-edits'} (a failed row falls
-      through to the card); everything else cards as in ask.
+      Write/MultiEdit/NotebookEdit, WebFetch and mcp__* (manualHolds) with no
+      card until a plan card in that session is approved (reset whenever
+      manual begins; RunModeControl onChange → supervisor.noteModeChange
+      records every applied change on each live session at once, Aegis L2);
+      auto-edits passes Edit/Write/MultiEdit/NotebookEdit whose path is
+      absolute with no `..` (M4), under a root that is not the user's home,
+      above it or / (M3, isHomeOrAbove; also refused at admitOpen and
+      request.mode.set), with NO symlink component below the root (every
+      component lstat'd, the final one too; H1), not gate-class (layers.ts
+      gateClassPathRule, incl. editor/toolchain dirs, lint/format configs,
+      task/build files, other agents' steering files, non-ASCII and win32
+      alias names; H2) and whose card has no hidden/bidi flags, after
+      broker.auto ⇒ approval.auto{hsid, tool, path (real), inputHash,
+      modeRef:'mode:auto-edits'} (a failed row falls through to the card);
+      everything else cards as in ask. Tightening a REPO pulls every live
+      session whose own mode is looser down to it with its own
+      approval.mode.set and withdraws a pending loosening card for it (M1).
+      permission.ts deniedWrite also tests policy.ts realpathFollow (where
+      a write lands, dangling links followed) and denies an unresolvable
+      path (H1).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]

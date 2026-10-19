@@ -67,6 +67,8 @@ function sessionRig() {
     sessions: { scope: (h) => sup.scopeOf(h), live: () => sup.liveScopes() },
     logRequest: (payload, ids) => log('request.mode.set', { ...payload }, ids),
     repoKeyOfPath: (abs) => repoKeyOf([abs]),
+    userHome: w.userHome,
+    onChange: () => sup.noteModeChange(),
   });
   const port = createSessionPort(sup, control);
   live.push(() => children.stopAll('test-end'));
@@ -177,5 +179,83 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     expect(await waitFor(() => r.answers().some((a) => a.id === 'p-2'))).toBe(true);
     expect(r.control.view(s2.hsid, r.repo)).toMatchObject({ chosen: 'auto-edits', source: 'repo' });
     expect(r.kinds('approval.auto')).toHaveLength(2);
+  }, 30_000);
+  it('Aegis H1/H2/M4: symlinks (dangling to .git/hooks, dangling outside, a linked parent), new gate files, a lookalike name and a relative path all card — never auto-approved', async () => {
+    const r = sessionRig();
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
+    fs.mkdirSync(path.join(w.cwd, 'scripts'));
+    fs.symlinkSync('../.git/hooks/pre-commit', path.join(w.cwd, 'scripts', 'precommit'));
+    fs.symlinkSync(path.join(w.root, 'outside-dangling.sh'), path.join(w.cwd, 'out.sh'));
+    fs.mkdirSync(path.join(w.root, 'elsewhere'));
+    fs.symlinkSync(path.join(w.root, 'elsewhere'), path.join(w.cwd, 'ext'));
+    const reqs = [
+      r.req('h-hook', 'Write', { file_path: path.join(w.cwd, 'scripts', 'precommit'), content: '#!/bin/sh\necho pwned\n' }),
+      r.req('h-out', 'Write', { file_path: path.join(w.cwd, 'out.sh'), content: 'x' }),
+      r.req('h-dir', 'Write', { file_path: path.join(w.cwd, 'ext', 'x.ts'), content: 'x' }),
+      r.req('h-make', 'Write', { file_path: path.join(w.cwd, 'Makefile'), content: 'all:\n\ttouch /tmp/x\n' }),
+      r.req('h-make2', 'Write', { file_path: path.join(w.cwd, 'makefile'), content: 'x' }),
+      r.req('h-vsc', 'Write', { file_path: path.join(w.cwd, '.VSCode', 'tasks.json'), content: '{}' }),
+      r.req('h-eslint', 'Write', { file_path: path.join(w.cwd, 'eslint.config.mjs'), content: 'x' }),
+      r.req('h-agents', 'Write', { file_path: path.join(w.cwd, 'AGENTS.md'), content: 'x' }),
+      r.req('h-lookalike', 'Write', { file_path: path.join(w.cwd, '.g\u0456t', 'hooks', 'pre-commit'), content: 'x' }),
+      r.req('h-rel', 'Write', { file_path: 'rel.txt', content: 'x' }),
+    ];
+    await r.open(reqs);
+    expect(await waitFor(() => r.pending().length + r.answers().length >= reqs.length, 15_000)).toBe(true);
+    expect(r.kinds('approval.auto')).toHaveLength(0);
+    expect(r.answers().filter((a) => a.behavior === 'allow')).toHaveLength(0);
+    // the dangling hook link is denied or carded, never followed: no hook planted, nothing outside written
+    expect(fs.existsSync(path.join(w.cwd, '.git', 'hooks', 'pre-commit'))).toBe(false);
+    expect(fs.existsSync(path.join(w.root, 'outside-dangling.sh'))).toBe(false);
+    expect(fs.existsSync(path.join(w.root, 'elsewhere', 'x.ts'))).toBe(false);
+    expect(fs.existsSync(path.join(w.cwd, 'Makefile'))).toBe(false);
+    const carded = r.pending().map((c) => JSON.stringify(c.block)).join('\n');
+    for (const n of ['out.sh', 'x.ts', 'Makefile', 'tasks.json', 'eslint.config.mjs', 'AGENTS.md', 'rel.txt']) expect(carded, n).toContain(n);
+  }, 30_000);
+
+  it('Aegis M1: tightening the repo pulls down a session that set its own looser mode — its next edit cards', async () => {
+    const r = sessionRig();
+    const s = await r.open([], { runMode: 'auto-edits' });
+    await r.approve(s.runModeCard!, 'allow');
+    expect(r.control.view(s.hsid, r.repo)).toMatchObject({ chosen: 'auto-edits', source: 'session' });
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'ask' }); // the repo was ask already: no change, no brake
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'manual' });
+    expect(r.control.view(s.hsid, r.repo)).toMatchObject({ chosen: 'manual', source: 'session', effective: 'manual' });
+    setMode(w, { permissionAsk: { steps: [r.req('b-1', 'Write', { file_path: path.join(w.cwd, 'b.txt'), content: 'b' })], hold: true } });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'again' }).catch(() => undefined);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'b-1'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'b-1')).toMatchObject({ behavior: 'deny' });
+    expect(r.kinds('approval.auto')).toHaveLength(0);
+  }, 30_000);
+
+  it('Aegis M3: a session in the user\'s home cannot open or loosen to auto-edits', async () => {
+    const r = sessionRig();
+    const e = await errOf(r.port.open({ principal: HUMAN, principalClass: 'human', connId: 'conn:gui', credential: 'gui' }, { cwd: w.userHome, attended: true, runMode: 'auto-edits' }));
+    expect(e.refusal).toMatchObject({ code: 'FORBIDDEN', gate: 'strictness', data: { reason: 'strictness-mode' } });
+    expect(r.rows.filter((x) => x.kind === 'session.open')).toHaveLength(0);
+  }, 30_000);
+
+  it('Aegis L2: manual → ask → manual between two requests re-requires a plan; manual holds mcp__* and WebFetch', async () => {
+    const r = sessionRig();
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'manual' });
+    // the fake claude replays the same steps every turn: turn 1 is before any plan, turn 2 after one was approved
+    const ids = ['l-w', 'l-mcp', 'l-fetch'];
+    await r.open([r.req('l-plan', 'ExitPlanMode', { plan: 'p' }), r.req('l-w', 'Write', { file_path: path.join(w.cwd, 'l.txt'), content: 'l' }), r.req('l-mcp', 'mcp__srv__write', { x: 1 }), r.req('l-fetch', 'WebFetch', { url: 'https://example.com', prompt: 'p' })]);
+    expect(await waitFor(() => ids.every((id) => r.answers().some((a) => a.id === id)) && r.pending().some((c) => c.kind === 'plan'))).toBe(true);
+    for (const id of ids) expect(r.answers().find((a) => a.id === id), id).toMatchObject({ behavior: 'deny' });
+    await r.approve(r.pending().find((c) => c.kind === 'plan')!.cardId, 'approve-plan');
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'l-plan'))).toBe(true);
+    // out of manual and back with no permission request in between: the approved plan does not survive
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'ask' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'manual' });
+    const hsid = r.sup.liveScopes()[0]!.hsid;
+    await r.sup.send(HUMAN, { hsid, text: 'again' }).catch(() => undefined);
+    const twice = (id: string) => r.answers().filter((a) => a.id === id).length >= 2;
+    expect(await waitFor(() => ids.every(twice))).toBe(true);
+    for (const id of ids) {
+      const all = r.answers().filter((a) => a.id === id);
+      expect(all.every((a) => a.behavior === 'deny' && String(a.message).includes('manual mode')), id).toBe(true);
+    }
+    expect(r.pending().filter((c) => c.kind === 'permission')).toHaveLength(0);
   }, 30_000);
 });

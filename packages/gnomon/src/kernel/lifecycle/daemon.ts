@@ -734,6 +734,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     sessions: { scope: (hsid) => supervisor.scopeOf(hsid), live: () => supervisor.liveScopes() },
     logRequest: (payload, ids) => log.append({ kind: 'request.mode.set', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     repoKeyOfPath: (abs) => repoKeyOf([abs]),
+    ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
+    // Aegis L2: every applied change reaches the live sessions at once (manual re-entered ⇒ the plan is dropped)
+    onChange: () => supervisor.noteModeChange(),
   });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),

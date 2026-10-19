@@ -27,7 +27,7 @@ export const errOf = async (p: Promise<unknown>): Promise<RefusedError> => {
 };
 
 /** A broker + run-mode control rig with no session (pure half). */
-export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | 'L3' | null; sessions?: Array<{ hsid: string; repoKey: string; cwd: string }> } = {}) {
+export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | 'L3' | null; sessions?: Array<{ hsid: string; repoKey: string; cwd: string }>; userHome?: string } = {}) {
   const rows: Array<{ kind: string; payload: Record<string, unknown>; ids?: Record<string, unknown> }> = [];
   const book = new RunModeBook({ principal: KP, isKernelKey: (k) => k === 'kernel-key' });
   const log = async (kind: string, payload: Record<string, unknown>, ids?: Record<string, unknown>): Promise<void> => {
@@ -49,6 +49,7 @@ export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | '
   };
   const broker = new ApprovalBroker({ kernel, kernelPrincipal: KP, log, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence, guiSessions: () => 1 });
   const sessions = o.sessions ?? [];
+  const changes = { n: 0 };
   const control = new RunModeControl({
     broker,
     book: () => book,
@@ -56,10 +57,14 @@ export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | '
     ...(o.level ? { level: o.level } : {}),
     logRequest: (payload, ids) => log('request.mode.set', { ...payload }, ids),
     repoKeyOfPath: (abs) => repoKeyOf([abs]),
+    userHome: o.userHome ?? '/nonexistent-home-for-tests',
+    onChange: () => {
+      changes.n++;
+    },
   });
   const sig = (cardId: string, decision: string) => cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision, cardContentHash: broker.card(cardId)!.contentHash, approverPrincipalId: HUMAN })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
   const approve = (cardId: string, decision: string, ctx: Record<string, unknown> = GUI) => broker.approve(ctx as never, { cardId, decision, decisionSig: sig(cardId, decision) });
   const kinds = (k: string) => rows.filter((r) => r.kind === k).map((r) => r.payload);
-  return { rows, book, broker, control, approve, kinds, gate, prompts };
+  return { rows, book, broker, control, approve, kinds, gate, prompts, changes };
 }
 
