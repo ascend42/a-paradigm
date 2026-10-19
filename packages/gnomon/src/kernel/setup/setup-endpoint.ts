@@ -252,11 +252,21 @@ export class SetupEndpoint {
     return { port, setupToken, setupPublicKey: this.#key.spki, bundleHash, expiresAt: this.#expiresAt, url: `http://127.0.0.1:${port}/#setup=${setupToken}&k=${this.#key.spki}` };
   }
 
+  /**
+   * Abort, stop the transport, remove the scratch dir, THEN wait for a running step. The scratch goes before the
+   * wait: Gnomon.app's Cmd-Q (quit + stdin EOF) gives the kernel at most 10 s before it kills it, and a step held
+   * on a Touch ID prompt can outlast that (T-2026-10-19-006 item 1). Only the transport reads the scratch dir.
+   */
   async stop(): Promise<void> {
     this.#abort('stopped', 'the setup endpoint stopped');
-    await this.#running?.catch(() => undefined);
     await this.#web?.stop('setup-done').catch(() => undefined);
     fs.rmSync(this.#state, { recursive: true, force: true });
+    await this.#running?.catch(() => undefined);
+  }
+
+  /** The private scratch dir beside the home (tests: removed by stop() before a held step settles). */
+  get scratchDir(): string {
+    return this.#state;
   }
 
   #abort(reason: string, message: string, leftoverGen?: string): void {

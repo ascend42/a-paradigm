@@ -888,6 +888,10 @@ components:
       purge (GNOMON_HOME guard, in-use / identity-malformed) or a failed
       begin returns to the checks. The checks are read-only: setup state
       lives in a private scratch dir and the home is created at begin.
+      stop() removes that scratch dir BEFORE it waits for a running step, so
+      the wrapper's quit / stdin EOF (Gnomon.app Cmd-Q, which kills the
+      kernel at most 10 s later) cleans it even with a Touch ID prompt held
+      open; an EOF that came before waitSetup listened also stops it.
     path: src/kernel/setup/setup-endpoint.ts
     type: service
     related: ["#provisioner", "#setup-preflight", "#web-endpoint", "#gui-setup", "#first-run"]

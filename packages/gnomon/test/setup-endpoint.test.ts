@@ -236,6 +236,37 @@ describe('#setup-endpoint', () => {
     expect([...fake.keys.keys()]).toEqual([]);
   });
 
+  it('T-2026-10-19-006 (1): stop() removes the scratch dir while a step is still held on a prompt (Cmd-Q EOF)', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let atCreate!: () => void;
+    const reached = new Promise<void>((r) => (atCreate = r));
+    const { ep } = rig({
+      gate: async (r) => {
+        if (r.op === 'key.create' && r.key === 'approvals') {
+          atCreate();
+          await held;
+        }
+      },
+    });
+    const g = await ep.start();
+    const scratch = ep.scratchDir;
+    expect(path.basename(scratch).startsWith('.gnomon-setup-')).toBe(true);
+    expect(fs.existsSync(scratch)).toBe(true);
+    const { ws } = await attach(g);
+    await call(ws, 3, 'setup.preflight');
+    await call(ws, 4, 'setup.name', { name: 'founder' });
+    ws.sendJson(rpc(5, 'setup.begin', {}));
+    await reached;
+    const stopping = ep.stop();
+    // the held step has not settled, yet the scratch is gone (the app kills the kernel at most 10 s after EOF)
+    for (let i = 0; i < 100 && fs.existsSync(scratch); i++) await new Promise((r) => setTimeout(r, 20));
+    expect(fs.existsSync(scratch)).toBe(false);
+    release();
+    await stopping;
+    expect(await ep.done).toMatchObject({ ok: false, reason: 'stopped' });
+  });
+
   it('touch-id: presence.available (helper 1.4.0, no prompt) makes the row pass or fail, never warn', async () => {
     for (const [touchId, status, ok] of [[true, 'pass', true], [false, 'fail', false]] as const) {
       const { ep } = rig({ fake: new FakeHelper(null, { touchId }) });
