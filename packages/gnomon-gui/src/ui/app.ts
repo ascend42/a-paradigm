@@ -13,7 +13,7 @@
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
-import { applyCwdHint, cwdHintOf, decidePin, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
+import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
@@ -27,6 +27,9 @@ const clear = (el: HTMLElement): void => {
 const put = (el: HTMLElement, s: string): void => {
   el.textContent = sanitizeDisplayText(s).text;
 };
+
+/** The new-session form elements a #bare-entry hint touches (values and text only). */
+const hintTarget = (): CwdHintTarget => ({ input: $<HTMLInputElement>('ns-cwd'), note: $('ns-hint'), dialog: $('new-session-dialog') });
 
 const store = new GuiStore();
 let client: GnomonClient | null = null;
@@ -286,7 +289,7 @@ async function subscribe(c: GnomonClient): Promise<void> {
 /** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
 const SURFACE = hostSurface();
 
-async function attach(auth: { launchToken: string } | { reconnect: true }, fragmentKey: string | null): Promise<void> {
+async function attach(auth: { launchToken: string } | { reconnect: true }, fragmentKey: string | null, hint: CwdHint | null = null): Promise<void> {
   const pin = decidePin(fragmentKey, localStorage.getItem(PIN_KEY));
   if (!pin.ok) return showReconnect(pin.message);
   const endpointPath = `ws://${location.host}/rpc`;
@@ -314,6 +317,9 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   session = out.session;
   if (verifyKey !== pin.verifyWith) verified.clear(); // I4: decisions verified under another key are not reused
   verifyKey = pin.verifyWith;
+  // #bare-entry (Aegis M1): the folder hint is shown ONLY after this launch token verified (hello + serverSig ok);
+  // a failed attach drops it (no prefill, no note) and Reconnect never carries one (attach's default is null)
+  if (hint) applyCwdHint(hintTarget(), hint);
   if (pin.notice && previousPin) {
     // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
     const from = shortKeyId(previousPin);
@@ -419,7 +425,10 @@ function run(id: string): void {
   else if (id === 'stack.scope.toggle') {
     stackScoped = !stackScoped;
     void paintStack();
-  } else if (id === 'session.new') $('new-session-dialog').hidden = false;
+  } else if (id === 'session.new') {
+    clearCwdHint(hintTarget()); // Aegis L2: a hint belongs to the launch that verified it, not to a later "+ new"
+    $('new-session-dialog').hidden = false;
+  }
   else if (id === 'composer.focus') $('composer-text').focus();
   else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
@@ -466,10 +475,15 @@ function wire(): void {
     }
   });
   $('new-session').addEventListener('click', () => run('session.new'));
-  $('ns-cancel').addEventListener('click', () => ($('new-session-dialog').hidden = true));
+  $('ns-cancel').addEventListener('click', () => {
+    $('new-session-dialog').hidden = true;
+    clearCwdHint(hintTarget());
+  });
   $('new-session-form').addEventListener('submit', (e) => {
     e.preventDefault();
+    if (!e.isTrusted) return; // Aegis L2: a session opens on the human's own submit only, like the card handlers
     $('new-session-dialog').hidden = true;
+    clearCwdHint(hintTarget());
     void openSession($<HTMLInputElement>('ns-cwd').value, $<HTMLSelectElement>('ns-model').value);
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
@@ -515,9 +529,7 @@ export function main(): void {
   applyLook();
   applyLayout();
   wire();
-  if (frag) void attach({ launchToken: frag.launchToken }, frag.kernelPublicKey);
-  // #bare-entry: a folder hint only prefills and shows; the form is submitted by the human's click alone
-  const hint = frag?.cwd !== undefined ? cwdHintOf(frag.cwd) : null;
-  if (hint) applyCwdHint({ input: $<HTMLInputElement>('ns-cwd'), note: $('ns-hint'), dialog: $('new-session-dialog') }, hint);
+  // #bare-entry: the folder hint is decoded here but applied by attach only after the token verified (Aegis M1)
+  if (frag) void attach({ launchToken: frag.launchToken }, frag.kernelPublicKey, frag.cwd !== undefined ? cwdHintOf(frag.cwd) : null);
   else showReconnect('This page has no GUI session (a reload, a restart or a token-less launch). Reconnect asks for your presence.');
 }

@@ -58,9 +58,15 @@ usage: gnomon [<command>] [options]     (every command takes --help)
 first run: gnomon identity init, then \`gnomon\` in a repo (or open Gnomon.app)
 `;
 
-/** Code points escaped for display: C0, DEL + C1, soft hyphen, ALM, MVS, zero-width + bidi marks, LS/PS, embeddings/overrides, word joiner + isolates, BOM, U+FFFD (invalid UTF-8), backslash. */
-const ESCAPE_RANGES: ReadonlyArray<readonly [number, number]> = [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x61c, 0x61c], [0x180e, 0x180e], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x2069], [0xfeff, 0xfeff], [0xfffd, 0xfffd], [0x5c, 0x5c]];
-const ESCAPE = { test: (c: string): boolean => { const n = c.codePointAt(0)!; return ESCAPE_RANGES.some(([a, b]) => n >= a && n <= b); } };
+/**
+ * The ONE prefill/escape rule (Aegis L3), identical in packages/gnomon-gui/src/core/launch.ts and checked by the
+ * shared vectors test/fixtures/cwd-hint.v1.json: a code point is shown as itself only when it is a letter, number,
+ * punctuation, symbol or a plain space, is not a format character (Cf) or default-ignorable (fillers, variation
+ * selectors, tags), is not U+FFFD (invalid UTF-8) and is not a backslash; anything else is escaped as \\u{hex}.
+ */
+const SAFE_CP = /^[\p{L}\p{N}\p{P}\p{S} ]$/u;
+const HIDDEN_CP = /[\p{Cf}\p{Default_Ignorable_Code_Point}\ufffd\\]/u;
+const ESCAPE = { test: (c: string): boolean => !SAFE_CP.test(c) || HIDDEN_CP.test(c) };
 
 /** Escape what a terminal or a page could interpret or hide, then cap. Pure; the same rule the GUI applies. */
 export function displayPath(p: string, cap: number = DISPLAY_CAP): string {
@@ -102,7 +108,7 @@ export function instanceOf(pid: number | undefined): string {
   if (pid === undefined) return 'a kernel answering on its socket';
   let cmd = '';
   try {
-    if (process.platform !== 'win32') cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (process.platform !== 'win32') cmd = execFileSync('/bin/ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
     cmd = '';
   }
@@ -132,7 +138,7 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
     rows: [['folder', `${shown}  (${where}${note}; a suggestion: the GUI asks before opening)`]],
     ...(suffix !== null ? { urlSuffix: suffix } : {}),
     onRunning: (e: UpRefusal, home: string) => {
-      const pid = /pidfile pid (\d+)/.exec(e.message);
+      const pid = /\bpid (\d+)/.exec(e.message);
       refused(io.stderr, 'gnomon', 'already-running', `Gnomon is already running on ${displayPath(home)}: ${instanceOf(pid ? Number(pid[1]) : undefined)}; bare gnomon does not start a second kernel`, [
         `open a session for this folder in that window: "+ new" (Cmd-N), cwd: ${shown}`,
         'or stop that instance (quit Gnomon.app, or Ctrl-C in its terminal) and run `gnomon` here again',

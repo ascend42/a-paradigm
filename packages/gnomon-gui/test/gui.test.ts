@@ -13,7 +13,7 @@ import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
 import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
-import { applyCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
+import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
@@ -508,13 +508,57 @@ describe('#bare-entry folder hint (spec §2.4 rule 8): prefilled and shown as te
   });
   it('app.ts applies the hint through applyCwdHint only: the hint path never calls openSession, session.open or a submit', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
-    const i = src.indexOf('#bare-entry: a folder hint');
+    const i = src.indexOf('#bare-entry (Aegis M1): the folder hint is shown ONLY');
     expect(i).toBeGreaterThan(0);
-    const block = src.slice(i, src.indexOf('\n}', i));
+    const block = src.slice(i, src.indexOf('applyCwdHint(', i) + 60);
     expect(block).toContain('applyCwdHint(');
     expect(block).not.toMatch(/openSession|session\.open|requestSubmit|\.submit\(|attended/);
     const lib = readFileSync(path.join(ROOT, 'src', 'core', 'launch.ts'), 'utf8');
     expect(lib.slice(lib.indexOf('export function applyCwdHint'))).not.toMatch(/requestSubmit|\.submit\(|innerHTML|session\.open/);
     expect(readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8')).toContain('<p id="ns-hint" class="meta" hidden></p>');
+  });
+});
+
+describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
+  const vectors = JSON.parse(readFileSync(path.join(REPO, 'packages', 'gnomon', 'test', 'fixtures', 'cwd-hint.v1.json'), 'utf8')) as { cases: Array<{ name: string; cps: number[]; prefill: boolean; escaped: string[] }> };
+  const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+  it('L3: the shared vectors (U+034F, U+115F, U+3164, U+FE0F, U+FFF9, U+E0001, …) prefill exactly when every code point is shown as itself', () => {
+    expect(vectors.cases.length).toBeGreaterThan(20);
+    for (const v of vectors.cases) {
+      const p = String.fromCodePoint(...v.cps);
+      const h = cwdHintOf(Buffer.from(p, 'utf8').toString('base64url'))!;
+      expect(h.prefill !== null, v.name).toBe(v.prefill);
+      for (const e of v.escaped) expect(h.display, v.name).toContain(e);
+    }
+  });
+  it('M1 FALSIFIER: the hint is applied only inside attach after the token verified; a failed attach or Reconnect carries none', () => {
+    const calls = app.split('applyCwdHint(').length - 1;
+    expect(calls).toBe(1);
+    const start = app.indexOf('async function attach(');
+    const ok = app.indexOf('session = out.session;', start);
+    const failed = app.indexOf('if (!out.ok) {', start);
+    const apply = app.indexOf('applyCwdHint(');
+    expect(failed).toBeGreaterThan(start);
+    expect(ok).toBeGreaterThan(failed);
+    expect(apply).toBeGreaterThan(ok); // after the failure returns: a bad token leaves ns-cwd empty and ns-hint hidden
+    expect(app).toContain('hint: CwdHint | null = null'); // Reconnect calls attach without a hint
+    for (const l of app.split('\n').filter((x) => x.includes('attach({ reconnect: true }'))) expect(l).not.toMatch(/cwdHintOf|hint/);
+  });
+  it('L1: a valid launch attaches; only a page without a fragment shows Reconnect', () => {
+    const i = app.indexOf('export function main()');
+    const body = app.slice(i, app.indexOf('\n}', i));
+    expect(body).toMatch(/if \(frag\) void attach\(\{ launchToken: frag\.launchToken \}, frag\.kernelPublicKey, frag\.cwd !== undefined \? cwdHintOf\(frag\.cwd\) : null\);\n\s*else showReconnect\(/);
+  });
+  it('L2: the note is cleared on cancel, submit and a later "+ new"; the submit handler requires a trusted event', () => {
+    const t = { input: { value: '' }, note: { textContent: null as string | null, hidden: true }, dialog: { hidden: true } };
+    applyCwdHint(t, cwdHintOf(Buffer.from('/Users/matt/repo').toString('base64url'))!);
+    clearCwdHint(t);
+    expect(t.note).toEqual({ textContent: '', hidden: true });
+    const cancel = app.slice(app.indexOf("$('ns-cancel')"), app.indexOf("$('new-session-form')"));
+    expect(cancel).toContain('clearCwdHint(hintTarget())');
+    const submit = app.slice(app.indexOf("$('new-session-form')"), app.indexOf("$('reconnect-btn')"));
+    expect(submit).toMatch(/if \(!e\.isTrusted\) return;[\s\S]*clearCwdHint\(hintTarget\(\)\)[\s\S]*openSession\(/);
+    const neu = app.slice(app.indexOf("id === 'session.new'"), app.indexOf("id === 'composer.focus'"));
+    expect(neu).toContain('clearCwdHint(hintTarget())');
   });
 });

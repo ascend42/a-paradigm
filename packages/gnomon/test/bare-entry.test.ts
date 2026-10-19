@@ -212,3 +212,20 @@ describe('#bare-entry: the kernel starts with the hint', () => {
     expect(await run).toBe(0);
   }, 60_000);
 });
+
+describe('#bare-entry: the shared prefill/escape vectors (Aegis L3)', () => {
+  it('the CLI rule matches test/fixtures/cwd-hint.v1.json exactly (the GUI reads the same file)', () => {
+    const vectors = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'test', 'fixtures', 'cwd-hint.v1.json'), 'utf8')) as { cases: Array<{ name: string; cps: number[]; prefill: boolean; escaped: string[] }> };
+    expect(vectors.cases.map((c) => c.name)).toEqual(expect.arrayContaining(['cgj-034f', 'hangul-choseong-filler-115f', 'hangul-filler-3164', 'vs16-fe0f', 'interlinear-fff9', 'tag-e0001']));
+    for (const v of vectors.cases) {
+      const p = String.fromCodePoint(...v.cps);
+      expect(!needsEscape(p), v.name).toBe(v.prefill);
+      for (const e of v.escaped) expect(displayPath(p), v.name).toContain(e);
+    }
+  });
+  it('nits: the instance probe runs /bin/ps (not a PATH lookup) and reads `pid N` from the refusal', () => {
+    const src = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', 'bare-cli.ts'), 'utf8');
+    expect(src).toContain("execFileSync('/bin/ps',");
+    expect(src).toContain('/\\bpid (\\d+)/');
+  });
+});

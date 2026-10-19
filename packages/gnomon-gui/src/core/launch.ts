@@ -40,12 +40,16 @@ const CWD_B64_MAX = Math.ceil((CWD_HINT_MAX_BYTES * 4) / 3);
 /** Display cap, in code points (the CLI's DISPLAY_CAP). */
 export const CWD_DISPLAY_CAP = 240;
 
-/** Code points escaped for display (the CLI's displayPath rule): C0, DEL + C1, soft hyphen, ALM, MVS, zero-width + bidi marks, LS/PS, embeddings/overrides, word joiner + isolates, BOM, U+FFFD (invalid UTF-8), backslash. */
-const ESCAPE_RANGES: ReadonlyArray<readonly [number, number]> = [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x61c, 0x61c], [0x180e, 0x180e], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x2069], [0xfeff, 0xfeff], [0xfffd, 0xfffd], [0x5c, 0x5c]];
-const escapes = (c: string): boolean => {
-  const n = c.codePointAt(0)!;
-  return ESCAPE_RANGES.some(([a, b]) => n >= a && n <= b);
-};
+/**
+ * The ONE prefill/escape rule (Aegis L3), identical in packages/gnomon/src/cli/bare-cli.ts and checked by the
+ * shared vectors packages/gnomon/test/fixtures/cwd-hint.v1.json: a code point is shown as itself only when it is
+ * a letter, number, punctuation, symbol or a plain space, is not a format character (Cf) or default-ignorable
+ * (fillers, variation selectors, tags), is not U+FFFD (invalid UTF-8) and is not a backslash; anything else is
+ * escaped as \\u{hex}, and a path holding any escaped code point is never prefilled.
+ */
+const SAFE_CP = /^[\p{L}\p{N}\p{P}\p{S} ]$/u;
+const HIDDEN_CP = /[\p{Cf}\p{Default_Ignorable_Code_Point}\ufffd\\]/u;
+const escapes = (c: string): boolean => !SAFE_CP.test(c) || HIDDEN_CP.test(c);
 
 export interface CwdHint {
   /** The path for display: escaped and capped, for textContent only. */
@@ -93,6 +97,12 @@ export function applyCwdHint(t: CwdHintTarget, hint: CwdHint): void {
   t.note.hidden = false;
   if (hint.prefill !== null) t.input.value = hint.prefill;
   t.dialog.hidden = false;
+}
+
+/** Drop a shown hint (cancel, submit, a later "+ new"): the note is emptied and hidden; the field is left to the human. */
+export function clearCwdHint(t: Pick<CwdHintTarget, 'note'>): void {
+  t.note.textContent = '';
+  t.note.hidden = true;
 }
 
 /** Parse a location.hash; null when it is not a well-formed launch fragment. */

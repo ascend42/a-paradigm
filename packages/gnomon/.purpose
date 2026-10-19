@@ -693,8 +693,11 @@ components:
       `&cwd=<base64url utf-8>` appended after the token on the same TTY line
       (launch-tty.ts printLaunch urlSuffix; never argv, env, a file, the
       wrapper channel or another line; over HINT_MAX_BYTES 1024 it is not
-      carried). displayPath escapes C0/C1, bidi, zero-width, LS/PS, BOM,
-      U+FFFD and backslash as \u{..} and caps at 240 code points; the GUI
+      carried). displayPath escapes every code point that is not a letter,
+      number, punctuation, symbol or plain space, plus Cf, default-ignorables
+      (fillers, variation selectors, tags), U+FFFD and backslash, as \u{..},
+      and caps at 240 code points (shared vectors
+      test/fixtures/cwd-hint.v1.json, Aegis L3); the GUI
       (#gui, core/launch.ts cwdHintOf/applyCwdHint) applies the same rule,
       prefills only a clean absolute path and never submits. A kernel
       already running on the home is NOT joined and no second one starts:

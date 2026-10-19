@@ -19,7 +19,12 @@ components:
       cwdHintOf escapes and caps it for display and applyCwdHint opens the
       new-session form, shows it as text in #ns-hint, prefills #ns-cwd only
       when clean and absolute, and never submits — session.open stays on the
-      human's click (test/gui.test.ts). static/boot.js reads the launch fragment
+      human's click (test/gui.test.ts). Aegis round 1: the hint is applied
+      only inside attach() after the launch token verified (never on a failed
+      attach or Reconnect); clearCwdHint on cancel, trusted submit and "+ new";
+      the prefill rule is the strict L/N/P/S-or-space rule minus Cf and
+      default-ignorables, shared with the CLI via
+      packages/gnomon/test/fixtures/cwd-hint.v1.json. static/boot.js reads the launch fragment
       (#launch=<token>&k=<spki>) and clears it with history.replaceState
       before any other script, handing it to app.js once. core/launch.ts
       decides the key pin (localStorage holds only the kernel public key;
