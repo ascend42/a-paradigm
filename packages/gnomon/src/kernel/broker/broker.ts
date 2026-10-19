@@ -205,6 +205,19 @@ interface CardRecord {
 
 /** tool.permission default timeout (expires into deny). Other kinds wait. */
 export const PERMISSION_TIMEOUT_MS = 10 * 60_000;
+/**
+ * T-2026-10-18-028 L2: presence prompts are rate-limited PER CONNECTION. At most ONE fresh prompt is
+ * outstanding on a connection (a second is refused while the first is on screen), and after a prompt
+ * the human was shown and did not prove (declined at the prompt) the connection waits
+ * PROMPT_COOLDOWN_MS before it can raise another — so a holder of the connection cannot stack prompts
+ * or re-raise one the instant the human dismisses it (prompt fatigue). A prompt the human ACCEPTED
+ * starts no cooldown (consecutive deliberate decisions stay fast). Refused FORBIDDEN{presence} with
+ * data.why prompt-outstanding | prompt-cooldown (no new wire reason: clientApiId unmoved).
+ */
+export const PROMPT_COOLDOWN_MS = 3_000;
+
+/** L2: a prompt refused by the rate limit (nothing was shown); passes through the presence error mapping unchanged. */
+export class PromptRateLimited extends RefusedError {}
 const NEVER_EXPIRE: readonly string[] = ['fallback', 'api-token'];
 
 export interface BrokerOptions {
@@ -238,6 +251,11 @@ export class ApprovalBroker {
   readonly #presence: PresenceProvider;
   readonly #approvals: ApprovalsKey;
   readonly #clock: () => number;
+  readonly #mono: () => number;
+  /** L2: connections with a fresh prompt on screen now */
+  readonly #prompting = new Set<string>();
+  /** L2: per connection, when its last unproved prompt ended (mono) */
+  readonly #cooldownFrom = new Map<string, number>();
 
   constructor(o: BrokerOptions) {
     this.#o = o;
@@ -245,6 +263,7 @@ export class ApprovalBroker {
     this.#approvals = o.approvals ?? NO_APPROVALS_KEY;
     this.#clock = o.clock ?? Date.now;
     const mono = o.mono ?? (() => performance.now());
+    this.#mono = mono;
     this.unlocks = new UnlockStore(mono, o.unlockIdleMs, o.unlockLimits);
   }
 
@@ -371,6 +390,7 @@ export class ApprovalBroker {
    * failure), and the helper's is the one that signs.
    */
   async connectionClosed(connId: string): Promise<void> {
+    this.#cooldownFrom.delete(connId); // L2 state is per connection; a connId is never reused
     const had = this.unlocks.drop(connId);
     await this.#dropHelperUnlock(connId);
     if (had) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
@@ -496,7 +516,7 @@ export class ApprovalBroker {
       const prompt = this.#promptOf(r, decision, ctx, cls);
       let res: DecisionSignResult;
       try {
-        res = await this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision) } });
+        res = await this.#freshPrompt(ctx, cardId, () => this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision) } }));
       } catch (err) {
         // M3: a keep request that failed (timeout, refusal) may still have left an unlock in the helper
         if (keep && !this.unlocks.has(ctx.connId)) await this.#dropHelperUnlock(ctx.connId);
@@ -657,8 +677,9 @@ export class ApprovalBroker {
     const binding = this.#binding(r, decision);
     let token: PresenceToken;
     try {
-      token = await this.#presence.prove({ purpose, binding, prompt, connId: ctx.connId });
+      token = await this.#freshPrompt(ctx, r.card.cardId, () => this.#presence.prove({ purpose, binding, prompt, connId: ctx.connId }));
     } catch (err) {
+      if (err instanceof PromptRateLimited) throw err; // L2: nothing was shown
       if (err instanceof PresenceDenied) throw await this.#presenceDenied(r.card, ctx, err.message, hadUnlock);
       await this.#o.log('approval.presence.denied', { cardId: r.card.cardId, connId: ctx.connId, why: 'unavailable', milestone: 'M1.3' }, { connId: ctx.connId }).catch(() => undefined);
       if (hadUnlock && cls !== 'cached') throw fail('FORBIDDEN', 'presence', `${decision} takes fresh presence; the cached unlock of this connection does not carry it`, { cardId: r.card.cardId });
@@ -668,6 +689,38 @@ export class ApprovalBroker {
       throw await this.#presenceDenied(r.card, ctx, 'presence token does not bind this decision', hadUnlock);
     }
     return token;
+  }
+
+  /**
+   * L2: raise ONE fresh prompt on `ctx.connId` through `show`. Refused (before anything is shown) while
+   * another is outstanding on the connection, or inside the cooldown after an unproved one.
+   */
+  async #freshPrompt<T>(ctx: DecideContext, cardId: string, show: () => Promise<T>): Promise<T> {
+    const conn = ctx.connId;
+    if (this.#prompting.has(conn)) {
+      await this.#o.log('approval.presence.denied', { cardId, connId: conn, why: 'prompt-outstanding' }, { connId: conn }).catch(() => undefined);
+      const f = fail('FORBIDDEN', 'presence', 'a presence prompt is already open on this connection; answer it first', { cardId, why: 'prompt-outstanding' });
+      throw new PromptRateLimited(f.refusal, f.message);
+    }
+    const from = this.#cooldownFrom.get(conn);
+    const left = from === undefined ? 0 : PROMPT_COOLDOWN_MS - (this.#mono() - from);
+    if (left > 0) {
+      await this.#o.log('approval.presence.denied', { cardId, connId: conn, why: 'prompt-cooldown' }, { connId: conn }).catch(() => undefined);
+      const f = fail('FORBIDDEN', 'presence', `the last presence prompt on this connection was not proved; wait ${Math.ceil(left / 1000)} s`, { cardId, why: 'prompt-cooldown', retryAfterMs: Math.ceil(left) });
+      throw new PromptRateLimited(f.refusal, f.message);
+    }
+    this.#cooldownFrom.delete(conn);
+    this.#prompting.add(conn);
+    try {
+      const out = await show();
+      return out;
+    } catch (err) {
+      // only a prompt the human was shown and did not prove starts the cooldown (never an unavailable helper)
+      if (err instanceof PresenceDenied || err instanceof HardwarePresenceDenied) this.#cooldownFrom.set(conn, this.#mono());
+      throw err;
+    } finally {
+      this.#prompting.delete(conn);
+    }
   }
 
   async #presenceDenied(card: CardV1, ctx: DecideContext, why: string, _hadUnlock: boolean): Promise<RefusedError> {

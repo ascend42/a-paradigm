@@ -1241,7 +1241,13 @@ components:
       session profile ends with helperDenySbpl() — deny process-exec of
       /GnomonHelper.app(/|$) and /gnomon-helper$, deny file-read* of the
       bundle (no copy out), regexes on resolved paths; backstop: the helper
-      refuses serve/once under any sandbox (test/session-helper-deny.test.ts). P8-D96: RaiseInput.decisions limits a card's signed
+      refuses serve/once under any sandbox (test/session-helper-deny.test.ts).
+      L2 — #freshPrompt: at most ONE outstanding fresh presence prompt per
+      connection (FORBIDDEN{presence, why: prompt-outstanding}), and
+      PROMPT_COOLDOWN_MS (3 s) after a prompt the human declined
+      (why: prompt-cooldown, retryAfterMs); an accepted prompt or an
+      unavailable helper starts no cooldown; PromptRateLimited passes the
+      presence error mapping unchanged (test/prompt-rate.test.ts). P8-D96: RaiseInput.decisions limits a card's signed
       actions (permission slice cards: allow|deny, no always); approve
       refuses any other decision bad-params; expire(cardId, why) logs
       approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect

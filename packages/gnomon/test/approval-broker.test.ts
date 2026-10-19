@@ -24,6 +24,7 @@ import {
   verifyActions,
   verifyPresencePrompt,
   UNLOCK_IDLE_MS,
+  PROMPT_COOLDOWN_MS,
   type PresenceProvider,
 } from '../src/kernel/broker/index.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
@@ -281,6 +282,7 @@ describe('G-BRK-05 presence classes and the per-connection cached unlock', () =>
     expect(await refusal(r.broker.approve(H(A), { cardId: c3.cardId, decision: 'always', decisionSig: r.sig(c3.cardId, 'always', c3.contentHash) }))).toMatchObject({ code: 'FORBIDDEN', reason: 'presence' });
     expect(r.kinds()).not.toContain('approval.rule.learned');
     touch = true;
+    r.now.t += PROMPT_COOLDOWN_MS; // L2 (T-2026-10-18-028): a declined prompt cools the connection down
     expect(await r.broker.approve(H(A), { cardId: c3.cardId, decision: 'always', decisionSig: r.sig(c3.cardId, 'always', c3.contentHash) })).toMatchObject({ presence: 'fresh' });
     expect(r.rows.find((x) => x.kind === 'approval.rule.learned')!.payload).toMatchObject({ tool: 'Bash', matchExact: true, presence: 'fresh' });
   });

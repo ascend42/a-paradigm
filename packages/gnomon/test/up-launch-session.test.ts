@@ -27,6 +27,7 @@ import { runIdentityCommand } from '../src/cli/identity-cli.js';
 import { startUpKernel, type UpKernel } from '../src/cli/up-cli.js';
 import { acceptUnsignedHelperForTests, DEV_TEST_HELPER_ACK, readIdentity, type HelperTransport } from '../src/kernel/identity/index.js';
 import { approveMessage, KeyRing } from '../src/kernel/log/signer.js';
+import { PROMPT_COOLDOWN_MS } from '../src/kernel/broker/index.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { startDaemonForTest } from '../src/kernel/testing.js';
@@ -137,6 +138,13 @@ describe.skipIf(!SANDBOX_OK)('#gnomon-up end to end: identity init → gnomon up
     expect(JSON.stringify(declined.error)).toContain('presence');
     expect([...k.handle.log.read({ reader: { class: 'human' }, kinds: ['approval.decide'] })]).toHaveLength(0);
     fake.opts = {};
+    // 5b. falsifier (T-2026-10-18-028 L2): straight after a declined prompt the connection is cooling down — refused, no prompt shown
+    const shownBefore = fake.prompts.length;
+    ws.sendJson(rpc(7, 'approve', { cardId, decision: 'approve-plan' }));
+    const cooled = await reply(ws, 7);
+    expect(JSON.stringify(cooled.error)).toContain('prompt-cooldown');
+    expect(fake.prompts.length).toBe(shownBefore);
+    await new Promise((r) => setTimeout(r, PROMPT_COOLDOWN_MS + 50));
 
     // 5. the GUI approves exactly as gnomon-gui does: {cardId, decision}, no decisionSig
     const promptsBefore = fake.prompts.length;
