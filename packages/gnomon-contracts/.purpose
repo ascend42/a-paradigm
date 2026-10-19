@@ -93,13 +93,23 @@ components:
     description: >-
       event:v1 envelope (§4.1) — P8-D98 (T-2026-10-19-001): reserves, tag
       8.0:P8-D98, session.drained{uuid, reason} (DRAIN_REASONS = [upgrade],
-      closed), permit.reattributed{permitId, hsid, drainedEventId},
+      closed), permit.reattributed{permitId, hsid, drainedEventId,
+      renewedByDrain:true, expiresAt} (founder carry-over ruling: a permit live
+      at the drain gets a fresh window, never minted),
       approval.rule.revoked{ruleId, repoKey, tool, connId} and
       approval.effect.failed{cardId, decision, effect, reason}, each with a
       closed payload check (validateKindPayload; an extra field is refused, an
       unchecked kind is an error); reserved payload fields contract.claimed
       claimGen, approval.rule.learned match (ALWAYS_RULE_MATCHES = [exact],
       validateAlwaysRuleMatch, TD-2026-10-19-528 F2) and approval.expire why.
+      Drain-and-resume (T-2026-10-19-014 B1/B2, Aegis M1 G-HON): reserved
+      session.open resume{drainedEventId, outcome} + principalClass,
+      session.sandbox resumedFrom/drainOutcome/note/drainedEventId,
+      session.inject deadlineMs/deadlineSource/failed, session.refused resume;
+      closed sets DRAIN_OUTCOMES, DRAIN_EXIT_REASONS [drain-clean,
+      drain-interrupted], DRAIN_INJECT_CHANNELS [drain],
+      DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES [resume-note], RESUME_NOTES,
+      RESUME_REFUSALS — all in D98_CLOSED_VALUES.
       P8-D93 (T-2026-10-18-016): kernel-owned
       session.compacted{hsid, turn, reason, summaryHash, tokensBefore,
       tokensAfter} (summaryHash a sensitive field), KIND_PAYLOADS (published as
@@ -288,8 +298,9 @@ components:
   contract-client-api-id:
     description: >-
       kitId and clientApiId (§12.3, §12.8). P8-D98 (T-2026-10-19-001) moved
-      clientApiId once: sha256:1faf47f5…8720 →
-      sha256:342ec4db11695ee9830c3e420c37ee49ce92e843f174825a76c09f3435b49c4f
+      clientApiId once (re-moved inside the same unreleased move for the
+      drain-and-resume wire, Aegis M1): sha256:1faf47f5…8720 →
+      sha256:7c006597aeeafd69059fc85d450e43a3367d53d12973f1f70999e875c66d5a40
       (descriptor gains humanDeviceVerbs — gui.open, rules.revoke and, with
       TD-2026-10-19-339 inside the same unreleased move, daemon.stop{reason?}
       with closedValues daemon.stop.reason [stop, upgrade] — helloFeatures.reserved,

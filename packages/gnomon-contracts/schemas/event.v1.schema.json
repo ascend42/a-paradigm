@@ -299,7 +299,10 @@
   "x-gnomon-reserved-payload-fields": {
     "session.inject": {
       "peerRootKeyId": "M1.1:P8-R9",
-      "briefId": "M1.1:P8-R9"
+      "briefId": "M1.1:P8-R9",
+      "deadlineMs": "8.0:P8-D98",
+      "deadlineSource": "8.0:P8-D98",
+      "failed": "8.0:P8-D98"
     },
     "session.tainted": {
       "taint": "M1.1:P8-R9"
@@ -320,7 +323,18 @@
       "override": "M1.1:P8-D86-D88"
     },
     "session.open": {
-      "runMode": "M1.1:P8-D86-D88"
+      "runMode": "M1.1:P8-D86-D88",
+      "resume": "8.0:P8-D98",
+      "principalClass": "8.0:P8-D98"
+    },
+    "session.sandbox": {
+      "resumedFrom": "8.0:P8-D98",
+      "drainOutcome": "8.0:P8-D98",
+      "note": "8.0:P8-D98",
+      "drainedEventId": "8.0:P8-D98"
+    },
+    "session.refused": {
+      "resume": "8.0:P8-D98"
     },
     "contract.claimed": {
       "claimGen": "8.0:P8-D98"
@@ -462,7 +476,9 @@
     "permit.reattributed": [
       "permitId",
       "hsid",
-      "drainedEventId"
+      "drainedEventId",
+      "renewedByDrain",
+      "expiresAt"
     ],
     "approval.rule.revoked": [
       "ruleId",

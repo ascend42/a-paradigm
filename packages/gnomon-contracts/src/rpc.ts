@@ -11,7 +11,7 @@ import { CARD_EXPIRY_WHYS, CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, 
 import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
 import { RISK_TIERS, AGENT_REVERT_HOWS, KERNEL_REVERT_HOWS } from './change-note.js';
 import { REFUSAL_GATES, REFUSAL_REASONS, refuse, type Refusal, type RefusalCode } from './refusal.js';
-import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS } from './event.js';
+import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS, DRAIN_OUTCOMES, DRAIN_EXIT_REASONS, DRAIN_INJECT_CHANNELS, DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES, RESUME_NOTES, RESUME_REFUSALS } from './event.js';
 
 export const GNOMON_RPC_V1 = 'gnomon-rpc:v1' as const;
 export const CLIENT_API_PATTERN = /^gnomon-rpc:v([1-9][0-9]*)$/;
@@ -215,6 +215,15 @@ export function validateLogReadCursor(value: unknown): string[] {
 export const D98_CLOSED_VALUES = deepFreeze({
   'approval.rule.learned.match': [...ALWAYS_RULE_MATCHES],
   'session.drained.reason': [...DRAIN_REASONS],
+  // §2.4 rule 11 drain-and-resume rows (T-2026-10-19-014 B1/B2).
+  'session.open.resume.outcome': [...DRAIN_OUTCOMES],
+  'session.sandbox.drainOutcome': [...DRAIN_OUTCOMES],
+  'session.sandbox.phase.resume': [...SANDBOX_D98_PHASES],
+  'session.sandbox.note': [...RESUME_NOTES],
+  'session.exited.reason.drain': [...DRAIN_EXIT_REASONS],
+  'session.inject.channel.drain': [...DRAIN_INJECT_CHANNELS],
+  'session.inject.deadlineSource': [...DRAIN_DEADLINE_SOURCES],
+  'session.refused.resume': [...RESUME_REFUSALS],
   'daemon.stop.reason': [...DAEMON_STOP_REASONS],
 });
 

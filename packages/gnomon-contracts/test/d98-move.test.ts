@@ -35,7 +35,7 @@ import {
 const ULID = '01J00000000000000000000000';
 const GOOD: Record<string, Record<string, unknown>> = {
   'session.drained': { uuid: '0f8fad5b-d9cb-469f-a165-70867728950e', reason: 'upgrade' },
-  'permit.reattributed': { permitId: `permit:v1:${ULID}`, hsid: `hsid:v1:${ULID}`, drainedEventId: `ev:${ULID}` },
+  'permit.reattributed': { permitId: `permit:v1:${ULID}`, hsid: `hsid:v1:${ULID}`, drainedEventId: `ev:${ULID}`, renewedByDrain: true, expiresAt: '2026-10-19T12:00:00.000Z' },
   'approval.rule.revoked': { ruleId: `card:${ULID}`, repoKey: `sha256:${'b'.repeat(64)}`, tool: 'Bash', connId: `conn:${ULID}` },
   'approval.effect.failed': { cardId: `card:${ULID}`, decision: 'answer', effect: 'tool-answer', reason: 'session-gone' },
 };
@@ -58,6 +58,9 @@ describe('P8-D98 kinds: registered, kernel-owned, closed payload checks', () => 
     }
     expect(validateKindPayload('session.drained', { ...GOOD['session.drained']!, reason: 'crash' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('approval.effect.failed', { ...GOOD['approval.effect.failed']!, reason: 'free text here' }).length).toBeGreaterThan(0);
+    // carry-over ruling: a re-attributed permit is always renewed, with an ISO expiry
+    expect(validateKindPayload('permit.reattributed', { ...GOOD['permit.reattributed']!, renewedByDrain: false }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('permit.reattributed', { ...GOOD['permit.reattributed']!, expiresAt: 'tomorrow' }).length).toBeGreaterThan(0);
   });
   it('a kind with no closed check is an error, never a pass', () => {
     expect(validateKindPayload('session.open', {}).length).toBeGreaterThan(0);
@@ -97,6 +100,26 @@ describe('human-device verbs (gui.open, rules.revoke, daemon.stop)', () => {
     expect([...DAEMON_STOP_REASONS]).toEqual(['stop', 'upgrade']);
     expect(D98_CLOSED_VALUES['daemon.stop.reason' as keyof typeof D98_CLOSED_VALUES]).toEqual(['stop', 'upgrade']);
     expect(CLIENT_API_DESCRIPTOR.closedValues).toMatchObject({ 'daemon.stop.reason': ['stop', 'upgrade'] });
+  });
+});
+
+describe('drain-and-resume wire (§2.4 rule 11, T-2026-10-19-014 B1/B2; Aegis M1 G-HON)', () => {
+  it('every B1/B2 wire field is reserved under D98 and every new value is a published closed set', () => {
+    expect(RESERVED_PAYLOAD_FIELDS['session.open']).toMatchObject({ resume: '8.0:P8-D98', principalClass: '8.0:P8-D98' });
+    expect(RESERVED_PAYLOAD_FIELDS['session.sandbox']).toEqual({ resumedFrom: '8.0:P8-D98', drainOutcome: '8.0:P8-D98', note: '8.0:P8-D98', drainedEventId: '8.0:P8-D98' });
+    expect(RESERVED_PAYLOAD_FIELDS['session.inject']).toMatchObject({ deadlineMs: '8.0:P8-D98', deadlineSource: '8.0:P8-D98', failed: '8.0:P8-D98' });
+    expect(D98_CLOSED_VALUES).toMatchObject({
+      'session.open.resume.outcome': ['clean', 'interrupted'],
+      'session.sandbox.drainOutcome': ['clean', 'interrupted'],
+      'session.sandbox.phase.resume': ['resume-note'],
+      'session.sandbox.note': ['turn interrupted by update'],
+      'session.exited.reason.drain': ['drain-clean', 'drain-interrupted'],
+      'session.inject.channel.drain': ['drain'],
+      'session.inject.deadlineSource': ['default', 'caller'],
+      'session.refused.resume': ['cwd-gone', 'not-human', 'transcripts-withheld', 'layers-changed', 'git-changed', 'permit-missing', 'permit-unfit', 'billing-refused', 'spawn-failed'],
+    });
+    expect(RESERVED_PAYLOAD_FIELDS['session.refused']).toEqual({ resume: '8.0:P8-D98' });
+    expect(CLIENT_API_DESCRIPTOR.closedValues).toMatchObject({ 'session.exited.reason.drain': ['drain-clean', 'drain-interrupted'] });
   });
 });
 
