@@ -1,0 +1,21 @@
+id: L-2026-10-19-builder-004123-001
+type: milestone
+timestamp: '2026-10-19T00:41:23.734Z'
+author: builder
+title: 'Gnomon M1.11 slice 3: gnomon mod CLI and the Workshop (first first-party mod)'
+summary: 'gnomon mod install|link|list|status|pause|start|uninstall (dd863b67) and the Workshop mod with the host kernel-event feed (40cbc7c9). The Workshop installs through the CLI as tier first-party (pinned packageHash) and renders golden fixtures on every OS. Deferred to their own lane: /blob (Aegis C4), dev mode, the gnomon-mods MCP bridge, spend from the caller permit, Tier 0.'
+symbols_touched:
+  - '#mod-cli'
+  - '#workshop-mod'
+  - '#mod-host'
+tags:
+  - gnomon
+  - M1.11
+  - milestone
+linked_commits:
+  - dd863b67
+  - 40cbc7c9
+git_context:
+  ref: 40cbc7c921a81caccb43d2df61190c34ebabea10
+  branch: gnomon/m111-slice3
+  dirty: false

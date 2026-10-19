@@ -58,8 +58,14 @@ import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, 
 export const STAGED_RECORD_SCHEMA = 'gnomon-staged-install:v1' as const;
 const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 
-/** packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods, Move 3). Empty until then. */
-export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>();
+/**
+ * packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods).
+ * M1.11 slice 3: the Workshop (#workshop-mod). Any edit to its tree moves the
+ * hash; test/workshop-mod.test.ts holds the pin.
+ */
+export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
+  'sha256:07a1cf2c8a61ba9f17681f6af4308b859ffcc35ab6f9f225a4946f5a915223e6', // packages/gnomon-mods/workshop 1.0.0
+]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
 
@@ -471,7 +477,11 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   }
   const shown = blockFor(derived);
   const children = (shown.block as { children: Array<{ text: string }> }).children;
-  return { record: rec, detail: derived, lines: children.map((c) => c.text), flags: shown.flags, detailHash: sha(canonicalJson(derived)) };
+  // Aegis C4: requestedBy / hsid / attended come from the writable staged file: shown as CLAIMS, after the kernel-composed lines
+  const claim = wrappedBlock([`claimed by the staged record (unverified): requested by ${rec.card.requestedBy} · session ${rec.card.hsid ?? 'none'} · attended ${rec.card.attended ? 'yes' : 'no'}`]);
+  const lines = [...children.map((c) => c.text), ...(claim.block as { children: Array<{ text: string }> }).children.map((c) => c.text)];
+  const flags = [...new Set([...shown.flags, ...claim.flags])].sort();
+  return { record: rec, detail: derived, lines, flags, detailHash: sha(canonicalJson(derived)) };
 }
 
 /**
@@ -620,8 +630,8 @@ export function linkedFolders(home: string, trust: RowVerifier): string[] {
   const g = readGrants(home, trust);
   const names = [...new Set(g.installs.map((r) => r.name))];
   return names
-    .map((n) => effectiveInstall(g, n)!)
-    .filter((r) => r.source.startsWith('linked:'))
+    .map((n) => effectiveInstall(g, n))
+    .filter((r): r is GrantInstallRow => r !== undefined && r.source.startsWith('linked:'))
     .map((r) => r.source.slice(7))
     .sort();
 }

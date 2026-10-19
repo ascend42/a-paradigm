@@ -8,3 +8,4 @@
 {"timestamp":"2026-09-20T23:53:15Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
 {"timestamp":"2026-09-20T23:56:53Z","type":"edit-advisory","source":"team-gate","file":"local-guard.ts"}
 {"timestamp":"2026-09-21T00:00:44Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
+{"timestamp":"2026-10-18T02:28:02Z","type":"edit-advisory","source":"team-gate","file":"portal-compliance.ts"}

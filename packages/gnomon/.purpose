@@ -1873,9 +1873,64 @@ components:
       the bridge drops a call's byte tally on the host's onCallEnd and prunes
       past idle seconds (never a wholesale clear); kernel-side refusals reach
       a mod as code + reason only (generic message, no wrapped data).
-      Slice 3: spend from the caller permit, dev-mode cards/re-pin,
-      gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
+      Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
+      a <home>/mods/<name>/paused marker makes every start return
+      paused{why:user}. feed.ts: ModHost.feed (startDaemon queues committed
+      rows, bounded 4096, and feeds only rows at or below the log's released
+      head; turn.partial coalesced to one edge per hsid; ModChannel.notify
+      drops past 256 KiB unread stdin, counted in inspect
+      droppedNotifications) forwards a fixed projection of session.open/exited,
+      turn.partial/result, approval.request/decide/expire and warpline.knot
+      (kernel fields only; project = a hue index from sha256(cwd)) to running
+      mods requiring log.read - the #workshop-mod input. FIRST_PARTY_PACKAGE_HASHES
+      pins the Workshop. Still to come: spend from the caller permit,
+      dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
+
+  mod-cli:
+    description: >-
+      #mod-cli (spec §12.4, §12.5, §3.1 I3; §19.1 M1.11 slice 3) -
+      src/cli/mod-cli.ts `gnomon mod install|link|list|status|pause|start|
+      uninstall` over #manifest-loader, plus the kernel half in
+      src/kernel/modhost/control.ts. §5 has no install/pause/start verb and
+      adding one moves clientApiId, so the CLI and the kernel meet in the
+      home: install/link run stageInstall in the CLI (snapshot + pending card
+      record, signs nothing; staging from a session is NOT available yet: the
+      darwin session profile denies writes under the home, so it waits for the
+      gnomon-mods bridge; a GNOMON_HSID in the env is recorded only as a
+      claim, and the CLI's GNOMON_HSID refusals are advisory, the SBPL is the
+      boundary) and print the card lines from rederiveInstallDetail
+      (the hardened install path: one line per entry, kernel-composed count
+      line at index 2, COMMAND_UNSAFE linked-path refusal, linked-source
+      re-hash); a url source is refused. The daemon's StagedCardPickup
+      (scan every 2 s) raises every pending staged card through
+      #approval-broker raiseInstallCard (re-derived from the pinned snapshot;
+      install = fresh presence + root key, Touch ID via the M1.3 helper),
+      logs manifest.staged{via:cli} for cards the kernel did not stage
+      itself, starts the mod on mod.installed; bounded (MAX_PICKUP_CARDS 32
+      raised, 256 remembered refusals keyed by file stamp so a tampered
+      record is not retried until it changes; Aegis C5: files are listed by
+      readdir + lstat only (≤ 1024), raised / settled / refused-unchanged ids
+      are skipped before any read, ≤ 64 records READ per scan, 64 KiB per
+      record, manifest.refuse carries the ManifestRefusal code and is folded
+      8 per 10 s, and the grant table is read once per scan). pause writes the paused marker
+      (narrows; allowed from a session), the pickup stops a running paused
+      mod (mod.paused{reason:user}); start clears it and writes
+      start.request (operator start, lifts DOWN); uninstall writes
+      uninstall.request naming the pin, the pickup raises a root-class
+      `grant` card (allow|deny) whose allow appends a root-signed
+      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input;
+      pin rows are stamped max(now, newest pin plus one millisecond) and read back - the
+      reader rejects a non-newer pin as replay - and the uninstall effect
+      reports nothing unless it took effect; junk staged files are
+      remembered by stamp; manifest.staged logs by/hsid under claimed),
+      stops the mod and logs manifest.uninstall{diff} (+ mod.unlinked);
+      effectiveInstall = the last install/uninstall pin row naming the mod.
+      start and uninstall are refused from a kernel-spawned shell. list and
+      status read the grant table offline (trust from identity.json or a
+      DEV home's root).
+    tags: [cli, mods, M1.11]
+    oracles: [G-MOD-04, G-MOD-08]
 flows:
   daemon-lifecycle:
     description: >-

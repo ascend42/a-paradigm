@@ -37,6 +37,9 @@ export class ModRpcError extends Error {
 
 export type RequestHandler = (method: string, params: Record<string, unknown>) => Promise<unknown>;
 
+/** Unread bytes in a mod's stdin above which notifications are dropped (bounded feed). */
+export const MOD_NOTIFY_HIGH_WATER = 256 * 1024;
+
 export class ModChannel {
   readonly #child: ChildProcess;
   readonly #decoder = new NdjsonDecoder(MOD_FRAME_MAX_BYTES);
@@ -123,9 +126,24 @@ export class ModChannel {
     });
   }
 
-  notify(method: string, params: Record<string, unknown>): void {
+  /**
+   * A host → mod notification. Bounded (M1.11 slice 3 review): while the
+   * child's stdin already holds more than MOD_NOTIFY_HIGH_WATER unread bytes
+   * the notification is DROPPED (counted in droppedNotifications), so a mod
+   * that stops reading can never grow the kernel's memory. Requests are not
+   * dropped (they are bounded by the per-mod call queue and timeouts).
+   */
+  notify(method: string, params: Record<string, unknown>): boolean {
+    if (this.#closed) return false;
+    if ((this.#child.stdin?.writableLength ?? 0) > MOD_NOTIFY_HIGH_WATER) {
+      this.droppedNotifications++;
+      return false;
+    }
     this.#write({ method, params });
+    return true;
   }
+
+  droppedNotifications = 0;
 
   close(err: Error): void {
     if (this.#closed) return;

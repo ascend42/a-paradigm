@@ -67,9 +67,15 @@
  * kernel.call to the real dispatcher and the relays into it), lists it in
  * `status.mods`, and stops every mod before the children sweep at every exit.
  *
+ * USER PAUSE (slice 3, control.ts): a `<home>/mods/<name>/paused` marker
+ * (`gnomon mod pause`) makes every start return paused{why:'user'}.
+ *
+ * FEED (slice 3, feed.ts): feed() forwards a fixed projection of kernel
+ * kinds to running mods requiring log.read (the Workshop's only input).
+ *
  * STILL NAMED, NOT BUILT: dev-mode cards/expiry scheduling/cwd exclusion and
  * the dev re-pin (`mod.repinned`), the `gnomon-mods` MCP bridge, Tier 0
- * templates, the Workshop mod, `/blob` serving.
+ * templates, `/blob` serving.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -95,6 +101,8 @@ import { declaredEffects, effectsFor, methodEffect, type CallContext } from './e
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
+import { isUserPaused, modNames } from './control.js';
+import { FEED_CAPABILITY, projectFeedEvent } from './feed.js';
 
 const isLink = (p: string): boolean => {
   try {
@@ -118,6 +126,8 @@ export const RELAY_MISS_WINDOW_MS = 10_000;
 /** Aegis R2-1: mod.effect.refused rows per mod per window before folding. */
 export const EFFECT_REFUSED_ROWS_PER_WINDOW = 8;
 export const EFFECT_REFUSED_WINDOW_MS = 10_000;
+/** Sessions whose streaming edge the feed remembers (oldest forgotten first; a forgotten one just gets a second edge). */
+export const MAX_STREAMING_TRACKED = 4096;
 const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 export interface ModChildrenPort {
@@ -162,7 +172,7 @@ export interface ModHostSeams {
 
 export type ModStartResult =
   | { state: 'running'; name: string; packageHash: string; dev: boolean; effects: ToolEffect[]; sandbox: 'full' | 'none'; profileHash: string | null; egressPort: number | null }
-  | { state: 'paused'; name: string; why: 'changed' | 'dev-expired'; cardId: string | null; files?: TreeDiff };
+  | { state: 'paused'; name: string; why: 'changed' | 'dev-expired' | 'user'; cardId: string | null; files?: TreeDiff };
 
 interface Running {
   name: string;
@@ -209,6 +219,8 @@ export class ModHost {
   /** mods out of restarts: refused DOWN to relays until an operator start() */
   readonly #down = new Set<string>();
   readonly #inflight = new Map<string, number>();
+  /** hsids whose turn.partial edge was already fed (bounded) */
+  readonly #streaming = new Set<string>();
   #misses!: RowFold;
   readonly #refusedFolds = new Map<string, RowFold>();
   #closed = false;
@@ -277,8 +289,32 @@ export class ModHost {
     return {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
-      paused: [...this.#paused.values()].map((p) => ({ name: p.name, why: p.why, cardId: p.cardId })).sort((a, b) => a.name.localeCompare(b.name)),
+      paused: this.#pausedView(),
     };
+  }
+
+  /**
+   * Paused mods (Aegis C2): the in-memory pauses PLUS every `gnomon mod pause`
+   * marker on disk, so a user pause is visible from the moment it is written
+   * and across kernel restarts, whether or not the mod was ever started.
+   */
+  #pausedView(): Array<{ name: string; why: string; cardId: string | null }> {
+    const out = new Map<string, { name: string; why: string; cardId: string | null }>();
+    for (const p of this.#paused.values()) out.set(p.name, { name: p.name, why: p.why, cardId: p.cardId });
+    for (const n of modNames(this.#o.home)) if (!out.has(n) && isUserPaused(this.#o.home, n)) out.set(n, { name: n, why: 'user', cardId: null });
+    return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Aegis C2 fail-closed: a pause marker written while the child runs refuses
+   * every call NOW (the pickup's next scan only reaps the child); the stop is
+   * started here too.
+   */
+  #userPausedLive(r: Running): boolean {
+    if (r.stopping || !isUserPaused(this.#o.home, r.name)) return false;
+    this.#emit('mod.paused', { name: r.name, reason: 'user', files: [] });
+    void this.stop(r.name, 'paused').catch(() => undefined);
+    return true;
   }
 
   /** Mods whose linked folder is being watched (tests / inspect). */
@@ -325,6 +361,7 @@ export class ModHost {
   /** Start (or return) the child for `name` — the OPERATOR path: it also lifts a restart-cap `down`. Paused mods return their pause; nothing from a changed tree loads. */
   start(name: string): Promise<ModStartResult> {
     this.#down.delete(name);
+    if (this.#paused.get(name)?.why === 'user') this.#paused.delete(name); // re-judged from the marker
     return this.#launch(name);
   }
 
@@ -338,7 +375,9 @@ export class ModHost {
    */
   async admit(name: string): Promise<void> {
     if (typeof name !== 'string' || !MOD_NAME.test(name)) throw new ModRefusal('NOT_INSTALLED', 'malformed mod name', { reason: 'not-found' });
-    if (this.#running.has(name)) return;
+    const live = this.#running.get(name);
+    if (live && this.#userPausedLive(live)) throw new ModRefusal('PAUSED', `${name} is paused (gnomon mod pause)`, { name, why: 'user' });
+    if (live) return;
     const p = this.#paused.get(name);
     if (p) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: p.why, cardId: p.cardId });
     if (this.#down.has(name) || this.restarts(name) >= RESTART_CAP.n) {
@@ -389,6 +428,13 @@ export class ModHost {
 
   async #start(name: string): Promise<ModStartResult> {
     if (this.#closed) throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
+    if (MOD_NAME.test(name) && isUserPaused(this.#o.home, name)) {
+      // `gnomon mod pause` (control.ts): nothing loads until `gnomon mod start`
+      this.#unwatch(name);
+      const p = { state: 'paused' as const, name, why: 'user' as const, cardId: null };
+      this.#paused.set(name, p);
+      return p;
+    }
     const loaded = loadMod({ home: this.#o.home, name, trust: this.#o.trust, emit: this.#emit, ...(this.#o.kernelPrincipal ? { kernelPrincipal: this.#o.kernelPrincipal } : {}) });
     if (loaded.state === 'paused') {
       this.#unwatch(name);
@@ -540,6 +586,7 @@ export class ModHost {
       ...(p ? { paused: { why: p.why, cardId: p.cardId } } : {}),
       restarts: this.restarts(name),
       protocolErrors: r?.channel.protocolErrors ?? 0,
+      droppedNotifications: r?.channel.droppedNotifications ?? 0,
       stderrTail: r?.channel.stderrTail ?? this.#stderr.get(name) ?? '',
     };
   }
@@ -551,6 +598,7 @@ export class ModHost {
     if (!r) return;
     r.stopping = true;
     this.#running.delete(name);
+    if (reason === 'paused') this.#paused.set(name, { state: 'paused', name, why: 'user', cardId: null });
     let t: NodeJS.Timeout | undefined;
     await Promise.race([r.channel.request('shutdown', {}).catch(() => undefined), new Promise((res) => (t = setTimeout(res, 300)))]);
     clearTimeout(t);
@@ -570,6 +618,7 @@ export class ModHost {
 
   #require(name: string): Running {
     const r = this.#running.get(name);
+    if (r && this.#userPausedLive(r)) throw new ModRefusal('PAUSED', `${name} is paused (gnomon mod pause)`, { name, why: 'user' });
     if (r) return r;
     if (this.#paused.has(name)) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name });
     throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });
@@ -705,6 +754,29 @@ export class ModHost {
     if (!r || typeof event?.kind !== 'string' || !event.kind.startsWith(`modns.${name}.`)) return false;
     r.channel.notify('event', { event });
     return true;
+  }
+
+  /**
+   * The kernel-event feed (feed.ts, slice 3): every running mod whose
+   * manifest requires `log.read` (granted at load) gets the PROJECTION of the
+   * fixed feed kinds; nothing else. Returns how many mods it reached.
+   */
+  feed(event: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }): number {
+    const projected = projectFeedEvent(event);
+    if (!projected) return 0;
+    // review: turn.partial is coalesced to ONE edge per hsid (streaming started); turn.result / session.exited end it
+    const hsid = typeof projected.payload.hsid === 'string' ? projected.payload.hsid : null;
+    if (hsid && projected.kind === 'turn.partial') {
+      if (this.#streaming.has(hsid)) return 0;
+      if (this.#streaming.size >= MAX_STREAMING_TRACKED) this.#streaming.delete(this.#streaming.values().next().value!);
+      this.#streaming.add(hsid);
+    } else if (hsid && (projected.kind === 'turn.result' || projected.kind === 'session.exited')) this.#streaming.delete(hsid);
+    let n = 0;
+    for (const r of this.#running.values()) {
+      if (r.stopping || !r.manifest.requires?.capabilities?.includes(FEED_CAPABILITY)) continue;
+      if (r.channel.notify('event', { event: projected })) n++;
+    }
+    return n;
   }
 
   /** The call a mod → host request is bound to: its echoed callId must name the call in force; none ⇒ idle. */

@@ -109,6 +109,7 @@ import { catchUp, RuleBook, RULE_KINDS } from '../supervisor/rules.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
+import { StagedCardPickup } from '../modhost/control.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
@@ -129,6 +130,8 @@ export type DaemonEvent =
   | SocketEvent;
 
 export interface DaemonOptions {
+  /** `gnomon mod` pickup scan period (default PICKUP_SCAN_MS); tests shorten it */
+  modPickupMs?: number;
   home: string;
   idleMs?: number;
   /** Test seam: per-subscription undelivered-frame cap (default 10 000, §4.9). */
@@ -206,6 +209,8 @@ export interface DaemonHandle {
   readonly children: DaemonChildren;
   /** #mod-host (M1.11): mods started on first relay, stopped at every exit. */
   readonly mods: ModHost;
+  /** `gnomon mod` control (M1.11 slice 3): staged install cards raised through the broker, pause markers, start requests. */
+  readonly modPickup: StagedCardPickup;
   /** The exact kernel.call function the mod host uses (bridge.ts createModKernelCall over this daemon's dispatcher and log). */
   readonly modKernelCall: (req: KernelCallRequest) => Promise<unknown>;
   /** The unix-socket dispatcher (its `callAs` is the mods' kernel.call). */
@@ -369,6 +374,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       try {
         await scheduler.stop().catch(() => undefined); // an in-flight tick finishes before children stop
         // §2.4 rule 3: mod, session and transport children stop BEFORE daemon.exit — never exit with a live child
+        try {
+          modPickup.stop();
+        } catch {
+          /* shutdown before the pickup existed */
+        }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
@@ -608,15 +618,54 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     home,
     trust: authority,
     children,
-    emit: (kind, payload) =>
+    emit: (kind, payload) => {
+      if (kind === 'manifest.staged' && typeof payload.cardId === 'string' && kernelStaged.size < 4096) kernelStaged.add(payload.cardId);
       void appendRow(kind, payload).catch((err: unknown) => {
         // N3: a lost pause / refusal row surfaces on the diag channel (as recordRevocation does)
         if (kind === 'mod.paused' || kind === 'mod.effect.refused') emit({ kind: 'daemon.mod.row.unrecorded', rowKind: kind, name: typeof payload.name === 'string' ? payload.name : null, error: err instanceof Error ? err.message : String(err) });
-      }),
+      });
+    },
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
     kernelCall: (req) => modKernelCall(req),
     onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
+  });
+  // M1.11 slice 3 (#mod-cli): what `gnomon mod install|link` staged on disk reaches the human only through the broker
+  const kernelStaged = new Set<string>();
+  // the `event` feed to log.read-granted mods (feed.ts): a projection only, and only of RELEASED rows
+  // (review: a mod never sees a row the log has not released to readers). Committed rows wait in a
+  // bounded queue until the release head passes them; overflow drops the oldest (display only).
+  const feedQueue: Array<{ seq: number; e: Parameters<typeof mods.feed>[0] }> = [];
+  let feedScheduled = false;
+  const flushFeed = (head: number): void => {
+    while (feedQueue.length && feedQueue[0]!.seq <= head) {
+      const { e } = feedQueue.shift()!;
+      try {
+        mods.feed(e);
+      } catch {
+        /* a mod's feed never breaks a release */
+      }
+    }
+  };
+  // commit listeners run BEFORE the release (kernel-log.ts onCommit): deliver on the next turn, up to the released head
+  log.onCommit((e) => {
+    if (feedQueue.length >= 4096) feedQueue.shift();
+    feedQueue.push({ seq: e.seq, e });
+    if (feedScheduled) return;
+    feedScheduled = true;
+    setImmediate(() => {
+      feedScheduled = false;
+      flushFeed(log.releasedHead());
+    });
+  });
+  log.onRelease((head) => flushFeed(head));
+  const modPickup = new StagedCardPickup({
+    home,
+    broker,
+    authority,
+    host: mods,
+    emit: (kind, payload) => void appendRow(kind, payload).catch(() => undefined),
+    alreadyLogged: (cardId) => kernelStaged.has(cardId),
   });
   const modKernelCall = createModKernelCall({
       callAs: (principal, verb, params) => dispatcher.callAs(principal, verb, params),
@@ -736,6 +785,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     await shutdown('error');
     throw err;
   }
+  modPickup.start(opts.modPickupMs);
   idle.start();
   return {
     pidfile,
@@ -753,6 +803,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     web: () => web,
     children,
     mods,
+    modPickup,
     modKernelCall,
     dispatcher,
     scheduler,

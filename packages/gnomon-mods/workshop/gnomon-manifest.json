@@ -1,0 +1,13 @@
+{
+  "manifest": 1,
+  "kind": "mod",
+  "name": "workshop",
+  "version": "1.0.0",
+  "abi": "mod-abi:v1",
+  "description": "The Workshop (spec §11.6): needs-you caps per pending card and working caps per session, every attribute from kernel events.",
+  "provides": {
+    "views": [{ "id": "workshop.strip", "slot": "sidebar", "placement": "append", "fixtures": ["fixtures/strip.json", "fixtures/strip-reduced.json"] }],
+    "events": ["modns.workshop.moved"]
+  },
+  "requires": { "capabilities": ["log.read"], "egress": "none" }
+}
