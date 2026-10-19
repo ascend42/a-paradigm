@@ -91,7 +91,7 @@ Then, each build:
 
 ```sh
 # from the a-paradigm checkout you want the app to run
-npm ci && npm run build:gnomon
+npm ci && npm run gnomon:install                # = build:gnomon + links `gnomon` for terminal use (packages/gnomon/README.md)
 export PATH="$HOME/.cargo/bin:$PATH"            # cargo + cargo-tauri
 
 node packages/gnomon-wrapper/scripts/build-darwin.mjs        # release build, Developer ID signed, hardened runtime
@@ -106,13 +106,17 @@ never hardcoded. The build checks `codesign --verify --strict --deep`, the
 requirement (Apple anchor, Developer ID leaf, team `SW4BMQ8PNL`, identifier
 `gnomon.wrapper`) and that the app carries no entitlements.
 
-**The app runs the kernel from the checkout it was built in.** Rebuild it after
+**The app runs the kernel from the checkout it was built in.** After every
+update (`git pull`, then `npm run gnomon:install`), rebuild the app with
+`build-darwin.mjs`: the pins above make it refuse until you do. Rebuild it after
 moving the checkout. Rebuild it after `npm run build:gnomon` changes the GUI
 bundle, because the app refuses a bundle other than its pin.
 
 Before the first launch, provision the identity once in a terminal:
-`node packages/gnomon/dist/cli/gnomon.js identity init`. Until you do, the app
-shows that exact instruction.
+`node packages/gnomon/dist/cli/gnomon.js identity init` (or `gnomon identity init`
+once installed). Until you do, the app shows that exact instruction. While the
+app runs, a terminal `gnomon` refuses `already-running` and tells you to open
+the folder in the app's window (**+ new**).
 
 ## Tests
 

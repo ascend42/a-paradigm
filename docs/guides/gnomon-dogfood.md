@@ -7,9 +7,16 @@ the hardware root and the presence prompt come with M1.3, and this path is
 removed when they land (spec §2.4 rule 6, `#dev-launch`).
 
 **With M1.3 on your Mac, use the real path instead:** `gnomon identity init`, then
-`gnomon up`. Approvals work there, with Touch ID. See
+`gnomon` in a repo (or `gnomon up`). Approvals work there, with Touch ID. See
 [Real identity: `gnomon up`](#real-identity-gnomon-up) at the end. The
-prerequisites below apply to both paths.
+prerequisites below apply to both paths. The short user-facing version of the
+real path, with install, update and troubleshooting, is
+[packages/gnomon/README.md](../../packages/gnomon/README.md).
+
+**Install once:** `npm ci && npm run gnomon:install` from the clone. It builds
+and links `gnomon` into `/opt/homebrew/bin` or `/usr/local/bin` (no sudo; it
+refuses to replace a `gnomon` that is not its own link). After that, `gnomon`
+works in any terminal and passes `--disable-sigusr1` through its shebang.
 
 ## Before you start
 
@@ -212,8 +219,19 @@ another one exists.
 ### Each time: run it
 
 ```sh
-node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js up
+cd <a repo>
+gnomon        # = gnomon up, with this repo suggested in the GUI's new-session form
 ```
+
+Bare `gnomon` (spec §2.4 rule 8, `#bare-entry`) runs exactly `gnomon up` with
+the same checks, and adds a `folder` line: the repo's top folder, or the
+current folder when you are not in a git repo (it says so). The launch URL
+carries that path after the token, in the part of the URL your browser never
+sends to the server. The GUI opens the new-session form with it filled in and
+shows the full path as text. You still click **open**. A path with control,
+bidi or other hidden characters is shown escaped and is not filled in. Without
+a repo hint, `gnomon up` (or `node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js up`
+without the installer) behaves as before.
 
 There is no `DEV ONLY` banner. It prints:
 
@@ -275,6 +293,7 @@ separately running `gnomond`.
 | `REFUSED  UP  unprovisioned` | No home, or no `keys/identity.json` | `gnomon identity init` |
 | `REFUSED  UP  dev-home` | The home carries the DEV-ONLY marker | `gnomon dev up --home <it>` |
 | `REFUSED  UP  daemon-running` | A kernel already runs on this home (`gnomond` or another `up`) | Stop it with Ctrl-C in its terminal, or let it exit on idle. `gnomon open` has no wire verb yet. |
+| `REFUSED  GNOMON  already-running` (bare `gnomon`, exit 3) | A kernel already runs on this home; the message names it (Gnomon.app, a terminal `gnomon up`, or `gnomond`) | In that window: **+ new** (Cmd-N) and paste the path it prints; or stop that instance and run `gnomon` again. No second kernel is started. |
 | `REFUSED  UP  identity-malformed` | `keys/identity.json` is not a regular file, not JSON, or its key ids do not match its keys | Check with `gnomon identity status`; restore it, or `gnomon identity init --recover` if the root is lost |
 | `REFUSED  UP  identity-helper` / `identity-mismatch` | The helper is not the pinned signed one or does not answer, or the Secure Enclave keys do not match identity.json | Rebuild the helper; check with `gnomon identity status` |
 | `REFUSED  UP  unsafe-home` | The home is a symlink or not a directory | Name the real directory with `--home` |
@@ -313,7 +332,7 @@ first: the signed helper plus `gnomon identity init`. Then, from the clone you
 want the app to run:
 
 ```sh
-npm ci && npm run build:gnomon
+npm ci && npm run gnomon:install                           # builds, and links `gnomon` for the terminal path
 export PATH="$HOME/.cargo/bin:$PATH"
 node packages/gnomon-wrapper/scripts/build-darwin.mjs      # Developer ID signed, hardened runtime
 node packages/gnomon-wrapper/scripts/notarize-darwin.mjs   # notarytool (gnomon-notary) + staple; a few minutes
