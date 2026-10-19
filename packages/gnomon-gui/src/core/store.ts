@@ -494,7 +494,7 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
   const speaker = speakerName(p.speakerId);
   if (isPartial(r, p)) {
     if (!tid || ctx.finals.has(tid) || ctx.lastPartial.get(tid) !== r.seq || !text.trim()) return null;
-    return { role: 'voice-partial', text: cap(text, CHAT_TEXT_MAX), speaker };
+    return { role: 'voice-partial', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker };
   }
   switch (r.kind) {
     case 'voice.turn.user': {
