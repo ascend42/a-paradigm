@@ -116,6 +116,7 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // T-2026-10-19-009 item 2: socket ownership (connect-probe reclaim, private bind + publish, 0700 dir).
   { test: 'test/socket-ownership.test.ts', platforms: ['darwin', 'linux'], na: 'unix-socket ownership only: on Windows the endpoint is a named pipe created by the signed helper with an owner-only DACL (Windows parity phase, P8-D78), which has no stale file to reclaim' },
   // T-2026-10-19-009 item 3: readiness handshake over real gnomond processes (ready pipe, lost race, classified exit).
+  { test: 'test/socket-flood.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the flood, write-buffer and connection-cap falsifiers drive the unix-socket endpoint; the named pipe (P03) gets its own bounds there' },
   { test: 'test/daemon-ready.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/daemon-exit-codes.test.ts', na: 'the exit-code table, the ready-line parser and the bounded stderr tail run on every platform in test/daemon-exit-codes.test.ts; the real-process handshake needs the unix-socket endpoint (the Windows named pipe is the parity phase, P8-D78)' },
   // PR-4 #kernel-log, macOS-first (P8-D78): file modes, kill -9, p99 + per-OS memory metric.
   { test: 'test/kernel-log-posix.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only ACLs instead of modes, and the private-bytes memory metric (§16 memory row) are measured there' },
