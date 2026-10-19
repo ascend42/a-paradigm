@@ -7,7 +7,7 @@ description: >
   Read-only — does not write implementation code.
 tools: Read, Grep, Glob, WebSearch, WebFetch
 disallowedTools: Write, Edit, Bash, NotebookEdit
-maxTurns: 60
+maxTurns: 100
 ---
 
 # Architect Agent

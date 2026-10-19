@@ -7,7 +7,7 @@ description: >
   then code quality.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash, NotebookEdit
-maxTurns: 40
+maxTurns: 100
 ---
 
 # Reviewer Agent
