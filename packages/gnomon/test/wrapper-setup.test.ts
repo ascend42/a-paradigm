@@ -1,10 +1,12 @@
 // @gnomon-platform: darwin, linux
 /**
- * #gnomon-wrapper × #setup-endpoint (T-2026-10-19-006 item 2): `gnomon up --wrapper`, the way Gnomon.app
+ * #gnomon-wrapper × #setup-endpoint (T-2026-10-19-006 items 2 and 3): `gnomon up --wrapper`, the way Gnomon.app
  * spawns it, on a home that is not ready routes to the setup screens, and the setup page (driven here over the
  * real setup WebSocket, as the app's WebView would) carries it through to `{t:up}`.
  *   - item 2: identity.json exists but the device registry row does not (a setup interrupted before its last
  *     step): `up --wrapper` emits `{t:setup}`, never a `device-unregistered` refusal, and setup.complete finishes it;
+ *   - item 3: an unprovisioned home end to end: {t:setup} → hello/auth/preflight/name/begin/finish → {t:up}
+ *     (→ a launch grant on darwin, where the transport sandbox profile exists) → quit → {t:down}.
  * What this does NOT cover: a real WebView rendering the page (the Tauri app is not built in CI); the browser
  * smoke (test/gui-browser-darwin.test.ts) loads the pages in headless Chrome instead.
  * POSIX only: the #provisioner writes an owner-only keys/ dir and pins a shebang helper (as setup-endpoint.test.ts).
@@ -28,6 +30,8 @@ import { rpc, wsConnect, type RawWs } from './web-helpers.js';
 const DEV = acceptUnsignedHelperForTests(DEV_TEST_HELPER_ACK);
 const CLEAN = { env: {}, execArgv: ['--disable-sigusr1'] as string[] };
 const CHILD = path.join(PKG_ROOT, 'dist', 'transport', 'gnomon-web.js');
+// the launch grant needs the kernel's GUI endpoint under the darwin `transport` sandbox profile (§15.5)
+const NO_TRANSPORT = process.platform !== 'darwin';
 const HELLO = { clientApis: [SETUP_API], features: [], clientNonce: TEST_CLIENT_NONCE, client: { name: 'gnomon-gui', version: '0', surface: 'webview' } };
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -158,5 +162,37 @@ describe('#gnomon-wrapper setup routing (up --wrapper)', () => {
     c.stdin.write('quit\n');
     expect(await run).toBe(0);
     await c.next('down');
+  });
+
+  it('item 3: an unprovisioned home end to end through {t:up}: setup grant → page flow → up (→ launch on darwin) → quit → down; no token on stderr', async () => {
+    const uh = userHome();
+    const home = path.join(uh, '.gnomon');
+    const fake = new FakeHelper(null);
+    const c = channel();
+    const run = runUpCommand(['--wrapper'], c, deps(uh, fake));
+    const s = await c.next('setup');
+    expect(fs.existsSync(path.join(home, 'keys', 'identity.json'))).toBe(false);
+    const p = await page(Number(s.port), String(s.setupToken));
+    expect((await p.call(3, 'setup.preflight')).result).toBeTruthy();
+    await p.call(4, 'setup.name', { name: 'founder' });
+    const b = await p.call(5, 'setup.begin');
+    expect(b.result).toMatchObject({ principalId: expect.stringMatching(/\/founder$/) });
+    expect(fake.signs.filter((x) => x.key === 'root').length).toBe(2);
+    await p.call(6, 'setup.finish');
+    const up = await c.next('up');
+    expect(up).toBeTruthy();
+    expect(deviceRegistered(home, readIdentity(home)!)).toBe(true);
+    if (!NO_TRANSPORT) {
+      c.stdin.write('launch\n');
+      const g = await c.next('launch');
+      expect(String(g.launchToken)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(c.err.join('')).not.toContain(String(g.launchToken));
+    }
+    c.stdin.write('quit\n');
+    expect(await run).toBe(0);
+    await c.next('down');
+    expect(c.err.join('')).not.toContain(String(s.setupToken));
+    // the setup scratch beside the home is gone once setup hands over to the kernel
+    expect(fs.readdirSync(uh).filter((n) => n.startsWith('.gnomon-setup-'))).toEqual([]);
   });
 });
