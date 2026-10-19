@@ -3,8 +3,8 @@
  * #socket + $daemon-lifecycle — the human-device verb `daemon.stop {reason?}` (P8-D98 verb 15, ruling
  * TD-2026-10-19-339, T-2026-10-19-014 B0), end to end over the unix socket of a real daemon on a dev home.
  * Falsifiers: the home's human device raises the daemon-stop card; approving it with fresh presence stops the
- * daemon (exit reason `stop`); an unknown reason is BAD_REQUEST and `upgrade` is ENGINE{not-implemented}, neither
- * raising a card; agent, session, mod, voice, read-token, peer and GUI launch-token connections are refused
+ * daemon (exit reason `stop`); an unknown reason is BAD_REQUEST, raising no card; `upgrade` (slice B1) raises the
+ * card with the upgrade lines and an accept drains (§2.4 rule 11) and exits with reason `upgrade`, exit 0, no restart; agent, session, mod, voice, read-token, peer and GUI launch-token connections are refused
  * FORBIDDEN{matrix} before the handler (no card); the web dispatcher reports daemon.stop unavailable; the handler
  * stamps connId from the connection, never from params; and `gnomon daemon stop` raises the card and exits 0
  * without waiting (no kernel: REFUSED ENGINE not-running).
@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { refusalOf } from '@a-company/gnomon-contracts';
 import { approvalsKeyFrom, type ApprovalsKey } from '../src/kernel/broker/index.js';
-import { selectSocketPath, startDaemon, type DaemonHandle } from '../src/kernel/lifecycle/index.js';
+import { EXIT_REASON_CLASS, exitCodeOfExitReason, restartable, selectSocketPath, startDaemon, type DaemonHandle } from '../src/kernel/lifecycle/index.js';
 import { dispatcherOptionsFor } from '../src/kernel/lifecycle/daemon.js';
 import { connectGnomon, createDaemonStopHandler, createKernelDispatcher, RpcRefusal, type HumanDeviceVerbPorts } from '../src/kernel/socket/index.js';
 import { loadDevHome, provisionDevHome } from '../src/cli/dev-home.js';
@@ -83,8 +83,6 @@ describe('daemon.stop over the unix socket, as the home human device', () => {
     expect('error' in bad && refusalOf(bad)).toMatchObject({ code: 'BAD_REQUEST', data: { reason: 'bad-params' } });
     const extra = await s.conn.call('daemon.stop', { reason: 'stop', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZQ' } as never);
     expect('error' in extra && refusalOf(extra)).toMatchObject({ code: 'BAD_REQUEST' });
-    const up = await s.conn.call('daemon.stop', { reason: 'upgrade' });
-    expect('error' in up && refusalOf(up)).toMatchObject({ code: 'ENGINE', data: { reason: 'not-implemented' } });
     expect(daemonStopCards(d)).toHaveLength(0);
 
     const r = await s.conn.call('daemon.stop', {});
@@ -104,6 +102,32 @@ describe('daemon.stop over the unix socket, as the home human device', () => {
     expect(w.prompts).toEqual(['fresh']); // one Touch ID prompt, never a cached unlock
     expect(await d.exited).toBe('stop');
     expect(exited).toBe(true);
+  });
+
+  it('B1: reason upgrade raises the card with the upgrade lines; a presence accept drains and exits `upgrade` (exit 0, no restart)', async () => {
+    const w = world();
+    const events: Array<{ kind: string; reason?: string }> = [];
+    const d = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: w.l.kernel, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, onEvent: (e) => events.push(e as never) });
+    cleanups.push(() => d.shutdown('signal').catch(() => undefined));
+    const s = await humanConn(w);
+    const r = await s.conn.call('daemon.stop', { reason: 'upgrade' });
+    if ('error' in r) throw new Error(r.error.message);
+    expect(r.result).toMatchObject({ state: 'pending' });
+    const rows = daemonStopCards(d);
+    expect(rows).toHaveLength(1);
+    const card = (rows[0]!.view === 'full' ? rows[0]!.event.payload : {}) as { card: { cardId: string; detail?: { reason?: string }; lines?: string[]; block?: unknown } };
+    expect(card.card.cardId).toBe(r.result.cardId);
+    expect(JSON.stringify(card.card)).toContain('UPGRADE'); // the human sees it is an upgrade, not a plain stop
+    expect(JSON.stringify(card.card)).toContain('reason: upgrade');
+    const a = await s.conn.call('approve', { cardId: r.result.cardId, decision: 'accept' });
+    if ('error' in a) throw new Error(a.error.message);
+    expect(w.prompts).toEqual(['fresh']);
+    const reason = await d.exited;
+    expect(reason).toBe('upgrade');
+    expect(EXIT_REASON_CLASS[reason]).toBe('ok');
+    expect(exitCodeOfExitReason(reason)).toBe(0);
+    expect(restartable(EXIT_REASON_CLASS[reason])).toBe(false);
+    expect(events.filter((e) => e.kind === 'daemon.exit')).toEqual([{ kind: 'daemon.exit', reason: 'upgrade' }]);
   });
 
   it('`gnomon daemon stop` raises the card and exits 0 without waiting; with no kernel it is REFUSED ENGINE not-running', async () => {

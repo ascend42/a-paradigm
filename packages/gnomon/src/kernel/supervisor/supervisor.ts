@@ -79,7 +79,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId, type RefusalCode } from '@a-company/gnomon-contracts';
+import { hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -120,6 +120,42 @@ function boundedSet(m: Set<string>, k: string): void {
   while (m.size > TOOL_ID_CAP) m.delete(m.values().next().value!);
 }
 
+/**
+ * §2.4 rule 11 (TD-2026-10-19-908, T-2026-10-19-014 B1): how long a drain waits for every in-flight turn to reach
+ * its boundary before it interrupts the ones still running. No root-signed config value names a drain deadline
+ * yet, so this built-in default is used; a drain that interrupts on it says so on the interrupt's
+ * session.inject{channel:'drain', deadlineMs, deadlineSource:'default'} row.
+ */
+export const DRAIN_DEADLINE_MS = 30_000;
+/** After the deadline's interrupt, how long the drain waits for the interrupted turn's result line before it stops the child. */
+export const DRAIN_INTERRUPT_GRACE_MS = 1_000;
+/**
+ * The `session.exited{reason}` a drained Claude session's stop writes (the record slice B2 reads; session.drained's
+ * payload is closed to {uuid, reason}). `drain-clean`: the session was at a turn boundary, so B2 resumes it
+ * normally. `drain-interrupted`: a turn was still running at the deadline and was interrupted, so B2 resumes it
+ * IDLE with a visible "turn interrupted by update" note and never continues it (TD-2026-10-19-814 item 2;
+ * probes/results/p-resume.darwin.json: a turn killed mid-tool re-issues the tool call on resume + continue).
+ */
+export const DRAIN_EXIT_REASONS = Object.freeze({ clean: 'drain-clean', interrupted: 'drain-interrupted' } as const);
+export type DrainOutcome = keyof typeof DRAIN_EXIT_REASONS;
+
+export interface DrainOptions {
+  /** default DRAIN_DEADLINE_MS (no root-signed config value exists for it) */
+  deadlineMs?: number;
+}
+export interface DrainRecord {
+  hsid: string;
+  /** the backend session uuid session.drained carries (`--resume <uuid>`) */
+  uuid: string;
+  outcome: DrainOutcome;
+}
+export interface DrainReport {
+  deadlineMs: number;
+  deadlineSource: 'default' | 'caller';
+  /** every live Claude session, each with a session.drained row before its session.exited{reason: DRAIN_EXIT_REASONS[outcome]} */
+  sessions: DrainRecord[];
+}
+
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
 
 export interface SupervisorOptions {
@@ -127,7 +163,7 @@ export interface SupervisorOptions {
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
-  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect' | 'auto'>>;
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect' | 'auto' | 'expireSessionBound'>>;
   /** the Gnomon home (session dirs, the claude pin and its private copy) */
   home: string;
   /** the user's home (the ~/.claude layers); the child's HOME is forced to it */
@@ -175,6 +211,8 @@ export interface OpenRequest {
 
 interface Session {
   hsid: string;
+  /** the backend session uuid (`--session-id`; session.drained{uuid} for `--resume`) */
+  uuid: string;
   principalId: string;
   owner: string;
   cwd: string;
@@ -203,6 +241,8 @@ interface Session {
   planUses: Map<string, string>;
   lastPlanFile: string | null;
   policy: SessionPolicy;
+  /** §2.4 rule 11: set when the drain wrote this session's session.drained row */
+  drained?: DrainOutcome;
 }
 
 interface PendingPermission {
@@ -278,6 +318,12 @@ export class SessionSupervisor {
   readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
   readonly #local: LocalLane;
+  /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
+  #drain: Promise<DrainReport> | null = null;
+  /** Claude opens past the draining check and not yet settled: the drain waits for them before it collects sessions */
+  #opening = 0;
+  /** woken at every turn boundary (a result line), session exit and settled open */
+  readonly #boundaryWaiters = new Set<() => void>();
 
   constructor(o: SupervisorOptions) {
     this.#o = o;
@@ -318,9 +364,21 @@ export class SessionSupervisor {
   }
 
   async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
+    this.#refuseIfDraining('session.open');
+    this.#opening++;
+    try {
+      return await this.#open(req);
+    } finally {
+      this.#opening--;
+      this.#wake();
+    }
+  }
+
+  async #open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
     if (req.principalClass !== 'human' || req.attended !== true) {
       throw refused('FORBIDDEN', 'M1.7 slice 1 opens attended, human-started sessions only (agent/session/unattended opens wait for the broker decision, law 5)', { principalClass: req.principalClass });
     }
+    this.#refuseIfDraining('session.open');
     // an explicit backend pins the route: claude-code never spawns gnomon-local (model local + claude-code ⇒ BAD_REQUEST in the lane)
     if (req.backend === 'local' || req.model === 'local' || (req.model === 'any' && req.backend !== 'claude-code')) {
       // §13.3: local ⇒ capable local or a fallback card; any ⇒ local if capable, else (null) Claude below
@@ -458,6 +516,7 @@ export class SessionSupervisor {
         await scan();
         wHash = wNow;
       }
+      this.#refuseIfDraining('session.open'); // a drain that began during preflight: nothing is forked (the catch releases the permit)
       const intent = await this.#o.children.intend({ kind: 'session', hsid });
       child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
       // the exit/close listeners are attached SYNCHRONOUSLY, before any await. 'exit' only lets paused stdout
@@ -475,7 +534,7 @@ export class SessionSupervisor {
       await this.#o.children.track({ kind: 'session', child: c, hsid, intent });
       tracked = true;
       const s: Session = {
-        hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
+        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy,
       };
       this.#sessions.set(hsid, s);
@@ -606,8 +665,9 @@ export class SessionSupervisor {
     s.turnPermits = [];
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
-    this.#history.push({ hsid: s.hsid, principalId: s.principalId, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode });
+    this.#history.push({ hsid: s.hsid, principalId: s.principalId, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode, ...(s.drained ? { drained: s.drained } : {}) });
     while (this.#history.length > HISTORY_CAP) this.#history.shift();
+    this.#wake();
   }
 
   async #onLine(s: Session, line: string): Promise<void> {
@@ -652,6 +712,7 @@ export class SessionSupervisor {
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError });
         const head = s.turnPermits.shift(); // reviewer 7: FIFO — this result closes the oldest turn only
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
+        this.#wake(); // §2.4 rule 11: a turn boundary
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       }
@@ -849,6 +910,7 @@ export class SessionSupervisor {
   }
 
   async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean }): Promise<{ turn: string; steered?: boolean }> {
+    this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
     // M1.8 slice 2 serves steer on local sessions only; Claude's mid-turn steer is not built (refused, never ignored)
@@ -898,11 +960,11 @@ export class SessionSupervisor {
     return this.#stopSession(s, 'session.stop');
   }
 
-  async #stopSession(s: Session, reason: string): Promise<{ signals: string[]; exited: boolean }> {
+  async #stopSession(s: Session, reason: string, expireWhy = 'session-exited'): Promise<{ signals: string[]; exited: boolean }> {
     if (s.state === 'exited') return { signals: [], exited: true };
     s.state = 'stopping';
     if (s.watch) clearInterval(s.watch);
-    await this.#expirePending(s, 'session-exited');
+    await this.#expirePending(s, expireWhy);
     const signals = ['control_request:interrupt', 'stdin:close'];
     try {
       s.child.stdin?.write(controlInterruptLine());
@@ -913,6 +975,84 @@ export class SessionSupervisor {
     const survivors = await this.#o.children.stop(s.child, reason);
     signals.push('group:staged');
     return { signals, exited: !survivors };
+  }
+
+  #refuseIfDraining(verb: string): void {
+    if (this.#drain) throw refused('ENGINE', `the kernel is draining for an upgrade (§2.4 rule 11): ${verb} starts nothing new`, { reason: 'draining', verb });
+  }
+
+  #wake(): void {
+    for (const w of [...this.#boundaryWaiters]) w();
+  }
+
+  /** Resolve true once `done()` holds (re-checked at every boundary), false when `ms` runs out first. */
+  async #until(done: () => boolean, ms: number): Promise<boolean> {
+    if (done()) return true;
+    return new Promise<boolean>((resolve) => {
+      const finish = (v: boolean): void => {
+        clearTimeout(t);
+        this.#boundaryWaiters.delete(check);
+        resolve(v);
+      };
+      const check = (): void => {
+        if (done()) finish(true);
+      };
+      const t = setTimeout(() => finish(done()), Math.max(0, ms));
+      this.#boundaryWaiters.add(check);
+    });
+  }
+
+  /** Whether a drain began (session.open / session.send refuse ENGINE{draining}). */
+  draining(): boolean {
+    return this.#drain !== null;
+  }
+
+  /**
+   * §2.4 rule 11 (TD-2026-10-19-908; T-2026-10-19-014 B1): drain before an upgrade stop. Idempotent (a second
+   * call gets the first drain). From the first call on, session.open and session.send are refused
+   * ENGINE{draining}. The drain waits for the opens already past that check, then for every Claude session's
+   * in-flight turns to reach their boundary (a result line), up to the deadline; a session still mid-turn then
+   * gets the backend's interrupt control message (logged as session.inject{channel:'drain'}). For EVERY live
+   * Claude session it then expires the session's pending cards with why `session-drained` (F4), writes
+   * session.drained{uuid, reason:'upgrade'} (chain write before side effect) and stops the child, whose
+   * session.exited row carries reason DRAIN_EXIT_REASONS[outcome] — the clean/interrupted record of slice B2.
+   * Last, every other pending card bound to a session expires `session-drained`; a card bound to no session
+   * (install, api-token, fallback) is left pending for the new kernel to raise again. gnomon-local sessions get
+   * no session.drained (they cannot resume until slice B3, rule 11 "Order"): their turns are refused like
+   * Claude's and the daemon's shutdown stops them (session.exited{reason:'upgrade'}).
+   */
+  drain(opts: DrainOptions = {}): Promise<DrainReport> {
+    this.#drain ??= this.#runDrain(opts);
+    return this.#drain;
+  }
+
+  async #runDrain(opts: DrainOptions): Promise<DrainReport> {
+    const deadlineSource: DrainReport['deadlineSource'] = opts.deadlineMs === undefined ? 'default' : 'caller';
+    const deadlineMs = opts.deadlineMs ?? DRAIN_DEADLINE_MS;
+    const until = Date.now() + deadlineMs;
+    const inTurn = (s: Session): boolean => s.state === 'running' && s.turnPermits.length > 0;
+    await this.#until(() => this.#opening === 0, until - Date.now());
+    await this.#until(() => [...this.#sessions.values()].every((s) => !inTurn(s)), until - Date.now());
+    const live = [...this.#sessions.values()].filter((s) => s.state === 'running');
+    const records = await Promise.all(live.map((s) => this.#drainSession(s, inTurn(s) ? 'interrupted' : 'clean', deadlineMs, deadlineSource)));
+    await this.#o.broker?.expireSessionBound?.('session-drained').catch(() => []);
+    return { deadlineMs, deadlineSource, sessions: records.filter((r): r is DrainRecord => r !== null) };
+  }
+
+  async #drainSession(s: Session, outcome: DrainOutcome, deadlineMs: number, deadlineSource: DrainReport['deadlineSource']): Promise<DrainRecord | null> {
+    if (outcome === 'interrupted') {
+      await this.#write(s, controlInterruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() => undefined);
+      await this.#until(() => s.state !== 'running' || s.turnPermits.length === 0, DRAIN_INTERRUPT_GRACE_MS);
+    }
+    if (s.state === 'exited') return null; // it ended by itself: its exit row is already written, there is nothing to resume
+    await this.#expirePending(s, 'session-drained');
+    const payload = { uuid: s.uuid, reason: 'upgrade' as const };
+    const errors = validateKindPayload('session.drained', payload);
+    if (errors.length) throw new Error(`#supervisor: session.drained payload: ${errors.join('; ')}`);
+    await this.#o.log('session.drained', payload, { session: s.hsid });
+    s.drained = outcome;
+    await this.#stopSession(s, DRAIN_EXIT_REASONS[outcome], 'session-drained'); // F4 also for a request that arrived after the expiry above
+    return { hsid: s.hsid, uuid: s.uuid, outcome };
   }
 
   /** #local-runner's daemon-start probe of every configured local endpoint (model.probe / model.capabilities rows). */
@@ -934,7 +1074,7 @@ export class SessionSupervisor {
   /** status.sessions: live sessions + a bounded history of exited ones */
   status(): Array<Record<string, unknown>> {
     return [
-      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId })),
+      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, ...(s.drained ? { drained: s.drained } : {}) })),
       ...this.#history,
       ...this.#local.status(),
     ];

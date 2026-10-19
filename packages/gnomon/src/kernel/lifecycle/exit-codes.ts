@@ -8,7 +8,7 @@
  * restarts a misconfigured kernel in a loop. Every gnomond exit is one of
  * these codes, and every code has exactly one class:
  *
- *   ok          0   clean exit (idle, signal)                      no restart
+ *   ok          0   clean exit (idle, signal, stop, upgrade)       no restart
  *   superseded  4   another kernel already serves this home        no restart (attach to it)
  *   config     64   usage: bad argv                                 no restart
  *   internal   70   unexpected error (a bug)                        restart with backoff
@@ -24,6 +24,7 @@
  * `gnomon daemon --detach|start` is an activator and returns this table.
  */
 import type { LifecycleRefusalReason } from './refusal.js';
+import type { DaemonExitReason } from './daemon.js';
 
 export const DAEMON_EXIT = Object.freeze({
   ok: 0,
@@ -96,6 +97,24 @@ export function classifyExitCode(code: number | null): DaemonExitClass {
     default:
       return 'internal';
   }
+}
+
+/**
+ * The class of a running kernel's own exit (DaemonHandle.exited). `upgrade` (§2.4 rule 11, T-2026-10-19-014 B1)
+ * is a deliberate, human-approved stop like `stop`: class ok, exit 0, never restarted by a supervisor — the
+ * upgrader starts the NEW kernel, which resumes the drained sessions. `error` (startup failed after the endpoint
+ * came up) is internal.
+ */
+export const EXIT_REASON_CLASS: Readonly<Record<DaemonExitReason, DaemonExitClass>> = Object.freeze({
+  idle: 'ok',
+  signal: 'ok',
+  stop: 'ok',
+  upgrade: 'ok',
+  error: 'internal',
+});
+
+export function exitCodeOfExitReason(reason: DaemonExitReason): DaemonExitCode {
+  return exitCodeOfClass(EXIT_REASON_CLASS[reason]);
 }
 
 /** Whether a supervisor may restart after this class (with backoff). Config and superseded never are. */

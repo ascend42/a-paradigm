@@ -122,8 +122,12 @@ import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 
-/** `stop`: an accepted daemon-stop card (§3.1 I3, F3). B1 adds `upgrade` (§2.4 rule 11). Every reason here exits 0 (no restart). */
-export type DaemonExitReason = 'idle' | 'signal' | 'error' | 'stop';
+/**
+ * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
+ * after the §2.4 rule 11 drain (T-2026-10-19-014 B1). The exit class of each is EXIT_REASON_CLASS (exit-codes.ts):
+ * every reason but `error` is ok, exit 0, no restart.
+ */
+export type DaemonExitReason = 'idle' | 'signal' | 'error' | 'stop' | 'upgrade';
 
 /** Events named after the §9.1 `daemon` and `socket` kinds; the kernel log takes them at M1.2. */
 export type DaemonEvent =
@@ -267,6 +271,8 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
 export interface DaemonSeams {
   supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
   billing?: BillingScanSource;
+  /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
+  drainDeadlineMs?: number;
 }
 
 /** How long a live pidfile holder whose socket is silent is given (it may be the race winner mid-start) before `holder-silent`. */
@@ -629,8 +635,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
-  // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason (B1 adds upgrade)
-  const stopCards = new DaemonStopCards(broker, (reason) => void shutdown(reason));
+  // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason. B1: an `upgrade`
+  // accept drains every session first (§2.4 rule 11: session.drained before session.exited), then exits `upgrade`.
+  const stopCards = new DaemonStopCards(broker, (reason) => {
+    if (reason !== 'upgrade') return void shutdown(reason);
+    if (stopping) return;
+    void supervisor
+      .drain(seams.drainDeadlineMs !== undefined ? { deadlineMs: seams.drainDeadlineMs } : {})
+      .catch(() => undefined) // a drain that failed part way still exits: the new kernel sweeps what it left (rule 4)
+      .then(() => shutdown('upgrade'));
+  });
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;
   for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
