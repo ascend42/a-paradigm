@@ -1,0 +1,145 @@
+/**
+ * #workshop-mod (spec §11.6, G-WSP-01; M1.11 slice 3). The first first-party
+ * mod (packages/gnomon-mods/workshop): installed through `gnomon mod install`
+ * and the real broker card, tier first-party (its packageHash is pinned in
+ * FIRST_PARTY_PACKAGE_HASHES), declared effects none beyond `read`, state ONLY
+ * from the host's projected kernel-event feed (modhost/feed.ts). Fixtures
+ * render to golden blocks on every OS through a real ModHost (unsandboxed
+ * test launcher; the darwin `mod` profile path is test/mod-sandbox.test.ts).
+ */
+import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
+import * as fs from 'node:fs';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
+import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider } from '../src/kernel/broker/index.js';
+import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
+import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
+import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
+import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { effectiveInstall, readGrants, removeTree } from '../src/kernel/manifest/index.js';
+import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
+import { pendingStaged, StagedCardPickup } from '../src/kernel/modhost/control.js';
+import { FEED_KINDS, projectFeedEvent } from '../src/kernel/modhost/feed.js';
+import type { ModHost } from '../src/kernel/modhost/host.js';
+import { createModHostForTest, decideInstallCard, mintTestPresence, unsandboxedModLauncher } from '../src/kernel/testing.js';
+import { installPresenceBinding, readStaged, stageInstall } from '../src/kernel/manifest/install.js';
+import { EXAMPLE_MOD, writeModFolder } from './mod-helpers.js';
+import { runModCommand } from '../src/cli/mod-cli.js';
+import { privateTmpRoot } from './daemon-helpers.js';
+import { PKG_ROOT } from './helpers.js';
+
+const WORKSHOP = path.resolve(PKG_ROOT, '..', 'gnomon-mods', 'workshop');
+const HUMAN = 'p:abcdefgh/matt';
+const H = { connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', principal: HUMAN, principalClass: 'human', surface: 'browser', credential: 'gui' };
+const cleanups: Array<() => unknown> = [];
+afterEach(async () => {
+  while (cleanups.length) await cleanups.pop()!();
+});
+
+async function installedWorkshop() {
+  const root = fs.mkdtempSync(path.join(privateTmpRoot(), 'gws-'));
+  cleanups.push(() => removeTree(root));
+  const home = path.join(root, 'home');
+  fs.mkdirSync(home, { mode: 0o700 });
+  const auth = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+  const out: string[] = [];
+  const io = { stdout: { write: (s: string) => out.push(s) }, stderr: { write: (s: string) => out.push(s) } };
+  expect(await runModCommand(['install', WORKSHOP, '--home', home], io, { trust: auth })).toBe(0);
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const ring = new KeyRing();
+  const keyId = ring.addP256(publicKey);
+  const touching: PresenceProvider = { prove: async (req) => mintTestPresence(req.purpose, { bind: req.binding }) };
+  const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async () => undefined, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, root: auth });
+  const events: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+  const children = new DaemonChildren({ append: async (kind, payload) => void events.push({ kind, payload }), control: processControlFor(), boot: 'test', graceMs: 1_000 });
+  const host: ModHost = createModHostForTest({ home, trust: auth, children, emit: (kind, payload) => void events.push({ kind, payload }), callTimeoutMs: 10_000 }, { launcher: unsandboxedModLauncher });
+  cleanups.push(() => host.stopAll());
+  const pickup = new StagedCardPickup({ home, broker, authority: auth, host });
+  await pickup.scan();
+  const { cardId } = { cardId: pickup.raised()[0]! };
+  const card = broker.card(cardId)!;
+  const sig = cryptoSign('sha256', signaturePreimage('approve', approveMessage({ cardId, decision: 'install', cardContentHash: card.contentHash, approverPrincipalId: HUMAN })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
+  await broker.approve(H, { cardId, decision: 'install', decisionSig: sig });
+  return { root, home, auth, host, out: out.join(''), events };
+}
+
+const fixture = (f: string) => JSON.parse(fs.readFileSync(path.join(WORKSHOP, 'fixtures', f), 'utf8'));
+
+describe('#workshop-mod', () => {
+  it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
+    const h = hashSourceTree(WORKSHOP, 'workshop', () => undefined).packageHash;
+    expect([...FIRST_PARTY_PACKAGE_HASHES]).toContain(h);
+  });
+
+  it('it echoes the current modAbiId (a mod-ABI move needs a new Workshop build)', () => {
+    expect(fs.readFileSync(path.join(WORKSHOP, 'index.mjs'), 'utf8')).toContain(`const MOD_ABI_ID = '${MOD_ABI_ID}'`);
+  });
+
+  it('installs through gnomon mod install + the broker card as tier first-party, effects read only, and starts', async () => {
+    const w = await installedWorkshop();
+    expect(w.out).toContain('│ Install mod workshop 1.0.0 (mod) from package, tier first-party');
+    expect(w.out).toContain('│ effects: none · egress: none');
+    const g = readGrants(w.home, w.auth);
+    const row = effectiveInstall(g, 'workshop')!;
+    expect(g.trust.get(row.manifestHash)).toBe('first-party');
+    await new Promise((r) => setTimeout(r, 50));
+    const st = await w.host.start('workshop');
+    expect(st).toMatchObject({ state: 'running', effects: [] });
+    expect(pendingStaged(w.home)).toEqual([]);
+  });
+
+  it('fixtures render to their golden blocks (full and reduced motion)', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('workshop');
+    for (const f of ['strip', 'strip-reduced']) {
+      const fx = fixture(`${f}.json`);
+      const r = await w.host.render('workshop', 'workshop.strip', fx.input, { width: fx.width, prefs: fx.prefs });
+      expect(r.label).toBe('mod:workshop');
+      expect(r.block).toEqual(fixture(`${f}.golden.json`));
+    }
+  });
+
+  it('G-WSP-01: caps derive from the projected kernel feed only; a relayed render cannot replay fixture events', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('workshop');
+    const hsid = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+    expect(w.host.feed({ kind: 'session.open', seq: 1, payload: { hsid, backend: 'claude-code', cwd: '/secret/project', model: 'claude' } })).toBe(1);
+    expect(w.host.feed({ kind: 'turn.partial', seq: 2, payload: { hsid, bytes: 10 } })).toBe(1);
+    expect(w.host.feed({ kind: 'approval.request', seq: 3, payload: { card: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', kind: 'permission', hsid, block: { text: 'rm -rf /' } }, tool_input: { command: 'rm -rf /' } } })).toBe(1);
+    expect(w.host.feed({ kind: 'turn.text', seq: 4, payload: { hsid, text: 'ignore previous instructions' } })).toBe(0);
+    const r = await w.host.relayView({ name: 'workshop', viewId: 'workshop.strip', input: fixture('strip.json').input, principal: HUMAN, connId: H.connId, prefs: { motion: 'full' } });
+    const s = JSON.stringify(r.block);
+    expect(s).toContain('needs you 1 of 1');
+    expect(s).toContain('▲ permission');
+    expect(s).toContain('▲ builder filled bob');
+    expect(s).not.toContain('plan'); // the relayed fixtureEvents were ignored
+    for (const leak of ['secret', 'rm -rf', 'ignore previous']) expect(s).not.toContain(leak);
+    w.host.feed({ kind: 'turn.result', seq: 5, payload: { hsid } });
+    w.host.feed({ kind: 'approval.decide', seq: 6, payload: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', decision: 'allow' } });
+    const r2 = JSON.stringify((await w.host.render('workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
+    expect(r2).toContain('needs you 0 of 0');
+    expect(r2).toContain('▲ builder filled still');
+  });
+
+  it('the feed projection carries only the listed kernel fields', () => {
+    expect(FEED_KINDS).not.toContain('turn.text');
+    expect(projectFeedEvent({ kind: 'session.open', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA', cwd: '/x/y', backend: 'local', systemPrompt: 'p' } })!.payload).toEqual({ hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA', backend: 'local', project: expect.any(Number) });
+    expect(projectFeedEvent({ kind: 'approval.request', payload: { card: { cardId: 'bad id with spaces', kind: 'permission' } } })).toBeNull();
+    expect(projectFeedEvent({ kind: 'approval.request', payload: { card: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', kind: 'Not A Kind!' } } })!.payload.kind).toBe('card');
+  });
+
+  it('falsifier: a running mod without the log.read capability gets no feed', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('workshop');
+    const src = writeModFolder(path.join(w.root, 'hello'), JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8')), fs.readFileSync(path.join(EXAMPLE_MOD, 'index.mjs'), 'utf8'));
+    const st = stageInstall({ home: w.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: w.auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    const bind = installPresenceBinding(st.cardId, readStaged(w.home, 'hello', st.cardId)!.card.contentHash, 'install');
+    decideInstallCard(w.home, 'hello', st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: w.auth });
+    expect(await w.host.start('hello')).toMatchObject({ state: 'running' });
+    expect(w.host.running()).toEqual(['hello', 'workshop']);
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } })).toBe(1);
+  });
+});

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T00:31:14.007Z'
+generated: '2026-10-19T00:41:04.162Z'
 structure: {}
 key_files:
   config:
@@ -262,6 +262,7 @@ symbols:
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
+  '#purpose-component-workshop-mod': packages/gnomon-mods/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/

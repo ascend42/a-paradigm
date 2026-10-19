@@ -1742,7 +1742,12 @@ components:
       a mod as code + reason only (generic message, no wrapped data).
       Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
       a <home>/mods/<name>/paused marker makes every start return
-      paused{why:user}. Still to come: spend from the caller permit,
+      paused{why:user}. feed.ts: ModHost.feed (wired to log.onCommit in
+      startDaemon) forwards a fixed projection of session.open/exited,
+      turn.partial/result, approval.request/decide/expire and warpline.knot
+      (kernel fields only; project = a hue index from sha256(cwd)) to running
+      mods requiring log.read - the #workshop-mod input. FIRST_PARTY_PACKAGE_HASHES
+      pins the Workshop. Still to come: spend from the caller permit,
       dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
 

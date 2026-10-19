@@ -58,8 +58,14 @@ import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, 
 export const STAGED_RECORD_SCHEMA = 'gnomon-staged-install:v1' as const;
 const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 
-/** packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods, Move 3). Empty until then. */
-export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>();
+/**
+ * packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods).
+ * M1.11 slice 3: the Workshop (#workshop-mod). Any edit to its tree moves the
+ * hash; test/workshop-mod.test.ts holds the pin.
+ */
+export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
+  'sha256:8afd0d33d26addd8255b918f1e45d0db8d065392fdc0367dea2f9177c02b9507', // packages/gnomon-mods/workshop 1.0.0
+]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
 

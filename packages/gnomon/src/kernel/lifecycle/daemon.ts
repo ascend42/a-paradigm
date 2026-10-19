@@ -618,6 +618,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // M1.11 slice 3 (#mod-cli): what `gnomon mod install|link` staged on disk reaches the human only through the broker
   const kernelStaged = new Set<string>();
+  // the `event` feed to log.read-granted mods (feed.ts): a projection only, never a failing append
+  log.onCommit((e) => {
+    try {
+      mods.feed(e);
+    } catch {
+      /* a mod's feed never breaks an append */
+    }
+  });
   const modPickup = new StagedCardPickup({
     home,
     broker,

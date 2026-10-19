@@ -70,9 +70,12 @@
  * USER PAUSE (slice 3, control.ts): a `<home>/mods/<name>/paused` marker
  * (`gnomon mod pause`) makes every start return paused{why:'user'}.
  *
+ * FEED (slice 3, feed.ts): feed() forwards a fixed projection of kernel
+ * kinds to running mods requiring log.read (the Workshop's only input).
+ *
  * STILL NAMED, NOT BUILT: dev-mode cards/expiry scheduling/cwd exclusion and
  * the dev re-pin (`mod.repinned`), the `gnomon-mods` MCP bridge, Tier 0
- * templates, the Workshop mod, `/blob` serving.
+ * templates, `/blob` serving.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -99,6 +102,7 @@ import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
 import { isUserPaused } from './control.js';
+import { FEED_CAPABILITY, projectFeedEvent } from './feed.js';
 
 const isLink = (p: string): boolean => {
   try {
@@ -718,6 +722,23 @@ export class ModHost {
     if (!r || typeof event?.kind !== 'string' || !event.kind.startsWith(`modns.${name}.`)) return false;
     r.channel.notify('event', { event });
     return true;
+  }
+
+  /**
+   * The kernel-event feed (feed.ts, slice 3): every running mod whose
+   * manifest requires `log.read` (granted at load) gets the PROJECTION of the
+   * fixed feed kinds; nothing else. Returns how many mods it reached.
+   */
+  feed(event: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }): number {
+    const projected = projectFeedEvent(event);
+    if (!projected) return 0;
+    let n = 0;
+    for (const r of this.#running.values()) {
+      if (r.stopping || !r.manifest.requires?.capabilities?.includes(FEED_CAPABILITY)) continue;
+      r.channel.notify('event', { event: projected });
+      n++;
+    }
+    return n;
   }
 
   /** The call a mod → host request is bound to: its echoed callId must name the call in force; none ⇒ idle. */
