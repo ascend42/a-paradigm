@@ -69,7 +69,11 @@ export type SessionDenyClass = (typeof SESSION_DENY_CLASSES)[number];
  * `steering` (P8-D97 R1): under `path`, at ANY depth and in ANY letter case, a `CLAUDE*.md` file or anything in a
  * `.claude` dir — the memory and settings Claude Code may load from a subtree. Write-deny only.
  */
-export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering';
+/**
+ * `dep-steering` (P8-D97 F2): under `path`, inside ANY `node_modules` at any depth, in any case, a `CLAUDE*.md` file or
+ * anything in a `.claude` dir — dependency-shipped memory the subtree audit does not walk. Read-deny only.
+ */
+export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering' | 'dep-steering';
 export interface PolicyPath {
   path: string;
   match: PathMatch;
@@ -283,7 +287,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   return {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
-    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home')]),
+    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
     allowRead: uniq(allowRead),
     allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
     denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),
@@ -317,7 +321,15 @@ export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEd
 /** The `policy.json` permissions block: the sandbox deny mirror (§6.1 step 6) and the always-ask tools (P8-D96). */
 export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] } } {
   const deny = new Set<string>();
-  for (const d of p.denyRead) deny.add(rule('Read', d));
+  for (const d of p.denyRead) {
+    if (d.match !== 'dep-steering') {
+      deny.add(rule('Read', d));
+      continue;
+    }
+    // F2: Claude's own Read rules for dependency-shipped memory (both common spellings: its globs may be case-sensitive)
+    const base = rule('Read', { ...d, match: 'literal' }).slice(0, -1);
+    for (const g of ['**/node_modules/**/CLAUDE*.md', '**/node_modules/**/claude*.md', '**/node_modules/**/.claude/**', '**/node_modules/**/.Claude/**']) deny.add(`${base}/${g})`);
+  }
   for (const d of p.denyWrite) {
     if (d.match !== 'steering') {
       deny.add(rule('Edit', d));

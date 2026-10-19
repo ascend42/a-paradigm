@@ -520,6 +520,14 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     expect(c.memoryDirs).toEqual([pkg]);
     expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/^other\/CLAUDE\.md: /) }]);
   });
+  it('F2: the policy read-denies dependency-shipped memory (dep-steering) and mirrors it as Claude Read rules', () => {
+    const w = world();
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });
+    expect(pol.denyRead).toContainEqual({ path: w.repo, match: 'dep-steering', class: 'settings' });
+    const rules = claudePermissions(pol).permissions.deny.filter((r) => r.startsWith('Read(') && r.includes('node_modules'));
+    expect(rules.some((r) => r.endsWith('/**/node_modules/**/CLAUDE*.md)'))).toBe(true);
+    expect(rules.some((r) => r.endsWith('/**/node_modules/**/.claude/**)'))).toBe(true);
+  });
   it('the policy carries a steering deny for the subtree and Claude Edit globs for it', () => {
     const w = world();
     const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });

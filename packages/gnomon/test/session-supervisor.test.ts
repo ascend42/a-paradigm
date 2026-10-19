@@ -340,6 +340,23 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
     for (const b of blocked) expect(res[b], b).toBe('blocked');
     for (const a of allowed) expect(res[a], a).toBe('allowed');
   }, 30_000);
+  it('F2: dependency-shipped CLAUDE*.md and .claude/** under any node_modules are read-denied, in any case; the rest stays readable', async () => {
+    const r = rig();
+    const top = fs.realpathSync.native(w.cwd);
+    const files = { blocked: [['node_modules', 'dep', 'CLAUDE.md'], ['node_modules', '@s', 'p', 'node_modules', 'q', 'claude.MD'], ['pkg', 'node_modules', 'd', '.Claude', 'settings.json']], allowed: [['node_modules', 'dep', 'index.js'], ['CLAUDE.md'], ['pkg', 'CLAUDE.md']] };
+    for (const f of [...files.blocked, ...files.allowed]) {
+      fs.mkdirSync(path.join(top, ...f.slice(0, -1)), { recursive: true });
+      fs.writeFileSync(path.join(top, ...f), 'x\n');
+    }
+    const abs = (l: string[][]) => l.map((f) => path.join(top, ...f));
+    setMode(w, { startReads: [...abs(files.blocked), ...abs(files.allowed)] });
+    const s = await open(r.sup);
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'start-read').length === 6)).toBe(true);
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    const res = Object.fromEntries(trace(w).filter((t) => t.t === 'start-read').map((t) => [String(t.path), t.result]));
+    for (const b of abs(files.blocked)) expect(res[b], b).toBe('blocked');
+    for (const a of abs(files.allowed)) expect(res[a], a).toBe('allowed');
+  }, 30_000);
   it('an approved repo hook runs beside the staged context; mode user-only and none stage nothing; mode all loads the repo natively', async () => {
     const r = rig();
     seed();
