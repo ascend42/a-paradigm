@@ -92,6 +92,13 @@
  * are not reachable through callAs (`mod.command` through kernel.call is for
  * `knowledge:federate` holders, §8.10, not built) and log.append is the mod
  * host's own path (modhost/bridge.ts).
+ *
+ * Voice slice V1 #gnomon-voice (T-2026-10-19-026, talk-only): with a `voice` port, the voice principal's
+ * `session.send` (attached session, `source: voice` forced, forwarding guards), `session.stop` (interrupt only),
+ * `log.append voice.*` (shape-validated) and `log.read` (own attached session + voice.*, redacted) are served by
+ * voice/voice-control.ts; the human attaches / detaches voice by appending `voice.session.start|end` on a
+ * first-party connection (the run-mode HumanRequestPort pattern). `approve` stays voice-off in every form;
+ * `request.voice.arm`, root verbs and `permit.reserve` stay refused.
  */
 import {
   CLIENT_API_ID,
@@ -117,6 +124,7 @@ import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
 import type { SessionPort } from '../supervisor/port.js';
 import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
+import type { VoiceControl } from '../voice/voice-control.js';
 
 const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
 import { voiceApproveRefusal } from '../broker/broker.js';
@@ -300,11 +308,16 @@ export interface DispatcherOptions {
    * `status()` is the human class's `status.runModes`.
    */
   requests?: HumanRequestPort;
+  /** #gnomon-voice (voice slice V1, talk-only). Absent ⇒ every voice cell keeps its refusal. */
+  voice?: VoicePort;
   /** The method registry (default KERNEL_METHODS: the 12 verbs + 2 relays). Test seam for the fail-closed check. */
   methods?: MethodRegistry;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
+
+/** What the dispatcher needs of #gnomon-voice (voice/voice-control.ts VoiceControl). */
+export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'>;
 
 /** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
 export interface HumanRequestPort {
@@ -394,7 +407,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     const key = o.status.kernelKey();
     const authed = [...conns.values()].filter((c) => c.phase === 'authenticated');
     const available = (m: string): boolean =>
-      (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent')))) || (o.sessions !== undefined && cls === 'human' && SESSION_METHODS.includes(m));
+      (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent')))) || (o.sessions !== undefined && cls === 'human' && SESSION_METHODS.includes(m)) || (o.voice !== undefined && cls === 'voice' && (m === 'session.send' || m === 'session.stop' || m === 'log.append'));
     return {
       principal: s.principal,
       principalKind: s.principalKind,
@@ -421,6 +434,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
+      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: o.voice.status() } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -584,6 +598,9 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   };
 
   /** The post-auth dispatch: the §5 matrix, then each served cell (shared by the socket and a mod's kernel.call). */
+  /** The voice reader's scope (V1): the attached session, when a voice port exists. */
+  const voiceScope = (): { voiceHsid: string | null } | undefined => (o.voice ? { voiceHsid: o.voice.attachedHsid() } : undefined);
+
   const serve = async (s: ConnAuthState, m: string, frame: RpcRequestFrame, ctx: ConnectionContext): Promise<unknown> => {
     const cls = matrixClassOf(s);
     const access: Access = accessOf_(m, cls);
@@ -594,12 +611,12 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (!reads) throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${VERB_MILESTONES[m]})`, { verb: m, milestone: VERB_MILESTONES[m] });
       try {
         if (m === 'log.read') {
-          const grant = readerFor(s); // explicit per-class policy: never the generic 'full' view
+          const grant = readerFor(s, voiceScope()); // explicit per-class policy: never the generic 'full' view
           const params = parseLogReadParams(frame.params, { features: s.features ?? [], logId: reads.log.logId });
           if (params.follow && !Object.hasOwn(frame, 'id')) throw new RpcRefusal('BAD_REQUEST', 'follow-needs-id', 'a subscription is opened by a request with an id (its reply names the subscription)');
           return params.follow ? reads.hub.subscribe(ctx, grant, params) : readOnePage(reads.log, grant, params);
         }
-        const r = resolveRef(frame.params, reads.log, () => readerFor(s).reader);
+        const r = resolveRef(frame.params, reads.log, () => readerFor(s, voiceScope()).reader);
         if (!r.ok) throw new RpcRefusal(r.code, r.reason, r.message, r.data);
         return r.result;
       } catch (err) {
@@ -652,6 +669,15 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         throw asRpcRefusal(err);
       }
     }
+    // voice slice V1 (#gnomon-voice): the voice principal's session.send / session.stop (forwarding guards in the port)
+    if (cls === 'voice' && (m === 'session.send' || m === 'session.stop') && o.voice && s.principal) {
+      const vc = { connId: s.connId, principal: s.principal };
+      try {
+        return await (m === 'session.send' ? o.voice.send(vc, frame.params) : o.voice.stop(vc, frame.params));
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
     // M1.11 slice 2: the client relays, relayedFor stamped from THIS connection
     if (RELAY_NAMES.includes(m) && o.mods) {
       const p = frame.params;
@@ -687,6 +713,24 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.modeSet({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // voice slice V1: the human's attach / detach gesture, and the voice principal's voice.* rows
+      const vkind = typeof pa?.kind === 'string' ? pa.kind : '';
+      if (o.voice && cls === 'human' && (vkind === 'voice.session.start' || vkind === 'voice.session.end') && (s.credential === 'gui' || s.credential === 'device')) {
+        const extra = Object.keys(pa!).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${vkind} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.voice.humanAppend({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, vkind, pa!.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      if (o.voice && cls === 'voice' && vkind.startsWith('voice.') && s.principal) {
+        try {
+          return await o.voice.voiceAppend({ connId: s.connId, principal: s.principal }, frame.params);
         } catch (err) {
           throw asRpcRefusal(err);
         }
@@ -743,6 +787,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     onDisconnect: (ctx) => {
       o.reads?.hub.disconnect(ctx.connId);
       o.approvals?.connectionClosed(ctx.connId);
+      o.voice?.connectionClosed(ctx.connId);
       clearTimers(ctx.connId);
       conns.delete(ctx.connId);
     },

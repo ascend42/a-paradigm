@@ -16,9 +16,10 @@
  *
  * Reader classes implemented in PR-4: human (full), read token, community
  * client, session (own hsid), mod (own modns + granted kinds), peer (no read
- * path). `agent` (own subtree) and `voice` (attached session) need the
- * session tree and voice arms (M1.7, M4.x); asking for them throws
- * UNSUPPORTED rather than guessing a projection. `team`/`org` audiences are
+ * path), voice (voice slice V1: rows of its attached session, voice.*
+ * included, redacted like a read token). `agent` (own subtree) needs the
+ * session tree (Move 2); asking for it throws UNSUPPORTED rather than
+ * guessing a projection. `team`/`org` audiences are
  * 8.1 projections (Q6): in 8.0 every row is `private` and every reader here
  * is the local user's own surface or a narrower class.
  *
@@ -54,7 +55,7 @@ export type ReaderClass =
   | { class: 'mod'; name: string; grantedKinds?: readonly string[] }
   | { class: 'peer' }
   | { class: 'agent' }
-  | { class: 'voice' };
+  | { class: 'voice'; hsid?: string | null };
 
 /** `{kind, hsid, at, hash}` — what a redacting reader gets for a sensitive-column row (§9.3). */
 export interface LogStub {
@@ -144,6 +145,8 @@ export function mayBeVisible(e: Pick<EventV1, 'kind' | 'sensitivity' | 'session'
       return e.session === reader.hsid;
     case 'mod':
       return !columnKind && sens === 'normal' && (e.kind.startsWith(`modns.${reader.name}.`) || (reader.grantedKinds ?? []).includes(e.kind));
+    case 'voice':
+      return sens !== 'secret' && reader.hsid != null && e.session === reader.hsid;
     default:
       return false;
   }
@@ -189,8 +192,16 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
     }
     case 'peer':
       return undefined;
+    case 'voice': {
+      // voice slice V1 (#gnomon-voice): own attached session + voice.*, REDACTED — the read-token row restricted to that
+      // scope (secret hidden, a sensitive-column kind a stub, a sensitive-labelled row hidden, never-fields limited)
+      // Aegis L3: only rows of the CURRENT attachment's session (its voice.* rows carry that hsid); never another session's
+      if (reader.hsid == null || e.session !== reader.hsid || sens === 'secret') return undefined;
+      if (columnKind) return { seq, view: 'stub', stub: stubOf(e) };
+      if (sens === 'sensitive') return undefined;
+      return { seq, view: 'full', event: limitedView(e) };
+    }
     case 'agent':
-    case 'voice':
       throw logRefusal('UNSUPPORTED', 'reader-unsupported', `the ${reader.class} read projection needs the session tree / voice arms (M1.7, M4.x)`);
   }
 }

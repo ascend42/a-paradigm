@@ -128,7 +128,7 @@ export function modNameOf(principal: string | undefined): string | undefined {
   return /^p:[^/]+\/mod-([a-z0-9][a-z0-9-]{0,63})$/.exec(principal ?? '')?.[1];
 }
 
-export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' | 'credential'>): ReaderGrant {
+export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' | 'credential'>, scope?: { voiceHsid: string | null }): ReaderGrant {
   // A read-token connection reads as the §9.3 read-token row whatever its principal's kind (M1.4 slice 3).
   if (s.credential === 'read-token') return { reader: { class: 'read-token' }, projection: 'read-token' };
   switch (s.principalKind) {
@@ -148,6 +148,9 @@ export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' |
     case 'agent':
       throw new RpcRefusal('UNSUPPORTED', 'reader-unsupported', 'the agent read projection (own subtree) needs the session tree; refused rather than guessed (§9.3)', { milestone: 'Move 2', principalClass: 'agent' });
     case 'voice':
+      // voice slice V1 (#gnomon-voice): rows of the attached session (its voice.* included), redacted; the daemon ends
+      // voice follow subscriptions on every attachment change (SubscriptionHub.endReaderClass, Aegis M3)
+      if (scope) return { reader: { class: 'voice', hsid: scope.voiceHsid }, projection: 'voice' };
       throw new RpcRefusal('UNSUPPORTED', 'reader-unsupported', 'the voice read projection (attached session) needs voice arms; refused rather than guessed (§9.3)', { milestone: 'Move 4', principalClass: 'voice' });
     case 'session':
       throw new RpcRefusal('ENGINE', 'not-implemented', 'the session view is its own hsid; the principal → hsid binding lands with the session runner', { milestone: 'M1.7', principalClass: 'session', access: 'own scope' });
@@ -414,6 +417,16 @@ export class SubscriptionHub {
   /** The connection is gone: end its subscriptions (no drop row — nothing lagged). */
   disconnect(connId: string): void {
     for (const s of [...this.#subs.values()]) if (s.ctx.connId === connId) this.#kill(s);
+  }
+
+  /** #gnomon-voice (Aegis M3): end every subscription of one reader class (voice: on attach, detach or re-attach). */
+  endReaderClass(cls: string): number {
+    let n = 0;
+    for (const s of [...this.#subs.values()]) if (s.reader.class === cls) {
+      this.#kill(s);
+      n++;
+    }
+    return n;
   }
 
   close(): void {

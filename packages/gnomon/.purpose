@@ -1823,6 +1823,45 @@ components:
       - test/manifest-loader.test.ts
       - test/identity-hardware.test.ts
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
+  gnomon-voice:
+    description: >-
+      #gnomon-voice kernel side, slice V1 talk-only (spec §14.1-14.4, §14.7
+      Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026,
+      TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts:
+      attachment ONLY by a human gesture (log.append voice.session.start|end on a
+      first-party GUI/device connection; the kernel mints voiceSessionId and
+      writes the row); voice session.send to the attached session only, source
+      voice forced, riding the attaching human's turn permit (never its own),
+      accepted only for the voice connection's latest voice.turn.user in this
+      attachment from an enrolled speaker, not intercepted, push-to-talk, outside
+      every voice.turn.agent playback window + echoTailMs (750). Refusals are
+      FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn,
+      voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off
+      (conversation mode). session.stop interrupt only; voice.* shape-validated;
+      the voice reader sees its attached session + voice.*, redacted. approve stays
+      voice-off in every form; request.voice.arm stays refused (V7).
+      src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup |
+      enrol | forget, root-signed rows (enrolments.jsonl, voice device key).
+      Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent
+      (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after
+      receipt, never before the attachment, echo checked on kernel times too;
+      per-turn client mode claim cross-checked against the attachment (ptt is a
+      client claim, §A.4); voice follow subscriptions end on every attachment
+      change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry
+      source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice
+      reader sees only its attached session's rows; enrolment order is the
+      signed seq; windows bounded at VOICE_WINDOW_CAP.
+    path: src/kernel/voice/
+    type: module
+    tags: [gnomon, kernel, voice, paradigm-8, move-4]
+    flows: [$voice-turn]
+    tests:
+      - test/voice-v1.test.ts
+      - test/voice-enrolment.test.ts
+      - test/voice-golden.test.ts
+      - test/socket-abi.test.ts
+      - test/socket-log-read.test.ts
+    oracles: [G-VOX-04, G-VOX-06]
 
   budget-fuse:
     description: >-

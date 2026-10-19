@@ -662,8 +662,12 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
         return column || eff !== 0 ? 'none' : 'limited';
       case 'peer':
         return 'none';
+      case 'voice':
+        // voice slice V1 (Aegis L3): rows of the attached session only, redacted — this matrix reader has no attachment,
+        // so it sees nothing (test/voice-v1.test.ts covers the attached projection)
+        return 'none';
       default:
-        return 'throws'; // agent (Move 2), voice (Move 4): refused rather than guessed
+        return 'throws'; // agent (Move 2): refused rather than guessed
     }
   }
 
@@ -768,7 +772,7 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         } else if (cls === 'human' && humanRequest.has(kind)) {
           expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
           expect((await s.conn.call('log.append', { kind })) as { error: { data: { data: Res } } }).toMatchObject({ error: { data: { data: { needs: 'first-party human-class connection' } } } });
-        } else if (cls === 'voice' && kind === 'request.voice.arm') expect(e, kind).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'Move 4' });
+        } else if (cls === 'voice' && kind === 'request.voice.arm') expect(e, kind).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'voice V7' });
         else expect(e, `${cls} ${kind}`).toMatchObject({ code: -32002, c: 'FORBIDDEN', reason: 'kernel-owned' });
       }
       await s.conn.close();
@@ -831,7 +835,7 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     expect(errOf(await mod.conn.call('log.append', { kind: 'modns.other.saved' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'modns-not-own' });
     expect(errOf(await mod.conn.call('log.append', { kind: 'paradigm.event' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'modns-not-own' });
     const v = await asDevice(r, 'voice');
-    expect(errOf(await v.conn.call('log.append', { kind: 'voice.focus' }))).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'Move 4' });
+    expect(errOf(await v.conn.call('log.append', { kind: 'voice.focus' }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' }); // voice slice V1: served, shape-validated
     expect(errOf(await v.conn.call('log.append', { kind: 'paradigm.event' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'ungranted' });
   });
 

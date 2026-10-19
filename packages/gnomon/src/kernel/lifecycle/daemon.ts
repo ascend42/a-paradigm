@@ -125,6 +125,8 @@ import { StagedCardPickup } from '../modhost/control.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
+import { VoiceControl } from '../voice/voice-control.js';
+import { readEnrolled } from '../voice/enrolment.js';
 
 /**
  * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
@@ -850,7 +852,26 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         return { seq: r.seq };
       },
   });
+  // voice slice V1 (#gnomon-voice, talk-only): attachment by human gesture, forwarding guards, voice.* shape checks.
+  // Voice rows are userland (voice.* is the voice principal's grant, A23-2): appended `as: 'userland'` under the
+  // appending principal, kernel-key attested like modns rows. Enrolment is read from the root-signed file each check.
+  const voice = new VoiceControl({
+    sessions: {
+      ownerOf: (hsid) => supervisor.ownerOf(hsid),
+      send: (owner, p) => supervisor.send(owner, p),
+      stop: (owner, p) => supervisor.stop(owner, p),
+    },
+    append: async (row) => {
+      const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', connId: row.connId, ...(row.session ? { session: row.session } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity as 'normal' } : {}) });
+      return { seq: r.seq, hash: r.hash, id: r.event.id };
+    },
+    enrolled: () => readEnrolled(home, authority),
+    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under
+    onAttachmentChange: () => void hub.endReaderClass('voice'),
+    voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
+  });
   const dispatcherCommon = {
+    voice,
     mods: createModRelayPort(mods),
     sessions,
     approvals,
