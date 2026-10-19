@@ -515,16 +515,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       return { principal: out.principal, connId: s.connId };
     }
 
-    const known = methods.has(m); // the registry: every method declared a tier for every class
-    if (!known) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(m.slice(0, 64))}`);
     if (s.phase !== 'authenticated') {
-      // G-SOCK-01: unauthenticated ⇒ AUTH + close (a client that calls before auth is not one we keep talking to)
+      // G-SOCK-01: unauthenticated ⇒ AUTH + close (a client that calls before auth is not one we keep talking to).
+      // Aegis L6: this runs BEFORE the registry lookup, so every name but hello/auth — known or not — gets the same
+      // AUTH answer; an unauthenticated caller cannot enumerate method names by telling UNKNOWN_VERB from AUTH.
       if (s.phase !== 'closed') {
         s.phase = 'closed';
         o.onPreAuthClose?.('unauthenticated-call');
       }
-      throw new RpcRefusal('AUTH', 'unauthenticated', `${m} needs hello + auth on this connection`, { required: ['hello', 'auth'] }, { closeAfter: true });
+      throw new RpcRefusal('AUTH', 'unauthenticated', 'this connection needs hello + auth first', { required: ['hello', 'auth'] }, { closeAfter: true });
     }
+    const known = methods.has(m); // the registry: every method declared a tier for every class
+    if (!known) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(m.slice(0, 64))}`);
     if (s.credential === 'read-token') {
       const dead = liveTokenCheck(s);
       if (dead) throw tokenDead(s, ctx, dead, false);

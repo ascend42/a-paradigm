@@ -228,8 +228,9 @@ components:
       socket.auth.replay; {token}/{launchToken}/{reconnect} refused
       UNSUPPORTED (later M1.4 slices). Any failed auth = ONE AUTH refusal,
       then the connection is closed. dispatch.ts — before auth only hello and
-      auth (other known methods AUTH{unauthenticated}, connection kept;
-      unknown names UNKNOWN_VERB); after auth the §5 verb × principal matrix
+      auth (every other name, known or unknown, AUTH{unauthenticated} then
+      closed — Aegis L6: no pre-auth method enumeration; UNKNOWN_VERB only
+      after auth); after auth the §5 verb × principal matrix
       (contracts VERBS.access; peer refused everywhere) then `status` served
       for real (principal, connId, surface, clientApi, clientApiId, kitId,
       abiId, nextLegalVerbs from the §5 table, verbs/relays with

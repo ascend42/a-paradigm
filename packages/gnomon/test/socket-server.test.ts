@@ -1,7 +1,7 @@
 // @gnomon-platform: darwin, linux
 /**
  * #socket over a live unix socket (spec §4.9): errors carry refusal:v1, unknown
- * verbs are UNKNOWN_VERB, known verbs before auth are AUTH and close (G-SOCK-01),
+ * verbs are UNKNOWN_VERB after auth; every name but hello/auth before auth is AUTH and closes (G-SOCK-01, L6),
  * frames without the rpc tag BAD_REQUEST; malformed and oversize lines are
  * refused and the connection keeps serving; replies on one connection come
  * back in order. Hello/auth/status: test/socket-auth.test.ts (M1.4).
@@ -38,10 +38,10 @@ describe('#socket gnomon-rpc:v1 surface', () => {
     expect(isRefusalV1((resp as { error: { data: unknown } }).error.data, { mode: 'tolerant' })).toBe(true);
   });
 
-  it('unknown names are UNKNOWN_VERB; known verbs before auth are AUTH; the PR-5 daemon.status placeholder is gone', async () => {
+  it('before auth every name but hello/auth is AUTH — known or not (Aegis L6: no method enumeration); the PR-5 daemon.status placeholder is not a verb', async () => {
     const d = await daemon();
     const unk = await rpcCall(d.pidfile.socketPath, 'daemon.status');
-    expect(unk).toMatchObject({ error: { code: -32601, data: { data: { reason: 'unknown-verb' } } } });
+    expect(unk).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
     const st = await rpcCall(d.pidfile.socketPath, 'session.open');
     expect(st).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
   });
@@ -49,19 +49,19 @@ describe('#socket gnomon-rpc:v1 surface', () => {
   it('refuses malformed, untagged and oversize frames and keeps the connection serving, in order', async () => {
     const d = await daemon(256);
     const c = await rawConnect(d.pidfile.socketPath);
-    cleanups.push(c.close);
+    cleanups.push(() => (c.conn.closed ? Promise.resolve() : c.close())); // the server closes it after the last frame
     c.send('{not json\n');
     c.send(`${JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'hello' })}\n`);
     c.send(`{"pad":"${'z'.repeat(300)}"}\n`);
     c.send(Buffer.from([0x7b, 0xff, 0x7d, 0x0a]));
-    c.send(requestFrame('last', 'no.such')); // unknown name: refused, connection kept (a known verb would close, G-SOCK-01)
+    c.send(requestFrame('last', 'no.such')); // any non-handshake name before auth: AUTH, then closed (G-SOCK-01, Aegis L6)
     const got = await c.next(5);
     expect(got.map((f) => [f.id, (f.error as { data?: { data?: { reason?: string } } } | undefined)?.data?.data?.reason ?? 'ok'])).toEqual([
       [null, 'malformed-json'],
       [9, 'rpc-tag'],
       [null, 'frame-too-large'],
       [null, 'malformed-utf8'],
-      ['last', 'unknown-verb'],
+      ['last', 'unauthenticated'],
     ]);
     expect(got[2]!.error).toMatchObject({ code: -32600 });
   });
@@ -70,9 +70,9 @@ describe('#socket gnomon-rpc:v1 surface', () => {
     const d = await daemon();
     const c = await rawConnect(d.pidfile.socketPath);
     cleanups.push(c.close);
-    // an unknown name keeps the connection (a known verb before auth would close it, G-SOCK-01)
-    c.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'no.such' });
-    c.send(requestFrame(2, 'no.such'));
+    // a malformed hello keeps the connection (any non-handshake name before auth would close it, G-SOCK-01, L6)
+    c.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'hello' });
+    c.send(requestFrame(2, 'hello'));
     const got = await c.next(1);
     expect(got[0]!.id).toBe(2);
     expect(c.frames).toEqual([]);

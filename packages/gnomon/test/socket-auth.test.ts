@@ -344,7 +344,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
 });
 
 describe('verb dispatch skeleton (§5)', () => {
-  it('G-SOCK-01: unauthenticated callers get only hello/auth; any other known method is AUTH and closes the connection (before and after hello); unknown names are UNKNOWN_VERB', async () => {
+  it('G-SOCK-01: unauthenticated callers get only hello/auth; any other method, known or unknown, is AUTH and closes the connection (before and after hello)', async () => {
     const r = await rig();
     for (const m of CLIENT_METHODS) {
       const c = await RpcConnection.open(r.d.pidfile.socketPath);
@@ -354,9 +354,13 @@ describe('verb dispatch skeleton (§5)', () => {
       expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }))).toBe('connection-closed');
       expect(c.closed).toBe(true);
     }
+    // Aegis L6: an unknown name before auth is the same AUTH + close as a known one (no method enumeration)
+    const u = await RpcConnection.open(r.d.pidfile.socketPath);
+    cleanups.push(() => u.close());
+    expect(await u.call('daemon.stop', {})).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
+    await untilClosed(u);
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } }); // unknown: refused, connection kept
     await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(await c.call('status', {})).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
     await untilClosed(c);
@@ -577,8 +581,8 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
       const r = await rig({ daemon });
       const c = await rawConnect(r.d.pidfile.socketPath);
       cleanups.push(c.close);
-      // unknown names: answered without closing (a known verb before auth closes, G-SOCK-01)
-      c.send(Buffer.concat(Array.from({ length: 60 }, (_, i) => encodeFrame(requestFrame(i, 'no.such')))));
+      // malformed hellos: answered BAD_REQUEST without closing (any other name before auth closes, G-SOCK-01, L6)
+      c.send(Buffer.concat(Array.from({ length: 60 }, (_, i) => encodeFrame(requestFrame(i, 'hello')))));
       const got = await c.next(60, 5000);
       expect(got.map((f) => f.id)).toEqual(Array.from({ length: 60 }, (_, i) => i));
       expect(r.d.server.stats().pauses).toBeGreaterThan(0);
