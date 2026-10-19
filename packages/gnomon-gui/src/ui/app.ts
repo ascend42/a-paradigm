@@ -11,7 +11,7 @@
  * reaches the DOM through core/render.ts as a text node.
  */
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
-import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
+import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
@@ -275,15 +275,9 @@ function schedule(what: Set<string>): void {
 store.onChange(schedule);
 
 /* ── connection ─────────────────────────────────────────────────── */
-async function subscribe(c: GnomonClient): Promise<void> {
-  let since = store.head;
-  for (;;) {
-    const page = await c.call<{ rows: Row[]; next: number; caughtUp: boolean }>('log.read', { since, limit: 1000 });
-    store.apply(page.rows);
-    since = Math.max(since, page.next);
-    if (page.caughtUp) break;
-  }
-  await c.call('log.read', { since, follow: true });
+/** Backlog + follow with the {logId, seq} cursor; a cursor-epoch refusal clears the store and re-reads (core/client.ts). */
+function subscribe(c: GnomonClient): Promise<void> {
+  return followLog(c, store);
 }
 
 /** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
@@ -339,7 +333,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     if (method !== 'event') return;
     const p = (params ?? {}) as { row?: Row; end?: { since?: number } };
     if (p.row) store.apply([p.row]);
-    else if (p.end) void c.call('log.read', { since: store.head, follow: true }).catch(() => undefined);
+    else if (p.end) void followLog(c, store).catch(() => undefined);
   });
   c.onClose(() => {
     client = null;

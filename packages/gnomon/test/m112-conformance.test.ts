@@ -111,8 +111,9 @@ describe('#gnomon-ts-client against a live kernel (§4.9, §12.8)', () => {
     expect(t.expiresAt).toBeDefined();
     await expect(t.call('log.append', { kind: 'request.grant', payload: {} })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
     const seqs: number[] = [];
-    const sub = await t.subscribe({ since: 0 }, { row: (r) => seqs.push(r.seq) });
+    const sub = await t.subscribe({}, { row: (r) => seqs.push(r.seq) }); // no since: from the start of the current log
     expect(typeof sub.subscription).toBe('string');
+    expect(sub.logId).toMatch(/^log:/);
     const other = await GnomonClient.connect({ socketPath: f.socketPath, client: CLIENT, kernelKey: f.kernelKey, credential: f.device });
     cleanups.push(() => other.close());
     const deadline = Date.now() + 3000;
@@ -120,7 +121,7 @@ describe('#gnomon-ts-client against a live kernel (§4.9, §12.8)', () => {
     expect(seqs[0]).toBe(1);
     expect(seqs.every((s, i) => i === 0 || s === seqs[i - 1]! + 1 || s > seqs[i - 1]!)).toBe(true);
     expect(seqs.some((s) => s > sub.head)).toBe(true);
-    expect(sub.cursor()).toBe(seqs.at(-1));
+    expect(sub.cursor()).toEqual({ logId: sub.logId, seq: seqs.at(-1) }); // journal.cursor resume point
   });
 });
 

@@ -243,13 +243,17 @@ function closedError(): RpcErrorFrame['error'] {
   return { code: JSON_RPC_CODES.ENGINE, message: 'connection closed', data: refuse({ code: 'ENGINE', data: { reason: 'connection-closed' } }) };
 }
 
+/** First-party client: it speaks the `{logId, seq}` log.read cursor (journal.cursor, P8-D98). */
+export const DEFAULT_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
+
 export interface ConnectOptions {
   socketPath: string;
   /** The endpoint path the client derived itself (defaults to socketPath). */
   endpointPath?: string;
   client: HelloParams['client'];
   clientApis?: string[];
-  features?: string[];
+  /** Hello features to offer; default DEFAULT_FEATURES. */
+  features?: readonly string[];
   /** The kernel key from the root-signed registry. Omitted ⇒ serverSig is NOT verified and `serverVerified` is false. */
   serverKey?: ServerKeyPin;
   /** Authenticate with this device key after the server is verified. */
@@ -279,12 +283,12 @@ export async function connectGnomon(o: ConnectOptions): Promise<GnomonSession> {
   const conn = await RpcConnection.open(o.socketPath);
   try {
     const clientNonce = newClientNonce();
-    const h = await conn.call('hello', { clientApis: o.clientApis ?? ['gnomon-rpc:v1'], features: o.features ?? [], clientNonce, client: o.client });
+    const h = await conn.call('hello', { clientApis: o.clientApis ?? ['gnomon-rpc:v1'], features: o.features ?? DEFAULT_FEATURES, clientNonce, client: o.client });
     if ('error' in h) throw new RefusedError(h.error.data, h.error.message);
     const hello = h.result as HelloResult;
     // client-local check: the kernel must choose from what THIS client offered
     const offeredApis = o.clientApis ?? ['gnomon-rpc:v1'];
-    const offeredFeatures = o.features ?? [];
+    const offeredFeatures = o.features ?? DEFAULT_FEATURES;
     if (!offeredApis.includes(hello.clientApi) || !Array.isArray(hello.features) || hello.features.some((f) => !offeredFeatures.includes(f))) {
       throw new ServerAuthError('hello-not-offered', 'hello chose a clientApi or feature this client did not offer');
     }

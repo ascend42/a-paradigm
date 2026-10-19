@@ -112,6 +112,7 @@ import { KERNEL_METHODS, type MatrixClass, type MethodRegistry } from './methods
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
+import { SERVER_FEATURES } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
 import type { SessionPort } from '../supervisor/port.js';
@@ -576,7 +577,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       try {
         if (m === 'log.read') {
           const grant = readerFor(s); // explicit per-class policy: never the generic 'full' view
-          const params = parseLogReadParams(frame.params);
+          const params = parseLogReadParams(frame.params, { features: s.features ?? [], logId: reads.log.logId });
           if (params.follow && !Object.hasOwn(frame, 'id')) throw new RpcRefusal('BAD_REQUEST', 'follow-needs-id', 'a subscription is opened by a request with an id (its reply names the subscription)');
           return params.follow ? reads.hub.subscribe(ctx, grant, params) : readOnePage(reads.log, grant, params);
         }
@@ -673,7 +674,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   /** A mod's kernel.call (§12.3): matrix class `mod`, no connection (so no subscription), relays and log.append excluded. */
   const callAs = async (principal: string, verb: string, params: Record<string, unknown>): Promise<unknown> => {
     if (methods.kindOf(verb) !== 'verb') throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(verb.slice(0, 64))}`);
-    const s: ConnAuthState = { connId: `kernel.call:${principal}`, phase: 'authenticated', principal, principalKind: 'mod', credential: 'device' };
+    // in-process: the mod host speaks the kernel's own version, so it has every feature the kernel built (journal.cursor)
+    const s: ConnAuthState = { connId: `kernel.call:${principal}`, phase: 'authenticated', principal, principalKind: 'mod', credential: 'device', features: [...SERVER_FEATURES] };
     if (verb === 'status') {
       // the mod column's `own view`: who it is, the ids, and what it may call — nothing about other principals
       return { principal, principalKind: 'mod', clientApiId: CLIENT_API_ID, kitId: KIT_ID, abiId: ABI_ID, modAbiId: MOD_ABI_ID, verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access.mod })) };

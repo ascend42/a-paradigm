@@ -92,8 +92,8 @@ describe('human-device verbs (P8-D98)', () => {
 });
 
 describe('reserved hello features are not advertised', () => {
-  it('SERVER_FEATURES names none of journal.cursor, session.resume', () => {
-    for (const f of RESERVED_HELLO_FEATURES) expect(SERVER_FEATURES).not.toContain(f);
-    expect(SERVER_FEATURES).toEqual([]);
+  it('SERVER_FEATURES advertises journal.cursor (built, slice A4) and not session.resume', () => {
+    expect(RESERVED_HELLO_FEATURES).toContain('journal.cursor');
+    expect(SERVER_FEATURES).toEqual(['journal.cursor']);
   });
 });

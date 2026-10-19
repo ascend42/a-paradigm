@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
+import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, refusalFromError, RpcError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
@@ -592,5 +592,82 @@ describe('#gui messages name a command that exists (round 3)', () => {
     const h = cwdHintOf(Buffer.from(nfd, 'utf8').toString('base64url'))!;
     expect(h.display).toBe('/r/caf' + String.fromCodePoint(0xe9));
     expect(h.prefill).toBe(nfd);
+  });
+});
+
+/* ── journal.cursor (P8-D98, §5): the {logId, seq} cursor and cursor-epoch ── */
+describe('#gui log.read cursor (journal.cursor)', () => {
+  const LOG_A = 'log:01JAAAAAAAAAAAAAAAAAAAAAAA';
+  const LOG_B = 'log:01JBBBBBBBBBBBBBBBBBBBBBBB';
+  const epoch = () => new RpcError({ code: 'BAD_REQUEST', reason: 'cursor-epoch', message: 'the cursor names another log', next: [], data: { reason: 'cursor-epoch' } });
+
+  it('the hello offers journal.cursor', () => {
+    expect(GUI_FEATURES).toEqual(['journal.cursor']);
+  });
+
+  it('every resume sends the {logId, seq} cursor, never a bare seq', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const pages = [
+      { rows: [{ seq: 1, kind: 'daemon.start' }], next: 1, caughtUp: false, logId: LOG_A },
+      { rows: [{ seq: 3, kind: 'config.loaded' }], next: 4, caughtUp: true, logId: LOG_A },
+    ];
+    const c = {
+      call: async <T,>(_m: string, p?: unknown): Promise<T> => {
+        calls.push(p as Record<string, unknown>);
+        return ((p as { follow?: boolean }).follow ? { logId: LOG_A, subscription: 'sub:1' } : pages.shift()) as T;
+      },
+    };
+    const store = new GuiStore();
+    await followLog(c, store);
+    expect(calls).toEqual([{ limit: 1000 }, { since: { logId: LOG_A, seq: 1 }, limit: 1000 }, { since: { logId: LOG_A, seq: 4 }, follow: true }]);
+    for (const p of calls) expect(typeof p.since).not.toBe('number');
+    expect(store.cursor()).toEqual({ logId: LOG_A, seq: 4 });
+  });
+
+  it('after cursor-epoch the store is cleared and the read starts over from the start', async () => {
+    const store = new GuiStore();
+    store.adopt(LOG_A);
+    store.apply([{ seq: 7, kind: 'approval.request', payload: { card: { cardId: 'card:1', kind: 'tool' } } }, { seq: 8, kind: 'session.open', session: 'hsid:v1:X' }]);
+    expect(store.cards.size).toBe(1);
+    const changes: string[][] = [];
+    store.onChange((w) => changes.push([...w]));
+    const calls: Array<Record<string, unknown>> = [];
+    const c = {
+      call: async <T,>(_m: string, p?: unknown): Promise<T> => {
+        calls.push(p as Record<string, unknown>);
+        const q = p as { since?: { logId: string }; follow?: boolean };
+        if (q.since?.logId === LOG_A) throw epoch();
+        if (q.follow) return { logId: LOG_B, subscription: 'sub:2' } as T;
+        return { rows: [{ seq: 1, kind: 'daemon.log.quarantined' }], next: 1, caughtUp: true, logId: LOG_B } as T;
+      },
+    };
+    await followLog(c, store);
+    expect(calls[0]).toEqual({ since: { logId: LOG_A, seq: 8 }, limit: 1000 });
+    expect(calls[1]).toEqual({ limit: 1000 }); // from the start: no since
+    expect(calls[2]).toEqual({ since: { logId: LOG_B, seq: 1 }, follow: true });
+    expect(store.cards.size).toBe(0);
+    expect(store.sessions.size).toBe(0);
+    expect(store.head).toBe(1);
+    expect(store.logId).toBe(LOG_B);
+    expect(changes.some((w) => w.includes('reset'))).toBe(true);
+  });
+
+  it('a second cursor-epoch surfaces instead of looping; other refusals are not an epoch', async () => {
+    const store = new GuiStore();
+    store.adopt(LOG_A);
+    store.apply([{ seq: 2, kind: 'x' }]);
+    const c = { call: async <T,>(): Promise<T> => Promise.reject(epoch()) };
+    await expect(followLog(c, store)).rejects.toSatisfy(isCursorEpoch);
+    expect(isCursorEpoch(new RpcError({ code: 'BAD_REQUEST', reason: 'bad-since', message: '', next: [], data: null }))).toBe(false);
+  });
+
+  it('a page from another log than the store holds resets before applying', () => {
+    const store = new GuiStore();
+    store.adopt(LOG_A);
+    store.apply([{ seq: 5, kind: 'x' }]);
+    store.adopt(LOG_B);
+    expect(store.head).toBe(0);
+    expect(store.kernelFeed).toHaveLength(0);
+    expect(store.cursor()).toBeUndefined();
   });
 });

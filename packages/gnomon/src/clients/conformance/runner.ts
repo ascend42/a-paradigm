@@ -238,6 +238,17 @@ const CHECKS: Record<string, Check> = {
     const conn = await authed(d, f, c);
     const r = await d.request({ op: 'call', conn, method: 'log.read', params: { since: 'yesterday' } });
     must(refusedAs(r, 'BAD_REQUEST'), `expected BAD_REQUEST, got ${JSON.stringify(r.error ?? r.result)}`);
+    // journal.cursor (P8-D98, §5): `since` is the {logId, seq} cursor — a bare seq is refused, and a cursor from
+    // another log (another kernel, or one a quarantine replaced) is refused cursor-epoch, never resumed
+    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });
+    must(page.ok, `log.read page refused: ${JSON.stringify(page.error)}`);
+    const { logId } = page.result as { logId: string };
+    must(typeof logId === 'string' && logId.startsWith('log:'), `a page carries no logId: ${JSON.stringify(page.result)}`);
+    const bare = await d.request({ op: 'call', conn, method: 'log.read', params: { since: 1 } });
+    must(refusedAs(bare, 'BAD_REQUEST', 'bad-since'), `a bare-seq since: expected BAD_REQUEST{bad-since}, got ${JSON.stringify(bare.error ?? bare.result)}`);
+    const otherLog = `${logId.slice(0, -1)}${logId.endsWith('0') ? '1' : '0'}`;
+    const epoch = await d.request({ op: 'call', conn, method: 'log.read', params: { since: { logId: otherLog, seq: 1 } } });
+    must(refusedAs(epoch, 'BAD_REQUEST', 'cursor-epoch'), `another log's cursor: expected BAD_REQUEST{cursor-epoch}, got ${JSON.stringify(epoch.error ?? epoch.result)}`);
     await d.request({ op: 'close', conn });
   },
   /**
@@ -253,14 +264,16 @@ const CHECKS: Record<string, Check> = {
     const conn = await authed(d, f, c);
     const probe = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });
     must(probe.ok, `log.read page refused: ${JSON.stringify(probe.error)}`);
-    const since = Math.max(0, Number((probe.result as { head: number }).head) - 4);
+    const pp = probe.result as { head: number; logId: string };
+    const since = Math.max(1, Number(pp.head) - 4);
+    const cursor = { logId: pp.logId, seq: since }; // journal.cursor: a resume names its log
     // the oracle: a non-follow page from the same since names exactly the backlog the subscription must deliver
-    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { since, limit: 1000 } });
+    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { since: cursor, limit: 1000 } });
     must(page.ok, 'log.read page refused');
     const pr = page.result as { rows: Array<{ seq: number }>; head: number };
     const expected = pr.rows.map((x) => x.seq);
     must(expected.length > 0 && expected[0] === since + 1, `the oracle page does not start at since+1: ${expected.join(',')}`);
-    const sub = await d.request({ op: 'subscribe', conn, params: { since } });
+    const sub = await d.request({ op: 'subscribe', conn, params: { since: cursor } });
     must(sub.ok, `subscribe refused: ${JSON.stringify(sub.error)}`);
     const other = await authed(d, f, c); // a second client makes live rows
     const ev = await d.request({ op: 'events', conn, subscription: (sub.result as { subscription: string }).subscription, n: expected.length + 1, timeoutMs: 3000 });
