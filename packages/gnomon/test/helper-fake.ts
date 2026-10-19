@@ -15,6 +15,35 @@ const DOMAINS: Record<string, string[]> = { root: ['gnomon:row-sig:v1\n'], appro
 const CACHED_DOMAINS = ['gnomon:approve:v1\n'];
 const d12 = (m: Buffer): string => createHash('sha256').update(m).digest('hex').slice(0, 12);
 
+/** The helper's own prompt line, as packages/gnomon-helper/darwin/Sources/gnomon-helper/Protocol.swift helperLine builds it (Aegis MEDIUM-3). */
+export function helperLine(key: string, msgs: readonly Buffer[]): string {
+  const parts = [`Gnomon Helper: ${key} key signs ${msgs.length}: ${msgs.map(d12).join(' ')}`];
+  for (const m of msgs) {
+    const nl = m.indexOf(0x0a);
+    if (nl < 0) continue;
+    const domain = m.subarray(0, nl).toString();
+    if (domain === 'gnomon:row-sig:v1') {
+      let obj: Record<string, unknown> | null = null;
+      try {
+        obj = JSON.parse(m.subarray(nl + 1).toString()) as Record<string, unknown>;
+      } catch {
+        obj = null;
+      }
+      if (obj && typeof obj === 'object') {
+        let what = typeof obj.schemaVersion === 'string' ? obj.schemaVersion : 'row';
+        if (typeof obj.kind === 'string') what += ` ${obj.kind}`;
+        if (typeof obj.cardId === 'string') what += ` card ${obj.cardId.slice(0, 40)}`;
+        if (typeof obj.contentHash === 'string') what += ` ${obj.contentHash.slice(0, 19)}`;
+        parts.push(`row ${what.slice(0, 160)}`);
+      }
+    } else if (domain === 'gnomon:approve:v1') {
+      const f = m.subarray(nl + 1).toString().split('\n');
+      if (f.length >= 3) parts.push(`decision ${f[1]!.slice(0, 24)} on ${f[0]!.slice(0, 40)} ${f[2]!.slice(0, 19)}`);
+    }
+  }
+  return parts.join('; ');
+}
+
 export interface FakeHelperOptions {
   /** false = the human declines every prompt */
   touch?: boolean;
@@ -145,7 +174,7 @@ export class FakeHelper implements HelperTransport {
         if (req.keep !== undefined && typeof req.keep !== 'boolean') throw new HelperRefusal('bad-request', 'keep must be a boolean');
         const allowed = req.mode === 'cached' ? CACHED_DOMAINS : DOMAINS[String(req.key)]!;
         for (const m of msgs) if (!allowed.some((d) => m.subarray(0, d.length).toString() === d)) throw new HelperRefusal('domain-refused', 'domain');
-        const line = `Gnomon Helper: ${String(req.key)} key signs ${msgs.length}: ${msgs.map(d12).join(' ')}`;
+        const line = helperLine(String(req.key), msgs);
         const conn = typeof req.connId === 'string' ? req.connId : undefined;
         if (req.mode === 'cached') {
           if (req.key !== 'approvals' || !conn || !this.unlocks.has(conn)) throw new HelperRefusal('no-unlock', 'no unlock');

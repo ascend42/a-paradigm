@@ -59,6 +59,14 @@ export interface IdentityRecord {
   rotatedFrom?: string;
   /** --recover: the LOST root this identity replaces (a new namespace; nothing signed by it carries over) */
   recoveredFrom?: string;
+  /** #provisioner (Aegis HIGH-1): the device key this record was provisioned with */
+  deviceKeyId?: string;
+  /**
+   * #provisioner (Aegis HIGH-1): the device registry row the root signed during THIS record's provisioning,
+   * saved with the record so a commit that crashed before the registry append is completed with ZERO new
+   * root signatures (completeDevice). Public, root-signed material.
+   */
+  pendingDeviceRow?: { row: Record<string, unknown>; signer: string; sig: string };
 }
 
 export class IdentityError extends Error {

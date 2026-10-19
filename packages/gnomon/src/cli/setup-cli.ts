@@ -37,6 +37,7 @@ import {
   HardwareRootAuthority,
   identityPath,
   Provisioner,
+  readIdentity,
   readRegistry,
   registryPath,
   deviceKeyPath,
@@ -162,7 +163,8 @@ function renderPresence(io: LaunchTtyIo): (e: ProvisionEvent) => void {
     if (e.digest12) {
       // I2: the expected digest goes to the user's own launch surface (this terminal) and nowhere else
       io.stdout.write(`\n        ${groupDigest(e.digest12)}\n\n`);
-      io.stdout.write(`  The LAST line of the Touch ID dialog must read "Gnomon Helper: root key signs 1: ${e.digest12}".\n  If it doesn't, press Cancel.\n`);
+      // MEDIUM-3: the real helper appends "; row <schemaVersion> <kind>", so the line BEGINS with this
+      io.stdout.write(`  The LAST line of the Touch ID dialog must BEGIN with "Gnomon Helper: root key signs 1: ${e.digest12}".\n  If it doesn't, press Cancel.\n`);
     }
   };
 }
@@ -230,10 +232,21 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     if (homeCheck?.status === 'fail') return stop(new SetupRefusal('unfit-home', homeCheck.detail, homeCheck.fix ? [homeCheck.fix] : []));
 
     // I6: leftover generations are offered for purge (presence per key), never adopted
+    // MEDIUM-2: GNOMON_HOME is read here ONLY to protect the home it names from a purge, never to choose the home
+    const otherHome = env.GNOMON_HOME && path.isAbsolute(env.GNOMON_HOME) ? path.resolve(env.GNOMON_HOME) : null;
     for (const gen of report.leftover) {
-      const a = await rl.ask(`\nThe Secure Enclave holds old Gnomon keys (generation ${gen}) that no home uses. Setup needs them gone.\nType "purge" to delete them (one Touch ID per key), anything else to stop:\n> `);
+      if (otherHome) {
+        let other: IdentityRecord | null = null;
+        try {
+          other = readIdentity(otherHome);
+        } catch {
+          return stop(new SetupRefusal('identity-malformed', `the home GNOMON_HOME names (${otherHome}) has an unreadable identity.json that may use generation ${gen}; not purging blind`));
+        }
+        if (other?.gen === gen) return stop(new SetupRefusal('in-use', `generation ${gen} is the live identity of ${otherHome} (GNOMON_HOME); setup will not delete it`, ['unset GNOMON_HOME only if that home is really gone, or keep it and use `gnomon identity init --home <abs>`']));
+      }
+      const a = await rl.ask(`\nThe Secure Enclave holds Gnomon keys (generation ${gen}) not used by ~/.gnomon (another home set by GNOMON_HOME/--home may use it). Setup needs them gone.\nType "purge" to delete them (one Touch ID per key), anything else to stop:\n> `);
       if (a !== 'purge') return stop(new SetupRefusal('keys-exist', `generation ${gen} was kept; setup does not adopt keys it did not create`, [`gnomon identity purge-keys --gen ${gen}`]));
-      const r = await engine(deps.helperPath ?? defaultHelperPath()).purgeGeneration(gen);
+      const r = await engine(deps.helperPath ?? defaultHelperPath()).purgeGeneration(gen, otherHome ? { alsoCheckHomes: [otherHome] } : {});
       if (!r.ok) return stop(new SetupRefusal(r.reason, r.message));
       io.stdout.write(`  deleted generation ${gen}\n`);
     }
@@ -292,7 +305,7 @@ async function alreadySetUp(io: LaunchTtyIo, home: string, rec: IdentityRecord, 
     io.stdout.write('  Nothing to do. Run `gnomon` in a repo to start.\n');
     return { code: SETUP_EXIT_OK, provisioned: false, home };
   }
-  const a = await rl.ask(`\nThis Mac's device key is not registered yet (an earlier setup stopped just before the last step).\nType "complete" to register it now (1 Touch ID), anything else to stop:\n> `);
+  const a = await rl.ask(`\nThis Mac's device key is not registered yet (an earlier setup stopped just before the last step).\nType "complete" to register it now (no Touch ID: the root already signed it during that setup), anything else to stop:\n> `);
   if (a !== 'complete') {
     refused(io.stderr, 'setup', 'device-unregistered', 'the device registration was not completed', ['gnomon setup']);
     return { code: SETUP_EXIT_REFUSED, provisioned: false, home };

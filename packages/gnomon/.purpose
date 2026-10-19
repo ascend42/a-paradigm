@@ -738,8 +738,12 @@ components:
       / complete 1), I8 (O_EXCL `<home>.provisioning.lock`, provisioning-locked,
       before key.list), I9 (pre-commit failure restores moved files and
       deletes only keys it created), I10 (after identity.json, keys are never
-      deleted; completeDevice() finishes a missing registry row with ONE fresh
-      root presence and a shown digest), I12 (validates name/host itself).
+      deleted; completeDevice() appends the device row the root signed during
+      that provisioning, saved in identity.json as pendingDeviceRow with
+      deviceKeyId — verified under the root, keyId === device key on disk ===
+      deviceKeyId, deviceId/principalId === the record's; ZERO new signatures,
+      budget 0; no saved row → no-saved-device-row, use --rotate; Aegis
+      HIGH-1), I12 (validates name/host itself).
     path: src/kernel/identity/provisioner.ts
     type: module
     tags: [gnomon, kernel, identity, setup]
@@ -2216,7 +2220,7 @@ gates:
       (createdAt, root keyId) and never adopted or replaced; a malformed one
       is shown, never touched; a dev or symlinked home is refused. The one
       write allowed on a provisioned home is the I10 completion of a missing
-      registry row (fresh root presence, digest shown). Needs a portal.yaml
+      registry row (the saved, already root-signed row; no new signature). Needs a portal.yaml
       gate entry once Gnomon's portal is authored.
     tags: [gnomon, setup]
 
