@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assertNoForbiddenFlags, buildClaudeArgv, cardKindOfTool, repoContextFor, SESSION_HOOKS_MODES, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
+import { assertArgv, assertNoForbiddenFlags, buildClaudeArgv, cardKindOfTool, repoContextFor, SESSION_HOOKS_MODES, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
 import { buildSessionEnv, ENV_ALLOWLIST } from '../src/kernel/runner/env.js';
 import { PKG_ROOT } from './helpers.js';
 
@@ -43,11 +43,14 @@ describe('G-RUN-01 argv and forbidden flags', () => {
 
 describe('G-SUB-08 P8-D97 repo context argv', () => {
   const base = { uuid: '00000000-0000-4000-8000-000000000000', policyPath: 'policy.json', mcpConfigPath: 'mcp.json', settingSources: ['user'] as const };
-  it('pluginDirs and addDirs become one --plugin-dir / --add-dir each (deduped); none by default', () => {
-    const a = buildClaudeArgv({ ...base, pluginDirs: ['ctx', 'ctx'], addDirs: ['repo', 'pkg', 'repo'] });
+  it('pluginDirs and addDirs: one --plugin-dir, ONE variadic --add-dir (deduped); none by default; relative dirs throw', () => {
+    const a = buildClaudeArgv({ ...base, pluginDirs: ['/ctx', '/ctx'], addDirs: ['/repo', '/repo/pkg', '/repo'] });
     expect(a.filter((x) => x === '--plugin-dir')).toHaveLength(1);
-    expect(a[a.indexOf('--plugin-dir') + 1]).toBe('ctx');
-    expect(a.flatMap((x, i) => (x === '--add-dir' ? [a[i + 1]] : []))).toEqual(['repo', 'pkg']);
+    expect(a[a.indexOf('--plugin-dir') + 1]).toBe('/ctx');
+    expect(a.filter((x) => x === '--add-dir')).toHaveLength(1);
+    expect(a.slice(a.indexOf('--add-dir') + 1, a.indexOf('--add-dir') + 3)).toEqual(['/repo', '/repo/pkg']);
+    expect(() => buildClaudeArgv({ ...base, addDirs: ['repo'] })).toThrow(TypeError);
+    expect(() => buildClaudeArgv({ ...base, pluginDirs: ['-x'] })).toThrow(TypeError);
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('user');
     const b = buildClaudeArgv({ ...base });
     expect(b).not.toContain('--plugin-dir');
@@ -55,6 +58,52 @@ describe('G-SUB-08 P8-D97 repo context argv', () => {
   });
   it('only audited stages the repo context through the kernel', () => {
     expect(SESSION_HOOKS_MODES.filter(repoContextFor)).toEqual(['audited']);
+  });
+});
+
+describe('Q6 (Aegis): extra is an allow-list; every kernel-owned flag appears once', () => {
+  const base = { uuid: '00000000-0000-4000-8000-000000000000', policyPath: '/s/policy.json', mcpConfigPath: '/s/mcp.json', settingSources: ['user'] as const };
+  it('the allowed extras pass', () => {
+    const a = buildClaudeArgv({ ...base, extra: ['--max-turns', '5', '--no-session-persistence'] });
+    expect(a.slice(-3)).toEqual(['--max-turns', '5', '--no-session-persistence']);
+    expect(buildClaudeArgv({ ...base, extra: ['--max-turns=7'] }).at(-1)).toBe('--max-turns=7');
+  });
+  it.each([
+    ['--plugin-dir', ['--plugin-dir', '/evil']],
+    ['--add-dir', ['--add-dir', '/']],
+    ['--agents', ['--agents', '{}']],
+    ['--tools', ['--tools', 'Bash']],
+    ['--settings', ['--settings', '/x.json']],
+    ['--setting-sources', ['--setting-sources=user,project,local']],
+    ['--permission-mode', ['--permission-mode', 'bypassPermissions']],
+    ['--mcp-config', ['--mcp-config', '/m.json']],
+    ['--model', ['--model', 'x']],
+    ['--plugin-url', ['--plugin-url', 'https://x']],
+    ['an unknown flag', ['--whatever']],
+    ['a positional prompt', ['do something']],
+    ['a value on a boolean', ['--no-session-persistence=1']],
+    ['a missing value', ['--max-turns']],
+    ['a repeated extra', ['--max-turns', '1', '--max-turns', '2']],
+  ])('extra %s ⇒ TypeError', (_n, extra) => {
+    expect(() => buildClaudeArgv({ ...base, extra })).toThrow(TypeError);
+  });
+  it('assertArgv: a duplicated, missing or =-form duplicate kernel flag throws; the built argv passes', () => {
+    const a = buildClaudeArgv({ ...base, pluginDirs: ['/c'], addDirs: ['/r'], appendSystemPrompt: '--settings /evil.json', model: 'm' });
+    expect(() => assertArgv(a)).not.toThrow();
+    const counts = assertArgv(a);
+    expect(counts.get('--settings')).toBe(1); // the system prompt VALUE is not counted as a flag
+    expect(() => assertArgv([...a, '--settings', '/x'])).toThrow(/--settings must appear exactly 1/);
+    expect(() => assertArgv([...a, '--settings=/x'])).toThrow(/--settings/);
+    expect(() => assertArgv([...a, '--plugin-dir', '/y'])).toThrow(/--plugin-dir/);
+    expect(() => assertArgv([...a, '--add-dir', '/y'])).toThrow(/--add-dir/);
+    expect(() => assertArgv([...a, '--agents', '{}'])).toThrow(/--agents/);
+    expect(() => assertArgv([...a, '--tools', 'Bash'])).toThrow(/--tools/);
+    expect(() => assertArgv([...a, '--resume', 'u'])).toThrow(/session-id/);
+    const i = a.indexOf('--setting-sources');
+    expect(() => assertArgv([...a.slice(0, i), ...a.slice(i + 2)])).toThrow(/--setting-sources/);
+  });
+  it('an empty --setting-sources value (mode none) is still one value', () => {
+    expect(() => buildClaudeArgv({ ...base, settingSources: [] })).not.toThrow();
   });
 });
 

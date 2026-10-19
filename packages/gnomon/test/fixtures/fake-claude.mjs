@@ -26,6 +26,7 @@ if (args[0] === 'auth') {
   out(JSON.stringify(mode.auth ?? { loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty', subscriptionType: 'max' }));
   process.exit(0);
 }
+if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' })); // first: before any startup work
 trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), pid: process.pid });
 // P8-D94: emulate Claude's SessionStart command hooks — from --settings, and from the repo's project/local
 // layers ONLY when --setting-sources names them (the semantics the audited mode relies on)
@@ -67,7 +68,9 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
     }
   }
   if (process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD === '1') {
-    for (const d of all('--add-dir')) {
+    // --add-dir is variadic (commander `<directories...>`): every value up to the next flag
+    const addDirs = args.flatMap((a, i) => { if (a !== '--add-dir') return []; const out = []; for (let j = i + 1; j < args.length && !args[j].startsWith('-'); j++) out.push(args[j]); return out; });
+    for (const d of addDirs) {
       let text;
       try { text = readFileSync(path.join(d, 'CLAUDE.md'), 'utf8'); } catch { continue; }
       for (const m of text.matchAll(/^@(\S+)$/gm)) { try { text += readFileSync(path.resolve(d, m[1]), 'utf8'); } catch { /* missing import */ } }
@@ -82,7 +85,6 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
 // M2: try writes at start (under the session profile): each path is reported allowed or blocked
 for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
-if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' }));
 const session = args[args.indexOf('--session-id') + 1] ?? 'none';
 out({ type: 'system', subtype: 'hook_started', hook: 'x', futureField: { a: 1 } });
 out({ type: 'system', subtype: 'init', session_id: session, model: 'fake-model', apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });

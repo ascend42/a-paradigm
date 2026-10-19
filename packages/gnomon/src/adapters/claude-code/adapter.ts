@@ -139,7 +139,80 @@ export function assertNoForbiddenFlags(argv: readonly string[]): void {
   }
 }
 
+/** Q6 (Aegis): the ONLY flags a caller may pass in `extra`, with their arity. Every other flag is refused. */
+export const EXTRA_FLAGS: Readonly<Record<string, 0 | 1>> = Object.freeze({ '--max-turns': 1, '--no-session-persistence': 0 });
+
+type FlagSpec = { arity: 0 | 1 | '*'; min: number; max: number };
+/**
+ * Q6: the whole argv grammar. Every kernel-owned flag appears exactly once (min = max = 1) or at most once; `--agents`
+ * and `--tools` are kernel-owned and the kernel never sets them, so they may not appear at all. `--session-id` and
+ * `--resume` are exactly one between them. `--add-dir` is ONE variadic flag.
+ */
+export const ARGV_GRAMMAR: Readonly<Record<string, FlagSpec>> = Object.freeze({
+  '-p': { arity: 0, min: 1, max: 1 },
+  '--input-format': { arity: 1, min: 1, max: 1 },
+  '--output-format': { arity: 1, min: 1, max: 1 },
+  '--verbose': { arity: 0, min: 1, max: 1 },
+  '--replay-user-messages': { arity: 0, min: 1, max: 1 },
+  '--include-partial-messages': { arity: 0, min: 1, max: 1 },
+  '--permission-mode': { arity: 1, min: 1, max: 1 },
+  '--permission-prompts': { arity: 1, min: 1, max: 1 },
+  '--permission-prompt-tool': { arity: 1, min: 1, max: 1 },
+  '--session-id': { arity: 1, min: 0, max: 1 },
+  '--resume': { arity: 1, min: 0, max: 1 },
+  '--settings': { arity: 1, min: 1, max: 1 },
+  '--setting-sources': { arity: 1, min: 1, max: 1 },
+  '--mcp-config': { arity: 1, min: 1, max: 1 },
+  '--strict-mcp-config': { arity: 0, min: 1, max: 1 },
+  '--plugin-dir': { arity: 1, min: 0, max: 1 },
+  '--add-dir': { arity: '*', min: 0, max: 1 },
+  '--append-system-prompt': { arity: 1, min: 0, max: 1 },
+  '--model': { arity: 1, min: 0, max: 1 },
+  '--agents': { arity: 1, min: 0, max: 0 },
+  '--tools': { arity: 1, min: 0, max: 0 },
+  '--max-turns': { arity: 1, min: 0, max: 1 },
+  '--no-session-persistence': { arity: 0, min: 0, max: 1 },
+});
+
+/** Q6: walk an argv against a grammar (arity-aware, `--flag=value` included); throws TypeError on any unknown flag, stray value or wrong count. */
+export function assertArgv(argv: readonly string[], grammar: Readonly<Record<string, FlagSpec>> = ARGV_GRAMMAR, enforceMin = true): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i]!;
+    const eq = tok.startsWith('--') ? tok.indexOf('=') : -1;
+    const name = eq > 0 ? tok.slice(0, eq) : tok;
+    const spec = grammar[name];
+    if (!spec) throw new TypeError(`#claude-adapter: ${tok.startsWith('-') ? `flag ${name} is not allowed here` : `stray argument ${JSON.stringify(tok.slice(0, 64))}`} (Q6)`);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    if (spec.arity === 0) {
+      if (eq > 0) throw new TypeError(`#claude-adapter: ${name} takes no value (Q6)`);
+    } else if (spec.arity === 1) {
+      if (eq < 0) {
+        if (i + 1 >= argv.length) throw new TypeError(`#claude-adapter: ${name} needs a value (Q6)`);
+        i++;
+      }
+    } else {
+      let n = eq > 0 ? 1 : 0;
+      while (i + 1 < argv.length && !argv[i + 1]!.startsWith('-')) {
+        i++;
+        n++;
+      }
+      if (n === 0) throw new TypeError(`#claude-adapter: ${name} needs at least one value (Q6)`);
+    }
+  }
+  for (const [name, spec] of Object.entries(grammar)) {
+    const n = counts.get(name) ?? 0;
+    if (n > spec.max || (enforceMin && n < spec.min)) throw new TypeError(`#claude-adapter: ${name} must appear ${spec.min === spec.max ? `exactly ${spec.min}` : `at most ${spec.max}`} time(s), got ${n} (Q6)`);
+  }
+  if (enforceMin && (counts.get('--session-id') ?? 0) + (counts.get('--resume') ?? 0) !== 1) throw new TypeError('#claude-adapter: exactly one of --session-id / --resume (Q6)');
+  return counts;
+}
+
 export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
+  // Q6: extras are an ALLOW-list (a forbidden flag still throws ForbiddenFlagError first)
+  assertNoForbiddenFlags(i.extra ?? []);
+  assertArgv(i.extra ?? [], Object.fromEntries(Object.entries(EXTRA_FLAGS).map(([k, a]) => [k, { arity: a, min: 0, max: 1 }])), false);
+  for (const d of [...(i.pluginDirs ?? []), ...(i.addDirs ?? [])]) if (typeof d !== 'string' || !(d.startsWith('/') || /^[A-Za-z]:[\\/]/.test(d) || d.startsWith('\\\\'))) throw new TypeError(`#claude-adapter: a context dir must be absolute, got ${JSON.stringify(String(d).slice(0, 64))}`);
   for (const s of i.settingSources) if (!(SETTING_SOURCES as readonly string[]).includes(s)) throw new TypeError(`#claude-adapter: unknown setting source ${String(s)}`);
   const argv = [
     '-p',
@@ -157,13 +230,14 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
     '--mcp-config', i.mcpConfigPath,
     '--strict-mcp-config',
     ...[...new Set(i.pluginDirs ?? [])].flatMap((d) => ['--plugin-dir', d]),
-    ...[...new Set(i.addDirs ?? [])].flatMap((d) => ['--add-dir', d]),
+    ...(i.addDirs?.length ? ['--add-dir', ...new Set(i.addDirs)] : []), // ONE variadic flag (Q6)
     ...(i.appendSystemPrompt !== undefined ? ['--append-system-prompt', i.appendSystemPrompt] : []),
     ...(i.model !== undefined ? ['--model', i.model] : []),
     ...(i.extra ?? []),
   ];
   assertNoForbiddenFlags(argv);
   assertPermissionChannel(argv);
+  assertArgv(argv);
   return argv;
 }
 
