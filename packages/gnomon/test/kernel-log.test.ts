@@ -639,6 +639,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       'approval.suspect',
       'approval.presence.denied',
       'approval.rule.learned',
+      'approval.rule.revoked',
       'approval.voice.arm',
       'approval.voice.disarm',
       'key.mint',

@@ -49,11 +49,10 @@
  *   questions before presence (parseAskAnswer), the allow carries
  *   updatedInput = {...kernel-held input, answers}, and the answer text never
  *   reaches a non-sensitive row (approval.decide: noteHash/noteBytes). The
- *   answer is NOT inside the decisionSig preimage or the presence binding:
- *   an ACCEPTED RISK (spec §3.4, Aegis C3, T-2026-10-19-001) — `answer` is
- *   cached-class, and a party rewriting frames on an authenticated GUI
- *   connection could already flip a cached deny; the GUI renderer and
- *   transport are trusted for cached-class decisions. ExitPlanMode is a `plan` card with its
+ *   answer IS inside the decisionSig preimage and the presence binding since
+ *   P8-D98 (slice A2 of T-2026-10-19-001): an `answer` signs the decisionSig
+ *   v2 message ending in its answerDigest (= the row's noteHash), so an
+ *   answer rewritten on the wire fails decisionSig. ExitPlanMode is a `plan` card with its
  *   turn.plan row; a write under denyWrite is denied with no card. An unknown
  *   control_request subtype gets an error response. The assistant tool_use
  *   path raises NO card (one card per request).

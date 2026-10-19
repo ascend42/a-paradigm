@@ -48,6 +48,9 @@ export const FORCED_ANCHOR_ENVELOPE = 1 / 64;
  *     so a future `grant.*` kind is critical on registration.
  *   - `link.*` (pair/renew/revoke) maps to the registered kinds
  *     link.pair.offered, link.paired, link.renewed, link.revoked.
+ *   - `approval.rule.revoked` (P8-D98, Aegis M1) is added beside
+ *     `approval.rule.learned`: a lost revoke silently widens permission
+ *     (the rule comes back), so it is anchored like the learn it undoes.
  */
 export const CRITICAL_ANCHOR_KINDS = Object.freeze({
   ref: 'research 33 S33-06 (P8-D82)',
@@ -56,6 +59,7 @@ export const CRITICAL_ANCHOR_KINDS = Object.freeze({
     'approval.suspect',
     'approval.presence.denied',
     'approval.rule.learned',
+    'approval.rule.revoked',
     'approval.voice.arm',
     'approval.voice.disarm',
     'link.pair.offered',

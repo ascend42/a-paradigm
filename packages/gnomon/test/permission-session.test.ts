@@ -18,7 +18,7 @@ import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
-import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { answerDigest, decisionMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer, usesDecisionV2 } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { ASK_MAX_ANSWER_CHARS, ASK_USER_NO_ANSWER, composePermission, FIELD_BODY_PREFIX, inputHash, parseAskAnswer, PLAN_FILE } from '../src/kernel/supervisor/permission.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
@@ -68,10 +68,11 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   const broker = new ApprovalBroker({ kernel, kernelPrincipal: 'p:abcdefgh/kernel', log, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, guiSessions: () => 1, ...(now ? { clock: () => now.t } : {}) });
   const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash) => book.match(repoKey, tool, hash) });
   live.push(() => children.stopAll('test-end'));
-  const sig = (cardId: string, decision: string, contentHash: string, approver = HUMAN) =>
-    cryptoSign('sha256', signaturePreimage('approve', approveMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: approver })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
+  // P8-D98: an answer signs the v2 message over its text's digest (signer decisionMessage); the rest stay v1
+  const sig = (cardId: string, decision: string, contentHash: string, approver = HUMAN, note?: unknown) =>
+    cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: approver, ...(usesDecisionV2(decision) ? { answerDigest: answerDigest(typeof note === 'string' ? note : '') } : {}) })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
   const approve = (cardId: string, decision: string, extra: Record<string, unknown> = {}, ctx: Record<string, unknown> = GUI) =>
-    broker.approve(ctx as never, { cardId, decision, decisionSig: sig(cardId, decision, broker.card(cardId)?.contentHash ?? 'sha256:0'), ...extra });
+    broker.approve(ctx as never, { cardId, decision, decisionSig: sig(cardId, decision, broker.card(cardId)?.contentHash ?? 'sha256:0', HUMAN, extra.note), ...extra });
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string, pred: (p: Record<string, unknown>) => boolean = () => true) => rows.findIndex((r) => r.kind === k && pred(r.payload));
   const answers = () => trace(w).filter((t) => t.t === 'perm-answer');

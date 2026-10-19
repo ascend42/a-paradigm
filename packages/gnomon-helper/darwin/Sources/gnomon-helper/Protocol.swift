@@ -155,8 +155,15 @@ func helperLine(key: KeyClass, messages: [Data]) -> String {
             if let h = obj["contentHash"] as? String { what += " " + String(h.prefix(19)) }
             parts.append("row " + String(what.prefix(160)))
         } else if domain == "gnomon:approve:v1" {
-            let fields = String(decoding: m[(nl + 1)...], as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false)
-            if fields.count >= 3 { parts.append("decision \(fields[1].prefix(24)) on \(fields[0].prefix(40)) \(fields[2].prefix(19))") }
+            var fields = String(decoding: m[(nl + 1)...], as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false)
+            // decisionSig v2 (P8-D98): first line gnomon:decision:v2, then the v1 fields, then the answer digest
+            let v2 = fields.first == "gnomon:decision:v2"
+            if v2 { fields.removeFirst() }
+            if fields.count >= 3 {
+                var line = "decision \(fields[1].prefix(24)) on \(fields[0].prefix(40)) \(fields[2].prefix(19))"
+                if v2, fields.count >= 5 { line += " answer \(fields[4].prefix(19))" }
+                parts.append(line)
+            }
         }
     }
     return parts.joined(separator: "; ")

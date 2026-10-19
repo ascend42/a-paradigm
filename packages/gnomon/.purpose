@@ -1630,8 +1630,28 @@ components:
       the sanitizer strips tag characters and escapes C0/C1 controls; the
       install card is rendered by the broker from re-derived lines, readPaths
       and linked source validated, presence bound to the decision; effect
-      failures are recorded approval.suspect{why:effect-failed}
-      (approval.decide is a record, never authority). Slice 2: with no
+      failures are recorded as exactly one approval.effect.failed{cardId,
+      decision, effect: the card kind, reason: a kebab-case code} and no
+      approval.suspect row; the card stays pending (approval.decide is a
+      record, never authority; P8-D98 slice A2), so replay folds decide ->
+      approval.effect.failed -> decide for one card with no divergence (the
+      last decide stands). raise refuses a card carrying both a ruleScope and
+      an effect BAD_REQUEST (Aegis M3: a learned rule auto-allows without
+      running an effect). decisionSig v2 (P8-D98
+      slice A2): an `answer` signs the v2 message (signer decisionMessage,
+      first line gnomon:decision:v2, last line answerDigest = the noteHash)
+      and its presence binding carries answerDigest. With a client-supplied
+      decisionSig an answer rewritten on the wire after signing fails AUTH
+      bad-signature; on the helper-signs path the kernel computes
+      answerDigest from the note it received, so v2 binds the text the
+      kernel received, not the text the human saw (Aegis M2); an answer with no note is
+      refused BAD_REQUEST; every other decision stays v1. Replay verifies
+      both layouts given decisionKeys (replay.ts checkDecisionSigs) with a
+      per-log cutover MARKER ROW: the first v2 answer or any 8.0:P8-D98 kind;
+      a v1 answer after it is decision-sig-v1-after-cutover. The helper
+      prompt line (gnomon-helper Protocol.swift helperLine) parses the v2
+      marker so it still shows the decision, card and content hash, plus the
+      answer digest. Slice 2: with no
       approvals key (before M1.3) approve answers UNSUPPORTED{presence}
       before the decisionSig shape check, so the GUI (no signing path yet)
       sees the presence refusal (T-2026-10-18-018 item 2); status.cards per
@@ -2040,10 +2060,15 @@ components:
       approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
       different input, tool or repo raises the card. updatedInput is the
       kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
-      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp (Aegis C2: lastSeq advances to the captured head, past every scanned row; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
-      incrementally from the chain (fromSeq). Not built: revoke (needs a new
-      event kind approval.rule.revoked, moves clientApiId) and the strictness
-      L1 suspension of rules (M2.10).
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp over ruleSourceOf(log) (Aegis C2: lastSeq advances to the captured head, past every scanned row; Aegis H1: that head is the RELEASED head, never the committed tip, so rows hidden behind a critical row pending on its anchors are folded once released, never skipped; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
+      incrementally from the chain (fromSeq). The learned row matches EXACT
+      only (TD-2026-10-19-528 F2: matchExact:true or match:'exact'; any other
+      match value forms no rule). Revoke (P8-D98, F1): a KERNEL-signed
+      approval.rule.revoked{ruleId, repoKey, tool, connId} removes the rule and
+      forgets the card's always decision (a replayed learned row never
+      resurrects it); a forged revoked row is ignored; a fresh always on a new
+      card learns a new rule. get(ruleId) serves #rules-revoke. Not built: the
+      strictness L1 suspension of rules (M2.10).
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]
@@ -2058,13 +2083,44 @@ components:
       <id>` (src/cli/rules-cli.ts). list verifies the home's kernel log
       read-only (verifyLog with the home's kernel pubs, like gnomon replay)
       and folds the verified rows through #always-rules; an unverified log
-      is refused INTEGRITY_BROKEN. revoke is refused UNSUPPORTED (needs a new
-      kernel event kind).
+      is refused INTEGRITY_BROKEN; the kernel principal is namespaced by the
+      home's root (homeTrust ns), as the daemon's is. revoke (`gnomon rules
+      revoke <id> [--home <abs>] [--json]`) asks the RUNNING daemon: the
+      hello's key id is pinned from the home (kernelPinOf; an unpinned server
+      gets nothing), it authenticates as the home's human device (device.key +
+      its root-signed human registry row) and calls rules.revoke
+      (#rules-revoke); kernel refusals (NOT_FOUND, BAD_REQUEST, FORBIDDEN) are
+      printed as they come; no daemon => REFUSED ENGINE{not-running}.
     path: src/cli/rules-cli.ts
     type: module
     tags: [gnomon, cli, approvals, paradigm-8, move-1]
     tests:
       - test/always-rules.test.ts
+    oracles: [G-BRK-05]
+
+  rules-revoke:
+    description: >-
+      #rules-revoke (P8-D98 human-device verb 14, TD-2026-10-19-528 F1) in
+      src/kernel/socket/rules-revoke.ts: the rules.revoke{ruleId} handler the
+      daemon wires into DispatcherOptions.humanVerbs['rules.revoke'] (one
+      key per verb in daemon.ts `humanVerbs`). Reached only for a verified
+      human device connection (dispatch.ts refuses every other class, and a
+      connection whose credential is not explicitly 'device', Aegis L3); no
+      presence prompt (revoking only narrows). Params exactly {ruleId}
+      (RULE_ID_PATTERN) else BAD_REQUEST; the rule must stand in the
+      daemon's RuleBook (kernel-signed rows only, shared with the
+      supervisor's exact-match check via syncRuleBook) else NOT_FOUND; then
+      the kernel appends approval.rule.revoked{ruleId, repoKey, tool, connId}
+      (connId stamped from THIS connection; a CRITICAL kind, anchor-policy.ts
+      Aegis M1, so the append resolves only once anchored) and re-folds, so the next exact
+      match raises the card. Revokes run one at a time (a concurrent double
+      revoke writes one row). Result {ruleId, revoked: true}.
+    path: src/kernel/socket/rules-revoke.ts
+    type: module
+    tags: [gnomon, kernel, socket, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/human-device-verbs.test.ts
     oracles: [G-BRK-05]
 
   gnomon-guide:

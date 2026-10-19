@@ -24,15 +24,25 @@
  * the window is not formed — fail closed, the card is raised again) and at
  * most MAX_RULES rules (oldest dropped first, same fail-closed direction).
  *
- * REVOKE is not built: it needs a new event kind (`approval.rule.revoked`),
- * which moves clientApiId — reported, not added (the task's STOP rule).
+ * The learned row's match mode is EXACT only (TD-2026-10-19-528 F2): v1
+ * `matchExact:true`, or `match:'exact'`; a row carrying any other `match`
+ * value forms no rule (an always-rule never widens).
+ *
+ * REVOKE (P8-D98, TD-2026-10-19-528 F1): a kernel-signed
+ * `approval.rule.revoked{ruleId, repoKey, tool, connId}` (written by the
+ * `rules.revoke` human-device verb, socket/rules-revoke.ts) removes the rule
+ * and forgets the card's `always` decision, so a replayed learned row for the
+ * same card never brings it back. A forged revoked row is ignored like any
+ * other forged row. A revoke never widens anything: a later `always` on a
+ * NEW card learns a new rule (a new id).
  * `gnomon rules list` reads the same fold offline (rules-cli.ts).
  */
+import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 
 export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
-export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned'] as const);
+export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked'] as const);
 
 export interface RuleRow {
   seq?: number;
@@ -94,11 +104,21 @@ export class RuleBook {
       while (this.#always.size > MAX_TRACKED_REQUESTS) this.#always.delete(this.#always.values().next().value!);
     } else if (r.kind === 'approval.rule.learned') {
       const cardId = p.cardId;
-      if (typeof cardId !== 'string' || p.matchExact !== true || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || p.presence === 'cached') return;
+      const exact = 'match' in p ? p.match === 'exact' : p.matchExact === true; // F2: exact only
+      if (typeof cardId !== 'string' || !exact || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || p.presence === 'cached') return;
       const req = this.#requests.get(cardId);
       if (!req || req.tool !== p.tool || !this.#always.has(cardId)) return;
       bump(this.#rules, cardId, { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh') }, MAX_RULES);
+    } else if (r.kind === 'approval.rule.revoked') {
+      if (typeof p.ruleId !== 'string') return;
+      this.#rules.delete(p.ruleId);
+      this.#always.delete(p.ruleId);
     }
+  }
+
+  /** The standing rule with this id, or null (revoked or never learned). */
+  get(ruleId: string): AlwaysRule | null {
+    return this.#rules.get(ruleId) ?? null;
   }
 
   /** The rule an exact (repoKey, tool, inputHash) matches, or null. */
@@ -117,10 +137,30 @@ export class RuleBook {
   }
 }
 
-/** A chain reader for catchUp: the released head, and the RULE_KINDS rows in [fromSeq, toSeq]. */
+/**
+ * A chain reader for catchUp: `head()` MUST be a seq every row at or below
+ * which `read` can return — the RELEASED head (kernel-log.ts releasedHead,
+ * D83), never the committed tip. A critical row waiting on its anchors hides
+ * itself and every later row from `log.read`; a tip-valued head would make
+ * catchUp advance past rows it never saw and skip them forever (Aegis H1: a
+ * revoke appended while a critical approval.decide is pending was never
+ * folded). Released heads only grow, so a row hidden now is read next time.
+ */
 export interface RuleSource {
   head(): number;
   read(fromSeq: number, toSeq: number): Iterable<RuleRow>;
+}
+
+/** The kernel log as a RuleSource: released head + the RULE_KINDS rows in full view (shared by the daemon and its tests). */
+export function ruleSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): RuleSource {
+  return {
+    head: () => log.releasedHead(),
+    read: function* (fromSeq, toSeq) {
+      for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
+        if (v.view === 'full') yield { seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+      }
+    },
+  };
 }
 
 /**
@@ -128,12 +168,17 @@ export interface RuleSource {
  * EVERY row up to the head captured first — not only past rule kinds — so a
  * chain of non-rule rows is scanned once, never on each request. Rows
  * appended after the head was captured are read next time. Returns whether
- * the source was read at all.
+ * the source was read at all. Aegis H1: the head is the source's RELEASED
+ * head (RuleSource), so the advance never passes a row the read could not
+ * return; a row seq above the captured head is never folded early either.
  */
 export function catchUp(book: RuleBook, src: RuleSource): boolean {
   const head = src.head();
   if (head <= book.lastSeq) return false;
-  for (const r of src.read(book.lastSeq + 1, head)) book.fold(r);
+  for (const r of src.read(book.lastSeq + 1, head)) {
+    if (r.seq !== undefined && r.seq > head) break;
+    book.fold(r);
+  }
   book.advanceTo(head);
   return true;
 }

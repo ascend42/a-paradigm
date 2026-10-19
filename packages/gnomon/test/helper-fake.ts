@@ -38,7 +38,10 @@ export function helperLine(key: string, msgs: readonly Buffer[]): string {
       }
     } else if (domain === 'gnomon:approve:v1') {
       const f = m.subarray(nl + 1).toString().split('\n');
-      if (f.length >= 3) parts.push(`decision ${f[1]!.slice(0, 24)} on ${f[0]!.slice(0, 40)} ${f[2]!.slice(0, 19)}`);
+      // decisionSig v2 (P8-D98): a marker first line, then the v1 fields, then the answer digest
+      const v2 = f[0] === 'gnomon:decision:v2';
+      if (v2) f.shift();
+      if (f.length >= 3) parts.push(`decision ${f[1]!.slice(0, 24)} on ${f[0]!.slice(0, 40)} ${f[2]!.slice(0, 19)}${v2 && f.length >= 5 ? ` answer ${f[4]!.slice(0, 19)}` : ''}`);
     }
   }
   return parts.join('; ');
