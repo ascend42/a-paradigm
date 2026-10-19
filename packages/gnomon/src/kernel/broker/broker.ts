@@ -31,9 +31,17 @@
  *
  * `approval.decide` is a RECORD, never authority: the effect (grant rows,
  * activation) is the authority; an effect that fails after the row is
- * written is recorded `approval.suspect{why:'effect-failed'}` and the card
- * stays pending (`approval.effect.failed` would be the honest kind; adding it
- * moves clientApiId — reported).
+ * written is recorded `approval.effect.failed{cardId, decision, effect,
+ * reason}` (P8-D98, slice A2; effect = the card kind, reason a kebab-case
+ * code) and the card stays pending. No `approval.suspect` row: a failed
+ * effect is a fact about the kernel, not a suspicion about the decider.
+ *
+ * decisionSig v2 (P8-D98, slice A2): an `answer` decision signs the v2
+ * message (signer decisionMessage) whose last line is the answer digest
+ * (sha256 of the note, the noteHash approval.decide records), and the
+ * presence binding carries the same answerDigest, so an answer rewritten on
+ * the wire fails decisionSig (AUTH bad-signature) and never matches the
+ * token. Every other decision keeps the v1 message.
  *
  * Silence never allows (B6, G-BRK-01): `tool.permission` cards expire into
  * deny; `fallback` and `api-token` cards never expire; `decisionOf` of a
@@ -56,7 +64,7 @@ import {
   type RefusalGate,
 } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
-import { approveMessage, type KeyRing, type Signer } from '../log/signer.js';
+import { answerDigest, decisionMessage, usesDecisionV2, type KeyRing, type Signer } from '../log/signer.js';
 import { consumeBoundPresence, PresenceToken, presenceBindingDigest, requestPresence, type PresenceBinding, type PresencePurpose } from '../identity/presence.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
@@ -257,6 +265,22 @@ export interface BrokerOptions {
 }
 
 const APPROVE_KEYS = ['cardId', 'decision', 'note', 'decisionSig', 'via', 'voice'] as const;
+
+/** The contracts KEBAB_64 shape of approval.effect.failed `effect` / `reason`. */
+const KEBAB_64 = /^[a-z][a-z0-9-]{0,63}$/;
+const kebab64 = (v: unknown): string | undefined => (typeof v === 'string' && KEBAB_64.test(v) ? v : undefined);
+
+/** approval.effect.failed `effect` (P8-D98): the card kind names the effect (install grants, api-token activation, tool answer). */
+function effectNameOf(card: CardV1): string {
+  return kebab64(String(card.kind)) ?? 'card-effect';
+}
+
+/** approval.effect.failed `reason` (P8-D98): a kebab-case code, never free text — a refusal's reason or gate, else `effect-threw`. */
+function effectFailureReason(err: unknown): string {
+  if (err instanceof RefusedError) return kebab64(err.refusal.data?.reason) ?? kebab64(err.refusal.gate) ?? 'effect-refused';
+  if (err instanceof RootUnavailableError) return 'root-unavailable';
+  return 'effect-threw';
+}
 
 export class ApprovalBroker {
   readonly #o: BrokerOptions;
@@ -500,7 +524,10 @@ export class ApprovalBroker {
     //    answered FIRST, so a decision with no decisionSig (the GUI has no signing path yet) sees the
     //    presence refusal the human can act on, not BAD_REQUEST (T-2026-10-18-018 item 2)
     if (this.#approvals.available?.() === false) throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
-    const message = approveMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal });
+    // P8-D98 v2: an answer binds its text (the digest), so an answer carries it in note or is refused here
+    if (usesDecisionV2(decision) && (typeof p.note !== 'string' || p.note.length === 0)) throw fail('BAD_REQUEST', 'bad-params', `a ${decision} decision carries its text in note`, { cardId });
+    const digest = usesDecisionV2(decision) ? answerDigest(String(p.note)) : undefined;
+    const message = decisionMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal, ...(digest ? { answerDigest: digest } : {}) });
     // M1.3: no decisionSig from the caller + a helper-held key => the helper signs it after presence (step 4)
     const helperSigns = p.decisionSig === undefined && typeof this.#approvals.signDecision === 'function' && cls !== 'none';
     let decisionSig = typeof p.decisionSig === 'string' ? p.decisionSig : '';
@@ -545,7 +572,7 @@ export class ApprovalBroker {
       const prompt = this.#promptOf(r, decision, ctx, cls);
       let res: DecisionSignResult;
       try {
-        res = await this.#freshPrompt(ctx, cardId, () => this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision) } }));
+        res = await this.#freshPrompt(ctx, cardId, () => this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision, digest) } }));
       } catch (err) {
         // M3: a keep request that failed (timeout, refusal) may still have left an unlock in the helper
         if (keep && !this.unlocks.has(ctx.connId)) await this.#dropHelperUnlock(ctx.connId);
@@ -560,7 +587,7 @@ export class ApprovalBroker {
         decisionSig = res.decisionSig;
         presence = isCli ? 'cli' : 'fresh';
         if (!r.presence?.consumedByEffect) {
-          const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision));
+          const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
           if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
         }
         if (keep && res.kept && !this.unlocks.has(ctx.connId)) {
@@ -576,10 +603,10 @@ export class ApprovalBroker {
       presence = 'cached';
     } else {
       const hadUnlock = this.unlocks.has(ctx.connId);
-      token = await this.#prove(r, decision, ctx, cls, hadUnlock);
+      token = await this.#prove(r, decision, ctx, cls, hadUnlock, digest);
       presence = isCli ? 'cli' : 'fresh';
       if (!r.presence?.consumedByEffect) {
-        const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision));
+        const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
         if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
       }
       if (cls === 'cached' && !isCli && !this.unlocks.has(ctx.connId)) {
@@ -644,7 +671,8 @@ export class ApprovalBroker {
       try {
         await r.effect(decision, { token, rootSig, connId: ctx.connId });
       } catch (err) {
-        await this.#o.log('approval.suspect', { cardId, connId: ctx.connId, why: 'effect-failed', decision, error: err instanceof Error ? err.message.slice(0, 200) : 'effect failed' }, { connId: ctx.connId }).catch(() => undefined);
+        // P8-D98 (slice A2): the honest kind, exactly one row, no suspect row; the card stays pending (approve's catch)
+        await this.#o.log('approval.effect.failed', { cardId, decision, effect: effectNameOf(card), reason: effectFailureReason(err) }, { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) }).catch(() => undefined);
         throw err;
       }
     }
@@ -660,15 +688,18 @@ export class ApprovalBroker {
     return u;
   }
 
-  #binding(r: CardRecord, decision: string): PresenceBinding {
-    return r.presence ? r.presence.binding(decision) : { action: 'approval.decide', cardId: r.card.cardId, contentHash: r.card.contentHash, decision };
+  /** The presence binding; an answer (v2) adds its answerDigest, so the token binds the text too (P8-D98). */
+  #binding(r: CardRecord, decision: string, digest: string | undefined): PresenceBinding {
+    const b = r.presence ? r.presence.binding(decision) : { action: 'approval.decide', cardId: r.card.cardId, contentHash: r.card.contentHash, decision };
+    return digest ? { ...b, answerDigest: digest } : b;
   }
 
   /** Expected binding digest for a decision (tests: mint a token bound to it). */
-  bindingFor(cardId: string, decision: string): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
+  bindingFor(cardId: string, decision: string, answer?: string): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
+    const digest = usesDecisionV2(decision) && answer !== undefined ? answerDigest(answer) : undefined;
     const r = this.#cards.get(cardId);
     if (!r) throw fail('NOT_FOUND', 'not-found', `no card ${cardId}`);
-    const binding = this.#binding(r, decision);
+    const binding = this.#binding(r, decision, digest);
     return { purpose: r.presence?.purpose ?? 'approval.decide', binding, digest: presenceBindingDigest(binding) };
   }
 
@@ -692,7 +723,7 @@ export class ApprovalBroker {
     return fail('UNSUPPORTED', 'presence', `the signed helper could not sign the decision (${err instanceof Error ? err.message.slice(0, 160) : 'helper error'}); there is no software fallback`, { cardId });
   }
 
-  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean): Promise<PresenceToken> {
+  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean, digest: string | undefined): Promise<PresenceToken> {
     const reason =
       decision === 'always'
         ? 'fresh presence: always is a standing rule'
@@ -703,7 +734,7 @@ export class ApprovalBroker {
             : `fresh presence: ${String(r.card.kind)}`;
     const prompt = composePresencePrompt(this.#o.kernel, r.card, { decision, connId: ctx.connId, guiSessions: this.#o.guiSessions?.() ?? 0, reason });
     const purpose = r.presence?.purpose ?? 'approval.decide';
-    const binding = this.#binding(r, decision);
+    const binding = this.#binding(r, decision, digest);
     let token: PresenceToken;
     try {
       token = await this.#freshPrompt(ctx, r.card.cardId, () => this.#presence.prove({ purpose, binding, prompt, connId: ctx.connId }));

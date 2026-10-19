@@ -46,7 +46,14 @@ import {
   verify as cryptoVerify,
   type KeyObject,
 } from 'node:crypto';
-import { AUTH_CLIENT_DOMAIN, AUTH_SERVER_DOMAIN, AUTH_TOKEN_DOMAIN, KEY_ID_PATTERN } from '@a-company/gnomon-contracts';
+import {
+  AUTH_CLIENT_DOMAIN,
+  AUTH_SERVER_DOMAIN,
+  AUTH_TOKEN_DOMAIN,
+  DECISION_SIG_V2_DECISIONS,
+  decisionMessageV2,
+  KEY_ID_PATTERN,
+} from '@a-company/gnomon-contracts';
 
 /** The §3.1 signature domains (the prefix before the first `\n`). */
 export const SIGNATURE_DOMAINS = {
@@ -120,6 +127,43 @@ export function approveMessage(f: {
   approverPrincipalId: string;
 }): string {
   return [f.cardId, f.decision, f.cardContentHash, f.approverPrincipalId].join('\n');
+}
+
+/**
+ * #approval-broker decisionSig v2 (P8-D98, TD-2026-10-19-648, slice A2). The v2 layout (contracts
+ * decisionMessageV2) adds the answer digest, so a typed `answer{text}` binds the text the human approved:
+ *   gnomon:decision:v2 \n cardId \n decision \n cardContentHash \n approverPrincipalId \n answerDigest
+ * It is used ONLY for the DECISION_SIG_V2_DECISIONS (`answer`); every other decision keeps the v1
+ * approveMessage. The domain stays `gnomon:approve:v1`: the version lives in the message's first line.
+ */
+export function usesDecisionV2(decision: string): boolean {
+  return (DECISION_SIG_V2_DECISIONS as readonly string[]).includes(decision);
+}
+
+/** sha256:<hex> of the UTF-8 answer text (the same bytes approval.decide records as noteHash). */
+export function answerDigest(text: string): string {
+  return `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
+}
+
+/**
+ * The decisionSig message for a decision: v2 for `answer` (answerDigest REQUIRED; a missing one throws,
+ * never a silent v1), v1 approveMessage otherwise (an answerDigest on a v1 decision throws: no ambiguity).
+ */
+export function decisionMessage(f: {
+  cardId: string;
+  decision: string;
+  cardContentHash: string;
+  approverPrincipalId: string;
+  answerDigest?: string;
+}): string {
+  if (usesDecisionV2(f.decision)) {
+    if (typeof f.answerDigest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(f.answerDigest)) {
+      throw new Error(`#kernel-log: a ${f.decision} decisionSig (v2) needs an answerDigest sha256:<hex>`);
+    }
+    return decisionMessageV2({ cardId: f.cardId, decision: f.decision, cardContentHash: f.cardContentHash, approverPrincipalId: f.approverPrincipalId, answerDigest: f.answerDigest });
+  }
+  if (f.answerDigest !== undefined) throw new Error(`#kernel-log: a ${f.decision} decisionSig is v1 and carries no answerDigest`);
+  return approveMessage(f);
 }
 
 function normalizePem(pem: string): string {

@@ -1630,8 +1630,21 @@ components:
       the sanitizer strips tag characters and escapes C0/C1 controls; the
       install card is rendered by the broker from re-derived lines, readPaths
       and linked source validated, presence bound to the decision; effect
-      failures are recorded approval.suspect{why:effect-failed}
-      (approval.decide is a record, never authority). Slice 2: with no
+      failures are recorded as exactly one approval.effect.failed{cardId,
+      decision, effect: the card kind, reason: a kebab-case code} and no
+      approval.suspect row; the card stays pending (approval.decide is a
+      record, never authority; P8-D98 slice A2). decisionSig v2 (P8-D98
+      slice A2): an `answer` signs the v2 message (signer decisionMessage,
+      first line gnomon:decision:v2, last line answerDigest = the noteHash)
+      and its presence binding carries answerDigest, so an answer rewritten
+      on the wire fails AUTH bad-signature; an answer with no note is
+      refused BAD_REQUEST; every other decision stays v1. Replay verifies
+      both layouts given decisionKeys (replay.ts checkDecisionSigs) with a
+      per-log cutover MARKER ROW: the first v2 answer or any 8.0:P8-D98 kind;
+      a v1 answer after it is decision-sig-v1-after-cutover. The helper
+      prompt line (gnomon-helper Protocol.swift helperLine) parses the v2
+      marker so it still shows the decision, card and content hash, plus the
+      answer digest. Slice 2: with no
       approvals key (before M1.3) approve answers UNSUPPORTED{presence}
       before the decisionSig shape check, so the GUI (no signing path yet)
       sees the presence refusal (T-2026-10-18-018 item 2); status.cards per
