@@ -19,7 +19,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Stdio};
@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
-use gnomon_wrapper::contract::{parse_line, ChannelLine};
+use gnomon_wrapper::contract::{parse_line, read_line_capped, ChannelLine, LineRead, MAX_LINE};
 use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_GNOMON_PKG};
 use gnomon_wrapper::loopback::preflight;
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
@@ -43,6 +43,8 @@ struct Shared {
     stdin: Mutex<Option<ChildStdin>>,
     child: Mutex<Option<Child>>,
     quitting: AtomicBool,
+    /// the kernel was stopped and the app may exit now
+    stopped: AtomicBool,
     log: Mutex<Option<fs::File>>,
 }
 
@@ -121,9 +123,22 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
     let out = child.stdout.take().expect("piped stdout");
     *sh.stdin.lock().unwrap() = child.stdin.take();
     *sh.child.lock().unwrap() = Some(child);
-    for line in BufReader::new(out).lines().map_while(Result::ok) {
+    let mut reader = BufReader::new(out);
+    let mut buf = Vec::new();
+    let (mut saw_up, mut saw_terminal) = (false, false);
+    loop {
+        match read_line_capped(&mut reader, &mut buf) {
+            Ok(LineRead::Line) => {}
+            Ok(LineRead::TooLong) => {
+                sh.log(&format!("ignored a channel line over {MAX_LINE} bytes"));
+                continue;
+            }
+            Ok(LineRead::Eof) | Err(_) => break,
+        }
+        let line = String::from_utf8_lossy(&buf).to_string();
         match parse_line(&line) {
             Ok(ChannelLine::Up) => {
+                saw_up = true;
                 show_status(&app, &sh, "verifying the kernel", "", false);
                 send(&sh, "launch");
             }
@@ -139,48 +154,57 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
             },
             Ok(ChannelLine::LaunchFailed { message }) => show_status(&app, &sh, "the kernel could not open its GUI endpoint", &message, true),
             Ok(ChannelLine::Refused { reason, message, next }) => {
+                saw_terminal = true;
                 let (h, d) = refusal_text(&reason, &message, &next);
                 show_status(&app, &sh, &h, &d, true);
             }
             Ok(ChannelLine::Down { reason }) => {
+                saw_terminal = true;
                 if !sh.quitting.load(Ordering::SeqCst) {
-                    show_status(&app, &sh, "the kernel stopped", &format!("reason: {reason}\n\nQuit and reopen Gnomon to start it again."), true);
+                    show_status(&app, &sh, "the kernel stopped", &format!("reason: {reason}\n\nQuit and reopen Gnomon to start it again (a stopped kernel is not restarted in place)."), true);
                 }
             }
             Err(why) => sh.log(&format!("ignored a channel line: {why}")),
         }
     }
-    // stdout closed: the child is gone
-    let status = sh.child.lock().unwrap().as_mut().and_then(|c| c.wait().ok());
-    if !sh.quitting.load(Ordering::SeqCst) && *sh.phase.lock().unwrap() != Phase::Status {
-        show_status(&app, &sh, "the kernel exited", &format!("{status:?}\n\nSee ~/Library/Logs/Gnomon/kernel.log; quit and reopen Gnomon to start it again."), true);
+    // stdout hit EOF: the kernel page is dead from this moment, so the origin lock closes NOW
+    *sh.phase.lock().unwrap() = Phase::Status;
+    // the Child leaves the mutex before wait(): stop_kernel never blocks on a lock held across a wait
+    let child = sh.child.lock().unwrap().take();
+    let status = child.map(|mut c| c.wait().map(|s| s.to_string()).unwrap_or_else(|e| e.to_string()));
+    let status = status.unwrap_or_else(|| "stopped by the app".into());
+    sh.log(&format!("kernel channel closed ({status})"));
+    if !sh.quitting.load(Ordering::SeqCst) && !saw_terminal {
+        let head = if saw_up { "the kernel exited unexpectedly" } else { "the kernel exited before starting" };
+        show_status(&app, &sh, head, &format!("exit: {status}\n\nSee ~/Library/Logs/Gnomon/kernel.log. Quit and reopen Gnomon to start it again."), true);
     }
 }
 
-/// Cmd-Q: `quit` on the channel, close stdin (EOF also quits), wait up to 10 s, then kill.
+/// Cmd-Q, OFF the event loop: `quit` on the channel, close stdin (EOF also quits),
+/// poll try_wait for up to 10 s, then kill. The Child is taken out of the mutex first.
 fn stop_kernel(sh: &Shared) {
-    if sh.quitting.swap(true, Ordering::SeqCst) {
-        return;
-    }
     send(sh, "quit");
     drop(sh.stdin.lock().unwrap().take());
-    if let Some(mut c) = sh.child.lock().unwrap().take() {
-        let end = Instant::now() + Duration::from_secs(10);
-        while Instant::now() < end {
-            if let Ok(Some(_)) = c.try_wait() {
-                sh.log("kernel stopped");
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(50));
+    let child = sh.child.lock().unwrap().take();
+    let Some(mut c) = child else {
+        sh.log("kernel already gone");
+        return;
+    };
+    let end = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < end {
+        if let Ok(Some(s)) = c.try_wait() {
+            sh.log(&format!("kernel stopped ({s})"));
+            return;
         }
-        let _ = c.kill();
-        let _ = c.wait();
-        sh.log("kernel killed after 10 s");
+        std::thread::sleep(Duration::from_millis(50));
     }
+    let _ = c.kill();
+    let _ = c.wait();
+    sh.log("kernel killed after 10 s");
 }
 
 fn main() {
-    let sh = Arc::new(Shared { phase: Mutex::new(Phase::Status), status: Mutex::new(json!({ "state": "starting the kernel" })), stdin: Mutex::new(None), child: Mutex::new(None), quitting: AtomicBool::new(false), log: Mutex::new(open_log()) });
+    let sh = Arc::new(Shared { phase: Mutex::new(Phase::Status), status: Mutex::new(json!({ "state": "starting the kernel" })), stdin: Mutex::new(None), child: Mutex::new(None), quitting: AtomicBool::new(false), stopped: AtomicBool::new(false), log: Mutex::new(open_log()) });
     let setup_sh = sh.clone();
     let app = tauri::Builder::default()
         .invoke_system(IPC_DISABLED_SCRIPT)
@@ -233,7 +257,30 @@ fn main() {
                 let _ = w.set_focus();
             }
         }
-        RunEvent::ExitRequested { .. } | RunEvent::Exit => stop_kernel(&run_sh),
+        // Cmd-Q: hold the exit, stop the kernel on a worker thread (the event loop never waits), then exit
+        RunEvent::ExitRequested { api, .. } => {
+            if run_sh.stopped.load(Ordering::SeqCst) {
+                return;
+            }
+            api.prevent_exit();
+            if !run_sh.quitting.swap(true, Ordering::SeqCst) {
+                let (h, s) = (app.clone(), run_sh.clone());
+                std::thread::spawn(move || {
+                    stop_kernel(&s);
+                    s.stopped.store(true, Ordering::SeqCst);
+                    h.exit(0);
+                });
+            }
+        }
+        // an exit that skipped ExitRequested: never leave the child behind (EOF on its stdin also stops it)
+        RunEvent::Exit => {
+            if !run_sh.stopped.load(Ordering::SeqCst) {
+                drop(run_sh.stdin.lock().unwrap().take());
+                if let Some(mut c) = run_sh.child.lock().unwrap().take() {
+                    let _ = c.kill();
+                }
+            }
+        }
         _ => {}
     });
 }

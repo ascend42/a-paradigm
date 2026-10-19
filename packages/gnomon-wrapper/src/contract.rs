@@ -76,9 +76,64 @@ pub fn parse_line(line: &str) -> Result<ChannelLine, &'static str> {
     }
 }
 
+/// The channel's line cap, enforced at READ time (never buffer more than this per line).
+pub const MAX_LINE: usize = 64 * 1024;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LineRead {
+    /// one line (without its newline) in the buffer
+    Line,
+    /// a line longer than MAX_LINE: it was read and discarded up to its newline, never buffered whole
+    TooLong,
+    Eof,
+}
+
+/// Read one channel line into `buf`, holding at most MAX_LINE + 1 bytes of it.
+pub fn read_line_capped<R: std::io::BufRead>(r: &mut R, buf: &mut Vec<u8>) -> std::io::Result<LineRead> {
+    use std::io::{BufRead, Read};
+    buf.clear();
+    let n = r.by_ref().take(MAX_LINE as u64 + 1).read_until(b'\n', buf)?;
+    if n == 0 {
+        return Ok(LineRead::Eof);
+    }
+    if buf.last() == Some(&b'\n') {
+        buf.pop();
+        return Ok(LineRead::Line);
+    }
+    if buf.len() <= MAX_LINE {
+        return Ok(LineRead::Line); // the last line, without a newline, before EOF
+    }
+    // over the cap: drain the rest of this line in bounded chunks
+    loop {
+        buf.clear();
+        let n = r.by_ref().take(MAX_LINE as u64).read_until(b'\n', buf)?;
+        if n == 0 || buf.last() == Some(&b'\n') {
+            buf.clear();
+            return Ok(LineRead::TooLong);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn falsifier_the_line_cap_holds_at_read_time() {
+        let long = "x".repeat(MAX_LINE * 3);
+        let input = format!("{{\"v\":1,\"t\":\"up\"}}\n{long}\n{{\"v\":1,\"t\":\"down\",\"reason\":\"signal\"}}\nlast");
+        let mut r = std::io::BufReader::with_capacity(4096, input.as_bytes());
+        let mut buf = Vec::new();
+        assert_eq!(read_line_capped(&mut r, &mut buf).unwrap(), LineRead::Line);
+        assert!(matches!(parse_line(std::str::from_utf8(&buf).unwrap()), Ok(ChannelLine::Up)));
+        assert_eq!(read_line_capped(&mut r, &mut buf).unwrap(), LineRead::TooLong);
+        assert!(buf.capacity() <= 2 * (MAX_LINE + 1), "never buffered the whole long line ({})", buf.capacity());
+        assert_eq!(read_line_capped(&mut r, &mut buf).unwrap(), LineRead::Line);
+        assert!(matches!(parse_line(std::str::from_utf8(&buf).unwrap()), Ok(ChannelLine::Down { .. })));
+        assert_eq!(read_line_capped(&mut r, &mut buf).unwrap(), LineRead::Line);
+        assert_eq!(buf, b"last");
+        assert_eq!(read_line_capped(&mut r, &mut buf).unwrap(), LineRead::Eof);
+    }
 
     const TOKEN: &str = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE";
     const KEY: &str = "MCowBQYDK2VwAyEA2iiIlCdozFI1zJMqG5gn-VReZQ3719iZCHBH73JgxYU";

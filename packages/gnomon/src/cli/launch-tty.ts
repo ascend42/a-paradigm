@@ -199,6 +199,8 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
  * (`wrapper-channel`): the channel is a pipe or a socket the parent holds.
  */
 export const WRAPPER_CHANNEL = 'gnomon-wrapper-channel:v1';
+/** At most this many `launch` grants per minute on one channel (one in flight at a time). */
+export const WRAPPER_LAUNCH_CAP = 8;
 
 /**
  * The next step for an `unsafe-env` refusal in --wrapper mode: the APP spawned
@@ -269,16 +271,31 @@ export async function serveWrapperChannel(k: InProcessKernel, io: LaunchTtyIo, o
   io.stderr.write(`UP  ${o.noun} (in this process, wrapper channel)\n`);
   readout(io.stderr, o.rows);
   channelLine(io.stdout, { t: 'up' });
+  // repeated `launch` commands are capped: one mint in flight, at most WRAPPER_LAUNCH_CAP per minute
+  let minting = false;
+  const recent: number[] = [];
   const mint = async (): Promise<void> => {
     if (stopping) return;
+    const now = Date.now();
+    while (recent.length && now - recent[0]! > 60_000) recent.shift();
+    if (minting || recent.length >= WRAPPER_LAUNCH_CAP) {
+      channelLine(io.stdout, { t: 'launch-failed', message: minting ? 'a launch is already being minted' : `more than ${WRAPPER_LAUNCH_CAP} launch requests in a minute` });
+      return;
+    }
+    recent.push(now);
+    minting = true;
     try {
       const g = await k.launch();
+      // the kernel may have begun stopping while the token was minted: never hand out a grant then
+      if (stopping) return;
       // the grant's own fields only: the url is rebuilt by the wrapper (it never needs a second copy of the token)
       channelLine(io.stdout, { t: 'launch', port: g.port, launchToken: g.launchToken, kernelPublicKey: g.kernelPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
       refused(io.stderr, o.code, 'web-launch', m);
       channelLine(io.stdout, { t: 'launch-failed', message: m });
+    } finally {
+      minting = false;
     }
   };
   const rl = readline.createInterface({ input: io.stdin, terminal: false });

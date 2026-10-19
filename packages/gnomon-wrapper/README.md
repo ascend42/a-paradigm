@@ -32,6 +32,10 @@ Double-click Gnomon.app and:
    This covers a forged key, a bundle mismatch, an unprovisioned home and a
    kernel that is already running. Nothing else renders.
 
+If the kernel exits for any reason (a refusal, a crash, a kill), the window
+says so, with the exit status and the log path. The app does not restart the
+kernel in place: quit (Cmd-Q) and reopen Gnomon to start it again.
+
 Closing the window hides it, and the kernel and its sessions keep running.
 Click the Dock icon to show it again. Quit (Cmd-Q) stops the kernel: the app
 sends `quit`, waits 10 s, then kills it. Opening the app a second time focuses
@@ -73,6 +77,17 @@ its root signature. The pins hold only up to the spawn: a same-user process
 could still swap the files in that window, which is the §15.1 posture.
 
 ## Build, sign, notarize (founder, macOS)
+
+On a fresh machine, install Rust and the Tauri CLI once:
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal   # rustup + stable (>= 1.92)
+export PATH="$HOME/.cargo/bin:$PATH"
+cargo install tauri-cli --version '^2' --locked                                             # provides `cargo tauri`
+cargo --version && cargo tauri --version
+```
+
+Then, each build:
 
 ```sh
 # from the a-paradigm checkout you want the app to run

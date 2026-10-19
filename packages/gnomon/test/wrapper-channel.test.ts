@@ -25,7 +25,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { channelKind, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem } from '../src/cli/launch-tty.js';
+import { channelKind, WRAPPER_LAUNCH_CAP, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem } from '../src/cli/launch-tty.js';
 import { runDevCommand } from '../src/cli/dev-cli.js';
 import { runUpCommand } from '../src/cli/up-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
@@ -107,6 +107,31 @@ describe('#gnomon-wrapper channel (in-process)', () => {
     c.stdin.write('quit\n');
     expect(await run).toBe(0);
     expect((await c.next('down')).reason).toBe('signal');
+  });
+
+  it('FALSIFIER: repeated launch commands are capped (one in flight, WRAPPER_LAUNCH_CAP a minute); quit mid-mint hands out no grant', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    const c = channel();
+    const run = runDevCommand(['up', '--home', w.devHome, '--wrapper'], c, { userHome: w.userHome, runtime: CLEAN });
+    await c.next('up');
+    c.stdin.write('launch\nlaunch\n'); // the second arrives while the first is in flight
+    await c.next('launch');
+    expect(c.lines.filter((l) => l.t === 'launch-failed').map((l) => l.message)).toContain('a launch is already being minted');
+    for (let i = 0; i < WRAPPER_LAUNCH_CAP + 3; i++) {
+      const want = c.lines.length + 1; // counted BEFORE the write: a capped refusal is written synchronously
+      c.stdin.write('launch\n');
+      const end = Date.now() + 10_000;
+      while (c.lines.length < want && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+    }
+    const grants = c.lines.filter((l) => l.t === 'launch').length;
+    expect(grants).toBe(WRAPPER_LAUNCH_CAP);
+    expect(c.lines.some((l) => l.t === 'launch-failed' && String(l.message).includes('in a minute'))).toBe(true);
+    // a launch then an immediate quit: the grant minted after stopping began is never written
+    const before = c.lines.filter((l) => l.t === 'launch').length;
+    c.stdin.write('quit\n');
+    expect(await run).toBe(0);
+    expect(c.lines.filter((l) => l.t === 'launch').length).toBe(before);
   });
 
   it('EOF on stdin (the app went away) stops the kernel', async () => {
