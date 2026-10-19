@@ -1222,7 +1222,16 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
-      src/kernel/broker/. P8-D96: RaiseInput.decisions limits a card's signed
+      src/kernel/broker/. T-2026-10-18-028: M2 — UnlockStore ends a cached
+      unlock at UNLOCK_IDLE_MS idle, UNLOCK_ABSOLUTE_MS (60 min) after it
+      opened, or after UNLOCK_MAX_SIGNATURES (64) uses (approval.unlock.
+      dropped{reason: idle|expired|exhausted}); M3 — unlock.drop goes to the
+      helper on every close and failure path (connectionClosed always, a
+      lost keep-sign reply, a close during the keep-sign, a failed cached
+      sign, an ended unlock), and HelperApprovalsKey.dropUnlock escalates a
+      drop the helper does not answer to unlock.drop-all, then recycles the
+      helper process (HelperTransport.running / recycle); helper floor
+      MIN_HELPER_VERSION 1.3.0 (test/unlock-bounds.test.ts). P8-D96: RaiseInput.decisions limits a card's signed
       actions (permission slice cards: allow|deny, no always); approve
       refuses any other decision bad-params; expire(cardId, why) logs
       approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect

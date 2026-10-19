@@ -12,7 +12,9 @@
 //              here keyed by the kernel's connId (the kernel holds only the
 //              reference, S29-K5), with interactionNotAllowed set so a cached
 //              sign can never raise a prompt; dropped after 15 idle minutes,
-//              on unlock.drop, and when this process exits.
+//              60 minutes after it opened, after 64 signatures (T-2026-10-18-028
+//              M2: hard bounds the idle timer cannot slide), on unlock.drop, and
+//              when this process exits.
 
 import Foundation
 import LocalAuthentication
@@ -144,7 +146,9 @@ final class Unlocks {
     private struct Entry {
         let gen: String
         let ctx: LAContext
+        let opened: Date
         var lastUsed: Date
+        var signatures: Int
     }
 
     private var byConn: [String: Entry] = [:]
@@ -155,14 +159,22 @@ final class Unlocks {
         sweep()
         if byConn[connId] == nil && byConn.count >= Bounds.maxUnlocks { return false }
         byConn[connId]?.ctx.invalidate()
-        byConn[connId] = Entry(gen: gen, ctx: ctx, lastUsed: Date())
+        let now = Date()
+        byConn[connId] = Entry(gen: gen, ctx: ctx, opened: now, lastUsed: now, signatures: 0)
         return true
     }
 
-    func use(_ connId: String, gen: String) -> LAContext? {
+    /// Spend `signatures` of THIS connection's unlock. nil = none, another generation, or the
+    /// unlock has hit its absolute TTL or signature cap (then it is invalidated and dropped).
+    func use(_ connId: String, gen: String, signatures n: Int) -> LAContext? {
         sweep()
         guard var e = byConn[connId], e.gen == gen else { return nil }
+        guard n > 0, e.signatures + n <= Bounds.maxSignaturesPerUnlock else {
+            drop(connId)
+            return nil
+        }
         e.lastUsed = Date()
+        e.signatures += n
         byConn[connId] = e
         return e.ctx
     }
@@ -183,7 +195,9 @@ final class Unlocks {
 
     private func sweep() {
         let now = Date()
-        for (k, e) in byConn where now.timeIntervalSince(e.lastUsed) > Bounds.unlockIdleSeconds {
+        for (k, e) in byConn where now.timeIntervalSince(e.lastUsed) > Bounds.unlockIdleSeconds
+            || now.timeIntervalSince(e.opened) > Bounds.unlockAbsoluteSeconds
+            || e.signatures >= Bounds.maxSignaturesPerUnlock {
             e.ctx.invalidate()
             byConn.removeValue(forKey: k)
         }

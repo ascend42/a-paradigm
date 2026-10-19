@@ -62,7 +62,7 @@ import { RootUnavailableError } from '../identity/root-authority.js';
 import { HardwarePresenceDenied, HelperUnlockGone, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
 import { baseClass, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
-import { UnlockStore } from './unlock.js';
+import { UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
 
 /** A refusal thrown by the broker (reasons are registered refusal reasons; scanned by test/refusal-reasons.test.ts). */
 export function fail(code: RefusalCode, reason: string, message: string, data?: RefusalData & { gate?: RefusalGate }): RefusedError {
@@ -219,6 +219,8 @@ export interface BrokerOptions {
   /** monotonic ms for unlock idle (default performance.now via Date.now fallback) */
   mono?: () => number;
   unlockIdleMs?: number;
+  /** T-2026-10-18-028 M2: absolute TTL + signature cap per unlock (defaults UNLOCK_ABSOLUTE_MS / UNLOCK_MAX_SIGNATURES). */
+  unlockLimits?: UnlockLimits;
   /** open GUI sessions {n} for the prompt (#web-endpoint) */
   guiSessions?: () => number;
   /** CLI peer provenance (M1.3/M1.7); default unknown */
@@ -243,7 +245,7 @@ export class ApprovalBroker {
     this.#approvals = o.approvals ?? NO_APPROVALS_KEY;
     this.#clock = o.clock ?? Date.now;
     const mono = o.mono ?? (() => performance.now());
-    this.unlocks = new UnlockStore(mono, o.unlockIdleMs);
+    this.unlocks = new UnlockStore(mono, o.unlockIdleMs, o.unlockLimits);
   }
 
   /* ── raise ──────────────────────────────────────────────────────────── */
@@ -354,20 +356,29 @@ export class ApprovalBroker {
       this.#settle(r, into);
       out.push(r.card.cardId);
     }
-    for (const connId of this.unlocks.idle()) {
+    for (const { connId, reason } of this.unlocks.ended()) {
       this.unlocks.drop(connId);
-      await this.#approvals.dropUnlock?.(connId).catch(() => undefined);
-      await this.#o.log('approval.unlock.dropped', { connId, reason: 'idle' }, { connId });
+      await this.#dropHelperUnlock(connId);
+      await this.#o.log('approval.unlock.dropped', { connId, reason }, { connId });
     }
     return out;
   }
 
-  /** A connection closed: its cached unlock is gone (never usable from another connection). */
+  /**
+   * A connection closed: its cached unlock is gone (never usable from another connection).
+   * T-2026-10-18-028 M3: the helper is told ALWAYS, whether or not the broker holds an unlock for the
+   * connection — the two records can diverge (a fresh sign whose `kept` reply raced a close or a
+   * failure), and the helper's is the one that signs.
+   */
   async connectionClosed(connId: string): Promise<void> {
-    if (this.unlocks.drop(connId)) {
-      await this.#approvals.dropUnlock?.(connId).catch(() => undefined);
-      await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
-    }
+    const had = this.unlocks.drop(connId);
+    await this.#dropHelperUnlock(connId);
+    if (had) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
+  }
+
+  /** T-2026-10-18-028 M3: tell the helper to drop `connId`'s unlock. Never throws; the helper side escalates a failed drop (hardware.ts). */
+  async #dropHelperUnlock(connId: string): Promise<void> {
+    await this.#approvals.dropUnlock?.(connId).catch(() => undefined);
   }
 
   /** The helper exited: every unlock it held is gone (§3.1 failure modes); the next decision on each connection prompts again. */
@@ -465,8 +476,13 @@ export class ApprovalBroker {
         helperCached = true;
       } catch (err) {
         // the helper lost the unlock (exit, idle, screen lock): drop ours too and take fresh presence below
-        if (!(err instanceof HelperUnlockGone)) throw this.#helperFailure(err, cardId);
+        if (!(err instanceof HelperUnlockGone)) {
+          this.unlocks.drop(ctx.connId); // M3: a failed cached sign ends the unlock on both sides
+          await this.#dropHelperUnlock(ctx.connId);
+          throw this.#helperFailure(err, cardId);
+        }
         this.unlocks.drop(ctx.connId);
+        await this.#dropHelperUnlock(ctx.connId);
         await this.#o.log('approval.unlock.dropped', { connId: ctx.connId, reason: 'helper-lost' }, { connId: ctx.connId });
       }
     }
@@ -482,21 +498,30 @@ export class ApprovalBroker {
       try {
         res = await this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision) } });
       } catch (err) {
+        // M3: a keep request that failed (timeout, refusal) may still have left an unlock in the helper
+        if (keep && !this.unlocks.has(ctx.connId)) await this.#dropHelperUnlock(ctx.connId);
         if (err instanceof HardwarePresenceDenied) throw await this.#presenceDenied(card, ctx, err.why, hadUnlock);
         throw this.#helperFailure(err, cardId);
       }
-      if (!res.token) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
-      token = res.token;
-      decisionSig = res.decisionSig;
-      presence = isCli ? 'cli' : 'fresh';
-      if (!r.presence?.consumedByEffect) {
-        const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision));
-        if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
-      }
-      if (keep && res.kept && !this.unlocks.has(ctx.connId)) {
-        live();
-        this.unlocks.open(ctx.connId);
-        await this.#o.log('approval.unlock', { connId: ctx.connId, cardId }, { connId: ctx.connId });
+      // M3: from here, any failure before the broker records the unlock drops the helper's copy too
+      let recorded = !res.kept || this.unlocks.has(ctx.connId);
+      try {
+        if (!res.token) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
+        token = res.token;
+        decisionSig = res.decisionSig;
+        presence = isCli ? 'cli' : 'fresh';
+        if (!r.presence?.consumedByEffect) {
+          const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision));
+          if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
+        }
+        if (keep && res.kept && !this.unlocks.has(ctx.connId)) {
+          live();
+          this.unlocks.open(ctx.connId);
+          recorded = true;
+          await this.#o.log('approval.unlock', { connId: ctx.connId, cardId }, { connId: ctx.connId });
+        }
+      } finally {
+        if (!recorded) await this.#dropHelperUnlock(ctx.connId);
       }
     } else if (cls === 'cached' && !isCli && (await this.#useUnlock(ctx.connId)) === 'ok') {
       presence = 'cached';
@@ -576,10 +601,13 @@ export class ApprovalBroker {
     }
   }
 
-  /** Use this connection's unlock; an idle one is dropped and logged (approval.unlock.dropped{idle}). */
-  async #useUnlock(connId: string): Promise<'ok' | 'none' | 'idle'> {
+  /** Use this connection's unlock; an ended one (idle | expired | exhausted, M2) is dropped on both sides and logged approval.unlock.dropped{reason}. */
+  async #useUnlock(connId: string): Promise<UnlockUse> {
     const u = this.unlocks.use(connId);
-    if (u === 'idle') await this.#o.log('approval.unlock.dropped', { connId, reason: 'idle' }, { connId });
+    if (u !== 'ok' && u !== 'none') {
+      await this.#dropHelperUnlock(connId); // M3: an unlock that ended here ends in the helper too
+      await this.#o.log('approval.unlock.dropped', { connId, reason: u }, { connId });
+    }
     return u;
   }
 
