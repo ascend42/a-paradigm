@@ -1576,11 +1576,21 @@ components:
       UNSUPPORTED / FORBIDDEN presence, card stays pending. Root-class
       decisions use the root's signRowAsync. A client-supplied decisionSig
       is still verified as before. No new wire reason or event kind.
+      T-2026-10-19-009 item 5 (Orca audit Adopt 5): deny-safe settlement
+      pinned by falsifiers, no code change — an undecodable request is
+      denied (permission-malformed ⇒ deny line; bad approve params ⇒
+      BAD_REQUEST, card stays pending; answerFor: only a decoded allow
+      allows); a cancel (control_cancel_request ⇒ expire 'cancelled')
+      settles into deny once and answers the session nothing; a late answer
+      on a non-pending card is refused before presence with no
+      approval.decide row; an unknown card is NOT_FOUND. Tests:
+      test/broker-deny-safe.test.ts (every platform).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]
     tests:
       - test/approval-broker.test.ts
+      - test/broker-deny-safe.test.ts
       - test/socket-abi.test.ts
       - test/manifest-loader.test.ts
       - test/identity-hardware.test.ts
