@@ -62,6 +62,7 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'voice.echoTailMs': 'limit', // configured echo tail (spec §14.7 config)
   'voice.ambientIdleMs': 'limit', // configured idle auto-off of a conversation ceiling (V2a, spec §14.7 config)
   'voice.turns.n': 'gauge', // voice.turn.user rows of the current attachment
+  'voice.idleEndFailures.n': 'gauge', // every failed kernel idle end since start (a counter; the timer retries)
 });
 
 export interface StatusNumberFinding {

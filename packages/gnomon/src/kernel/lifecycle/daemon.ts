@@ -916,6 +916,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           if (decision === 'allow') await onAllow();
         },
       }),
+    // Aegis V2a L1: a denied or expired widening card is dropped and a new one raised
+    presenceState: (cardId) => broker.card(cardId)?.state,
+    // Aegis V2a M2: a failed idle end is counted in status.voice.idleEndFailures{n} and the timer re-armed (no new log
+    // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
   const dispatcherCommon = {
     voice,

@@ -24,6 +24,8 @@ function rig(o: { ambientIdleMs?: number } = {}) {
   const cards: VoicePresenceRequest[] = [];
   const busy = { streaming: false, endedAt: null as number | null };
   const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = [];
+  const cardState = new Map<string, string>();
+  const fail = { append: false };
   const v = new VoiceControl({
     sessions: {
       ownerOf: (h) => (h === HSID ? HUMAN : undefined),
@@ -31,7 +33,12 @@ function rig(o: { ambientIdleMs?: number } = {}) {
       stop: async () => ({}),
       busy: () => ({ ...busy }),
     },
-    append: async (row) => (rows.push(row), { seq: rows.length, hash: `h${rows.length}` }),
+    append: async (row) => {
+      if (fail.append) throw new Error('log write failed');
+      rows.push(row);
+      return { seq: rows.length, hash: `h${rows.length}` };
+    },
+    presenceState: (id) => cardState.get(id) ?? 'pending',
     enrolled: () => new Set([SPK]),
     voiceConnections: () => ['conn:V'],
     now: () => clock.t,
@@ -58,7 +65,7 @@ function rig(o: { ambientIdleMs?: number } = {}) {
   const userTurn = (p: Record<string, unknown> = {}) =>
     v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: String(++n), speakerId: SPK, speakerEnrolled: true, forwarded: true, t0: clock.t - 1000, t1: clock.t, text: 'run the tests', mode: 'conversation', aec: 'vpio', ...p } });
   const send = (text = 'run the tests') => v.send(vc, { hsid: HSID, content: [{ text }] });
-  return { v, rows, sends, cards, busy, timers, clock, human, vc, start, widen, userTurn, send, changes: () => changes };
+  return { v, rows, sends, cards, busy, timers, clock, cardState, fail, human, vc, start, widen, userTurn, send, changes: () => changes };
 }
 
 async function refusal(p: Promise<unknown>): Promise<Record<string, unknown>> {
@@ -76,7 +83,7 @@ describe('#gnomon-voice V2a ceiling', () => {
     const r = rig();
     await r.widen();
     r.clock.t += 2000;
-    await r.userTurn({ mode: 'ptt', aec: undefined });
+    await r.userTurn({ mode: 'ptt' });
     await r.send();
     expect(r.sends).toHaveLength(1);
     await r.start('ptt'); // narrowing: no presence
@@ -247,5 +254,65 @@ describe('#gnomon-voice V2a idle auto-off and status', () => {
   it('the voice goldens stay put', () => {
     expect(ABI_ID).toBe('sha256:18357f4420e34c2959102ff01f8279736ba69f2d9f011421895fd1ce39cfa3fa');
     expect(CLIENT_API_ID).toBe('sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1');
+  });
+});
+
+describe('#gnomon-voice V2a Aegis fixes', () => {
+  it('M1: under a conversation ceiling a ptt claim does not skip the aec and busy guards; under a ptt ceiling it is unchanged', async () => {
+    const r = rig();
+    await r.widen();
+    r.clock.t += 2000;
+    await r.userTurn({ mode: 'ptt', aec: undefined });
+    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-off', cause: 'aec', mode: 'ptt', ceiling: 'conversation' });
+    r.clock.t += 2000;
+    r.busy.streaming = true;
+    await r.userTurn({ mode: 'ptt' });
+    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-playback', clock: 'kernel' });
+    await r.start('ptt');
+    r.clock.t += 2000;
+    await r.userTurn({ mode: 'ptt', aec: undefined });
+    await r.send();
+    expect(r.sends).toHaveLength(1);
+  });
+  it('M2: past idleAt send is refused voice-off{cause: idle} even before the end row lands', async () => {
+    const r = rig({ ambientIdleMs: 60_000 });
+    await r.widen();
+    r.clock.t += 59_500;
+    await r.userTurn();
+    r.clock.t += 1000;
+    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-off', cause: 'idle' });
+    expect(r.sends).toHaveLength(0);
+  });
+  it('M2: a failed idle end is counted and the timer re-armed, never swallowed; the retry ends it', async () => {
+    const r = rig({ ambientIdleMs: 60_000 });
+    await r.widen();
+    r.clock.t += 61_000;
+    r.fail.append = true;
+    const armed = r.timers.length;
+    expect(await r.v.checkIdle()).toBe(false);
+    expect(r.timers.length).toBe(armed + 1);
+    expect(r.v.status()).toMatchObject({ attached: true, idleEndFailures: { n: 1 } });
+    r.fail.append = false;
+    r.timers.at(-1)!.fn();
+    await new Promise((res) => setImmediate(res));
+    expect(r.v.status()).toMatchObject({ attached: false });
+    expect(checkStatusNumbers({ voice: r.v.status() })).toEqual([]);
+  });
+  it('L1: a denied or expired widening card is dropped and a new one raised; the answer names the card\'s session', async () => {
+    const r = rig();
+    expect(await r.start('conversation')).toMatchObject({ cardId: 'card:1', hsid: HSID });
+    r.cardState.set('card:1', 'denied');
+    expect(await r.start('conversation')).toMatchObject({ pending: true, cardId: 'card:2', hsid: HSID });
+    expect(r.cards).toHaveLength(2);
+  });
+  it('L3: asrModel and confidence are bounded on every row', async () => {
+    const r = rig();
+    await r.widen();
+    expect(await refusal(r.userTurn({ asrModel: 'x'.repeat(65) }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(r.userTurn({ asrModel: 'bad model!' }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(r.userTurn({ confidence: 1.5 }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(r.userTurn({ confidence: '0.9' }))).toMatchObject({ code: 'BAD_REQUEST' });
+    await r.userTurn({ speakerId: 'spk:unknown-1', speakerEnrolled: false, asrModel: 'parakeet-0.6b', confidence: 0.5 });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ asrModel: 'parakeet-0.6b', confidence: 0.5 });
   });
 });

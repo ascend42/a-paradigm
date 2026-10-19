@@ -18,12 +18,15 @@
  *     every logged `voice.turn.agent` playback window `[t0, t1 + echoTailMs]` (echoTailMs default 750, §14.7 config).
  *
  * V2a (TD-2026-10-19-298, spec §14.7 "Ceiling and ambient guards"): the attachment mode is a CEILING. A `ptt` turn
- * is forwardable under any ceiling; a `conversation` (ambient) turn only under a `conversation` ceiling, and only with
+ * claim is forwardable under any ceiling; a `conversation` (ambient) claim only under a `conversation` ceiling. Under a
+ * conversation ceiling EVERY turn, whatever mode it claims (Aegis V2a M1), needs
  *   - an `aec` claim on its voice.turn.user (`vpio` | `headphones`), else voice-off{cause: 'aec'};
  *   - an enrolled speaker (as for ptt);
- *   - the attached session's model NOT busy by the kernel's own clock: refused voice-playback{clock: 'kernel'} while
- *     the supervisor has a turn in flight (turn.sent until its result) and through echoTailMs after it closed, even if
- *     the client logs no playback at all (VoiceSessionsPort.busy, from supervisor state).
+ *   - the attached session's model not busy by the kernel's own clock: refused voice-playback{clock: 'kernel'} while
+ *     the supervisor has a turn in flight (turn.sent until its result) and through echoTailMs after it closed
+ *     (VoiceSessionsPort.busy, from supervisor state). This window covers model streaming plus the tail ONLY: client
+ *     TTS that plays longer, a client that logs no voice.turn.agent, or a claimed turn duration of 0 can still get an
+ *     echo past it (spec §14.7 residual risk); the client playback rows and the AEC claim are the rest of the defence.
  * No wake word and no ask clamp (founder rulings): a forwarded ambient turn is exactly a typed send by the owner.
  * Widening to `conversation` takes one fresh presence (Touch ID, a `strictness` card — the run-mode loosening path)
  * per first-party human connection (one GUI login); narrowing, re-attaching at ptt and ending take none. A
@@ -76,6 +79,9 @@ export type VoiceMode = (typeof VOICE_MODES_V1)[number];
 const SPEAKER_ID = /^spk:(?:[0-9a-z]{8}\/[a-z0-9][a-z0-9._-]{0,63}|unknown-[1-9][0-9]{0,5})$/;
 const TURN_ID = /^[0-9A-Za-z][0-9A-Za-z:._-]{0,63}$/;
 const SENS = ['normal', 'sensitive', 'secret'] as const;
+const ASR_MODEL = /^[\w.-]{1,64}$/;
+/** Aegis V2a M2: a failed idle end is retried after this long (the send path already refuses past idleAt) */
+export const VOICE_IDLE_RETRY_MS = 5_000;
 
 /** Kinds the voice principal may append, and the ones it may not (with why). */
 const VOICE_APPENDABLE = ['voice.turn.user', 'voice.turn.agent', 'voice.deck', 'voice.focus', 'voice.tts.filtered', 'voice.bargein', 'voice.session.end'];
@@ -169,6 +175,10 @@ export interface VoiceControlOptions {
   ambientIdleMs?: number;
   /** V2a: the principal the kernel writes its own voice.session.end{reason: 'idle'} under */
   kernelPrincipal?: string;
+  /** V2a L1: the state of a widening card (broker card state); absent ⇒ treated as pending */
+  presenceState?: (cardId: string) => string | undefined;
+  /** V2a M2: the kernel's idle end row could not be written (daemon: diagnostics + a kernel log row) */
+  onIdleEndFailed?: (err: unknown) => void;
   /** V2a: arm the idle timer (default setTimeout, unref'd); tests drive checkIdle() instead */
   setTimer?: (fn: () => void, ms: number) => { clear(): void };
 }
@@ -240,13 +250,15 @@ export class VoiceControl {
   /** V2a: first-party human connections that gave the widening presence (one GUI login each); dropped on close */
   readonly #widened = new Set<string>();
   /** V2a: a pending widening card per asking connection */
-  readonly #pendingWiden = new Map<string, string>();
+  readonly #pendingWiden = new Map<string, { cardId: string; hsid: string }>();
   /** connections with a widening card out that have not closed (a grant never lands on a closed login) */
   readonly #liveConn = new Set<string>();
   readonly #past = new Map<string, string>();
   /** per-boot key for text hashes (a stored hash cannot be dictionary-tested against short utterances) */
   readonly #hashKey = randomBytes(32);
   #idleTimer: { clear(): void } | null = null;
+  /** Aegis V2a M2: idle end rows that could not be written (surfaced in status.voice) */
+  #idleEndFailures = 0;
 
   constructor(o: VoiceControlOptions) {
     this.#o = o;
@@ -310,6 +322,7 @@ export class VoiceControl {
       turns: { n: a?.turns ?? 0 },
       echoTailMs: this.echoTailMs,
       ambientIdleMs: this.ambientIdleMs,
+      idleEndFailures: { n: this.#idleEndFailures },
     };
   }
 
@@ -349,8 +362,14 @@ export class VoiceControl {
     if (prev && prev.owner !== asker.principal && this.#o.sessions.ownerOf(prev.hsid) === prev.owner) throw voiceRefusal('voice-target', "voice is attached to another human's session");
     // V2a widening: a conversation ceiling takes one fresh presence per first-party connection (one GUI login)
     if (mode === 'conversation' && !this.#widened.has(asker.connId)) {
+      // Aegis V2a L1: a pending card is reused only while it is still pending and for the same session; a denied or
+      // expired card is dropped and a new one raised
       const still = this.#pendingWiden.get(asker.connId);
-      if (still) return { pending: true, cardId: still, hsid: p.hsid, mode };
+      if (still && (this.#o.presenceState?.(still.cardId) ?? 'pending') === 'pending' && still.hsid === p.hsid) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
+      if (still && still.hsid !== p.hsid && (this.#o.presenceState?.(still.cardId) ?? 'pending') === 'pending') {
+        throw bad(`a widening card for session ${still.hsid} is pending on this connection; decide it first`);
+      }
+      this.#pendingWiden.delete(asker.connId);
       if (!this.#o.presence) throw voiceRefusal('voice-off', 'widening to conversation needs fresh presence, and no presence path is wired', { mode, cause: 'presence' });
       const hsid = p.hsid;
       this.#liveConn.add(asker.connId);
@@ -366,7 +385,7 @@ export class VoiceControl {
           await this.#start(asker, hsid, 'conversation', continues);
         },
       });
-      if (this.#liveConn.has(asker.connId) && !this.#widened.has(asker.connId)) this.#pendingWiden.set(asker.connId, card.cardId);
+      if (this.#liveConn.has(asker.connId) && !this.#widened.has(asker.connId)) this.#pendingWiden.set(asker.connId, { cardId: card.cardId, hsid });
       return { pending: true, cardId: card.cardId, hsid, mode };
     }
     return this.#start(asker, p.hsid, mode, continues);
@@ -406,13 +425,13 @@ export class VoiceControl {
     return { ...r, voiceSessionId: a.voiceSessionId };
   }
 
-  #armIdle(): void {
+  #armIdle(retryMs?: number): void {
     this.#idleTimer?.clear();
     this.#idleTimer = null;
     const a = this.#attachment;
     const at = a ? this.#idleAt(a) : null;
     if (at === null) return;
-    const ms = Math.max(0, at - this.#now()) + 1;
+    const ms = retryMs ?? Math.max(0, at - this.#now()) + 1;
     const set =
       this.#o.setTimer ??
       ((fn: () => void, d: number) => {
@@ -436,7 +455,15 @@ export class VoiceControl {
       this.#armIdle();
       return false;
     }
-    await this.#end(a, undefined, this.#o.kernelPrincipal ?? a.owner, 'idle');
+    try {
+      await this.#end(a, undefined, this.#o.kernelPrincipal ?? a.owner, 'idle');
+    } catch (err) {
+      // Aegis V2a M2: never swallowed — reported, and the timer re-armed; send() already refuses past idleAt (fail closed)
+      this.#idleEndFailures++;
+      this.#o.onIdleEndFailed?.(err);
+      if (this.#attachment === a) this.#armIdle(VOICE_IDLE_RETRY_MS);
+      return false;
+    }
     return true;
   }
 
@@ -480,6 +507,9 @@ export class VoiceControl {
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
+        // Aegis V2a L3: the free-form ASR metadata is bounded on every row
+        if (p.asrModel !== undefined && (typeof p.asrModel !== 'string' || !ASR_MODEL.test(p.asrModel))) throw bad('asrModel is ≤ 64 of [A-Za-z0-9_.-]');
+        if (p.confidence !== undefined && (typeof p.confidence !== 'number' || !Number.isFinite(p.confidence) || p.confidence < 0 || p.confidence > 1)) throw bad('confidence is a number in 0..1');
         const turn: UserTurn = {
           turnId: t.turnId,
           connId: c.connId,
@@ -557,13 +587,18 @@ export class VoiceControl {
    * and echo. Returns the refusal, or undefined when the turn may go.
    */
   #guards(turn: UserTurn, a: Attachment): RefusedError | undefined {
+    // Aegis V2a M2: idle fails closed — past idleAt nothing is forwarded, even before the kernel's end row lands
+    const idleAt = this.#idleAt(a);
+    if (idleAt !== null && this.#now() >= idleAt) return voiceRefusal('voice-off', 'the ambient attachment is idle (ended by the kernel)', { turnId: turn.turnId, ceiling: a.mode, cause: 'idle' });
     if (!turn.speakerEnrolled || !this.#o.enrolled().has(turn.speakerId)) return voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
     // V2a: the attachment mode is a CEILING — ptt under any, conversation only under conversation
     if (turn.mode !== 'ptt' && turn.mode !== a.mode) return voiceRefusal('voice-off', "the turn's mode is above the attachment's ceiling", { turnId: turn.turnId, mode: turn.mode, ceiling: a.mode, cause: 'ceiling' });
     const tail = this.echoTailMs;
     const userStart = turn.receivedAt - (turn.t1 - turn.t0);
-    if (turn.mode === 'conversation') {
-      if (!turn.aec) return voiceRefusal('voice-off', 'an ambient turn needs echo cancellation (aec: vpio | headphones)', { turnId: turn.turnId, mode: 'conversation', cause: 'aec' });
+    // Aegis V2a M1: under a conversation ceiling the ambient guards run on EVERY turn, a ptt claim included (the claim
+    // is the client's; the open mic is the kernel's fact)
+    if (a.mode === 'conversation') {
+      if (!turn.aec) return voiceRefusal('voice-off', 'a turn under a conversation ceiling needs echo cancellation (aec: vpio | headphones)', { turnId: turn.turnId, mode: turn.mode, ceiling: a.mode, cause: 'aec' });
       // V2a kernel-side busy: the supervisor's own turn state, independent of any client playback row
       const b = this.#o.sessions.busy?.(a.hsid);
       if (b && (b.streaming || (b.endedAt !== null && userStart <= b.endedAt + tail))) {

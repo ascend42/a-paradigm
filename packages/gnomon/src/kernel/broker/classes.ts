@@ -41,6 +41,9 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
   declassify: { accept: 'fresh', reject: 'fresh' },
   'peer-pair': { accept: 'root', reject: 'fresh' },
   reconsider: { extend: 'fresh', restart: 'fresh', reject: 'cached' },
+  // TD-2026-10-19-298 (Aegis V2a L2): a `strictness` card is raised for detail.op 'mode.loosen' (run-mode.ts) AND
+  // 'voice.widen' (#gnomon-voice); a consumer that reads strictness cards must branch on detail.op — voice.widen is
+  // not a strictness or run-mode change
   strictness: { allow: 'fresh', deny: 'cached' },
   incident: { accept: 'cached', reject: 'cached' },
   // P8-D98 (TD-2026-10-19-528 F3): gnomon daemon stop raises a signed daemon-stop card decided with Touch ID (fresh).
