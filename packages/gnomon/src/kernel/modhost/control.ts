@@ -59,8 +59,8 @@ export const START_REQUEST = 'start.request';
 export const UNINSTALL_REQUEST = 'uninstall.request';
 /** Pending install cards the pickup raises at once (the staged dir is writable by the OS user: bounded). */
 export const MAX_PICKUP_CARDS = 32;
-/** Refused staged records remembered so they are not retried every scan. */
-export const MAX_PICKUP_REFUSED = 256;
+/** Refused staged records remembered so they are not retried every scan (>= MAX_LISTED, or junk evicts and starves real cards). */
+export const MAX_PICKUP_REFUSED = 1024;
 /** Mod directories looked at per scan. */
 export const MAX_PICKUP_MODS = 256;
 export const PICKUP_SCAN_MS = 2_000;
