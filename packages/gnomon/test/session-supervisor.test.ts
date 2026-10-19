@@ -313,9 +313,13 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
     fs.writeFileSync(path.join(sub, 'CLAUDE.md'), 'sub token ZEBRA-sub\n');
     const topReal = fs.realpathSync.native(w.cwd);
     const subReal = fs.realpathSync.native(sub);
-    setMode(w, { startWrites: [path.join(topReal, 'CLAUDE.md'), path.join(subReal, 'CLAUDE.md'), path.join(topReal, '.claude', 'planted.md'), path.join(subReal, 'ok.txt')] });
+    const probes = [path.join(topReal, 'CLAUDE.md'), path.join(subReal, 'CLAUDE.md'), path.join(topReal, '.claude', 'planted.md'), path.join(subReal, 'ok.txt')];
+    setMode(w, { startWrites: probes });
     const s = await r.sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: sub });
-    expect(await waitFor(() => trace(w).some((t) => t.t === 'allow'))).toBe(true);
+    // T-2026-10-19-008: wait on the LAST startup trace the fake writes (every start-write probe; memory + allow
+    // precede them), not on `allow` — stopping right after `allow` raced the probes and, under load, killed the child
+    // before they were traced. Generous deadline: the regex-heavy R1/F2 profile slows a loaded child's startup.
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'start-write').length === probes.length, 20_000)).toBe(true);
     await r.sup.stop(HUMAN, { hsid: s.hsid });
     const args = trace(w).find((t) => t.t === 'argv')!.args as string[];
     expect(addDirsOf(args)).toEqual([topReal, subReal]);
