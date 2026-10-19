@@ -251,6 +251,22 @@ export const SOCKET_REFUSAL_REASONS = Object.freeze(Object.keys(SOCKET_REASON_RO
  */
 export const CLIENT_LOCAL_REFUSAL_REASONS = ['hello-not-offered', 'client-nonce-mismatch'] as const;
 
+/**
+ * Reasons reserved by the P8-D98 move (T-2026-10-19-001), with their routes. Built by later slices:
+ *   - `stale-claim`, `claim-expired`, `claim-superseded`: CAS_LOST on contract.claim (§7.4, TD-2026-10-19-648 item 11; M2.2).
+ *   - `cursor-epoch`: BAD_REQUEST on log.read when the `since` cursor names another log (§5, item 8).
+ *   - `draining`: a turn or session.open refused while the kernel drains for an upgrade (§2.4 rule 11, TD-2026-10-19-908).
+ */
+export const D98_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({
+  'stale-claim': { code: 'CAS_LOST', gate: 'claim' },
+  'claim-expired': { code: 'CAS_LOST', gate: 'claim' },
+  'claim-superseded': { code: 'CAS_LOST', gate: 'claim' },
+  'cursor-epoch': { code: 'BAD_REQUEST', gate: 'usage' },
+  draining: { code: 'ENGINE', gate: 'transport' },
+});
+export const CAS_LOST_REASONS = ['stale-claim', 'claim-expired', 'claim-superseded'] as const;
+export const D98_REFUSAL_REASONS = Object.freeze(Object.keys(D98_REASON_ROUTES)) as readonly string[];
+
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;
 /** Additive: a client renders an unknown reason opaquely. */
@@ -263,6 +279,7 @@ export const REFUSAL_REASONS = [
   ...OTHER_REFUSAL_REASONS,
   ...CLIENT_LOCAL_REFUSAL_REASONS,
   ...(SOCKET_REFUSAL_REASONS as readonly string[]),
+  ...D98_REFUSAL_REASONS,
 ] as readonly string[];
 
 /** Which gate (and code) each reserved P8-D86–D88 reason rides on (§4.11). */

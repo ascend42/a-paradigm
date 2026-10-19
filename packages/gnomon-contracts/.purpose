@@ -91,7 +91,16 @@ components:
 
   contract-event-v1:
     description: >-
-      event:v1 envelope (§4.1) — P8-D93 (T-2026-10-18-016): kernel-owned
+      event:v1 envelope (§4.1) — P8-D98 (T-2026-10-19-001): reserves, tag
+      8.0:P8-D98, session.drained{uuid, reason} (DRAIN_REASONS = [upgrade],
+      closed), permit.reattributed{permitId, hsid, drainedEventId},
+      approval.rule.revoked{ruleId, repoKey, tool, connId} and
+      approval.effect.failed{cardId, decision, effect, reason}, each with a
+      closed payload check (validateKindPayload; an extra field is refused, an
+      unchecked kind is an error); reserved payload fields contract.claimed
+      claimGen, approval.rule.learned match (ALWAYS_RULE_MATCHES = [exact],
+      validateAlwaysRuleMatch, TD-2026-10-19-528 F2) and approval.expire why.
+      P8-D93 (T-2026-10-18-016): kernel-owned
       session.compacted{hsid, turn, reason, summaryHash, tokensBefore,
       tokensAfter} (summaryHash a sensitive field), KIND_PAYLOADS (published as
       x-gnomon-kind-payloads) and validateSessionCompactedPayload. P8-D89
@@ -197,7 +206,10 @@ components:
       JSON-RPC code map (§4.9); refuse() single constructor, refusalOf()
       accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1,
       schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped
-      refusal validates.
+      refusal validates. P8-D98 (T-2026-10-19-001): D98_REASON_ROUTES reserve
+      CAS_LOST stale-claim | claim-expired | claim-superseded (§7.4),
+      BAD_REQUEST cursor-epoch (§5 log.read) and ENGINE draining (§2.4 rule 11),
+      all in REFUSAL_REASONS.
     path: src/refusal.ts
     type: module
     tags: [gnomon, contracts, refusal-v1, paradigm-8]
@@ -208,7 +220,11 @@ components:
 
   contract-card-v1:
     description: >-
-      card:v1 (§3.4, §14.7, §3.9) — kinds incl. reserved voice-arm, grant,
+      card:v1 (§3.4, §14.7, §3.9) — P8-D98 (T-2026-10-19-001): kind
+      daemon-stop (TD-2026-10-19-528 F3), CARD_EXPIRY_WHYS incl.
+      session-drained (F4), decisionSig v2 layout (decisionMessageV2, first
+      line DECISION_SIG_V2_MARKER gnomon:decision:v2, used for answer, carries
+      the answer digest; the kernel signer adopts it in slice A2). Kinds incl. reserved voice-arm, grant,
       handoff, declassify, peer-pair, reconsider, strictness, incident; states
       incl. held; flags incl. voice-phrase, peer, irreversible, claim-mismatch;
       decisions incl. withdraw, extend, restart (reconsider cards only);
@@ -253,7 +269,15 @@ components:
       ({brief}), STATUS_RESERVED_FIELDS (links, strictness, review,
       unobservedRefWrites) and FAIL_SAFE_VALUES (in clientApiId);
       ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule;
-      schemas/gnomon-rpc.v1.hello.schema.json. Serves #socket and #web-endpoint.
+      schemas/gnomon-rpc.v1.hello.schema.json. P8-D98 (T-2026-10-19-001):
+      HUMAN_DEVICE_VERBS gui.open{cwdHint?} (13) and rules.revoke{ruleId} (14)
+      — human class only, access 'verified human device', every other class
+      false; not among law 3's twelve kernel verbs; CLIENT_METHODS is 16;
+      RESERVED_HELLO_FEATURES (journal.cursor, session.resume; the kernel
+      advertises none until built); LogReadCursor {logId, seq} +
+      validateLogReadCursor; D98_CLOSED_VALUES (always-rule match, drain
+      reason); ADDITIVE_ENUMS gains approval.expire.why. Serves #socket and
+      #web-endpoint.
     path: src/rpc.ts
     type: module
     tags: [gnomon, contracts, gnomon-rpc-v1, paradigm-8]
@@ -263,7 +287,13 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). P8-D93 moved clientApiId once
+      kitId and clientApiId (§12.3, §12.8). P8-D98 (T-2026-10-19-001) moved
+      clientApiId once: sha256:1faf47f5…8720 →
+      sha256:0f3ae273d0c047e995c8360c9d0e18416bc878861b27773bcbedaff9a67bd35c
+      (descriptor gains humanDeviceVerbs, helloFeatures.reserved,
+      logReadCursor, closedValues and DECISION_SIG_DESCRIPTOR — the decisionSig
+      v2 marker gnomon:decision:v2, its decisions [answer] and one fixed
+      message vector); kitId and modAbiId unchanged. P8-D93 moved clientApiId once
       (hello clientNonce + session.compacted): sha256:fd576e6d… →
       sha256:1faf47f5…8720 (round 2: server-sig domain v2, closed compaction-reason enum; round 3: AUTH_WIRE_DESCRIPTOR — the three auth domains and one fixed preimage vector per auth form — is a CLIENT_API_DESCRIPTOR input, so a domain or layout change moves the id); kitId unchanged. kitId = sha256(canonicalJson(kit:v1
       block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +

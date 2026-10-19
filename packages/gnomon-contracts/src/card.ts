@@ -42,6 +42,8 @@ export const CARD_KINDS = [
   'reconsider',
   'strictness',
   'incident',
+  // P8-D98 (TD-2026-10-19-528 F3): `gnomon daemon stop` raises a signed daemon-stop card decided with fresh presence.
+  'daemon-stop',
 ] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
@@ -104,6 +106,35 @@ export const ROOT_CONFIG_RESERVED_SECTIONS = ['strictness', 'review'] as const;
 export const APPROVE_SIG_DOMAIN = 'gnomon:approve:v1' as const;
 export const APPROVE_VOICE_SIG_DOMAIN = 'gnomon:approve-voice:v1' as const;
 
+/**
+ * decisionSig v2 (P8-D98, TD-2026-10-19-648; built by slice A2 in the kernel signer). The v1 message is the four
+ * lines `cardId, decision, cardContentHash, approverPrincipalId`. The v2 message is version-marked by its FIRST line
+ * and adds the answer digest, so an `answer{text}` decision binds the text the human approved:
+ *   gnomon:decision:v2 \n cardId \n decision \n cardContentHash \n approverPrincipalId \n answerDigest
+ * It is used when decision = `answer`; `answerDigest` = sha256:<hex> of the UTF-8 answer text. A v1 message never
+ * starts with the marker (a cardId starts `card:`), so neither layout verifies as the other.
+ */
+export const DECISION_SIG_V2_MARKER = 'gnomon:decision:v2' as const;
+export interface DecisionMessageV2Fields {
+  cardId: string;
+  decision: string;
+  cardContentHash: string;
+  approverPrincipalId: string;
+  answerDigest: string;
+}
+export function decisionMessageV2(f: DecisionMessageV2Fields): string {
+  return [DECISION_SIG_V2_MARKER, f.cardId, f.decision, f.cardContentHash, f.approverPrincipalId, f.answerDigest].join('\n');
+}
+/** Decisions whose decisionSig uses the v2 layout. */
+export const DECISION_SIG_V2_DECISIONS = Object.freeze(['answer'] as const);
+
+/**
+ * `approval.expire{why}` values (§3.4). ADDITIVE. `session-drained` (P8-D98, TD-2026-10-19-528 F4): at a drain
+ * (§2.4 rule 11) a session-bound card expires with this why; a card bound to no session is raised again by the
+ * new kernel instead.
+ */
+export const CARD_EXPIRY_WHYS = ['timeout', 'cancelled', 'session-exited', 'duplicate-request-id', 'answered', 'session-drained'] as const;
+
 /** Reserved values and the move that first uses them (§19.1 M1.1). */
 export const CARD_RESERVED_VALUES = Object.freeze({
   'M1.1:P8-D58': Object.freeze({
@@ -124,6 +155,10 @@ export const CARD_RESERVED_VALUES = Object.freeze({
     decision: ['extend', 'restart'],
     flag: ['irreversible', 'claim-mismatch'],
     field: ['note', 'strictness'],
+  }),
+  '8.0:P8-D98': Object.freeze({
+    kind: ['daemon-stop'],
+    expiryWhy: ['session-drained'],
   }),
 });
 

@@ -35,7 +35,8 @@
         "peer-pair",
         "reconsider",
         "strictness",
-        "incident"
+        "incident",
+        "daemon-stop"
       ],
       "x-gnomon-additive": true
     },
