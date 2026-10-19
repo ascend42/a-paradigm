@@ -270,7 +270,15 @@ export function memoryFilesUnder(dir: string, maxDirs: number = MAX_SUBTREE_DIRS
           target = fs.realpathSync.native(p);
           if (!fs.statSync(target).isDirectory()) continue; // a file link: not memory (claude.md links refused above)
         } catch {
-          continue; // dangling: nothing to read through it
+          // F1a (Aegis): a DANGLING link is resolved lexically (readlink against the link's own dir): a later mkdir
+          // could make it live, so one aimed outside the repo or into node_modules refuses now
+          let raw: string;
+          try {
+            raw = fs.readlinkSync(p);
+          } catch {
+            continue;
+          }
+          target = path.resolve(realpathLoose(path.dirname(p)), raw);
         }
         if (!isUnder(topReal, target)) return { ok: false, why: `${rel(p)} is a symlinked dir leading outside the repo` };
         if (target.split(path.sep).some((x) => x.toLowerCase() === 'node_modules')) return { ok: false, why: `${rel(p)} is a symlinked dir leading into node_modules` };

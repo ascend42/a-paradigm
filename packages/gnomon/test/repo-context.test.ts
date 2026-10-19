@@ -495,12 +495,34 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     // F1: a symlinked dir leading outside the repo refuses (Claude could lazy-load its CLAUDE.md through it)
     expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/linked-dir is a symlinked dir leading outside the repo/);
   });
+  it.skipIf(!canSymlink)('F1a: a dangling link is resolved lexically: aimed outside or into node_modules refuses; in-repo and live outward FILE links pass', () => {
+    const mk = (link: (w: ReturnType<typeof world>) => void) => {
+      if (root) fs.rmSync(root, { recursive: true, force: true });
+      const w = world();
+      put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+      link(w);
+      return ctxOf(w);
+    };
+    expect(mk((w) => fs.symlinkSync(path.join(root, 'later-outside'), path.join(w.repo, 'docs'), 'dir')).memoryRefused[0]!.why).toMatch(/docs is a symlinked dir leading outside the repo/);
+    expect(mk((w) => fs.symlinkSync(path.join('..', '..', 'escape'), path.join(w.repo, 'rel'), 'dir')).memoryRefused[0]!.why).toMatch(/rel is a symlinked dir leading outside the repo/);
+    expect(mk((w) => fs.symlinkSync(path.join('node_modules', 'later'), path.join(w.repo, 'vend'), 'dir')).memoryRefused[0]!.why).toMatch(/vend is a symlinked dir leading into node_modules/);
+    let w2: ReturnType<typeof world> | null = null;
+    expect(mk((w) => fs.symlinkSync(path.join(w.repo, 'later-inside'), path.join(w.repo, 'soon'), 'dir')).memoryRefused).toEqual([]);
+    // an EXISTING outward file link (a venv interpreter) is not memory and is not refused
+    const c = mk((w) => {
+      w2 = w;
+      put(path.join(root, 'usr-bin', 'python3'), '#!');
+      fs.mkdirSync(path.join(w.repo, '.venv', 'bin'), { recursive: true });
+      fs.symlinkSync(path.join(root, 'usr-bin', 'python3'), path.join(w.repo, '.venv', 'bin', 'python'), 'file');
+    });
+    expect(c.memoryDirs).toEqual([w2!.repo]);
+  });
   it.skipIf(!canSymlink)('F1: a symlinked dir inside the repo is fine (walked where it lives); one into node_modules refuses', () => {
     let w = world();
     put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
     put(path.join(w.repo, 'docs', 'CLAUDE.md'), 'docs, fine\n');
     fs.symlinkSync(path.join(w.repo, 'docs'), path.join(w.repo, 'docs-link'), 'dir');
-    fs.symlinkSync(path.join(root, 'nowhere'), path.join(w.repo, 'dangling'), 'dir');
+    fs.symlinkSync(path.join(w.repo, 'not-yet'), path.join(w.repo, 'dangling'), 'dir'); // dangling, in-repo (F1a)
     expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
     fs.rmSync(root, { recursive: true, force: true });
     w = world();
