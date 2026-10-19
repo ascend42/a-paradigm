@@ -388,8 +388,8 @@ components:
       takes a `web` hook for {launchToken}/{reconnect} (credential 'gui',
       human class); on the unix socket those forms stay UNSUPPORTED
       web-auth-not-implemented. P8-D98 (T-2026-10-19-001 A0): the registry
-      (methods.ts) also registers the two human-device verbs gui.open and
-      rules.revoke (human tier only, every other class false, deny by
+      (methods.ts) also registers the three human-device verbs gui.open,
+      rules.revoke and daemon.stop (human tier only, every other class false, deny by
       default); dispatch.ts refuses any non-human class FORBIDDEN{matrix},
       refuses a human GUI launch-token connection the same way, and routes a
       human DEVICE connection to DispatcherOptions.humanVerbs (one handler

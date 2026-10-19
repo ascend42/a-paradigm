@@ -16,7 +16,7 @@
  * review-finding:v1 / change-note:v1), the M1.1 reservations that have no
  * schema yet (verb param values, content parts, status fields), and (P8-D93
  * round 3) the auth wire format: the three domains and one fixed preimage
- * vector per auth form (AUTH_WIRE_DESCRIPTOR). P8-D98 adds the two human-device
+ * vector per auth form (AUTH_WIRE_DESCRIPTOR). P8-D98 adds the three human-device
  * verbs, the reserved hello features, the log.read cursor, the closed P8-D98
  * values and the decisionSig v2 vector (DECISION_SIG_DESCRIPTOR).
  * A change to any of them moves clientApiId; `modAbiId` is NOT an input

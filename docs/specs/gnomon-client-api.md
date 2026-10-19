@@ -8,11 +8,11 @@ Everything a community client needs is published by `@a-company/gnomon-contracts
 ## Identity
 
 - clientApi: `gnomon-rpc:v1`
-- clientApiId: `sha256:f29062d40652cda72dcb41e25fdd9bbe7a95eb683b37784be07fc573e00a2870` (pinned in `schemas/client-api.ids.json`)
+- clientApiId: `sha256:342ec4db11695ee9830c3e420c37ee49ce92e843f174825a76c09f3435b49c4f` (pinned in `schemas/client-api.ids.json`)
 - kitId: `sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a` (`kit:v1`)
 - clientApiId = sha256(canonicalJson(descriptor) + "\n" + kitId); modAbiId is not an input.
 
-## Verbs (12), human-device verbs (2) and client relays (2)
+## Verbs (12), human-device verbs (3) and client relays (2)
 
 | # | verb | params | result | refusals | human only | human | agent | session | mod | voice | readToken | peer |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -30,13 +30,14 @@ Everything a community client needs is published by `@a-company/gnomon-contracts
 | 12 | `ref.resolve` | ref | {target, hash?} | BAD_REQUEST, UNSUPPORTED, NOT_FOUND | no | yes | yes | yes | yes | yes | yes | no |
 | 13 | `gui.open` | cwdHint? | {url, expiresAt} | FORBIDDEN, BAD_REQUEST, ENGINE | yes | verified human device | no | no | no | no | no | no |
 | 14 | `rules.revoke` | ruleId | {ruleId, revoked} | FORBIDDEN, NOT_FOUND, BAD_REQUEST, ENGINE | yes | verified human device | no | no | no | no | no | no |
+| 15 | `daemon.stop` | reason? | {cardId, state} | FORBIDDEN, BAD_REQUEST, ENGINE | yes | verified human device | no | no | no | no | no | no |
 
 | relay | params | forwards as |
 |---|---|---|
 | `mod.view` | name, viewId, input | `view.render` |
 | `mod.command` | name, commandId, args | `command.run` |
 
-Verbs 13–14 are human-device verbs (P8-D98): only a human principal on a device connection whose hello verified the kernel key may call them; they are not among law 3's twelve kernel verbs.
+Verbs 13–15 are human-device verbs (P8-D98): only a human principal on a device connection whose hello verified the kernel key may call them; they are not among law 3's twelve kernel verbs.
 
 ## Reserved (P8-D98)
 

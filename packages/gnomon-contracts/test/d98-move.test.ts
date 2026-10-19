@@ -6,6 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DAEMON_STOP_REASONS,
+  D98_CLOSED_VALUES,
   ADDITIVE_ENUMS,
   CARD_EXPIRY_WHYS,
   CARD_KINDS,
@@ -74,9 +76,10 @@ describe('F2: the always-rule match field accepts only exact', () => {
   });
 });
 
-describe('human-device verbs (gui.open, rules.revoke)', () => {
+describe('human-device verbs (gui.open, rules.revoke, daemon.stop)', () => {
   it('are callable only by the human class; agent, read token, peer and every other class are false', () => {
-    expect(HUMAN_DEVICE_VERBS.map((v) => v.verb)).toEqual(['gui.open', 'rules.revoke']);
+    expect(HUMAN_DEVICE_VERBS.map((v) => v.verb)).toEqual(['gui.open', 'rules.revoke', 'daemon.stop']);
+    expect(HUMAN_DEVICE_VERBS.map((v) => v.n)).toEqual([13, 14, 15]);
     for (const v of HUMAN_DEVICE_VERBS) {
       expect(v.humanOnly).toBe(true);
       expect(v.access).toEqual({ human: 'verified human device', agent: false, session: false, mod: false, voice: false, readToken: false, peer: false });
@@ -85,6 +88,15 @@ describe('human-device verbs (gui.open, rules.revoke)', () => {
     expect(VERBS).toHaveLength(12); // law 3's twelve kernel verbs are unchanged
     expect(HUMAN_DEVICE_VERBS.find((v) => v.verb === 'gui.open')!.params).toEqual(['cwdHint?']);
     expect(HUMAN_DEVICE_VERBS.find((v) => v.verb === 'rules.revoke')!.params).toEqual(['ruleId']);
+  });
+
+  it('daemon.stop{reason?} (TD-2026-10-19-339): reason is closed to stop and upgrade, published so clientApiId covers it', () => {
+    const v = HUMAN_DEVICE_VERBS.find((x) => x.verb === 'daemon.stop')!;
+    expect(v.params).toEqual(['reason?']);
+    expect(v.refusals).toEqual(['FORBIDDEN', 'BAD_REQUEST', 'ENGINE']);
+    expect([...DAEMON_STOP_REASONS]).toEqual(['stop', 'upgrade']);
+    expect(D98_CLOSED_VALUES['daemon.stop.reason' as keyof typeof D98_CLOSED_VALUES]).toEqual(['stop', 'upgrade']);
+    expect(CLIENT_API_DESCRIPTOR.closedValues).toMatchObject({ 'daemon.stop.reason': ['stop', 'upgrade'] });
   });
 });
 

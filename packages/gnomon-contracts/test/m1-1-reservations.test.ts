@@ -247,7 +247,7 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by P8-D89 (M1.4 slice 3, T-2026-10-18-002): was sha256:8e30f400…3014.
 // Moved once by P8-D93 (T-2026-10-18-016: hello clientNonce + session.compacted): was sha256:fd576e6d…e0fd.
 // Moved once by P8-D98 (T-2026-10-19-001: human-device verbs, drain/resume + cursor + claim reservations): was sha256:1faf47f5…8720.
-const PINNED_CLIENT_API_ID = 'sha256:f29062d40652cda72dcb41e25fdd9bbe7a95eb683b37784be07fc573e00a2870';
+const PINNED_CLIENT_API_ID = 'sha256:342ec4db11695ee9830c3e420c37ee49ce92e843f174825a76c09f3435b49c4f';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 

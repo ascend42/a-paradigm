@@ -289,8 +289,10 @@ components:
     description: >-
       kitId and clientApiId (§12.3, §12.8). P8-D98 (T-2026-10-19-001) moved
       clientApiId once: sha256:1faf47f5…8720 →
-      sha256:f29062d40652cda72dcb41e25fdd9bbe7a95eb683b37784be07fc573e00a2870
-      (descriptor gains humanDeviceVerbs, helloFeatures.reserved,
+      sha256:342ec4db11695ee9830c3e420c37ee49ce92e843f174825a76c09f3435b49c4f
+      (descriptor gains humanDeviceVerbs — gui.open, rules.revoke and, with
+      TD-2026-10-19-339 inside the same unreleased move, daemon.stop{reason?}
+      with closedValues daemon.stop.reason [stop, upgrade] — helloFeatures.reserved,
       logReadCursor, closedValues and DECISION_SIG_DESCRIPTOR — the decisionSig
       v2 marker gnomon:decision:v2, its decisions [answer] and one fixed
       message vector); kitId and modAbiId unchanged. P8-D93 moved clientApiId once

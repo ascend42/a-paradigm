@@ -56,7 +56,7 @@ export function renderClientApiDoc(): string {
   L.push('|---|---|---|');
   for (const r of CLIENT_RELAYS) L.push(`| \`${r.relay}\` | ${cell(r.params.join(', '))} | \`${r.forwardsAs}\` |`);
   L.push('');
-  L.push('Verbs 13–14 are human-device verbs (P8-D98): only a human principal on a device connection whose hello verified the kernel key may call them; they are not among law 3\'s twelve kernel verbs.');
+  L.push('Verbs 13–15 are human-device verbs (P8-D98): only a human principal on a device connection whose hello verified the kernel key may call them; they are not among law 3\'s twelve kernel verbs.');
   L.push('');
   L.push('## Reserved (P8-D98)');
   L.push('');

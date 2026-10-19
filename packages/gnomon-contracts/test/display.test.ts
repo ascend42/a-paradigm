@@ -162,14 +162,14 @@ describe('conformance catalog (\u00a712.8, G-CLI-02)', () => {
 describe('additive only: clientApiId did not move (\u00a712.8)', () => {
   it('the pin still equals the computed id', () => {
     expect(JSON.parse(read('../schemas/client-api.ids.json')).clientApiId).toBe(CLIENT_API_ID);
-    expect(CLIENT_API_ID).toBe('sha256:f29062d40652cda72dcb41e25fdd9bbe7a95eb683b37784be07fc573e00a2870');
+    expect(CLIENT_API_ID).toBe('sha256:342ec4db11695ee9830c3e420c37ee49ce92e843f174825a76c09f3435b49c4f');
   });
 
-  it('client-types cover exactly the 12 verbs + 2 human-device verbs + 2 relays', () => {
+  it('client-types cover exactly the 12 verbs + 3 human-device verbs + 2 relays', () => {
     const typed: Record<keyof ClientMethodParams, true> = {
       status: true, 'session.open': true, 'session.send': true, 'session.stop': true, 'log.append': true, 'log.read': true, 'permit.reserve': true,
       approve: true, 'contract.register': true, 'contract.claim': true, 'oracle.run': true, 'ref.resolve': true, 'mod.view': true, 'mod.command': true,
-      'gui.open': true, 'rules.revoke': true,
+      'gui.open': true, 'rules.revoke': true, 'daemon.stop': true,
     };
     expect(Object.keys(typed).sort()).toEqual([...CLIENT_METHODS].sort());
   });

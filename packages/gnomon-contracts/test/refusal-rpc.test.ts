@@ -196,7 +196,7 @@ describe('frozen client surface (§5): 12 verbs + 2 relays', () => {
       'permit.reserve', 'approve', 'contract.register', 'contract.claim', 'oracle.run', 'ref.resolve',
     ]);
     expect(RELAY_NAMES).toEqual(['mod.view', 'mod.command']);
-    expect(CLIENT_METHODS).toHaveLength(16); // + gui.open, rules.revoke (human-device verbs, P8-D98)
+    expect(CLIENT_METHODS).toHaveLength(17); // + gui.open, rules.revoke, daemon.stop (human-device verbs, P8-D98)
     expect(Object.isFrozen(VERBS)).toBe(true);
     expect(Object.isFrozen(VERBS[0]!.access)).toBe(true);
     expect(() => (VERBS as unknown as unknown[]).push({})).toThrow();
