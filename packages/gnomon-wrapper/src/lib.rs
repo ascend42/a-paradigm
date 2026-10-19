@@ -8,5 +8,10 @@
 //! Windows (WebView2, the named-pipe channel, `WDA_EXCLUDEFROMCAPTURE`) is the
 //! parity phase; the seams are `nav::APP_ORIGIN` and `kernel::child_command`.
 
+pub mod bundle;
+pub mod contract;
+pub mod kernel;
+pub mod loopback;
 pub mod nav;
 pub mod surface;
+pub mod verify;
