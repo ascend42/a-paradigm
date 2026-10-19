@@ -364,9 +364,12 @@ export class VoiceControl {
     if (mode === 'conversation' && !this.#widened.has(asker.connId)) {
       // Aegis V2a L1: a pending card is reused only while it is still pending and for the same session; a denied or
       // expired card is dropped and a new one raised
+      // a card the broker no longer knows counts as not pending (Aegis re-check); only an unwired presenceState
+      // keeps the old reuse behaviour
+      const live = (id: string): boolean => (this.#o.presenceState ? this.#o.presenceState(id) === 'pending' : true);
       const still = this.#pendingWiden.get(asker.connId);
-      if (still && (this.#o.presenceState?.(still.cardId) ?? 'pending') === 'pending' && still.hsid === p.hsid) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
-      if (still && still.hsid !== p.hsid && (this.#o.presenceState?.(still.cardId) ?? 'pending') === 'pending') {
+      if (still && live(still.cardId) && still.hsid === p.hsid) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
+      if (still && still.hsid !== p.hsid && live(still.cardId)) {
         throw bad(`a widening card for session ${still.hsid} is pending on this connection; decide it first`);
       }
       this.#pendingWiden.delete(asker.connId);
