@@ -145,8 +145,8 @@ function refusedFrom(error: { code?: unknown; message?: unknown; data?: unknown 
   return new RefusedError(data, typeof error.message === 'string' ? error.message : 'refused');
 }
 
-/** Hello features this client implements: the `{logId, seq}` log.read cursor (P8-D98, §5). */
-export const CLIENT_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
+/** Hello features this client implements: the `{logId, seq}` log.read cursor (P8-D98, §5) and resumed sessions (session.resume, §2.4 rule 11). */
+export const CLIENT_FEATURES: readonly string[] = Object.freeze(['journal.cursor', 'session.resume']);
 
 /** True when a refusal says the cursor names another log: drop local state and re-read from the start (no `since`). */
 export function isCursorEpoch(err: unknown): boolean {

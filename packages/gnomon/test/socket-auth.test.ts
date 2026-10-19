@@ -109,7 +109,7 @@ describe('hello negotiation (§4.9)', () => {
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, clientApis: ['gnomon-rpc:v1', 'gnomon-rpc:v9'], serverKey: r.pin });
     cleanups.push(() => s.conn.close());
     expect(validateHelloResult(s.hello)).toEqual([]);
-    expect(s.hello).toMatchObject({ clientApi: 'gnomon-rpc:v1', features: ['journal.cursor'], serverKeyId: r.d.kernelSigner.keyId, clientApiId: CLIENT_API_ID, kitId: KIT_ID });
+    expect(s.hello).toMatchObject({ clientApi: 'gnomon-rpc:v1', features: ['journal.cursor', 'session.resume'], serverKeyId: r.d.kernelSigner.keyId, clientApiId: CLIENT_API_ID, kitId: KIT_ID });
     expect(s.serverVerified).toBe(true);
     expect(s.clientApiIdMatches).toBe(true);
     // hello is answered once per connection

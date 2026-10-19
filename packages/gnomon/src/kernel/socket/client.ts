@@ -243,8 +243,8 @@ function closedError(): RpcErrorFrame['error'] {
   return { code: JSON_RPC_CODES.ENGINE, message: 'connection closed', data: refuse({ code: 'ENGINE', data: { reason: 'connection-closed' } }) };
 }
 
-/** First-party client: it speaks the `{logId, seq}` log.read cursor (journal.cursor, P8-D98). */
-export const DEFAULT_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
+/** First-party client: it speaks the `{logId, seq}` log.read cursor (journal.cursor, P8-D98) and addresses resumed sessions (session.resume, §2.4 rule 11). */
+export const DEFAULT_FEATURES: readonly string[] = Object.freeze(['journal.cursor', 'session.resume']);
 
 export interface ConnectOptions {
   socketPath: string;

@@ -15,6 +15,20 @@ import type { SessionSupervisor } from './supervisor.js';
 export interface SessionCallContext {
   principal: string;
   principalClass: string;
+  /** the hello features this connection negotiated (§4.9); `session.resume` gates the resumed sessions */
+  features?: readonly string[];
+}
+
+/** The hello feature a client offers to address a session the kernel resumed after an upgrade (§2.4 rule 11, P8-D98). */
+export const SESSION_RESUME_FEATURE = 'session.resume';
+
+/**
+ * §2.4 rule 11 feature gate (T-2026-10-19-014 B2): a client that did not negotiate `session.resume` is REFUSED
+ * any verb on a resumed session, never served a degraded view of it (no feature switches a check off).
+ */
+function gateResumed(sup: SessionSupervisor, ctx: SessionCallContext, hsid: string, verb: string): void {
+  if (!sup.resumed?.(hsid) || (ctx.features ?? []).includes(SESSION_RESUME_FEATURE)) return;
+  throw new RefusedError(refuse({ code: 'FORBIDDEN', data: { reason: 'matrix', needs: SESSION_RESUME_FEATURE, verb } }), `#supervisor: ${verb} on a session resumed after an upgrade needs the ${SESSION_RESUME_FEATURE} hello feature (offer it in hello)`);
 }
 
 export interface SessionPort {
@@ -63,12 +77,14 @@ export function createSessionPort(sup: SessionSupervisor): SessionPort {
       const texts = p.content.map((c) => (c && typeof c === 'object' && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : null));
       if (texts.some((t) => t === null)) throw bad('slice 1 serves text content parts only ({text})');
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
+      gateResumed(sup, ctx, p.hsid, 'session.send');
       return sup.send(ctx.principal, { hsid: p.hsid, text: texts.join('\n'), ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}) });
     },
     stop: async (ctx, params) => {
       const p = objectParams(params, ['hsid', 'interrupt'], 'session.stop');
       if (typeof p.hsid !== 'string') throw bad('hsid is required');
       if (p.interrupt !== undefined && typeof p.interrupt !== 'boolean') throw bad('interrupt must be a boolean');
+      gateResumed(sup, ctx, p.hsid, 'session.stop');
       return sup.stop(ctx.principal, { hsid: p.hsid, ...(p.interrupt === true ? { interrupt: true } : {}) });
     },
     status: () => ({ sessions: sup.status(), claudePin: sup.pinStatus(), sessionSandbox: sup.sandboxStatus() }),

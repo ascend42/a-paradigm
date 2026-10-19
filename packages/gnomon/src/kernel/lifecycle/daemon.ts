@@ -109,6 +109,7 @@ import { helloProbe } from './ready.js';
 import { LifecycleRefusal } from './refusal.js';
 import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
+import { planResume, resumeAfterUpgrade, type ResumeReport, type ResumeRow } from '../supervisor/resume.js';
 import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
@@ -255,6 +256,8 @@ export interface DaemonHandle {
   readonly scheduler: Scheduler;
   /** The start-up orphan sweep's result (G-DMN-04). */
   readonly orphanSweep: { orphans: number; stopped: number };
+  /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
+  readonly resume: Promise<ResumeReport>;
 }
 
 /** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
@@ -658,7 +661,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     logId: log.head().log,
     // a turn counts under its own budget.usage row's chain time (the time restore reads back)
     log: (kind, payload, ids = {}) =>
-      log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}) }).then((r) => ({ at: r.event.at })),
+      log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}), ...(ids.session ? { session: ids.session } : {}) }).then((r) => ({ at: r.event.at })),
     onClockSkew: (d) => emit({ kind: 'daemon.fuse.clock.skew', chainAt: new Date(d.chainAt).toISOString(), wall: new Date(d.wall).toISOString() }),
     config: fuseCfg.config,
     apiTokens,
@@ -885,6 +888,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // socket.disconnect has no §9.1 kind: callback only (contract gap, reported).
   };
 
+  // §2.4 rule 11 (TD-2026-10-19-908, T-2026-10-19-014 B2): BEFORE the orphan sweep, read what an upgrade drained
+  // (drained + exited ⇒ resume; drained without an exit ⇒ the sweep's) and the cards the old kernel left pending
+  const resumePlan = planResume(
+    (function* (): Generator<ResumeRow> {
+      for (const v of log.read({ reader: { class: 'human' }, kinds: ['permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'approval.request', 'approval.decide', 'approval.expire'] })) {
+        if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), payload: v.event.payload };
+      }
+    })(),
+    { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },
+  );
   let orphanSweep: { orphans: number; stopped: number };
   try {
     // §2.4 rule 4: before serving anyone, stop what a crashed daemon left running
@@ -895,6 +908,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       append: (kind, payload) => appendRow(kind, payload),
       control,
       ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}),
+      resuming: new Set(resumePlan.resume.map((c) => c.hsid)),
     });
     server = await listenSocket({
       socketPath: choice.path,
@@ -943,6 +957,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     await shutdown('error');
     throw err;
   }
+  // §2.4 rule 11: resume the drained sessions and retire the old kernel's pending cards (background: never blocks serving)
+  const resume = resumeAfterUpgrade(resumePlan, { supervisor, broker }).catch((): ResumeReport => ({ resumed: [], refused: [], retired: [] }));
   modPickup.start(opts.modPickupMs);
   idle.start();
   return {
@@ -967,5 +983,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     dispatcher,
     scheduler,
     orphanSweep,
+    resume,
   };
 }

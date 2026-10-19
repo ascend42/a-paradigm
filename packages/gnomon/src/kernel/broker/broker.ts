@@ -412,6 +412,19 @@ export class ApprovalBroker {
   }
 
   /**
+   * §2.4 rule 11 (T-2026-10-19-014 B2; F4, TD-2026-10-19-528): retire a card an EARLIER kernel raised and left
+   * pending. This broker never held it, so no decision against its id can land here (decide/approve answer
+   * NOT_FOUND{not-found}); the row closes it on the chain (and in every GUI's stack) as `approval.expire{why}`,
+   * deny. A cardId this broker holds is refused: a live card expires through expire(). B3: only the broker
+   * appends approval.*.
+   */
+  async retireForeign(card: { cardId: string; kind: string; hsid?: string }, why: string): Promise<void> {
+    if (!ID_PATTERNS.card.test(card.cardId)) throw fail('BAD_REQUEST', 'bad-params', 'cardId must be card:<ULID>');
+    if (this.#cards.has(card.cardId)) throw fail('BAD_REQUEST', 'bad-params', `card ${card.cardId} is live in this kernel; expire it instead`);
+    await this.#o.log('approval.expire', { cardId: card.cardId, kind: card.kind, into: 'deny', why }, card.hsid ? { session: card.hsid } : {});
+  }
+
+  /**
    * approval.auto (§9.1, B3): a request answered allow with NO card because a
    * kernel-derived standing rule matched it exactly. Carries the inputHash
    * (a sensitive FIELD label), never the tool input. Must reject if the row

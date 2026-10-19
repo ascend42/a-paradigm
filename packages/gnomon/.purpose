@@ -2512,7 +2512,32 @@ flows:
       gnomon-local sessions get no session.drained (they cannot resume until
       B3) and are stopped by shutdown (session.exited{reason:'upgrade'}).
       Falsifiers: test/session-drain.test.ts (darwin), the B1 case of
-      test/daemon-stop-verb.test.ts. NEW-KERNEL HALF (resume, B2) PLANNED.
+      test/daemon-stop-verb.test.ts. NEW-KERNEL HALF BUILT (T-2026-10-19-014
+      B2): supervisor/resume.ts planResume() reads the kernel-signed rows
+      BEFORE the rule-4 sweep: session.drained followed by session.exited
+      {drain-clean|drain-interrupted}, with no later session.open or
+      permit.reattributed, is resumed; drained with no exit is left to the
+      sweep and never resumed. sweepOrphans{resuming} never sweeps a spawn of
+      this boot for a resumed hsid. SessionSupervisor.resume() runs the
+      ordinary spawn path with --resume <uuid> (same hsid, same uuid): sandboxed
+      preflight, law 7, binary pin, layersHash and gitHash must equal the
+      drained session's (else session.refused{resume:'layers-changed'|
+      'git-changed'}), and BudgetFuse.reattribute() re-attributes the old
+      permit.grant's permit (permit.reattributed{permitId, hsid,
+      drainedEventId}; no permit.reserve/grant; expired/other-log/not-this-
+      session refuse PERMIT_REQUIRED). Nothing is sent to the child; a
+      drain-interrupted session also gets session.sandbox{phase:'resume-note',
+      note:'turn interrupted by update'}. The new broker holds no unlocks.
+      resumeAfterUpgrade() retires every card an earlier kernel left pending
+      (ApprovalBroker.retireForeign: approval.expire{why:'cancelled'}); no kind
+      is rebuilt from the log (the row lacks the detail its effect needs);
+      install cards come back via #mod-host pickup from the staged record.
+      A decision against an old card id is NOT_FOUND. The hello feature
+      session.resume is advertised (SERVER_FEATURES, already reserved: no
+      contracts move); session.send/stop on a resumed session without it are
+      refused FORBIDDEN{matrix, needs:'session.resume'}. The daemon exposes
+      the run as handle.resume. Falsifiers: test/session-resume.test.ts
+      (darwin), test/resume-plan.test.ts (every platform).
       Original plan: A kernel update drains and resumes:
       the old kernel rides `gnomon daemon stop` with reason upgrade (no new
       verb), starts no new turn, drains each session to a turn boundary

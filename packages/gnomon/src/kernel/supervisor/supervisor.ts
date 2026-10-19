@@ -156,12 +156,35 @@ export interface DrainReport {
   sessions: DrainRecord[];
 }
 
+/** The note row a drain-interrupted session resumes with (TD-2026-10-19-814 item 2): it is idle and never continued. */
+export const INTERRUPTED_NOTE = 'turn interrupted by update';
+
+/**
+ * §2.4 rule 11 (T-2026-10-19-014 B2): what the new kernel resumes a drained session from, read back from the
+ * old kernel's kernel-signed rows (resume.ts planResume): its session.open, its last session.sandbox (layersHash,
+ * gitHash, permitId), the permit.grant of that permit, and the session.drained row (its `ev:` id) whose
+ * session.exited reason gave the outcome.
+ */
+export interface ResumeInput {
+  hsid: string;
+  uuid: string;
+  drainedEventId: string;
+  outcome: DrainOutcome;
+  principal: string;
+  cwd: string;
+  worktree?: string;
+  model?: string;
+  layersHash: string;
+  gitHash: string | null;
+  permit: PermitV1 | null;
+}
+
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
 
 export interface SupervisorOptions {
   log: SupervisorLog;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
-  fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
+  fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'> & Partial<Pick<BudgetFuse, 'reattribute'>>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
   broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect' | 'auto' | 'expireSessionBound'>>;
   /** the Gnomon home (session dirs, the claude pin and its private copy) */
@@ -320,6 +343,8 @@ export class SessionSupervisor {
   readonly #local: LocalLane;
   /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
   #drain: Promise<DrainReport> | null = null;
+  /** §2.4 rule 11 (B2): hsids this kernel resumed after an upgrade */
+  readonly #resumed = new Set<string>();
   /** Claude opens past the draining check and not yet settled: the drain waits for them before it collects sessions */
   #opening = 0;
   /** woken at every turn boundary (a result line), session exit and settled open */
@@ -388,11 +413,45 @@ export class SessionSupervisor {
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
-    const hsid = mintHsid();
+    return this.#spawnClaude(req);
+  }
+
+  /**
+   * §2.4 rule 11 (TD-2026-10-19-908; T-2026-10-19-014 B2): respawn a drained session with `--resume <uuid>`
+   * through the ordinary spawn path, same hsid and uuid. Everything re-runs as for any spawn: the sandboxed
+   * preflight (version, auth), law 7, the binary pin, layersHash and gitHash — which must EQUAL the drained
+   * session's (a change refuses `layers-changed` / `git-changed`) — and the permit, which is re-attributed by
+   * the fuse (permit.reattributed citing the drained row), never minted. Any failure leaves the session
+   * stopped with its session.refused{code, resume} row. Nothing is sent to the child: a clean session is idle
+   * until the human sends; an interrupted one also gets the INTERRUPTED_NOTE row and is never continued.
+   * Cached unlocks and voice arms belong to the old process: this kernel's broker starts with none.
+   */
+  async resume(r: ResumeInput): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string }> {
+    this.#refuseIfDraining('session.open');
+    if (this.#sessions.has(r.hsid) || this.#resumed.has(r.hsid)) throw refused('BAD_REQUEST', `session ${r.hsid} is already resumed`, { reason: 'bad-params' });
+    if (typeof r.cwd !== 'string' || !path.isAbsolute(r.cwd) || !fs.existsSync(r.cwd) || !fs.statSync(r.cwd).isDirectory()) {
+      return this.#refuse(r.hsid, 'spawn_failed', 'the drained session\'s cwd is gone', { resume: 'cwd-gone' });
+    }
+    this.#opening++;
+    try {
+      return await this.#spawnClaude({ principal: r.principal, principalClass: 'human', attended: true, cwd: r.cwd, ...(r.worktree ? { worktree: r.worktree } : {}), ...(r.model ? { model: r.model } : {}) }, r);
+    } finally {
+      this.#opening--;
+      this.#wake();
+    }
+  }
+
+  /** Whether `hsid` is a session this kernel resumed after an upgrade (the `session.resume` hello feature gates it). */
+  resumed(hsid: string): boolean {
+    return this.#resumed.has(hsid);
+  }
+
+  async #spawnClaude(req: OpenRequest, r?: ResumeInput): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
+    const hsid = r?.hsid ?? mintHsid();
     const principalId = this.#principalFor(hsid);
-    const uuid = randomUUID();
+    const uuid = r?.uuid ?? randomUUID();
     const userHome = this.#o.userHome ?? os.homedir();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid, ...(r ? { resume: { drainedEventId: r.drainedEventId, outcome: r.outcome } } : {}) }, { session: hsid });
     const row = claudeCodePlatform(this.#platform);
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
@@ -440,6 +499,7 @@ export class SessionSupervisor {
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
+      if (r && policy.allowWriteRefused) throw new PreflightRefusal('spawn_failed', 'a resume needs its transcript dir writable', { resume: 'transcripts-withheld' });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
         if (!b) return {};
@@ -490,6 +550,9 @@ export class SessionSupervisor {
       const layerInput: Law7Input = { row, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, userClaudeJson, policyPath, mcpConfigPath };
       const lHash = layersHash({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, managedPaths: managed, userClaudeJson });
       const gHash = gitHash(req.worktree ?? req.cwd);
+      // §2.4 rule 11: the resumed session reads exactly the layers and git state it was drained with
+      if (r && lHash !== r.layersHash) throw new PreflightRefusal('spawn_failed', 'the settings layers changed since the drain', { resume: 'layers-changed' });
+      if (r && gHash !== r.gitHash) throw new PreflightRefusal('spawn_failed', 'the git state changed since the drain', { resume: 'git-changed' });
       let wHash = this.#watchHashOf(layerInput);
       const scan = async (): Promise<void> => {
         const hits = law7Scan(env, law7Layers(layerInput));
@@ -499,7 +562,7 @@ export class SessionSupervisor {
       };
       await scan();
       try {
-        permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'claude-code', model: req.model ?? 'claude', scope: { user: req.principal, session: hsid }, kernelSpawn: { hsid } });
+        permit = r ? await this.#reattribute(r) : await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'claude-code', model: req.model ?? 'claude', scope: { user: req.principal, session: hsid }, kernelSpawn: { hsid } });
       } catch (err) {
         if (err instanceof RefusedError && err.refusal.code === 'BILLING_REFUSED') throw new PreflightRefusal('api_billing_refused', err.message, { where: 'fuse' });
         throw err;
@@ -507,7 +570,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -543,7 +606,13 @@ export class SessionSupervisor {
       await this.#o.log('session.sandbox', {
         hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
+        ...(r ? { resumedFrom: r.drainedEventId, drainOutcome: r.outcome } : {}),
       }, { session: hsid });
+      if (r) {
+        this.#resumed.add(hsid);
+        // TD-2026-10-19-814 item 2: visible in the transcript; nothing is written to the child (no continue)
+        if (r.outcome === 'interrupted') await this.#o.log('session.sandbox', { hsid, phase: 'resume-note', note: INTERRUPTED_NOTE, drainedEventId: r.drainedEventId }, { session: hsid });
+      }
       return { hsid, principalId, backend: 'claude-code', state: s.state, ...(priv.pin === 'first-use' ? { binaryPin: `first-use pin ${priv.sha256} from ${priv.source}` } : {}) };
     } catch (err) {
       if (tracked && child) {
@@ -975,6 +1044,12 @@ export class SessionSupervisor {
     const survivors = await this.#o.children.stop(s.child, reason);
     signals.push('group:staged');
     return { signals, exited: !survivors };
+  }
+
+  async #reattribute(r: ResumeInput): Promise<PermitV1> {
+    if (!r.permit) throw new PreflightRefusal('spawn_failed', 'the drained session\'s permit is not on the chain', { resume: 'permit-missing' });
+    if (!this.#o.fuse.reattribute) throw new PreflightRefusal('spawn_failed', 'this fuse cannot re-attribute a permit', { resume: 'permit-missing' });
+    return this.#o.fuse.reattribute(r.permit, { hsid: r.hsid, drainedEventId: r.drainedEventId });
   }
 
   #refuseIfDraining(verb: string): void {
