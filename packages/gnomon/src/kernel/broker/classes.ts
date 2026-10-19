@@ -43,6 +43,8 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
   reconsider: { extend: 'fresh', restart: 'fresh', reject: 'cached' },
   strictness: { allow: 'fresh', deny: 'cached' },
   incident: { accept: 'cached', reject: 'cached' },
+  // P8-D98 (TD-2026-10-19-528 F3): gnomon daemon stop raises a signed daemon-stop card decided with Touch ID (fresh).
+  'daemon-stop': { accept: 'fresh', reject: 'fresh' },
 });
 
 /** Kinds the M1.6 broker raises (the rest are classed for their milestones, never raised here). */

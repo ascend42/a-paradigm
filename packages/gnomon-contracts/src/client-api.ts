@@ -16,7 +16,9 @@
  * review-finding:v1 / change-note:v1), the M1.1 reservations that have no
  * schema yet (verb param values, content parts, status fields), and (P8-D93
  * round 3) the auth wire format: the three domains and one fixed preimage
- * vector per auth form (AUTH_WIRE_DESCRIPTOR).
+ * vector per auth form (AUTH_WIRE_DESCRIPTOR). P8-D98 adds the two human-device
+ * verbs, the reserved hello features, the log.read cursor, the closed P8-D98
+ * values and the decisionSig v2 vector (DECISION_SIG_DESCRIPTOR).
  * A change to any of them moves clientApiId; `modAbiId` is NOT an input
  * (a mod-ABI change never churns clients, A24-2).
  *
@@ -41,7 +43,12 @@ import {
   authServerPreimage,
   authClientPreimage,
   authTokenPreimage,
+  HUMAN_DEVICE_VERBS,
+  RESERVED_HELLO_FEATURES,
+  LOG_READ_CURSOR_KEYS,
+  D98_CLOSED_VALUES,
 } from './rpc.js';
+import { APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, decisionMessageV2 } from './card.js';
 import { JSON_RPC_CODES } from './refusal.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
@@ -86,6 +93,26 @@ export const AUTH_WIRE_DESCRIPTOR = deepFreeze({
   },
 });
 
+/**
+ * decisionSig v2 (P8-D98): the version marker, the decisions that use it and ONE fixed message vector, so a changed
+ * layout moves clientApiId. The kernel signer (slice A2) must produce exactly this message for these inputs.
+ */
+const DECISION_V2_INPUTS = {
+  cardId: 'card:01J00000000000000000000000',
+  decision: 'answer',
+  cardContentHash: `sha256:${'c'.repeat(64)}`,
+  approverPrincipalId: 'p:local/founder',
+  answerDigest: `sha256:${'a'.repeat(64)}`,
+} as const;
+export const DECISION_SIG_DESCRIPTOR = deepFreeze({
+  domain: APPROVE_SIG_DOMAIN,
+  v2: {
+    marker: DECISION_SIG_V2_MARKER,
+    decisions: [...DECISION_SIG_V2_DECISIONS],
+    vector: { inputs: DECISION_V2_INPUTS, message: decisionMessageV2(DECISION_V2_INPUTS) },
+  },
+});
+
 export const CLIENT_API_DESCRIPTOR = deepFreeze({
   clientApi: GNOMON_RPC_V1,
   verbs: VERBS,
@@ -100,6 +127,13 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   failSafe: FAIL_SAFE_VALUES,
   // P8-D93 round 3 (Aegis): domains + one preimage vector per auth form
   auth: AUTH_WIRE_DESCRIPTOR,
+  // P8-D98 (T-2026-10-19-001): the human-device verbs, the reserved hello features, the log.read cursor shape,
+  // the closed always-rule match and drain reason, and the decisionSig v2 layout.
+  humanDeviceVerbs: HUMAN_DEVICE_VERBS,
+  helloFeatures: { reserved: RESERVED_HELLO_FEATURES },
+  logReadCursor: LOG_READ_CURSOR_KEYS,
+  closedValues: D98_CLOSED_VALUES,
+  decisionSig: DECISION_SIG_DESCRIPTOR,
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {

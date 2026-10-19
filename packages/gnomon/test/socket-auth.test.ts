@@ -391,6 +391,9 @@ describe('verb dispatch skeleton (§5)', () => {
       'oracle.run': [-32000, 'not-implemented', 'M2.3'],
       'mod.view': [-32600, 'bad-params', undefined], // served since M1.11 slice 2 (#mod-host relays): {} has no name/viewId
       'mod.command': [-32600, 'bad-params', undefined],
+      // P8-D98 human-device verbs: a human device connection reaches the stub (no port wired yet)
+      'gui.open': [-32000, 'not-implemented', 'T-2026-10-19-001'],
+      'rules.revoke': [-32000, 'not-implemented', 'T-2026-10-19-001'],
     });
   });
 

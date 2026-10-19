@@ -6,11 +6,13 @@
   "x-gnomon-kinds": [
     "approval.auto",
     "approval.decide",
+    "approval.effect.failed",
     "approval.expire",
     "approval.mode.set",
     "approval.presence.denied",
     "approval.request",
     "approval.rule.learned",
+    "approval.rule.revoked",
     "approval.strictness.held",
     "approval.strictness.lowered",
     "approval.strictness.proposed",
@@ -147,6 +149,7 @@
     "paradigm.event",
     "permit.deny",
     "permit.grant",
+    "permit.reattributed",
     "permit.release",
     "permit.reserve",
     "request.brief.send",
@@ -166,6 +169,7 @@
     "session.alias",
     "session.alias.rejected",
     "session.compacted",
+    "session.drained",
     "session.exited",
     "session.idle",
     "session.inject",
@@ -233,7 +237,9 @@
   ],
   "x-gnomon-reserved-kinds": {
     "approval.auto": "M1.1:P8-D86-D88",
+    "approval.effect.failed": "8.0:P8-D98",
     "approval.mode.set": "M1.1:P8-D86-D88",
+    "approval.rule.revoked": "8.0:P8-D98",
     "approval.strictness.held": "M1.1:P8-D86-D88",
     "approval.strictness.lowered": "M1.1:P8-D86-D88",
     "approval.strictness.proposed": "M1.1:P8-D86-D88",
@@ -277,6 +283,7 @@
     "link.scan.hit": "M1.1:P8-R9",
     "merge.ref.rewritten": "M1.1:P8-D86-D88",
     "merge.reverted": "M1.1:P8-D86-D88",
+    "permit.reattributed": "8.0:P8-D98",
     "request.brief.send": "M1.1:P8-R9",
     "request.cowork.allow": "M1.1:P8-R9",
     "request.grant": "M1.1:P8-D58",
@@ -286,6 +293,7 @@
     "request.strictness.set": "M1.1:P8-D86-D88",
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
+    "session.drained": "8.0:P8-D98",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -313,6 +321,15 @@
     },
     "session.open": {
       "runMode": "M1.1:P8-D86-D88"
+    },
+    "contract.claimed": {
+      "claimGen": "8.0:P8-D98"
+    },
+    "approval.rule.learned": {
+      "match": "8.0:P8-D98"
+    },
+    "approval.expire": {
+      "why": "8.0:P8-D98"
     },
     "key.registry.malformed": {
       "file": "M1.4:P8-D89",
@@ -437,6 +454,27 @@
       "summaryHash",
       "tokensBefore",
       "tokensAfter"
+    ],
+    "session.drained": [
+      "uuid",
+      "reason"
+    ],
+    "permit.reattributed": [
+      "permitId",
+      "hsid",
+      "drainedEventId"
+    ],
+    "approval.rule.revoked": [
+      "ruleId",
+      "repoKey",
+      "tool",
+      "connId"
+    ],
+    "approval.effect.failed": [
+      "cardId",
+      "decision",
+      "effect",
+      "reason"
     ]
   },
   "x-gnomon-compaction-reasons": [

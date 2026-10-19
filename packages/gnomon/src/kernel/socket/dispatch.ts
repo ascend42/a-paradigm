@@ -99,6 +99,8 @@ import {
   KIT_ID,
   RELAY_NAMES,
   VERBS,
+  HUMAN_DEVICE_VERBS,
+  HUMAN_DEVICE_VERB_NAMES,
   canonicalJson,
   hex,
   sanitizeDisplayText,
@@ -283,11 +285,37 @@ export interface DispatcherOptions {
   sessions?: SessionPort;
   /** #mod-host (M1.11 slice 2): the client relays. Absent ⇒ mod.view / mod.command stay not-implemented. */
   mods?: ModRelayPort;
+  /**
+   * P8-D98 human-device verbs: each handler lives in its own module (later slices) and is wired here by the daemon,
+   * so dispatch.ts does not change again. Absent ⇒ ENGINE{not-implemented}. Called only for a human principal on a
+   * device connection (credential 'device'); the handler owns its own params check.
+   */
+  humanVerbs?: HumanDeviceVerbPorts;
   /** The method registry (default KERNEL_METHODS: the 12 verbs + 2 relays). Test seam for the fail-closed check. */
   methods?: MethodRegistry;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
+
+/** The connection a human-device verb runs for (stamped from THIS connection, never from params). */
+export interface HumanDeviceVerbContext {
+  connId: string;
+  principal: string;
+  deviceId?: string;
+  surface: string | null;
+  isLive: () => boolean;
+}
+export type HumanDeviceVerbHandler = (ctx: HumanDeviceVerbContext, params: unknown) => Promise<unknown>;
+/** gui.open (§2.4 rule 8) and rules.revoke (TD-2026-10-19-528 F1): later slices supply them. */
+export interface HumanDeviceVerbPorts {
+  'gui.open'?: HumanDeviceVerbHandler;
+  'rules.revoke'?: HumanDeviceVerbHandler;
+}
+/** Where each human-device verb lands (T-2026-10-19-001 slices). */
+export const HUMAN_DEVICE_VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
+  'gui.open': 'T-2026-10-19-001',
+  'rules.revoke': 'T-2026-10-19-001',
+});
 
 /** The mod host's side of the client relays (modhost/bridge.ts createModRelayPort). */
 export interface ModRelayPort {
@@ -366,6 +394,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         .filter((v) => accessOf_(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
         .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
       verbs: VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
+      humanDeviceVerbs: HUMAN_DEVICE_VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: cls === 'human' && (s.credential ?? 'device') === 'device' && o.humanVerbs?.[v.verb as keyof HumanDeviceVerbPorts] !== undefined, milestone: HUMAN_DEVICE_VERB_MILESTONES[v.verb] })),
       relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf_(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
       ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
       daemon: o.status.daemon(),
@@ -554,6 +583,21 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const r = resolveRef(frame.params, reads.log, () => readerFor(s).reader);
         if (!r.ok) throw new RpcRefusal(r.code, r.reason, r.message, r.data);
         return r.result;
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
+    // P8-D98: the human-device verbs. The matrix above already refused every non-human class (agent, session,
+    // mod, voice, read token, peer). A human principal needs a DEVICE connection (a key that signed auth over
+    // the verified hello); a GUI launch-token connection is refused. Then the port, or not-implemented.
+    if (HUMAN_DEVICE_VERB_NAMES.includes(m)) {
+      if (cls !== 'human' || (s.credential ?? 'device') !== 'device' || !s.principal) {
+        throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is callable only by a verified human device connection (§5)`, { verb: m, principalClass: cls });
+      }
+      const h = o.humanVerbs?.[m as keyof HumanDeviceVerbPorts];
+      if (!h) throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${HUMAN_DEVICE_VERB_MILESTONES[m]})`, { verb: m, milestone: HUMAN_DEVICE_VERB_MILESTONES[m] });
+      try {
+        return await h({ connId: s.connId, principal: s.principal, ...(s.deviceId ? { deviceId: s.deviceId } : {}), surface: s.client?.surface ?? null, isLive: () => !ctx.closed && conns.get(s.connId) === s }, frame.params);
       } catch (err) {
         throw asRpcRefusal(err);
       }

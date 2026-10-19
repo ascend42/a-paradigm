@@ -47,7 +47,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -66,6 +66,8 @@ const D58 = 'M1.1:P8-D58' as const;
 const R9 = 'M1.1:P8-R9' as const;
 const D86 = 'M1.1:P8-D86-D88' as const;
 const D89 = 'M1.4:P8-D89' as const;
+/** P8-D98 (T-2026-10-19-001, the batched clientApiId move of TD-2026-10-19-528/-648/-908): reserved for 8.0, built by later slices. */
+const D98 = '8.0:P8-D98' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -102,6 +104,15 @@ const TABLE: Row[] = [
   // backend finished compacting the session's context (the local runner's successful compaction_end, §13). Typed
   // so clients need not parse the raw turn.event line; validated at append (validateSessionCompactedPayload).
   ['session', 'kernel', 'compacted'],
+  // P8-D98 (TD-2026-10-19-908, §2.4 rule 11): session.drained{uuid, reason} — the old kernel drained the session to a
+  // turn boundary before an upgrade; the new kernel resumes it. permit.reattributed{permitId, hsid, drainedEventId} —
+  // the kernel-signed row that hands a permit to the resumed session, citing the drained row (never a mint).
+  ['session', 'kernel', 'drained', D98],
+  ['permit', 'kernel', 'reattributed', D98],
+  // P8-D98 (TD-2026-10-19-528 F1/F2): approval.rule.revoked{ruleId, repoKey, tool, connId} — a verified human device
+  // revoked a standing `always` rule (rules.revoke). approval.effect.failed{cardId, decision, effect, reason} — a
+  // decided card whose effect could not be applied (never a silent success).
+  ['approval', 'kernel', 'rule.revoked effect.failed', D98],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -227,6 +238,12 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   'contract.built': Object.freeze({ note: D86, responses: D86 }),
   'verdict.founder': Object.freeze({ override: D86 }),
   'session.open': Object.freeze({ runMode: D86 }),
+  // P8-D98 (TD-2026-10-19-648 item 11, §7.4): the per-node claim generation; built in M2.2.
+  'contract.claimed': Object.freeze({ claimGen: D98 }),
+  // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
+  'approval.rule.learned': Object.freeze({ match: D98 }),
+  // P8-D98 (TD-2026-10-19-528 F4, §2.4 rule 11): approval.expire{why:'session-drained'} (CARD_EXPIRY_WHYS).
+  'approval.expire': Object.freeze({ why: D98 }),
   // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
   'key.registry.malformed': Object.freeze({ file: D89, reason: D89 }),
 });
@@ -268,7 +285,95 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
  */
 export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'session.compacted': Object.freeze(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']),
+  // P8-D98: closed payloads of the kinds reserved in the T-2026-10-19-001 move (validateKindPayload).
+  'session.drained': Object.freeze(['uuid', 'reason']),
+  'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId']),
+  'approval.rule.revoked': Object.freeze(['ruleId', 'repoKey', 'tool', 'connId']),
+  'approval.effect.failed': Object.freeze(['cardId', 'decision', 'effect', 'reason']),
 });
+
+/** session.drained reasons (§2.4 rule 11): closed. An upgrade is the only drain in 8.0. */
+export const DRAIN_REASONS = ['upgrade'] as const;
+export type DrainReason = (typeof DRAIN_REASONS)[number];
+
+/** Always-rule match modes (TD-2026-10-19-528 F2): closed; only an exact match of (repoKey, tool, inputHash). */
+export const ALWAYS_RULE_MATCHES = ['exact'] as const;
+export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];
+
+/** F2: the always-rule `match` field accepts only 'exact' (absent = 'exact', the v1 `matchExact:true` reading). */
+export function validateAlwaysRuleMatch(value: unknown): string[] {
+  return value === 'exact' ? [] : [`match: must be ${ALWAYS_RULE_MATCHES.join('|')} (an always-rule never widens past an exact match)`];
+}
+
+/** A standing rule's id is the cardId whose `always` decision learned it (#always-rules; approval.auto's modeRef is `rule:<ruleId>`). */
+export const RULE_ID_PATTERN = ID_PATTERNS.card;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const KEBAB_64 = /^[a-z][a-z0-9-]{0,63}$/;
+const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/;
+
+export interface SessionDrainedPayload {
+  /** The backend session uuid the new kernel resumes with `--resume <uuid>`. */
+  uuid: string;
+  reason: DrainReason;
+}
+export interface PermitReattributedPayload {
+  permitId: string;
+  hsid: string;
+  /** The `ev:` id of the session.drained row this re-attribution cites. */
+  drainedEventId: string;
+}
+export interface ApprovalRuleRevokedPayload {
+  ruleId: string;
+  repoKey: string;
+  tool: string;
+  /** The verified human device connection that revoked it. */
+  connId: string;
+}
+export interface ApprovalEffectFailedPayload {
+  cardId: string;
+  decision: string;
+  /** What the decision was to do (kebab-case, e.g. `tool-answer`), never free text. */
+  effect: string;
+  /** Why it failed (kebab-case), never free text. */
+  reason: string;
+}
+
+/** Closed checks of the P8-D98 kinds (and session.compacted). Returns errors; [] = valid; an unchecked kind is an error. */
+export function validateKindPayload(kind: string, value: unknown): string[] {
+  if (kind === 'session.compacted') return validateSessionCompactedPayload(value);
+  const keys = KIND_PAYLOADS[kind];
+  if (!keys) return [`${kind}: no closed payload check`];
+  const c = new Checker('strict');
+  if (!c.obj('', value)) return c.errors;
+  c.closed('', value, keys);
+  c.required('', value, keys);
+  const v = value as Record<string, unknown>;
+  switch (kind) {
+    case 'session.drained':
+      if ('uuid' in v) c.str('uuid', v.uuid, UUID_PATTERN, 'a lowercase uuid');
+      if ('reason' in v) c.closedEnum('reason', v.reason, DRAIN_REASONS);
+      break;
+    case 'permit.reattributed':
+      if ('permitId' in v) c.str('permitId', v.permitId, ID_PATTERNS.permit, 'permit:v1:<ULID>');
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('drainedEventId' in v) c.str('drainedEventId', v.drainedEventId, ID_PATTERNS.ev, 'ev:<ULID>');
+      break;
+    case 'approval.rule.revoked':
+      if ('ruleId' in v) c.str('ruleId', v.ruleId, RULE_ID_PATTERN, 'card:<ULID> (the learning card)');
+      if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
+      if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      break;
+    case 'approval.effect.failed':
+      if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
+      if ('decision' in v) c.str('decision', v.decision, KEBAB_64, 'a decision');
+      if ('effect' in v) c.str('effect', v.effect, KEBAB_64, 'kebab-case, ≤ 64');
+      if ('reason' in v) c.str('reason', v.reason, KEBAB_64, 'kebab-case, ≤ 64');
+      break;
+  }
+  return c.errors;
+}
 
 /** session.compacted reasons (Aegis, P8-D93): closed; a backend value outside it is recorded as `unspecified`. */
 export const COMPACTION_REASONS = ['threshold', 'overflow', 'manual', 'unspecified'] as const;

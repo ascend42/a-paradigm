@@ -4,13 +4,14 @@
  * surface: 12 kernel verbs + 2 client relays.
  */
 
+import { ID_PATTERNS } from './ids.js';
 import { Checker, canonicalJson, deepFreeze, type ValidateOptions } from './internal.js';
 import { PRINCIPAL_KINDS } from './principal.js';
-import { CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, PRESENCE_VALUES, VIA_VALUES, RUN_MODES, STRICTNESS_LEVELS } from './card.js';
+import { CARD_EXPIRY_WHYS, CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, PRESENCE_VALUES, VIA_VALUES, RUN_MODES, STRICTNESS_LEVELS } from './card.js';
 import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
 import { RISK_TIERS, AGENT_REVERT_HOWS, KERNEL_REVERT_HOWS } from './change-note.js';
 import { REFUSAL_GATES, REFUSAL_REASONS, refuse, type Refusal, type RefusalCode } from './refusal.js';
-import { INJECT_ORIGINS } from './event.js';
+import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS } from './event.js';
 
 export const GNOMON_RPC_V1 = 'gnomon-rpc:v1' as const;
 export const CLIENT_API_PATTERN = /^gnomon-rpc:v([1-9][0-9]*)$/;
@@ -103,6 +104,30 @@ export const VERBS: readonly VerbDescriptor[] = deepFreeze([
 
 export const VERB_NAMES = Object.freeze(VERBS.map((v) => v.verb)) as readonly string[];
 
+/**
+ * Human-device verbs (P8-D98, T-2026-10-19-001): socket methods callable ONLY by a human principal on a device
+ * connection whose hello verified the kernel key. Every other class is refused (`false`), the peer column included.
+ * They are not among law 3's twelve kernel verbs (§10 law 3 counts them separately, as it counts the relays):
+ *   13 `gui.open{cwdHint?}` → a single-use launch grant, the in-process requestWebLaunch's rules (§2.4 rule 8).
+ *   14 `rules.revoke{ruleId}` → revokes a standing `always` rule; writes approval.rule.revoked. No presence prompt:
+ *      revoking only narrows (TD-2026-10-19-528 F1).
+ * Each handler is its own module behind a dispatcher port; until it lands the call is ENGINE{not-implemented}.
+ */
+export const HUMAN_DEVICE_ACCESS = 'verified human device' as const;
+export const HUMAN_DEVICE_VERBS: readonly VerbDescriptor[] = deepFreeze([
+  {
+    n: 13, verb: 'gui.open', params: ['cwdHint?'], result: '{url, expiresAt}', refusals: ['FORBIDDEN', 'BAD_REQUEST', 'ENGINE'], humanOnly: true,
+    access: { human: HUMAN_DEVICE_ACCESS, agent: false, session: false, mod: false, voice: false, readToken: false, peer: false },
+  },
+  {
+    n: 14, verb: 'rules.revoke', params: ['ruleId'], result: '{ruleId, revoked}', refusals: ['FORBIDDEN', 'NOT_FOUND', 'BAD_REQUEST', 'ENGINE'], humanOnly: true,
+    access: { human: HUMAN_DEVICE_ACCESS, agent: false, session: false, mod: false, voice: false, readToken: false, peer: false },
+  },
+] satisfies VerbDescriptor[]);
+export const HUMAN_DEVICE_VERB_NAMES = Object.freeze(HUMAN_DEVICE_VERBS.map((v) => v.verb)) as readonly string[];
+/** `gui.open.cwdHint` cap in UTF-8 bytes (§2.4 rule 8). */
+export const GUI_OPEN_CWD_HINT_MAX_BYTES = 1024;
+
 export interface RelayDescriptor {
   relay: string;
   params: readonly string[];
@@ -143,8 +168,40 @@ export const STATUS_RESERVED_FIELDS = deepFreeze({
   unobservedRefWrites: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
 });
 
-/** The client-callable surface: 12 verbs + 2 relays (§5). */
-export const CLIENT_METHODS = Object.freeze([...VERB_NAMES, ...RELAY_NAMES]) as readonly string[];
+/** The client-callable surface: 12 kernel verbs + 2 human-device verbs + 2 relays (§5, P8-D98). */
+export const CLIENT_METHODS = Object.freeze([...VERB_NAMES, ...HUMAN_DEVICE_VERB_NAMES, ...RELAY_NAMES]) as readonly string[];
+
+/**
+ * hello feature names reserved by P8-D98 (§2.4 rule 11, §5): per-client gates negotiated in the signed hello.
+ * The kernel advertises none of them until it builds them (socket/auth.ts SERVER_FEATURES stays []); a client
+ * that needs one and does not get it refuses the dependent operation, never degrades it.
+ */
+export const RESERVED_HELLO_FEATURES = Object.freeze(['journal.cursor', 'session.resume'] as const);
+
+/** The `log.read` cursor (§5, TD-2026-10-19-648 item 8): a seq is only meaningful inside one log. */
+export interface LogReadCursor {
+  logId: string;
+  seq: number;
+}
+export const LOG_READ_CURSOR_KEYS = ['logId', 'seq'] as const;
+export function validateLogReadCursor(value: unknown): string[] {
+  const c = new Checker('strict');
+  if (!c.obj('', value)) return c.errors;
+  c.closed('', value, LOG_READ_CURSOR_KEYS);
+  c.required('', value, LOG_READ_CURSOR_KEYS);
+  if ('logId' in value) c.str('logId', value.logId, ID_PATTERNS.log, 'log:<ULID>');
+  if ('seq' in value) c.int('seq', value.seq, 1);
+  return c.errors;
+}
+
+/**
+ * Closed value sets of the P8-D98 move that are NOT additive: an always-rule matches exactly (F2), and a drain
+ * has one reason. Published so clientApiId covers them.
+ */
+export const D98_CLOSED_VALUES = deepFreeze({
+  'approval.rule.learned.match': [...ALWAYS_RULE_MATCHES],
+  'session.drained.reason': [...DRAIN_REASONS],
+});
 
 /* ── the compatible-additive rule (§4.9, §12.8) ───────────────────────────── */
 
@@ -166,6 +223,8 @@ export const ADDITIVE_ENUMS = deepFreeze({
   'refusal.gate': [...REFUSAL_GATES],
   'refusal.reason': [...REFUSAL_REASONS],
   'client.surface': [...CLIENT_SURFACES],
+  // P8-D98: approval.expire{why} (session-drained, F4).
+  'approval.expire.why': [...CARD_EXPIRY_WHYS],
   // P8-D86–D88, additive with fail-safe readings (FAIL_SAFE_VALUES).
   'card.strictness.level': [...STRICTNESS_LEVELS],
   'run.mode': [...RUN_MODES],

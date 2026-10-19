@@ -16,7 +16,8 @@ import { CONFORMANCE_CHECKS, CONFORMANCE_SUITE, CONFORMANCE_VERSION } from './co
 import { BIDI_GLYPHS, HIDDEN_STRIP_RANGES } from './display.js';
 import { EVENT_KIND_NAMES, OPEN_USERLAND_NAMESPACES } from './event.js';
 import { JSON_RPC_CODES, REFUSAL_REASONS } from './refusal.js';
-import { ADDITIVE_ENUMS, CLIENT_RELAYS, GNOMON_RPC_V1, VERBS } from './rpc.js';
+import { ADDITIVE_ENUMS, CLIENT_RELAYS, GNOMON_RPC_V1, HUMAN_DEVICE_VERBS, LOG_READ_CURSOR_KEYS, RESERVED_HELLO_FEATURES, VERBS } from './rpc.js';
+import { DECISION_SIG_V2_MARKER } from './card.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
 export const CLIENT_API_DOC_PATH = 'docs/specs/gnomon-client-api.md' as const;
@@ -41,12 +42,12 @@ export function renderClientApiDoc(): string {
   L.push(`- kitId: \`${KIT_ID}\` (\`${KIT_V1}\`)`);
   L.push('- clientApiId = sha256(canonicalJson(descriptor) + "\\n" + kitId); modAbiId is not an input.');
   L.push('');
-  L.push(`## Verbs (${VERBS.length}) and client relays (${CLIENT_RELAYS.length})`);
+  L.push(`## Verbs (${VERBS.length}), human-device verbs (${HUMAN_DEVICE_VERBS.length}) and client relays (${CLIENT_RELAYS.length})`);
   L.push('');
   const classes = Object.keys(VERBS[0]!.access);
   L.push(`| # | verb | params | result | refusals | human only | ${classes.join(' | ')} |`);
   L.push(`|---|---|---|---|---|---|${classes.map(() => '---').join('|')}|`);
-  for (const v of VERBS) {
+  for (const v of [...VERBS, ...HUMAN_DEVICE_VERBS]) {
     const acc = v.access as Readonly<Record<string, string | boolean>>;
     L.push(`| ${v.n} | \`${v.verb}\` | ${cell(v.params.join(', ') || '—')} | ${cell(v.result)} | ${cell(v.refusals.join(', '))} | ${v.humanOnly ? 'yes' : 'no'} | ${classes.map((c) => cell(acc[c] === false ? 'no' : acc[c])).join(' | ')} |`);
   }
@@ -54,6 +55,14 @@ export function renderClientApiDoc(): string {
   L.push('| relay | params | forwards as |');
   L.push('|---|---|---|');
   for (const r of CLIENT_RELAYS) L.push(`| \`${r.relay}\` | ${cell(r.params.join(', '))} | \`${r.forwardsAs}\` |`);
+  L.push('');
+  L.push('Verbs 13–14 are human-device verbs (P8-D98): only a human principal on a device connection whose hello verified the kernel key may call them; they are not among law 3\'s twelve kernel verbs.');
+  L.push('');
+  L.push('## Reserved (P8-D98)');
+  L.push('');
+  L.push(`- hello features: ${RESERVED_HELLO_FEATURES.map((f) => `\`${f}\``).join(', ')} — the kernel advertises none until it builds them; a missing feature refuses the dependent operation, never degrades it.`);
+  L.push(`- \`log.read\` cursor: \`{${LOG_READ_CURSOR_KEYS.join(', ')}}\`; a cursor from another log is \`BAD_REQUEST{reason:'cursor-epoch'}\`.`);
+  L.push(`- decisionSig v2: first line \`${DECISION_SIG_V2_MARKER}\`, used for \`answer\` decisions, carrying the answer digest.`);
   L.push('');
   L.push('## Refusals (`refusal:v1`)');
   L.push('');

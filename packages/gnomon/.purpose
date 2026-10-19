@@ -371,7 +371,16 @@ components:
       scans socket/, web/, refs/, redaction.ts). M1.4 #web-endpoint: auth.ts
       takes a `web` hook for {launchToken}/{reconnect} (credential 'gui',
       human class); on the unix socket those forms stay UNSUPPORTED
-      web-auth-not-implemented.
+      web-auth-not-implemented. P8-D98 (T-2026-10-19-001 A0): the registry
+      (methods.ts) also registers the two human-device verbs gui.open and
+      rules.revoke (human tier only, every other class false, deny by
+      default); dispatch.ts refuses any non-human class FORBIDDEN{matrix},
+      refuses a human GUI launch-token connection the same way, and routes a
+      human DEVICE connection to DispatcherOptions.humanVerbs (one handler
+      module per verb, wired by the daemon so dispatch.ts does not change
+      again) or ENGINE{not-implemented} when the port is absent; status lists
+      them as humanDeviceVerbs. SERVER_FEATURES stays [] (no reserved hello
+      feature advertised). abiId still hashes the twelve VERBS only.
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
@@ -381,6 +390,7 @@ components:
       - test/socket-auth.test.ts
       - test/socket-log-read.test.ts
       - test/socket-abi.test.ts
+      - test/human-device-verbs.test.ts
       - test/refusal-reasons.test.ts
       - test/verb-access.test.ts
       - test/web-backpressure.test.ts
@@ -1559,7 +1569,8 @@ components:
       from kernel observation). Aegis A3: approve claims the decision
       synchronously after its last re-check (CardRecord.claim); expire()
       refuses a claimed card and defers while #deciding (applied in
-      approve's finally if the decision did not settle). classes.ts — valid decisions per card kind and the
+      approve's finally if the decision did not settle). classes.ts (P8-D98: the reserved daemon-stop kind
+      is accept|reject, both fresh presence — Touch ID, TD-2026-10-19-528 F3) — valid decisions per card kind and the
       BASE presence class of each (cached: allow/deny on permission, answer,
       approve-plan, reject on plan/reconsider/inbound handoff, deny on
       strictness, incident; fresh: everything else the spec names, incl.

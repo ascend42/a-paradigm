@@ -88,6 +88,7 @@ export interface LogAppendResult extends Open {
 }
 
 export interface LogReadParams {
+  /** A bare seq today; the `{logId, seq}` cursor (LogReadCursor, P8-D98, §5) replaces it when `journal.cursor` is built. */
   since?: number;
   until?: number;
   kinds?: string[];
@@ -174,6 +175,25 @@ export interface RefResolveResult extends Open {
   hash?: string;
 }
 
+/** P8-D98 human-device verb 13 (§2.4 rule 8). */
+export interface GuiOpenParams {
+  /** ≤ 1024 UTF-8 bytes; returned for the CLI to append as the URL fragment; never read by the kernel. */
+  cwdHint?: string;
+}
+export interface GuiOpenResult extends Open {
+  url: string;
+  expiresAt: string;
+}
+/** P8-D98 human-device verb 14 (TD-2026-10-19-528 F1): no presence prompt; revoking only narrows. */
+export interface RulesRevokeParams {
+  /** The cardId whose `always` decision learned the rule. */
+  ruleId: string;
+}
+export interface RulesRevokeResult extends Open {
+  ruleId: string;
+  revoked: boolean;
+}
+
 export interface ModViewParams {
   name: string;
   viewId: string;
@@ -185,7 +205,7 @@ export interface ModCommandParams {
   args?: unknown;
 }
 
-/** method → params, for the whole client-callable surface (12 verbs + 2 relays). */
+/** method → params, for the whole client-callable surface (12 verbs + 2 human-device verbs + 2 relays). */
 export interface ClientMethodParams {
   status: Record<string, never>;
   'session.open': SessionOpenParams;
@@ -199,6 +219,8 @@ export interface ClientMethodParams {
   'contract.claim': ContractClaimParams;
   'oracle.run': OracleRunParams;
   'ref.resolve': RefResolveParams;
+  'gui.open': GuiOpenParams;
+  'rules.revoke': RulesRevokeParams;
   'mod.view': ModViewParams;
   'mod.command': ModCommandParams;
 }
@@ -217,6 +239,8 @@ export interface ClientMethodResults {
   'contract.claim': ContractClaimResult;
   'oracle.run': Open;
   'ref.resolve': RefResolveResult;
+  'gui.open': GuiOpenResult;
+  'rules.revoke': RulesRevokeResult;
   'mod.view': Open;
   'mod.command': Open;
 }

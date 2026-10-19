@@ -23,7 +23,7 @@
  * registry lookup (no matrix class exists until auth names a principal), and
  * before auth every other name is refused AUTH without consulting the registry.
  */
-import { CLIENT_RELAYS, VERBS, type Access, type VerbDescriptor } from '@a-company/gnomon-contracts';
+import { CLIENT_RELAYS, HUMAN_DEVICE_VERBS, VERBS, type Access, type VerbDescriptor } from '@a-company/gnomon-contracts';
 
 export type MatrixClass = keyof VerbDescriptor['access'];
 
@@ -125,9 +125,11 @@ export const RELAY_TIERS: MethodTiers = Object.freeze({
 export function buildKernelMethodRegistry(): MethodRegistry {
   const r = new MethodRegistry();
   for (const v of VERBS) r.register({ method: v.verb, kind: 'verb', tiers: v.access });
+  // P8-D98: the human-device verbs (gui.open, rules.revoke) — human tier only, every other class declared false
+  for (const v of HUMAN_DEVICE_VERBS) r.register({ method: v.verb, kind: 'verb', tiers: v.access });
   for (const rel of CLIENT_RELAYS) r.register({ method: rel.relay, kind: 'relay', tiers: RELAY_TIERS });
   return r.seal();
 }
 
-/** The kernel's registry: exactly the 12 verbs + 2 relays, sealed. */
+/** The kernel's registry: exactly the 12 verbs + 2 human-device verbs + 2 relays, sealed. */
 export const KERNEL_METHODS: MethodRegistry = buildKernelMethodRegistry();

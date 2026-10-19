@@ -315,7 +315,12 @@
             "row-integrity",
             "closed",
             "response-too-large",
-            "internal"
+            "internal",
+            "stale-claim",
+            "claim-expired",
+            "claim-superseded",
+            "cursor-epoch",
+            "draining"
           ],
           "x-gnomon-additive": true
         },
