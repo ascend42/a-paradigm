@@ -70,7 +70,7 @@
  *   a local hsid are the lane's.
  * #trace-capture (trace/): when the human traced the session's cwd (trace/mode.ts, read at every open and
  *   resume), every stdin line (#stdin) and every stdout line is teed, as sent and received, with kernel notes
- *   (spawn argv redacted, exit, drain interrupt) to `<cwd>/.gnomon/trace/`; the session.sandbox row says
+ *   (spawn argv redacted, exit, drain interrupt) to `<home>/trace/<project key>/` (TD-2026-10-19-057: never the project); the session.sandbox row says
  *   `traced: true` (or `traced: false, traceRefused`). The tee never blocks the session (bounded queue, counted drops).
  * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
  *   ~/.claude.json only through its law-7 projection, so Claude's routine
@@ -104,7 +104,7 @@ import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
-import { openTraceStream, redactArgv, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
+import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -611,7 +611,7 @@ export class SessionSupervisor {
       // #trace-capture: the human's per-folder toggle, read at every open and resume; a refused trace dir is reported on session.sandbox
       if (this.#o.traceMode?.(req.cwd) ?? traceModeOf(this.#o.home, req.cwd)) {
         try {
-          trace = openTraceStream(req.cwd, hsid, { ...this.#o.traceOptions, secrets: Object.entries(env).filter(([k, v]) => SECRET_ENV.test(k) && typeof v === 'string').map(([, v]) => v) });
+          trace = openTraceStream(this.#o.home, req.cwd, hsid, { ...this.#o.traceOptions, secrets: Object.entries(env).filter(([k, v]) => SECRET_ENV.test(k) && typeof v === 'string').map(([, v]) => v) });
           trace.ctl({ event: 'spawn', argv: redactArgv(argv), envKeys, ...(r ? { resume: r.uuid } : {}) });
         } catch (e) {
           traceRefused = e instanceof TraceRefused ? e.reason : 'trace-unavailable';
@@ -1189,6 +1189,7 @@ export class SessionSupervisor {
     await this.#o.log('session.drained', payload, { session: s.hsid });
     s.drained = outcome;
     await this.#stopSession(s, DRAIN_EXIT_REASONS[outcome], 'session-drained'); // F4 also for a request that arrived after the expiry above
+    await s.trace?.flush(TRACE_DRAIN_FLUSH_MS); // #trace-capture (Aegis L3): the kernel is about to go away; a hung disk bounds the wait
     return { hsid: s.hsid, uuid: s.uuid, outcome };
   }
 

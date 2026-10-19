@@ -1,8 +1,9 @@
 /**
  * #trace-capture end to end: a FAKE claude (test/fixtures/fake-claude.mjs) under the REAL darwin session profile.
- * A traced cwd gets `<cwd>/.gnomon/trace/<file>.jsonl` with the in / out / ctl lines of the actual stream and a
- * `traced: true` session.sandbox row; an untraced cwd gets no file; the session can neither read nor write its
- * trace nor the toggle (runtime falsifier); a hung disk never stalls the session.
+ * A traced cwd gets `<home>/trace/<project key>/<file>.jsonl` (TD-2026-10-19-057; nothing under the project) with the
+ * in / out / ctl lines of the actual stream and a `traced: true` session.sandbox row; an untraced cwd gets no file;
+ * the session can neither read, write nor rename its trace nor the toggle (runtime falsifier) while the project's own
+ * .gnomon stays free (Aegis L7); a hung disk never stalls the session.
  */
 // @gnomon-platform: darwin
 import * as fs from 'node:fs';
@@ -15,7 +16,7 @@ import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { setTraceMode, traceFoldersPath } from '../src/kernel/trace/mode.js';
-import { traceDirOf, traceFileName, type TraceOpenOptions, type TraceSink } from '../src/kernel/trace/capture.js';
+import { traceDirOf, traceFileName, traceRootOf, TRACE_PROJECT_FILE, type TraceOpenOptions, type TraceSink } from '../src/kernel/trace/capture.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const SANDBOX_OK = darwinFloor().ok;
@@ -56,7 +57,7 @@ describe.runIf(SANDBOX_OK)('#trace-capture with a fake claude (darwin session pr
     expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
     await r.sup.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => r.sup.stateOf(s.hsid) === 'exited')).toBe(true);
-    const file = path.join(traceDirOf(fs.realpathSync(w.cwd)), traceFileName(s.hsid));
+    const file = path.join(traceDirOf(w.home, fs.realpathSync(w.cwd)), traceFileName(s.hsid));
     expect(await waitFor(() => fs.existsSync(file) && read(file).some((l) => l.dir === 'ctl' && l.line.event === 'exit'))).toBe(true);
     expect(fs.lstatSync(path.dirname(file)).mode & 0o777).toBe(0o700);
     expect(fs.lstatSync(file).mode & 0o777).toBe(0o600);
@@ -75,7 +76,10 @@ describe.runIf(SANDBOX_OK)('#trace-capture with a fake claude (darwin session pr
     expect(outs.map((o) => o.type)).toEqual(r.kinds('turn.event').filter((e) => e.payload.type !== 'dropped').map((e) => String(e.payload.type).split('.')[0]));
     expect(outs.some((o) => o.type === 'system' && o.subtype === 'init')).toBe(true);
     expect(outs.some((o) => o.type === 'result')).toBe(true);
-    expect(fs.readFileSync(path.join(path.dirname(file), '.gitignore'), 'utf8')).toBe('*\n');
+    // FALSIFIER (TD-2026-10-19-057): nothing of the trace is written under the project
+    const under = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? under(path.join(d, e.name)) : [e.name]));
+    expect(under(w.cwd).filter((n) => n === traceFileName(s.hsid) || n === TRACE_PROJECT_FILE || n.endsWith('.jsonl') && n.startsWith('hsid-'))).toEqual([]);
+    expect(fs.existsSync(path.join(w.cwd, '.gnomon', 'trace'))).toBe(false);
   });
   it('an untraced cwd writes no file and no traced field', async () => {
     const r = rig();
@@ -84,28 +88,35 @@ describe.runIf(SANDBOX_OK)('#trace-capture with a fake claude (darwin session pr
     expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
     await r.sup.stop(HUMAN, { hsid: s.hsid });
     expect(fs.existsSync(path.join(w.cwd, '.gnomon', 'trace'))).toBe(false);
+    expect(fs.existsSync(traceRootOf(w.home))).toBe(false);
     expect(r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload).not.toHaveProperty('traced');
     expect(r.sup.status().find((x) => x.hsid === s.hsid)).not.toHaveProperty('traced');
   });
-  it('runtime falsifier: the session cannot read or write its trace, its .gnomon dir, nor the toggle', async () => {
+  it('runtime falsifier: the session cannot read, write or rename <home>/trace nor the toggle; the project .gnomon stays free (L7)', async () => {
     const r = rig();
     setTraceMode(w.home, w.cwd, true);
-    const dir = path.join(w.cwd, '.gnomon', 'trace');
+    const dir = traceDirOf(w.home, fs.realpathSync(w.cwd));
     // a trace of an earlier session, so the read has something to find
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(traceRootOf(w.home), 0o700);
     fs.writeFileSync(path.join(dir, 'earlier.jsonl'), '{}\n', { mode: 0o600 });
+    const proj = path.join(w.cwd, '.gnomon');
+    fs.mkdirSync(proj, { recursive: true });
     setMode(w, {
       startReads: [path.join(dir, 'earlier.jsonl'), traceFoldersPath(w.home)],
-      startWrites: [path.join(dir, 'earlier.jsonl'), path.join(dir, 'planted.jsonl'), traceFoldersPath(w.home), path.join(w.cwd, '.gnomon', 'planted')],
+      startWrites: [path.join(dir, 'earlier.jsonl'), path.join(dir, 'planted.jsonl'), path.join(traceRootOf(w.home), 'planted'), traceFoldersPath(w.home), path.join(proj, 'planted')],
+      startRenames: [[path.join(dir, 'earlier.jsonl'), path.join(dir, 'moved.jsonl')], [dir, `${dir}-moved`], [traceRootOf(w.home), `${traceRootOf(w.home)}-moved`], [proj, `${proj}-moved`]],
     });
     await open(r.sup);
-    expect(await waitFor(() => trace(w).filter((t) => t.t === 'start-write').length === 4)).toBe(true);
-    for (const t of trace(w).filter((x) => x.t === 'start-read' || x.t === 'start-write')) {
-      if (t.path === path.join(w.cwd, '.gnomon', 'planted')) expect(t.result, String(t.path)).toBe('allowed'); // .gnomon's other children stay as before
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'start-rename').length === 4)).toBe(true);
+    const free = new Set([path.join(proj, 'planted'), proj]);
+    for (const t of trace(w).filter((x) => x.t === 'start-read' || x.t === 'start-write' || x.t === 'start-rename')) {
+      if (free.has(String(t.path))) expect(t.result, `${String(t.t)} ${String(t.path)}`).toBe('allowed'); // Aegis L7: the project's .gnomon is not denied
       else expect(t.result, `${String(t.t)} ${String(t.path)}`).toBe('blocked');
     }
     expect(fs.readFileSync(path.join(dir, 'earlier.jsonl'), 'utf8')).toBe('{}\n');
     expect(fs.existsSync(path.join(dir, 'planted.jsonl'))).toBe(false);
+    expect(fs.existsSync(`${dir}-moved`)).toBe(false);
   });
   it('a hung disk never stalls the session: the turn completes while the trace writer is blocked', async () => {
     let hang!: () => void;

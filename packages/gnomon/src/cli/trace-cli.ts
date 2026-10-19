@@ -23,16 +23,20 @@
  *       realpath'd and every non-alphanumeric character replaced by '-'
  *       (probes/results/p-resume.darwin.json): user prompts, assistant text,
  *       tool_use and tool_result;
- *   (c) the raw stream capture `<project>/.gnomon/trace/<hsid>.jsonl`
- *       (project = the session cwd's realpath; written only for a folder a
- *       human switched trace mode on for; one `{t, dir: in|out|ctl, line}`
- *       object per line) when present; absent or unparsable lines are
- *       skipped.
+ *   (c) the raw stream capture `<home>/trace/<project key>/<hsid>.jsonl`
+ *       (TD-2026-10-19-057: in the Gnomon home, never the project; key =
+ *       traceProjectKey(realpath of the session cwd); written only for a
+ *       folder a human switched trace mode on for; one `{t, dir: in|out|ctl,
+ *       line}` object per line) when present; absent or unparsable lines are
+ *       skipped. Secret spans read `[redacted:<kind>]`, over-size records
+ *       `{truncated, bytes, hash, head}`, records past the file bound
+ *       `{skeleton, type, subtype, tools}`.
  *
  * SUBCOMMANDS `gnomon trace on | off | status [--home <abs>] [--folder <abs>]`
  * switch and list per-project trace mode (kernel/trace/mode.ts; the folder
  * defaults to the cwd's realpath). They write only `<home>/trace-folders.json`;
- * the reader above writes nothing.
+ * `gnomon trace path [--home <abs>] [--folder <abs>]` prints where that
+ * folder's captures live and writes nothing; the reader above writes nothing.
  * Ordered by time (chain `at`, transcript `timestamp`, capture `t`), stable
  * within each source.
  *
@@ -73,8 +77,8 @@ export const TRACE_USAGE = `usage: gnomon trace [--home <abs>] [--last | --sessi
   session (open, sandbox, turns sent, usage and cost, cards and decisions,
   permits, drain and resume, exit, the daemon start and exit around it), the
   Claude Code transcript of the session (prompts, replies, tool calls and
-  results) and, when present, the raw stream capture
-  <project>/.gnomon/trace/<hsid>.jsonl (only for a folder with trace mode on),
+  results) and, when present, the raw stream capture in the Gnomon home
+  (gnomon trace path; only for a folder with trace mode on),
   in time order. Each turn sent is checked against the transcript prompt by
   its content hash: "✓ matches log" or "✗ hash mismatch".
 
@@ -89,13 +93,16 @@ export const TRACE_USAGE = `usage: gnomon trace [--home <abs>] [--last | --sessi
   \`gnomon replay\`. THE OUTPUT CONTAINS PROMPT TEXT and whatever
   else the transcript holds: treat it like the transcript itself.
 
-       gnomon trace on | off | status [--home <abs>] [--folder <abs>]
+       gnomon trace on | off | status | path [--home <abs>] [--folder <abs>]
 
   on      record the prompts and outputs of Claude sessions in this folder
-          (default: the current folder) to <folder>/.gnomon/trace/, git-ignored;
-          takes effect for new and resumed sessions
+          (default: the current folder) to the Gnomon home
+          (<home>/trace/<project key>/, never inside the folder); takes effect
+          for new and resumed sessions. The files hold prompt and tool text in
+          the clear, readable by your own user account outside Gnomon
   off     stop recording for the folder (files already written stay)
   status  list the folders with trace mode on
+  path    print where the folder's captures live
 `;
 
 /** Display cap (code points) for one text field unless --full. */
@@ -125,6 +132,8 @@ export interface TraceSession {
 export interface TraceDeps {
   /** The user's Claude dir (default `~/.claude`); a test passes a throwaway one. */
   claudeDir?: string;
+  /** The Gnomon home whose `trace/` holds the raw captures (runTraceCommand passes the --home it read). */
+  home?: string;
 }
 
 interface LogRow {
@@ -309,18 +318,18 @@ function transcriptEvents(file: string): { events: TraceEvent[]; lines: number }
   return { events, lines };
 }
 
-/** The raw capture of a session: `traceDirOf(<realpath cwd>)/traceFileName(hsid)` (kernel/trace/capture.ts). */
-function captureFile(cwd: string | null, hsid: string): string | null {
-  if (!cwd) return null;
+/** The raw capture of a session: `traceDirOf(home, <realpath cwd>)/traceFileName(hsid)` (kernel/trace/capture.ts). */
+function captureFile(home: string | undefined, cwd: string | null, hsid: string): string | null {
+  if (!cwd || !home) return null;
   let project = cwd;
   try {
     project = fs.realpathSync.native(cwd);
   } catch {
     /* a cwd that no longer exists keeps its recorded spelling */
   }
-  const f = path.join(traceDirOf(project), traceFileName(hsid));
+  const f = path.join(traceDirOf(home, project), traceFileName(hsid));
   try {
-    return fs.statSync(f).isFile() ? f : null;
+    return fs.lstatSync(f).isFile() ? f : null; // never a link, a FIFO or a device (a FIFO would hang the read)
   } catch {
     return null;
   }
@@ -406,7 +415,7 @@ export function traceSession(rows: readonly LogRow[], chain: ChainCheck, hsid: s
   const logEvents = logRows.map(logEventOf);
   const tFile = findTranscript(claudeDir, cwd, uuid);
   const tr = tFile ? transcriptEvents(tFile) : { events: [], lines: 0 };
-  const cFile = captureFile(cwd, hsid);
+  const cFile = captureFile(deps.home, cwd, hsid);
   const cap = cFile ? captureEvents(cFile) : { events: [], lines: 0, skipped: 0 };
 
   // verification: each turn.sent against the transcript prompts, by the supervisor's own hash
@@ -552,7 +561,7 @@ function render(out: Out, s: TraceSession, n: number, of: number, full: boolean)
 /** `gnomon trace …` */
 export async function runTraceCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }, deps: TraceDeps = {}): Promise<number> {
   const sub = argv[0];
-  if (sub === 'on' || sub === 'off' || sub === 'status') return runTraceMode(sub, argv.slice(1), io);
+  if (sub === 'on' || sub === 'off' || sub === 'status' || sub === 'path') return runTraceMode(sub, argv.slice(1), io);
   let home: string | undefined;
   let mode: { by: 'last' } | { by: 'session'; hsid: string } | { by: 'since'; at: number; iso: string } = { by: 'last' };
   let picked = 0;
@@ -619,7 +628,7 @@ export async function runTraceCommand(argv: readonly string[], io: { stdout: Out
     return TRACE_EXIT_REFUSED;
   }
   chosen.forEach((h, i) => {
-    const s = traceSession(read.rows, read.chain, h, deps);
+    const s = traceSession(read.rows, read.chain, h, { ...deps, home });
     if (json) io.stdout.write(`${JSON.stringify(s)}\n`);
     else {
       if (i > 0) io.stdout.write('\n');
@@ -629,8 +638,8 @@ export async function runTraceCommand(argv: readonly string[], io: { stdout: Out
   return TRACE_EXIT_OK;
 }
 
-/** `gnomon trace on | off | status [--home <abs>] [--folder <abs>]` — per-project trace mode. */
-function runTraceMode(sub: 'on' | 'off' | 'status', argv: readonly string[], io: { stdout: Out; stderr: Out }): number {
+/** `gnomon trace on | off | status | path [--home <abs>] [--folder <abs>]` — per-project trace mode. */
+function runTraceMode(sub: 'on' | 'off' | 'status' | 'path', argv: readonly string[], io: { stdout: Out; stderr: Out }): number {
   let home: string | undefined;
   let folder: string | undefined;
   for (let i = 0; i < argv.length; i++) {
@@ -669,13 +678,19 @@ function runTraceMode(sub: 'on' | 'off' | 'status', argv: readonly string[], io:
     if (!all.length) io.stdout.write('  next: gnomon trace on   (in the folder to record)\n');
     return TRACE_EXIT_OK;
   }
+  const where = sanitizeDisplayText(traceDirOf(home, dir)).text;
+  if (sub === 'path') {
+    io.stdout.write(`${where}\n`);
+    return TRACE_EXIT_OK;
+  }
   const was = traceModeOf(home, dir);
   setTraceMode(home, dir, sub === 'on');
   if (sub === 'on') {
     heading(io.stdout, 'trace on', shown);
     readout(io.stdout, [
       ['records', 'the prompts and outputs of Claude sessions in this folder'],
-      ['to', `${sanitizeDisplayText(path.join(dir, '.gnomon', 'trace')).text}${path.sep}  (git-ignored)`],
+      ['to', `${where}${path.sep}  (in the Gnomon home, never inside the folder)`],
+      ['contains', 'prompt and tool text IN THE CLEAR; your own user account can read it outside Gnomon'],
       ['effect', 'new and resumed sessions; a running session is not recorded until it resumes'],
       ['state', was ? 'already on' : 'switched on'],
       ['read it', 'gnomon trace'],
@@ -685,7 +700,7 @@ function runTraceMode(sub: 'on' | 'off' | 'status', argv: readonly string[], io:
     heading(io.stdout, 'trace off', shown);
     readout(io.stdout, [
       ['state', was ? 'switched off' : 'was not on'],
-      ['kept', `files already in ${sanitizeDisplayText(path.join(dir, '.gnomon', 'trace')).text} stay; delete them yourself if you want them gone`],
+      ['kept', `files already in ${where} stay; delete them yourself if you want them gone`],
     ]);
   }
   return TRACE_EXIT_OK;

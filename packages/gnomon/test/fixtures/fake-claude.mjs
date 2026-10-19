@@ -3,7 +3,7 @@
 // wrapper (the child env is allowlisted, so env vars cannot steer it). It records its argv, env NAMES and every
 // stdin line to `trace.jsonl` in the same dir, and speaks the stream-json shapes p10m-claude-compat-generated
 // observed from Claude Code 2.1.302 (system.init, stream_event.*, assistant, user, rate_limit_event, result).
-import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -85,6 +85,7 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
 // M2: try writes at start (under the session profile): each path is reported allowed or blocked
 for (const f of mode.startReads ?? []) { try { readFileSync(f); trace({ t: 'start-read', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-read', path: f, result: e?.code === 'ENOENT' ? 'missing' : 'blocked', code: e?.code ?? null }); } }
 for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
+for (const [from, to] of mode.startRenames ?? []) { try { renameSync(from, to); trace({ t: 'start-rename', path: from, result: 'allowed' }); } catch (e) { trace({ t: 'start-rename', path: from, result: 'blocked', code: e?.code ?? null }); } }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 // §2.4 rule 11 (B2): `--resume <uuid>` keeps the session id (probe p-resume); traced so a test can tell a resume from a new session
 const resumeAt = args.indexOf('--resume');

@@ -3,7 +3,8 @@
  *
  * #trace-capture, the per-project toggle. Trace capture is a CORE audit mode: on any home and any build, the
  * human switches it on for one project folder and every Claude session the kernel opens (or resumes) with that
- * folder as its cwd records its raw stream-json traffic to `<project>/.gnomon/trace/` (capture.ts).
+ * folder as its cwd records its raw stream-json traffic to `<home>/trace/<project key>/` (capture.ts; TD-2026-10-19-057:
+ * nothing is written into the project tree).
  *
  * The state lives ONLY in the Gnomon home: `<home>/trace-folders.json`, owner-only (0600) in the owner-only (0700)
  * home, keyed by each folder's realpath. Nothing a project holds is read: no project file and no project config

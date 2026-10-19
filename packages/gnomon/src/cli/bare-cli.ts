@@ -63,7 +63,7 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   mod                stage mod changes as cards for approval (never signs)
   replay             replay the hash-chained log and check its head
   trace              read-only audit timeline of a session (log + transcript; contains prompt text);
-                     on | off | status: record a folder's sessions to <folder>/.gnomon/trace/
+                     on | off | status | path: record a folder's sessions (kept in ~/.gnomon/trace/)
   log                log maintenance (quarantine)
   daemon             status | stop | --detach: the background kernel (gnomond)
   dev                init | up: the DEV ONLY unsigned launch path on a separate dev home

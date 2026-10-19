@@ -77,10 +77,11 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   ];
   fs.writeFileSync(path.join(project, `${UUID}.jsonl`), `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
   if (opts.capture) {
-    const cdir = traceDirOf(fs.realpathSync.native(work));
-    fs.mkdirSync(cdir, { recursive: true });
+    const cdir = traceDirOf(home, fs.realpathSync.native(work)); // TD-2026-10-19-057: in the Gnomon home
+    fs.mkdirSync(cdir, { recursive: true, mode: 0o700 });
+    const spanRedacted = { t: iso(4.6), dir: 'out', line: { type: 'assistant', text: 'key [redacted:anthropic-key] end' } };
     const redacted = { t: iso(4.5), dir: 'out', line: { redacted: 'secret-shaped', hash: 'sha256:00', bytes: 40 } };
-    fs.writeFileSync(path.join(cdir, traceFileName(HSID)), `${JSON.stringify({ t: iso(2.5), dir: 'in', line: { type: 'user' } })}\nnot json\n${JSON.stringify(redacted)}\n${JSON.stringify({ t: iso(7.8), dir: 'out', line: { type: 'result', subtype: 'success' } })}\n`);
+    fs.writeFileSync(path.join(cdir, traceFileName(HSID)), `${JSON.stringify({ t: iso(2.5), dir: 'in', line: { type: 'user' } })}\nnot json\n${JSON.stringify(redacted)}\n${JSON.stringify(spanRedacted)}\n${JSON.stringify({ t: iso(7.8), dir: 'out', line: { type: 'result', subtype: 'success' } })}\n`);
   }
   return { home, claudeDir, work };
 }
@@ -190,11 +191,14 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
     expect(full.out.join('')).not.toMatch(/\u001b|\u0007/);
   });
 
-  it('reads the raw capture from <project>/.gnomon/trace/ when present and skips unparsable lines', async () => {
+  it('FALSIFIER: joins the raw capture from <home>/trace/<project key>/ (never the project) and skips unparsable lines', async () => {
     const f = await fixture({ capture: true });
     const s = await traceJson(f);
+    expect(s.capture.path).toBe(path.join(traceDirOf(f.home, fs.realpathSync.native(f.work)), traceFileName(HSID)));
+    expect(fs.existsSync(path.join(f.work, '.gnomon'))).toBe(false);
+    expect(s.events.find((e) => e.kind === 'capture.out' && e.type === 'assistant')).toMatchObject({ line: { text: 'key [redacted:anthropic-key] end' } });
     expect(traceFileName(HSID)).toBe('hsid-v1-01JABCDEFGHJKMNPQRSTVWXYZ0.jsonl');
-    expect(s.capture.lines).toBe(4);
+    expect(s.capture.lines).toBe(5);
     expect(s.events.find((e) => e.redacted)).toMatchObject({ source: 'capture', kind: 'capture.out', redacted: 'secret-shaped', bytes: 40 });
     expect(s.events.find((e) => e.redacted)).not.toHaveProperty('line');
     expect(s.traced).toEqual({ traced: true, refused: null });
@@ -238,7 +242,10 @@ describe('gnomon trace on | off | status (per-project trace mode)', () => {
     expect(traceModeOf(home, folder)).toBe(false);
     const on = io();
     expect(await runTraceCommand(['on', '--home', home, '--folder', folder], on.io)).toBe(0);
-    expect(on.out.join('')).toContain(path.join(real, '.gnomon', 'trace'));
+    expect(on.out.join('')).toContain(traceDirOf(home, real));
+    expect(on.out.join('')).toContain('IN THE CLEAR');
+    expect(on.out.join('')).toContain('outside Gnomon');
+    expect(fs.existsSync(path.join(real, '.gnomon'))).toBe(false); // nothing is written under the folder
     expect(on.out.join('')).toContain('new and resumed sessions');
     expect(traceModeOf(home, real)).toBe(true);
     expect(tracedFolders(home)).toEqual([real]);
@@ -251,5 +258,20 @@ describe('gnomon trace on | off | status (per-project trace mode)', () => {
     setTraceMode(home, folder, true);
     expect(tracedFolders(home)).toEqual([real]);
     expect(await runTraceCommand(['on', '--folder', 'relative'], io().io)).toBe(64);
+  });
+  it('gnomon trace path prints where the folder\'s captures live (the home) and writes nothing', async () => {
+    const home = tmp('gnomon-trace-path-');
+    const folder = tmp('gnomon-trace-pfolder-');
+    const real = fs.realpathSync.native(folder);
+    const before = fs.readdirSync(home);
+    const o = io();
+    expect(await runTraceCommand(['path', '--home', home, '--folder', folder], o.io)).toBe(0);
+    const printed = o.out.join('').trim();
+    expect(printed).toBe(traceDirOf(home, real));
+    expect(printed.startsWith(path.join(home, 'trace') + path.sep)).toBe(true);
+    expect(path.basename(printed)).toMatch(/^[a-z0-9-]+-[0-9a-f]{12}$/);
+    expect(fs.readdirSync(home)).toEqual(before);
+    expect(fs.readdirSync(folder)).toEqual([]);
+    expect(await runTraceCommand(['path', '--home', home, '--folder', path.join(folder, 'nope')], io().io)).toBe(1);
   });
 });
