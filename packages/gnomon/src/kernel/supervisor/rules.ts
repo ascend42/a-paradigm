@@ -37,6 +37,7 @@
  * NEW card learns a new rule (a new id).
  * `gnomon rules list` reads the same fold offline (rules-cli.ts).
  */
+import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 
 export const MAX_RULES = 1024;
@@ -136,10 +137,30 @@ export class RuleBook {
   }
 }
 
-/** A chain reader for catchUp: the released head, and the RULE_KINDS rows in [fromSeq, toSeq]. */
+/**
+ * A chain reader for catchUp: `head()` MUST be a seq every row at or below
+ * which `read` can return — the RELEASED head (kernel-log.ts releasedHead,
+ * D83), never the committed tip. A critical row waiting on its anchors hides
+ * itself and every later row from `log.read`; a tip-valued head would make
+ * catchUp advance past rows it never saw and skip them forever (Aegis H1: a
+ * revoke appended while a critical approval.decide is pending was never
+ * folded). Released heads only grow, so a row hidden now is read next time.
+ */
 export interface RuleSource {
   head(): number;
   read(fromSeq: number, toSeq: number): Iterable<RuleRow>;
+}
+
+/** The kernel log as a RuleSource: released head + the RULE_KINDS rows in full view (shared by the daemon and its tests). */
+export function ruleSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): RuleSource {
+  return {
+    head: () => log.releasedHead(),
+    read: function* (fromSeq, toSeq) {
+      for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
+        if (v.view === 'full') yield { seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+      }
+    },
+  };
 }
 
 /**
@@ -147,12 +168,17 @@ export interface RuleSource {
  * EVERY row up to the head captured first — not only past rule kinds — so a
  * chain of non-rule rows is scanned once, never on each request. Rows
  * appended after the head was captured are read next time. Returns whether
- * the source was read at all.
+ * the source was read at all. Aegis H1: the head is the source's RELEASED
+ * head (RuleSource), so the advance never passes a row the read could not
+ * return; a row seq above the captured head is never folded early either.
  */
 export function catchUp(book: RuleBook, src: RuleSource): boolean {
   const head = src.head();
   if (head <= book.lastSeq) return false;
-  for (const r of src.read(book.lastSeq + 1, head)) book.fold(r);
+  for (const r of src.read(book.lastSeq + 1, head)) {
+    if (r.seq !== undefined && r.seq > head) break;
+    book.fold(r);
+  }
   book.advanceTo(head);
   return true;
 }

@@ -23,10 +23,10 @@ import { RpcRefusal } from '../src/kernel/socket/index.js';
 import { loadDevHome, provisionDevHome } from '../src/cli/dev-home.js';
 import { recordKernelPub } from '../src/kernel/identity/index.js';
 import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
-import { KeyRing, SoftwareEd25519Signer, type KernelLog } from '../src/kernel/log/index.js';
+import { KeyRing, SoftwareEd25519Signer, type AnchorStore, type HeadAnchor, type KernelLog } from '../src/kernel/log/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
-import { catchUp, MAX_RULES, RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
+import { catchUp, MAX_RULES, RuleBook, ruleSourceOf, type RuleRow } from '../src/kernel/supervisor/rules.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 import { runRulesCommand, rulesOfHome } from '../src/cli/rules-cli.js';
 import { tempHome } from './daemon-helpers.js';
@@ -211,6 +211,74 @@ describe('#rules-revoke: the rules.revoke handler', () => {
     const r = rig();
     for (const p of [undefined, null, [], 'card', {}, { ruleId: 7 }, { ruleId: 'rule:1' }, { ruleId: card(1), extra: 1 }]) expect(await refusalOf(r.handler(ctx, p))).toBe('BAD_REQUEST');
     expect(r.appended).toEqual([]);
+  });
+});
+
+describe('#always-rules: catch-up stops at the RELEASED head (Aegis H1)', () => {
+  const homes: Array<() => void> = [];
+  const logs: KernelLog[] = [];
+  const unhold: Array<() => void> = [];
+  afterEach(async () => {
+    for (const u of unhold.splice(0)) u();
+    for (const l of logs.splice(0)) await l.close().catch(() => undefined);
+    for (const c of homes.splice(0)) c();
+  });
+
+  it('falsifier: a revoke appended while a critical approval.decide waits on its anchors is folded once released — the rule is gone', async () => {
+    const t = tempHome('rules-h1-');
+    homes.push(t.cleanup);
+    fs.mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const g = { hold: false, waiting: [] as Array<() => void>, stored: undefined as HeadAnchor | undefined };
+    const ks: AnchorStore = {
+      name: 'keystore',
+      read: () => (g.stored ? { state: 'present', head: g.stored } : { state: 'absent' }),
+      write: async (h) => {
+        if (g.hold) await new Promise<void>((res) => g.waiting.push(res));
+        g.stored = h;
+      },
+    };
+    const log = openKernelLog({ home: t.home, kernelPrincipal: K, signer: SoftwareEd25519Signer.generate('kernel'), keystoreAnchor: ks, keystoreTimeoutMs: 60_000 });
+    logs.push(log);
+    unhold.push(() => ((g.hold = false), g.waiting.splice(0).forEach((res) => res())));
+    const append = (r: RuleRow) => log.append({ kind: r.kind, principal: K, payload: r.payload as Record<string, unknown> });
+    for (const r of learnRows(card(1))) await append(r);
+    const b = new RuleBook({ principal: K, isKernelKey: (k) => log.isKernelKey(k) });
+    const src = ruleSourceOf(log);
+    catchUp(b, src);
+    const h = inputHash(INPUT);
+    expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(1));
+    // a critical approval.decide for another card waits on its keystore anchor; the revoke lands behind it
+    g.hold = true;
+    const pendingDecide = append(learnRows(card(2), { input: { command: 'ls' } })[1]!);
+    await new Promise((r) => setTimeout(r, 10));
+    const pendingRevoke = append(revokedRow(card(1)));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(log.releasedHead()).toBeLessThan(log.head().seq);
+    catchUp(b, src);
+    expect(b.lastSeq).toBe(log.releasedHead()); // never past what the read could return
+    expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(1)); // hidden until released (D83)
+    g.hold = false;
+    for (;;) {
+      const w = g.waiting.splice(0);
+      if (w.length === 0) break;
+      w.forEach((res) => res());
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await Promise.all([pendingDecide, pendingRevoke]);
+    expect(log.releasedHead()).toBe(log.head().seq);
+    catchUp(b, src);
+    expect(b.match(REPO, 'Bash', h)).toBeNull();
+    expect(b.get(card(1))).toBeNull();
+  });
+
+  it('a tip-valued head would have skipped the hidden rows forever (why the source is the released head)', () => {
+    const b = new RuleBook({ principal: K, isKernelKey: (k) => k === KEY });
+    for (const r of learnRows(card(1))) b.fold(r);
+    const rows = [{ ...revokedRow(card(1)), seq: 7 }];
+    // a source whose head exceeds what read returns: catchUp ignores nothing it read, folds nothing above head
+    expect(catchUp(b, { head: () => 6, read: () => rows })).toBe(true);
+    expect(b.lastSeq).toBe(6);
+    expect(b.get(card(1))?.ruleId).toBe(card(1)); // seq 7 is above the captured head: not folded early
   });
 });
 

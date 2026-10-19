@@ -106,7 +106,7 @@ import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
-import { catchUp, RuleBook, RULE_KINDS } from '../supervisor/rules.js';
+import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
 import type { HumanDeviceVerbPorts } from '../socket/dispatch.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
@@ -674,14 +674,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // S-L1: fold the KERNEL-signed approval.* rows appended since the last catch-up (rules.ts); shared by the
   // supervisor's exact-match check and the rules.revoke handler, so both read one book
   const syncRuleBook = (): RuleBook => {
-    catchUp(ruleBook, {
-      head: () => log.head().seq,
-      read: function* (fromSeq, toSeq) {
-        for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
-          if (v.view === 'full') yield { seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
-        }
-      },
-    });
+    // Aegis H1: catch up to the RELEASED head only (ruleSourceOf) — the committed tip would skip rows hidden behind a pending critical row
+    catchUp(ruleBook, ruleSourceOf(log));
     return ruleBook;
   };
   const supervisor = new SessionSupervisor({

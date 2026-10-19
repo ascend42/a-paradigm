@@ -2053,7 +2053,7 @@ components:
       approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
       different input, tool or repo raises the card. updatedInput is the
       kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
-      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp (Aegis C2: lastSeq advances to the captured head, past every scanned row; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp over ruleSourceOf(log) (Aegis C2: lastSeq advances to the captured head, past every scanned row; Aegis H1: that head is the RELEASED head, never the committed tip, so rows hidden behind a critical row pending on its anchors are folded once released, never skipped; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
       incrementally from the chain (fromSeq). The learned row matches EXACT
       only (TD-2026-10-19-528 F2: matchExact:true or match:'exact'; any other
       match value forms no rule). Revoke (P8-D98, F1): a KERNEL-signed
