@@ -245,6 +245,81 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-07 P8-D94 audited repo hooks (fake claude ru
   }, 30_000);
 });
 
+describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks stay audited (fake claude; real profile)', () => {
+  const marker = () => path.join(w.stubDir, 'frontmatter-hook-ran');
+  const settingsHookMarker = () => path.join(w.stubDir, 'settings-hook-ran');
+  const seed = () => {
+    const hooks = `hooks:\n  PreToolUse:\n    - matcher: ".*"\n      hooks:\n        - type: command\n          command: echo ran >> "${marker()}"\n`;
+    fs.mkdirSync(path.join(w.cwd, '.claude', 'skills', 'x'), { recursive: true });
+    fs.mkdirSync(path.join(w.cwd, '.claude', 'agents'), { recursive: true });
+    fs.mkdirSync(path.join(w.cwd, '.claude', 'commands'), { recursive: true });
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'skills', 'x', 'SKILL.md'), `---\nname: x\ndescription: skill x\nallowed-tools: Bash(touch:*)\n${hooks}---\nSay SKILLX.\n`);
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'agents', 'y.md'), `---\nname: y\ndescription: agent y\n${hooks}---\nSay AGENTY.\n`);
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'commands', 'z.md'), `---\ndescription: z\n${hooks}---\nSay COMMANDZ.\n`);
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash(touch:*)'] }, env: { REPO_ENV_PROBE: 'repo-env-value' }, hooks: { SessionStart: [{ hooks: [{ type: 'command', command: `echo ran >> "${settingsHookMarker()}"` }] }] } }));
+    fs.writeFileSync(path.join(w.cwd, 'CLAUDE.md'), '# repo\n\n@imported.md\n');
+    fs.writeFileSync(path.join(w.cwd, 'imported.md'), 'token ZEBRA-d97\n');
+  };
+  const openOnce = async (r: ReturnType<typeof rig>) => {
+    const before = trace(w).filter((t) => t.t === 'allow').length;
+    const s = await open(r.sup);
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'allow').length > before)).toBe(true);
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => r.sup.stateOf(s.hsid) === 'exited')).toBe(true);
+    return s;
+  };
+
+  it('audited: CLAUDE.md (+ @import) via --add-dir, skills/agents/commands via the kernel plugin, no repo hook, no repo allow or env', async () => {
+    const r2 = rig();
+    seed();
+    await openOnce(r2);
+    const argv = trace(w).find((t) => t.t === 'argv')!;
+    const args = argv.args as string[];
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('user');
+    const pluginDir = args[args.indexOf('--plugin-dir') + 1]!;
+    expect(pluginDir.startsWith(path.join(w.home, 'sessions'))).toBe(true);
+    expect(args[args.indexOf('--add-dir') + 1]).toBe(fs.realpathSync.native(w.cwd));
+    expect(argv.envKeys as string[]).toContain('CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD');
+    expect(argv.envKeys as string[]).not.toContain('REPO_ENV_PROBE');
+    // the plugin carries x, y, z (the fake lists it) and the model-visible memory carries the @import token
+    expect((trace(w).find((t) => t.t === 'plugin')!.files as string[]).sort()).toEqual(['agents/y.md', 'commands/z.md', 'skills/x/SKILL.md']);
+    expect(String(trace(w).find((t) => t.t === 'memory')!.text)).toContain('ZEBRA-d97');
+    // the falsifiers: no frontmatter hook ran (the fake RUNS any hook left in a plugin file), no settings hook ran
+    expect(trace(w).filter((t) => t.t === 'hook' && t.event === 'frontmatter')).toEqual([]);
+    expect(fs.existsSync(marker())).toBe(false);
+    expect(fs.existsSync(settingsHookMarker())).toBe(false);
+    // the repo's permissions.allow is NOT an effective rule (nor in policy.json)
+    expect(trace(w).find((t) => t.t === 'allow')!.allow).not.toContain('Bash(touch:*)');
+    // logged: what loaded, what was stripped, what was not loaded (names and counts only)
+    const row = r2.kinds('gate-class.detected').find((x) => x.payload.what === 'repo-context')!.payload;
+    expect(row).toMatchObject({ plugin: true, memoryDirs: 1, skills: ['x'], agents: ['y'], commands: ['z'], run: 0 });
+    expect((row.frontmatterHooks as string[]).length).toBe(3);
+    expect(row.notLoaded).toMatchObject({ permissions: { allow: 1 }, envKeys: ['REPO_ENV_PROBE'] });
+    expect(JSON.stringify(row)).not.toContain('repo-env-value');
+    // the repo-hook card shows the non-hook settings as informational
+    expect((r2.cards[0]!.lines as string[]).some((l) => l.startsWith('not loaded from this repo') && l.includes('env REPO_ENV_PROBE'))).toBe(true);
+  }, 30_000);
+  it('an approved repo hook runs beside the staged context; mode user-only and none stage nothing; mode all loads the repo natively', async () => {
+    const r = rig();
+    seed();
+    await openOnce(r);
+    await (r.cards[0]!.effect as (d: string, c: unknown) => Promise<void>)('allow', { token: null, rootSig: null, connId: 'c' });
+    await openOnce(r);
+    expect(await waitFor(() => fs.existsSync(settingsHookMarker()))).toBe(true);
+    expect(fs.existsSync(marker())).toBe(false);
+    for (const mode of ['user-only', 'none', 'all'] as const) {
+      w.cleanup();
+      const r2 = rig({ hooksMode: mode });
+      seed();
+      await openOnce(r2);
+      const a = trace(w).find((t) => t.t === 'argv')!;
+      expect(a.args as string[], mode).not.toContain('--plugin-dir');
+      expect(a.args as string[], mode).not.toContain('--add-dir');
+      expect(a.envKeys as string[], mode).not.toContain('CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD');
+    }
+  }, 60_000);
+});
+
 describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, real process group)', () => {
   it('spawns under the profile with the adapter argv and the allowlisted env; rows in order', async () => {
     const r = rig();

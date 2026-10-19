@@ -271,7 +271,11 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
         ctx.refused.push({ path: r, why: 'an unsupported name' });
         continue;
       }
-      if (!e.isDirectory() || e.isSymbolicLink()) continue; // Claude loads skill DIRS only
+      if (e.isSymbolicLink()) {
+        ctx.refused.push({ path: r, why: 'a symlink' });
+        continue;
+      }
+      if (!e.isDirectory()) continue; // Claude loads skill DIRS only
       const tree = listTree(path.join(skillsDir, e.name));
       if (!tree.ok) {
         ctx.refused.push({ path: r, why: tree.why });

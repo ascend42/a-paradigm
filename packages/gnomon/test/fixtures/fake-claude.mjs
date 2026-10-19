@@ -3,7 +3,7 @@
 // wrapper (the child env is allowlisted, so env vars cannot steer it). It records its argv, env NAMES and every
 // stdin line to `trace.jsonl` in the same dir, and speaks the stream-json shapes p10m-claude-compat-generated
 // observed from Claude Code 2.1.302 (system.init, stream_event.*, assistant, user, rate_limit_event, result).
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -43,6 +43,41 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
       trace({ t: 'hook', event: 'SessionStart', command: h.command, from: f, status: r.status });
     }
   }
+}
+// P8-D97: emulate what p10m-repo-context measured. (1) A --plugin-dir's skill/agent/command frontmatter hooks FIRE
+// (here: every `command:` line inside a frontmatter `hooks:` block runs at start). (2) --add-dir memory loads only
+// with CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 (CLAUDE.md + one level of @imports, traced). (3) the effective
+// permissions.allow is the --settings file's plus the project/local layers' only when --setting-sources names them.
+{
+  const all = (f) => args.flatMap((a, i) => (a === f ? [args[i + 1]] : []));
+  const at = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : undefined);
+  const sources = (at('--setting-sources') ?? '').split(',').filter(Boolean);
+  const walk = (d) => { try { return readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])); } catch { return []; } };
+  for (const pd of all('--plugin-dir')) {
+    const files = walk(pd).filter((f) => f.endsWith('.md'));
+    trace({ t: 'plugin', dir: pd, files: files.map((f) => path.relative(pd, f)) });
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8');
+      const fm = text.startsWith('---\n') ? text.slice(4, text.indexOf('\n---', 4)) : '';
+      const block = /^hooks:\n((?:[ -].*\n?)*)/m.exec(fm);
+      for (const m of block ? block[1].matchAll(/command:\s*(.+)$/gm) : []) {
+        const r = spawnSync('/bin/sh', ['-c', m[1]], { stdio: 'ignore', timeout: 5000 });
+        trace({ t: 'hook', event: 'frontmatter', command: m[1], from: f, status: r.status });
+      }
+    }
+  }
+  if (process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD === '1') {
+    for (const d of all('--add-dir')) {
+      let text;
+      try { text = readFileSync(path.join(d, 'CLAUDE.md'), 'utf8'); } catch { continue; }
+      for (const m of text.matchAll(/^@(\S+)$/gm)) { try { text += readFileSync(path.resolve(d, m[1]), 'utf8'); } catch { /* missing import */ } }
+      trace({ t: 'memory', dir: d, text });
+    }
+  }
+  const allow = [];
+  const layers = [at('--settings'), ...(sources.includes('project') ? [path.join(process.cwd(), '.claude', 'settings.json')] : []), ...(sources.includes('local') ? [path.join(process.cwd(), '.claude', 'settings.local.json')] : [])];
+  for (const f of layers) { try { allow.push(...(JSON.parse(readFileSync(f, 'utf8'))?.permissions?.allow ?? [])); } catch { /* none */ } }
+  trace({ t: 'allow', allow });
 }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' }));

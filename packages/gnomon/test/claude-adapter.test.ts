@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assertNoForbiddenFlags, buildClaudeArgv, cardKindOfTool, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
+import { assertNoForbiddenFlags, buildClaudeArgv, cardKindOfTool, repoContextFor, SESSION_HOOKS_MODES, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
 import { buildSessionEnv, ENV_ALLOWLIST } from '../src/kernel/runner/env.js';
 import { PKG_ROOT } from './helpers.js';
 
@@ -38,6 +38,23 @@ describe('G-RUN-01 argv and forbidden flags', () => {
   it('stdin lines: the user message and the control_request interrupt (never a signal)', () => {
     expect(JSON.parse(userMessageLine('hi'))).toEqual({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'hi' }] } });
     expect(JSON.parse(controlInterruptLine('r1'))).toEqual({ type: 'control_request', request_id: 'r1', request: { subtype: 'interrupt' } });
+  });
+});
+
+describe('G-SUB-08 P8-D97 repo context argv', () => {
+  const base = { uuid: '00000000-0000-4000-8000-000000000000', policyPath: 'policy.json', mcpConfigPath: 'mcp.json', settingSources: ['user'] as const };
+  it('pluginDirs and addDirs become one --plugin-dir / --add-dir each (deduped); none by default', () => {
+    const a = buildClaudeArgv({ ...base, pluginDirs: ['ctx', 'ctx'], addDirs: ['repo', 'pkg', 'repo'] });
+    expect(a.filter((x) => x === '--plugin-dir')).toHaveLength(1);
+    expect(a[a.indexOf('--plugin-dir') + 1]).toBe('ctx');
+    expect(a.flatMap((x, i) => (x === '--add-dir' ? [a[i + 1]] : []))).toEqual(['repo', 'pkg']);
+    expect(a[a.indexOf('--setting-sources') + 1]).toBe('user');
+    const b = buildClaudeArgv({ ...base });
+    expect(b).not.toContain('--plugin-dir');
+    expect(b).not.toContain('--add-dir');
+  });
+  it('only audited stages the repo context through the kernel', () => {
+    expect(SESSION_HOOKS_MODES.filter(repoContextFor)).toEqual(['audited']);
   });
 });
 
