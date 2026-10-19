@@ -1867,7 +1867,16 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
-      #gnomon-voice kernel side, slice V1 talk-only (spec §14.1-14.4, §14.7
+      #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298:
+      the attachment mode is a ceiling, ptt under any, conversation only under
+      conversation; widening to conversation takes one fresh-presence strictness
+      card per GUI login; ambient turns need an aec claim, an enrolled speaker and
+      a not-busy session by the supervisor's own turn state plus the echo tail
+      (voice-playback, clock kernel); idle auto-off of a conversation ceiling after
+      voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle;
+      receipt-refused and unknown-speaker turns are stored as a keyed text hash,
+      duration and reason, never text; status.voice attached, hsid, ceiling, since,
+      idleAt) (spec §14.1-14.4, §14.7
       Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026,
       TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts:
       attachment ONLY by a human gesture (log.append voice.session.start|end on a

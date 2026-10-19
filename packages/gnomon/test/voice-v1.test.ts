@@ -88,7 +88,7 @@ describe('#gnomon-voice V1 forwarding guards (§14.7)', () => {
     await r.userTurn();
     await r.send('run the tests', { source: 'typed-by-client' });
     // auto-edits (founder ruling): the send is exactly a typed send by the owner — no clamp, no extra mode param
-    const vs = r.v.status().attached as { voiceSessionId: string };
+    const vs = r.v.status() as { voiceSessionId: string };
     expect(r.sends).toEqual([{ owner: HUMAN, p: { hsid: HSID, text: 'run the tests', source: 'voice', voice: { voiceSessionId: vs.voiceSessionId, turnId: '1', turnSeq: 2 } } }]);
     // M1: the kernel stamps its receipt time; a client receivedAt is refused
     expect(r.rows[1]!.payload).toMatchObject({ receivedAt: 10_000 });
@@ -109,18 +109,17 @@ describe('#gnomon-voice V1 forwarding guards (§14.7)', () => {
     expect(await refusal(r2.send())).toMatchObject({ reason: 'voice-speaker' });
     expect(r.sends.length + r2.sends.length).toBe(0);
   });
-  it('a conversation-mode turn is not forwarded (voice-off)', async () => {
+  it('V2a: a conversation ceiling is a widening (no presence path wired here ⇒ refused voice-off, nothing attached)', async () => {
     const r = rig();
-    await r.attach('conversation');
-    await r.userTurn({ mode: 'conversation' });
-    expect(await refusal(r.send())).toMatchObject({ gate: 'voice', reason: 'voice-off', mode: 'conversation' });
+    expect(await refusal(r.attach('conversation'))).toMatchObject({ gate: 'voice', reason: 'voice-off', mode: 'conversation', cause: 'presence' });
+    expect(r.v.attachedHsid()).toBeNull();
   });
-  it('M2: the per-turn mode claim is required and must equal the attachment mode', async () => {
+  it('M2 + V2a: the per-turn mode claim is required and may not exceed the attachment ceiling', async () => {
     const r = rig();
     await r.attach();
     expect(await refusal(r.userTurn({ mode: undefined }))).toMatchObject({ code: 'BAD_REQUEST' });
     await r.userTurn({ mode: 'conversation' });
-    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-off', mode: 'conversation', attachmentMode: 'ptt' });
+    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-off', mode: 'conversation', ceiling: 'ptt', cause: 'ceiling' });
   });
   it('M1: a turn older than the kernel max age is stale; a turn whose t0 precedes the attachment is stale', async () => {
     const r = rig();

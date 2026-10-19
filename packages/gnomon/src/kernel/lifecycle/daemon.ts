@@ -79,7 +79,7 @@ import { VoiceArmCustody } from '../broker/arm-custody.js';
 import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
-import { modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
+import { LOOSEN_TIMEOUT_MS, modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
@@ -206,6 +206,8 @@ export interface DaemonOptions {
   writeHighWater?: number;
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
   web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number; /** Aegis H: the predecessor's inherited listening socket fd */ inheritFd?: number };
+  /** #gnomon-voice V2a config: voice.ambientIdleMs — a conversation ceiling's idle auto-off (clamped, never unbounded) */
+  voice?: { ambientIdleMs?: number };
   /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
   automations?: readonly unknown[];
   /** #scheduler clock seam (default Date.now). */
@@ -578,6 +580,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         await web?.stop(reason === 'idle' ? 'idle' : 'daemon-exit').catch(() => undefined);
         emit({ kind: 'daemon.exit', reason });
         hub.close();
+        try {
+          voice.close(); // V2a: the idle auto-off timer goes with the daemon
+        } catch {
+          /* shutdown before voice existed */
+        }
         await server?.close();
         clearInterval(diagTimer);
         clearInterval(tokenTimer);
@@ -945,15 +952,39 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ownerOf: (hsid) => supervisor.ownerOf(hsid),
       send: (owner, p) => supervisor.send(owner, p),
       stop: (owner, p) => supervisor.stop(owner, p),
+      // V2a kernel-side busy: the supervisor's own turn state (turn.sent until its result)
+      busy: (hsid) => supervisor.turnBusy(hsid),
     },
     append: async (row) => {
-      const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', connId: row.connId, ...(row.session ? { session: row.session } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity as 'normal' } : {}) });
+      const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.connId ? { connId: row.connId } : {}), ...(row.session ? { session: row.session } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity as 'normal' } : {}) });
       return { seq: r.seq, hash: r.hash, id: r.event.id };
     },
     enrolled: () => readEnrolled(home, authority),
     // Aegis M3: a voice follow subscription never outlives the attachment it was opened under
     onAttachmentChange: () => void hub.endReaderClass('voice'),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
+    kernelPrincipal,
+    ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
+    // V2a widening to conversation: the run-mode loosening path — a `strictness` card whose allow is fresh presence
+    // (classes.ts: strictness.allow = 'fresh', never a cached unlock, never voice: VOICE_ALLOWLIST names no approving row)
+    presence: ({ asker, hsid, from, to, onAllow }) =>
+      broker.raise({
+        kind: 'strictness',
+        requestedBy: asker.principal!,
+        hsid,
+        attended: true,
+        detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId },
+        lines: [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
+        decisions: ['allow', 'deny'],
+        timeoutMs: LOOSEN_TIMEOUT_MS,
+        effect: async (decision) => {
+          if (decision === 'allow') await onAllow();
+        },
+      }),
+    // Aegis V2a L1: a denied or expired widening card is dropped and a new one raised
+    presenceState: (cardId) => broker.card(cardId)?.state,
+    // Aegis V2a M2: a failed idle end is counted in status.voice.idleEndFailures{n} and the timer re-armed (no new log
+    // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
   const dispatcherCommon = {
     voice,

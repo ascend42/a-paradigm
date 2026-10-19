@@ -1,5 +1,9 @@
 version: '1.0'
+<<<<<<< HEAD
 generated: '2026-10-19T23:17:10.763Z'
+=======
+generated: '2026-10-19T23:22:42.099Z'
+>>>>>>> feat/gnomon-voice-v2a
 structure: {}
 key_files:
   config:
@@ -130,7 +134,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
