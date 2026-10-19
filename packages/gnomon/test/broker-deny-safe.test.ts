@@ -12,7 +12,7 @@
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
-import { parseStreamLine } from '../src/adapters/claude-code/adapter.js';
+import { parseStreamLine, permissionDenyLine } from '../src/adapters/claude-code/adapter.js';
 import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider } from '../src/kernel/broker/index.js';
 import { answerFor } from '../src/kernel/supervisor/permission.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
@@ -42,11 +42,11 @@ function rig() {
   return { broker, rows, prompts, sig, raise, decides };
 }
 
-async function refused(p: Promise<unknown>): Promise<{ code: string; reason: unknown }> {
+async function refused(p: Promise<unknown>): Promise<{ code: string; reason: unknown; state: unknown }> {
   const e = await p.then(() => null, (x: unknown) => x);
   expect(e).toBeInstanceOf(RefusedError);
   const r = (e as RefusedError).refusal;
-  return { code: r.code, reason: r.data?.reason };
+  return { code: r.code, reason: r.data?.reason, state: (r.data as { state?: unknown } | undefined)?.state };
 }
 
 describe('§3.4 deny-safe broker (Orca Adopt 5)', () => {
@@ -55,6 +55,11 @@ describe('§3.4 deny-safe broker (Orca Adopt 5)', () => {
     expect(parseStreamLine(JSON.stringify({ ...CAN_USE_TOOL, request: { ...CAN_USE_TOOL.request, input: 'not an object' } }))).toMatchObject({ kind: 'permission-malformed', requestId: 'req-1' });
     expect(parseStreamLine(JSON.stringify({ ...CAN_USE_TOOL, request_id: 'bad id!' })).kind).toBe('malformed');
     expect(parseStreamLine('{"type":"control_request","request_id":"req-1","request":').kind).toBe('malformed');
+    // the line the supervisor writes for permission-malformed (supervisor.ts) is a deny control_response for that id
+    expect(JSON.parse(permissionDenyLine('req-1', 'Denied: the permission request was malformed.'))).toEqual({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'req-1', response: { behavior: 'deny', message: 'Denied: the permission request was malformed.' } },
+    });
     // the decision: anything but a decoded allow / approve-plan is deny
     for (const d of ['', 'ALLOW', 'allow ', 'always-maybe', 'null', 'undefined', '{"allow":true}']) expect(answerFor('permission', d).behavior).toBe('deny');
     expect(answerFor('plan', 'allow').behavior).toBe('deny');
@@ -91,11 +96,21 @@ describe('§3.4 deny-safe broker (Orca Adopt 5)', () => {
     await r.broker.expire(cardId, 'cancelled');
     const late = await refused(r.broker.approve(GUI as never, { cardId, decision: 'allow', decisionSig: r.sig(cardId, 'allow') }));
     expect(late.code).toBe('BAD_REQUEST'); // "not decidable": the prompt is gone
+    expect(late.state).toBe('expired'); // refused BECAUSE the card settled, not for some other bad-params
     expect(r.prompts).toEqual([]); // no presence prompt was ever shown for it
     expect(r.decides()).toEqual([]);
     expect(await r.broker.decisionOf(cardId)).toBe('deny');
     // a card the broker never held: NOT_FOUND, never a fresh prompt
     expect((await refused(r.broker.approve(GUI as never, { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', decision: 'allow', decisionSig: 'AAAA' }))).code).toBe('NOT_FOUND');
     expect(r.prompts).toEqual([]);
+  });
+
+  it('FALSIFIER 3 positive control: the same sig() on a PENDING card gets past the signature check (to presence and a decide row)', async () => {
+    const r = rig();
+    const { cardId } = await r.raise();
+    await r.broker.approve(GUI as never, { cardId, decision: 'allow', decisionSig: r.sig(cardId, 'allow') });
+    expect(r.prompts.length).toBe(1); // presence was asked: the signature was accepted
+    expect(r.decides().length).toBe(1);
+    expect(r.broker.card(cardId)!.state).toBe('decided');
   });
 });
