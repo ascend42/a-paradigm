@@ -1,0 +1,25 @@
+id: L-2026-10-19-builder-004044-002
+type: milestone
+timestamp: '2026-10-19T00:40:44.695Z'
+author: builder
+title: 'Gnomon GUI completeness slice: ask-user picker, always rules, plan text'
+summary: AskUserQuestion is answered in the GUI (ask-user card, picker, validated answers, 10 min expiry); permission cards offer always (fresh presence each time) with kernel-derived exact-match rules and approval.auto; gnomon rules list; plan cards show the session-carried plan text. Reconnect left refused (own lane); rules revoke not built (needs a new event kind).
+symbols_touched:
+  - '#supervisor'
+  - '#approval-broker'
+  - '#always-rules'
+  - '#rules-cli'
+  - '#gui'
+tags:
+  - gnomon
+  - move-1
+  - gui
+linked_commits:
+  - 6464d943
+  - decc7b2f
+  - 5bbc010e
+  - 8bc83953
+git_context:
+  ref: 8bc839535792a62154424d91cb13d24d2fc2fa14
+  branch: gnomon/gui-complete
+  dirty: true
