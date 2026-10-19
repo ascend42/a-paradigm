@@ -328,7 +328,7 @@ describe('G-DMN-02 endpoint ACL and placement', () => {
 });
 
 describe('gnomon daemon status|stop (CLI over the socket)', () => {
-  it('status reports running, stop is a refusal pending approvals, status after exit reports not running', async () => {
+  it('status reports running, stop is refused (no client path to the daemon-stop card yet) and the kernel keeps running, status and stop after exit report not running', async () => {
     const h = home();
     const { child, ready } = await startChild(h);
     const status = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
@@ -345,12 +345,19 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     });
     const stop = spawnSync(process.execPath, [GNOMON, 'daemon', 'stop', '--home', h], { encoding: 'utf8' });
     expect(stop.status).toBe(1);
-    expect(JSON.parse(stop.stderr)).toMatchObject({ code: -32000, data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.6' } } });
+    expect(stop.stderr).toContain('REFUSED  ENGINE  not-implemented');
+    expect(stop.stderr).toContain('Touch ID');
+    const still = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
+    expect(JSON.parse(still.stdout)).toMatchObject({ running: true });
     child.kill('SIGTERM');
     await exitOf(child);
     const after = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
     expect(after.status).toBe(3);
     expect(JSON.parse(after.stdout)).toEqual({ running: false, state: 'stopped' });
+    // T-2026-10-19-014 B0: with no kernel answering, stop is REFUSED ENGINE not-running (exit 1, like gnomon rules)
+    const none = spawnSync(process.execPath, [GNOMON, 'daemon', 'stop', '--home', h], { encoding: 'utf8' });
+    expect(none.status).toBe(1);
+    expect(none.stderr).toContain('REFUSED  ENGINE  not-running');
   });
 
   it('T-2026-10-19-016(a): a squatter whose key the home does not know is never reported running:true; a known key with a bad sig is refused', async () => {
