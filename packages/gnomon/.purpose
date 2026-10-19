@@ -845,7 +845,20 @@ components:
       launch-grant cap src/kernel/web/launch-cap.ts (LaunchGrantCap on
       WebEndpoint.requestLaunch: one in flight, 8 a minute across the
       terminal, the wrapper channel and gui.open — shared, not added on
-      top; ENGINE{web-launch-capped}). Falsified in test/gui-open.test.ts.
+      top; ENGINE{web-launch-capped}). Fairness (Aegis M2): gui.open is a
+      `socket` asker that may hold at most LAUNCH_GRANT_SOCKET_SHARE (4) of
+      the 8 window slots, so the in-process asker (terminal, wrapper) always
+      keeps the rest; a socket mint in flight (a cold start) makes ONE
+      in-process asker wait and go next, never refuses it; a mint that
+      throws refunds its slot (the token is the mint's last throwing step).
+      The human-device verbs are UNIX-SOCKET ONLY (Aegis L1): the daemon
+      builds them as their own `humanVerbs` object and hands it only to the
+      unix dispatcher (daemon.ts dispatcherOptionsFor), so the web
+      dispatcher reports them unavailable and refuses them. A grant whose
+      caller's connection closed during the mint is withdrawn
+      (GuiAccess.withdraw via WebEndpoint.withdrawLaunch, Aegis L2), never
+      left pending. Falsified in test/gui-open.test.ts and
+      test/human-device-verbs.test.ts.
       Also `gnomon help|--help|-h` (GNOMON_HELP, one line per verb) and an
       unknown verb → usage exit 64 without echoing it.
       scripts/install-darwin.mjs is the idempotent installer (build, link

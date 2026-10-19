@@ -96,6 +96,18 @@ export class GuiAccess {
     return { launchToken, expiresAt: mintedAt + LAUNCH_TOKEN_TTL_MS };
   }
 
+  /**
+   * Withdraw an UNCONSUMED launch token (Aegis L2: gui.open minted it but its caller's connection is gone, so
+   * nobody holds it). A presented withdrawn token is `unknown`. False if it was consumed or never existed.
+   */
+  withdraw(launchToken: string): boolean {
+    if (!TOKEN_SHAPE.test(launchToken)) return false;
+    const k = digest(launchToken);
+    const r = this.#launch.get(k);
+    if (!r || r.consumedBy !== undefined) return false;
+    return this.#launch.delete(k);
+  }
+
   /** Classify a presented launch token and, if fresh, consume it for `connId`. */
   exchange(token: unknown, connId: string): LaunchClass {
     this.#prune();

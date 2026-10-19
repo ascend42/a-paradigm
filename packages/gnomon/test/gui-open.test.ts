@@ -22,7 +22,8 @@ import { acceptUnsignedHelperForTests, DEV_TEST_HELPER_ACK, type HelperTransport
 import { selectSocketPath, startDaemon, type DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { connectGnomon, createGuiOpenHandler, createKernelDispatcher, RpcRefusal } from '../src/kernel/socket/index.js';
-import { LAUNCH_GRANT_CAP, LaunchGrantCap } from '../src/kernel/web/launch-cap.js';
+import { LAUNCH_GRANT_CAP, LAUNCH_GRANT_SOCKET_SHARE, LaunchGrantCap } from '../src/kernel/web/launch-cap.js';
+import { GuiAccess } from '../src/kernel/web/launch.js';
 import { LAUNCH_TOKEN_TTL_MS } from '../src/kernel/web/launch.js';
 import { FakeHelper } from './helper-fake.js';
 import { privateTmpRoot } from './daemon-helpers.js';
@@ -130,6 +131,73 @@ describe('the ONE launch-grant cap (FALSIFIER: shared, not added on top)', () =>
     release();
     await held;
     await expect(cap.run(mint)).resolves.toBe('g');
+  });
+});
+
+describe('launch-cap fairness (Aegis M2 FALSIFIERS)', () => {
+  const mint = async (): Promise<string> => 'g';
+  const capped = (e: unknown) => (e as { reason?: string }).reason === 'web-launch-capped';
+  it('a gui.open flood never locks out the terminal launch: socket draws only its share, the rest stays the human\'s', async () => {
+    let t = 1_000_000;
+    const cap = new LaunchGrantCap(() => t);
+    let socketOk = 0;
+    for (let i = 0; i < LAUNCH_GRANT_CAP * 3; i++) if (await cap.run(mint, 'socket').then(() => true, (e) => (expect(capped(e)).toBe(true), false))) socketOk++;
+    expect(socketOk).toBe(LAUNCH_GRANT_SOCKET_SHARE);
+    // the window is still full of socket grants, yet the terminal / wrapper asker gets every reserved slot
+    for (let i = 0; i < LAUNCH_GRANT_CAP - LAUNCH_GRANT_SOCKET_SHARE; i++) await expect(cap.run(mint, 'in-process')).resolves.toBe('g');
+    // the SHARED total still holds: no asker gets a ninth grant in the window
+    await expect(cap.run(mint, 'in-process')).rejects.toThrow('in a minute');
+    expect(cap.count()).toBe(LAUNCH_GRANT_CAP);
+    t += 60_001;
+    expect(cap.count()).toBe(0);
+  });
+  it('a socket mint in flight (a cold start) never refuses the terminal: it waits, then goes ahead of further socket callers', async () => {
+    const cap = new LaunchGrantCap(() => 1_000_000);
+    let release!: () => void;
+    const cold = cap.run(() => new Promise<string>((r) => (release = () => r('socket'))), 'socket');
+    const human = cap.run(async () => 'human', 'in-process');
+    // while the human waits, socket callers are refused busy (they cannot cut in front)
+    await expect(cap.run(mint, 'socket')).rejects.toThrow('a launch is already being minted');
+    release();
+    expect(await cold).toBe('socket');
+    expect(await human).toBe('human');
+    // an in-process mint in flight still refuses everyone else (global one-in-flight)
+    let r2!: () => void;
+    const held = cap.run(() => new Promise<string>((r) => (r2 = () => r('g'))), 'in-process');
+    await expect(cap.run(mint, 'in-process')).rejects.toThrow('a launch is already being minted');
+    await expect(cap.run(mint, 'socket')).rejects.toThrow('a launch is already being minted');
+    r2();
+    await held;
+  });
+  it('a failed mint refunds its slot (no token existed)', async () => {
+    const cap = new LaunchGrantCap(() => 1_000_000);
+    for (let i = 0; i < LAUNCH_GRANT_CAP * 2; i++) await expect(cap.run(async () => Promise.reject(new Error('spawn failed')), i % 2 ? 'socket' : 'in-process')).rejects.toThrow('spawn failed');
+    expect(cap.count()).toBe(0);
+    for (let i = 0; i < LAUNCH_GRANT_CAP; i++) await expect(cap.run(mint)).resolves.toBe('g');
+  });
+});
+
+describe('gui.open withdraws a grant whose caller is gone (Aegis L2)', () => {
+  it('the minted token is withdrawn when the connection closed during the mint; a withdrawn token is unknown', async () => {
+    const access = new GuiAccess();
+    const withdrawn: string[] = [];
+    let tok = '';
+    const h = createGuiOpenHandler({
+      requestLaunch: async () => {
+        const m = access.mint({ deviceId: 'dev:local/mac', principal: 'p:local/x', askedBy: 'conn:x' });
+        tok = m.launchToken;
+        return { ...GRANT, launchToken: m.launchToken, expiresAt: m.expiresAt };
+      },
+      withdrawLaunch: (t) => (withdrawn.push(t), void access.withdraw(t)),
+    });
+    expect(await refusal(h({ connId: 'conn:x', principal: 'p:local/x', surface: 'cli', isLive: () => false }, {}))).toMatchObject({ code: 'ENGINE', reason: 'connection-gone' });
+    expect(withdrawn).toEqual([tok]);
+    expect(access.pendingLaunches()).toBe(0);
+    expect(access.exchange(tok, 'conn:thief')).toEqual({ kind: 'unknown' });
+    // a consumed token is never withdrawn
+    const m2 = access.mint({ deviceId: 'dev:local/mac', principal: 'p:local/x', askedBy: 'conn:y' });
+    expect(access.exchange(m2.launchToken, 'conn:gui').kind).toBe('fresh');
+    expect(access.withdraw(m2.launchToken)).toBe(false);
   });
 });
 

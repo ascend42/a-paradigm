@@ -86,7 +86,7 @@ import type { ConnectionContext } from '../socket/server.js';
 import { PRE_AUTH_MAX_FRAME_BYTES } from '../socket/server.js';
 import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
-import { LaunchGrantCap } from './launch-cap.js';
+import { LaunchGrantCap, type LaunchAsker } from './launch-cap.js';
 import {
   CHANNEL_MAX_RECORD_BYTES,
   encodeRecord,
@@ -307,22 +307,31 @@ export class WebEndpoint {
    * `gnomon open`: mint a launch token for an authenticated HUMAN device
    * connection on the unix socket. The token goes back to that caller only.
    */
-  async requestLaunch(asker: Pick<ConnAuthState, 'connId' | 'phase' | 'credential' | 'principalKind' | 'principal' | 'deviceId'>): Promise<LaunchGrant> {
+  async requestLaunch(asker: Pick<ConnAuthState, 'connId' | 'phase' | 'credential' | 'principalKind' | 'principal' | 'deviceId'>, via: LaunchAsker = 'in-process'): Promise<LaunchGrant> {
     if (asker.phase !== 'authenticated' || asker.credential !== 'device' || asker.principalKind !== 'human' || !asker.deviceId || !asker.principal) {
       throw new LifecycleRefusal('web-launch-refused', 'a launch token is minted only for an authenticated human device connection (§11.2 rule 2)', { connId: asker.connId });
     }
-    // the shared cap (busy | rate) is checked synchronously, before the endpoint starts or a token exists
-    return this.launchCap.run(() => this.#mintLaunch(asker as Required<Pick<ConnAuthState, 'connId' | 'principal' | 'deviceId'>>));
+    // the shared cap (busy | rate) is checked synchronously, before the endpoint starts or a token exists;
+    // `via` is the asker class (socket gui.open draws only its own share — launch-cap.ts, Aegis M2)
+    return this.launchCap.run(() => this.#mintLaunch(asker as Required<Pick<ConnAuthState, 'connId' | 'principal' | 'deviceId'>>), via);
   }
 
   async #mintLaunch(asker: Required<Pick<ConnAuthState, 'connId' | 'principal' | 'deviceId'>>): Promise<LaunchGrant> {
     await this.ensureListening();
     if (!this.listening) throw new LifecycleRefusal('web-transport-failed', 'the web endpoint stopped while it was starting');
     const binding: LaunchBinding = { deviceId: asker.deviceId, principal: asker.principal, askedBy: asker.connId };
+    // everything that can throw comes BEFORE the token exists: the cap refunds the slot of a mint that throws
+    const kernelPublicKey = spkiBase64Url(this.#o.kernelPublicKeyPem);
     const { launchToken, expiresAt } = this.access.mint(binding);
     this.#lingerCheck(); // the linger timer re-arms while a launch token is pending
-    const kernelPublicKey = spkiBase64Url(this.#o.kernelPublicKeyPem);
     return { port: this.#port, launchToken, expiresAt, kernelPublicKey, bundleHash: this.#bundle.hash, url: `http://127.0.0.1:${this.#port}/#launch=${launchToken}&k=${kernelPublicKey}` };
+  }
+
+  /** Withdraw an unconsumed launch token whose asker is gone (gui.open, Aegis L2); true if one was withdrawn. */
+  withdrawLaunch(launchToken: string): boolean {
+    const gone = this.access.withdraw(launchToken);
+    if (gone) this.#lingerCheck();
+    return gone;
   }
 
   status(): Record<string, unknown> {

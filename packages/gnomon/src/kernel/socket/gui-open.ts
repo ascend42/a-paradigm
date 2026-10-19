@@ -30,6 +30,8 @@ import { RpcRefusal } from './rpc.js';
 export interface GuiOpenPort {
   /** The in-process launch path: DaemonHandle.requestWebLaunch for this connection (the endpoint applies the shared cap). */
   requestLaunch(connId: string): Promise<LaunchGrant>;
+  /** Withdraw a minted, unconsumed launch token whose asker's connection is gone (Aegis L2). */
+  withdrawLaunch?(launchToken: string): void;
 }
 
 export interface GuiOpenGrant {
@@ -64,7 +66,11 @@ export function createGuiOpenHandler(port: GuiOpenPort): HumanDeviceVerbHandler 
       if (isLifecycleRefusal(e)) throw new RpcRefusal('ENGINE', e.reason, e.message, { verb: 'gui.open' });
       throw e;
     }
-    if (!ctx.isLive()) throw new RpcRefusal('ENGINE', 'connection-gone', 'the connection closed while the launch token was minted', { verb: 'gui.open' });
+    if (!ctx.isLive()) {
+      // nobody holds the grant: withdraw its binding now instead of leaving it pending for its TTL
+      port.withdrawLaunch?.(g.launchToken);
+      throw new RpcRefusal('ENGINE', 'connection-gone', 'the connection closed while the launch token was minted', { verb: 'gui.open' });
+    }
     return { url: g.url, expiresAt: new Date(g.expiresAt).toISOString(), ...(cwdHint !== undefined ? { cwdHint } : {}) };
   };
 }
