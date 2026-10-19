@@ -161,6 +161,12 @@ export function foldsCase(platform: string = process.platform): boolean {
   return platform === 'darwin' || platform === 'win32';
 }
 
+/** P8-D97 F3: a path below a steering root that Claude may load as memory or settings (case-insensitive, like the SBPL regex). */
+function isSteering(rel: string): boolean {
+  const parts = rel.split(/[\\/]/).filter(Boolean);
+  return parts.slice(0, -1).some((x) => x.toLowerCase() === '.claude') || parts.at(-1)?.toLowerCase() === '.claude' || /^claude[^/\\]*\.md$/i.test(parts.at(-1) ?? '');
+}
+
 /** Is `p` (absolute, realpath'd loosely) under one of the deny entries? Returns the matching entry. */
 export function deniedWrite(p: string, deny: readonly PolicyPath[], platform: string = process.platform): PolicyPath | null {
   const fold = foldsCase(platform) ? (x: string) => x.toLowerCase() : (x: string) => x;
@@ -172,6 +178,8 @@ export function deniedWrite(p: string, deny: readonly PolicyPath[], platform: st
       if (d.match === 'literal' && cand === dp) return d;
       if (d.match === 'subpath' && (cand === dp || cand.startsWith(dp.endsWith(path.sep) ? dp : dp + path.sep))) return d;
       if (d.match === 'prefix' && cand.startsWith(dp)) return d;
+      // P8-D97 F3: the steering subtree (CLAUDE*.md files, anything in a .claude dir, any case) is auto-denied like the rest
+      if (d.match === 'steering' && cand.startsWith(dp.endsWith(path.sep) ? dp : dp + path.sep) && isSteering(cand.slice(dp.length))) return d;
     }
   }
   return null;

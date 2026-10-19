@@ -132,6 +132,13 @@ function filter(p: PolicyPath): string {
     const r = reEscape(p.path);
     return `(regex #"^${r}/(.+/)?${ci('claude')}[^/]*\\.${ci('md')}$") (regex #"^${r}/(.+/)?\\.${ci('claude')}(/.*)?$")`;
   }
+  if (p.match === 'dep-steering') {
+    // P8-D97 F2: under the root, inside any node_modules, any case: CLAUDE*.md files and .claude dirs (read-deny)
+    q(p.path);
+    const r = reEscape(p.path);
+    const nm = '(.+/)?node_modules/(.+/)?';
+    return `(regex #"^${r}/${nm}${ci('claude')}[^/]*\\.${ci('md')}$") (regex #"^${r}/${nm}\\.${ci('claude')}(/.*)?$")`;
+  }
   return `(${p.match === 'subpath' ? 'subpath' : p.match === 'prefix' ? 'prefix' : 'literal'} ${q(p.path)})`;
 }
 

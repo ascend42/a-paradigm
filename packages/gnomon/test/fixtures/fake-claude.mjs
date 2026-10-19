@@ -83,6 +83,7 @@ trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(proc
   trace({ t: 'allow', allow });
 }
 // M2: try writes at start (under the session profile): each path is reported allowed or blocked
+for (const f of mode.startReads ?? []) { try { readFileSync(f); trace({ t: 'start-read', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-read', path: f, result: e?.code === 'ENOENT' ? 'missing' : 'blocked', code: e?.code ?? null }); } }
 for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 const session = args[args.indexOf('--session-id') + 1] ?? 'none';

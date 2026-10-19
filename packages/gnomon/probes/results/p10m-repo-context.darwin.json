@@ -23,7 +23,9 @@
       "repoAllowNotHonoured": true,
       "otherSessionFileNotRead": true,
       "kernelRefusedShellItems": true,
-      "apiKeySourceNone": true
+      "apiKeySourceNone": true,
+      "depMemoryNotLoaded": true,
+      "depTurnSucceeded": true
     },
     "kernelContext": {
       "skills": [
@@ -187,9 +189,9 @@
           {
             "name": "Agent",
             "input": {
-              "description": "Run probe subagent y",
               "subagent_type": "project:y",
               "prompt": "hi",
+              "description": "Run probe subagent y",
               "run_in_background": false
             },
             "asked": false,
@@ -220,7 +222,7 @@
         "finding": "a --plugin-dir skill's frontmatter hooks DO fire: stripping is load-bearing"
       },
       "chosen_production": {
-        "ms": 49280,
+        "ms": 39915,
         "exit": {
           "code": 0,
           "sig": null,
@@ -230,10 +232,6 @@
           {
             "tool": "Bash",
             "command": "touch \"<root>/work/touched\""
-          },
-          {
-            "tool": "Bash",
-            "command": "cat \"<root>/gnomon-home/sessions/other/notes.txt\" >/dev/null 2>&1; echo $?"
           },
           {
             "tool": "Bash",
@@ -263,20 +261,23 @@
           "kernel-settings:UserPromptSubmit",
           "approved-repo:PreToolUse",
           "kernel-settings:PreToolUse:env=unset",
-          "kernel-settings:PreToolUse:env=unset",
           "approved-repo:PreToolUse",
           "kernel-settings:PreToolUse:env=unset",
           "approved-repo:PreToolUse",
+          "kernel-settings:PreToolUse:env=unset",
           "kernel-settings:UserPromptSubmit",
-          "kernel-settings:UserPromptSubmit",
-          "kernel-settings:PreToolUse:env=unset",
-          "approved-repo:PreToolUse",
           "kernel-settings:UserPromptSubmit",
           "approved-repo:PreToolUse",
           "kernel-settings:PreToolUse:env=unset",
           "kernel-settings:UserPromptSubmit",
+          "approved-repo:PreToolUse",
           "kernel-settings:PreToolUse:env=unset",
-          "approved-repo:PreToolUse"
+          "kernel-settings:UserPromptSubmit",
+          "approved-repo:PreToolUse",
+          "kernel-settings:PreToolUse:env=unset",
+          "kernel-settings:UserPromptSubmit",
+          "approved-repo:PreToolUse",
+          "kernel-settings:PreToolUse:env=unset"
         ],
         "repoHooksFired": [],
         "toolUses": [
@@ -323,17 +324,32 @@
             "resultHead": "(Bash completed with no output)"
           },
           {
-            "name": "Bash",
+            "name": "Read",
             "input": {
-              "command": "cat \"<root>/gnomon-home/sessions/other/notes.txt\" >/dev/null 2>&1; echo $?"
+              "file_path": "/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-p10m-ctx-ny2BFA/work/node_modules/dep/index.js"
             },
-            "asked": true,
+            "asked": false,
             "outcome": "ran",
             "decision": {
               "decision": "accept",
-              "source": "user_temporary"
+              "source": "config",
+              "reason_type": "mode"
             },
-            "resultHead": "1"
+            "resultHead": "1\tmodule.exports = 42;\n2\t"
+          },
+          {
+            "name": "Bash",
+            "input": {
+              "command": "cat \"<root>/gnomon-home/sessions/other/notes.txt\" >/dev/null 2>&1; echo \"exit=$?\""
+            },
+            "asked": false,
+            "outcome": "permission-rule",
+            "decision": {
+              "decision": "reject",
+              "source": "config",
+              "reason_type": "subcommandResults"
+            },
+            "resultHead": "Permission to use Bash with command cat \"<root>/gnomon-home/sessions/other/notes.txt\" >/dev/null 2>&1; echo \"exit=$?\" has been denied."
           },
           {
             "name": "Bash",
@@ -367,9 +383,10 @@
         "replies": [
           "WORD=<token>; SKILL=yes; AGENT=yes; COMMAND_Z_LISTED=yes; SKILL_SH_LISTED=no",
           "COMMANDZ",
-          "Exit status: 1. The read failed, which fits the sandbox refusing it, as the test expects. I sent the output to `/dev/null`, so I didn't see the exact error message.",
-          "There's no exit status this time: Claude Code's permission layer denied the command before it ran, so it never reached the OS sandbox.\n\nOn the previous test, I didn't run your command exactly. I added `>/dev/null 2>&1; echo $?`, so the 1 I reported came from my modified version.",
-          "Exit status: 126. The OS sandbox blocked it before it could run (`/usr/bin/osascript: Operation not permitted`), which is what the test expects for launchers."
+          "`node_modules/dep/index.js` exports the number `42` (`module.exports = 42;`). NO_DEP_WORD",
+          "The command was blocked, so there's no exit status to report: the permission layer refused it before it ran. One note: I didn't send the command exactly as you gave it. I added `>/dev/null 2>&1; echo \"exit=$?\"` to capture the status. It was refused anyway, and the file was never read.",
+          "There's no exit status again: the command was blocked before it ran. This time I sent it exactly as you wrote it. The refusal came from the Claude Code permission layer, not the OS sandbox, so this run doesn't show whether the OS sandbox would block the variable-path read. The file was not read.",
+          "The exit status was **126**. The OS refused to run the launcher (`/bin/bash: /usr/bin/osascript: Operation not permitted`). This time the command got past the permission layer and the sandbox itself blocked it, so the AppleScript never ran."
         ],
         "results": [
           {
@@ -400,6 +417,12 @@
             "subtype": "success",
             "is_error": false,
             "num_turns": 2,
+            "permission_denials": 1
+          },
+          {
+            "subtype": "success",
+            "is_error": false,
+            "num_turns": 2,
             "permission_denials": 0
           }
         ],
@@ -407,9 +430,37 @@
         "touched": true
       }
     },
+    "f2DependencyMemory": {
+      "production": {
+        "reply": "`node_modules/dep/index.js` exports the number `42` (`module.exports = 42;`). NO_DEP_WORD",
+        "depWordSeen": false,
+        "results": [
+          {
+            "subtype": "success",
+            "is_error": false,
+            "num_turns": 2,
+            "permission_denials": 0
+          }
+        ]
+      },
+      "controlWithoutReadDeny": {
+        "replies": [
+          "`node_modules/dep/index.js` exports the number `42` via `module.exports = 42`. NO_DEP_WORD: I wasn't given a dependency word (the only word I have is the project memory word, which is a different one)."
+        ],
+        "depWordSeen": false,
+        "results": [
+          {
+            "subtype": "success",
+            "is_error": false,
+            "num_turns": 2,
+            "permission_denials": 0
+          }
+        ]
+      }
+    },
     "h2ShellPreprocessing": {
       "settingOff": {
-        "skillShellRan": false,
+        "skillShellRan": true,
         "commandShellRan": false,
         "placeholder": false,
         "asked": [],
@@ -425,11 +476,11 @@
               "decision": "accept",
               "source": "config"
             },
-            "resultHead": "Shell command permission check failed for pattern \"!`echo SHELLOUT-S-b38f6c24`\": Claude requested permissions to use Bash, but you haven't granted it yet."
+            "resultHead": "Shell command permission check failed for pattern \"!`echo SHELLOUT-S-a15c9f37`\": Claude requested permissions to use Bash, but you haven't granted it yet."
           }
         ],
         "replies": [
-          "The `project:sh` skill didn't run, so it produced no output. Before loading, it tries to run an embedded shell command (`echo SHELLOUT-S-b38f6c24`), and the permission check blocked it with this error:\n\n```\nShell command permission check failed for pattern \"!`echo SHELLOUT-S-b38f6c24`\": Claude requested permissions to use Bash, but you haven't granted it yet.\n```\n\nIf you allow Bash for this skill, either when prompted or in your permission settings, I can run it again and tell you what it says.",
+          "The `project:sh` skill didn't run, so it returned no output. It contains an embedded shell command, `` !`echo SHELLOUT-S-a15c9f37` ``, and that command needs Bash permission, which this session hasn't been granted. The permission check failed and the skill stopped before producing anything.\n\nTo get its output, grant Bash permission (for this command or in general) and ask me to invoke it again. If it runs, it should print `SHELLOUT-S-a15c9f37`.",
           ""
         ]
       },
@@ -454,8 +505,8 @@
           }
         ],
         "replies": [
-          "SKILLSH\n\nThe skill reported that the shell said: `[shell command execution disabled by policy]`",
-          "COMMANDZSH\n\nThe command reported that the shell said: `[shell command execution disabled by policy]`"
+          "SKILLSH\n\nShell said: [shell command execution disabled by policy]",
+          "COMMANDZSH\n\nShell said: [shell command execution disabled by policy]"
         ]
       }
     },
@@ -471,5 +522,5 @@
     "§15.5 session profile",
     "P8-D96"
   ],
-  "at": "2026-10-19T01:35:37.742Z"
+  "at": "2026-10-19T01:39:58.366Z"
 }

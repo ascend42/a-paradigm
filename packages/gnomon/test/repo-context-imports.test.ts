@@ -7,6 +7,7 @@
 // @gnomon-platform: darwin, linux
 import { describe, expect, it } from 'vitest';
 import { importAudit, importTargets } from '../src/kernel/supervisor/repo-context.js';
+import { deniedWrite } from '../src/kernel/supervisor/permission.js';
 
 describe('importAudit (POSIX forms)', () => {
   const f = '/r/sub/CLAUDE.md';
@@ -26,5 +27,15 @@ describe('importAudit (POSIX forms)', () => {
     ['&commat; (any case)', '&COMMAT;~/x'],
   ])('%s ⇒ refuse', (_n, text) => {
     expect(importAudit(text, f, '/h').refuse).not.toBeNull();
+  });
+});
+
+describe('F3: deniedWrite knows the steering subtree (the card pre-check auto-denies it)', () => {
+  const deny = [{ path: '/r', match: 'steering' as const, class: 'settings' as const }];
+  it.each([['/r/a/b/claude.md'], ['/r/CLAUDE.md'], ['/r/x/Claude-notes.MD'], ['/r/p/.Claude/settings.json'], ['/r/p/.claude']])('%s ⇒ denied', (p) => {
+    expect(deniedWrite(p, deny, 'linux')?.match).toBe('steering');
+  });
+  it.each([['/r/src/claude-adapter.ts'], ['/r/claude-code/adapter.ts'], ['/r/a/notes.md'], ['/other/CLAUDE.md']])('%s ⇒ allowed', (p) => {
+    expect(deniedWrite(p, deny, 'linux')).toBeNull();
   });
 });

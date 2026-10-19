@@ -459,6 +459,14 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     expect(c.memoryDirs).toEqual([]);
     expect(c.memoryRefused[0]!.why).toMatch(new RegExp(`^${parts.join('/').replace(/\./g, '\\.')}: an @ import reaches outside the repo`));
   });
+  it.each([['CLAUDE.local.md'], ['claude-notes.MD'], ['Claude.Local.md']])('F4: a nested %s is audited like CLAUDE.md', (name) => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'sub', name), '@~/.ssh/id\n');
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused[0]!.why).toMatch(new RegExp(`^sub/${name.replace(/\./g, '\\.')}: an @ import reaches outside the repo`));
+  });
   it('a clean subtree passes; a nested file that only imports inside the repo passes', () => {
     const w = world();
     put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
@@ -484,7 +492,44 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
     put(path.join(root, 'elsewhere', 'CLAUDE.md'), '@~/.ssh/id\n');
     fs.symlinkSync(path.join(root, 'elsewhere'), path.join(w.repo, 'linked-dir'), 'dir');
-    expect(ctxOf(w).memoryDirs).toEqual([w.repo]); // a plain symlinked dir is not followed
+    // F1: a symlinked dir leading outside the repo refuses (Claude could lazy-load its CLAUDE.md through it)
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/linked-dir is a symlinked dir leading outside the repo/);
+  });
+  it.skipIf(!canSymlink)('F1a: a dangling link is resolved lexically: aimed outside or into node_modules refuses; in-repo and live outward FILE links pass', () => {
+    const mk = (link: (w: ReturnType<typeof world>) => void) => {
+      if (root) fs.rmSync(root, { recursive: true, force: true });
+      const w = world();
+      put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+      link(w);
+      return ctxOf(w);
+    };
+    expect(mk((w) => fs.symlinkSync(path.join(root, 'later-outside'), path.join(w.repo, 'docs'), 'dir')).memoryRefused[0]!.why).toMatch(/docs is a symlinked dir leading outside the repo/);
+    expect(mk((w) => fs.symlinkSync(path.join('..', '..', 'escape'), path.join(w.repo, 'rel'), 'dir')).memoryRefused[0]!.why).toMatch(/rel is a symlinked dir leading outside the repo/);
+    expect(mk((w) => fs.symlinkSync(path.join('node_modules', 'later'), path.join(w.repo, 'vend'), 'dir')).memoryRefused[0]!.why).toMatch(/vend is a symlinked dir leading into node_modules/);
+    let w2: ReturnType<typeof world> | null = null;
+    expect(mk((w) => fs.symlinkSync(path.join(w.repo, 'later-inside'), path.join(w.repo, 'soon'), 'dir')).memoryRefused).toEqual([]);
+    // an EXISTING outward file link (a venv interpreter) is not memory and is not refused
+    const c = mk((w) => {
+      w2 = w;
+      put(path.join(root, 'usr-bin', 'python3'), '#!');
+      fs.mkdirSync(path.join(w.repo, '.venv', 'bin'), { recursive: true });
+      fs.symlinkSync(path.join(root, 'usr-bin', 'python3'), path.join(w.repo, '.venv', 'bin', 'python'), 'file');
+    });
+    expect(c.memoryDirs).toEqual([w2!.repo]);
+  });
+  it.skipIf(!canSymlink)('F1: a symlinked dir inside the repo is fine (walked where it lives); one into node_modules refuses', () => {
+    let w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'docs', 'CLAUDE.md'), 'docs, fine\n');
+    fs.symlinkSync(path.join(w.repo, 'docs'), path.join(w.repo, 'docs-link'), 'dir');
+    fs.symlinkSync(path.join(w.repo, 'not-yet'), path.join(w.repo, 'dangling'), 'dir'); // dangling, in-repo (F1a)
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
+    fs.rmSync(root, { recursive: true, force: true });
+    w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'node_modules', 'dep', 'CLAUDE.md'), '@~/.ssh/id\n');
+    fs.symlinkSync(path.join(w.repo, 'node_modules', 'dep'), path.join(w.repo, 'vendored'), 'dir');
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/vendored is a symlinked dir leading into node_modules/);
   });
   it('over the subtree cap ⇒ the dir is refused (fail closed)', () => {
     const w = world();
@@ -508,6 +553,38 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     const c = buildRepoContext({ cwd: pkg, userHome: w.home, outDir: w.out });
     expect(c.memoryDirs).toEqual([pkg]);
     expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/^other\/CLAUDE\.md: /) }]);
+  });
+  it('F3: every in-repo import target (existing or not) is collected and becomes a write-deny literal', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), '@docs/a.md @docs/missing.md\n');
+    put(path.join(w.repo, 'docs', 'a.md'), '@../b.md\n');
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    const want = [path.join(w.repo, 'b.md'), path.join(w.repo, 'docs', 'a.md'), path.join(w.repo, 'docs', 'missing.md')];
+    expect([...c.importTargets].sort()).toEqual(want);
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memoryImports: c.importTargets });
+    for (const t of want) expect(pol.denyWrite).toContainEqual({ path: t, match: 'literal', class: 'settings' });
+    // a refused dir contributes no targets
+    put(path.join(w.repo, 'CLAUDE.md'), '@docs/a.md @~/.ssh/x\n');
+    expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).importTargets).toEqual([]);
+  });
+  it.each([['a quote', '@docs/a"b.md\n'], ['a control character', '@docs/a\u0001b.md\n']])('F3a: an import target with %s refuses only its dir (never the session profile)', (_n, text) => {
+    const w = world();
+    const pkg = path.join(w.repo, 'pkg');
+    put(path.join(w.repo, 'CLAUDE.md'), text);
+    put(path.join(pkg, 'CLAUDE.md'), 'fine\n');
+    const c = buildRepoContext({ cwd: pkg, userHome: w.home, outDir: w.out });
+    expect(c.memoryDirs).toEqual([pkg]);
+    expect(c.memoryRefused[0]!.why).toMatch(/cannot be expressed in the session profile/);
+    expect(c.importTargets).toEqual([]);
+    expect(() => buildSessionPolicy({ home: path.join(root, 'gh'), cwd: pkg, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memoryImports: c.importTargets })).not.toThrow();
+  });
+  it('F2: the policy read-denies dependency-shipped memory (dep-steering) and mirrors it as Claude Read rules', () => {
+    const w = world();
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });
+    expect(pol.denyRead).toContainEqual({ path: w.repo, match: 'dep-steering', class: 'settings' });
+    const rules = claudePermissions(pol).permissions.deny.filter((r) => r.startsWith('Read(') && r.includes('node_modules'));
+    expect(rules.some((r) => r.endsWith('/**/node_modules/**/CLAUDE*.md)'))).toBe(true);
+    expect(rules.some((r) => r.endsWith('/**/node_modules/**/.claude/**)'))).toBe(true);
   });
   it('the policy carries a steering deny for the subtree and Claude Edit globs for it', () => {
     const w = world();

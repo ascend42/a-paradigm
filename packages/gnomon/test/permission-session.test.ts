@@ -88,6 +88,24 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
 const marker = () => path.join(w.cwd, 'marker.txt');
 const writeReq = (id?: string) => ({ request: { ...(id ? { id } : {}), tool: 'Write', input: { file_path: marker(), content: 'hello' } } });
 
+describe.skipIf(!SANDBOX_OK)('P8-D97 F3: memory import targets and the steering subtree are auto-denied (no card)', () => {
+  it('a Write to an @ import target (existing or missing) or a nested claude.md is denied with no card; another file gets a card', async () => {
+    const r = rig();
+    const top = fs.realpathSync.native(w.cwd);
+    fs.writeFileSync(path.join(top, 'CLAUDE.md'), '@docs/a.md @docs/planned.md\n');
+    fs.mkdirSync(path.join(top, 'docs'));
+    fs.writeFileSync(path.join(top, 'docs', 'a.md'), 'ok\n');
+    const targets = [path.join(top, 'docs', 'a.md'), path.join(top, 'docs', 'planned.md'), path.join(top, 'sub', 'claude.md'), path.join(top, 'docs', 'free.md')];
+    await r.open(targets.map((t, i) => ({ request: { id: `req-f3-${i}`, tool: 'Write', input: { file_path: t, content: 'planted' } } })), { hold: true });
+    expect(await waitFor(() => r.answers().length >= 3 && r.pending().length >= 1)).toBe(true);
+    const by = Object.fromEntries(r.answers().map((t) => [String(t.id), t.behavior]));
+    expect([by['req-f3-0'], by['req-f3-1'], by['req-f3-2']]).toEqual(['deny', 'deny', 'deny']);
+    expect(by['req-f3-3']).toBeUndefined();
+    expect(r.pending().map((c) => JSON.stringify(c.detail ?? c))).toEqual([expect.stringContaining('free.md')]);
+    expect(fs.existsSync(path.join(top, 'docs', 'planned.md'))).toBe(false);
+  }, 30_000);
+});
+
 describe('falsifier 1+2: the argv and the parser (pure)', () => {
   const base = { uuid: '11111111-1111-4111-8111-111111111111', policyPath: '/s/p.json', mcpConfigPath: '/s/m.json', settingSources: ['user'] as const };
   it('1. argv has --permission-prompts host + --permission-prompt-tool stdio, never none; any other value or a second copy throws', () => {
