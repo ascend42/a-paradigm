@@ -7,7 +7,8 @@
  * virtualized transcript, the sessions sidebar with new-session, the decision
  * stack (approve on a user gesture only, `G-GUI-04`; refusals shown
  * verbatim), the composer (session.open / session.send), the run-mode
- * control (header menu, ⇧Tab, palette; core/modes.ts), the palette,
+ * control (header menu, ⇧Tab, palette; core/modes.ts), the voice pill and
+ * attach controls (core/voice.ts, V2d), the palette,
  * themes + auto + reduced motion, the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
@@ -21,6 +22,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
+import { canAttach, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -133,14 +135,15 @@ function resetTranscript(): void {
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
 function itemEl(it: ChatItem): HTMLElement {
-  const label = ROLE_LABEL[it.role];
+  const label = it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
+  if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
     ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), h(doc, 'div', { class: 'body' }, it.text)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
-  return h(doc, 'div', { class: `trow role-${it.role}` }, ...body) as unknown as HTMLElement;
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}` }, ...body) as unknown as HTMLElement;
 }
 
 const sameKeys = (a: readonly ChatItem[], b: readonly ChatItem[]): boolean => {
@@ -251,7 +254,11 @@ function paintSessions(): void {
     list.appendChild(h(doc, 'div', { class: 'group-head' }, sw, g.repo === UNSCOPED ? 'unscoped' : g.repo) as unknown as Node);
     for (const s of ss) {
       const glyph = s.backend === 'local' ? '○' : '●';
-      list.appendChild(h(doc, 'button', { class: `session-row state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: s.hsid }, h(doc, 'span', { class: 'glyph' }, glyph), `${s.hsid.slice(-10)} · ${s.state}${s.pending ? ` · ${s.pending} need you` : ''}`) as unknown as Node);
+      const vv = voiceStatusOf(status);
+      const mic = vv.state !== 'off' && vv.hsid === s.hsid ? (vv.state === 'ambient' ? ' · 🎙 ambient' : ' · 🎙 push-to-talk') : '';
+      list.appendChild(h(doc, 'button', { class: `session-row state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: s.hsid }, h(doc, 'span', { class: 'glyph' }, glyph), `${s.hsid.slice(-10)} · ${s.state}${s.pending ? ` · ${s.pending} need you` : ''}${mic}`) as unknown as Node);
+      // V2d: the focused live session gets [Voice ▾] (PTT | Ambient); only a human connection is offered it
+      if (focused === s.hsid && isLiveState(s.state) && canAttach(status)) list.appendChild(voiceRowEl(s.hsid, vv));
     }
   }
 }
@@ -370,7 +377,8 @@ function schedule(what: Set<string>): void {
     if ([...w].some((x) => x === 'feed' || x.startsWith('transcript:'))) paintTranscript();
     if (w.has('sessions') || w.has('cards')) paintSessions();
     if (w.has('cards')) void paintStack(w);
-    if (w.has('modes')) void refreshStatus();
+    if (w.has('modes') || w.has('voice')) void refreshStatus();
+    if (w.has('voice-activity')) kickMeter();
     paintShuttle();
   });
 }
@@ -447,7 +455,9 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   } catch {
     status = null;
   }
+  voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
+  paintVoice();
   try {
     await subscribe(c);
   } catch (err) {
@@ -510,7 +520,10 @@ function focus(hsid: string | null): void {
   focused = hsid;
   closeDrawers();
   closeModeMenu();
+  closeVoiceMenu();
+  voiceRowOpen = false;
   paintMode();
+  paintVoice();
   resetTranscript();
   paintSessions();
   void paintStack();
@@ -526,6 +539,8 @@ async function refreshStatus(): Promise<void> {
     /* keep the last status; the control shows what it last knew */
   }
   paintMode();
+  paintVoice();
+  paintSessions();
 }
 
 const currentMode = () => sessionModeOf(status, focused);
@@ -611,6 +626,123 @@ function cycleMode(trusted: boolean): void {
   void setMode(to, 'session', trusted);
 }
 
+/* ── voice (V2d, TD-2026-10-19-298; core/voice.ts) ───────────────── */
+let voicePresenceDone = false;
+let voiceBusy = false;
+let voiceRowOpen = false;
+
+/** The pill is kernel-owned: its state is status.voice only (re-read on a voice.session.* row, store 'voice'). */
+function paintVoice(): void {
+  const v = voiceStatusOf(status);
+  const p = pillOf(v);
+  const btn = $('voice-pill');
+  btn.className = p.className;
+  btn.title = p.title;
+  btn.dataset.state = p.state;
+  put($('voice-label'), p.label);
+  put($('voice-target'), p.target ? `· ${p.target}` : '');
+  $('voice-meter').hidden = p.state !== 'ambient';
+  if (v.level !== null) $('voice-meter').style.setProperty('--level', String(v.level));
+  const note = store.voiceNote;
+  $('voice-note').hidden = !note || v.state !== 'off';
+  put($('voice-note'), note ?? '');
+  if (!$('voice-menu').hidden) paintVoiceMenu();
+}
+
+/** A voice.turn.* row arrived: the meter kicks once (CSS; reduced motion keeps it still). */
+function kickMeter(): void {
+  const m = $('voice-meter');
+  m.classList.remove('kick');
+  void m.offsetWidth; // restart the animation
+  m.classList.add('kick');
+}
+
+/** The session a choice applies to: Off and a mode switch go to the attached session; nothing attached ⇒ the focused one. */
+function voiceTargetFor(to: VoiceState): string | null {
+  const v = voiceStatusOf(status);
+  if (to === 'off') return v.hsid;
+  return v.state !== 'off' && v.hsid ? v.hsid : focused;
+}
+
+function paintVoiceMenu(): void {
+  const menu = $('voice-menu');
+  clear(menu);
+  const v = voiceStatusOf(status);
+  for (const e of voiceMenuEntries(v, focused, canAttach(status), voicePresenceDone)) {
+    const b = h(doc, 'button', { class: `mode-item voice-item${e.current ? ' current' : ''}${e.state ? ` voice-${e.state}` : ' scope'}`, type: 'button', role: 'menuitem', 'data-voice': e.id, 'aria-disabled': String(e.disabled) }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as HTMLButtonElement;
+    b.disabled = e.disabled;
+    menu.appendChild(b);
+  }
+  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk`) as unknown as Node);
+}
+function openVoiceMenu(): void {
+  $('voice-menu').hidden = false;
+  $('voice-pill').setAttribute('aria-expanded', 'true');
+  paintVoiceMenu();
+}
+function closeVoiceMenu(): void {
+  $('voice-menu').hidden = true;
+  $('voice-pill').setAttribute('aria-expanded', 'false');
+}
+
+/** The focused session row's [Voice ▾] and, open, its two choices. */
+function voiceRowEl(hsid: string, v: ReturnType<typeof voiceStatusOf>): HTMLElement {
+  const here: VoiceState = v.state !== 'off' && v.hsid === hsid ? v.state : 'off';
+  const kids: Node[] = [h(doc, 'button', { class: `key quiet voice-row-btn voice-${here}`, type: 'button', 'data-voice-row': hsid, 'aria-expanded': String(voiceRowOpen), title: 'Attach voice to this session' }, here === 'off' ? 'Voice ▾' : `Voice: ${VOICE_TITLE[here]} ▾`) as unknown as Node];
+  if (voiceRowOpen)
+    for (const s of ['ptt', 'ambient'] as const) {
+      const pl = planVoice(v, s, hsid, voicePresenceDone);
+      const b = h(doc, 'button', { class: `key quiet voice-choice voice-${s}${pl.kind === 'same' ? ' current' : ''}`, type: 'button', 'data-voice-set': s, 'data-voice-hsid': hsid, title: pl.kind === 'presence' ? 'needs Touch ID' : pl.kind === 'blocked' ? pl.reason : VOICE_TITLE[s] }, `${VOICE_TITLE[s]}${pl.kind === 'presence' ? ' · Touch ID' : ''}`) as unknown as HTMLButtonElement;
+      b.disabled = pl.kind === 'blocked';
+      kids.push(b as unknown as Node);
+    }
+  const row = h(doc, 'div', { class: 'voice-attach' }) as unknown as HTMLElement;
+  for (const k of kids) row.appendChild(k);
+  return row;
+}
+
+/**
+ * One gesture sets voice (G-GUI-04: trusted events only). Off and a narrowing apply on the kernel's answer; the
+ * first widening to ambient in this GUI login comes back as a pending presence card this same gesture approves
+ * `allow` (the kernel asks for Touch ID), as a run-mode loosening does. A refusal is shown as given.
+ */
+async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  closeVoiceMenu();
+  voiceRowOpen = false;
+  if (!client) return notice('not connected: voice was not changed', true);
+  if (!canAttach(status)) return notice('only a human connection attaches voice', true);
+  const v = voiceStatusOf(status);
+  const plan = planVoice(v, to, hsid, voicePresenceDone);
+  if (plan.kind === 'blocked') return notice(`${VOICE_TITLE[to]} is not allowed: ${plan.reason}`, true);
+  if (plan.kind === 'same') return;
+  const req = voiceRequest(v, to, hsid);
+  if (!req) return;
+  if (voiceBusy) return;
+  voiceBusy = true;
+  try {
+    const r = await client.call<Record<string, unknown>>('log.append', req);
+    if (r.pending === true && typeof r.cardId === 'string') {
+      notice(`Ambient for ${sessionName(hsid ?? '')}: confirm with Touch ID`);
+      try {
+        await client.call('approve', { cardId: r.cardId, decision: 'allow' });
+        voicePresenceDone = true;
+        notice(null);
+      } catch (err) {
+        notice(err instanceof RpcError ? `voice stays ${VOICE_TITLE[v.state].toLowerCase()}: ${refusalText(err.refusal)}` : `voice stays ${VOICE_TITLE[v.state].toLowerCase()}`, true);
+      }
+    } else {
+      if (to === 'ambient') voicePresenceDone = true; // the kernel already held this login's presence
+      notice(null);
+    }
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'voice was not changed', true);
+  } finally {
+    voiceBusy = false;
+    await refreshStatus();
+  }
+}
+
 /* ── palette ────────────────────────────────────────────────────── */
 let palSel = 0;
 let palItems: Command[] = [];
@@ -647,6 +779,7 @@ function run(id: string): void {
   else if (id === 'composer.focus') $('composer-text').focus();
   else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', true);
   else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', true);
+  else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), true);
   else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
   else if (id === 'verb.status' && client) void client.call('status').then((s) => (status = s as Record<string, unknown>));
@@ -712,6 +845,12 @@ function wire(): void {
   $('toggle-stack').addEventListener('click', () => toggleDrawer('stack'));
   $('scrim').addEventListener('click', closeDrawers);
   $('session-list').addEventListener('click', (e) => {
+    const vr = (e.target as HTMLElement).closest('[data-voice-row], [data-voice-set]') as HTMLElement | null;
+    if (vr) {
+      if (vr.dataset.voiceSet) return void setVoice(vr.dataset.voiceSet as VoiceState, vr.dataset.voiceHsid ?? null, e.isTrusted);
+      voiceRowOpen = !voiceRowOpen;
+      return paintSessions();
+    }
     const b = (e.target as HTMLElement).closest('[data-hsid]') as HTMLElement | null;
     if (b) focus(b.dataset.hsid || null);
   });
@@ -753,6 +892,22 @@ function wire(): void {
       return openPalette('mode.repo.');
     }
     void setMode(b.dataset.mode as RunMode, 'session', e.isTrusted);
+  });
+  $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
+  $('voice-menu').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-voice]') as HTMLButtonElement | null;
+    if (!b || b.disabled) return;
+    const id = b.dataset.voice!;
+    if (id === 'voice.attach') {
+      const v = voiceStatusOf(status);
+      return void setVoice(v.state === 'off' ? 'ptt' : v.state, focused, e.isTrusted);
+    }
+    const to = id.slice(6) as VoiceState;
+    void setVoice(to, voiceTargetFor(to), e.isTrusted);
+  });
+  $('voice-meter').addEventListener('animationend', () => $('voice-meter').classList.remove('kick'));
+  document.addEventListener('click', (e) => {
+    if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
   });
   document.addEventListener('click', (e) => {
     if ($('mode-menu').hidden) return;
@@ -797,6 +952,8 @@ function wire(): void {
       openPalette();
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
+    } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
+      closeVoiceMenu();
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new');

@@ -21,6 +21,7 @@
   --warn-edge: #A8730C;
   --fail-edge: #B4382A;
   --knot-edge: #5B4FD6;
+  --slate: #44577C;
   --p-terracotta-fill: #C08A73;
   --p-sage-fill: #9DAF8C;
   --p-slate-fill: #8C9DBB;
@@ -50,6 +51,7 @@
   --warn-edge: #FFC15A;
   --fail-edge: #FF7A66;
   --knot-edge: #A79CFF;
+  --slate: #A9B9DB;
   --p-terracotta-fill: #E6A88F;
   --p-sage-fill: #B7CCA3;
   --p-slate-fill: #A9B9DB;
@@ -307,4 +309,46 @@ html, body {
 .mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: 11px; }
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
+/* V2d voice pill (kernel-owned; TD-2026-10-19-298). Text tokens only from the G-GUI-10 fixture: Mic off = --sec on
+   --sheet; push-to-talk = --slate (a text token) with a slate dot; ambient = the fixture's voice-armed pair
+   (--warn-ink on --warn-bg) inside a vermilion --fail-edge (nonText, >= 3:1) with a pulsing red dot. The pulse and the
+   meter are motion: [data-motion="reduced"] and prefers-reduced-motion stop them (the edge and dot stay, so the
+   state never depends on motion). */
+.voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.voice-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; font: inherit; font-size: 11.5px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; box-shadow: var(--shadow); }
+.voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
+.voice-pill.voice-off .voice-dot { border-style: dashed; }
+.voice-pill.voice-ptt { color: var(--slate); border-color: var(--slate); }
+.voice-pill.voice-ptt .voice-dot { background: var(--p-slate-fill); border-color: var(--slate); }
+.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 2px solid var(--fail-edge); font-weight: 600; animation: voice-ring 1.4s ease-in-out infinite; }
+.voice-pill.voice-ambient .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); animation: voice-pulse 1.4s ease-in-out infinite; }
+.voice-pill.voice-noclient { color: var(--sec); border-style: dashed; }
+.voice-target { font-weight: 400; }
+.voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0.5; }
+.voice-meter[hidden] { display: none; }
+.voice-meter i { display: block; width: 2px; background: var(--fail-edge); height: calc(20% + 60% * var(--level)); animation: voice-meter 0.9s ease-in-out infinite; }
+.voice-meter i:nth-child(2) { animation-delay: 0.15s; }
+.voice-meter i:nth-child(3) { animation-delay: 0.3s; }
+.voice-meter i:nth-child(4) { animation-delay: 0.45s; }
+.voice-meter.kick i { height: 100%; }
+.voice-note { font-style: italic; }
+.voice-menu { left: 0; right: auto; }
+.voice-keys { padding: 4px 8px 2px; border-top: 1px solid var(--rule); }
+.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--fail); }
+.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--slate); }
+.voice-item.voice-off .mode-name::before { content: "○ "; color: var(--sec); }
+.voice-attach { display: flex; gap: 4px; padding: 2px 10px 4px 24px; flex-wrap: wrap; }
+.voice-row-btn.voice-ambient { color: var(--fail); }
+.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--slate); }
+.voice-choice.current { border-width: 2px; }
+@keyframes voice-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(1.35); } }
+@keyframes voice-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(180, 56, 42, 0.35); } 50% { box-shadow: 0 0 0 4px rgba(180, 56, 42, 0); } }
+@keyframes voice-meter { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
+/* the transcript's voice turns */
+.trow.voice .who { color: var(--slate); }
+.trow.role-voice-partial { color: var(--sec); font-style: italic; padding: 4px 14px; }
+.trow.role-voice-partial .voice-tag { font-style: normal; font-size: 11px; }
+.trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
+.trow.role-voice-refused { color: var(--sec); font-size: 11px; padding-left: 28px; border-left: 2px solid var(--fail-edge); }
 .mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }

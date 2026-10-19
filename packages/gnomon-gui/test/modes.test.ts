@@ -120,7 +120,7 @@ describe('run modes: the page wiring (source read; the browser smoke drives the 
     expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);[\s\S]{0,200}r\.pending === true[\s\S]{0,300}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
   });
   it('the control is repainted from status on a mode row, never on a timer', () => {
-    expect(app).toContain("if (w.has('modes')) void refreshStatus();");
+    expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
     expect(app).not.toMatch(/setInterval\(|setTimeout\([^)]*refreshStatus/);
   });
 });

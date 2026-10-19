@@ -49,6 +49,10 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'mode.repo.manual', title: 'Mode: manual (this repo)' },
   { id: 'mode.repo.ask', title: 'Mode: ask (this repo)' },
   { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this repo)' },
+  // V2d voice (TD-2026-10-19-298): the focused session (or the attached one); the global hotkeys live in the voice app
+  { id: 'voice.off', title: 'Voice: off — close the mic' },
+  { id: 'voice.ptt', title: 'Voice: push-to-talk — hold the hotkey to talk', keys: 'hold ⌃⌥Space (voice app)' },
+  { id: 'voice.ambient', title: 'Voice: ambient — the mic stays open (Touch ID the first time)' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
 ]);
@@ -56,12 +60,12 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
 /**
  * The commands a `kit.Button` inside a block (agent- or mod-authored data) may
  * name (Aegis M1.10 C6): presentation-only. `diag.send` (writes the human's
- * gui.log), `gui.reconnect` (raises a presence prompt) and every `mode.*`
- * (changes a run mode, P8-D87) are excluded, so a block can never make a
+ * gui.log), `gui.reconnect` (raises a presence prompt), every `mode.*`
+ * (changes a run mode, P8-D87) and every `voice.*` (opens or closes the mic, V2d) are excluded, so a block can never make a
  * press look like a kernel or presence action.
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.')),
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.')),
 );
 
 export type Pane ='sessions' | 'transcript' | 'stack' | 'shuttle';

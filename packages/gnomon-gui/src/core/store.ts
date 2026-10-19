@@ -27,6 +27,7 @@
  *     re-reads from the start.
  */
 import { MODE_ROW_KINDS } from './modes.js';
+import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 
 export interface Row {
   seq: number;
@@ -122,6 +123,8 @@ export class GuiStore {
   boot = 0;
   /** The log these rows came from (a page's / subscription's `logId`); null before the first read. */
   logId: string | null = null;
+  /** V2d: "Ambient turned off after N min idle" from the kernel's idle auto-off, until the next voice.session.start. */
+  voiceNote: string | null = null;
   /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
   position = 0;
   readonly #listeners = new Set<(what: Set<string>) => void>();
@@ -168,6 +171,7 @@ export class GuiStore {
     this.boot = 0;
     this.position = 0;
     this.logId = null;
+    this.voiceNote = null;
     this.#emit(new Set(['reset', 'sessions', 'cards', 'feed']));
   }
 
@@ -218,6 +222,14 @@ export class GuiStore {
     }
     // P8-D87: rows that change status.runModes — the page re-reads status on them (motion-on-events, no polling)
     if (MODE_ROW_KINDS.has(r.kind)) what.add('modes');
+    // V2d: an attachment row changes status.voice (the pill re-reads it); a turn row kicks the level meter; the
+    // kernel's idle auto-off leaves a quiet note until the next attachment
+    if (VOICE_ROW_KINDS.has(r.kind)) {
+      what.add('voice');
+      if (r.kind === 'voice.session.start') this.voiceNote = null;
+      else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload);
+    }
+    if (VOICE_ACTIVITY_KINDS.has(r.kind)) what.add('voice-activity');
     if (r.kind === 'daemon.start') {
       // a kernel (re)start: a session the old kernel neither exited nor drained into a resume is gone with it (a
       // Ctrl-C leaves no session.exited, and the sweep only logs the spawns it found). A resume in this boot logs its
@@ -351,7 +363,13 @@ export function turnEventSummary(line: string, type: string | null): string {
 /* ── chat transcript (dogfood 2026-10-19: the focused session showed 16 rows of hook noise, not the conversation) ── */
 
 /** How one transcript item reads: the user's message, the assistant's text, a tool call, a card, the turn result, a lifecycle note, an error, or a raw row. */
-export type ChatRole = 'user' | 'assistant' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw';
+/**
+ * V2d voice roles: `user` with `speaker` set is a voice turn sent to the session (🎙 <speaker>); `voice-partial` is
+ * the voice app's in-progress text (grey); `voice-heard` a turn heard but not sent (handled as a decision/control,
+ * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
+ * the 🔊 marker under a reply the voice app spoke aloud.
+ */
+export type ChatRole = 'user' | 'assistant' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-partial' | 'voice-heard' | 'voice-refused' | 'spoken';
 
 export interface ChatItem {
   /** Stable per row (and part): `seq` or `seq.part`. */
@@ -361,6 +379,8 @@ export interface ChatItem {
   /** Raw text: the renderer passes it through the contracts sanitizer, never as markup. */
   text: string;
   at?: string;
+  /** V2d: the voice turn's speaker (the item gets a 🎙 tag) */
+  speaker?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -432,6 +452,69 @@ function resultText(p: Record<string, unknown>): string {
   return parts.join(' · ');
 }
 
+function isPartial(r: Row, p: Record<string, unknown> | null): boolean {
+  return r.kind === 'voice.turn.partial' || (r.kind === 'voice.turn.user' && p?.partial === true);
+}
+
+/** A refusal reason a voice row carries (`refusal: {reason} | string`, or `reason`), or null. */
+function voiceReasonOf(p: Record<string, unknown>): string | null {
+  const ref = p.refusal ?? p.refused;
+  if (typeof ref === 'string') return ref;
+  const o = objOf(ref);
+  if (o && typeof o.reason === 'string') return o.reason;
+  if (o && typeof objOf(o.data)?.reason === 'string') return String(objOf(o.data)!.reason);
+  return null;
+}
+
+/**
+ * The chat item of a voice row (V2d): undefined = not a voice row (the kernel reducer decides), null = hidden noise.
+ * A sent voice turn is the user's message with a 🎙 <speaker> tag; turn.sent{source:'voice'} adds one only when the
+ * page cannot see the voice.turn.user row it cites (a stub view); a refusal shows its reason inline.
+ */
+function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number> }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string }) | null | undefined {
+  const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
+  if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${voiceReasonOf(p!) ?? String(p!.reason)}` };
+  if (r.kind === 'turn.sent') {
+    if (p?.source !== 'voice') return undefined;
+    if (typeof p.voiceTurnSeq === 'number' && ctx.shownVoiceSeqs.has(p.voiceTurnSeq)) return null;
+    return { role: 'user', text: '(voice turn; its words are in the voice log)', speaker: 'voice' };
+  }
+  if (!r.kind.startsWith('voice.')) return undefined;
+  if (r.view === 'stub' || r.view === 'oversize' || !p) return null;
+  const tid = typeof p.turnId === 'string' ? p.turnId : null;
+  const text = typeof p.text === 'string' ? p.text : '';
+  const speaker = speakerName(p.speakerId);
+  if (isPartial(r, p)) {
+    if (!tid || ctx.finals.has(tid) || ctx.lastPartial.get(tid) !== r.seq || !text.trim()) return null;
+    return { role: 'voice-partial', text: cap(text, CHAT_TEXT_MAX), speaker };
+  }
+  switch (r.kind) {
+    case 'voice.turn.user': {
+      const why = voiceReasonOf(p);
+      if (why) return { role: 'voice-refused', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” not sent · ${why}` };
+      if (p.intercepted === 'decision' || p.intercepted === 'control') return { role: 'voice-heard', text: `${speaker} · handled as a ${p.intercepted}: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker };
+      if (p.forwarded === false) return text.trim() ? { role: 'voice-heard', text: `${speaker} · heard, not sent: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker } : null;
+      return text.trim() ? { role: 'user', text: cap(text, CHAT_TEXT_MAX), speaker } : null;
+    }
+    case 'voice.turn.agent': {
+      const spoken = typeof p.textSpoken === 'string' ? p.textSpoken : '';
+      const planned = typeof p.textPlanned === 'string' ? p.textPlanned : '';
+      if (!spoken.trim()) return null;
+      return { role: 'spoken', text: `🔊 spoken aloud${planned && spoken.length < planned.length ? ' (in part)' : ''}` };
+    }
+    case 'voice.bargein':
+      return { role: 'spoken', text: '🔊 interrupted' };
+    case 'voice.session.start':
+      return { role: 'system', text: `voice attached · ${p.mode === 'ptt' ? 'push-to-talk' : 'ambient'}` };
+    case 'voice.session.end': {
+      const note = idleNoteOf(r.kind, p);
+      return { role: 'system', text: note ?? 'voice detached' };
+    }
+    default:
+      return null;
+  }
+}
+
 /** A kernel row's chat item, or null when it is noise in the chat view. */
 function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
   if (r.view === 'stub' || r.view === 'oversize' || r.payload === undefined) return null;
@@ -487,9 +570,20 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const items: ChatItem[] = [];
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'>): void => {
-    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}) });
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string }): void => {
+    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}) });
   };
+  // V2d: a partial shows only while it is the latest word on its turn (a later partial or the final replaces it)
+  const lastPartial = new Map<string, number>();
+  const finals = new Set<string>();
+  const shownVoiceSeqs = new Set<number>();
+  for (const r of rows) {
+    const p = objOf(r.payload);
+    const tid = p && typeof p.turnId === 'string' ? p.turnId : null;
+    if (!tid) continue;
+    if (isPartial(r, p)) lastPartial.set(tid, r.seq);
+    else if (r.kind === 'voice.turn.user') finals.add(tid);
+  }
   for (const r of rows) {
     if (r.connId === 'local') {
       if (r.kind === 'composer') {
@@ -514,6 +608,18 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       });
       if (!its.length) hidden++;
       its.forEach((it, i) => push(r, i, it));
+      continue;
+    }
+    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs });
+    if (v !== undefined) {
+      if (v === null) hidden++;
+      else {
+        if (v.role === 'user') {
+          echoes.push(v.text.trim()); // claude's replay of the same words shows once
+          shownVoiceSeqs.add(r.seq);
+        }
+        push(r, 0, v);
+      }
       continue;
     }
     const it = kernelItem(r);
