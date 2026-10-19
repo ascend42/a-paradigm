@@ -352,6 +352,8 @@ function readFile(p: string): { ok: true; buf: Buffer } | { ok: false; why: stri
   }
 }
 
+/** R4: `.md` in any case (case-insensitive filesystems load `Z.MD` as a command). */
+const isMd = (n: string): boolean => n.toLowerCase().endsWith('.md');
 const okName = (n: string): boolean => NAME_RE.test(n) && !COMMAND_UNSAFE.test(n);
 /** Reviewer 2: dot-leading regular files (.DS_Store, .gitkeep) are skipped, not a reason to refuse. */
 const dotFile = (e: fs.Dirent): boolean => e.name.startsWith('.') && e.isFile();
@@ -468,7 +470,8 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
         ctx.refused.push({ path: r, why: tree.why });
         continue;
       }
-      if (!tree.files.includes('SKILL.md')) continue;
+      // R4 (Aegis): APFS / NTFS are case-insensitive, so skill.md IS the skill's SKILL.md to Claude
+      if (!tree.files.some((f) => f.toLowerCase() === 'skill.md')) continue;
       const mine: Array<{ dst: string; data: string | Buffer }> = [];
       let why: string | null = null;
       for (const f of tree.files) {
@@ -482,22 +485,15 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
           break;
         }
         const fRel = `${r}/${f.split(path.sep).join('/')}`;
-        if (path.basename(f) === 'SKILL.md') {
-          // H3: EVERY SKILL.md, at any depth, is sanitized like the skill's own
+        if (isMd(f)) {
+          // H3 + R4 (Aegis): EVERY .md in a skill tree (SKILL.md in any case, at any depth, and every reference .md)
+          // goes through the full SKILL_KEYS sanitizer and the shell check; only the sanitized text is written
           const t = sanitized(fRel, got.buf, SKILL_KEYS, true);
           if (t === null) {
             why = '';
             break;
           }
           mine.push({ dst: path.join('skills', e.name, f), data: t });
-        } else if (f.endsWith('.md')) {
-          // H3: any other .md whose frontmatter declares hooks (or cannot be read as frontmatter) refuses the skill
-          const fm = sanitizeFrontmatter(got.buf.toString('utf8'), []);
-          if (!fm.ok || fm.hooks) {
-            why = `${f.split(path.sep).join('/')}: ${fm.ok ? 'a nested .md declares hooks' : fm.why}`;
-            break;
-          }
-          mine.push({ dst: path.join('skills', e.name, f), data: got.buf });
         } else mine.push({ dst: path.join('skills', e.name, f), data: got.buf });
       }
       if (why !== null) {
@@ -514,7 +510,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
     const rd = readDir(agentsDir);
     if (!rd.ok) ctx.refused.push({ path: rel('agents'), why: rd.why });
     for (const e of rd.ok ? rd.ents : []) {
-      if (!e.name.endsWith('.md') || dotFile(e)) continue;
+      if (!isMd(e.name) || dotFile(e)) continue;
       const r = rel('agents', e.name);
       if (!okName(e.name) || !e.isFile()) {
         ctx.refused.push({ path: r, why: e.isSymbolicLink() ? 'a symlink' : 'an unsupported name or not a regular file' });
@@ -537,7 +533,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
     const tree = listTree(commandsDir);
     if (!tree.ok) ctx.refused.push({ path: rel('commands'), why: tree.why });
     else {
-      for (const f of tree.files.filter((x) => x.endsWith('.md'))) {
+      for (const f of tree.files.filter(isMd)) {
         const r = rel('commands', ...f.split(path.sep));
         const got = readFile(path.join(commandsDir, f));
         if (!got.ok || !take(got.buf.length)) {

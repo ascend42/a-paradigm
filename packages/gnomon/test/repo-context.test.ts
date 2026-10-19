@@ -281,15 +281,45 @@ describe('H3 (Aegis): every SKILL.md at any depth is sanitized; a nested .md dec
     expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).skills).toEqual([]);
   });
   it.each([
-    ['declares hooks', `---\ntitle: doc\n${HOOKS}---\ntext\n`, /declares hooks/],
     ['has unreadable frontmatter', '---\n\tbad\n---\n', /control or line-separator/],
+    ['uses shell preprocessing', 'Ref: !`id`\n', /shell preprocessing/],
   ])('a nested reference .md that %s refuses the skill', (_n, text, why) => {
     const w = world();
     put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
     put(path.join(w.repo, '.claude', 'skills', 's', 'docs', 'ref.md'), text);
     const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
     expect(c.skills).toEqual([]);
-    expect(c.refused[0]).toMatchObject({ path: '.claude/skills/s', why: expect.stringMatching(why) });
+    expect(c.refused).toEqual([{ path: '.claude/skills/s/docs/ref.md', why: expect.stringMatching(why) }]);
+    expect(fs.existsSync(path.join(w.out, 'skills', 's'))).toBe(false);
+  });
+  it('R4: a nested reference .md declaring hooks is sanitized (the written text, never the raw bytes)', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'docs', 'ref.md'), `---\ntitle: doc\ndescription: d\n${HOOKS}---\ntext\n`);
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c.skills).toEqual(['s']);
+    expect(c.frontmatterHooks).toEqual(['.claude/skills/s/docs/ref.md']);
+    expect(fs.readFileSync(path.join(w.out, 'skills', 's', 'docs', 'ref.md'), 'utf8')).toBe('---\ndescription: d\n---\ntext\n');
+  });
+  it('R4: SKILL.md is matched case-insensitively (skill.md at the top, Skill.MD nested) and sanitized', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 'low', 'skill.md'), `---\nname: low\n${HOOKS}---\nbody\n`);
+    put(path.join(w.repo, '.claude', 'skills', 'low', 'deep', 'Skill.MD'), `---\nname: deep\nallowed-tools: Bash\n${HOOKS}---\nx\n`);
+    put(path.join(w.repo, '.claude', 'skills', 'up', 'SKILL.MD'), '!`id`\n');
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c.skills).toEqual(['low']);
+    expect(c.refused.map((r) => r.path)).toEqual(['.claude/skills/up/SKILL.MD']);
+    expect(fs.readFileSync(path.join(w.out, 'skills', 'low', 'skill.md'), 'utf8')).toBe('---\nname: low\n---\nbody\n');
+    expect(fs.readFileSync(path.join(w.out, 'skills', 'low', 'deep', 'Skill.MD'), 'utf8')).toBe('---\nname: deep\n---\nx\n');
+  });
+  it('R4: .MD agents and commands are sanitized too', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'agents', 'A.MD'), `---\nname: a\npermissionMode: bypassPermissions\n---\np\n`);
+    put(path.join(w.repo, '.claude', 'commands', 'Z.Md'), `---\ndescription: z\n${HOOKS}---\nZ\n`);
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c).toMatchObject({ agents: ['A'], commands: ['Z'] });
+    expect(fs.readFileSync(path.join(w.out, 'agents', 'A.MD'), 'utf8')).toBe('---\nname: a\n---\np\n');
+    expect(fs.readFileSync(path.join(w.out, 'commands', 'Z.Md'), 'utf8')).toBe('---\ndescription: z\n---\nZ\n');
   });
   it('a plain nested .md loads verbatim', () => {
     const w = world();
