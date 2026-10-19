@@ -46,6 +46,56 @@ components:
       shows approval.auto as a subtle `auto-approved edit · <path>` line
       (`auto-approved · <tool> (always rule)` for a rule) and
       approval.mode.set as a system line. Tests: test/modes.test.ts.
+    voice-controls: >-
+      Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
+      header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the
+      one adapter over status.voice (V1 nested {attached: {voiceSessionId,
+      hsid, mode, turns} | null}; V2a flat {attached: boolean, hsid,
+      ceiling: ptt | conversation | null (the attachment's state, not a
+      cap), since, idleAt, voiceSessionId, turns, echoTailMs,
+      ambientIdleMs}, optional clientConnected, hotkey, level, maxMode);
+      V2a refusals voice-off (cause aec | ceiling | presence) and
+      voice-playback read as plain lines (voiceRefusalNote); an undecided
+      widen card (strictness, op voice.widen) is focused in the stack; an
+      attached session whose mode is not ptt reads as ambient
+      (the indicator never under-reports a live mic). Three states: Mic off
+      (grey), push-to-talk (slate blue, "Hold <hotkey> to talk"), ambient
+      (red edge, pulsing dot, "Listening", level meter). clientConnected is
+      only an explicit kernel field (null when unsure; no client-name
+      guesses); attached with the app not connected keeps the attached
+      state's class, label and meter plus "· voice app not connected"
+      (never under-reports a live mic); "Voice app not running" only with
+      nothing attached.
+      planVoice: same | free (Off, narrowing, re-target) | presence (the
+      first widening to ambient in a GUI login) | blocked (ceiling, nothing
+      focused). voiceRequest builds log.append voice.session.start{hsid,
+      mode: ptt | conversation, continues?} or voice.session.end
+      {voiceSessionId?}. canAttach: only a human-class connection (a voice
+      connection never gets the controls). ui/app.ts: the kernel-owned
+      header pill + menu (Off / Push-to-talk / Ambient, Attach to focused),
+      [Voice ▾] on the focused live session row, palette voice.off /
+      voice.ptt / voice.ambient, all on trusted gestures (G-GUI-04); a
+      pending card from an ambient request is approved allow in the same
+      gesture only when isVoiceWidenCard (kind strictness, detail.op
+      voice.widen, the same hsid) holds for the card in the store; else it is
+      focused in the stack (the kernel asks for Touch ID). Status is re-read when the
+      store flags `voice` (voice.session.start / .end / .mode, daemon.start),
+      never on a timer; voice.turn.* rows only kick the meter. The kernel's
+      idle auto-off (voice.session.end with reason idle) leaves a quiet
+      "Ambient turned off after N min idle" note (store.voiceNote) until the
+      next attachment. Transcript: a voice turn is the user message
+      (one line, tagged with a mic and the speaker, capped at 32 chars) only
+      when the kernel's turn.sent{source: voice, voiceTurnSeq} cites it;
+      claude's replay of it shows once; until then the app's refusal /
+      intercepted / forwarded claims are shown attributed ("voice app says:
+      ..."); turn.sent adds its own line only when the voice row is
+      unreadable, partials in grey while they are the latest word on their
+      turn, a speaker marker under a spoken reply, a refused voice turn's
+      reason inline and subtle. voice.* are excluded from
+      BLOCK_SAFE_COMMANDS. Contrast: ambient text is the fixture's
+      voice-armed pair (warn-ink on warn-bg), push-to-talk text the
+      fixture's slate token; the pulse and meter stop under reduced motion.
+      Tests: test/voice.test.ts; bundle pin in gnomon test/web-units.test.ts.
     journal-cursor: >-
       Slice A4 (P8-D98): the hello offers journal.cursor; core/client.ts
       followLog pages then follows with the store's {logId, seq} cursor

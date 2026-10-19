@@ -425,13 +425,13 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     const m = new RegExp(theme === 'day' ? String.raw`:root,\s*\[data-theme="day"\]\s*\{([^}]*)\}` : String.raw`\[data-theme="night"\]\s*\{([^}]*)\}`).exec(css)!;
     return Object.fromEntries([...m[1]!.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map((x) => [x[1]!, x[2]!.trim().toUpperCase()]));
   };
-  const MAP: Record<string, [string, string]> = { ground: ['surfaces', 'ground'], sheet: ['surfaces', 'sheet'], ink: ['text', 'ink'], ink2: ['text', 'ink2'], sec: ['text', 'sec'], fail: ['text', 'fail'], 'warn-ink': ['text', 'warnInk'], knot: ['text', 'knot'], 'key-edge': ['nonText', 'keyEdge'], 'warn-edge': ['nonText', 'warnEdge'], 'fail-edge': ['nonText', 'failEdge'], 'knot-edge': ['nonText', 'knotEdge'] };
+  const MAP: Record<string, [string, string]> = { ground: ['surfaces', 'ground'], sheet: ['surfaces', 'sheet'], ink: ['text', 'ink'], ink2: ['text', 'ink2'], sec: ['text', 'sec'], fail: ['text', 'fail'], 'warn-ink': ['text', 'warnInk'], knot: ['text', 'knot'], slate: ['text', 'slate'], 'key-edge': ['nonText', 'keyEdge'], 'warn-edge': ['nonText', 'warnEdge'], 'fail-edge': ['nonText', 'failEdge'], 'knot-edge': ['nonText', 'knotEdge'] };
   it.each(['day', 'night'])('%s tokens equal contrast.json', (theme) => {
     const t = tokens(theme);
     for (const [v, [grp, key]] of Object.entries(MAP)) expect(t[v], `${theme} --${v}`).toBe((fx.themes[theme] as unknown as Record<string, Record<string, string>>)[grp]![key]!.toUpperCase());
   });
   it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
-    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot']);
+    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate']); // slate: the V2d push-to-talk text (a fixture text token)
     for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
