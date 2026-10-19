@@ -16,6 +16,7 @@
  *   setup.name      {name}             → validated server-side (PRINCIPAL_NAME_PATTERN)
  *   setup.begin     {}                 → provisioning; events setup.presence / setup.state
  *   setup.purge     {gen}              → a leftover generation the SERVER listed
+ *   setup.complete  {}                 → finish an interrupted setup (I10: the saved row, 0 prompts)
  *   setup.finish    {}                 → hand-off to the first session
  *
  * The page sends ONLY `name`, a `gen` the server itself listed, and clicks:
@@ -30,7 +31,7 @@ export const SETUP_TOKEN_BYTES = 32;
 export const SETUP_TOKEN_TTL_MS = 60_000;
 export const SETUP_GEN_PATTERN = /^[a-z0-9]{12}$/;
 
-export const SETUP_METHODS = deepFreeze(['hello', 'auth', 'setup.preflight', 'setup.name', 'setup.begin', 'setup.purge', 'setup.finish'] as const);
+export const SETUP_METHODS = deepFreeze(['hello', 'auth', 'setup.preflight', 'setup.name', 'setup.begin', 'setup.purge', 'setup.complete', 'setup.finish'] as const);
 export type SetupMethod = (typeof SETUP_METHODS)[number];
 export const SETUP_EVENTS = deepFreeze(['setup.state', 'setup.presence'] as const);
 
@@ -41,6 +42,7 @@ export const SETUP_PARAMS: Readonly<Record<Exclude<SetupMethod, 'hello'>, readon
   'setup.name': ['name'],
   'setup.begin': [],
   'setup.purge': ['gen'],
+  'setup.complete': [],
   'setup.finish': [],
 });
 
@@ -48,7 +50,7 @@ export const SETUP_API_DESCRIPTOR = deepFreeze({
   api: SETUP_API,
   methods: [...SETUP_METHODS],
   params: SETUP_PARAMS,
-  events: { 'setup.state': ['phase', 'step'], 'setup.presence': ['n', 'of', 'purpose', 'digest12'] },
+  events: { 'setup.state': ['phase', 'step'], 'setup.presence': ['n', 'of', 'purpose', 'digest12', 'key?', 'gen?'] },
   tokenBytes: SETUP_TOKEN_BYTES,
   tokenTtlMs: SETUP_TOKEN_TTL_MS,
 });

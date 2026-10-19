@@ -23,7 +23,7 @@
  *       and is ALWAYS signature-pinned (pinHelper); never from a cwd or a UI;
  *   I6  a generation this run did not create is never adopted; init refuses
  *       while one exists, and purging one takes presence per key (purgeGeneration);
- *   I7  a root-prompt budget per mode (init 2, rotate 3, recover 2, complete 1):
+ *   I7  a root-prompt budget per mode (init 2, rotate 3, recover 2, complete 0):
  *       one more root sign request throws before it reaches the helper;
  *   I8  an exclusive O_EXCL provisioning lock at `<home>.provisioning.lock`
  *       (a sibling of the home: the home itself may not exist yet), taken

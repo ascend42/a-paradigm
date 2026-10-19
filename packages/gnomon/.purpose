@@ -735,7 +735,7 @@ components:
       (helper path pinned, from the caller default or identity.json), I6 (a
       generation it did not create is never adopted; purgeGeneration takes
       presence per key), I7 (ROOT_PROMPT_BUDGET init 2 / rotate 3 / recover 2
-      / complete 1), I8 (O_EXCL `<home>.provisioning.lock`, provisioning-locked,
+      / complete 0), I8 (O_EXCL `<home>.provisioning.lock`, provisioning-locked,
       before key.list), I9 (pre-commit failure restores moved files and
       deletes only keys it created), I10 (after identity.json, keys are never
       deleted; completeDevice() appends the device row the root signed during
@@ -794,8 +794,11 @@ components:
 
   first-run:
     description: >-
-      #first-run (spec §2.4 rule 9) — `gnomon setup`, the guided first run in
-      plain readline prompts (no in-terminal UI, P8-D51): welcome paragraph,
+      #first-run (spec §2.4 rule 9) — the guided first run. Default: the
+      setup SCREENS (#setup-endpoint, #gui-setup; `gnomon setup` and bare
+      `gnomon` print a one-shot setup URL and every expected digest, the
+      terminal being the surface to trust; Gnomon.app runs it in its
+      window). `gnomon setup --cli` keeps the plain readline prompts (no in-terminal UI, P8-D51): welcome paragraph,
       #setup-preflight results with fixes, leftover generations offered for
       purge, a name prompt prefilled from $USER (PRINCIPAL_NAME_PATTERN,
       re-checked by #provisioner), "exactly 2 Touch ID prompts; a third is an

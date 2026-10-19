@@ -103,7 +103,6 @@ export interface UpKernel extends InProcessKernel {
 
 /** #first-run: the default home is set up by the guided `gnomon setup` (bare `gnomon` runs it on a terminal). */
 const initHint = (home: string, dflt: boolean): string => (dflt ? 'gnomon setup   (or just `gnomon` in a repo: it sets this Mac up first)' : `gnomon identity init --home ${home}`);
-/** Gnomon.app (MVP-a): the app has no setup screens yet, so it names the step without a command to paste. */
 /** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json. */
 function unprovisionedHome(userHome?: string): boolean {
   const h = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
@@ -116,7 +115,8 @@ function unprovisionedHome(userHome?: string): boolean {
   return st.isDirectory() && !isDevHome(h) && !hasIdentityFile(h);
 }
 
-export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet. In-app setup is coming; until then, run gnomon once in Terminal and it walks you through it';
+/** Gnomon.app: an unprovisioned home is set up in the app window (#setup-endpoint); a refusal names the step, never a command to paste. */
+export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet: quit and reopen Gnomon, and it walks you through setup in its window';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
 export function resolveUpHome(given: string | undefined, userHome: string = os.userInfo().homedir): { home: string; isDefault: boolean } {

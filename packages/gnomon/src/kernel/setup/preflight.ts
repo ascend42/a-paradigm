@@ -100,7 +100,8 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
 
   // helper: pinned (signature), answers key.list (no prompt)
   let leftover: string[] = [];
-  let touch: PreflightCheck = { id: 'touch-id', status: 'fail', detail: 'unknown: the helper did not answer', fix: 'reinstall Gnomon (the signed GnomonHelper.app ships with it)' };
+  // one helper fault is ONE FAIL (the helper row): touch-id then says it was not checked
+  let touch: PreflightCheck = { id: 'touch-id', status: 'warn', detail: 'not checked: the helper is unavailable (see the helper row)' };
   if (i.env.GNOMON_HSID || i.env.APP_SANDBOX_CONTAINER_ID) {
     add({ id: 'helper', status: 'fail', detail: 'this shell runs inside a Gnomon session or an app sandbox', fix: 'run setup from your own terminal' });
   } else {

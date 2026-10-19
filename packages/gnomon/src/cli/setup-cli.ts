@@ -111,10 +111,8 @@ export function resolveSetupHome(userHome: string = os.userInfo().homedir): stri
   try {
     st = fs.lstatSync(raw);
   } catch {
-    // L6: created here, owner-only, then judged like an existing one (never a symlink)
-    const made = path.join(fs.realpathSync.native(path.dirname(raw)), path.basename(raw));
-    fs.mkdirSync(made, { mode: 0o700 });
-    st = fs.lstatSync(made);
+    // round 2: the checks are read-only, so a missing home is only NAMED here; ensureSetupHome creates it before a write
+    return path.join(fs.realpathSync.native(path.dirname(raw)), path.basename(raw));
   }
   if (st.isSymbolicLink()) throw new SetupRefusal('unsafe-home', `${raw} is a symlink; the home must be a plain directory`, ['replace the link with the real directory, then run gnomon setup']);
   if (!st.isDirectory()) throw new SetupRefusal('unsafe-home', `${raw} is not a directory`);
@@ -122,6 +120,13 @@ export function resolveSetupHome(userHome: string = os.userInfo().homedir): stri
 }
 
 /** `3f2a91c07be4` → `3f2a 91c0 7be4` */
+/** L6: create the strict home owner-only right before the first write (purge journal, provision); never a symlink. */
+export function ensureSetupHome(home: string): void {
+  if (!fs.existsSync(home)) fs.mkdirSync(home, { mode: 0o700 });
+  const st = fs.lstatSync(home);
+  if (st.isSymbolicLink() || !st.isDirectory()) throw new SetupRefusal('unsafe-home', `${home} is not a plain directory`);
+}
+
 export function groupDigest(d: string): string {
   return (d.match(/.{1,4}/g) ?? []).join(' ');
 }
@@ -158,8 +163,6 @@ function renderPresence(io: LaunchTtyIo): (e: ProvisionEvent) => void {
         ? 'Touch ID 1 of 2: your root key vouches for your approvals key'
         : e.purpose === 'device-row'
           ? "Touch ID 2 of 2: the root registers this Mac's device key"
-          : e.purpose === 'complete-device'
-            ? "Touch ID 1 of 1: the root registers this Mac's device key (finishing an interrupted setup)"
             : `Touch ID: delete the ${e.key} key of generation ${e.gen}`;
     io.stdout.write(`\n${title}\n`);
     if (e.digest12) {
@@ -248,6 +251,7 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
       }
       const a = await rl.ask(`\nThe Secure Enclave holds Gnomon keys (generation ${gen}) not used by ~/.gnomon (another home set by GNOMON_HOME/--home may use it). Setup needs them gone.\nType "purge" to delete them (one Touch ID per key), anything else to stop:\n> `);
       if (a !== 'purge') return stop(new SetupRefusal('keys-exist', `generation ${gen} was kept; setup does not adopt keys it did not create`, [`gnomon identity purge-keys --gen ${gen}`]));
+      ensureSetupHome(home);
       const r = await engine(deps.helperPath ?? defaultHelperPath()).purgeGeneration(gen, otherHome ? { alsoCheckHomes: [otherHome] } : {});
       if (!r.ok) return stop(new SetupRefusal(r.reason, r.message));
       io.stdout.write(`  deleted generation ${gen}\n`);
@@ -265,6 +269,12 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     if (!name) return stop(new SetupRefusal('bad-name', 'no valid name was given'));
 
     io.stdout.write(`\nNext come EXACTLY 2 Touch ID prompts. Before each one this terminal shows a code;\nthe dialog's last line must show the same code. A third prompt to SIGN during setup is an attack: press Cancel.\nIf something fails (for example the helper crashes), cleanup may ask extra Touch ID prompts to DELETE the keys\nthis run created; cancelling those is safe: the keys stay and the next setup offers to purge them.\n`);
+    try {
+      ensureSetupHome(home);
+    } catch (e) {
+      if (e instanceof SetupRefusal) return stop(e);
+      throw e;
+    }
     const r = await engine(deps.helperPath ?? defaultHelperPath()).provision({ mode: 'init', existing: null, name, host: sanitizeHost(os.hostname()) });
     if (!r.ok) {
       const leftover = typeof r.extra.leftoverGen === 'string' ? [`gnomon identity purge-keys --gen ${r.extra.leftoverGen}`] : [];
@@ -345,6 +355,8 @@ export interface GuiSetupDeps extends SetupDeps {
   surface?: 'gui' | 'cli';
   scriptPath?: string;
   createWeb?: SetupEndpointOptions['createWeb'];
+  /** tests: the setup token TTL */
+  ttlMs?: number;
   /** tests: called with the grant once the endpoint listens (the page side) */
   onGrant?: (g: SetupGrant) => void;
 }
@@ -361,7 +373,7 @@ export const GUI_SETUP_TRUST =
 export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty' | 'wrapper', urlSuffix = ''): Promise<SetupResult> {
   const env = deps.runtime?.env ?? process.env;
   const fail = (reason: string, message: string, next: readonly string[] = []): SetupResult => {
-    if (via === 'wrapper') channelRefused(io, 'setup', reason, message, next);
+    if (via === 'wrapper') channelRefused(io, 'setup', reason, message, next.length ? next : ['quit and reopen Gnomon to start setup again']);
     else refused(io.stderr, 'setup', reason, message, next);
     return { code: SETUP_EXIT_REFUSED, provisioned: false };
   };
@@ -375,34 +387,59 @@ export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty
     throw e;
   }
   if (fs.existsSync(home) && daemonState(home).state === 'running') return fail('daemon-running', `a kernel already runs on ${home}`);
-  const ep = new SetupEndpoint({
-    home,
-    userHome: deps.userHome ?? os.homedir(),
-    helperPath: deps.helperPath ?? defaultHelperPath(),
-    host: sanitizeHost(os.hostname()),
-    defaultName: sanitizeName(os.userInfo().username),
-    env,
-    unsafe: unsafeRuntime(deps.runtime),
-    ...(deps.verifier ? { verifier: deps.verifier } : {}),
-    ...(deps.startHelper ? { start: deps.startHelper } : {}),
-    ...(deps.once ? { once: deps.once } : {}),
-    ...(deps.exec ? { exec: deps.exec } : {}),
-    ...(deps.platform ? { platform: deps.platform } : {}),
-    ...(deps.scriptPath ? { scriptPath: deps.scriptPath } : {}),
-    ...(deps.createWeb ? { createWeb: deps.createWeb } : {}),
-    // Aegis: started from a terminal, the terminal ALSO prints each expected digest, and is the surface to trust
-    ...(via === 'tty' ? { onEvent: renderPresence(io) } : {}),
-  });
-  let g: SetupGrant;
-  try {
-    g = await ep.start();
-  } catch (e) {
-    await ep.stop();
-    return fail('setup-endpoint', e instanceof Error ? e.message : 'the setup endpoint did not start', via === 'tty' ? ['gnomon setup --cli'] : []);
+  // MEDIUM-2: GNOMON_HOME is read ONLY to protect the home it names from a purge, never to choose the home
+  const otherHome = env.GNOMON_HOME && path.isAbsolute(env.GNOMON_HOME) ? path.resolve(env.GNOMON_HOME) : null;
+  // the terminal prints a FRESH link when one expires unused (up to SETUP_LINKS); the wrapper's app asks again by reopening
+  for (let link = 1; ; link++) {
+    const ep = new SetupEndpoint({
+      home,
+      userHome: deps.userHome ?? os.homedir(),
+      helperPath: deps.helperPath ?? defaultHelperPath(),
+      host: sanitizeHost(os.hostname()),
+      defaultName: sanitizeName(os.userInfo().username),
+      env,
+      unsafe: unsafeRuntime(deps.runtime),
+      ...(otherHome ? { alsoCheckHomes: [otherHome] } : {}),
+      ...(deps.verifier ? { verifier: deps.verifier } : {}),
+      ...(deps.startHelper ? { start: deps.startHelper } : {}),
+      ...(deps.once ? { once: deps.once } : {}),
+      ...(deps.exec ? { exec: deps.exec } : {}),
+      ...(deps.platform ? { platform: deps.platform } : {}),
+      ...(deps.scriptPath ? { scriptPath: deps.scriptPath } : {}),
+      ...(deps.createWeb ? { createWeb: deps.createWeb } : {}),
+      ...(deps.ttlMs !== undefined ? { ttlMs: deps.ttlMs } : {}),
+      // Aegis: started from a terminal, the terminal ALSO prints each expected digest, and is the surface to trust
+      ...(via === 'tty' ? { onEvent: renderPresence(io), onNotice: (t: string) => void io.stdout.write(`\n  ${t}\n`) } : {}),
+    });
+    let g: SetupGrant;
+    try {
+      g = await ep.start();
+    } catch (e) {
+      await ep.stop();
+      return fail('setup-endpoint', e instanceof Error ? e.message : 'the setup endpoint did not start', via === 'tty' ? ['gnomon setup --cli'] : []);
+    }
+    deps.onGrant?.(g);
+    if (via === 'wrapper') channelLine(io.stdout, { t: 'setup', port: g.port, setupToken: g.setupToken, setupPublicKey: g.setupPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
+    else io.stdout.write(`${link === 1 ? WELCOME : ''}\n  open this in your browser within 60 s (single use) to set up Gnomon on screens:\n\n  ${g.url}${urlSuffix}\n\n${link === 1 ? GUI_SETUP_TRUST : ''}  (prefer prompts here? Ctrl-C, then: gnomon setup --cli)\n`);
+    const r = await waitSetup(io, deps, via, ep);
+    if (!r.ok && r.reason === 'token-expired' && via === 'tty' && link < SETUP_LINKS) {
+      io.stdout.write('\n  That link expired unused. Here is a fresh one:\n');
+      continue;
+    }
+    if (!r.ok) {
+      const next = r.leftoverGen ? [`keys of generation ${r.leftoverGen} were left in the Secure Enclave: setup offers to delete them next time`] : [];
+      return fail(r.reason, r.message, r.reason === 'token-expired' ? (via === 'tty' ? ['run gnomon (or gnomon setup) again for a fresh link'] : []) : [...next, ...(via === 'tty' ? ['gnomon setup'] : [])]);
+    }
+    const rec = readIdentity(home);
+    if (via === 'tty' && rec && r.provisioned) summary(io, home, rec);
+    return { code: SETUP_EXIT_OK, provisioned: r.provisioned, home };
   }
-  deps.onGrant?.(g);
-  if (via === 'wrapper') channelLine(io.stdout, { t: 'setup', port: g.port, setupToken: g.setupToken, setupPublicKey: g.setupPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
-  else io.stdout.write(`${WELCOME}\n  open this in your browser within 60 s (single use) to set up Gnomon on screens:\n\n  ${g.url}${urlSuffix}\n\n${GUI_SETUP_TRUST}  (prefer prompts here? Ctrl-C, then: gnomon setup --cli)\n`);
+}
+
+/** How many fresh links the terminal prints before it stops (each one is single use, 60 s). */
+export const SETUP_LINKS = 3;
+
+async function waitSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty' | 'wrapper', ep: SetupEndpoint) {
   const onSigint = (): void => void ep.stop();
   if (deps.handleSignals !== false) process.on('SIGINT', onSigint);
   // the wrapper channel: `quit` or EOF (the app went away) aborts setup; the provisioner cleans up at its next step
@@ -417,11 +454,7 @@ export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty
     io.stdin.on('end', onEnd);
   }
   try {
-    const r = await ep.done;
-    if (!r.ok) return fail(r.reason, r.message, ['gnomon setup']);
-    const rec = readIdentity(home);
-    if (via === 'tty' && rec) summary(io, home, rec);
-    return { code: SETUP_EXIT_OK, provisioned: true, home };
+    return await ep.done;
   } finally {
     if (deps.handleSignals !== false) process.off('SIGINT', onSigint);
     io.stdin.off('data', onData);

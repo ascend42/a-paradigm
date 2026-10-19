@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { authServerPreimage, SETUP_API, SETUP_API_ID } from '@a-company/gnomon-contracts';
 import { acceptUnsignedHelperForTests, DEV_TEST_HELPER_ACK, identityJournalPath, identityPath, readIdentity, type HelperTransport } from '../src/kernel/identity/index.js';
+import { Provisioner } from '../src/kernel/identity/index.js';
 import { SetupEndpoint, type SetupGrant } from '../src/kernel/setup/setup-endpoint.js';
 import { createWebEndpointForTest } from '../src/kernel/testing.js';
 import { privateTmpRoot, TEST_CLIENT_NONCE } from './daemon-helpers.js';
@@ -37,8 +38,8 @@ function tmp(): string {
   return d;
 }
 
-function rig(o: { fake?: FakeHelper; gate?: (r: Record<string, unknown>) => Promise<void> | void } = {}) {
-  const u = tmp();
+function rig(o: { fake?: FakeHelper; gate?: (r: Record<string, unknown>) => Promise<void> | void; userHome?: string; alsoCheckHomes?: string[]; ttlMs?: number; idleMs?: number } = {}) {
+  const u = o.userHome ?? tmp();
   const helperDir = tmp();
   const exe = path.join(helperDir, 'gnomon-helper');
   fs.writeFileSync(exe, `#!${process.execPath}\n`);
@@ -59,6 +60,7 @@ function rig(o: { fake?: FakeHelper; gate?: (r: Record<string, unknown>) => Prom
         return fake.alive;
       },
       close: async () => undefined,
+      onExit: (cb: () => void) => fake.onExit(cb),
     } as unknown as HelperTransport;
   };
   const home = path.join(u, '.gnomon');
@@ -78,9 +80,12 @@ function rig(o: { fake?: FakeHelper; gate?: (r: Record<string, unknown>) => Prom
     createWeb: (w) => createWebEndpointForTest(w),
     onDispatch: (m) => dispatched.push(m),
     onEvent: (e) => e.type === 'presence' && presence.push(e as unknown as Record<string, unknown>),
+    ...(o.alsoCheckHomes ? { alsoCheckHomes: o.alsoCheckHomes } : {}),
+    ...(o.ttlMs !== undefined ? { ttlMs: o.ttlMs } : {}),
+    ...(o.idleMs !== undefined ? { idleMs: o.idleMs } : {}),
   });
   cleanups.push(() => ep.stop());
-  return { ep, home, ops, dispatched, presence, fake };
+  return { ep, home, ops, dispatched, presence, fake, start, exe };
 }
 
 const HELLO = { clientApis: [SETUP_API], features: [], clientNonce: TEST_CLIENT_NONCE, client: { name: 'gnomon-gui', version: '0', surface: 'browser' } };
@@ -188,7 +193,7 @@ describe('#setup-endpoint', () => {
     expect(pres.every((p) => /^[0-9a-f]{12}$/.test(String(p.digest12)))).toBe(true);
     expect(presence.map((p) => p.digest12)).toEqual(pres.map((p) => p.digest12)); // the terminal sees the same digests
     expect((await call(ws, 7, 'setup.finish')).result).toEqual({ finished: true });
-    expect(await ep.done).toEqual({ ok: true, home });
+    expect(await ep.done).toEqual({ ok: true, home, provisioned: true });
   });
 
   it('G-SET-12: a second connection with the token is refused, and the reuse inside the TTL aborts and journals', async () => {
@@ -242,5 +247,108 @@ describe('#setup-endpoint', () => {
       expect(r.ok).toBe(ok);
       await ep.stop();
     }
+  });
+
+  /** Provision `home` straight through the engine over the same fake SE (optionally crashing at a step). */
+  async function provisionDirect(fake: FakeHelper, home: string, fault?: string) {
+    const r0 = rig({ fake });
+    fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+    const p = new Provisioner({ home, helperPath: r0.exe, verifier: DEV, start: r0.start, once: () => (req) => fake.handle(req), ...(fault ? { fault: (st: string) => { if (st === fault) throw new Error('crash'); } } : {}) });
+    return p.provision({ mode: 'init', existing: null, name: 'founder', host: 'mac-1' });
+  }
+
+  it('round 2 (a): purge, then begin, then exactly 2 root signs (#running is cleared after the purge)', async () => {
+    const fake = new FakeHelper('oldgenoldgen');
+    const { ep, home } = rig({ fake });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    expect(((await call(ws, 3, 'setup.preflight')).result as { leftover: string[] }).leftover).toEqual(['oldgenoldgen']);
+    expect(((await call(ws, 4, 'setup.purge', { gen: 'oldgenoldgen' })).result as { leftover: string[] }).leftover).toEqual([]);
+    await call(ws, 5, 'setup.name', { name: 'founder' });
+    const b = await call(ws, 6, 'setup.begin');
+    expect(b.result).toMatchObject({ principalId: expect.stringMatching(/\/founder$/) });
+    expect(fake.signs.filter((x) => x.key === 'root').length).toBe(2);
+    expect(readIdentity(home)).not.toBeNull();
+  });
+
+  it('round 2 (b): a generation GNOMON_HOME lives on is never purged (in-use), and no key.delete happens', async () => {
+    const fake = new FakeHelper(null);
+    const other = path.join(tmp(), 'other-home');
+    expect((await provisionDirect(fake, other)).ok).toBe(true);
+    const gen = readIdentity(other)!.gen;
+    const { ep, ops } = rig({ fake, alsoCheckHomes: [other] });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    expect(((await call(ws, 3, 'setup.preflight')).result as { leftover: string[] }).leftover).toEqual([gen]);
+    expect(reason(await call(ws, 4, 'setup.purge', { gen }))).toBe('in-use');
+    expect(ops).not.toContain('key.delete');
+    expect(ep.settled).toBe(false); // a refused purge does not end setup
+    expect((await call(ws, 5, 'setup.preflight')).result).toBeTruthy();
+  });
+
+  it('round 2 (c): an interrupted setup (no registry row) is finished by setup.complete with 0 prompts; finish settles', async () => {
+    const fake = new FakeHelper(null);
+    const u = tmp();
+    const home = path.join(u, '.gnomon');
+    expect((await provisionDirect(fake, home, 'registry')).ok).toBe(false);
+    const signsBefore = fake.signs.length;
+    const { ep } = rig({ fake, userHome: u });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    expect(((await call(ws, 3, 'setup.preflight')).result as { existing: unknown }).existing).toMatchObject({ registered: false });
+    const cf = await call(ws, 4, 'setup.complete');
+    if (!cf.result) throw new Error(JSON.stringify(cf.error));
+    expect(cf.result).toMatchObject({ deviceId: readIdentity(home)!.deviceId });
+    expect(fake.signs.length).toBe(signsBefore); // no new signature, no prompt
+    await call(ws, 5, 'setup.finish');
+    expect(await ep.done).toEqual({ ok: true, home, provisioned: true });
+  });
+
+  it('round 2 (c): a fully set-up home settles on finish (continue into up), it does not hang', async () => {
+    const fake = new FakeHelper(null);
+    const u = tmp();
+    const home = path.join(u, '.gnomon');
+    expect((await provisionDirect(fake, home)).ok).toBe(true);
+    const { ep } = rig({ fake, userHome: u });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    expect(((await call(ws, 3, 'setup.preflight')).result as { existing: unknown }).existing).toMatchObject({ registered: true });
+    expect(reason(await call(ws, 4, 'setup.complete'))).toBe('nothing-to-complete');
+    await call(ws, 5, 'setup.finish');
+    expect(await ep.done).toEqual({ ok: true, home, provisioned: false });
+  });
+
+  it('round 2: an unused token expires and settles; an idle page settles; neither hangs', async () => {
+    const a = rig({ ttlMs: 150 });
+    await a.ep.start();
+    expect(await a.ep.done).toMatchObject({ ok: false, reason: 'token-expired' });
+    const b = rig({ idleMs: 200 });
+    const g = await b.ep.start();
+    await attach(g);
+    expect(await b.ep.done).toMatchObject({ ok: false, reason: 'idle' });
+  });
+
+  it('round 2: a failed begin returns to the checks (setup continues); nothing was left', async () => {
+    let fail = true;
+    const { ep, home } = rig({ gate: (r) => { if (r.op === 'sign' && fail) { fail = false; throw new Error('helper crashed'); } } });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    await call(ws, 3, 'setup.preflight');
+    await call(ws, 4, 'setup.name', { name: 'founder' });
+    const f = await call(ws, 5, 'setup.begin');
+    expect(f.error).toBeTruthy();
+    expect(ep.settled).toBe(false);
+    expect(fs.existsSync(identityPath(home))).toBe(false);
+    expect(((await call(ws, 6, 'setup.preflight')).result as { ok: boolean }).ok).toBe(true);
+  });
+
+  it('Aegis L5: hello params are an exact key set', async () => {
+    const { ep } = rig();
+    const g = await ep.start();
+    const ws = await wsConnect(g.port);
+    cleanups.push(() => ws.end());
+    ws.sendJson(rpc(1, 'hello', { ...HELLO, extra: 1 }));
+    await ws.nextJson();
+    expect(await ws.closed()).toBe(1008);
   });
 });
