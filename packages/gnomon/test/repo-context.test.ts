@@ -41,6 +41,9 @@ const canSymlink = ((): boolean => {
   }
 })();
 
+/** win32: the @ import resolver's absolute forms (C:, \\?\, UNC) are re-reviewed in the parity phase (platform-registry, repo-context-imports row); POSIX-absolute cases skip there. */
+const WIN = process.platform === 'win32';
+
 describe('sanitizeFrontmatter (allow-list, fail closed)', () => {
   it('drops hooks, allowed-tools and unknown keys, keeps the allowed ones and the body', () => {
     const s = sanitizeFrontmatter(`---\nname: x\ndescription: d\nallowed-tools: Bash(touch:*)\n${HOOKS}weird: 1\n---\nBody line\n`, SKILL_KEYS);
@@ -365,7 +368,7 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
   });
   it.each([
     ['@~/.ssh/x', (w: ReturnType<typeof world>) => (put(path.join(w.home, '.ssh', 'x'), 'KEY'), '@~/.ssh/x\n')],
-    ['@/abs (outside)', (_w: ReturnType<typeof world>) => (put(path.join(root, 'abs-secret'), 'S'), `see @${path.join(root, 'abs-secret')}\n`)],
+    ...(WIN ? [] : [['@/abs (outside)', (_w: ReturnType<typeof world>) => (put(path.join(root, 'abs-secret'), 'S'), `see @${path.join(root, 'abs-secret')}\n`)] as const]),
     ['@../other', (_w: ReturnType<typeof world>) => (put(path.join(root, 'other'), 'S'), '@../other\n')],
     ['a nested import that leaves', (w: ReturnType<typeof world>) => (put(path.join(root, 'leak'), 'S'), put(path.join(w.repo, 'docs', 'n1.md'), '@n2.md\n'), put(path.join(w.repo, 'docs', 'n2.md'), '@../../leak\n'), '@docs/n1.md\n')],
     ['an import in .claude/rules', (w: ReturnType<typeof world>) => (put(path.join(root, 'leak2'), 'S'), put(path.join(w.repo, '.claude', 'rules', 'sub', 'r.md'), '@../../../../leak2\n'), '# plain\n')],
@@ -380,7 +383,7 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
   });
   it.each([
     ['@~/ that does not exist', '@~/.ssh/not-there\n', /outside the repo/],
-    ['an absolute path that does not exist', () => `@${path.join(root, 'nowhere', 'x.md')}\n`, /outside the repo/],
+    ...(WIN ? [] : [['an absolute path that does not exist', () => `@${path.join(root, 'nowhere', 'x.md')}\n`, /outside the repo/] as const]),
     ['@../ that does not exist', '@../../not-there.md\n', /outside the repo/],
     ['a % in the token', '@docs%2f..%2f..%2fx.md\n', /contains %/],
     ['&#64;', 'see &#64;~/.ssh/x\n', /entity-encoded/],
@@ -434,7 +437,7 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
     expect(c.memoryDirs).toEqual([pkg]);
     expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/outside the repo/) }]);
   });
-  it('importTargets follows Claude grammar: # cut, escaped spaces, ~/ = the user home, @@ and punctuation ignored', () => {
+  it.skipIf(WIN)('importTargets follows Claude grammar: # cut, escaped spaces, ~/ = the user home, @@ and punctuation ignored', () => {
     const f = path.join(path.sep, 'r', 'CLAUDE.md');
     expect(importTargets('@a.md#frag x @~/k @my\\ file.md @@x @#y @/ @(z)', f, path.join(path.sep, 'h'))).toEqual([path.join(path.sep, 'r', 'a.md'), path.join(path.sep, 'h', 'k'), path.join(path.sep, 'r', 'my file.md')]);
   });
