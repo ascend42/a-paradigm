@@ -142,6 +142,26 @@ describe('G-WEB-02/03/04 at the wire: no non-Gnomon origin reaches a verb (M1.4 
     await until(() => rows.filter((r) => r.kind === 'socket.auth.fail' && r.payload.reason === 'origin').length === 2);
     expect(existsSync(path.join(home, 'logs', 'gui.log'))).toBe(false);
   });
+
+  it('Aegis finding 2: a /diag or /blob POST with NO Sec-Fetch-Site is served only with a live GUI token (exact Origin still required)', async () => {
+    const { ep, rows, home } = await rig();
+    const grant = await ep.requestLaunch(HUMAN); // listening from here (the port is live)
+    const { auth } = await attach(ep, grant.launchToken);
+    const guiToken = (auth.result as { guiToken: string }).guiToken;
+    const port = ep.port;
+    const bare: Record<string, string> = { ...GOOD(port) };
+    for (const k of Object.keys(bare)) if (k.toLowerCase() === 'sec-fetch-site') delete bare[k];
+    // no token / a wrong token: 403, logged gui-token with the absent header named, nothing written
+    for (const tok of [undefined, 'x'.repeat(43)]) {
+      const r = await rawHttp(port, 'POST', '/diag', { ...bare, ...(tok ? { 'X-Gnomon-Token': tok } : {}) }, Buffer.from('x'));
+      expect(r.status).toBe(403);
+    }
+    await until(() => rows.filter((r) => r.kind === 'socket.auth.fail' && r.payload.reason === 'gui-token' && r.payload.secFetchSite === 'absent').length === 2);
+    expect(existsSync(path.join(home, 'logs', 'gui.log'))).toBe(false);
+    expect((await rawHttp(port, 'POST', '/diag', { ...bare, 'X-Gnomon-Token': guiToken }, Buffer.from('ok'))).status).toBe(204);
+    expect((await rawHttp(port, 'POST', `/blob/${'a'.repeat(64)}`, { ...bare, 'X-Gnomon-Token': guiToken }, Buffer.alloc(0))).status).toBe(404);
+    expect((await rawHttp(port, 'POST', '/diag', { ...bare, Origin: 'http://evil.example', 'X-Gnomon-Token': guiToken }, Buffer.from('x'))).status).toBe(403);
+  });
 });
 
 describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-only /blob, /diag', () => {

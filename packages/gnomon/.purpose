@@ -441,7 +441,9 @@ components:
       (test/seams-fence.test.ts). The KERNEL decides every rule (rules.ts):
       Host = 127.0.0.1:<port> else 421 (host) before routing; Origin =
       http://127.0.0.1:<port> on every upgrade and non-static request else
-      403 (origin); Sec-Fetch-Site same-origin|none else 403; no cookies, no
+      403 (origin); a present Sec-Fetch-Site same-origin|none else 403 (an
+      absent one passes only an upgrade, and /diag and /blob, which then
+      still need a live X-Gnomon-Token: Aegis finding 2); no cookies, no
       ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response,
       no-store on non-static; traversal refused; /blob raster-only by content
       sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag
