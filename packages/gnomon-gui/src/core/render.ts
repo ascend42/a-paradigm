@@ -296,10 +296,12 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const { doc } = ctx;
   const keys = v.decidable && v.decisions.length ? v.decisions : [];
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
+  // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
+  const loud = v.flags.includes('claim-mismatch');
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
     h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
     ask ? askPicker(ctx, v.cardId, ask) : null,
@@ -308,7 +310,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       'div',
       { class: 'card-keys' },
       ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi — shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
-      ...keys.map((d) => h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId }, d)),
+      ...keys.map((d) => h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),

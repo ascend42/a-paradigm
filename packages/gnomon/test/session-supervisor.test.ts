@@ -555,7 +555,7 @@ describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
     await r.sup.stop(HUMAN, { hsid: s.hsid });
     fs.appendFileSync(w.claude, '# swapped by a session\n');
     const e = await refusal(open(r.sup));
-    expect(e.refusal.data).toMatchObject({ session: 'claude_binary_changed', next: 'gnomon session repin-claude' });
+    expect(e.refusal.data).toMatchObject({ session: 'claude_binary_changed', next: 'approve the re-pin card' });
     expect(r.kinds('session.spawned').filter((x) => x.payload.phase === 'intent')).toHaveLength(1);
     const { createHash } = await import('node:crypto');
     repinClaudeBinary(w.home, createHash('sha256').update(fs.readFileSync(w.claude)).digest('hex'), w.claude);

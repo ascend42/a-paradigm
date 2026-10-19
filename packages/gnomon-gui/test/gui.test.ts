@@ -111,6 +111,15 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const none = renderCard({ doc: fdoc }, { ...v, state: 'mystery', decidable: false }, block) as FEl;
     expect(none.all().filter((e) => e.attrs.has('data-decision'))).toHaveLength(0);
   });
+  it('TD-2026-10-19-063: a claim-mismatch card (an unsigned claude re-pin) marks Deny as the default key; a plain card marks none', () => {
+    const block = { type: 'Box', children: [{ type: 'Text', text: 'NOT signed by the expected publisher' }] };
+    const v = { cardId: 'card:01J', kind: 'gate-class', requestedBy: 'p:x/kernel', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: ['claim-mismatch'], decisions: ['allow', 'deny'], decidable: true };
+    const el = renderCard({ doc: fdoc }, v, block) as FEl;
+    expect(el.className).toContain('claim-mismatch');
+    expect(el.all().filter((e) => e.attrs.has('data-default')).map((e) => e.attrs.get('data-decision'))).toEqual(['deny']);
+    const plain = renderCard({ doc: fdoc }, { ...v, flags: [] }, block) as FEl;
+    expect(plain.all().filter((e) => e.attrs.has('data-default'))).toHaveLength(0);
+  });
   it('ask-user card (Aegis C1): the picker comes from the contentHash-verified structured detail, never from display text', () => {
     const t = (text: string) => ({ type: 'Text', text });
     const detail = {

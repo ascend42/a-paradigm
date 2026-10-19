@@ -291,6 +291,8 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
     if (r) el.appendChild(h(doc, 'p', { class: 'refusal' }, refusalText(r)) as unknown as Node);
     if (arrived.has(`card-in:${c.cardId}`)) {
       el.classList.add('arriving');
+      // TD-2026-10-19-063: a claim-mismatch card arrives with Deny focused (a keypress never lands on allow)
+      queueMicrotask(() => (el.querySelector('[data-default]') as HTMLElement | null)?.focus());
       el.addEventListener('animationend', () => el.classList.remove('arriving'), { once: true });
     }
     return el;
@@ -482,7 +484,25 @@ async function openSession(cwd: string, model: string): Promise<void> {
     focus(r.hsid);
   } catch (err) {
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed', true);
+    // TD-2026-10-19-063: a changed claude binary — the kernel pre-staged a re-pin card; [Re-pin] focuses it
+    const d = err instanceof RpcError ? ((err.refusal.data ?? {}) as Record<string, unknown>) : {};
+    if (d.session === 'claude_binary_changed') {
+      const btn = h(doc, 'button', { class: 'key', type: 'button' }, 'Re-pin') as unknown as HTMLButtonElement;
+      btn.addEventListener('click', (e) => {
+        if (e.isTrusted) focusCard(typeof d.cardId === 'string' ? d.cardId : null);
+      });
+      $('notice').appendChild(btn);
+    }
   }
+}
+
+/** Scroll to a card and focus its default key (Deny on a claim-mismatch card), else its first key. Never decides. */
+function focusCard(cardId: string | null): void {
+  const pile = $('stack');
+  const el = (cardId ? pile.querySelector(`[data-card-id="${CSS.escape(cardId)}"].card`) : null) ?? pile.querySelector('.card.kind-gate-class');
+  if (!el) return notice('the re-pin card has not arrived yet; it shows in the inbox when it does', true);
+  el.scrollIntoView({ block: 'nearest' });
+  ((el.querySelector('[data-default]') ?? el.querySelector('[data-decision]') ?? el) as HTMLElement).focus();
 }
 
 function focus(hsid: string | null): void {

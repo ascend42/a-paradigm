@@ -7,7 +7,9 @@
  * `claude_binary_changed` until a human re-pins. Until presence lands (M1.3)
  * the human is proved like `gnomon log quarantine`: an interactive terminal
  * and a typed confirmation (the last 8 characters of the NEW sha256). There
- * is no --yes. Refused while the daemon runs (so no session is live). The
+ * is no --yes. Refused while the daemon runs (so no session is live): the
+ * daemon pre-stages a re-pin card instead (TD-2026-10-19-063), approved in the
+ * Gnomon window with one Touch ID; this verb stays the OFFLINE raw form. The
  * re-pin record carries {from, to, logged:false}; the supervisor writes the
  * kernel-signed `session.sandbox{phase:'binary-pin', by:'repin', from, to}`
  * row at the next open (the CLI holds no kernel key).
@@ -86,7 +88,8 @@ export async function runSessionCommand(argv: readonly string[], io: SessionCliI
     return SESSION_EXIT_REFUSED;
   }
   if (daemonState(home).state === 'running') {
-    refused(io.stderr, 'the daemon is running (sessions may be live)', `gnomon daemon stop, then ${REPIN_COMMAND}`);
+    // TD-2026-10-19-063: with a daemon running the re-pin is the card it pre-staged (one Touch ID); this is the offline form
+    refused(io.stderr, 'the daemon is running: it pre-staged a re-pin card', 'approve the re-pin card in the Gnomon window');
     return SESSION_EXIT_REFUSED;
   }
   const row = claudeCodePlatform(opts.platform ?? process.platform);

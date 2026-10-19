@@ -230,6 +230,11 @@ export interface SupervisorOptions {
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
+  /**
+   * TD-2026-10-19-063: an open refused claude_binary_changed pre-stages the re-pin card (runner/repin-card.ts);
+   * resolves its cardId (null: none raised), which the refusal names for the GUI's [Re-pin]. A failure is ignored.
+   */
+  onClaudeBinaryChanged?: (sourceReal: string) => Promise<string | null>;
   /** TEST RIG ONLY: the OS version probe (default: the platform's sw_vers). Tests pass a LOWER version to exercise the floor refusal. */
   macosMajor?: () => number | null;
   /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
@@ -505,7 +510,11 @@ export class SessionSupervisor {
     let traceRefused: string | null = null;
     try {
       const bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
-      const priv = await prepareClaude(this.#o.home, bin.real, { allowScripts: this.#o.allowScripts === true });
+      const priv = await prepareClaude(this.#o.home, bin.real, { allowScripts: this.#o.allowScripts === true }).catch(async (e: unknown) => {
+        if (!(e instanceof PreflightRefusal) || e.code !== 'claude_binary_changed' || !this.#o.onClaudeBinaryChanged) throw e;
+        const cardId = await this.#o.onClaudeBinaryChanged(bin.real).catch(() => null);
+        throw new PreflightRefusal(e.code, e.message.replace(/^#session-runner: /, ''), { ...e.data, ...(cardId ? { cardId } : {}) });
+      });
       const userClaudeDir = path.join(userHome, row.userClaudeDir);
       const userClaudeJson = defaultClaudeJson(userClaudeDir);
       const managed = managedFiles(row);
@@ -587,7 +596,7 @@ export class SessionSupervisor {
       await claudeAuthOk(run);
       // Aegis N1: trust on first use — the pin is written only after the sandboxed preflight passed
       commitPin(this.#o.home, priv);
-      await this.#o.log('session.sandbox', { hsid, phase: 'binary-pin', pin: priv.pin, by: priv.pin === 'repin' ? 'repin' : priv.pin === 'first-use' ? 'first-use' : 'pinned', ...(priv.repin ? { from: priv.repin.from, to: priv.repin.to } : {}), binarySha256: `sha256:${priv.sha256}`, source: bin.real }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, phase: 'binary-pin', pin: priv.pin, by: priv.pin === 'repin' ? 'repin' : priv.pin === 'first-use' ? 'first-use' : 'pinned', ...(priv.repin ? { from: priv.repin.from, to: priv.repin.to, ...(priv.repin.cardId ? { cardId: priv.repin.cardId } : {}) } : {}), binarySha256: `sha256:${priv.sha256}`, source: bin.real }, { session: hsid });
       // Aegis L1: hash first, then scan; re-checked right before the spawn
       const layerInput: Law7Input = { row, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, userClaudeJson, policyPath, mcpConfigPath };
       const lHash = layersHash({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, managedPaths: managed, userClaudeJson });

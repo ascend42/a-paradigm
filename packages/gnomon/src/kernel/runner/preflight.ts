@@ -71,6 +71,24 @@ export function resolveClaudeBinary(o: { explicit?: string; row: ClaudeCodePlatf
   throw new PreflightRefusal('spawn_failed', o.explicit ? `claude not found at the configured path` : 'claude not found at any known location (never a PATH lookup, p01)', { candidates });
 }
 
+/**
+ * TD-2026-10-19-063: the resolved claude source only (realpath, no hashing) — the re-pin poll's cheap probe.
+ * Same candidate order and rules as resolveClaudeBinary (never a bare name, never PATH). null: none found.
+ */
+export function resolveClaudeSource(o: { explicit?: string; row: ClaudeCodePlatformRow; home: string }): { path: string; real: string } | null {
+  const candidates = o.explicit ? [o.explicit] : o.row.knownBinaries.map((b) => expandHome(b, o.home));
+  for (const c of candidates) {
+    if (!path.isAbsolute(c)) continue;
+    try {
+      const real = fs.realpathSync.native(c);
+      if (fs.statSync(real).isFile()) return { path: c, real };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map((x) => Number.parseInt(x, 10) || 0);
   const pb = b.split('.').map((x) => Number.parseInt(x, 10) || 0);

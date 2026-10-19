@@ -156,7 +156,7 @@ export function approvalsKeyFrom(ring: KeyRing, keyIdOf: (principal: string) => 
 export type CliProvenance = { pid: number; ppid: number; pgid: number; tty: string | null };
 
 /** What happens when a card is decided (install: the grant rows; api-token: activation). Runs AFTER approval.decide is logged. */
-export type CardEffect = (decision: string, ctx: { token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; connId: string }) => Promise<void> | void;
+export type CardEffect = (decision: string, ctx: { token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; connId: string; decisionSig?: string }) => Promise<void> | void;
 
 export interface RaiseInput {
   kind: CardKind;
@@ -731,7 +731,7 @@ export class ApprovalBroker {
     }
     if (r.effect) {
       try {
-        await r.effect(decision, { token, rootSig, connId: ctx.connId });
+        await r.effect(decision, { token, rootSig, connId: ctx.connId, decisionSig });
       } catch (err) {
         // P8-D98 (slice A2): the honest kind, exactly one row, no suspect row; the card stays pending (approve's catch)
         await this.#o.log('approval.effect.failed', { cardId, decision, effect: effectNameOf(card), reason: effectFailureReason(err) }, { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) }).catch(() => undefined);
