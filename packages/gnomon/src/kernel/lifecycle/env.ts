@@ -18,8 +18,6 @@
  * `process.on('SIGUSR1')` listener does NOT count — it can be removed at run
  * time and is not what the guard reads.
  */
-import { spawn } from 'node:child_process';
-
 /** Fixed PATH pending the root-signed config of M1.1. */
 export const DEFAULT_REEXEC_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
 
@@ -90,13 +88,3 @@ export function reexecArgs(opts: Pick<DetachOptions, 'entry' | 'home' | 'idleMs'
   return args;
 }
 
-/** Spawn the detached daemon with the clean env. Returns its pid. */
-export function spawnDetachedDaemon(opts: DetachOptions): number | undefined {
-  const child = spawn(opts.execPath, reexecArgs(opts), {
-    detached: true,
-    stdio: 'ignore',
-    env: cleanReexecEnv(opts.sourceEnv ?? process.env, opts.path !== undefined ? { path: opts.path } : {}),
-  });
-  child.unref();
-  return child.pid;
-}
