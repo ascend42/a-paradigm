@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 /** A fake `gnomon-helper serve`: echoes the id; op `bad-id` answers with the wrong id; op `die` exits. */
-function fakeServe(dir: string, version = '1.4.0'): string {
+function fakeServe(dir: string, version = '1.5.0'): string {
   const f = path.join(dir, 'gnomon-helper');
   fs.writeFileSync(
     f,
@@ -118,9 +118,15 @@ describe('HelperProcess (serve)', () => {
     expect(h.alive).toBe(false);
   });
 
+  it('falsifier (setup helper-line-mismatch, 2026-10-19): a 1.4.0 helper (root signs without `shown`) is below the floor', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.4.0'), { verifier: DEV }));
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.5.0/);
+    expect(h.alive).toBe(false);
+  });
+
   it('falsifier (T-2026-10-18-028 M2): a 1.2.0 helper (no absolute unlock TTL, no signature cap) is below the floor', async () => {
     const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.2.0'), { verifier: DEV }));
-    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.4.0/);
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.5.0/);
     expect(h.alive).toBe(false);
   });
 

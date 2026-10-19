@@ -34,7 +34,7 @@ import Foundation
 import LocalAuthentication
 import Security
 
-let gnomonHelperVersion = "1.4.0"
+let gnomonHelperVersion = "1.5.0"
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {
@@ -143,7 +143,8 @@ func handle(_ req: Json) throws -> Json {
             guard !keep else { throw bad("the root key never keeps an unlock") }
             let ctx = try evaluatePresence(promptText(try reason(req), line))
             defer { ctx.invalidate() }
-            return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": false]
+            // "shown": the kernel checks the line names the digest it displayed (provisioner helperLineShows)
+            return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": false, "shown": line]
         case (.approvals, "fresh"):
             if keep && conn == nil { throw bad("keep needs a connId") }
             let ctx = try evaluatePresence(promptText(try reason(req), line))

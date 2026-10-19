@@ -21,7 +21,10 @@ components:
       minutes, 60 minutes after it opened or 64 signatures under it
       (T-2026-10-18-028 M2, helper 1.3.0: hard bounds the idle timer cannot
       slide; the broker enforces the same pair), on unlock.drop and on exit),
-      unlock.drop(-all). M4: promptText strips every format (Cf), control
+      unlock.drop(-all). Every fresh sign (root and approvals) returns
+      `shown`, the helper's own prompt line, which the provisioner checks names
+      the digest it displayed (helper 1.5.0; 1.4.0 omitted it for root, so
+      guided setup failed helper-line-mismatch). M4: promptText strips every format (Cf), control
       and line/paragraph separator from the caller text before the OS prompt. Each key signs
       only its own domain prefixes (root: row-sig, presence; approvals:
       approve, presence). Inputs bounded before any key is touched. Refuses
