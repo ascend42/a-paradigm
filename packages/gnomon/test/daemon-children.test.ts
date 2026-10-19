@@ -279,6 +279,23 @@ describe('descendant sweep on stop (T-2026-10-19-009 item 1): tree verdict exite
     expect(r).toEqual({ survivors: 0, tree: 'exited' });
   });
 
+  it('stopAll takes ONE process-table snapshot for all its children, before any of them is signalled', async () => {
+    let snaps = 0;
+    let signalledAt = -1;
+    const control = treeControl(() => (snaps++, []));
+    const signalGroup = control.signalGroup.bind(control);
+    control.signalGroup = (pgid, sig) => (signalledAt < 0 && (signalledAt = snaps), signalGroup(pgid, sig));
+    const children = new DaemonChildren({ append: async () => undefined, control, boot: BOOT, graceMs: 150 });
+    for (const hsid of ['h-a', 'h-b', 'h-c']) {
+      const s = sleeper();
+      control.register(s);
+      await children.track({ kind: 'session', child: s, hsid });
+    }
+    expect(await children.stopAll('stop')).toBe(0);
+    expect(snaps).toBe(1); // was one `ps` per child
+    expect(signalledAt).toBe(1);
+  });
+
   it('a pid reused with a different start time is never SIGKILLed', async () => {
     let calls = 0;
     const control = treeControl(() => {

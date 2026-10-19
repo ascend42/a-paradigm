@@ -242,13 +242,20 @@ export class DaemonChildren {
   /** Stop every child and await each exit (idle exit, shutdown). Returns leaders still alive + groups with surviving members. */
   async stopAll(reason: string): Promise<number> {
     this.#closed = true;
-    const survivors = await Promise.all([...this.#live].map((t) => this.#stop(t, reason)));
+    const all = [...this.#live];
+    // ONE process-table snapshot for the whole stop (not one `ps` per child), taken before any child is signalled
+    const control = this.#o.control;
+    const shared = control.snapshot && all.some((t) => t.input.kind !== 'mod') ? control.snapshot().catch(() => null) : undefined;
+    const survivors = await Promise.all(all.map((t) => this.#stop(t, reason, shared)));
     await new Promise((r) => setImmediate(r)); // let exit handlers write their rows
     return this.#live.size + survivors.filter(Boolean).length;
   }
 
-  /** true when something of this child's group (or its descendant tree) is still alive after the stop. */
-  async #stop(t: Tracked, reason: string): Promise<boolean> {
+  /**
+   * true when something of this child's group (or its descendant tree) is still alive after the stop.
+   * `shared`: stopAll's one snapshot for every child (each walks its own tree in it); absent ⇒ a fresh one.
+   */
+  async #stop(t: Tracked, reason: string, shared?: Promise<ProcRow[] | null>): Promise<boolean> {
     t.stopReason = reason;
     const { child } = t.input;
     const control = this.#o.control;
@@ -258,7 +265,7 @@ export class DaemonChildren {
     // snapshot the tree BEFORE any signal: once the leader dies its children are reparented and the ppid walk loses them
     const desc =
       session && control.snapshot
-        ? await control.snapshot().then(
+        ? await (shared ?? control.snapshot()).then(
             (rows) => {
               if (!rows) return null;
               const d = descendantsOf(rows, t.pid);
