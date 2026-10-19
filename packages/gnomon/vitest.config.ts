@@ -14,5 +14,7 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     exclude: [...configDefaults.exclude, ...excludedTestFiles(PKG_ROOT, process.platform)],
     testTimeout: 30_000,
+    // spec §2.4 rule 10: no test ever opens a real browser; tests that exercise auto-open inject the opener and its env
+    env: { GNOMON_NO_OPEN: '1' },
   },
 });

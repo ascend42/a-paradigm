@@ -713,7 +713,19 @@ components:
       scripts/install-darwin.mjs is the idempotent installer (build, link
       `gnomon` into /opt/homebrew/bin or /usr/local/bin, refuse a
       non-symlink or a link elsewhere, NODE_OPTIONS check, next steps; no
-      sudo, never touches ~/.gnomon).
+      sudo, never touches ~/.gnomon). AUTO-OPEN (spec §2.4 rule 10):
+      src/cli/open-browser.ts openInDefaultBrowser hands every terminal
+      launch/setup URL to the default browser via LaunchServices — it runs
+      /usr/bin/osascript - (absolute, no shell, EMPTY env) and writes
+      `open location "<url>"` on its STDIN, so the token is on no argv or env
+      (`open <url>` is forbidden: argv is readable by ps); the URL is
+      validated first (loopback, fragment [A-Za-z0-9_=&%.-] only), 5 s
+      timeout, never throws. The TTY shows `opened in your browser` with the
+      URL kept below as the fallback, or the old copy line on failure /
+      non-darwin. Covers bare `gnomon`, `gnomon up`, `gnomon setup`, the
+      Enter fresh URL, the setup re-link on expiry and the setup→up hand-off.
+      Off with `--no-open` (all three verbs) or GNOMON_NO_OPEN=1; never
+      without a TTY; never on the wrapper channel (`up --wrapper`).
     path: src/cli/bare-cli.ts
     type: module
     tags: [gnomon, cli, launch, dogfood]
@@ -721,6 +733,8 @@ components:
     tests:
       - test/bare-entry.test.ts
       - ../gnomon-gui/test/gui.test.ts
+      - test/open-browser.test.ts
+      - test/open-browser-darwin.test.ts
 
   provisioner:
     description: >-
@@ -821,7 +835,11 @@ components:
       strict (I4: never GNOMON_HOME, lstat, symlink refused — the raw
       `gnomon identity init` still honours GNOMON_HOME/--home). Gated by
       ^unprovisioned-only. `up` / `up --wrapper` unprovisioned refusals now
-      name the first run.
+      name the first run. On a terminal each setup URL (and each re-link
+      after expiry) is also opened in the default browser (#bare-entry's
+      open-browser.ts, osascript stdin; `gnomon setup --no-open` or
+      GNOMON_NO_OPEN=1 prints only, and --no-open carries into the up
+      hand-off); the wrapper path never opens.
     path: src/cli/setup-cli.ts
     type: module
     tags: [gnomon, cli, setup, onboarding]
@@ -829,6 +847,7 @@ components:
     tests:
       - test/setup.test.ts
       - test/bare-entry.test.ts
+      - test/open-browser-darwin.test.ts
 
   gnomon-up:
     description: >-

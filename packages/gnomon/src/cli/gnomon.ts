@@ -89,7 +89,7 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'setup') {
   // #first-run: the guided first run (setup-cli.ts), then the normal launch in this process
   const io = { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr };
-  runSetupCommand(argv.slice(1), io, { continueUp: () => runUp(io, {}, {}) }).then(
+  runSetupCommand(argv.slice(1), io, { continueUp: ({ noOpen }) => runUp(io, {}, { noOpen }) }).then(
     (code) => {
       process.exitCode = code;
     },
@@ -131,8 +131,8 @@ if (argv[0] === 'daemon') {
       process.exitCode = 70;
     },
   );
-} else if (argv.length === 0) {
-  // #bare-entry: bare `gnomon` in a folder = `gnomon up` with this folder as a GUI hint (bare-cli.ts)
+} else if (argv.length === 0 || argv[0] === '--no-open') {
+  // #bare-entry: bare `gnomon` in a folder = `gnomon up` with this folder as a GUI hint (bare-cli.ts); `--no-open` = print the URL only
   runBareCommand(argv, { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;

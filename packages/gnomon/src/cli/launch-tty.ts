@@ -28,6 +28,7 @@ import type { LaunchGrant } from '../kernel/web/endpoint.js';
 import { GnomonClient, type ClientCredential, type KernelKeyPin } from '../clients/ts/index.js';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
+import { presentUrl, type BrowserOpener } from './open-browser.js';
 
 type Out = { write(s: string): unknown; isTTY?: boolean; on?(ev: 'error', l: (e: Error) => void): unknown };
 export interface LaunchTtyIo {
@@ -101,8 +102,12 @@ export async function attachInProcess(handle: DaemonHandle, o: { home: string; c
   }
 }
 
-/** Print a launch URL — only to an interactive terminal: the token never lands in a pipe, a file or a log. */
-export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string, urlSuffix = ''): Promise<boolean> {
+/**
+ * Print a launch URL — only to an interactive terminal: the token never lands in a pipe, a file or a log.
+ * With an opener (open-browser.ts, spec §2.4 rule 10) the URL is also handed to the default browser on
+ * osascript's STDIN (never argv or env), and stays printed below `opened in your browser` as the fallback.
+ */
+export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string, urlSuffix = '', opener: BrowserOpener | null = null): Promise<boolean> {
   // checked BEFORE minting: with nothing to show it on, no endpoint is started and no token exists
   if (io.stdout.isTTY !== true) {
     io.stdout.write('  gui     not started: the launch URL is printed only to an interactive terminal (it carries a single-use token)\n');
@@ -111,7 +116,8 @@ export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: Launch
   const g = await k.launch();
   // #bare-entry: urlSuffix is a fragment-only hint (`&cwd=<base64url>`, built by bare-cli.ts): it rides after the
   // token in the SAME line, never a second copy of the token, and a fragment is never sent to the server
-  io.stdout.write(`\n  open this in your browser within 60 s (single use):\n\n  ${g.url}${urlSuffix}\n\n  ${keysHint}\n`);
+  await presentUrl(io.stdout, `${g.url}${urlSuffix}`, opener, 'open this in your browser within 60 s (single use)');
+  io.stdout.write(`\n  ${keysHint}\n`);
   return true;
 }
 
@@ -129,6 +135,8 @@ export interface ServeOptions {
   keysHint: string;
   /** #bare-entry: a fragment-only suffix appended to every terminal launch URL (`&cwd=<base64url>`); never on the wrapper channel. */
   urlSuffix?: string;
+  /** Auto-open (spec §2.4 rule 10): hand each terminal launch URL to the default browser; null/absent = print only. Never on the wrapper channel. */
+  opener?: BrowserOpener | null;
 }
 
 /**
@@ -168,7 +176,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   io.stdout.write(`UP  ${o.noun} (in this process)\n`);
   readout(io.stdout, o.rows);
   try {
-    await printLaunch(k, io, o.keysHint, o.urlSuffix);
+    await printLaunch(k, io, o.keysHint, o.urlSuffix, o.opener ?? null);
   } catch (e) {
     refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e), ['the kernel stays up for socket clients; Ctrl-C to stop']);
   }
@@ -177,7 +185,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
     rl = readline.createInterface({ input: io.stdin, terminal: false });
     rl.on('line', (l) => {
       if (l.trim() === 'q') stop();
-      else void printLaunch(k, io, o.keysHint, o.urlSuffix).catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)));
+      else void printLaunch(k, io, o.keysHint, o.urlSuffix, o.opener ?? null).catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)));
     });
   }
   const reason = await k.handle.exited;

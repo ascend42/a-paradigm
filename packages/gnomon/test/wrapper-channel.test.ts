@@ -150,7 +150,8 @@ describe('#gnomon-wrapper channel (in-process)', () => {
   it.skipIf(NO_TRANSPORT)('#setup-endpoint: an unprovisioned home gets a {t:setup} grant on the channel (not a refusal); quit aborts it; the token is on no stderr', async () => {
     const w = world();
     const c = channel();
-    const run = runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: CLEAN });
+    const opened: string[] = []; // spec §2.4 rule 10: the wrapper channel NEVER opens a browser, even with auto-open on
+    const run = runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: CLEAN, openEnv: {}, open: async (u) => (opened.push(u), { ok: true }) });
     const s = await c.next('setup');
     expect(Object.keys(s)).toEqual(expect.arrayContaining(['bundleHash', 'expiresAt', 'port', 'setupPublicKey', 'setupToken', 't']));
     expect(String(s.setupToken)).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -159,6 +160,7 @@ describe('#gnomon-wrapper channel (in-process)', () => {
     expect(c.err.join('')).not.toContain(String(s.setupToken));
     expect((await c.next('refused')).reason).toBe('stopped');
     expect(c.lines.some((l) => l.t === 'up')).toBe(false);
+    expect(opened).toEqual([]);
   });
 
   it('FALSIFIER: an unsafe runtime is refused on the channel too (the app shows why it did not start)', async () => {

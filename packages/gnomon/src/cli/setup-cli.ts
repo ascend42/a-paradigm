@@ -51,13 +51,14 @@ import {
 import { runPreflight, type PreflightCheck } from '../kernel/setup/preflight.js';
 import { SetupEndpoint, type SetupEndpointOptions, type SetupGrant } from '../kernel/setup/setup-endpoint.js';
 import { channelLine, channelRefused } from './launch-tty.js';
+import { presentUrl, terminalOpener, type BrowserOpener } from './open-browser.js';
 
 export const SETUP_EXIT_OK = 0;
 export const SETUP_EXIT_REFUSED = 1;
 export const SETUP_EXIT_USAGE = 64;
 
 export const SETUP_USAGE = `gnomon ${GNOMON_VERSION} setup — set up Gnomon on this Mac (guided; two Touch ID prompts)
-usage: gnomon setup [--cli]  (default: the setup screens in your browser; --cli: prompts in this terminal. the home is ~/.gnomon; GNOMON_HOME and --home are not read: use \`gnomon identity init\` for those)
+usage: gnomon setup [--cli] [--no-open]  (default: the setup screens, opened in your default browser (the URL is printed too); --no-open or GNOMON_NO_OPEN=1: print the URL only; --cli: prompts in this terminal. the home is ~/.gnomon; GNOMON_HOME and --home are not read: use \`gnomon identity init\` for those)
 `;
 
 export const WELCOME = `Welcome to Gnomon.
@@ -333,21 +334,22 @@ async function alreadySetUp(io: LaunchTtyIo, home: string, rec: IdentityRecord, 
 }
 
 /** `gnomon setup`: the guided run, then (on success) the normal launch in this process. */
-export async function runSetupCommand(argv: readonly string[], io: LaunchTtyIo, deps: SetupDeps & { continueUp?: () => Promise<number> } = {}): Promise<number> {
+export async function runSetupCommand(argv: readonly string[], io: LaunchTtyIo, deps: SetupDeps & { continueUp?: (o: { noOpen: boolean }) => Promise<number> } = {}): Promise<number> {
   if (argv[0] === '--help' || argv[0] === '-h') {
     io.stdout.write(SETUP_USAGE);
     return SETUP_EXIT_OK;
   }
-  const cli = argv[0] === '--cli';
-  if (argv.length > (cli ? 1 : 0)) {
-    io.stderr.write(`gnomon setup: unknown argument (${argv.length}); setup takes only --cli\n${SETUP_USAGE}`);
+  const cli = argv.includes('--cli');
+  const noOpen = argv.includes('--no-open');
+  if (argv.some((a) => a !== '--cli' && a !== '--no-open') || new Set(argv).size !== argv.length) {
+    io.stderr.write(`gnomon setup: unknown argument (${argv.length}); setup takes only --cli and --no-open\n${SETUP_USAGE}`);
     return SETUP_EXIT_USAGE;
   }
-  const r = cli || (deps as GuiSetupDeps).surface === 'cli' ? await runSetup(io, deps) : await runGuiSetup(io, deps, 'tty');
-  // also an already-set-up Mac (Start Gnomon): code 0 with a home continues into the launch
+  const r = cli || (deps as GuiSetupDeps).surface === 'cli' ? await runSetup(io, deps) : await runGuiSetup(io, { ...deps, ...(noOpen ? { noOpen } : {}) }, 'tty');
+  // also an already-set-up Mac (Start Gnomon): code 0 with a home continues into the launch (--no-open carries over)
   if (r.code !== SETUP_EXIT_OK || !r.home || !deps.continueUp) return r.code;
   io.stdout.write('\nStarting Gnomon…\n');
-  return deps.continueUp();
+  return deps.continueUp({ noOpen });
 }
 
 /** #setup-endpoint seams (tests): the transport child entry and the #web-endpoint factory. */
@@ -360,6 +362,12 @@ export interface GuiSetupDeps extends SetupDeps {
   ttlMs?: number;
   /** tests: called with the grant once the endpoint listens (the page side) */
   onGrant?: (g: SetupGrant) => void;
+  /** `--no-open` (spec §2.4 rule 10): print the setup URL only; only a 'tty' run ever opens the browser. */
+  noOpen?: boolean;
+  /** Auto-open seam (default openInDefaultBrowser). */
+  open?: BrowserOpener;
+  /** Where GNOMON_NO_OPEN is read (default process.env). */
+  openEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 export const GUI_SETUP_TRUST =
@@ -390,6 +398,9 @@ export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty
   if (fs.existsSync(home) && daemonState(home).state === 'running') return fail('daemon-running', `a kernel already runs on ${home}`);
   // MEDIUM-2: GNOMON_HOME is read ONLY to protect the home it names from a purge, never to choose the home
   const otherHome = env.GNOMON_HOME && path.isAbsolute(env.GNOMON_HOME) ? path.resolve(env.GNOMON_HOME) : null;
+  // spec §2.4 rule 10: a terminal run opens each setup URL in the default browser (stdin of osascript, never argv);
+  // the wrapper channel never opens anything (its app renders the grant itself)
+  const opener = via === 'tty' ? terminalOpener({ noOpen: deps.noOpen === true, env: deps.openEnv ?? process.env, ...(deps.open ? { open: deps.open } : {}) }) : null;
   // the terminal prints a FRESH link when one expires unused (up to SETUP_LINKS); the wrapper's app asks again by reopening
   for (let link = 1; ; link++) {
     const ep = new SetupEndpoint({
@@ -421,7 +432,11 @@ export async function runGuiSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty
     }
     deps.onGrant?.(g);
     if (via === 'wrapper') channelLine(io.stdout, { t: 'setup', port: g.port, setupToken: g.setupToken, setupPublicKey: g.setupPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
-    else io.stdout.write(`${link === 1 ? WELCOME : ''}\n  open this in your browser within 60 s (single use) to set up Gnomon on screens:\n\n  ${g.url}${urlSuffix}\n\n${link === 1 ? GUI_SETUP_TRUST : ''}  (prefer prompts here? Ctrl-C, then: gnomon setup --cli)\n`);
+    else {
+      if (link === 1) io.stdout.write(WELCOME);
+      await presentUrl(io.stdout, `${g.url}${urlSuffix}`, opener, 'open this in your browser within 60 s (single use) to set up Gnomon on screens');
+      io.stdout.write(`\n${link === 1 ? GUI_SETUP_TRUST : ''}  (prefer prompts here? Ctrl-C, then: gnomon setup --cli)\n`);
+    }
     const r = await waitSetup(io, deps, via, ep);
     if (!r.ok && r.reason === 'token-expired' && via === 'tty' && link < SETUP_LINKS) {
       io.stdout.write('\n  That link expired unused. Here is a fresh one:\n');

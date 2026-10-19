@@ -48,10 +48,11 @@ export const DISPLAY_CAP = 240;
 export const GNOMON_HELP = `gnomon ${GNOMON_VERSION} — supervise Claude Code sessions with signed, attended approvals
 usage: gnomon [<command>] [options]     (every command takes --help)
 
-  gnomon             in a repo: start the kernel and open the GUI with this folder suggested for a new session
+  gnomon             in a repo: start the kernel and open the GUI in your default browser with this folder suggested
+                     for a new session (the URL is printed too; --no-open or GNOMON_NO_OPEN=1: print it only)
                      (the first time, on a terminal, it sets this Mac up first: same as \`gnomon setup\`)
   setup              guided first run: checks, your name, two Touch ID prompts, then start
-  up                 start the kernel on your provisioned home (~/.gnomon) and print the GUI launch URL
+  up                 start the kernel on your provisioned home (~/.gnomon) and open the GUI in your browser
   identity           init | status: provision or inspect the hardware identity (Secure Enclave, Touch ID)
   session            repin-claude: re-pin the claude binary after Claude Code updates itself
   rules              list | revoke: standing always-allow rules
@@ -148,7 +149,9 @@ export function unprovisionedDefaultHome(userHome?: string): boolean {
 }
 
 export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, deps: BareDeps = {}): Promise<number> {
-  if (argv.length > 0) {
+  // spec §2.4 rule 10: on a terminal the launch (and setup) URL opens in the default browser; --no-open prints it only
+  const noOpen = argv.length === 1 && argv[0] === '--no-open';
+  if (argv.length > (noOpen ? 1 : 0)) {
     io.stderr.write(`gnomon: unknown arguments (${argv.length}) for bare gnomon\n${GNOMON_HELP}`);
     return BARE_EXIT_USAGE;
   }
@@ -156,7 +159,7 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
   // then this same process continues into up with the folder hint. Not a TTY: up's own refusal, unchanged.
   const tty = deps.setup?.isTty ?? (io.stdin.isTTY === true && io.stdout.isTTY === true);
   if (tty && unprovisionedDefaultHome(deps.userHome)) {
-    const sd = { ...deps, ...deps.setup } as GuiSetupDeps;
+    const sd = { ...deps, ...deps.setup, ...(noOpen ? { noOpen } : {}) } as GuiSetupDeps;
     const s = sd.surface === 'cli' ? await runSetup(io, sd) : await runGuiSetup(io, sd, 'tty', hintSuffix(folderOf(deps.cwd ?? process.cwd()).folder) ?? '');
     if (s.code !== 0) return s.code; // "already set up" (another run won) also continues into up
     io.stdout.write('\nStarting Gnomon…\n');
@@ -168,6 +171,7 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
   const note = suffix === null ? `; too long to carry (${Buffer.byteLength(folder)} bytes): type it in the GUI` : needsEscape(folder) ? '; shown escaped, so the GUI will not prefill it' : '';
   return runUp(io, deps, {
     code: 'gnomon',
+    noOpen,
     rows: [['folder', `${shown}  (${where}${note}; a suggestion: the GUI asks before opening)`]],
     ...(suffix !== null ? { urlSuffix: suffix } : {}),
     onRunning: (e: UpRefusal, home: string) => {

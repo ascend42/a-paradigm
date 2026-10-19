@@ -38,6 +38,7 @@
  */
 import { hasIdentityFile } from '../kernel/identity/index.js';
 import { runGuiSetup, type GuiSetupDeps } from './setup-cli.js';
+import { terminalOpener, type BrowserOpener } from './open-browser.js';
 import { deviceRegistered } from '../kernel/setup/setup-endpoint.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -65,7 +66,8 @@ export const UP_EXIT_REFUSED = 1;
 export const UP_EXIT_USAGE = 64;
 
 export const UP_USAGE = `gnomon ${GNOMON_VERSION} up — run the kernel on your provisioned home and open the GUI
-usage: gnomon up [--home <abs>] [--wrapper]   (default ~/.gnomon; GNOMON_HOME is not read)
+usage: gnomon up [--home <abs>] [--no-open] [--wrapper]   (default ~/.gnomon; GNOMON_HOME is not read)
+  Opens the GUI in your default browser and also prints its single-use URL; --no-open (or GNOMON_NO_OPEN=1) only prints it.
   Needs \`gnomon setup\` first (bare \`gnomon\` runs it for you). Refuses a dev home and a home whose kernel already runs.
   --wrapper: spawned by Gnomon.app (#gnomon-wrapper): the launch grant goes on the stdout pipe the app holds, never a terminal.
 `;
@@ -83,6 +85,10 @@ export interface UpDeps {
   idleMs?: number;
   /** The env / execArgv the unsafe-env guard reads (default this process's). */
   runtime?: RuntimeFacts;
+  /** Auto-open seam (default openInDefaultBrowser). */
+  open?: BrowserOpener;
+  /** Where GNOMON_NO_OPEN is read (default process.env). */
+  openEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 export class UpRefusal extends Error {
@@ -240,6 +246,8 @@ export interface UpRun {
   rows?: ReadonlyArray<readonly [string, string | number]>;
   /** #bare-entry: the fragment-only hint appended to each terminal launch URL. */
   urlSuffix?: string;
+  /** `--no-open`: print the launch URL only, never open the browser (GNOMON_NO_OPEN=1 does the same). */
+  noOpen?: boolean;
   /** #bare-entry: a kernel already running on the home is reported by the caller (another instance, not a fault). */
   onRunning?: (e: UpRefusal, home: string) => number;
 }
@@ -247,6 +255,7 @@ export interface UpRun {
 export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, deps: UpDeps = {}): Promise<number> {
   let given: string | undefined;
   let wrapper = false;
+  let noOpen = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === '--help' || a === '-h') {
@@ -262,12 +271,19 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
       given = path.resolve(v);
     } else if (a === '--wrapper') {
       wrapper = true;
+    } else if (a === '--no-open') {
+      noOpen = true;
     } else {
       io.stderr.write(`gnomon up: unknown argument ${a}\n${UP_USAGE}`);
       return UP_EXIT_USAGE;
     }
   }
-  return runUp(io, deps, { ...(given !== undefined ? { given } : {}), wrapper });
+  return runUp(io, deps, { ...(given !== undefined ? { given } : {}), wrapper, noOpen });
+}
+
+/** The terminal launch's browser opener, or null (`--no-open`, GNOMON_NO_OPEN). Never called for the wrapper channel. */
+export function upOpener(deps: Pick<UpDeps, 'open' | 'openEnv'>, run: Pick<UpRun, 'noOpen'>): BrowserOpener | null {
+  return terminalOpener({ noOpen: run.noOpen === true, env: deps.openEnv ?? process.env, ...(deps.open ? { open: deps.open } : {}) });
 }
 
 /** The `gnomon up` body after argv: every guard in order, then serve. Shared with bare `gnomon` (#bare-entry). */
@@ -287,7 +303,8 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
   if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper, code);
   // #setup-endpoint: the app sets up an unprovisioned home, and finishes an interrupted one (device-unregistered), in its window
   if (wrapper && given === undefined && (unprovisionedHome(deps.userHome) || unregisteredHome(deps.userHome))) {
-    const s = await runGuiSetup(io, { ...(deps as GuiSetupDeps), handleSignals: false }, 'wrapper');
+    // the wrapper channel never opens a browser: no opener is passed, and runGuiSetup opens only via 'tty'
+    const s = await runGuiSetup(io, { ...(deps as GuiSetupDeps), handleSignals: false, noOpen: true }, 'wrapper');
     if (s.code !== 0) return UP_EXIT_REFUSED;
   }
   let k: UpKernel;
@@ -324,6 +341,8 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
     ],
     keysHint: 'Enter = a fresh URL (a reload cannot Reconnect yet)   q or Ctrl-C = stop',
     ...(run.urlSuffix && !wrapper ? { urlSuffix: run.urlSuffix } : {}),
+    // spec §2.4 rule 10: a terminal launch opens the default browser; the wrapper channel NEVER does
+    opener: wrapper ? null : upOpener(deps, run),
   });
   return served === 0 ? UP_EXIT_OK : UP_EXIT_REFUSED;
 }
