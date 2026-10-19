@@ -369,6 +369,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const kernelPrincipal = kernelPrincipalOf(authority);
   /** Principal continuity across root provisioning (M1.3): rows written before it carry the unprovisioned kernel principal. */
   const kernelPrincipals = [...new Set([kernelPrincipalOf(new UnprovisionedRootAuthority()), kernelPrincipal])];
+  // Aegis L4: KernelLog.open (which may complete an interrupted rotation or
+  // quarantine, i.e. WRITE the home's log) runs BEFORE the socket is published,
+  // and it stays there: the orphan sweep, the dispatcher and every pre-auth row
+  // need the log before the first connection is accepted, and a refused open
+  // must never leave a briefly-served endpoint behind. Its exclusivity rests
+  // on the pidfile lock alone, which ASSUMES every contender runs as the same
+  // uid in the same pid namespace (the home is 0700, so another uid cannot
+  // reach it): a holder in another pid namespace (a container sharing this
+  // home) can look dead, be reclaimed, and two kernels would open one log.
+  // Sharing a home across pid namespaces is unsupported.
   let log: KernelLog;
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;

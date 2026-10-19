@@ -2415,6 +2415,12 @@ flows:
       answering:true, serverVerified:false` with clientApi/serverKeyId only
       under `unverified` (exit 0); a known key whose serverSig fails is
       refused (exit 1). Never running:true on an unverified hello.
+      Aegis L4: KernelLog.open runs after the pidfile lock and BEFORE the
+      socket is published (the sweep, dispatcher and pre-auth rows need the
+      log first; a refused open must not leave a served endpoint). Its
+      exclusivity rests on the pidfile lock, which assumes same uid and same
+      pid namespace for every contender; a home shared across pid namespaces
+      is unsupported (a holder there can look dead and be reclaimed).
       Exit codes are defined ONLY in
       lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
       75 transient, 78 config; config/superseded never restart, transient
