@@ -1,0 +1,16 @@
+id: L-2026-10-19-ascend-211854-459
+type: insight
+timestamp: '2026-10-19T21:18:54.340Z'
+author: ascend
+title: Decision TD-2026-10-19-194 recorded
+summary: Companion lore entry for decision record TD-2026-10-19-194. See .paradigm/decisions/TD-2026-10-19-194.yaml.
+symbols_touched:
+  - '#gnomon-voice'
+  - ^voice-armed
+  - '#approval-broker'
+  - $voice-approval
+references:
+  decision_id: TD-2026-10-19-194
+tags:
+  - companion-lore
+  - decision-reference

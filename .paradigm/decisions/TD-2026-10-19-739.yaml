@@ -1,0 +1,34 @@
+id: TD-2026-10-19-739
+timestamp: '2026-10-19T17:03:12.223Z'
+title: Resume carries a permit over with a fresh expiry when it was live at drain
+decision: >-
+  When a session's spawn permit was still valid at the moment it was drained (session.drained timestamp <= the permit's
+  expiresAt), the new kernel re-attributes that permit with a fresh expiry window. permit.reattributed records
+  renewedByDrain and the new expiresAt. Before it does, it re-runs the law-7 / API-billing scan and the layers/git
+  checks. A permit that had already expired before the drain is still refused. No new permit is minted.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog, on Aegis M2 (B1+B2 review). The 60-minute permit TTL meant every session
+  older than an hour stayed stopped after an upgrade, which covers most real sessions. A session alive at drain was
+  already authorised, so the renewal re-attributes that authorisation rather than creating a new one.
+  TD-2026-10-19-908's 'never minted' still holds.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Touch ID approval per expired session
+    rejected_because: too many prompts per upgrade
+  - option: Keep them stopped and warn on the upgrade card
+    rejected_because: most real sessions would not resume
+symbols_affected:
+  - '#budget-fuse'
+  - $daemon-lifecycle
+status: active
+tags:
+  - gnomon
+  - drain-resume
+  - permit
+  - T-2026-10-19-014

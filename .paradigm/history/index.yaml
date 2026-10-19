@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T05:47:23.479Z'
+generated: '2026-10-19T21:07:59.044Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -3279,11 +3279,44 @@ by_symbol:
       agent: []
   '#paradigm-plugin':
     symbol: '#paradigm-plugin'
-    total_changes: 3
-    last_modified: '2026-03-15T18:01:50Z'
+    total_changes: 5
+    last_modified: '2026-10-19T20:35:53Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0791
+        ts: '2026-10-19T20:35:53Z'
+        type: implement
+        symbols:
+          - '#paradigm-plugin'
+        author:
+          type: human
+          id: ascend
+        commit: a256597a34f883b165eb8e487f40228fa661385f
+        intent: feature
+        files:
+          - plugins/paradigm/agents/architect.md
+          - plugins/paradigm/agents/reviewer.md
+          - plugins/paradigm/agents/security.md
+          - plugins/paradigm/agents/tester.md
+        description: 'chore(#paradigm-plugin): align every agent''s turn limit to 100'
+      - id: h0787
+        ts: '2026-10-19T18:09:07Z'
+        type: implement
+        symbols:
+          - '#paradigm-plugin'
+        author:
+          type: human
+          id: ascend
+        commit: 2155f7a580ea7bfbca40d86f909f3e1d92eeab8b
+        intent: feature
+        files:
+          - plugins/paradigm/agents/architect.md
+          - plugins/paradigm/agents/builder.md
+          - plugins/paradigm/agents/reviewer.md
+          - plugins/paradigm/agents/security.md
+          - plugins/paradigm/agents/tester.md
+        description: 'chore(#paradigm-plugin): double agent turn limits'
       - id: h0178
         ts: '2026-03-15T18:01:50Z'
         type: implement
@@ -29451,7 +29484,7 @@ by_symbol:
         files:
           - docs/specs/gnomon.md
         description: 'docs(#approval-broker): Gnomon spec v3.9 part 2 — strictness L0-L3, review convergence, change notes (D86-D88)'
-      - &ref_445
+      - &ref_447
         id: h0758
         ts: '2026-10-17T23:07:43Z'
         type: implement
@@ -29614,11 +29647,42 @@ by_symbol:
       agent: []
   '#approval-broker':
     symbol: '#approval-broker'
-    total_changes: 2
-    last_modified: '2026-10-17T23:19:15Z'
+    total_changes: 4
+    last_modified: '2026-10-19T21:06:39Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0792
+        ts: '2026-10-19T21:06:39Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+        author:
+          type: human
+          id: ascend
+        commit: 9cfb82f64f12ac974ca3add6a144bf891edd0d56
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/supervisor/auto-edits.ts
+          - packages/gnomon/test/run-modes.test.ts
+        description: 'fix(#approval-broker): auto-edits refuses a root prefix that matches only case-folded (Aegis re-check)'
+      - &ref_442
+        id: h0785
+        ts: '2026-10-19T15:57:27Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#socket'
+        author:
+          type: human
+          id: ascend
+        commit: e56130d3ed627210168f3d8a57d859ed8fa6a4fd
+        intent: feature
+        files:
+          - packages/gnomon/test/decision-sig-v2.test.ts
+          - packages/gnomon/test/platform-registry.ts
+          - packages/gnomon/test/socket-abi.test.ts
+        description: 'test(#socket): CI fixes after the P8-D98 merge (linux gui.open, win32 key modes)'
       - *ref_431
       - *ref_432
     contributors:
@@ -29627,66 +29691,88 @@ by_symbol:
       agent: []
   '#gui':
     symbol: '#gui'
-    total_changes: 3
-    last_modified: '2026-10-17T07:48:45Z'
+    total_changes: 8
+    last_modified: '2026-10-19T20:20:10Z'
     stability_score: 1
     fragility: low
     recent:
-      - id: h0727
-        ts: '2026-10-17T07:48:45Z'
+      - id: h0790
+        ts: '2026-10-19T20:20:10Z'
         type: implement
         symbols:
           - '#gui'
         author:
           type: human
           id: ascend
-        commit: 9e99e8d727ecab3d636d7dc8463b789b4262302f
-        intent: feature
+        commit: eb900f0dbbe731444fd855dceaeccb434569b7ff
+        intent: fix
         files:
-          - .atelier/design-system.yaml
-          - docs/specs/gnomon.md
-        description: 'docs(#gui): Workshop defaults to footer; vertical placements as presets'
-      - id: h0726
-        ts: '2026-10-17T07:47:23Z'
+          - packages/gnomon-gui/src/core/follow.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#gui): scrolling up never snaps back while a session streams (founder dogfood)'
+      - &ref_433
+        id: h0784
+        ts: '2026-10-19T15:27:28Z'
         type: implement
         symbols:
+          - '#bare-entry'
+          - '#gnomon-contracts'
           - '#gui'
-          - '#paradigm-harness'
+          - '#socket'
+          - '#web-endpoint'
         author:
           type: human
           id: ascend
-        commit: 2b0dfce8463d70397b0c903fcfeea22a4ef8e1dc
+        commit: 0db01b496f040a3fcb9965367d5c409ffc260ab8
         intent: feature
-        files:
-          - .atelier/design-system.yaml
-          - .paradigm/events/stream.jsonl
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/entries/2026-10-17/L-2026-10-17-ascend-074722-001.lore
-          - .paradigm/lore/timeline.yaml
-          - docs/specs/gnomon-fixtures/check-contrast.mjs
-          - docs/specs/gnomon-fixtures/contrast.json
-          - docs/specs/gnomon.md
-        description: 'feat(#gui): Gnomon contrast fixtures (G-GUI-10); Move 1 entry gates cleared'
-      - id: h0725
-        ts: '2026-10-17T07:39:14Z'
+        files: []
+        description: 'merge(#socket): P8-D98 slices A3 (gui.open) + A4 (log cursor), Aegis fixes'
+      - id: h0783
+        ts: '2026-10-19T15:16:00Z'
         type: implement
         symbols:
           - '#gui'
-          - '#paradigm-harness'
         author:
           type: human
           id: ascend
-        commit: 4f0f5dfd8b84192f33664c838ef15d3d1b4cea7b
+        commit: 04bc831ef0c6465e039bfe3fe9da3e17d3747411
         intent: feature
         files:
-          - .atelier/DESIGN.md
-          - .atelier/design-system.yaml
-          - .atelier/sessions/2026-10-15-gnomon-aesthetic/session.yaml
-          - .paradigm/events/stream.jsonl
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/entries/2026-10-17/L-2026-10-17-ascend-073914-001.lore
-          - .paradigm/lore/timeline.yaml
-        description: 'docs(#paradigm-harness): Gnomon aesthetic closed — desk, pigment, mono spine, lively motion'
+          - packages/gnomon/test/gui-browser-darwin.test.ts
+        description: 'test(#gui): the headless Chrome smoke retries its profile removal'
+      - &ref_434
+        id: h0782
+        ts: '2026-10-19T15:09:22Z'
+        type: implement
+        symbols:
+          - '#gnomon-contracts'
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: 2c94645875488ac819c3040d2097d31ff0d177f7
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#gui): re-embed the GUI bundle after the P8-D98 contracts move'
+      - id: h0774
+        ts: '2026-10-19T03:29:27Z'
+        type: implement
+        symbols:
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: 7f07ce718ae3d65354d0f86c10a23c24a22d9422
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#gui): re-embed the GUI bundle from the main checkout (worktree builds embed a different esbuild path comment)'
     contributors:
       human:
         - ascend
@@ -29715,7 +29801,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-10-17/L-2026-10-17-ascend-220955-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'docs(#gnomon-ci): lore — first all-green CI across macOS, Ubuntu, Windows'
-      - &ref_434
+      - &ref_435
         id: h0753
         ts: '2026-10-17T21:56:03Z'
         type: implement
@@ -29746,7 +29832,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/vitest.config.ts
         description: 'fix(#kernel-log): Windows parity hygiene — writable-handle fsync, platform markers enforced, CI-portable tests'
-      - &ref_444
+      - &ref_445
         id: h0751
         ts: '2026-10-17T21:34:05Z'
         type: implement
@@ -29795,12 +29881,33 @@ by_symbol:
       agent: []
   '#gnomon-contracts':
     symbol: '#gnomon-contracts'
-    total_changes: 3
-    last_modified: '2026-10-17T23:52:09Z'
+    total_changes: 6
+    last_modified: '2026-10-19T15:27:28Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_437
+      - *ref_433
+      - *ref_434
+      - &ref_452
+        id: h0781
+        ts: '2026-10-19T15:02:49Z'
+        type: implement
+        symbols:
+          - '#gnomon-contracts'
+          - '#gnomon-guide'
+        author:
+          type: human
+          id: ascend
+        commit: 5bcaf0a586ee9c859444b4bad65a55dd6cd480e2
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-10-19-946.yaml
+          - .paradigm/decisions/TD-2026-10-19-947.yaml
+          - .paradigm/lore/entries/2026-10-19/L-2026-10-19-ascend-150002-177.lore
+          - packages/gnomon/test/honesty.test.ts
+          - packages/gnomon/test/m112-conformance.test.ts
+        description: 'test(#gnomon-contracts): reconcile the guide honesty falsifier and the TS client surface with P8-D98'
+      - &ref_439
         id: h0761
         ts: '2026-10-17T23:52:09Z'
         type: implement
@@ -29840,7 +29947,7 @@ by_symbol:
           - packages/gnomon-contracts/test/m1-1-reservations.test.ts
           - packages/gnomon-contracts/test/refusal-rpc.test.ts
         description: 'feat(#gnomon-contracts): M1.1 reservations for spec v3.9 — strictness, convergence, change notes, socket reasons'
-      - &ref_438
+      - &ref_440
         id: h0737
         ts: '2026-10-17T17:29:25Z'
         type: implement
@@ -29886,7 +29993,37 @@ by_symbol:
           - packages/gnomon-contracts/test/ids-principal-ref.test.ts
           - packages/gnomon-contracts/test/refusal-rpc.test.ts
         description: 'feat(#gnomon-contracts): PR-3 contracts core — event, ids, principal, ref, refusal, card, rpc, clientApiId'
-      - &ref_433
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gnomon-helper':
+    symbol: '#gnomon-helper'
+    total_changes: 2
+    last_modified: '2026-10-19T19:26:33Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_450
+        id: h0789
+        ts: '2026-10-19T19:26:33Z'
+        type: implement
+        symbols:
+          - '#gnomon-helper'
+          - '#provisioner'
+        author:
+          type: human
+          id: ascend
+        commit: e5122005a1e98e94c2e943a566173c1eddd843e9
+        intent: fix
+        files:
+          - packages/gnomon-helper/.purpose
+          - packages/gnomon-helper/checksums.json
+          - packages/gnomon-helper/darwin/Sources/gnomon-helper/main.swift
+          - packages/gnomon/src/kernel/identity/helper.ts
+          - packages/gnomon/test/identity-helper-pin.test.ts
+        description: 'fix(#gnomon-helper): root signs return the helper''s prompt line; helper 1.5.0'
+      - &ref_438
         id: h0729
         ts: '2026-10-17T08:05:48Z'
         type: implement
@@ -29981,18 +30118,6 @@ by_symbol:
       human:
         - ascend
       agent: []
-  '#gnomon-helper':
-    symbol: '#gnomon-helper'
-    total_changes: 1
-    last_modified: '2026-10-17T08:05:48Z'
-    stability_score: 1
-    fragility: low
-    recent:
-      - *ref_433
-    contributors:
-      human:
-        - ascend
-      agent: []
   '#gnomon-kernel':
     symbol: '#gnomon-kernel'
     total_changes: 6
@@ -30000,7 +30125,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_435
+      - &ref_436
         id: h0766
         ts: '2026-10-18T01:48:12Z'
         type: implement
@@ -30039,7 +30164,7 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/results/p14b-link-fdpass.darwin.json
         description: 'fix(#gnomon-probes): M1.0 probes round 2 — abort cleanups, live-capture gate, P14b link-fdpass pass'
-      - &ref_436
+      - &ref_437
         id: h0765
         ts: '2026-10-18T01:33:29Z'
         type: implement
@@ -30082,8 +30207,8 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/s29-10-voice-custody/README.md
         description: 'feat(#gnomon-probes): M1.0 probe batch 2 — P06, P09, P12, P14 run; P00/P04/P05/P07/P01-manual founder-run'
-      - *ref_434
-      - &ref_441
+      - *ref_435
+      - &ref_446
         id: h0739
         ts: '2026-10-17T18:03:13Z'
         type: implement
@@ -30131,8 +30256,7 @@ by_symbol:
           - packages/gnomon/test/symbol-allowlist.json
           - packages/gnomon/test/symbols-drift.test.ts
         description: 'feat(#kernel-log): PR-4 signed kernel log + symbol drift CI (P8-D81)'
-      - &ref_442
-        id: h0738
+      - id: h0738
         ts: '2026-10-17T17:29:25Z'
         type: implement
         symbols:
@@ -30186,8 +30310,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_435
       - *ref_436
+      - *ref_437
       - id: h0746
         ts: '2026-10-17T19:22:30Z'
         type: implement
@@ -30203,7 +30327,7 @@ by_symbol:
           - packages/gnomon/probes/p-log-fsync/probe.mjs
           - packages/gnomon/probes/results/p-log-fsync-human-cadence.darwin.json
         description: 'feat(#gnomon-probes): p-log-fsync human cadence — fullfsync fails critical budget, plain commit passes'
-      - &ref_439
+      - &ref_441
         id: h0743
         ts: '2026-10-17T19:05:26Z'
         type: implement
@@ -30257,12 +30381,25 @@ by_symbol:
       agent: []
   '#gnomon-wrapper':
     symbol: '#gnomon-wrapper'
-    total_changes: 1
-    last_modified: '2026-10-17T08:05:48Z'
+    total_changes: 2
+    last_modified: '2026-10-19T01:19:31Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_433
+      - id: h0768
+        ts: '2026-10-19T01:19:31Z'
+        type: implement
+        symbols:
+          - '#gnomon-wrapper'
+        author:
+          type: human
+          id: ascend
+        commit: bfe6b05bb95d5e942d833ade5fdbbe3e45b32641
+        intent: feature
+        files:
+          - packages/gnomon-wrapper/tests/live_kernel.rs
+        description: 'docs(#gnomon-wrapper): live_kernel header matches CI behaviour (fails, not skips, under CI)'
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -30299,8 +30436,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_439
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30312,8 +30449,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_439
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30325,7 +30462,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_440
+      - &ref_443
         id: h0764
         ts: '2026-10-18T00:43:52Z'
         type: implement
@@ -30363,7 +30500,7 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-log-read.test.ts
         description: 'feat(#socket): M1.4 slice 2 — log.read, subscriptions, ref.resolve, hash-free limited views, released head'
-      - *ref_437
+      - *ref_439
       - id: h0752
         ts: '2026-10-17T21:39:34Z'
         type: implement
@@ -30415,7 +30552,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-posix.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'feat(#kernel-log): D83 critical ordering-not-flush, boot-session classification, durable anchor faults'
-      - *ref_439
+      - *ref_441
     contributors:
       human:
         - ascend
@@ -30427,8 +30564,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_439
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30440,7 +30577,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30452,7 +30589,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30464,7 +30601,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -30476,21 +30613,36 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_439
+      - *ref_440
     contributors:
       human:
         - ascend
       agent: []
   '#socket':
     symbol: '#socket'
-    total_changes: 4
-    last_modified: '2026-10-18T00:43:52Z'
+    total_changes: 7
+    last_modified: '2026-10-19T15:57:27Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
-      - &ref_443
+      - *ref_442
+      - *ref_433
+      - id: h0780
+        ts: '2026-10-19T08:32:23Z'
+        type: implement
+        symbols:
+          - '#socket'
+        author:
+          type: human
+          id: ascend
+        commit: 6f3fce66dbacba481991607c6c6e330b0f20bdd4
+        intent: feature
+        files:
+          - packages/gnomon/test/socket-ownership.test.ts
+        description: 'test(#socket): the raw holder in socket-ownership tolerates the probe''s reset'
+      - *ref_443
+      - &ref_444
         id: h0762
         ts: '2026-10-18T00:00:00Z'
         type: implement
@@ -30530,23 +30682,48 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-server.test.ts
         description: 'feat(#socket): M1.4 slice 1 — hello negotiation, mutual auth, authenticated dispatch, status'
-      - *ref_441
-      - *ref_442
     contributors:
       human:
         - ascend
       agent: []
   $daemon-lifecycle:
     symbol: $daemon-lifecycle
-    total_changes: 4
-    last_modified: '2026-10-18T00:00:00Z'
+    total_changes: 6
+    last_modified: '2026-10-19T16:03:23Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_443
+      - id: h0786
+        ts: '2026-10-19T16:03:23Z'
+        type: implement
+        symbols:
+          - $daemon-lifecycle
+        author:
+          type: human
+          id: ascend
+        commit: 9d479ad2090226cae30a6e45d68ea2533bdcf13c
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-10-19-814.yaml
+        description: 'chore(#gnomon): record TD-2026-10-19-814 (drain/resume sandbox and idle resume)'
+      - id: h0779
+        ts: '2026-10-19T08:26:30Z'
+        type: implement
+        symbols:
+          - $daemon-lifecycle
+        author:
+          type: human
+          id: ascend
+        commit: 8602f83ea07168688214374a50eaf24099d826a0
+        intent: fix
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/lifecycle/ready.ts
+        description: 'fix($daemon-lifecycle): keep the ready fd on Linux, where a socketpair cannot be re-opened'
       - *ref_444
-      - *ref_441
-      - *ref_442
+      - *ref_445
+      - *ref_446
     contributors:
       human:
         - ascend
@@ -30558,7 +30735,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
+      - *ref_443
       - id: h0763
         ts: '2026-10-18T00:04:32Z'
         type: implement
@@ -30573,7 +30750,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-crossboot.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'test(#kernel-log): ceiling timeout for the two 1024-commit tests (Windows fsync is slow)'
-      - *ref_443
+      - *ref_444
       - id: h0759
         ts: '2026-10-17T23:11:31Z'
         type: implement
@@ -30592,7 +30769,7 @@ by_symbol:
           - packages/gnomon/src/kernel/log/kernel-log.ts
           - packages/gnomon/test/kernel-log-open-order.test.ts
         description: 'fix(#kernel-log): checks before writes on open — a refused open writes nothing (S34-30)'
-      - *ref_445
+      - *ref_447
     contributors:
       human:
         - ascend
@@ -30604,8 +30781,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
-      - *ref_441
+      - *ref_443
+      - *ref_446
     contributors:
       human:
         - ascend
@@ -30617,7 +30794,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_443
+      - *ref_444
     contributors:
       human:
         - ascend
@@ -30629,7 +30806,347 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
+      - *ref_443
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gnomon-local':
+    symbol: '#gnomon-local'
+    total_changes: 1
+    last_modified: '2026-10-18T16:47:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_448
+        id: h0767
+        ts: '2026-10-18T16:47:38Z'
+        type: implement
+        symbols:
+          - '#gnomon-local'
+          - '#local-runner'
+          - '#supervisor'
+          - ^subscription-only
+        author:
+          type: human
+          id: ascend
+        commit: 11e85e2dd83f1ced711ea8d52960d58f1ac2a8c7
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-local/.purpose
+          - packages/gnomon-local/src/agent.ts
+          - packages/gnomon-local/src/compaction.ts
+          - packages/gnomon-local/src/index.ts
+          - packages/gnomon-local/src/rpc.ts
+          - packages/gnomon-local/test/compaction.test.ts
+          - packages/gnomon-local/test/fake-openai.ts
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/adapters/local/runner.ts
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/local/config.ts
+          - packages/gnomon/src/kernel/supervisor/local-session.ts
+          - packages/gnomon/src/kernel/supervisor/port.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/test/local-config.test.ts
+          - packages/gnomon/test/local-lane-spawn.test.ts
+          - packages/gnomon/test/local-runner.test.ts
+        description: 'feat(#local-runner): M1.8 slice 2 — root-signed local config, runner pin, per-task endpoint, steer, compaction'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#local-runner':
+    symbol: '#local-runner'
+    total_changes: 1
+    last_modified: '2026-10-18T16:47:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_448
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#supervisor':
+    symbol: '#supervisor'
+    total_changes: 3
+    last_modified: '2026-10-19T01:46:33Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0772
+        ts: '2026-10-19T01:46:33Z'
+        type: implement
+        symbols:
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: def0411ea0e96520dd3e5d6a66351c4d73f4d53f
+        intent: feature
+        files:
+          - packages/gnomon/test/repo-context.test.ts
+        description: 'test(#supervisor): the win32 guard in repo-context tests keys on path.sep, not process.platform'
+      - id: h0771
+        ts: '2026-10-19T01:42:28Z'
+        type: implement
+        symbols:
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 2837e51b4636d859be231e658d6728cda9aa85e6
+        intent: feature
+        files:
+          - packages/gnomon/test/repo-context.test.ts
+        description: 'test(#supervisor): POSIX-absolute @ import cases skip on win32 (resolver re-review is the parity phase)'
+      - *ref_448
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ^subscription-only:
+    symbol: ^subscription-only
+    total_changes: 1
+    last_modified: '2026-10-18T16:47:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_448
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#manifest-loader':
+    symbol: '#manifest-loader'
+    total_changes: 1
+    last_modified: '2026-10-19T01:23:13Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_449
+        id: h0769
+        ts: '2026-10-19T01:23:13Z'
+        type: implement
+        symbols:
+          - '#manifest-loader'
+          - '#mod-host'
+        author:
+          type: human
+          id: ascend
+        commit: f078c03c0277ab42da39908c3907cdb6f1bc515a
+        intent: feature
+        files: []
+        description: Merge gnomon/m111-slice3 into feat/gnomon (M1.11 slice 3 mods; Aegis round 3 APPROVE)
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mod-host':
+    symbol: '#mod-host'
+    total_changes: 1
+    last_modified: '2026-10-19T01:23:13Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_449
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#wrapper-channel':
+    symbol: '#wrapper-channel'
+    total_changes: 1
+    last_modified: '2026-10-19T01:28:56Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0770
+        ts: '2026-10-19T01:28:56Z'
+        type: implement
+        symbols:
+          - '#wrapper-channel'
+        author:
+          type: human
+          id: ascend
+        commit: c3ab1b7129fcaa86d1208ec27afba480e37419e7
+        intent: feature
+        files:
+          - packages/gnomon/test/platform-registry.ts
+          - packages/gnomon/test/wrapper-channel.test.ts
+        description: 'test(#wrapper-channel): launch-grant tests are darwin-only (linux refuses web-launch: no transport profile)'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gnomon-helper-build':
+    symbol: '#gnomon-helper-build'
+    total_changes: 2
+    last_modified: '2026-10-19T04:59:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0775
+        ts: '2026-10-19T04:59:07Z'
+        type: implement
+        symbols:
+          - '#gnomon-helper-build'
+        author:
+          type: human
+          id: ascend
+        commit: 9f26c79757b19e12cfaee93e9be533241fa22525
+        intent: feature
+        files:
+          - packages/gnomon-helper/checksums.json
+        description: 'chore(#gnomon-helper-build): checksums for the signed helper 1.4.0 (presence.available)'
+      - id: h0773
+        ts: '2026-10-19T03:14:04Z'
+        type: implement
+        symbols:
+          - '#gnomon-helper-build'
+        author:
+          type: human
+          id: ascend
+        commit: c8fbbcf73be31d17b39f1d733fb48b9834005659
+        intent: feature
+        files:
+          - packages/gnomon-helper/checksums.json
+        description: 'chore(#gnomon-helper-build): checksums for the helper 1.3.0 rebuild from the main checkout'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#provisioner':
+    symbol: '#provisioner'
+    total_changes: 2
+    last_modified: '2026-10-19T19:26:33Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_450
+      - id: h0776
+        ts: '2026-10-19T05:04:25Z'
+        type: implement
+        symbols:
+          - '#provisioner'
+        author:
+          type: human
+          id: ascend
+        commit: 9e12800f511e5041454c54f2a02141b1d37bb97c
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/identity/provisioner.ts
+        description: 'fix(#provisioner): the provisioning lock is recognised by inode AND a per-run nonce (Linux reuses inodes at once)'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-setup':
+    symbol: '#gui-setup'
+    total_changes: 1
+    last_modified: '2026-10-19T05:26:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_451
+        id: h0777
+        ts: '2026-10-19T05:26:07Z'
+        type: implement
+        symbols:
+          - '#gui-setup'
+          - '#web-endpoint'
+        author:
+          type: human
+          id: ascend
+        commit: 2d53db1abfe16ceb5fd0310d16d36ace308aa7df
+        intent: fix
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/src/main.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/src/kernel/web/rules.ts
+          - packages/gnomon/test/web-endpoint.test.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#web-endpoint): accept a WebSocket upgrade without Sec-Fetch-Site on the exact Origin (Chrome sends none); setup page never blank'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#web-endpoint':
+    symbol: '#web-endpoint'
+    total_changes: 2
+    last_modified: '2026-10-19T15:27:28Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_433
+      - *ref_451
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#bare-entry':
+    symbol: '#bare-entry'
+    total_changes: 2
+    last_modified: '2026-10-19T15:27:28Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_433
+      - id: h0778
+        ts: '2026-10-19T05:43:39Z'
+        type: implement
+        symbols:
+          - '#bare-entry'
+        author:
+          type: human
+          id: ascend
+        commit: 488df7e4f3e72d8dab81a6bf6aefa2921dab5af8
+        intent: fix
+        files:
+          - packages/gnomon/src/cli/launch-tty.ts
+          - packages/gnomon/src/cli/open-browser.ts
+          - packages/gnomon/test/open-browser-darwin.test.ts
+          - packages/gnomon/test/open-browser.test.ts
+        description: 'fix(#bare-entry): print the URL before the open attempt; one fresh URL at a time (Aegis L1, L2)'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gnomon-guide':
+    symbol: '#gnomon-guide'
+    total_changes: 1
+    last_modified: '2026-10-19T15:02:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_452
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#trace-capture':
+    symbol: '#trace-capture'
+    total_changes: 1
+    last_modified: '2026-10-19T18:10:16Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0788
+        ts: '2026-10-19T18:10:16Z'
+        type: implement
+        symbols:
+          - '#trace-capture'
+        author:
+          type: human
+          id: ascend
+        commit: 7124288da888d9f234bab8d7beda4b37eb04ac48
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/trace/capture.ts
+          - packages/gnomon/test/trace-capture.test.ts
+        description: 'fix(#trace-capture): bound redaction bodies so a bogus header never hides a command tail (Aegis N1)'
     contributors:
       human:
         - ascend

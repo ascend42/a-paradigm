@@ -1,0 +1,48 @@
+id: L-2026-10-19-ascend-040139-001
+type: agent-session
+timestamp: '2026-10-19T04:01:39.847Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon onboarding MVP-a: Provisioner engine + guided `gnomon setup`'
+summary: 'Founder ruling (2026-10-19): launching gnomon or the app on a fresh Mac must guide setup in a real UI; the CLI verbs stay. Arky''s design (a setup-mode loopback endpoint, one engine, two renderers) was reconciled with Aegis''s threat model: the digest is shown only on the user''s own launch surface (the terminal or the wrapper window), and nothing in a browser can start provisioning. MVP-a extracted identity init into an event-emitting Provisioner (identity-cli output byte-identical), added read-only preflight, a guided `gnomon setup`, bare-gnomon routing, and completeDevice for the identity.json-written-but-no-registry-row crash window. Invariants I1–I10 have falsifiers. MVP-b (GUI screens, wrapper Phase::Setup, presence.available helper op) is in progress.'
+symbols_touched:
+  - '#provisioner'
+  - '#setup-preflight'
+  - '#first-run'
+  - $first-run
+  - ^unprovisioned-only
+  - '#bare-entry'
+  - '#gnomon-up'
+  - '#identity'
+symbols_created:
+  - '#provisioner'
+  - '#setup-preflight'
+  - '#first-run'
+  - $first-run
+  - ^unprovisioned-only
+decisions:
+  - id: D-first-run-surface
+    decision: The expected digest is trusted only on the terminal or the wrapper window. A browser tab may mirror it but is never the authority.
+    rationale: 'Aegis: a lookalike tab on another loopback port can''t be told apart, so a digest shown only in a browser proves nothing.'
+  - id: D-presence-available-deferred
+    decision: MVP-a didn't add the helper presence.available op (Touch ID preflight = warn); MVP-b adds it with helper 1.4.0 + MIN_HELPER_VERSION bump, and the coordinator re-signs.
+    rationale: A floor bump refuses the installed 1.3.0 helper until it is re-signed.
+  - id: D-last-line-wording
+    decision: 'The setup copy says the dialog''s LAST line must read ''Gnomon Helper: root key signs 1: <d12>'', not ''must end with''.'
+    rationale: The real helper line continues '; row <schema>' after the digest, so 'ends with' was false.
+tags:
+  - gnomon
+  - onboarding
+  - ux
+  - security
+linked_tasks:
+  - T-2026-10-19-005
+linked_commits:
+  - dfed92fe
+  - bfc6dd84
+git_context:
+  ref: 7f07ce718ae3d65354d0f86c10a23c24a22d9422
+  branch: feat/gnomon
+  dirty: true

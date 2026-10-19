@@ -1,0 +1,37 @@
+id: L-2026-10-19-ascend-004621-001
+type: milestone
+timestamp: '2026-10-19T00:46:21.562Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon first dogfood path complete on macOS; Mac daily-driver lanes underway
+summary: |-
+  On 2026-10-18 these all landed on feat/gnomon (green x8 at fa100167), each through reviewer + Aegis:
+  - M1.3 slice 1 (Secure Enclave helper, identity init/rotate/recover)
+  - gnomon up (real-home in-process launcher, unsafe-env refusal)
+  - P8-D96 permission channel (--permission-prompts host + stdio; Edit/Write/Bash cards with Touch ID; ask rules; ungated-tool-use detector)
+  - M1.7 s2 (session read-deny, P8-D94 audited repo hooks)
+  - T-020 (web child has no network; kernel-accept handoff)
+  - T-016 (P8-D93 clientNonce)
+  - M1.6 s2, M1.8 s2, M1.12 s3
+  The founder ruled P8-D94 (audited repo hooks), P8-D95 (ratifications) and P8-D97 (repo context loads normally). Then the founder set the goal of a Mac daily driver. Five lanes are in flight: the GUI completeness pass (ask-user picker, always rules), the M1.13 signed Tauri app, security hardening (SIGUSR1, unlock TTL, helper exec deny), M1.11 s3 (gnomon mod CLI + Workshop), and the repo context (stripped plugin-dir + add-dir).
+symbols_touched:
+  - '#identity'
+  - '#gnomon-helper'
+  - '#gnomon-up'
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#web-endpoint'
+  - '#approval-broker'
+  - '#mod-cli'
+  - '#workshop-mod'
+  - '#gnomon-wrapper'
+learnings:
+  - Builder stalls (turn limits, waiting on background work) cost more wall-clock than CI; heartbeat checks every 15 min plus commit-per-item briefs fixed most of it
+  - 'Windows/Linux CI traps recur: keys/ dir modes, world-writable /tmp homes, POSIX path fixtures, '':'' in names, JSON-escaped paths'
+  - Real-Claude probes before building (p01b, p10m-repo-surfaces, p10m-repo-context) caught design-breaking assumptions early
+git_context:
+  ref: fa1001678876ffd5d2ef5a9466636635677a9f76
+  branch: feat/gnomon
+  dirty: true

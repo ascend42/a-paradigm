@@ -1,0 +1,64 @@
+id: L-2026-10-19-ascend-072016-001
+type: milestone
+timestamp: '2026-10-19T07:20:16.338Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon session 2026-10-18/19: Mac daily-driver build, guided onboarding, Orca audit; process hardening started'
+summary: |-
+  Merged to feat/gnomon, with CI green at each merge:
+  - M1.13 wrapper app;
+  - M1.11 slice 3 mods;
+  - P8-D97 repo context and its F1–F4 follow-ups;
+  - bare `gnomon` and the installer;
+  - guided first-run onboarding (MVP-a: Provisioner, preflight, `gnomon setup --cli`; MVP-b: setup endpoint, GUI screens, wrapper Phase::Setup, helper 1.4.0 presence.available);
+  - the Linux lock-nonce fix;
+  - the Chrome WebSocket Sec-Fetch-Site fix (the first dogfood run showed a blank page);
+  - auto-open in the default browser through osascript stdin.
+  Founder rulings:
+  - every setup step needs a guided UI, and the CLI stays as the raw form;
+  - the founder waits for the full experience before testing;
+  - gnomon must open the browser seamlessly.
+  The Orca audit produced the adopt list T-009 (now in progress on gnomon/process-hardening) and the spec decisions T-010.
+  Founder status: the hardware test passed; guided setup is not yet run (the next step).
+symbols_touched:
+  - '#gnomon-wrapper'
+  - '#bare-entry'
+  - '#provisioner'
+  - '#first-run'
+  - '#setup-endpoint'
+  - '#gui-setup'
+  - '#web-endpoint'
+  - '#supervisor'
+  - '#session-runner'
+decisions:
+  - id: D-ui-first
+    decision: Every user-facing setup step gets a guided UI; the CLI verbs remain as the raw form
+    rationale: 'Founder: the tool needs proper UI/UX for everyone'
+  - id: D-auto-open
+    decision: gnomon auto-opens the default browser via osascript stdin (the URL is never on argv); --no-open and GNOMON_NO_OPEN opt out
+    rationale: 'Founder: seamless; Aegis: keep the token off argv'
+  - id: D-ws-sfs
+    decision: A WebSocket upgrade with no Sec-Fetch-Site is accepted on the exact Origin; HTTP non-static routes still require the header
+    rationale: Chrome sends no Fetch Metadata on the WS handshake; Origin is always sent and is exact-locked
+learnings:
+  - A GUI-pin embed made inside a worktree is wrong for CI (esbuild writes a different path comment); re-embed from the main checkout, or symlink the worktree's node_modules packages
+  - Linux reuses inodes immediately; never identify a lock file by inode alone; use a nonce
+  - No test loaded a real browser, so the blank page reached the founder; a headless-Chrome smoke test is needed (T-006 item 6)
+  - Builders hit the 50-turn limit repeatedly; resume them with SendMessage and tight budgets
+tags:
+  - gnomon
+  - milestone
+  - arc:gnomon-move-1
+linked_tasks:
+  - T-2026-10-19-005
+  - T-2026-10-19-006
+  - T-2026-10-19-007
+  - T-2026-10-19-008
+  - T-2026-10-19-009
+  - T-2026-10-19-010
+git_context:
+  ref: 488df7e4f3e72d8dab81a6bf6aefa2921dab5af8
+  branch: feat/gnomon
+  dirty: true

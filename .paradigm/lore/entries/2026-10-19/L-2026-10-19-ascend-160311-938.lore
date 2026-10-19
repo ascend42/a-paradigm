@@ -1,0 +1,14 @@
+id: L-2026-10-19-ascend-160311-938
+type: insight
+timestamp: '2026-10-19T16:03:11.281Z'
+author: ascend
+title: Decision TD-2026-10-19-814 recorded
+summary: Companion lore entry for decision record TD-2026-10-19-814. See .paradigm/decisions/TD-2026-10-19-814.yaml.
+symbols_touched:
+  - $daemon-lifecycle
+  - '#backend-adapter'
+references:
+  decision_id: TD-2026-10-19-814
+tags:
+  - companion-lore
+  - decision-reference
