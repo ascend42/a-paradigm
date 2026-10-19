@@ -21,6 +21,8 @@ import { groupDigest, runSetup, type SetupDeps } from '../src/cli/setup-cli.js';
 import {
   acceptUnsignedHelperForTests,
   DEV_TEST_HELPER_ACK,
+  deviceKeyPath,
+  writeNewDeviceKey,
   HardwareRootAuthority,
   helperLineShows,
   identityPath,
@@ -101,6 +103,11 @@ function deps(userHome: string, fake: FakeHelper, ops: string[] = [], extra: Par
 }
 
 const lastLine = (s: string): string => s.slice(s.lastIndexOf('\n') + 1);
+/** Rewrite identity.json in place (a same-user tamper). */
+function editRecord(home: string, f: (r: Record<string, unknown>) => Record<string, unknown>): void {
+  const p = identityPath(home);
+  fs.writeFileSync(p, `${JSON.stringify(f(JSON.parse(fs.readFileSync(p, 'utf8'))), null, 2)}\n`);
+}
 const homeOf = (u: string): string => path.join(u, '.gnomon');
 
 describe('gnomon setup (#first-run)', () => {
@@ -241,22 +248,46 @@ describe('gnomon setup (#first-run)', () => {
     expect(readRegistry(home, verify).devices.get(rec.deviceId)).toBeUndefined();
 
     // the record's helperPath is the pinned one (I5): reuse a valid executable there
+    // HIGH-1: completion appends the row the root signed during setup (saved in the record): ZERO new signatures
+    expect(rec.pendingDeviceRow?.row.keyId).toBe(rec.deviceKeyId);
     const before = fake.signs.length;
     const o = io(['complete']);
     const done = await runSetup(o.io, deps(u, fake));
     expect(done.code).toBe(0);
     expect(o.text()).toContain(`created    ${rec.createdAt}`);
-    expect(o.text()).toContain("Touch ID 1 of 1: the root registers this Mac's device key");
-    expect(fake.signs.length - before).toBe(1);
-    const d = /root key signs 1: ([0-9a-f]{12})"/.exec(o.text())![1]!;
-    expect(lastLine(fake.shown.at(-1)!)).toBe(`Gnomon Helper: root key signs 1: ${d}`);
+    expect(fake.signs.length - before).toBe(0);
+    expect(fake.prompts.length).toBe(2);
     expect(readRegistry(home, verify).devices.get(rec.deviceId)?.principalId).toBe(rec.principalId);
     expect(readIdentity(home)!.gen).toBe(rec.gen); // never re-keyed
 
     const again = io([]);
     expect((await runSetup(again.io, deps(u, fake))).code).toBe(0);
     expect(again.text()).toContain('Nothing to do');
-    expect(fake.signs.length - before).toBe(1);
+    expect(fake.signs.length - before).toBe(0);
+  });
+
+  it('G-SET-07 (HIGH-1 falsifiers): completion is never a signing oracle — a swapped device key, an edited deviceId or a record without the saved row refuse with 0 signs', async () => {
+    const crashAt = (s: string) => {
+      if (s === 'registry') throw new Error('crash');
+    };
+    const cases: Array<[string, (home: string) => void, string]> = [
+      ['swapped device key', (h) => (fs.rmSync(deviceKeyPath(h)), writeNewDeviceKey(h)), 'device-conflict'],
+      ['edited deviceId', (h) => editRecord(h, (r) => ({ ...r, deviceId: `${String(r.deviceId)}x` })), 'device-conflict'],
+      ['no saved row', (h) => editRecord(h, (r) => ({ ...r, pendingDeviceRow: undefined })), 'no-saved-device-row'],
+    ];
+    for (const [what, tamper, reason] of cases) {
+      const u = tmp();
+      const home = homeOf(u);
+      const fake = new FakeHelper(null);
+      expect((await runSetup(io(['']).io, deps(u, fake, [], { fault: crashAt }))).code, what).toBe(1);
+      tamper(home);
+      const before = fake.signs.length;
+      const o = io(['complete']);
+      expect((await runSetup(o.io, deps(u, fake))).code, what).toBe(1);
+      expect(o.errText(), what).toContain(reason);
+      expect(fake.signs.length - before, what).toBe(0);
+      expect(fs.existsSync(registryPath(home)) ? fs.readFileSync(registryPath(home), 'utf8').trim() : '', what).toBe('');
+    }
   });
 
   it('routing: bare gnomon on a TTY with an unprovisioned home runs setup first; off a TTY it is up\'s refusal naming gnomon setup', async () => {

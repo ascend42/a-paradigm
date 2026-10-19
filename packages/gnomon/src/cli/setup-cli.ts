@@ -289,7 +289,7 @@ async function alreadySetUp(io: LaunchTtyIo, home: string, rec: IdentityRecord, 
     io.stdout.write('  Nothing to do. Run `gnomon` in a repo to start.\n');
     return { code: SETUP_EXIT_OK, provisioned: false, home };
   }
-  const a = await rl.ask(`\nThis Mac's device key is not registered yet (an earlier setup stopped just before the last step).\nType "complete" to register it now (1 Touch ID), anything else to stop:\n> `);
+  const a = await rl.ask(`\nThis Mac's device key is not registered yet (an earlier setup stopped just before the last step).\nType "complete" to register it now (no Touch ID: the root already signed it during that setup), anything else to stop:\n> `);
   if (a !== 'complete') {
     refused(io.stderr, 'setup', 'device-unregistered', 'the device registration was not completed', ['gnomon setup']);
     return { code: SETUP_EXIT_REFUSED, provisioned: false, home };

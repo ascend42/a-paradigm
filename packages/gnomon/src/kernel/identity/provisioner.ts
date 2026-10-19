@@ -33,7 +33,10 @@
  *       this helper process, or deleted with fresh presence);
  *   I10 after identity.json is written, keys are never deleted; a crash before
  *       the registry row leaves `device-unregistered`, which completeDevice()
- *       finishes as its own root-signed step (fresh presence, digest shown).
+ *       finishes by appending the device row the root ALREADY signed during
+ *       that provisioning (saved in identity.json as pendingDeviceRow, with
+ *       deviceKeyId): verified, ids matched, ZERO new root signatures (Aegis
+ *       HIGH-1: never a signing oracle for whatever key sits on disk).
  */
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -45,7 +48,7 @@ import { deviceKeyPath, loadDeviceKey, writeNewDeviceKey } from './device-key.js
 import { HardwareRootAuthority, p256FromX963, p256KeyIdOfPem, pemOf } from './hardware.js';
 import { helperOnceSync, HelperProcess, pinHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
 import { APPROVALS_ROW_SCHEMA, appendIdentityJournal, helperPublicKey, IDENTITY_SCHEMA, identityPath, openHardwareIdentity, readIdentity, writeIdentity, type IdentityRecord } from './provision.js';
-import { appendSignedRegistryRow, deviceRowFor, readRegistry, registryPath } from './registry.js';
+import { appendSignedRegistryRow, deviceRowFor, readRegistry, registryPath, type RegistryRow } from './registry.js';
 
 export type ProvisionMode = 'init' | 'rotate' | 'recover';
 export type PresencePurposeId = 'rotate-statement' | 'approvals-binding' | 'device-row' | 'complete-device' | 'purge-old' | 'purge';
@@ -71,7 +74,7 @@ export interface ProvisionRefusal {
 export type ProvisionOutcome = ProvisionDone | ProvisionRefusal;
 
 /** I7: the root prompts each mode may raise; one more is refused before it reaches the helper. */
-export const ROOT_PROMPT_BUDGET: Readonly<Record<ProvisionMode | 'complete', number>> = Object.freeze({ init: 2, rotate: 3, recover: 2, complete: 1 });
+export const ROOT_PROMPT_BUDGET: Readonly<Record<ProvisionMode | 'complete', number>> = Object.freeze({ init: 2, rotate: 3, recover: 2, complete: 0 });
 export const PROVISION_LOCK_SUFFIX = '.provisioning.lock';
 
 export interface ProvisionerOptions {
@@ -338,6 +341,9 @@ export class Provisioner extends EventEmitter {
         deviceId: deviceRow.deviceId!,
         helperPath: pin.exe,
         createdAt: new Date().toISOString(),
+        // HIGH-1: the already-signed device row rides in the record (written BEFORE the registry append)
+        deviceKeyId: deviceRow.keyId,
+        pendingDeviceRow: { row: deviceRow as unknown as Record<string, unknown>, ...deviceSig },
         ...(existing && mode === 'rotate' ? { rotatedFrom: existing.rootKeyId } : {}),
         ...(existing && mode === 'recover' ? { recoveredFrom: existing.rootKeyId } : {}),
       };
@@ -464,10 +470,12 @@ export class Provisioner extends EventEmitter {
   /**
    * I10: finish a commit that crashed between identity.json and its registry
    * row. Opens the identity exactly as the daemon does (helper from
-   * identity.json, pinned; SE keys and approvals binding verified), rebuilds
-   * the device row from the record and the device key on disk (its deviceId
-   * must be the record's), and signs it with ONE fresh root presence whose
-   * digest the surface showed. Never deletes, never re-keys.
+   * identity.json, pinned; SE keys and approvals binding verified), takes
+   * the record's saved pendingDeviceRow, verifies its signature under this
+   * root, requires row.keyId === the device key on disk === deviceKeyId and
+   * the record's deviceId/principalId, and appends it. No prompt, no new
+   * signature (budget 0). A record without the saved row refuses (→ --rotate).
+   * Never deletes, never re-keys.
    */
   async completeDevice(): Promise<ProvisionOutcome> {
     const home = this.#o.home;
@@ -485,13 +493,16 @@ export class Provisioner extends EventEmitter {
       const have = reg.devices.get(rec.deviceId);
       if (have && have.keyId === device.keyId && have.principalId === rec.principalId && have.principalKind === 'human') return this.#refuse('nothing-to-complete', 'this device already has its registry row');
       if (have) return this.#refuse('device-conflict', 'a different registry row already names this device; re-provision with gnomon identity init --rotate');
-      const name = rec.principalId.slice(`p:${rec.ns}/`.length);
-      const host = rec.deviceId.slice(`dev:${rec.ns}/`.length);
-      const row = deviceRowFor(rec.ns, { host, name, principalKind: 'human', publicKeyPem: device.publicKeyPem });
-      if (row.deviceId !== rec.deviceId || row.principalId !== rec.principalId) return this.#refuse('device-conflict', 'the device row rebuilt from identity.json does not match it');
-      const s = await this.#rootSign(hw.root as HardwareRootAuthority, row, { n: 1, of: 1, purpose: 'complete-device' });
+      // Aegis HIGH-1: never a root-signing oracle. Only the row the root signed during THIS record's
+      // provisioning (saved in the record) is appended, after it verifies and every id agrees; no new signature.
+      const saved = rec.pendingDeviceRow;
+      if (!saved || typeof rec.deviceKeyId !== 'string') return this.#refuse('no-saved-device-row', 'this identity predates the saved device row, so it cannot be completed without a new root signature; re-provision with gnomon identity init --rotate');
+      const row = saved.row as unknown as RegistryRow;
+      if (saved.signer !== rec.rootKeyId || !hw.root.verifyRow(saved.signer, row, saved.sig)) return this.#refuse('device-conflict', 'the saved device row is not signed by this root');
+      if (row.keyId !== device.keyId || row.keyId !== rec.deviceKeyId) return this.#refuse('device-conflict', 'the device key on disk is not the one this identity was provisioned with');
+      if (row.deviceId !== rec.deviceId || row.principalId !== rec.principalId || row.principalKind !== 'human' || row.kind !== 'device') return this.#refuse('device-conflict', 'the saved device row does not match identity.json');
       this.#step('commit');
-      appendSignedRegistryRow(home, row, { signer: s.signer, sig: s.sig });
+      appendSignedRegistryRow(home, row, { signer: saved.signer, sig: saved.sig });
       appendIdentityJournal(home, { op: 'complete-device', deviceId: rec.deviceId, rootKeyId: rec.rootKeyId, at: new Date().toISOString() });
       return this.#done({ completed: true, home, deviceId: rec.deviceId, rootKeyId: rec.rootKeyId }, rec);
     } catch (e) {
