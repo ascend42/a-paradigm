@@ -67,6 +67,9 @@
  * kernel.call to the real dispatcher and the relays into it), lists it in
  * `status.mods`, and stops every mod before the children sweep at every exit.
  *
+ * USER PAUSE (slice 3, control.ts): a `<home>/mods/<name>/paused` marker
+ * (`gnomon mod pause`) makes every start return paused{why:'user'}.
+ *
  * STILL NAMED, NOT BUILT: dev-mode cards/expiry scheduling/cwd exclusion and
  * the dev re-pin (`mod.repinned`), the `gnomon-mods` MCP bridge, Tier 0
  * templates, the Workshop mod, `/blob` serving.
@@ -95,6 +98,7 @@ import { declaredEffects, effectsFor, methodEffect, type CallContext } from './e
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
+import { isUserPaused } from './control.js';
 
 const isLink = (p: string): boolean => {
   try {
@@ -162,7 +166,7 @@ export interface ModHostSeams {
 
 export type ModStartResult =
   | { state: 'running'; name: string; packageHash: string; dev: boolean; effects: ToolEffect[]; sandbox: 'full' | 'none'; profileHash: string | null; egressPort: number | null }
-  | { state: 'paused'; name: string; why: 'changed' | 'dev-expired'; cardId: string | null; files?: TreeDiff };
+  | { state: 'paused'; name: string; why: 'changed' | 'dev-expired' | 'user'; cardId: string | null; files?: TreeDiff };
 
 interface Running {
   name: string;
@@ -325,6 +329,7 @@ export class ModHost {
   /** Start (or return) the child for `name` — the OPERATOR path: it also lifts a restart-cap `down`. Paused mods return their pause; nothing from a changed tree loads. */
   start(name: string): Promise<ModStartResult> {
     this.#down.delete(name);
+    if (this.#paused.get(name)?.why === 'user') this.#paused.delete(name); // re-judged from the marker
     return this.#launch(name);
   }
 
@@ -389,6 +394,13 @@ export class ModHost {
 
   async #start(name: string): Promise<ModStartResult> {
     if (this.#closed) throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
+    if (MOD_NAME.test(name) && isUserPaused(this.#o.home, name)) {
+      // `gnomon mod pause` (control.ts): nothing loads until `gnomon mod start`
+      this.#unwatch(name);
+      const p = { state: 'paused' as const, name, why: 'user' as const, cardId: null };
+      this.#paused.set(name, p);
+      return p;
+    }
     const loaded = loadMod({ home: this.#o.home, name, trust: this.#o.trust, emit: this.#emit, ...(this.#o.kernelPrincipal ? { kernelPrincipal: this.#o.kernelPrincipal } : {}) });
     if (loaded.state === 'paused') {
       this.#unwatch(name);
@@ -551,6 +563,7 @@ export class ModHost {
     if (!r) return;
     r.stopping = true;
     this.#running.delete(name);
+    if (reason === 'paused') this.#paused.set(name, { state: 'paused', name, why: 'user', cardId: null });
     let t: NodeJS.Timeout | undefined;
     await Promise.race([r.channel.request('shutdown', {}).catch(() => undefined), new Promise((res) => (t = setTimeout(res, 300)))]);
     clearTimeout(t);

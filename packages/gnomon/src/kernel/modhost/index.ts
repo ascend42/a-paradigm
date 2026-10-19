@@ -18,3 +18,5 @@ export { sanitizeModBlock } from './block.js';
 export { EgressProxy, EGRESS_PORTS, isNonPublicAddress } from './egress-proxy.js';
 export { ModState, STATE_LIMITS, stateDir, blobsDir } from './state.js';
 export { ModChannel, MOD_FRAME_MAX_BYTES } from './channel.js';
+export { StagedCardPickup, pendingStaged, isUserPaused, writePause, requestStart, takeStartRequest, requestUninstall, uninstallRequested, UNINSTALL_REQUEST, modNames, modsRoot, PAUSE_MARKER, START_REQUEST, MAX_PICKUP_CARDS, MAX_PICKUP_REFUSED, PICKUP_SCAN_MS } from './control.js';
+export type { PendingStaged, PickupHost, PickupOptions } from './control.js';

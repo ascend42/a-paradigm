@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T22:30:57.073Z'
+generated: '2026-10-19T00:31:14.007Z'
 structure: {}
 key_files:
   config:
@@ -284,6 +284,7 @@ symbols:
   '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/
+  '#purpose-component-mod-cli': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/

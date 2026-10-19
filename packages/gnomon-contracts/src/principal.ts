@@ -120,6 +120,8 @@ export const GRANT_ROW_KINDS = [
   'grant.egress',
   'grant.voice-approvals',
   'grant.peer',
+  // M1.11 slice 3 (#mod-cli): a root-signed uninstall of a mod (the last pin row naming it wins); not a client schema
+  'grant.uninstall',
 ] as const;
 export type GrantRowKind = (typeof GRANT_ROW_KINDS)[number];
 

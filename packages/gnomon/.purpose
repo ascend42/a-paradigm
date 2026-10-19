@@ -1740,9 +1740,45 @@ components:
       the bridge drops a call's byte tally on the host's onCallEnd and prunes
       past idle seconds (never a wholesale clear); kernel-side refusals reach
       a mod as code + reason only (generic message, no wrapped data).
-      Slice 3: spend from the caller permit, dev-mode cards/re-pin,
-      gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
+      Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
+      a <home>/mods/<name>/paused marker makes every start return
+      paused{why:user}. Still to come: spend from the caller permit,
+      dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
+
+  mod-cli:
+    description: >-
+      #mod-cli (spec §12.4, §12.5, §3.1 I3; §19.1 M1.11 slice 3) -
+      src/cli/mod-cli.ts `gnomon mod install|link|list|status|pause|start|
+      uninstall` over #manifest-loader, plus the kernel half in
+      src/kernel/modhost/control.ts. §5 has no install/pause/start verb and
+      adding one moves clientApiId, so the CLI and the kernel meet in the
+      home: install/link run stageInstall in the CLI (snapshot + pending card
+      record, signs nothing, also from a kernel-spawned shell where the card
+      names GNOMON_HSID) and print the card lines from rederiveInstallDetail
+      (the hardened install path: one line per entry, kernel-composed count
+      line at index 2, COMMAND_UNSAFE linked-path refusal, linked-source
+      re-hash); a url source is refused. The daemon's StagedCardPickup
+      (scan every 2 s) raises every pending staged card through
+      #approval-broker raiseInstallCard (re-derived from the pinned snapshot;
+      install = fresh presence + root key, Touch ID via the M1.3 helper),
+      logs manifest.staged{via:cli} for cards the kernel did not stage
+      itself, starts the mod on mod.installed; bounded (MAX_PICKUP_CARDS 32
+      raised, 256 remembered refusals keyed by file stamp so a tampered
+      record is not retried until it changes). pause writes the paused marker
+      (narrows; allowed from a session), the pickup stops a running paused
+      mod (mod.paused{reason:user}); start clears it and writes
+      start.request (operator start, lifts DOWN); uninstall writes
+      uninstall.request naming the pin, the pickup raises a root-class
+      `grant` card (allow|deny) whose allow appends a root-signed
+      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input),
+      stops the mod and logs manifest.uninstall{diff} (+ mod.unlinked);
+      effectiveInstall = the last install/uninstall pin row naming the mod.
+      start and uninstall are refused from a kernel-spawned shell. list and
+      status read the grant table offline (trust from identity.json or a
+      DEV home's root).
+    tags: [cli, mods, M1.11]
+    oracles: [G-MOD-04, G-MOD-08]
 flows:
   daemon-lifecycle:
     description: >-

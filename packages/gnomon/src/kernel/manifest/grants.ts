@@ -80,7 +80,17 @@ export interface GrantBindRow {
   manifestHash: string;
   kinds: string[];
 }
-export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow;
+/** M1.11 slice 3: a root-signed uninstall (decided on a root-class card); the effective pin is the LAST install/uninstall row naming the mod. */
+export interface GrantUninstallRow {
+  schemaVersion: typeof GRANT_ROW_SCHEMA;
+  kind: 'grant.uninstall';
+  createdAt: string;
+  name: string;
+  /** the pin it removes */
+  packageHash: string;
+  cardId: string;
+}
+export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow | GrantUninstallRow;
 /** What a writer passes: a grant row without schemaVersion (createdAt optional). */
 export type GrantRowInput = GrantRow extends infer R ? (R extends GrantRow ? Omit<R, 'schemaVersion' | 'createdAt'> & { createdAt?: string } : never) : never;
 
@@ -90,6 +100,8 @@ export interface ResolvedGrants {
   egress: Map<string, Set<string>>; // manifestHash → hosts
   binds: GrantBindRow[];
   installs: GrantInstallRow[]; // file order
+  /** grant.install and grant.uninstall rows in file order (effectiveInstall reads this) */
+  pins: Array<GrantInstallRow | GrantUninstallRow>;
   other: Array<{ line: number; kind: GrantRowKind }>;
   rejected: Array<{ line: number; reason: string }>;
 }
@@ -126,6 +138,11 @@ export function checkGrantRow(row: unknown): string | null {
       }
       return null;
     }
+    case 'grant.uninstall':
+      if (typeof row.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(row.name)) return 'name';
+      if (typeof row.packageHash !== 'string' || !SHA.test(row.packageHash)) return 'packageHash';
+      if (typeof row.cardId !== 'string' || !CARD_ID.test(row.cardId)) return 'cardId';
+      return null;
     case 'grant.trust':
       if (typeof row.manifestHash !== 'string' || !SHA.test(row.manifestHash)) return 'manifestHash';
       if (typeof row.tier !== 'string' || !TRUST_TIER_PATTERN.test(row.tier)) return 'tier';
@@ -155,7 +172,7 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
   } catch {
     text = '';
   }
-  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], other: [], rejected: [] };
+  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], pins: [], other: [], rejected: [] };
   const egressLines = new Map<string, number[]>();
   text.split('\n').forEach((raw, i) => {
     const line = i + 1;
@@ -178,6 +195,10 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     switch (row.kind) {
       case 'grant.install':
         out.installs.push(row as GrantInstallRow);
+        out.pins.push(row as GrantInstallRow);
+        break;
+      case 'grant.uninstall':
+        out.pins.push(row as GrantUninstallRow);
         break;
       case 'grant.capability': {
         const r = row as GrantCapabilityRow;
@@ -276,8 +297,12 @@ export function checkAgainstGrants(
   };
 }
 
-/** The effective install of a mod: the LAST grant.install row naming it (re-pins and rollbacks append). */
+/** The effective install of a mod: the LAST grant.install row naming it (re-pins and rollbacks append), unless a later grant.uninstall names it. */
 export function effectiveInstall(grants: ResolvedGrants, name: string): GrantInstallRow | undefined {
-  for (let i = grants.installs.length - 1; i >= 0; i--) if (grants.installs[i]!.name === name) return grants.installs[i];
+  const pins = grants.pins ?? grants.installs;
+  for (let i = pins.length - 1; i >= 0; i--) {
+    const r = pins[i]!;
+    if (r.name === name) return r.kind === 'grant.install' ? r : undefined;
+  }
   return undefined;
 }

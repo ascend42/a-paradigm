@@ -17,7 +17,8 @@ import path from 'node:path';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, loadDeviceKey, readKernelPubs, readRegistry, registerDevice, registerKernelKey, RootVerifier, writeNewDeviceKey } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonEvent } from '../src/kernel/lifecycle/index.js';
 import { KeyRing, SoftwareEd25519Signer, verifyLog } from '../src/kernel/log/index.js';
-import { install, writeModFolder, probeManifest } from './mod-helpers.js';
+import { EXAMPLE_MOD, install, writeModFolder, probeManifest } from './mod-helpers.js';
+import { runModCommand } from '../src/cli/mod-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { connectGnomon } from '../src/kernel/socket/index.js';
 import { createModKernelCall } from '../src/kernel/modhost/index.js';
@@ -139,5 +140,24 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     const { d } = await rig();
     await d.shutdown('idle');
     await expect(d.mods.start('probe')).rejects.toMatchObject({ modCode: 'NOT_RUNNING' });
+  });
+});
+
+describe('gnomon mod pickup in startDaemon (M1.11 slice 3, #mod-cli)', () => {
+  it('a card the CLI staged on disk is raised through the daemon broker and logged approval.request + manifest.staged', async () => {
+    const { d, home, root } = await rig();
+    cleanups.push(() => removeTree(path.join(home, 'mods'))); // read-only pinned snapshots (removeTree restores write)
+    const src = path.join(path.dirname(home), 'hello-src');
+    fs.cpSync(EXAMPLE_MOD, src, { recursive: true });
+    const out: string[] = [];
+    const io = { stdout: { write: (s: string) => out.push(s) }, stderr: { write: (s: string) => out.push(s) } };
+    expect(await runModCommand(['install', src, '--home', home], io, { trust: root })).toBe(0);
+    const cardId = /STAGED {2}(card:[0-9A-Z]{26})/.exec(out.join(''))![1]!;
+    await d.modPickup.scan();
+    await new Promise((r) => setTimeout(r, 50));
+    const kinds = [...d.log.read({ reader: { class: 'human' }, kinds: ['approval.request', 'manifest.staged'] })].map((v) => (v.view === 'full' ? v.event.kind : ''));
+    expect(kinds).toContain('approval.request');
+    expect(kinds).toContain('manifest.staged');
+    expect(d.modPickup.raised()).toEqual([cardId]);
   });
 });

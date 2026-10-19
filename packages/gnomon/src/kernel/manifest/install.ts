@@ -620,8 +620,8 @@ export function linkedFolders(home: string, trust: RowVerifier): string[] {
   const g = readGrants(home, trust);
   const names = [...new Set(g.installs.map((r) => r.name))];
   return names
-    .map((n) => effectiveInstall(g, n)!)
-    .filter((r) => r.source.startsWith('linked:'))
+    .map((n) => effectiveInstall(g, n))
+    .filter((r): r is GrantInstallRow => r !== undefined && r.source.startsWith('linked:'))
     .map((r) => r.source.slice(7))
     .sort();
 }
