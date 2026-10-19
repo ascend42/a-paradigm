@@ -140,6 +140,16 @@ jobs:
           swift build
           .build/debug/gnomon-helper --version
 
+      # #gnomon-voice-io (TD-2026-10-19-298, V2b): macOS only (AVAudioEngine, CoreAudio, Carbon). Unsigned; the
+      # unit tests need no audio hardware, and nothing here opens the mic (--selftest is founder-run, PROBES.md).
+      - name: Build + test gnomon-voice-io (darwin, unsigned)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-voice/io-darwin
+        run: |
+          swift build
+          swift test
+          .build/debug/gnomon-voice-io --version
+
       # #gnomon-wrapper (M1.13 slice 1): macOS only. Unsigned, no notarization (identities never enter CI).
       # The Windows wrapper (WebView2, named-pipe channel) is the parity phase (P8-D78), so it is not built there.
       # The kernel dist is built FIRST: build.rs pins its tree hash and tests/live_kernel.rs runs against it
