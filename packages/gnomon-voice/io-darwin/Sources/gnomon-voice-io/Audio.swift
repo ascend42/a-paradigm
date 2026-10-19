@@ -30,6 +30,8 @@ final class AudioCore {
     private(set) var micOn = false
     private(set) var voiceProcessing = false
     private var wantVoiceProcessing = true
+    private let tapLock = NSLock()
+    private var tapGen = 0
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var duplex = false
@@ -95,6 +97,10 @@ final class AudioCore {
         e.attach(p)
         e.connect(p, to: e.mainMixerNode, format: playFormat)
 
+        tapLock.lock()
+        tapGen += 1
+        let myGen = tapGen
+        tapLock.unlock()
         var meter = LevelMeter(sampleRate: Int(AudioCore.captureRate), hz: 15)
         let outFmt = captureFormat
         input.installTap(onBus: 0, bufferSize: 1024, format: inFmt) { [weak self] buf, when in
@@ -116,6 +122,11 @@ final class AudioCore {
             guard err == nil, out.frameLength > 0, let ch = out.int16ChannelData else { return }
             let samples = Array(UnsafeBufferPointer(start: ch[0], count: Int(out.frameLength)))
             let hostNs = when.isHostTimeValid ? Clock.ns(fromHost: when.hostTime) : Clock.nowNs()
+            // Aegis L2: a tap callback in flight when the mic goes off emits nothing. teardown bumps
+            // tapGen under this lock BEFORE the mic:false event is queued, and the emit is non-blocking.
+            self.tapLock.lock()
+            defer { self.tapLock.unlock() }
+            guard self.tapGen == myGen else { return }
             self.onCapture?(hostNs, samples)
             for r in meter.feed(samples) { self.onLevel?(r.rms, r.peak) }
         }
@@ -196,6 +207,9 @@ final class AudioCore {
         stopPlayback(reason: reason)
         if let o = configObserver { NotificationCenter.default.removeObserver(o) }
         configObserver = nil
+        tapLock.lock()
+        tapGen += 1 // no capture or level frame after this point
+        tapLock.unlock()
         if let e = engine {
             if duplex { e.inputNode.removeTap(onBus: 0) }
             e.stop()

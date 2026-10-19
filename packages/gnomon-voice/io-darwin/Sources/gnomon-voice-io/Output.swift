@@ -1,6 +1,6 @@
 // stdout writer and monotonic clock (#gnomon-voice-io). Every frame goes
-// through one lock so capture frames, replies and events never interleave.
-// Diagnostics go to stderr as plain lines (the kernel logs them).
+// through one FIFO queue, so capture frames, replies and events never
+// interleave. Diagnostics go to stderr as plain lines (the kernel logs them).
 
 import Darwin
 import Foundation
@@ -24,46 +24,104 @@ enum Clock {
     static func nowUs() -> UInt64 { nowNs() / 1_000 }
 }
 
+/// One writer thread drains a FIFO queue to stdout; producers never block on the
+/// pipe and no lock is held during write(2) (Aegis L3). Control frames (replies,
+/// events) are never dropped; capture frames are dropped while more than
+/// `maxCaptureQueued` are waiting (the reader stalled), and the next accepted
+/// capture is preceded by a `capture.dropped {frames}` event.
 final class Output {
     static let shared = Output()
-    private let lock = NSLock()
-    private var broken = false
+    static let maxCaptureQueued = 32 // about 2 s of 64 ms tap buffers
 
-    func write(_ bytes: Data) {
-        lock.lock()
-        defer { lock.unlock() }
+    private let cond = NSCondition()
+    private var queue: [(data: Data, capture: Bool)] = []
+    private var capturesQueued = 0
+    private var dropped = 0
+    private var broken = false
+    private var writing = false
+
+    private init() {
+        let t = Thread { [unowned self] in self.drain() }
+        t.name = "gnomon-voice-io.stdout"
+        t.start()
+    }
+
+    private func enqueue(_ data: Data, capture: Bool) {
+        cond.lock()
+        defer { cond.unlock() }
         if broken { return }
-        var ok = true
-        bytes.withUnsafeBytes { raw in
+        if capture {
+            if capturesQueued >= Output.maxCaptureQueued { dropped += 1; return }
+            if dropped > 0 {
+                queue.append((Output.eventFrame("capture.dropped", ["frames": dropped]), false))
+                dropped = 0
+            }
+            capturesQueued += 1
+        }
+        queue.append((data, capture))
+        cond.signal()
+    }
+
+    private func drain() {
+        while true {
+            cond.lock()
+            while queue.isEmpty { cond.wait() }
+            let item = queue.removeFirst()
+            if item.capture { capturesQueued -= 1 }
+            writing = true
+            cond.unlock()
+            let ok = Output.writeAll(item.data) // no lock held while blocking
+            cond.lock()
+            writing = false
+            if !ok {
+                broken = true
+                queue.removeAll()
+                capturesQueued = 0
+            }
+            cond.broadcast()
+            cond.unlock()
+        }
+    }
+
+    /// Waits (bounded) until everything queued is written: called before exit.
+    func flush(timeout: TimeInterval = 1.0) {
+        let until = Date().addingTimeInterval(timeout)
+        cond.lock()
+        while (!queue.isEmpty || writing) && !broken {
+            if !cond.wait(until: until) { break }
+        }
+        cond.unlock()
+    }
+
+    private static func writeAll(_ bytes: Data) -> Bool {
+        bytes.withUnsafeBytes { raw -> Bool in
             var off = 0
             while off < raw.count {
                 let n = Darwin.write(STDOUT_FILENO, raw.baseAddress! + off, raw.count - off)
                 if n < 0 {
                     if errno == EINTR { continue }
-                    ok = false
-                    return
+                    return false // the reader is gone; stdin EOF or the parent watch ends us
                 }
                 off += n
             }
-        }
-        if !ok {
-            // the reader is gone: nothing more to say, and stdin EOF will end us
-            broken = true
+            return true
         }
     }
 
-    func json(_ obj: [String: Any]) { write(FrameCodec.json(obj)) }
-
-    func event(_ name: String, _ fields: [String: Any] = [:]) {
+    private static func eventFrame(_ name: String, _ fields: [String: Any]) -> Data {
         var e = fields
         e["type"] = "event"
         e["event"] = name
         e["tUs"] = Clock.nowUs()
-        json(e)
+        return FrameCodec.json(e)
     }
 
+    func json(_ obj: [String: Any]) { enqueue(FrameCodec.json(obj), capture: false) }
+
+    func event(_ name: String, _ fields: [String: Any] = [:]) { enqueue(Output.eventFrame(name, fields), capture: false) }
+
     func capture(hostTimeNs: UInt64, samples: [Int16]) {
-        write(FrameCodec.encode(Frame(type: .capture, payload: FrameCodec.capturePayload(hostTimeNs: hostTimeNs, sampleRate: 16_000, samples: samples))))
+        enqueue(FrameCodec.encode(Frame(type: .capture, payload: FrameCodec.capturePayload(hostTimeNs: hostTimeNs, sampleRate: 16_000, samples: samples))), capture: true)
     }
 }
 

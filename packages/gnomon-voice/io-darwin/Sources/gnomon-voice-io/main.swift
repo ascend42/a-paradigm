@@ -29,11 +29,14 @@ if args.contains("--version") {
     exit(0)
 }
 let known: Set<String> = ["serve", "--selftest", "--probe-aec", "--no-disclaim"]
-if let bad = args.enumerated().first(where: { i, a in !known.contains(a) && !(i > 0 && args[i - 1] == "--probe-aec") }) {
+let takesValue: Set<String> = ["--probe-aec", DisclaimToken.argFlag, DisclaimToken.parentFlag]
+if let bad = args.enumerated().first(where: { i, a in !known.contains(a) && !takesValue.contains(a) && !(i > 0 && takesValue.contains(args[i - 1])) }) {
     diag("unknown argument \(bad.element); usage: gnomon-voice-io [--version | serve | --selftest | --probe-aec <file>] [--no-disclaim]")
     exit(64)
 }
-if !args.contains("--no-disclaim") { Disclaim.respawnIfNeeded() }
+// re-spawns with TCC responsibility disclaimed (the parent waits here and exits with the child),
+// then watches the parent(s) and exits when one dies
+Disclaim.setUp(args: args, noDisclaim: args.contains("--no-disclaim"))
 
 if args.contains("--selftest") {
     Selftest.run()

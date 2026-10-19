@@ -5,9 +5,14 @@ codesign keychain prompt: enter your login password, Always Allow):
 
 ```sh
 node packages/gnomon-voice/scripts/build-voice-io.mjs
-APP=packages/gnomon-voice/bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io
+# run it from outside ~/Documents (a self-responsible process has no Documents grant)
+mkdir -p "$HOME/.gnomon-probe" && ditto packages/gnomon-voice/bin/darwin/GnomonVoiceIO.app "$HOME/.gnomon-probe/GnomonVoiceIO.app"
+APP="$HOME/.gnomon-probe/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io"
 $APP --version                     # gnomon-voice-io 0.1.0
 ```
+
+If a prompt asks to let GnomonVoiceIO access your Documents folder, click
+Don't Allow: the copy step above was skipped. Delete `~/.gnomon-probe` when done.
 
 ## Smoke (1 s)
 
@@ -15,7 +20,7 @@ $APP --version                     # gnomon-voice-io 0.1.0
 $APP --selftest
 ```
 
-Pass: the last line has `"selftest":"pass"`, `frames` > 0, `samples` near 16000,
+Pass: the first line has `"disclaimed":true`; the last line has `"selftest":"pass"`, `frames` > 0, `samples` near 16000,
 `"voiceProcessing":true`, and `playback` lists `playback.start` and
 `playback.end:drained`. You hear a short quiet tone.
 

@@ -48,6 +48,15 @@ func printLine(_ obj: [String: Any]) {
     FileHandle.standardOutput.write(d + Data("\n".utf8))
 }
 
+/// Aegis M3: the founder modes refuse like mic.on does.
+func refuseUnlessDisclaimed(_ key: String) {
+    let d = Disclaim.micAllowed
+    guard d.ok else {
+        printLine([key: "fail", "reason": "not-disclaimed", "disclaimReason": d.reason])
+        exit(1)
+    }
+}
+
 enum Selftest {
     static func run() -> Never {
         let audio = AudioCore()
@@ -57,7 +66,10 @@ enum Selftest {
         audio.onCapture = { ns, s in stats.feed(ns, s) }
         audio.onLevel = { rms, _ in DispatchQueue.main.async { lastLevel = rms } }
         audio.onPlayback = { name, f in playback.append("\(name)\((f["reason"] as? String).map { ":" + $0 } ?? "")") }
-        printLine(["selftest": "start", "version": voiceIOVersion, "permission": AudioCore.permission, "bundle": Bundle.main.bundleIdentifier ?? NSNull()])
+        var start: [String: Any] = ["selftest": "start", "version": voiceIOVersion, "permission": AudioCore.permission, "bundle": Bundle.main.bundleIdentifier ?? NSNull()]
+        for (k, v) in Disclaim.json { start[k] = v }
+        printLine(start)
+        refuseUnlessDisclaimed("selftest")
         AudioCore.requestPermission { ok in
             guard ok else {
                 printLine(["selftest": "fail", "reason": "mic-denied", "permission": AudioCore.permission])
@@ -152,6 +164,7 @@ enum ProbeAEC {
             exit(0)
         }
 
+        refuseUnlessDisclaimed("probe")
         AudioCore.requestPermission { ok in
             guard ok else {
                 printLine(["probe": "P7", "result": "fail", "reason": "mic-denied", "permission": AudioCore.permission])

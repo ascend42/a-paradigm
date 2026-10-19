@@ -10,6 +10,7 @@ import VoiceIOCore
 final class Server {
     let audio = AudioCore()
     let hotkeys = Hotkeys()
+    let micGate = MicGate(provider: { done in AudioCore.requestPermission(done) }, disclaimAllowed: { Disclaim.micAllowed })
     private var routeWatch: RouteWatch?
     private var lastRoute: OutputRoute?
 
@@ -62,6 +63,7 @@ final class Server {
         audio.stopPlayback(reason: "exit")
         audio.stopMic()
         Output.shared.event("exit", ["code": Int(code)])
+        Output.shared.flush()
         exit(code)
     }
 
@@ -103,13 +105,24 @@ final class Server {
         case .routeGet:
             reply(routeFields())
         case .micOn:
-            AudioCore.requestPermission { [weak self] ok in
+            // Aegis M1: a mic.off sent while the TCC prompt is open wins (MicGate generation);
+            // M3: refused `not-disclaimed` unless responsibility was disclaimed or --no-disclaim was given
+            micGate.requestOn { [weak self] outcome in
                 guard let self else { return }
-                guard ok else { return fail("mic-denied", "microphone access is \(AudioCore.permission)") }
+                switch outcome {
+                case .notDisclaimed(let why):
+                    return fail("not-disclaimed", "TCC responsibility was not disclaimed (\(why)); the grant would name the parent app. Restart without a stray token, or pass --no-disclaim deliberately")
+                case .superseded:
+                    return fail("superseded", "a mic.off or a newer mic.on arrived while the permission prompt was open")
+                case .denied:
+                    return fail("mic-denied", "microphone access is \(AudioCore.permission)")
+                case .start:
+                    break
+                }
                 do {
                     try self.audio.startMic()
-                    reply(["mic": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue])
-                    Output.shared.event("mic", ["on": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue])
+                    reply(["mic": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport])
+                    Output.shared.event("mic", ["on": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport])
                 } catch let e as AudioError {
                     fail(e.code, e.description)
                 } catch {
@@ -117,9 +130,10 @@ final class Server {
                 }
             }
         case .micOff:
+            micGate.off()
             audio.stopMic()
             reply(["mic": false])
-            Output.shared.event("mic", ["on": false, "voiceProcessing": false, "aec": aec.rawValue])
+            Output.shared.event("mic", ["on": false, "voiceProcessing": false, "aec": aec.rawValue, "transport": transport])
         case .playStop:
             let was = audio.isPlaying
             audio.stopPlayback()
@@ -152,8 +166,11 @@ final class Server {
 
     private func routeFields() -> [String: Any] {
         let r = lastRoute ?? OutputRoute.current()
-        return ["route": r.json, "aec": aec.rawValue, "voiceProcessing": audio.voiceProcessing]
+        return ["route": r.json, "aec": aec.rawValue, "voiceProcessing": audio.voiceProcessing, "transport": r.transport ?? NSNull()]
     }
+
+    /// Aegis L4: the transport rides every mic/route claim so the controller logs it beside `aec`.
+    var transport: Any { (lastRoute ?? OutputRoute.current()).transport ?? NSNull() }
 
     func infoFields() -> [String: Any] {
         var f: [String: Any] = [
@@ -169,6 +186,7 @@ final class Server {
         ]
         for (k, v) in routeFields() { f[k] = v }
         for (k, v) in audio.status { f[k] = v }
+        for (k, v) in Disclaim.json { f[k] = v }
         return f
     }
 
