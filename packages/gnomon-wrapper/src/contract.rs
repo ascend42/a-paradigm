@@ -26,9 +26,32 @@ impl LaunchGrant {
     }
 }
 
+/// #setup-endpoint grant (`{t:'setup',port,setupToken,setupPublicKey,bundleHash,expiresAt}`): ^setup-token is
+/// single use, 60 s; Debug never prints the token or the key.
+pub struct SetupGrant {
+    pub port: u16,
+    pub setup_token: String,
+    pub setup_public_key: String,
+    pub bundle_hash: String,
+}
+
+impl std::fmt::Debug for SetupGrant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SetupGrant").field("port", &self.port).field("setup_token", &"<redacted>").field("setup_public_key", &"<redacted>").field("bundle_hash", &self.bundle_hash).finish()
+    }
+}
+
+impl SetupGrant {
+    /// The setup page URL (§11.2 rule 11): `http://127.0.0.1:<port>/#setup=<token>&k=<spki>`.
+    pub fn url(&self) -> String {
+        format!("http://127.0.0.1:{}/#setup={}&k={}", self.port, self.setup_token, self.setup_public_key)
+    }
+}
+
 #[derive(Debug)]
 pub enum ChannelLine {
     Up,
+    Setup(SetupGrant),
     Launch(LaunchGrant),
     LaunchFailed { message: String },
     Refused { reason: String, message: String, next: Vec<String> },
@@ -64,6 +87,13 @@ pub fn parse_line(line: &str) -> Result<ChannelLine, &'static str> {
             let kernel_public_key = v.get("kernelPublicKey").and_then(Value::as_str).filter(|s| b64url(s, 256)).ok_or("launch line: bad kernelPublicKey")?.to_string();
             let bundle_hash = v.get("bundleHash").and_then(Value::as_str).filter(|s| bundle_hash(s)).ok_or("launch line: bad bundleHash")?.to_string();
             Ok(ChannelLine::Launch(LaunchGrant { port, launch_token, kernel_public_key, bundle_hash }))
+        }
+        Some("setup") => {
+            let port = v.get("port").and_then(Value::as_u64).filter(|p| (1..=65535).contains(p)).ok_or("setup line: bad port")? as u16;
+            let setup_token = v.get("setupToken").and_then(Value::as_str).filter(|s| s.len() == 43 && b64url(s, 43)).ok_or("setup line: bad setupToken")?.to_string();
+            let setup_public_key = v.get("setupPublicKey").and_then(Value::as_str).filter(|s| b64url(s, 256)).ok_or("setup line: bad setupPublicKey")?.to_string();
+            let bundle_hash = v.get("bundleHash").and_then(Value::as_str).filter(|s| bundle_hash(s)).ok_or("setup line: bad bundleHash")?.to_string();
+            Ok(ChannelLine::Setup(SetupGrant { port, setup_token, setup_public_key, bundle_hash }))
         }
         Some("launch-failed") => Ok(ChannelLine::LaunchFailed { message: text(&v, "message") }),
         Some("refused") => Ok(ChannelLine::Refused {
@@ -178,5 +208,17 @@ mod tests {
         let ChannelLine::Refused { reason, next, .. } = parse_line(l).unwrap() else { panic!() };
         assert_eq!(reason, "unprovisioned");
         assert_eq!(next, vec!["gnomon identity init".to_string()]);
+    }
+
+    #[test]
+    fn a_setup_line_parses_and_never_debug_prints_the_token() {
+        let tok = "A".repeat(43);
+        let l = format!(r#"{{"v":1,"t":"setup","port":4321,"setupToken":"{tok}","setupPublicKey":"{KEY}","bundleHash":"sha256:{}","expiresAt":1}}"#, "a".repeat(64));
+        let ChannelLine::Setup(g) = parse_line(&l).unwrap() else { panic!("not a setup line") };
+        assert_eq!(g.url(), format!("http://127.0.0.1:4321/#setup={tok}&k={KEY}"));
+        assert!(!format!("{:?}", g).contains(&tok));
+        for bad in [l.replace(&tok, "short"), l.replace(&tok, &"A".repeat(44)), l.replace("4321", "0"), l.replace("sha256:", "md5:")] {
+            assert!(parse_line(&bad).is_err(), "{bad}");
+        }
     }
 }

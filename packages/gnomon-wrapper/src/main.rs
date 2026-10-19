@@ -28,8 +28,8 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, read_line_capped, ChannelLine, LineRead, MAX_LINE};
-use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_GNOMON_PKG};
-use gnomon_wrapper::loopback::preflight;
+use gnomon_wrapper::kernel::{check_trust_root, child_command};
+use gnomon_wrapper::loopback::{preflight, setup_preflight};
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
 use gnomon_wrapper::surface::{IPC_DISABLED_SCRIPT, SURFACE_SCRIPT};
 use serde_json::json;
@@ -98,7 +98,7 @@ fn refusal_text(reason: &str, message: &str, next: &[String]) -> (String, String
         detail.push_str(&format!("\n\nnext: {n}"));
     }
     if reason == "unprovisioned" {
-        detail.push_str(&format!("\n\nIn Terminal:\n  node {BUILD_GNOMON_PKG}/dist/cli/gnomon.js identity init\nthen open Gnomon again."));
+        detail.push_str("\n\nOpen Gnomon again: it walks you through setup in this window.");
     }
     (head, detail)
 }
@@ -139,6 +139,16 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
                 show_status(&app, &sh, "verifying the kernel", "", false);
                 send(&sh, "launch");
             }
+            Ok(ChannelLine::Setup(g)) => match setup_preflight(g.port, &g.setup_public_key, &g.bundle_hash, PIN) {
+                Ok(()) => {
+                    sh.log(&format!("setup preflight ok on port {}: hello serverSig verified against the channel setup key; the served bundle equals the compiled pin", g.port));
+                    *sh.phase.lock().unwrap() = Phase::Setup { port: g.port };
+                    if let (Some(w), Ok(u)) = (app.get_webview_window("main"), Url::parse(&g.url())) {
+                        let _ = w.navigate(u);
+                    }
+                }
+                Err(e) => show_status(&app, &sh, "Gnomon refused to open the setup page", &e.to_string(), true),
+            },
             Ok(ChannelLine::Launch(g)) => match preflight(g.port, &g.kernel_public_key, &g.bundle_hash, PIN) {
                 Ok(()) => {
                     sh.log(&format!("preflight ok on port {}: hello serverSig verified against the channel key; channel bundleHash equals the compiled pin; the served files re-hash to it", g.port));

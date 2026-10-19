@@ -62,6 +62,7 @@ fn native_preflight_against_a_live_dev_kernel() {
             let p = parse_line(&l).expect("a well-formed channel line");
             let t = match &p {
                 ChannelLine::Up => "up",
+                ChannelLine::Setup(_) => "setup",
                 ChannelLine::Launch(_) => "launch",
                 ChannelLine::LaunchFailed { .. } => "launch-failed",
                 ChannelLine::Refused { .. } => "refused",

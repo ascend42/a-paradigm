@@ -55,7 +55,15 @@ components:
       a 0700 dir; tests/crafted_ipc.rs (Tauri mock runtime: keyless messages
       dropped, keyed commands refused from both origins); subframes are
       excluded by the kernel CSP frame-src 'none' (falsified statically and
-      on the live header).
+      on the live header). #setup-endpoint (T-2026-10-19-005 MVP-b): an
+      unprovisioned home makes `up --wrapper` emit {t:setup,port,setupToken,
+      setupPublicKey,bundleHash,expiresAt} (contract.rs SetupGrant, Debug
+      redacted; ^setup-token exactly 43 base64url); loopback.rs
+      setup_preflight runs the SAME pin and serverSig checks against the
+      ephemeral setup key speaking gnomon-setup:v1; nav.rs Phase::Setup{port}
+      locks navigation to that one origin; the page reaches no Tauri command
+      (G-GUI-12). After success the channel's {t:up} continues into the
+      normal launch. refusal_text no longer says "In Terminal".
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]
