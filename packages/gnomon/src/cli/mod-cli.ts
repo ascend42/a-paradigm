@@ -131,7 +131,8 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
   }
   const [verb, target, ...extra] = args;
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') {
-    io.stdout.write(MOD_USAGE);
+    // asked-for help goes to stdout; a missing verb is a usage error: stderr
+    (verb ? io.stdout : io.stderr).write(MOD_USAGE);
     return verb ? MOD_EXIT_OK : MOD_EXIT_USAGE;
   }
   if (extra.length) {
@@ -145,6 +146,9 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
     if (typeof target === 'string' && MOD_NAME.test(target)) return target;
     refused(io.stderr, 'usage', 'bad-name', `gnomon mod ${verb} needs a mod name (a-z, 0-9, -)`);
     return null;
+  };
+  const noTrustNote = (): void => {
+    if (trust.rootKeyId === null) io.stderr.write('  note: this home has no provisioned root (gnomon identity init); no install can take effect\n');
   };
   const human = (what: string): boolean => {
     if (!hsid) return true;
@@ -219,7 +223,7 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
         io.stdout.write(`${n.padEnd(24)} ${state.padEnd(20)} ${row ? `${short(row.packageHash)} ${row.source === 'package' ? 'package' : 'linked'}` : ''}${cards.length ? `  ${cards.length} pending card(s)` : ''}\n`);
       }
       if (!any) io.stdout.write('no mods installed or staged\n');
-      if (trust.rootKeyId === null) io.stderr.write('  note: this home has no provisioned root (gnomon identity init); no install can take effect\n');
+      noTrustNote();
       return MOD_EXIT_OK;
     }
     case 'status': {
@@ -231,6 +235,7 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
       const cards = pendingStaged(home).filter((p) => p.name === name);
       if (!row && cards.length === 0) {
         refused(io.stderr, 'not_found', 'not-installed', `${name} is neither installed nor staged`, [`gnomon mod install <path>`]);
+        noTrustNote();
         return MOD_EXIT_REFUSED;
       }
       io.stdout.write(`MOD  ${name}\n`);
@@ -251,6 +256,7 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
         ['snapshots', String(snapshots(home, name).length)],
         ['kernel', daemonState(home).state],
       ]);
+      noTrustNote();
       return MOD_EXIT_OK;
     }
     case 'pause': {

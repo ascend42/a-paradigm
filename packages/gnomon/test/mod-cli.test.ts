@@ -354,6 +354,23 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     expect(uninstallRequested(t.home, 'hello')).toBeNull();
   });
 
+  it('status gives the same no-trust note as list; usage on error goes to stderr, asked-for help to stdout', async () => {
+    const t = setup();
+    const noTrust = { rootKeyId: null, ns: null, verifyRow: () => false };
+    await runModCommand(['list', '--home', t.home], t.io, { trust: noTrust });
+    await runModCommand(['status', 'hello', '--home', t.home], t.io, { trust: noTrust });
+    expect(t.errText().match(/no provisioned root/g)).toHaveLength(2);
+    t.out.length = 0;
+    t.err.length = 0;
+    expect(await runModCommand([], t.io)).toBe(64);
+    expect(t.text()).toBe('');
+    expect(t.errText()).toContain('usage: gnomon mod');
+    t.err.length = 0;
+    expect(await runModCommand(['--help'], t.io)).toBe(0);
+    expect(t.text()).toContain('usage: gnomon mod');
+    expect(t.errText()).toBe('');
+  });
+
   it('usage: no verb, an unknown verb, a bad name, a relative --home', async () => {
     const t = setup();
     expect(await runModCommand([], t.io)).toBe(64);
