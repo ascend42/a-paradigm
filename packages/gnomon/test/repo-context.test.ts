@@ -222,6 +222,48 @@ describe('memoryDirsOf', () => {
   });
 });
 
+describe('reviewer 1, 2, 4: canonical fences, dotfiles skipped, readdir failures are refusals', () => {
+  it('the closing fence is emitted as a canonical ---', () => {
+    const t = sanitizeFrontmatter('---   \nname: x\n---   \nB\n', SKILL_KEYS);
+    expect(t.ok && t.text).toBe('---\nname: x\n---\nB\n');
+  });
+  it('.DS_Store / .gitkeep files are skipped in skills/, inside a skill and in agents/ and commands/', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', '.DS_Store'), 'x');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', '.gitkeep'), '');
+    put(path.join(w.repo, '.claude', 'agents', '.DS_Store'), 'x');
+    put(path.join(w.repo, '.claude', 'agents', 'a.md'), '---\nname: a\n---\n');
+    put(path.join(w.repo, '.claude', 'commands', '.gitkeep'), '');
+    put(path.join(w.repo, '.claude', 'commands', 'c.md'), 'C\n');
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c).toMatchObject({ skills: ['s'], agents: ['a'], commands: ['c'], refused: [] });
+    expect(fs.existsSync(path.join(w.out, 'skills', 's', '.gitkeep'))).toBe(false);
+  });
+  it('an unreadable skills/ or skill dir is a refusal, not a failed open', (t) => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\n');
+    put(path.join(w.repo, '.claude', 'commands', 'c.md'), 'C\n');
+    const locked = path.join(w.repo, '.claude', 'skills', 's');
+    fs.chmodSync(locked, 0o000);
+    let readable = true;
+    try {
+      fs.readdirSync(locked);
+    } catch {
+      readable = false;
+    }
+    try {
+      if (readable) t.skip(); // root, or a platform without POSIX modes: the case cannot be built
+      const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+      expect(c.skills).toEqual([]);
+      expect(c.commands).toEqual(['c']);
+      expect(c.refused).toEqual([{ path: '.claude/skills/s', why: expect.stringMatching(/unreadable \(EACCES\)/) }]);
+    } finally {
+      fs.chmodSync(locked, 0o700);
+    }
+  });
+});
+
 describe('H3 (Aegis): every SKILL.md at any depth is sanitized; a nested .md declaring hooks refuses the skill', () => {
   it('a nested SKILL.md loses its hooks like the top one', () => {
     const w = world();

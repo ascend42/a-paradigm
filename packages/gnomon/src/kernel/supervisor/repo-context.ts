@@ -28,6 +28,11 @@
  *     file: it is not loaded. Symlinks are refused. Bounded: MAX_CONTEXT_FILES
  *     files, MAX_CONTEXT_BYTES in total, MAX_CONTEXT_FILE_BYTES each.
  *     Plugin items are namespaced: `project:x`, `/project:z` (residual).
+ *   retention (reviewer 5): there is no session-dir GC. `<session dir>/context`
+ *     stays after exit beside policy.json and mcp.json (dir 0700, files 0600,
+ *     read-denied to every other session by the profile), and is wiped and
+ *     re-staged only if the same dir is reused. It holds copies of repo text,
+ *     never a secret the repo did not already hold.
  *   frontmatter hooks are never approvable in this slice: they are stripped
  *     and listed (`frontmatterHooks`), never run.
  *   non-hook settings (permissions, env, everything else in the repo's
@@ -123,7 +128,7 @@ export function sanitizeFrontmatter(raw: string, allowed: readonly string[]): Sa
     if (keep) out.push(l);
     else dropped.push(key);
   }
-  return { ok: true, text: ['---', ...out, ...lines.slice(end)].join('\n'), dropped, hooks };
+  return { ok: true, text: ['---', ...out, '---', ...lines.slice(end + 1)].join('\n'), dropped, hooks }; // canonical fences (reviewer 1)
 }
 
 export interface RepoContext {
@@ -328,12 +333,25 @@ function readFile(p: string): { ok: true; buf: Buffer } | { ok: false; why: stri
 }
 
 const okName = (n: string): boolean => NAME_RE.test(n) && !COMMAND_UNSAFE.test(n);
+/** Reviewer 2: dot-leading regular files (.DS_Store, .gitkeep) are skipped, not a reason to refuse. */
+const dotFile = (e: fs.Dirent): boolean => e.name.startsWith('.') && e.isFile();
+/** Reviewer 4: a readdir failure (EACCES, ENOTDIR, …) is a refusal, never a failed open. Sorted. */
+function readDir(dir: string): { ok: true; ents: fs.Dirent[] } | { ok: false; why: string } {
+  try {
+    return { ok: true, ents: fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1)) };
+  } catch (err) {
+    return { ok: false, why: `unreadable (${(err as NodeJS.ErrnoException).code ?? 'error'})` };
+  }
+}
 
 /** Collect a tree's regular files (relative paths), refusing symlinks, bad names and depth; null = refused. */
 function listTree(dir: string, depth = 0): { ok: true; files: string[] } | { ok: false; why: string } {
   if (depth > MAX_TREE_DEPTH) return { ok: false, why: 'nested too deep' };
   const out: string[] = [];
-  for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+  const rd = readDir(dir);
+  if (!rd.ok) return { ok: false, why: `${path.basename(dir)}: ${rd.why}` };
+  for (const e of rd.ents) {
+    if (dotFile(e)) continue;
     if (!okName(e.name)) return { ok: false, why: `an unsupported name ${JSON.stringify(e.name.slice(0, 64))}` };
     if (e.isSymbolicLink()) return { ok: false, why: `a symlink (${e.name})` };
     if (e.isDirectory()) {
@@ -411,7 +429,10 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
   // skills: <name>/SKILL.md plus the skill's own files (copied verbatim; only SKILL.md is frontmatter-parsed)
   const skillsDir = path.join(claudeDir, 'skills');
   if (realDir(skillsDir)) {
-    for (const e of fs.readdirSync(skillsDir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    const rd = readDir(skillsDir);
+    if (!rd.ok) ctx.refused.push({ path: rel('skills'), why: rd.why });
+    for (const e of rd.ok ? rd.ents : []) {
+      if (dotFile(e)) continue;
       const r = rel('skills', e.name);
       if (!okName(e.name)) {
         ctx.refused.push({ path: r, why: 'an unsupported name' });
@@ -470,8 +491,10 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
   // agents: top-level *.md
   const agentsDir = path.join(claudeDir, 'agents');
   if (realDir(agentsDir)) {
-    for (const e of fs.readdirSync(agentsDir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
-      if (!e.name.endsWith('.md')) continue;
+    const rd = readDir(agentsDir);
+    if (!rd.ok) ctx.refused.push({ path: rel('agents'), why: rd.why });
+    for (const e of rd.ok ? rd.ents : []) {
+      if (!e.name.endsWith('.md') || dotFile(e)) continue;
       const r = rel('agents', e.name);
       if (!okName(e.name) || !e.isFile()) {
         ctx.refused.push({ path: r, why: e.isSymbolicLink() ? 'a symlink' : 'an unsupported name or not a regular file' });
