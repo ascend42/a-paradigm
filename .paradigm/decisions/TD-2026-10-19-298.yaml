@@ -1,0 +1,64 @@
+id: TD-2026-10-19-298
+timestamp: '2026-10-19T23:04:38.510Z'
+title: 'Ambient voice: founder rulings and the V2/V3 plan'
+decision: >-
+  Voice gets three states: Mic OFF, PUSH-TO-TALK and AMBIENT (wire value `conversation`). The attachment mode becomes a
+  CEILING set by the human at attach. A turn may claim a mode at or below it. Narrowing is client-local and free;
+  widening re-issues voice.session.start (with `continues`) by human gesture.
+
+  FOUNDER RULINGS (against the Aegis and Arky recommendations):
+
+  (1) No addressing or wake word: ambient forwards all enrolled-speaker speech.
+
+  (2) Ambient into auto-edits sessions behaves like typed: no ask clamp.
+
+  (3) Turning ambient on costs fresh Touch ID once per GUI login; later toggles are a click; off/ptt is always free.
+
+  Adopted defaults (recommended, not contested): re-attach rather than a new kind (no clientApiId move); a separate
+  signed Swift capture binary gnomon-voice-io (VoiceProcessingIO AEC, playback, hotkeys ⌃⌥Space/⌃⌥M/⌃⌥A); AEC alone
+  satisfies G-VOX-07 if P7 shows <1% self-trigger; engines sherpa-onnx (Silero VAD, Parakeet TDT 0.6B v2 int8,
+  Kokoro-82M, speaker embedding); first dogfood runs node + lockfile + a model manifest hash.
+
+  Kernel controls kept for ambient:
+
+  - a refusal while the attached session's turn is streaming or TTS is playing, using the kernel's own turn timing;
+
+  - the AEC-or-headphones claim is required;
+
+  - an enrolled speaker;
+
+  - a 10-minute idle auto-off;
+
+  - a kernel/GUI-owned live-mic indicator;
+
+  - mode widening human-only;
+
+  - non-enrolled speech never logged.
+rationale: >-
+  The founder wants natural, hands-free voice. Aegis's residual risk, stated plainly: ANY speech by an enrolled voice
+  near the Mac (including on calls, and recordings of that voice) can drive edits in auto-edits sessions with no card.
+  Speaker ID is a client claim, not authentication. The founder accepted this.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: dissented
+alternatives_considered:
+  - option: Wake word required in ambient
+    rejected_because: 'Founder ruling: forward everything'
+  - option: Clamp ambient turns to ask
+    rejected_because: 'Founder ruling: same as typed'
+symbols_affected:
+  - '#gnomon-voice'
+  - $voice-turn
+  - '#gui'
+status: active
+tags:
+  - gnomon
+  - voice
+  - paradigm-8
