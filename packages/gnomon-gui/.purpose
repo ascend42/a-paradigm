@@ -40,6 +40,41 @@ components:
       so an old kernel's card id is never clickable (the new kernel refuses it
       NOT_FOUND and retires it with approval.expire). Tests: test/gui.test.ts
       (#gui store after an upgrade); bundle pin in gnomon test/web-units.test.ts.
+    dogfood-layout-chat: >-
+      Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
+      column (header, notices, desk grows, status line); the desk is a
+      three-column grid of panes that each scroll inside (sessions list,
+      chat viewport, decision pile); under 900px one column, and sessions /
+      decisions become drawers behind header toggles with a scrim (no
+      horizontal overflow). The grid-row layout it replaces put the desk in
+      an auto row once the hidden notices dropped out, so the app sat in
+      the top ~290px. CHAT: core/store.ts chatItems turns a session's rows
+      into the conversation: the user's message (this page's composer echo,
+      else claude's --replay-user-messages line; session.inject / turn.sent
+      carry only a hash), assistant text, one tool line per tool_use
+      (toolSummary: name + command/path/pattern…), cards inline, the
+      turn.result (subtype, cost, tokens) and lifecycle notes; hooks,
+      stream_event partials, rate limits, status, control frames, tool
+      results and bookkeeping rows are hidden and counted, and "show raw
+      events" shows every row. A composer echo hides the matching replay so
+      the list only grows at the end. STICKINESS: core/follow.ts
+      (isAtBottom, Follow) — at the bottom it stays stuck through new rows
+      and sends; scrolled up nothing moves it (not even a send), a
+      "↓ latest · N new" key jumps back, and scrolling to the bottom by hand
+      re-sticks; app.ts paints incrementally (no innerHTML, no
+      replaceChildren) and anchors the row in view while heights are
+      measured. STALE SESSIONS: GuiStore counts daemon.start boots; a new
+      boot ends every live session the old kernel did not exit, the boot
+      sweep's session.orphaned marks orphans, a session.open in the new
+      boot (a resume) makes it live again, session.exited ends it (the old
+      reducer matched a `session.exit` kind that does not exist);
+      liveCount() feeds the Shuttle's live count. The kernel's
+      status.sessions is still the constant {n: 0}, so the log is the
+      source of truth. Tests: test/gui.test.ts (chat transcript, stale
+      sessions, stickiness, layout CSS); gnomon test/gui-session-e2e.test.ts
+      (real kernel: the chat is user/assistant in order, noise hidden) and
+      test/gui-browser-darwin.test.ts (headless Chrome: desk ≥ 80% of a
+      2000×1030 viewport, no horizontal overflow at 640px).
     description: >-
       #gui (spec §11.1-§11.5, §4.5). #bare-entry (§2.4 rule 8): the fragment
       may carry an optional `cwd` folder hint (base64url UTF-8, ≤ 1024 bytes;

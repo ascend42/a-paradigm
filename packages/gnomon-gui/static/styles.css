@@ -82,7 +82,11 @@ html, body {
   line-height: 1.6;
 }
 
-.shell { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+/* the app fills the viewport: header, notices, the desk (grows), the status line; only panes scroll inside (the
+   page itself does not: the shell is exactly the viewport; the first-run setup screens still scroll the body) */
+.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.shell > .chrome, .shell > .notice, .shell > .shuttle { flex: 0 0 auto; }
+.shell > .desk { flex: 1 1 auto; }
 
 .chrome {
   display: flex; align-items: center; gap: 12px;
@@ -133,18 +137,22 @@ html, body {
   width: 100%;
 }
 
-.desk { display: grid; grid-template-columns: 240px 1fr 300px; min-height: 0; }
-.desk.no-sessions { grid-template-columns: 0 1fr 300px; }
-.desk.no-stack { grid-template-columns: 240px 1fr 0; }
-.desk.no-sessions.no-stack { grid-template-columns: 0 1fr 0; }
-.desk.stack-wide { grid-template-columns: 240px 1fr 460px; }
-.desk.stack-wide.no-sessions { grid-template-columns: 0 1fr 460px; }
+.desk { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(260px, 340px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; }
+.desk.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(260px, 340px); }
+.desk.no-stack { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) 0; }
+.desk.no-sessions.no-stack { grid-template-columns: 0 minmax(0, 1fr) 0; }
+.desk.stack-wide { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(320px, 460px); }
+.desk.stack-wide.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(320px, 460px); }
+.desk.no-sessions > .sessions, .desk.no-stack > .stack { display: none; }
 
-.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; border-right: 1px solid var(--rule); }
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; overflow: hidden; border-right: 1px solid var(--rule); }
+.pane-head, #session-search-wrap, .composer, .pinned { flex: 0 0 auto; }
+.head-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
 .sessions { background: var(--sheet); }
 #session-search-wrap { padding: 6px 10px; }
 .list { overflow-y: auto; }
+.sessions > .list { flex: 1 1 auto; min-height: 0; }
 
 .group-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px 2px; font-size: 11.5px; color: var(--sec); }
 .swatch { width: 10px; height: 10px; border: 1px solid var(--key-edge); border-radius: 2px; background: var(--p-slate-fill); }
@@ -157,23 +165,36 @@ html, body {
 .session-row { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; padding: 3px 10px; font: inherit; font-size: 12px; color: var(--ink2); background: transparent; border: 0; border-left: 2px solid transparent; cursor: pointer; }
 .session-row.active { border-left-color: var(--key-edge); color: var(--ink); background: var(--fold); }
 .session-row.state-refused { border-left-color: var(--fail-edge); }
+.session-row.gone { color: var(--sec); }
+.session-row.gone .glyph { color: var(--sec); }
 .glyph { color: var(--ink2); }
 
 .transcript { background: var(--ground); }
-.viewport { position: relative; flex: 1; overflow-y: auto; contain: strict; }
+.feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
+.jump { position: absolute; right: 18px; bottom: 10px; }
+.key.quiet { box-shadow: none; color: var(--ink2); font-size: 11px; }
 .spacer-v { width: 1px; }
-.trow { position: absolute; left: 0; right: 0; padding: 1px 14px; white-space: pre-wrap; word-break: break-word; max-width: 80ch; }
+.trow { position: absolute; left: 0; right: 0; padding: 1px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
+/* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */
+.trow.role-user, .trow.role-assistant { padding: 8px 14px 6px; }
+.trow .who { display: flex; gap: 8px; align-items: baseline; font-size: 11px; color: var(--sec); }
+.trow.role-user .body { color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; }
+.trow.role-assistant .body { color: var(--ink); }
+.trow.role-tool { color: var(--ink2); font-size: 12px; padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow.role-tool::before { content: "↳ "; color: var(--sec); }
+.trow.role-result, .trow.role-system { color: var(--sec); font-size: 11px; padding-top: 2px; padding-bottom: 4px; }
+.trow.role-card { color: var(--warn-ink); font-size: 12px; }
+.trow.role-error { color: var(--fail); }
+.trow.role-raw { font-size: 12px; color: var(--ink2); }
 .trow .t { color: var(--sec); font-size: 11px; margin-right: 8px; }
-.trow.kind-approval { color: var(--warn-ink); }
-.trow.local { color: var(--ink2); }
-.trow.refused { color: var(--fail); }
 .pinned { border-top: 1px solid var(--rule); max-height: 30vh; overflow-y: auto; }
 .composer { border-top: 1px solid var(--rule); padding: 8px 14px; background: var(--sheet); }
-.composer textarea { resize: vertical; }
+.composer textarea { resize: vertical; max-height: 40vh; }
 .composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
 
 .stack { background: var(--fold); border-right: 0; border-left: 1px solid var(--rule); }
-.pile { position: relative; overflow-y: auto; padding: 10px; }
+.pile { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px; }
 .card {
   position: relative;
   margin: 0 0 10px;
@@ -252,3 +273,18 @@ html, body {
 .setup-name { display: flex; flex-direction: column; gap: 8px; max-width: 32ch; }
 .setup-details { margin: 10px 0; }
 .setup-details summary { cursor: pointer; }
+
+/* narrow widths (< 900px): one column; sessions and decisions slide in as drawers from the header toggles */
+.pane-toggle, .scrim { display: none; }
+@media (max-width: 900px) {
+  .pane-toggle { display: inline-block; }
+  .chrome { flex-wrap: wrap; row-gap: 4px; }
+  .desk, .desk.no-sessions, .desk.no-stack, .desk.no-sessions.no-stack, .desk.stack-wide, .desk.stack-wide.no-sessions { grid-template-columns: minmax(0, 1fr); }
+  .desk > .transcript { grid-column: 1; grid-row: 1; border-right: 0; }
+  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow), var(--glow); }
+  .desk > .sessions { left: 0; }
+  .desk > .stack { right: 0; }
+  .desk.open-sessions > .sessions, .desk.open-stack > .stack { display: flex; }
+  .desk.open-sessions > .scrim, .desk.open-stack > .scrim { display: block; position: absolute; inset: 0; z-index: 2; background: rgba(15, 17, 22, 0.35); }
+  .sheet-card { min-width: 0; width: calc(100vw - 32px); }
+}

@@ -12,11 +12,13 @@
 <body>
 <div id="gnomon" class="shell">
 <header class="chrome">
+<button id="toggle-sessions" class="key pane-toggle" type="button" aria-controls="pane-sessions" aria-expanded="false" title="Sessions">sessions</button>
 <span class="wordmark">Gnomon</span>
 <span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
 <span id="risk" class="badge risk kernel-owned" hidden title="A browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.">browser · extension risk</span>
 <span class="spacer"></span>
 <span id="inbox" class="readout" title="global inbox: all projects">0 pending</span>
+<button id="toggle-stack" class="key pane-toggle" type="button" aria-controls="pane-stack" aria-expanded="false" title="Decisions">decisions</button>
 <button id="palette-btn" class="key" type="button" title="Command palette">⌘K</button>
 </header>
 <div id="repin" class="notice repin kernel-owned" role="alert" hidden><span id="repin-text"></span> <button id="repin-ack" class="key" type="button">understood</button></div>
@@ -28,8 +30,11 @@
 <div id="session-list" class="list"></div>
 </nav>
 <section id="pane-transcript" class="pane transcript" aria-label="transcript">
-<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span id="transcript-count" class="meta"></span></div>
-<div id="viewport" class="viewport" tabindex="0"><div id="spacer" class="spacer-v"></div></div>
+<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span class="head-right"><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" hidden>show raw events</button></span></div>
+<div class="feed">
+<div id="viewport" class="viewport" tabindex="0" aria-label="conversation"><div id="spacer" class="spacer-v"></div></div>
+<button id="jump-latest" class="key jump" type="button" hidden>↓ latest</button>
+</div>
 <div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
 <form id="composer" class="composer" autocomplete="off">
 <textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline." aria-label="composer"></textarea>
@@ -40,6 +45,7 @@
 <div class="pane-head"><span class="title">decisions</span><button id="stack-scope" class="key" type="button">all projects</button></div>
 <div id="stack" class="pile"></div>
 </aside>
+<div id="scrim" class="scrim" hidden></div>
 </main>
 <footer id="pane-shuttle" class="shuttle" aria-label="Shuttle view"></footer>
 <div id="reconnect" class="overlay" hidden>

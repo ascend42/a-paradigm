@@ -16,7 +16,8 @@ import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, palette
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
-import { GuiStore, rowOf, rowSummary, turnEventSummary, type Row } from '../src/core/store.js';
+import { Follow, isAtBottom } from '../src/core/follow.js';
+import { chatItems, GuiStore, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -715,5 +716,154 @@ describe('#gui store after an upgrade', () => {
     expect(s.stack()).toEqual([]);
     s.apply([card(3, 'card:01JBBBBBBBBBBBBBBBBBBBBBBB')]); // a card of the new kernel stays
     expect(s.stack().map((c) => c.cardId)).toEqual(['card:01JBBBBBBBBBBBBBBBBBBBBBBB']);
+  });
+});
+
+/* ── dogfood 2026-10-19 round 2: the chat transcript, stale sessions, stickiness, layout ── */
+describe('#gui chat transcript: the conversation, not the raw rows', () => {
+  const H = 'hsid:v1:01M5ATH1BQBCRNY5REDJ20RA7D';
+  const ev = (seq: number, line: unknown, type: string): Row => ({ seq, kind: 'turn.event', view: 'full', session: H, payload: { hsid: H, type, seq, line: JSON.stringify(line) } });
+  const turn = (): Row[] => [
+    { seq: 1, kind: 'session.open', view: 'full', session: H, payload: { hsid: H, backend: 'claude-code', model: 'claude', cwd: '/r' } },
+    ...Array.from({ length: 16 }, (_, i) => ev(2 + i, { type: 'system', subtype: i % 2 ? 'hook_response' : 'hook_started', hook: 'x' }, i % 2 ? 'system.hook_response' : 'system.hook_started')),
+    ev(18, { type: 'system', subtype: 'init', session_id: 's' }, 'system.init'),
+    { seq: 19, kind: 'session.inject', view: 'full', session: H, payload: { hsid: H, origin: 'client', hash: 'sha256:00', bytes: 5 } },
+    { seq: 20, kind: 'turn.sent', view: 'full', session: H, payload: { hsid: H, turn: 't1', contentHash: 'sha256:00' } },
+    ev(21, { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'fix the bug' }] }, isReplay: true }, 'user'),
+    ev(22, { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hi' } } }, 'stream_event.content_block_delta'),
+    { seq: 23, kind: 'turn.partial', view: 'full', session: H, payload: { hsid: H, bytes: 90 } },
+    ev(24, { type: 'assistant', message: { id: 'm1', content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'Looking at it.' }] } }, 'assistant'),
+    ev(25, { type: 'assistant', message: { id: 'm1', content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'npm   test\n -- --run', description: 'run tests' } }] } }, 'assistant'),
+    ev(26, { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] } }, 'user'),
+    ev(27, { type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } }, 'rate_limit_event'),
+    ev(28, { type: 'system', subtype: 'status', status: 'x' }, 'system.status'),
+    ev(29, { type: 'result', subtype: 'success', total_cost_usd: 0.01 }, 'result'),
+    { seq: 30, kind: 'turn.result', view: 'full', session: H, payload: { hsid: H, usage: { tokens: 1234 }, cost: 0.0123, subtype: 'success', isError: false } },
+  ];
+  it('noise is hidden by default: hooks, partials, rate limits, status, tool results, bookkeeping rows', () => {
+    const { items, hidden } = chatItems(turn());
+    expect(items.map((i) => i.role)).toEqual(['system', 'user', 'assistant', 'tool', 'result']);
+    expect(hidden).toBe(turn().length - 5);
+    for (const i of items) expect(i.text).not.toMatch(/hook_|stream_event|rate_limit|thinking|hmm/);
+  });
+  it('the user message, the assistant text and the tool line appear in order; the result is cost and tokens', () => {
+    const { items } = chatItems(turn());
+    expect(items.slice(1).map((i) => [i.role, i.text])).toEqual([
+      ['user', 'fix the bug'],
+      ['assistant', 'Looking at it.'],
+      ['tool', 'Bash · npm test -- --run'],
+      ['result', 'success · $0.0123 · 1,234 tokens'],
+    ]);
+    expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
+  });
+  it('"show raw events" shows every row; the composer echo hides the replay of the same text (shown once, list only grows)', () => {
+    expect(chatItems(turn(), { raw: true }).items).toHaveLength(turn().length);
+    const echo: Row = { seq: 18.5, kind: 'composer', connId: 'local', session: H, payload: 'fix the bug' };
+    const rows = [...turn()].concat(echo).sort((a, b) => a.seq - b.seq);
+    const users = chatItems(rows).items.filter((i) => i.role === 'user');
+    expect(users.map((u) => [u.key, u.text])).toEqual([['18.5', 'fix the bug']]);
+    // before the replay arrives the echo is the last item; after it, nothing before it moved
+    const before = chatItems(rows.filter((r) => r.seq <= 20)).items.map((i) => i.key);
+    const after = chatItems(rows).items.map((i) => i.key);
+    expect(after.slice(0, before.length)).toEqual(before);
+  });
+  it('cards, refusals and lifecycle show inline; stubs and unparseable lines are hidden, never thrown on', () => {
+    const { items } = chatItems([
+      { seq: 1, kind: 'approval.request', view: 'full', session: H, payload: { card: { cardId: 'c', kind: 'permission' } } },
+      { seq: 2, kind: 'approval.decide', view: 'full', session: H, payload: { cardId: 'c', decision: 'allow' } },
+      { seq: 3, kind: 'session.refused', view: 'full', session: H, payload: { hsid: H, reason: 'x' } },
+      { seq: 4, kind: 'turn.event', view: 'stub', session: H },
+      { seq: 5, kind: 'turn.event', view: 'full', session: H, payload: { hsid: H, type: 'x', line: '{nope' } },
+      { seq: 6, kind: 'session.exited', view: 'full', payload: { hsid: H, code: 0, signal: null } },
+    ]);
+    expect(items.map((i) => i.role)).toEqual(['card', 'card', 'error', 'system']);
+    expect(items[3]!.text).toBe('session ended · exit 0');
+  });
+  it('a tool line names the tool and what it acts on, capped', () => {
+    expect(toolSummary('Read', { file_path: '/a/b.ts' })).toBe('Read · /a/b.ts');
+    expect(toolSummary('Mystery', { n: 1 })).toBe('Mystery');
+    expect(toolSummary('Bash', { command: 'x'.repeat(500) }).length).toBeLessThanOrEqual('Bash · '.length + 140);
+  });
+});
+
+describe('#gui stale sessions: a killed kernel\'s sessions are not live', () => {
+  const open = (seq: number, h: string, extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'session.open', session: h, payload: { hsid: h, backend: 'claude-code', ...extra } });
+  it('after a new daemon.start, sessions with no exit and no resume are ended; a resume in the new boot is live; live matches', () => {
+    const s = new GuiStore();
+    s.apply([{ seq: 1, kind: 'daemon.start', payload: {} }, open(2, 'A'), open(3, 'B'), open(4, 'C'), { seq: 5, kind: 'turn.result', session: 'A', payload: { hsid: 'A' } }, { seq: 6, kind: 'session.exited', payload: { hsid: 'C', code: 0 } }]);
+    expect(s.liveCount()).toBe(2);
+    expect(s.sessions.get('A')!.state).toBe('idle');
+    expect(s.sessions.get('C')!.state).toBe('ended');
+    // Ctrl-C: no exit rows. The next boot's sweep logs B as orphaned (before daemon.start), then the start, then D opens
+    s.apply([{ seq: 7, kind: 'session.orphaned', payload: { hsid: 'B', probe: 'stale-boot', action: 'none' } }, { seq: 8, kind: 'daemon.start', payload: {} }, open(9, 'D')]);
+    expect(s.sessions.get('B')!.state).toBe('orphaned');
+    expect(s.sessions.get('A')!.state).toBe('ended'); // no exit, not swept: gone with the old kernel
+    expect(s.liveCount()).toBe(1);
+    // a late row for a dead session does not bring it back; a resume (session.open in this boot) does
+    s.apply([{ seq: 10, kind: 'turn.result', session: 'A', payload: { hsid: 'A' } }]);
+    expect(s.sessions.get('A')!.state).toBe('ended');
+    s.apply([open(11, 'A', { resume: { outcome: 'resumed' } })]);
+    expect(s.sessions.get('A')!.state).toBe('open');
+    expect(s.liveCount()).toBe(2);
+  });
+});
+
+describe('#gui transcript stickiness (founder rule)', () => {
+  it('isAtBottom allows a small slack only', () => {
+    expect(isAtBottom(900, 100, 1000)).toBe(true);
+    expect(isAtBottom(880, 100, 1000)).toBe(true);
+    expect(isAtBottom(800, 100, 1000)).toBe(false);
+    expect(isAtBottom(0, 600, 300)).toBe(true); // content shorter than the view
+  });
+  it('at the bottom it stays stuck through new rows and a send; scrolled up nothing moves it and the jump key counts', () => {
+    const f = new Follow();
+    expect(f.shouldStick).toBe(true);
+    f.onAppend(3);
+    expect([f.shouldStick, f.showJump, f.unseen]).toEqual([true, false, 0]);
+    f.onScroll(false); // the user scrolled up to read
+    f.onAppend(1); // the user's own send
+    f.onAppend(2); // replies
+    expect([f.shouldStick, f.showJump, f.unseen]).toEqual([false, true, 3]);
+    f.onScroll(true); // back to the bottom by hand
+    expect([f.shouldStick, f.showJump, f.unseen]).toEqual([true, false, 0]);
+    f.onScroll(false);
+    f.onAppend(5);
+    f.jump(); // the "↓ latest" key
+    expect([f.shouldStick, f.showJump, f.unseen]).toEqual([true, false, 0]);
+  });
+  it('app.ts scrolls only when stuck, never on send, and never rebuilds the feed with markup', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    const sendFn = app.slice(app.indexOf('async function send('), app.indexOf('async function openSession('));
+    expect(sendFn).not.toMatch(/scrollTop|follow\.jump|paintTranscript\(/);
+    expect(app).toMatch(/if \(follow\.shouldStick\) vp\.scrollTop = vp\.scrollHeight/);
+    expect(app).not.toMatch(/replaceChildren|innerHTML/);
+  });
+});
+
+describe('#gui layout: the app fills the viewport (CSS sanity; the darwin Chrome smoke measures it)', () => {
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = (sel: string): string => {
+    const m = new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css);
+    return m ? m[1]! : '';
+  };
+  it('the shell is a full-height column and the desk grows; panes and the feed scroll inside, not the page', () => {
+    expect(rule('.shell')).toMatch(/height:\s*100dvh/);
+    expect(rule('.shell')).toMatch(/flex-direction:\s*column/);
+    expect(rule('.shell > .desk')).toMatch(/flex:\s*1 1 auto/);
+    expect(rule('html, body')).toMatch(/height:\s*100%/);
+    expect(rule('.shell')).toMatch(/overflow:\s*hidden/);
+    expect(rule('.desk')).toMatch(/min-height:\s*0/);
+    expect(rule('.viewport')).toMatch(/overflow-y:\s*auto/);
+    expect(rule('.pile')).toMatch(/overflow-y:\s*auto/);
+    expect(rule('.sessions > .list')).toMatch(/min-height:\s*0/);
+  });
+  it('under 900px the side panes become drawers behind header toggles (one column, no horizontal overflow)', () => {
+    expect(css).toMatch(/@media \(max-width: 900px\)/);
+    const narrow = css.slice(css.indexOf('@media (max-width: 900px)'));
+    expect(narrow).toMatch(/grid-template-columns: minmax\(0, 1fr\)/);
+    expect(narrow).toMatch(/\.desk\.open-sessions > \.sessions/);
+    const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
+    for (const id of ['toggle-sessions', 'toggle-stack', 'jump-latest', 'raw-toggle', 'scrim']) expect(html).toContain(`id="${id}"`);
+    expect(html).not.toMatch(/style=/); // CSP style-src 'self': no inline style attributes
   });
 });

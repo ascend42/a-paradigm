@@ -16,7 +16,8 @@ import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resol
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
-import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
+import { Follow, isAtBottom } from '../core/follow.js';
+import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 
 const doc = document as unknown as MiniDoc;
@@ -84,53 +85,141 @@ function applyLayout(): void {
   $('pane-shuttle').hidden = !layout.visible.shuttle;
 }
 
-/* ── transcript (virtualized) ───────────────────────────────────── */
+/* ── transcript (virtualized chat) ───────────────────────────────── */
 const widths = new WidthCache(22);
 let heights = new HeightIndex(22);
 let width = 0;
-let rows: readonly Row[] = [];
+let items: ChatItem[] = [];
+let hiddenRows = 0;
+let rawMode = false; // "show raw events": every row as its one-line summary
+const follow = new Follow(); // stickiness: core/follow.ts (unit-tested)
 const mounted = new Map<number, HTMLElement>();
+let memo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
 
-function currentRows(): readonly Row[] {
+const transcriptId = (): string => `${focused ?? 'feed'}${rawMode ? '\u0000raw' : ''}`;
+
+function currentItems(): { items: ChatItem[]; hidden: number } {
   const base = focused ? store.transcript(focused) : store.kernelFeed;
   const mine = local.filter((r) => (r.session ?? null) === focused);
-  return mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
+  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}`;
+  if (memo?.key === key) return memo.out;
+  const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
+  // the kernel feed has no conversation: it stays the raw row list
+  const out = chatItems(rows, { raw: rawMode || !focused });
+  memo = { key, out };
+  return out;
 }
 
-function resetTranscript(): void {
+function unmountAll(): void {
   for (const el of mounted.values()) el.remove();
   mounted.clear();
-  rows = currentRows();
-  heights = widths.restore(focused ?? 'feed', width, rows.length);
-  put($('transcript-title'), focused ?? 'kernel feed');
-  paintTranscript(true);
 }
 
-function paintTranscript(stick = false): void {
+/** A new transcript (focus, raw toggle): rebuild from scratch, stuck to the bottom. */
+function resetTranscript(): void {
+  unmountAll();
+  memo = null;
+  items = [];
+  follow.jump();
+  heights = widths.restore(transcriptId(), width, 0);
+  put($('transcript-title'), focused ? focused.slice(-10) : 'kernel feed');
+  $('transcript-title').title = focused ?? '';
+  $('raw-toggle').hidden = !focused;
+  put($('raw-toggle'), rawMode ? 'chat view' : 'show raw events');
+  paintTranscript();
+}
+
+const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
+function itemEl(it: ChatItem): HTMLElement {
+  const label = ROLE_LABEL[it.role];
+  const at = it.at ? it.at.slice(11, 16) : '';
+  const body = label
+    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), h(doc, 'div', { class: 'body' }, it.text)]
+    : it.role === 'raw'
+      ? [h(doc, 'span', { class: 't' }, at), it.text]
+      : [it.text];
+  return h(doc, 'div', { class: `trow role-${it.role}` }, ...body) as unknown as HTMLElement;
+}
+
+const sameKeys = (a: readonly ChatItem[], b: readonly ChatItem[]): boolean => {
+  if (b.length < a.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i]!.key !== b[i]!.key) return false;
+  return true;
+};
+
+/**
+ * Paint the visible items. Stuck ⇒ end at the bottom; scrolled up ⇒ the item at the top of the view stays exactly
+ * where it is while heights are measured and items arrive (no jump, no reset to the top). `remeasure` (a width
+ * change) rebuilds the height index from the per-width cache and keeps the same reading position.
+ */
+function paintTranscript(remeasure = false): void {
   const vp = $('viewport');
-  const next = currentRows();
-  if (next.length > heights.length) heights.push(next.length - heights.length);
-  rows = next;
-  const atBottom = stick || vp.scrollTop + vp.clientHeight >= vp.scrollHeight - 4;
-  $('spacer').style.height = `${heights.total()}px`;
-  if (atBottom) vp.scrollTop = vp.scrollHeight;
-  const { start, end } = visibleRange(heights, vp.scrollTop, vp.clientHeight || 600);
-  for (const [i, el] of mounted) if (i < start || i >= end) {
-    el.remove();
-    mounted.delete(i);
+  const anchor = items.length ? heights.indexAt(vp.scrollTop) : 0;
+  const anchorDelta = items.length ? vp.scrollTop - heights.offsetOf(anchor) : 0;
+  const { items: next, hidden } = currentItems();
+  let appended = 0;
+  if (remeasure || !sameKeys(items, next)) {
+    unmountAll();
+    heights = widths.restore(transcriptId(), width, next.length);
+  } else {
+    appended = next.length - items.length;
+    if (appended > 0) heights.push(appended);
   }
-  for (let i = start; i < end; i++) {
-    if (mounted.has(i)) continue;
-    const r = rows[i]!;
-    const at = r.at ? r.at.slice(11, 16) : '';
-    const el = h(doc, 'div', { class: `trow kind-${r.kind.split('.')[0]!.replace(/[^a-z]/g, '')}${r.connId === 'local' ? ' local' : ''}${r.kind.endsWith('refused') ? ' refused' : ''}` }, h(doc, 'span', { class: 't' }, at), r.connId === 'local' ? `you · ${String(r.payload)}` : rowSummary(r)) as unknown as HTMLElement;
-    el.style.top = `${heights.offsetOf(i)}px`;
-    vp.appendChild(el);
-    mounted.set(i, el);
-    heights.set(i, el.offsetHeight || heights.estimate);
+  items = next;
+  hiddenRows = hidden;
+  follow.onAppend(appended);
+  for (let pass = 0; pass < 4; pass++) {
+    $('spacer').style.height = `${heights.total()}px`;
+    if (follow.shouldStick) vp.scrollTop = vp.scrollHeight;
+    else if (items.length) {
+      const want = heights.offsetOf(Math.min(anchor, items.length - 1)) + anchorDelta;
+      if (Math.abs(vp.scrollTop - want) >= 1) vp.scrollTop = want;
+    }
+    const { start, end } = visibleRange(heights, vp.scrollTop, vp.clientHeight || 600);
+    for (const [i, el] of mounted)
+      if (i < start || i >= end) {
+        el.remove();
+        mounted.delete(i);
+      }
+    let changed = false;
+    for (let i = start; i < end; i++) {
+      let el = mounted.get(i);
+      if (!el) {
+        el = itemEl(items[i]!);
+        el.style.top = `${heights.offsetOf(i)}px`;
+        vp.appendChild(el);
+        mounted.set(i, el);
+      }
+      const hgt = el.offsetHeight || heights.estimate;
+      if (hgt !== heights.height(i)) {
+        heights.set(i, hgt);
+        changed = true;
+      }
+    }
+    for (const [i, el] of mounted) el.style.top = `${heights.offsetOf(i)}px`;
+    if (!changed) break;
   }
-  for (const [i, el] of mounted) el.style.top = `${heights.offsetOf(i)}px`;
-  put($('transcript-count'), `${rows.length} rows`);
+  put($('transcript-count'), focused && !rawMode ? `${items.length} items${hiddenRows ? ` · ${hiddenRows} raw hidden` : ''}` : `${items.length} rows`);
+  const jump = $('jump-latest');
+  jump.hidden = !follow.showJump;
+  put(jump, follow.unseen ? `↓ latest · ${follow.unseen} new` : '↓ latest');
+}
+
+/* ── narrow widths: the side panes are drawers behind the header toggles (styles.css @media) ── */
+function toggleDrawer(which: 'sessions' | 'stack'): void {
+  const d = document.querySelector('.desk')!;
+  const open = !d.classList.contains(`open-${which}`);
+  d.classList.remove('open-sessions', 'open-stack');
+  if (open) d.classList.add(`open-${which}`);
+  $('scrim').hidden = !open;
+  $('toggle-sessions').setAttribute('aria-expanded', String(open && which === 'sessions'));
+  $('toggle-stack').setAttribute('aria-expanded', String(open && which === 'stack'));
+}
+function closeDrawers(): void {
+  document.querySelector('.desk')?.classList.remove('open-sessions', 'open-stack');
+  $('scrim').hidden = true;
+  $('toggle-sessions').setAttribute('aria-expanded', 'false');
+  $('toggle-stack').setAttribute('aria-expanded', 'false');
 }
 
 /* ── sessions sidebar ───────────────────────────────────────────── */
@@ -152,7 +241,7 @@ function paintSessions(): void {
     list.appendChild(h(doc, 'div', { class: 'group-head' }, sw, g.repo === UNSCOPED ? 'unscoped' : g.repo) as unknown as Node);
     for (const s of ss) {
       const glyph = s.backend === 'local' ? '○' : '●';
-      list.appendChild(h(doc, 'button', { class: `session-row state-${s.state}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: s.hsid }, h(doc, 'span', { class: 'glyph' }, glyph), `${s.hsid.slice(-10)} · ${s.state}${s.pending ? ` · ${s.pending} need you` : ''}`) as unknown as Node);
+      list.appendChild(h(doc, 'button', { class: `session-row state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: s.hsid }, h(doc, 'span', { class: 'glyph' }, glyph), `${s.hsid.slice(-10)} · ${s.state}${s.pending ? ` · ${s.pending} need you` : ''}`) as unknown as Node);
     }
   }
 }
@@ -248,7 +337,7 @@ function paintShuttle(): void {
   const s = $('pane-shuttle');
   clear(s);
   const by = store.pendingByKind();
-  const live = [...store.sessions.values()].filter((x) => x.state === 'open' || x.state === 'streaming' || x.state === 'idle').length;
+  const live = store.liveCount();
   const kv = (k: string, v: string) => h(doc, 'span', null, `${k} `, h(doc, 'span', { class: 'v' }, v));
   s.appendChild(kv('sessions', `${live} live · ${store.sessions.size} seen`) as unknown as Node);
   s.appendChild(kv('inbox', Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear') as unknown as Node);
@@ -385,8 +474,9 @@ async function openSession(cwd: string, model: string): Promise<void> {
 }
 
 function focus(hsid: string | null): void {
-  if (width) widths.save(focused ?? 'feed', width, heights);
+  if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
+  closeDrawers();
   put($('composer-mode'), hsid ? `to ${hsid.slice(-10)}` : 'no session focused');
   resetTranscript();
   paintSessions();
@@ -436,15 +526,36 @@ function run(id: string): void {
 
 /* ── events (every write verb hangs off a user gesture, G-GUI-04) ── */
 function wire(): void {
-  $('viewport').addEventListener('scroll', () => paintTranscript(), { passive: true });
+  $('viewport').addEventListener(
+    'scroll',
+    () => {
+      const vp = $('viewport');
+      follow.onScroll(isAtBottom(vp.scrollTop, vp.clientHeight, vp.scrollHeight));
+      paintTranscript();
+    },
+    { passive: true },
+  );
   new ResizeObserver(() => {
     const w = $('viewport').clientWidth;
     if (w !== width) {
-      if (width) widths.save(focused ?? 'feed', width, heights);
+      if (width) widths.save(transcriptId(), width, heights);
       width = w;
-      resetTranscript();
+      paintTranscript(true);
     } else paintTranscript();
   }).observe($('viewport'));
+  $('jump-latest').addEventListener('click', () => {
+    follow.jump();
+    paintTranscript();
+    $('composer-text').focus();
+  });
+  $('raw-toggle').addEventListener('click', () => {
+    if (width) widths.save(transcriptId(), width, heights);
+    rawMode = !rawMode;
+    resetTranscript();
+  });
+  $('toggle-sessions').addEventListener('click', () => toggleDrawer('sessions'));
+  $('toggle-stack').addEventListener('click', () => toggleDrawer('stack'));
+  $('scrim').addEventListener('click', closeDrawers);
   $('session-list').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-hsid]') as HTMLElement | null;
     if (b) focus(b.dataset.hsid || null);
