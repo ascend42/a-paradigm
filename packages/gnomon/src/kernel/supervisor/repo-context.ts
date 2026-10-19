@@ -108,8 +108,10 @@ export function sanitizeFrontmatter(raw: string, allowed: readonly string[]): Sa
 export interface RepoContext {
   /** the generated plugin dir, or null when the repo has no skill, agent or command to load */
   pluginDir: string | null;
-  /** `--add-dir` targets for memory (outermost first) */
+  /** `--add-dir` targets for memory (outermost first), each passed by auditMemoryDir */
   memoryDirs: string[];
+  /** H1: memory dirs NOT added (relative to the git top-level), with why: a symlink, or an @ import leaving the repo */
+  memoryRefused: Array<{ dir: string; why: string }>;
   skills: string[];
   agents: string[];
   commands: string[];
@@ -140,8 +142,11 @@ function hasMemory(dir: string): boolean {
   return file(path.join(dir, 'CLAUDE.md')) || file(path.join(dir, '.claude', 'CLAUDE.md')) || rules;
 }
 
-/** The memory dirs: the cwd and its ancestors up to the git top-level (outermost first); never the user home or above. */
-export function memoryDirsOf(cwd: string, userHome: string): string[] {
+/**
+ * The memory chain: the cwd and its ancestors up to the git top-level (innermost first), never the user home or
+ * above; without a git top-level, the cwd alone. `top` bounds every `@` import (the git top-level, else the cwd).
+ */
+export function memoryChainOf(cwd: string, userHome: string): { chain: string[]; top: string } {
   const home = realpathLoose(userHome);
   const start = realpathLoose(cwd);
   const chain: string[] = [];
@@ -157,8 +162,117 @@ export function memoryDirsOf(cwd: string, userHome: string): string[] {
     if (parent === d) break;
     d = parent;
   }
-  const dirs = top === null ? chain.slice(0, 1) : chain;
-  return dirs.filter(hasMemory).reverse();
+  return top === null ? { chain: chain.slice(0, 1), top: start } : { chain, top };
+}
+
+/** The memory dirs that hold memory, outermost first (unaudited: buildRepoContext audits them). */
+export function memoryDirsOf(cwd: string, userHome: string): string[] {
+  return memoryChainOf(cwd, userHome).chain.filter(hasMemory).reverse();
+}
+
+/** Claude Code's `@` import grammar (2.1.303, memory loader): the token, `#…` cut, `\ ` unescaped, accepted forms. */
+const IMPORT_RE = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g;
+export const MAX_IMPORT_DEPTH = 5;
+
+/** The `@` import targets of a memory file, resolved the way Claude resolves them (`~/` = the user home). Code spans are NOT skipped: stricter than Claude. */
+export function importTargets(text: string, file: string, userHome: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(IMPORT_RE)) {
+    let t = m[1] ?? '';
+    const hash = t.indexOf('#');
+    if (hash !== -1) t = t.slice(0, hash);
+    t = t.replaceAll('\\ ', ' ');
+    if (!t) continue;
+    const accepted = t.startsWith('./') || t.startsWith('~/') || (t.startsWith('/') && t !== '/') || (!t.startsWith('@') && !/^[#%^&*()]+/.test(t) && /^[a-zA-Z0-9._-]/.test(t));
+    if (!accepted) continue;
+    out.push(t.startsWith('~/') ? path.join(userHome, t.slice(2)) : path.isAbsolute(t) ? path.normalize(t) : path.resolve(path.dirname(file), t));
+  }
+  return out;
+}
+
+/** The memory files of one dir (CLAUDE.md, .claude/CLAUDE.md, .claude/rules/**.md); a symlink anywhere on the way refuses. */
+function memoryFilesOf(dir: string): { ok: true; files: string[] } | { ok: false; why: string } {
+  const files: string[] = [];
+  const lst = (p: string): fs.Stats | null => {
+    try {
+      return fs.lstatSync(p);
+    } catch {
+      return null;
+    }
+  };
+  for (const p of [path.join(dir, 'CLAUDE.md'), path.join(dir, '.claude')]) if (lst(p)?.isSymbolicLink()) return { ok: false, why: `${path.relative(dir, p)} is a symlink` };
+  const top = lst(path.join(dir, 'CLAUDE.md'));
+  if (top?.isFile()) files.push(path.join(dir, 'CLAUDE.md'));
+  const inner = lst(path.join(dir, '.claude', 'CLAUDE.md'));
+  if (inner?.isSymbolicLink()) return { ok: false, why: '.claude/CLAUDE.md is a symlink' };
+  if (inner?.isFile()) files.push(path.join(dir, '.claude', 'CLAUDE.md'));
+  const rules = path.join(dir, '.claude', 'rules');
+  const rs = lst(rules);
+  if (rs?.isSymbolicLink()) return { ok: false, why: '.claude/rules is a symlink' };
+  if (rs?.isDirectory()) {
+    const walk = (d: string, depth: number): string | null => {
+      if (depth > MAX_TREE_DEPTH) return `${path.relative(dir, d)} is nested too deep`;
+      let ents: fs.Dirent[];
+      try {
+        ents = fs.readdirSync(d, { withFileTypes: true });
+      } catch (err) {
+        return `${path.relative(dir, d)} is unreadable (${(err as NodeJS.ErrnoException).code ?? 'error'})`;
+      }
+      for (const e of ents) {
+        const p = path.join(d, e.name);
+        if (e.isSymbolicLink()) return `${path.relative(dir, p)} is a symlink`;
+        if (e.isDirectory()) {
+          const w = walk(p, depth + 1);
+          if (w) return w;
+        } else if (e.isFile() && e.name.endsWith('.md')) files.push(p);
+      }
+      return null;
+    };
+    const w = walk(rules, 0);
+    if (w) return { ok: false, why: w.split(path.sep).join('/') };
+  }
+  return { ok: true, files };
+}
+
+/**
+ * H1 (Aegis): audit one memory dir in the KERNEL. Refused (the whole dir is not added) when any memory file is a
+ * symlink, unreadable or oversized, or when any `@` import followed recursively (depth MAX_IMPORT_DEPTH, `~`,
+ * absolute and relative forms) names an existing path outside `top`, or a symlink. A target that does not exist is
+ * nothing Claude can load and is ignored.
+ */
+export function auditMemoryDir(dir: string, top: string, userHome: string): { ok: true } | { ok: false; why: string } {
+  const listed = memoryFilesOf(dir);
+  if (!listed.ok) return listed;
+  const topReal = realpathLoose(top);
+  const rel = (p: string): string => (isUnder(topReal, p) ? path.relative(topReal, p).split(path.sep).join('/') || '.' : p);
+  const seen = new Set<string>();
+  const visit = (file: string, depth: number): string | null => {
+    if (seen.has(file)) return null;
+    seen.add(file);
+    const got = readFile(file);
+    if (!got.ok) return `${rel(file)}: ${got.why}`;
+    if (depth >= MAX_IMPORT_DEPTH) return null;
+    for (const t of importTargets(got.buf.toString('utf8'), file, userHome)) {
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(t);
+      } catch {
+        continue; // nothing there: nothing to load
+      }
+      if (!isUnder(topReal, path.resolve(t)) || !isUnder(topReal, realpathLoose(t))) return `${rel(file)}: an @ import reaches outside the repo (${t.length > 120 ? `${t.slice(0, 120)}…` : t})`;
+      if (st.isSymbolicLink()) return `${rel(file)}: an @ import is a symlink (${rel(t)})`;
+      if (st.isFile()) {
+        const w = visit(t, depth + 1);
+        if (w) return w;
+      }
+    }
+    return null;
+  };
+  for (const f of listed.files) {
+    const w = visit(f, 0);
+    if (w) return { ok: false, why: w };
+  }
+  return { ok: true };
 }
 
 interface Budget {
@@ -231,7 +345,13 @@ function realDir(p: string): boolean {
  */
 export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string }): RepoContext {
   const cwd = realpathLoose(i.cwd);
-  const ctx: RepoContext = { pluginDir: null, memoryDirs: memoryDirsOf(cwd, i.userHome), skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
+  const { chain, top } = memoryChainOf(cwd, i.userHome);
+  const ctx: RepoContext = { pluginDir: null, memoryDirs: [], memoryRefused: [], skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
+  for (const d of chain.filter(hasMemory).reverse()) {
+    const a = auditMemoryDir(d, top, i.userHome);
+    if (a.ok) ctx.memoryDirs.push(d);
+    else ctx.memoryRefused.push({ dir: path.relative(top, d).split(path.sep).join('/') || '.', why: a.why });
+  }
   fs.rmSync(i.outDir, { recursive: true, force: true });
   const claudeDir = path.join(cwd, '.claude');
   try {
@@ -431,8 +551,18 @@ export function repoContextRow(hsid: string, ctx: RepoContext, info: RepoSetting
   const cap = <T>(l: readonly T[]): T[] => l.slice(0, 64);
   return {
     what: 'repo-context', hsid, plugin: ctx.pluginDir !== null, memoryDirs: ctx.memoryDirs.length,
-    skills: cap(ctx.skills), agents: cap(ctx.agents), commands: cap(ctx.commands),
+    memoryRefused: cap(ctx.memoryRefused), skills: cap(ctx.skills), agents: cap(ctx.agents), commands: cap(ctx.commands),
     refused: cap(ctx.refused), dropped: cap(ctx.dropped), frontmatterHooks: cap(ctx.frontmatterHooks), run: 0,
     notLoaded: { permissions: info.permissions, envKeys: cap(info.envKeys), otherKeys: cap(info.otherKeys), unreadable: info.unreadable },
   };
 }
+
+/** The repo-card lines about the context (kernel-composed): what memory and which items were refused. */
+export function repoContextLines(ctx: RepoContext): string[] {
+  const lines: string[] = [];
+  for (const m of ctx.memoryRefused.slice(0, 8)) lines.push(`repo memory NOT loaded (P8-D97 audit): ${m.dir}: ${m.why}`);
+  if (ctx.memoryRefused.length > 8) lines.push(`repo memory NOT loaded: ${ctx.memoryRefused.length - 8} more dirs`);
+  if (ctx.refused.length) lines.push(`repo skills/agents/commands NOT loaded: ${ctx.refused.slice(0, 8).map((r) => `${r.path} (${r.why})`).join('; ')}${ctx.refused.length > 8 ? ` and ${ctx.refused.length - 8} more` : ''}`);
+  return lines.map((l) => l.replace(COMMAND_UNSAFE_G, '?'));
+}
+const COMMAND_UNSAFE_G = new RegExp(COMMAND_UNSAFE.source, 'gu');

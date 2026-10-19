@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AGENT_KEYS, buildRepoContext, COMMAND_KEYS, MAX_CONTEXT_BYTES, MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_FILES, memoryDirsOf, REPO_CONTEXT_PLUGIN, repoContextRow, repoSettingsInfo, repoSettingsLines, sanitizeFrontmatter, SKILL_KEYS } from '../src/kernel/supervisor/repo-context.js';
+import { AGENT_KEYS, buildRepoContext, COMMAND_KEYS, MAX_CONTEXT_BYTES, MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_FILES, importTargets, memoryDirsOf, REPO_CONTEXT_PLUGIN, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, sanitizeFrontmatter, SKILL_KEYS } from '../src/kernel/supervisor/repo-context.js';
 import { privateTmpRoot } from './daemon-helpers.js';
 
 let root = '';
@@ -201,6 +201,64 @@ describe('memoryDirsOf', () => {
     put(path.join(inHome, 'CLAUDE.md'), 'proj');
     expect(memoryDirsOf(inHome, w.home)).toEqual([inHome]);
     expect(memoryDirsOf(w.home, w.home)).toEqual([]);
+  });
+});
+
+describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-dir', () => {
+  const ctxOf = (w: ReturnType<typeof world>, cwd = w.repo) => buildRepoContext({ cwd, userHome: w.home, outDir: w.out });
+  it('in-repo imports (relative, ./, nested, absolute inside the repo) pass; a missing target is ignored', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), `@docs/a.md and @./b.md and @${path.join(w.repo, 'c.md')} and @missing.md\n`);
+    put(path.join(w.repo, 'docs', 'a.md'), '@../d.md\n');
+    for (const f of ['b.md', 'c.md', 'd.md']) put(path.join(w.repo, f), 'ok\n');
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([w.repo]);
+    expect(c.memoryRefused).toEqual([]);
+  });
+  it.each([
+    ['@~/.ssh/x', (w: ReturnType<typeof world>) => (put(path.join(w.home, '.ssh', 'x'), 'KEY'), '@~/.ssh/x\n')],
+    ['@/abs (outside)', (_w: ReturnType<typeof world>) => (put(path.join(root, 'abs-secret'), 'S'), `see @${path.join(root, 'abs-secret')}\n`)],
+    ['@../other', (_w: ReturnType<typeof world>) => (put(path.join(root, 'other'), 'S'), '@../other\n')],
+    ['a nested import that leaves', (w: ReturnType<typeof world>) => (put(path.join(root, 'leak'), 'S'), put(path.join(w.repo, 'docs', 'n1.md'), '@n2.md\n'), put(path.join(w.repo, 'docs', 'n2.md'), '@../../leak\n'), '@docs/n1.md\n')],
+    ['an import in .claude/rules', (w: ReturnType<typeof world>) => (put(path.join(root, 'leak2'), 'S'), put(path.join(w.repo, '.claude', 'rules', 'sub', 'r.md'), '@../../../../leak2\n'), '# plain\n')],
+  ])('%s refuses the whole memory dir', (_n, mk) => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), mk(w));
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused).toHaveLength(1);
+    expect(c.memoryRefused[0]!.why).toMatch(/outside the repo/);
+    expect(repoContextLines(c)[0]).toMatch(/^repo memory NOT loaded \(P8-D97 audit\): \.: /);
+  });
+  it.skipIf(!canSymlink)('a symlinked CLAUDE.md, .claude/CLAUDE.md, rules file or in-repo import refuses the dir', () => {
+    for (const mk of [
+      (w: ReturnType<typeof world>) => fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, 'CLAUDE.md'), 'file'),
+      (w: ReturnType<typeof world>) => (fs.mkdirSync(path.join(w.repo, '.claude'), { recursive: true }), fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, '.claude', 'CLAUDE.md'), 'file')),
+      (w: ReturnType<typeof world>) => (fs.mkdirSync(path.join(w.repo, '.claude', 'rules'), { recursive: true }), fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, '.claude', 'rules', 'r.md'), 'file')),
+      (w: ReturnType<typeof world>) => (put(path.join(w.repo, 'CLAUDE.md'), '@link.md\n'), fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, 'link.md'), 'file')),
+    ]) {
+      const w = world();
+      put(path.join(w.repo, 'real.md'), 'x\n');
+      mk(w);
+      const c = ctxOf(w);
+      expect(c.memoryDirs).toEqual([]);
+      expect(c.memoryRefused[0]!.why).toMatch(/symlink/);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it('a refused ancestor does not refuse the cwd (each dir is audited on its own)', () => {
+    const w = world();
+    const pkg = path.join(w.repo, 'packages', 'p');
+    put(path.join(root, 'leak'), 'S');
+    put(path.join(w.repo, 'CLAUDE.md'), '@../leak\n');
+    put(path.join(pkg, 'CLAUDE.md'), 'fine\n');
+    const c = ctxOf(w, pkg);
+    expect(c.memoryDirs).toEqual([pkg]);
+    expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/outside the repo/) }]);
+  });
+  it('importTargets follows Claude grammar: # cut, escaped spaces, ~/ = the user home, @@ and punctuation ignored', () => {
+    const f = path.join(path.sep, 'r', 'CLAUDE.md');
+    expect(importTargets('@a.md#frag x @~/k @my\\ file.md @@x @#y @/ @(z)', f, path.join(path.sep, 'h'))).toEqual([path.join(path.sep, 'r', 'a.md'), path.join(path.sep, 'h', 'k'), path.join(path.sep, 'r', 'my file.md')]);
   });
 });
 

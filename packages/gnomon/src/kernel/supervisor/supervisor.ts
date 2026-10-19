@@ -90,7 +90,7 @@ import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/c
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
-import { buildRepoContext, REPO_CONTEXT_ENV, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
+import { buildRepoContext, REPO_CONTEXT_ENV, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -355,7 +355,7 @@ export class SessionSupervisor {
         await this.#o.log('gate-class.detected', repoContextRow(hsid, repoCtx, repoSettingsInfo([req.cwd, ...(req.worktree ? [req.worktree] : [])])), { session: hsid });
       }
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
-      const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req) : [];
+      const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
       fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
@@ -477,7 +477,7 @@ export class SessionSupervisor {
    * gate-class card per undecided hook. Returns the approved hooks only. Fail closed: no decision source, an
    * unreadable or oversized set, a refused hook or a failed raise ⇒ that hook (or the set) does not run.
    */
-  async #auditRepoHooks(hsid: string, req: OpenRequest): Promise<RepoHook[]> {
+  async #auditRepoHooks(hsid: string, req: OpenRequest, contextLines: readonly string[] = []): Promise<RepoHook[]> {
     const roots = [req.cwd, ...(req.worktree ? [req.worktree] : [])];
     const set = extractRepoHooks(roots);
     if (set.status === 'none') return [];
@@ -497,7 +497,7 @@ export class SessionSupervisor {
         continue;
       }
       if (!this.#o.broker) continue;
-      const c = repoHookCard(set, h, roots.join(' + '), repoSettingsLines(repoSettingsInfo(roots)));
+      const c = repoHookCard(set, h, roots.join(' + '), [...repoSettingsLines(repoSettingsInfo(roots)), ...contextLines]);
       try {
         const card = await this.#o.broker.raise({
           kind: 'gate-class', requestedBy: this.#o.kernelPrincipal, hsid, attended: true, detail: c.detail, lines: c.lines, block: c.block,
