@@ -90,7 +90,7 @@ import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/c
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
-import { buildRepoContext, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
+import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -332,6 +332,7 @@ export class SessionSupervisor {
         ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
+        memoryDirs: memoryChainOf(req.cwd, userHome).chain, // P8-D97 (Aegis M1): no session plants steering a later one loads
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);

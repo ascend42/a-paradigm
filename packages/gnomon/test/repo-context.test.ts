@@ -8,8 +8,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AGENT_KEYS, buildRepoContext, COMMAND_KEYS, hasShellPreprocessing, MAX_CONTEXT_BYTES, MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_FILES, importTargets, memoryDirsOf, REPO_CONTEXT_PLUGIN, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, sanitizeFrontmatter, SKILL_KEYS } from '../src/kernel/supervisor/repo-context.js';
+import { AGENT_KEYS, buildRepoContext, COMMAND_KEYS, hasShellPreprocessing, MAX_CONTEXT_BYTES, MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_FILES, importTargets, memoryChainOf, memoryDirsOf, REPO_CONTEXT_PLUGIN, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, sanitizeFrontmatter, SKILL_KEYS } from '../src/kernel/supervisor/repo-context.js';
 import { privateTmpRoot } from './daemon-helpers.js';
+import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
 
 let root = '';
 afterEach(() => {
@@ -317,6 +318,22 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
   it('importTargets follows Claude grammar: # cut, escaped spaces, ~/ = the user home, @@ and punctuation ignored', () => {
     const f = path.join(path.sep, 'r', 'CLAUDE.md');
     expect(importTargets('@a.md#frag x @~/k @my\\ file.md @@x @#y @/ @(z)', f, path.join(path.sep, 'h'))).toEqual([path.join(path.sep, 'r', 'a.md'), path.join(path.sep, 'h', 'k'), path.join(path.sep, 'r', 'my file.md')]);
+  });
+});
+
+describe('M1 (Aegis): every memory-chain dir is write-denied (CLAUDE* and .claude/**)', () => {
+  it('buildSessionPolicy denies the chain from a subdirectory cwd up to the git top-level', () => {
+    const w = world();
+    const pkg = path.join(w.repo, 'packages', 'p');
+    fs.mkdirSync(pkg, { recursive: true });
+    const { chain, top } = memoryChainOf(pkg, w.home);
+    expect(top).toBe(w.repo);
+    expect(chain).toEqual([pkg, path.join(w.repo, 'packages'), w.repo]);
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: pkg, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memoryDirs: chain });
+    for (const d of chain) {
+      expect(pol.denyWrite).toContainEqual({ path: d + path.sep + 'CLAUDE', match: 'prefix', class: 'settings' });
+      expect(pol.denyWrite).toContainEqual({ path: path.join(d, '.claude'), match: 'subpath', class: 'settings' });
+    }
   });
 });
 

@@ -30,7 +30,8 @@
  *     user `~/.claude/**` (subpath; Aegis F2: skills, plugins, agents, commands
  *     and hooks there all steer Claude) and `~/.claude.json` (literal: its
  *     user-scope mcpServers run commands), the managed files, project and
- *     worktree `.claude/**` and `CLAUDE*.md` (prefix); every input layersHash
+ *     worktree `.claude/**` and `CLAUDE*.md` (prefix), and the same pair for
+ *     every memory-chain dir (P8-D97, `memoryDirs`); every input layersHash
  *     reads is covered (test-proved);
  *   - git (write, Aegis F9; a spec amendment to §15.5): `.git/hooks/**`,
  *     `.git/config`, `.git/info/**` of the cwd and worktree (and the common
@@ -137,6 +138,12 @@ export interface SessionPolicyInput {
    * `runners/<tree>/…`); anything else refuses the policy (fail closed).
    */
   homeReadable?: ReadonlyArray<{ path: string; match: 'literal' | 'subpath' }>;
+  /**
+   * P8-D97 (Aegis M1): the memory chain (the cwd and its ancestors up to the git top-level). Each dir's `CLAUDE*`
+   * (prefix) and `.claude/**` join the settings write denies, so a session cannot plant steering that a later
+   * session loads (`--add-dir` memory, or an ancestor's `.claude`).
+   */
+  memoryDirs?: readonly string[];
 }
 
 /** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
@@ -232,7 +239,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     P(inp.userClaudeDir, 'subpath', 'settings'),
     P(inp.userClaudeJson ?? defaultClaudeJson(inp.userClaudeDir), 'literal', 'settings'),
     ...inp.managedSettingsPaths.map((m) => P(m, 'literal', 'settings')),
-    ...roots.flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
+    ...[...roots, ...(inp.memoryDirs ?? [])].flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
   ];
   // T-2026-10-18-010: the WHOLE Gnomon home is read-denied (keys, the kernel log, other sessions, the device key,
   // the pin, generated plugins…); the session's own reads are carved back explicitly and checked here
