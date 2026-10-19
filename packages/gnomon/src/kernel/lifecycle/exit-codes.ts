@@ -40,6 +40,7 @@ export type DaemonExitClass = 'ok' | 'superseded' | 'config' | 'internal' | 'tra
 /** Every lifecycle refusal is classified here; the Record type makes a new reason a compile error until it is. */
 export const REFUSAL_EXIT_CLASS: Readonly<Record<LifecycleRefusalReason, DaemonExitClass>> = Object.freeze({
   'already-running': 'superseded',
+  'holder-silent': 'transient',
   'lock-race': 'transient',
   'endpoint-busy': 'transient',
   'unsafe-home': 'config',

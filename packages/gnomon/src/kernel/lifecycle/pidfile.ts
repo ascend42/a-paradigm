@@ -14,7 +14,10 @@
  *   - stale residue is removed by rename-then-verify-inode, so a racer that
  *     already reclaimed the lock never has its fresh pidfile unlinked by us.
  * The pid is a diagnostic, never a security claim (the pidfile is same-user
- * writable, S29-K6).
+ * writable, S29-K6). A holder owned by another user (EPERM) is residue
+ * (Aegis L2); a same-user live holder is judged by startDaemon against the
+ * socket: `already-running` only when a kernel answers `hello` there, else
+ * `holder-silent` (transient, restartable — never `superseded`).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -79,12 +82,22 @@ export function readPidfile(home: string): DaemonPidfile | null {
 
 /** Is a pid alive (signal 0 probe)? EPERM counts as alive — someone owns it. */
 export function pidAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+  return pidProbe(pid) !== 'dead';
+}
+
+/**
+ * Signal-0 probe with EPERM kept apart: `foreign` = alive but owned by another
+ * user. Our kernel always runs as this user (signal 0 to it succeeds), so a
+ * foreign holder is never a gnomon kernel of this home (Aegis L2: a pidfile
+ * naming pid 1 or another user's recycled pid is residue, not a holder).
+ */
+export function pidProbe(pid: number): 'alive' | 'dead' | 'foreign' {
+  if (!Number.isInteger(pid) || pid <= 0) return 'dead';
   try {
     process.kill(pid, 0);
-    return true;
+    return 'alive';
   } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM';
+    return (err as NodeJS.ErrnoException).code === 'EPERM' ? 'foreign' : 'dead';
   }
 }
 
@@ -96,7 +109,7 @@ export type DaemonState =
 /** Lifecycle view from disk: running (live pid), stale (residue) or stopped. */
 export function daemonState(home: string, socketPath?: string): DaemonState {
   const r = readPidPath(pidPathOf(home));
-  if (r.kind === 'ok') return pidAlive(r.pidfile.pid) ? { state: 'running', pidfile: r.pidfile } : { state: 'stale', pidfile: r.pidfile };
+  if (r.kind === 'ok') return pidProbe(r.pidfile.pid) === 'alive' ? { state: 'running', pidfile: r.pidfile } : { state: 'stale', pidfile: r.pidfile };
   if (r.kind !== 'missing') return { state: 'stale', pidfile: null };
   if (socketPath && fs.existsSync(socketPath)) return { state: 'stale', pidfile: null };
   return { state: 'stopped' };
@@ -192,7 +205,9 @@ export function acquireDaemonLock(home: string, pid: number, opts: AcquireOption
       read = readPidPath(pp);
     }
     if (read.kind === 'missing') continue;
-    if (read.kind === 'ok' && pidAlive(read.pidfile.pid)) {
+    // a foreign (EPERM) holder is not a kernel of ours: residue, reclaimed below. A same-user live holder refuses;
+    // startDaemon then asks the socket whether it really is a kernel (already-running vs holder-silent).
+    if (read.kind === 'ok' && pidProbe(read.pidfile.pid) === 'alive') {
       throw new LifecycleRefusal(
         'already-running',
         `daemon already running (pid ${read.pidfile.pid}); exactly one per user`,

@@ -18,8 +18,11 @@ import {
   DAEMON_PIDFILE_SCHEMA,
   daemonState,
   ensureGnomonHome,
+  DAEMON_EXIT,
+  exitCodeOfRefusal,
   pidAlive,
   pidPathOf,
+  pidProbe,
   readPidfile,
   selectSocketPath,
   startDaemon,
@@ -143,6 +146,36 @@ describe('G-DMN-01 one daemon per user', () => {
     const d = await daemon(h);
     expect(readPidfile(h)!.pid).toBe(process.pid);
     expect(lstatSync(d.pidfile.socketPath).isSocket()).toBe(true);
+  });
+
+  it('FALSIFIER (Aegis L2): a pidfile naming another user\'s live pid (pid 1) is residue, reclaimed, never already-running', async () => {
+    if (process.getuid?.() === 0) return; // root may signal pid 1: no EPERM to test
+    expect(pidProbe(1)).toBe('foreign');
+    const h = home();
+    ensureGnomonHome(h);
+    writeFileSync(pidPathOf(h), JSON.stringify({ schemaVersion: DAEMON_PIDFILE_SCHEMA, pid: 1, startedAt: 'x', socketPath: '/attacker.sock' }));
+    expect(daemonState(h).state).toBe('stale'); // was 'running' (EPERM counted as alive)
+    await daemon(h);
+    expect(readPidfile(h)!.pid).toBe(process.pid);
+  });
+
+  it('FALSIFIER (Aegis L2): a same-user live pid whose socket stays silent is holder-silent (transient), not already-running (superseded, never restarted)', async () => {
+    const h = home();
+    ensureGnomonHome(h);
+    const squatter = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+    cleanups.push(() => void squatter.kill('SIGKILL'));
+    const row = JSON.stringify({ schemaVersion: DAEMON_PIDFILE_SCHEMA, pid: squatter.pid, startedAt: 'x', socketPath: '/attacker.sock' });
+    writeFileSync(pidPathOf(h), row);
+    const probed: string[] = [];
+    const err = await startDaemon({ home: h, holderGraceMs: 150, probeHolder: async (p) => (probed.push(p), false) }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ reason: 'holder-silent' });
+    expect(exitCodeOfRefusal('holder-silent')).toBe(DAEMON_EXIT.transient);
+    expect(probed.length).toBeGreaterThan(0);
+    const ours = selectSocketPath({ home: h });
+    expect(ours.ok && probed.every((p) => p === ours.path)).toBe(true); // our socket path, never the pidfile's
+    expect(readFileSync(pidPathOf(h), 'utf8')).toBe(row); // not stolen: a silent holder may be a racer mid-start
+    // positive control: the same holder with a kernel answering is already-running
+    await expect(startDaemon({ home: h, holderGraceMs: 150, probeHolder: async () => true })).rejects.toMatchObject({ reason: 'already-running' });
   });
 
   it('reclaims unreadable residue after the mid-write grace', () => {

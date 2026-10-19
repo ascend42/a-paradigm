@@ -9,6 +9,8 @@
  */
 export type LifecycleRefusalReason =
   | 'already-running'
+  // a same-user live pid holds the pidfile but no kernel answers on the socket (Aegis L2): transient, never superseded
+  | 'holder-silent'
   | 'lock-race'
   | 'unsafe-home'
   | 'no-safe-endpoint'

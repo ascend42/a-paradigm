@@ -98,7 +98,8 @@ import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
-import { acquireDaemonLock, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
+import { acquireDaemonLock, pidPathOf, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
+import { helloProbe } from './ready.js';
 import { LifecycleRefusal } from './refusal.js';
 import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
@@ -130,6 +131,10 @@ export type DaemonEvent =
   | SocketEvent;
 
 export interface DaemonOptions {
+  /** Test seam: does a kernel answer `hello` on our socket (default helloProbe, ready.ts); judges a live pidfile holder (Aegis L2). */
+  probeHolder?: (socketPath: string) => Promise<boolean>;
+  /** How long a live-but-silent holder is given to start answering before `holder-silent` (default HOLDER_GRACE_MS). */
+  holderGraceMs?: number;
   /** `gnomon mod` pickup scan period (default PICKUP_SCAN_MS); tests shorten it */
   modPickupMs?: number;
   home: string;
@@ -237,6 +242,34 @@ export interface DaemonSeams {
   billing?: BillingScanSource;
 }
 
+/** How long a live pidfile holder whose socket is silent is given (it may be the race winner mid-start) before `holder-silent`. */
+export const HOLDER_GRACE_MS = 2000;
+
+/**
+ * Aegis L2: a same-user live pid in the pidfile is a running kernel only if a
+ * kernel answers `hello` on OUR socket path (never the pidfile's own
+ * socketPath: the pidfile is same-user writable). A spoofed or recycled pid
+ * with a silent socket is `holder-silent` (transient, restartable), never
+ * `already-running` (superseded, never restarted). The pidfile is NOT
+ * reclaimed here: a silent holder may be a racer between its lock and its
+ * listen, and stealing its lock would make two kernels.
+ */
+async function judgeLiveHolder(refusal: LifecycleRefusal, home: string, socketPath: string, opts: DaemonOptions): Promise<LifecycleRefusal> {
+  const probe = opts.probeHolder ?? ((p: string) => helloProbe(p));
+  const deadline = Date.now() + (opts.holderGraceMs ?? HOLDER_GRACE_MS);
+  for (;;) {
+    if (await probe(socketPath)) return refusal;
+    if (Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const pid = refusal.detail.pid;
+  return new LifecycleRefusal(
+    'holder-silent',
+    `the pidfile names a live process (pid ${String(pid)}) but no kernel answers on ${socketPath}; if pid ${String(pid)} is not gnomond, remove ${pidPathOf(home)} and retry`,
+    { ...refusal.detail },
+  );
+}
+
 registerSeams('daemon', { start: (opts, seams) => startDaemonWith(opts, seams) });
 
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
@@ -262,7 +295,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   let pidfile: DaemonPidfile;
   try {
     pidfile = acquireDaemonLock(home, process.pid, { socketPath: choice.path });
-  } catch (err) {
+  } catch (caught) {
+    let err = caught;
+    if (err instanceof LifecycleRefusal && err.reason === 'already-running') err = await judgeLiveHolder(err, home, choice.path, opts);
     if (err instanceof LifecycleRefusal) {
       const holderPid = typeof err.detail.pid === 'number' ? err.detail.pid : undefined;
       emit({ kind: 'daemon.lock.refused', reason: err.reason, ...(holderPid !== undefined ? { holderPid } : {}) });
