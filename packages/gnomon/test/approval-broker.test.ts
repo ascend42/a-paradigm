@@ -147,8 +147,23 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
     // 119 BMP chars then astral emoji: a UTF-16 slice(0,120) would end on a lone high surrogate
     const first = `${'x'.repeat(119)}${'\u{1F44D}'.repeat(50)}`;
     const p = composePresencePrompt(kernel, { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', kind: 'permission', requestedBy: AGENT, contentHash, block: { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: first }] } }, { decision: 'allow', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', guiSessions: 1, reason: 'r' });
-    expect(p.record.summary).toBe(`${'a'.repeat(12)} ${'x'.repeat(119)}\u{1F44D}`);
+    expect(p.record.summary).toBe(`${'a'.repeat(12)} "${'x'.repeat(119)}\u{1F44D}"`);
     expect(p.record.summary).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  });
+
+  it('T-2026-10-18-028 M4 FALSIFIER: Cf/bidi/control characters never reach the presence prompt, and the summary is quoted', () => {
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const contentHash = `sha256:${'b'.repeat(64)}`;
+    const compose = (text: string) => composePresencePrompt(kernel, { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', kind: 'permission', requestedBy: AGENT, contentHash, block: { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text }] } }, { decision: 'allow', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', guiSessions: 1, reason: 'r' });
+    // raw characters a block that bypassed the §4.5 sanitizer could carry: RLO, LRI, ALM, word joiner, interlinear annotation, LS, a C0
+    const p = compose('rm \u202Eevil\u2066 \u061C\u2060\uFFF9x\uFFFB\u2028y\u0007 "z" \\ done');
+    expect(p.text).not.toMatch(/[\p{Cf}\p{Cc}\u2028\u2029]/u);
+    expect(p.record.summary).toBe(`${'b'.repeat(12)} "rm evil xy \\"z\\" \\\\ done"`);
+    // the real path: a sanitized card line keeps bidi VISIBLE (glyphs), still quoted
+    const line = sanitizeLine('a\u202Eb').text;
+    const q = compose(line);
+    expect(q.record.summary).toBe(`${'b'.repeat(12)} "${line}"`);
+    expect(q.text).not.toMatch(/\p{Cf}/u);
   });
 
   it('the presence prompt is composed from the card record and signed by the kernel key', async () => {

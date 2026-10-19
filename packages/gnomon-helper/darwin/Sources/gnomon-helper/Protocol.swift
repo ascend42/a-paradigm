@@ -162,6 +162,18 @@ func helperLine(key: KeyClass, messages: [Data]) -> String {
     return parts.joined(separator: "; ")
 }
 
+/// T-2026-10-18-028 M4 (defence in depth; the kernel strips them first, card.ts promptSafe): no format
+/// character (Cf: bidi controls and marks, invisible operators) and no control but the one newline
+/// the helper adds itself reaches the OS prompt, whatever the caller sends.
+func promptSafe(_ s: String) -> String {
+    String(String.UnicodeScalarView(s.unicodeScalars.filter { u in
+        switch u.properties.generalCategory {
+        case .format, .control, .lineSeparator, .paragraphSeparator: return false
+        default: return true
+        }
+    }))
+}
+
 func promptText(_ callerReason: String, _ line: String) -> String {
-    "\(callerReason)\n\(line)"
+    "\(promptSafe(callerReason))\n\(line)"
 }
