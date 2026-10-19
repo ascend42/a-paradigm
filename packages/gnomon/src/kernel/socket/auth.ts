@@ -118,7 +118,7 @@ export interface ConnAuthState {
   /** How the connection authenticated: a device key (the principal's own class), a read token (class `readToken`) or a GUI token (#web-endpoint, the launching device's human). */
   credential?: 'device' | 'read-token' | 'gui';
   /** GUI connections: how the GUI token was obtained. */
-  via?: 'launch' | 'reconnect';
+  via?: 'launch' | 'reconnect' | 'resume';
   deviceId?: string;
   keyId?: string;
   tokenId?: string;
@@ -163,7 +163,7 @@ export type AuthOutcome =
       principal: string;
       principalKind: 'human';
       deviceId: string;
-      via: 'launch' | 'reconnect';
+      via: 'launch' | 'reconnect' | 'resume';
       guiToken: string;
       /** The auth rows are written: the GUI session is live. */
       commit(): void;
@@ -312,7 +312,7 @@ export class SocketAuthenticator {
       if (opts.web) return fail('auth-params', 'read tokens authenticate on the unix socket only, not on the web endpoint');
       return this.#authToken(conn, nonce, params, opts, fail);
     }
-    if ('launchToken' in params || 'reconnect' in params) {
+    if ('launchToken' in params || 'reconnect' in params || 'resumeToken' in params) {
       if (opts.web) return opts.web(conn, params);
       return fail('web-auth-not-implemented', 'GUI launch/reconnect auth is accepted on the web endpoint only (#web-endpoint)', { code: 'UNSUPPORTED', data: { transport: 'socket' } });
     }

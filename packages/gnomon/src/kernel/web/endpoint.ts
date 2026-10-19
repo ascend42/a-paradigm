@@ -86,6 +86,7 @@ import type { ConnectionContext } from '../socket/server.js';
 import { PRE_AUTH_MAX_FRAME_BYTES } from '../socket/server.js';
 import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
+import type { ResumeGate } from './resume.js';
 import { LaunchGrantCap, type LaunchAsker } from './launch-cap.js';
 import {
   CHANNEL_MAX_RECORD_BYTES,
@@ -107,6 +108,7 @@ import {
 import { AttemptLimiter, childDefaultHeaders, decideUpgrade, routeHttp, securityHeaders, sniffRaster, type FailReason } from './rules.js';
 
 export const WEB_LINGER_MS = 2 * 60_000;
+const RESUME_TTL_S = 60;
 export const WEB_AUTH_DEADLINE_MS = 5_000;
 export const WEB_MAX_CONNECTIONS = 64;
 export const WEB_RESTART_CAP = Object.freeze({ max: 3, windowMs: 10 * 60_000 });
@@ -151,6 +153,13 @@ export interface WebEndpointOptions {
   platform?: string;
   /** The ACK watchdog bound for a socket hand-off (default WEB_HANDOFF_ACK_MS). */
   handoffAckMs?: number;
+  /**
+   * TD-2026-10-19-063: an upgraded kernel's successor asks for its predecessor's port first (`--prefer-port`), still
+   * 127.0.0.1 only and exclusive; taken (or refused) ⇒ an OS-chosen port and status `portFallback` (the GUI explains).
+   */
+  preferPort?: number;
+  /** TD-2026-10-19-063 #gui-resume: the successor's single-use `{resumeToken}` gate (none: the form is refused unknown-token). */
+  resume?: ResumeGate;
 }
 
 /** What the test seam may substitute: the launcher and the pinned bundle. */
@@ -238,6 +247,8 @@ export class WebEndpoint {
   #state: 'stopped' | 'starting' | 'listening' = 'stopped';
   #starting: Promise<void> | null = null;
   readonly #ws = new Map<number, WsConn>();
+  /** TD-2026-10-19-063: the predecessor port this endpoint asked for and did not get (status `portFallback`). */
+  #portFallback: number | null = null;
   readonly #restarts: number[] = [];
   #linger: NodeJS.Timeout | null = null;
   #sweep: NodeJS.Timeout | null = null;
@@ -327,6 +338,19 @@ export class WebEndpoint {
     return { port: this.#port, launchToken, expiresAt, kernelPublicKey, bundleHash: this.#bundle.hash, url: `http://127.0.0.1:${this.#port}/#launch=${launchToken}&k=${kernelPublicKey}` };
   }
 
+  /** TD-2026-10-19-063: one notification to ONE live GUI connection (gui.resume); false when it is gone. */
+  notifyConn(connId: string, method: string, params: unknown): boolean {
+    for (const c of this.#ws.values()) {
+      if (c.connId !== connId) continue;
+      try {
+        return c.ctx.notify(method, params);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
   /** Withdraw an unconsumed launch token whose asker is gone (gui.open, Aegis L2); true if one was withdrawn. */
   withdrawLaunch(launchToken: string): boolean {
     const gone = this.access.withdraw(launchToken);
@@ -341,6 +365,7 @@ export class WebEndpoint {
       sandbox: this.#plan?.sandbox ?? null,
       profileHash: this.#plan?.profileHash ?? null,
       connections: this.#ws.size,
+      ...(this.#portFallback !== null ? { portFallback: { wanted: this.#portFallback } } : {}),
       pendingLaunches: this.access.pendingLaunches(),
       guiSessions: { n: this.access.sessions().length, sessions: this.access.sessions().map((s) => ({ connId: s.connId, surface: s.surface, via: s.via, unlock: null })) },
       restarts: this.#restarts.length,
@@ -404,15 +429,27 @@ export class WebEndpoint {
     const server = net.createServer({ pauseOnConnect: true }, (socket) => this.#handOff(socket));
     server.maxConnections = WEB_MAX_PENDING_HANDOFFS; // counts sockets not yet sent (queued behind an unACKed hand-off)
     server.on('error', () => undefined); // after listen: an accept error never takes the daemon down
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
-        server.off('error', reject);
-        resolve();
+    const listenOn = (port: number): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
+          server.off('error', reject);
+          resolve();
+        });
       });
-    }).catch((err: NodeJS.ErrnoException) => {
-      throw new LifecycleRefusal('web-transport-failed', `the kernel cannot listen on 127.0.0.1: ${err.code ?? err.message}`);
-    });
+    const want = this.#o.preferPort;
+    let bound = false;
+    if (want !== undefined && Number.isInteger(want) && want > 0 && want < 65536) {
+      bound = await listenOn(want).then(
+        () => true,
+        () => false,
+      );
+      if (!bound) this.#portFallback = want;
+    }
+    if (!bound)
+      await listenOn(0).catch((err: NodeJS.ErrnoException) => {
+        throw new LifecycleRefusal('web-transport-failed', `the kernel cannot listen on 127.0.0.1: ${err.code ?? err.message}`);
+      });
     const a = server.address();
     if (a === null || typeof a === 'string' || a.address !== '127.0.0.1') {
       server.close();
@@ -973,6 +1010,30 @@ export class WebEndpoint {
         data: { milestone: 'M1.3', cause: 'presence-unavailable' },
         preRows: [{ kind: 'socket.auth.reconnect.requested', payload: { surface, openGuiSessions: this.access.sessions().length } }],
       });
+    }
+    if ('resumeToken' in params) {
+      // TD-2026-10-19-063 #gui-resume: the GUI that accepted an upgrade reattaches once, inside the TTL, as the bound principal
+      if (keys.length !== 1 || typeof params.resumeToken !== 'string') return fail('auth-params', 'resume auth is exactly {resumeToken}');
+      const r = this.#o.resume?.exchange(params.resumeToken) ?? { kind: 'unknown' as const };
+      switch (r.kind) {
+        case 'unknown':
+        case 'principal':
+          return fail('unknown-token', 'not a resume token this kernel can honour; run `gnomon` to open Gnomon again');
+        case 'expired':
+          return fail('token-expired', `the resume token has expired (${RESUME_TTL_S} s, single use); run \`gnomon\` to open Gnomon again`);
+        case 'replay':
+          return fail('replayed-transcript', 'this resume token was already used', { replay: true, logPayload: { form: 'resume', surface } });
+        case 'fresh': {
+          const { guiToken } = this.access.issue({ connId: conn.connId, deviceId: r.binding.deviceId, principal: r.binding.principal, surface, via: 'resume' });
+          conn.phase = 'authenticated';
+          conn.credential = 'gui';
+          conn.principal = r.binding.principal;
+          conn.principalKind = 'human';
+          conn.deviceId = r.binding.deviceId;
+          conn.via = 'resume';
+          return { ok: true, credential: 'gui', principal: r.binding.principal, principalKind: 'human', deviceId: r.binding.deviceId, via: 'resume', guiToken, commit: () => this.#lingerCheck(), abort: () => void this.access.end(conn.connId) };
+        }
+      }
     }
     if (keys.length !== 1 || typeof params.launchToken !== 'string') return fail('auth-params', 'launch auth is exactly {launchToken}');
     const x = this.access.exchange(params.launchToken, conn.connId);

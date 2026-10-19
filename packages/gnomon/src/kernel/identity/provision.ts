@@ -30,7 +30,7 @@ import { nsFromRootPublicKey } from '@a-company/gnomon-contracts';
 import { p256KeyId } from '../log/signer.js';
 import { ensureKeysDir, keysDir } from './device-key.js';
 import { HardwareRootAuthority, HelperApprovalsKey, p256FromX963, pemOf } from './hardware.js';
-import { helperOnceSync, HelperProcess, HelperUnavailableError, pinHelper, SupervisedHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
+import { helperOnceSync, HelperProcess, HelperRepin, HelperUnavailableError, pinHelper, SupervisedHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
 
 export const IDENTITY_FILE = 'identity.json';
 export const IDENTITY_JOURNAL_FILE = 'identity.jsonl';
@@ -174,6 +174,8 @@ export interface OpenedIdentity {
   approvals: HelperApprovalsKey;
   helper: HelperTransport;
   pin: PinnedHelper;
+  /** TD-2026-10-19-063: re-pin a changed helper binary and respawn `serve` (no card; fail closed). */
+  repin(): Promise<string>;
 }
 
 /**
@@ -192,7 +194,8 @@ export async function openHardwareIdentity(home: string, o: { verifier?: HelperV
     throw new IdentityError('helper', e instanceof Error ? e.message : 'the helper could not be pinned');
   }
   const start = o.start ?? ((p: PinnedHelper) => HelperProcess.start(p));
-  const helper = new SupervisedHelper(() => start(pin));
+  const holder = { pin };
+  const helper = new SupervisedHelper(() => start(holder.pin));
   try {
     const [rootPem, apprPem] = [await helperPublicKey(helper, 'root', record.gen), await helperPublicKey(helper, 'approvals', record.gen)];
     if (!rootPem || p256KeyId(createPublicKey(rootPem)) !== record.rootKeyId) throw new IdentityError('mismatch', 'the Secure Enclave root key does not match identity.json');
@@ -203,7 +206,17 @@ export async function openHardwareIdentity(home: string, o: { verifier?: HelperV
       throw new IdentityError('mismatch', 'the approvals key binding is not signed by this root');
     }
     const approvals = new HelperApprovalsKey({ gen: record.gen, approvalsPublicKeyPem: a.row.publicKeyPem }, record.principalId, helper);
-    return { record, root, approvals, helper, pin };
+    const repinner = new HelperRepin({
+      helperPath: record.helperPath,
+      holder,
+      helper,
+      ...(o.verifier ? { verifier: o.verifier } : {}),
+      confirm: async () => {
+        const pem = await helperPublicKey(helper, 'root', record.gen);
+        return !!pem && p256KeyId(createPublicKey(pem)) === record.rootKeyId;
+      },
+    });
+    return { record, root, approvals, helper, pin, repin: () => repinner.check() };
   } catch (e) {
     await helper.close().catch(() => undefined);
     if (e instanceof IdentityError) throw e;

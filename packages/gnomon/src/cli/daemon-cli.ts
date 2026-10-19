@@ -52,6 +52,7 @@ import { refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
 import { DEV_HOME_MARKER } from './dev-home.js';
+import { spawnSuccessor, successorPlanOf } from '../kernel/lifecycle/successor.js';
 import { heading, readout, refused } from './readout.js';
 import { humanDeviceOf } from './rules-cli.js';
 
@@ -82,6 +83,8 @@ export interface DaemonArgs {
   readyFd?: number;
   /** The activator's private ready FIFO (ready.ts 'fifo' channel, linux); set only by launchDaemon's re-exec. */
   readyFifo?: string;
+  /** TD-2026-10-19-063: an upgrade successor asks for its predecessor's web port first (127.0.0.1, exclusive). */
+  preferPort?: number;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -106,6 +109,10 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       const v = argv[++i];
       if (!v || !path.isAbsolute(v)) return '--ready-fifo needs an absolute path';
       out.readyFifo = v;
+    } else if (a === '--prefer-port') {
+      const v = Number(argv[++i]);
+      if (!Number.isInteger(v) || v < 1 || v > 65535) return '--prefer-port needs a port 1..65535';
+      out.preferPort = v;
     } else return `unknown argument ${a}`;
   }
   return out;
@@ -175,6 +182,8 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       ...(hw ? { rootAuthority: hw.root, approvalsKey: hw.approvals, helper: hw.helper } : {}),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
       onEvent: (e) => toStderr(`${JSON.stringify(e)}\n`),
+      ...(args.preferPort !== undefined ? { web: { preferPort: args.preferPort } } : {}),
+      ...(hw?.repin ? { update: { helper: { check: () => hw!.repin() } } } : {}),
     });
     const onSignal = (): void => void handle.shutdown('signal');
     process.once('SIGTERM', onSignal);
@@ -187,6 +196,9 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     const reason = await handle.exited;
     process.off('SIGTERM', onSignal);
     process.off('SIGINT', onSignal);
+    // TD-2026-10-19-063: an ACCEPTED upgrade drained, released the lock and socket; now ONE detached successor, then exit
+    const handoff = handle.upgradeHandoff();
+    if (reason === 'upgrade' && handoff) spawnSuccessor(successorPlanOf(home, handoff.preferPort, args.idleMs));
     return exitCodeOfExitReason(reason); // upgrade: ok, 0, no restart (EXIT_REASON_CLASS)
   } catch (err) {
     await opened?.helper.close().catch(() => undefined);
