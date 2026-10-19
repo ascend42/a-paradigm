@@ -79,7 +79,7 @@ export const VOICE_ALLOWLIST: Readonly<Record<CardKind, VoiceAllowRow>> = Object
   'peer-pair': row({}, ['reject']),
   reconsider: row({}, ['reject']), // restart|extend never by voice
   strictness: row({}, ['deny']), // every run-mode or level change is hand-only
-  // FOUNDER RULING (TD-2026-10-19-194, Aegis M2): fully hand-only by voice, deny/reject included — the D66 exception.
+  // FOUNDER RULING (TD-2026-10-19-677, Aegis M2): fully hand-only by voice, deny/reject included — the D66 exception.
   incident: row({}, []),
   'daemon-stop': row({}, []), // `daemon stop` is root-signed-class (§14.7 Never)
 });

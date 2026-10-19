@@ -30,7 +30,7 @@ describe('voice allowlist ⊆ broker decisions (§14.7, classes.ts)', () => {
       const row = VOICE_ALLOWLIST[kind];
       for (const d of [...Object.values(row.approve).flat(), ...row.deny]) expect(valid, `${kind}:${d}`).toContain(d);
       // D66: the deny row names the kind's deny-direction decision whenever the broker gives it one.
-      // Founder ruling (TD-2026-10-19-194, Aegis M2): incident and daemon-stop are fully hand-only, deny included.
+      // Founder ruling (TD-2026-10-19-677, Aegis M2): incident and daemon-stop are fully hand-only, deny included.
       const brokerDenies = FULLY_HAND_ONLY.includes(kind) ? [] : valid.filter((d) => d === 'deny' || d === 'reject');
       expect([...row.deny].sort(), kind).toEqual(brokerDenies.sort());
     }
