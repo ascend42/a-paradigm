@@ -118,7 +118,7 @@ describe('#bare-entry: help and dispatch', () => {
   });
   it('gnomon.ts runs bare entry for no argv (no seam), help for help/--help/-h, and refuses an unknown verb without echoing it', () => {
     const src = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', 'gnomon.ts'), 'utf8');
-    expect(src).toContain("} else if (argv.length === 0) {");
+    expect(src).toContain("} else if (argv.length === 0 || argv[0] === '--no-open') {"); // spec §2.4 rule 10: bare `gnomon --no-open`
     expect(src).toContain('runBareCommand(argv, { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(');
     expect(src).toContain("argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h'");
     expect(src).toContain('gnomon: unknown command (${argv[0]!.length} chars)');
