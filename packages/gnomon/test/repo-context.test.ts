@@ -60,6 +60,23 @@ describe('sanitizeFrontmatter (allow-list, fail closed)', () => {
     const s = sanitizeFrontmatter('\uFEFF---\r\nname: x\r\nallowed-tools:\r\n- Bash\r\n- Write\r\n---\r\nB\r\n', SKILL_KEYS);
     expect(s.ok && s.text).toBe('---\nname: x\n---\nB\n');
   });
+  it('M3: block scalars (| > with modifiers) and nested maps/lists under an empty value keep their continuations', () => {
+    const s = sanitizeFrontmatter('---\nname: x\ndescription: |-\n  line one\n  line two\nwhen_to_use: >2\n   folded\nmetadata:\n  a: 1\n  b:\n    - c\npaths:\n- src/**\n---\nB\n', SKILL_KEYS);
+    expect(s.ok && s.text).toBe('---\nname: x\ndescription: |-\n  line one\n  line two\nwhen_to_use: >2\n   folded\nmetadata:\n  a: 1\n  b:\n    - c\npaths:\n- src/**\n---\nB\n');
+  });
+  it.each([
+    ['a continuation after an inline value', '---\nname: x\ndescription: d\n  hooks: {}\n---\n'],
+    ['a list item after an inline value', '---\ndescription: d\n- x\n---\n'],
+    ['a flow value that spans lines', '---\ntools: [Read,\n  Bash]\n---\n'],
+    ['U+2028', '---\ndescription: a\u2028hooks: {}\n---\n'],
+    ['U+2029', '---\ndescription: a\u2029b\n---\n'],
+    ['U+0085 (NEL)', '---\ndescription: a\u0085hooks: {}\n---\n'],
+    ['a C0 control (BEL)', '---\ndescription: a\u0007\n---\n'],
+    ['a C1 control', '---\ndescription: a\u009b\n---\n'],
+    ['a tab inside a value', '---\ndescription: a\tb\n---\n'],
+  ])('M3: %s ⇒ refused', (_n, text) => {
+    expect(sanitizeFrontmatter(text, SKILL_KEYS).ok).toBe(false);
+  });
   it('no frontmatter ⇒ the text as is', () => {
     expect(sanitizeFrontmatter('Just a body\nhooks: not frontmatter\n', SKILL_KEYS)).toEqual({ ok: true, text: 'Just a body\nhooks: not frontmatter\n', dropped: [], hooks: false });
   });
@@ -114,7 +131,7 @@ describe('buildRepoContext', () => {
     put(path.join(w.repo, '.claude', 'skills', 'good', 'SKILL.md'), '---\nname: good\n---\nok\n');
     const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
     expect(c.skills).toEqual(['good']);
-    expect(c.refused).toEqual([{ path: '.claude/skills/bad/SKILL.md', why: 'a tab-indented frontmatter line' }]);
+    expect(c.refused).toEqual([{ path: '.claude/skills/bad/SKILL.md', why: 'a control or line-separator character in the frontmatter' }]);
     expect(fs.existsSync(path.join(w.out, 'skills', 'bad'))).toBe(false);
   });
   it.skipIf(!canSymlink)('a symlink in .claude/skills (a linked skill dir, or a link inside a skill) is refused; a linked .claude refuses all', () => {
@@ -223,7 +240,7 @@ describe('H3 (Aegis): every SKILL.md at any depth is sanitized; a nested .md dec
   });
   it.each([
     ['declares hooks', `---\ntitle: doc\n${HOOKS}---\ntext\n`, /declares hooks/],
-    ['has unreadable frontmatter', '---\n\tbad\n---\n', /tab-indented/],
+    ['has unreadable frontmatter', '---\n\tbad\n---\n', /control or line-separator/],
   ])('a nested reference .md that %s refuses the skill', (_n, text, why) => {
     const w = world();
     put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');

@@ -71,6 +71,7 @@ export const REPO_CONTEXT_SETTINGS = Object.freeze({ disableSkillShellExecution:
 export type SanitizeResult = { ok: true; text: string; dropped: string[]; hooks: boolean } | { ok: false; why: string };
 
 const FENCE = /^---[ \t]*$/;
+const FM_UNSAFE = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u2028\u2029]/;
 const KEY_LINE = /^([A-Za-z][A-Za-z0-9_-]{0,63})[ \t]*:(?:[ \t]|$)/;
 
 /**
@@ -86,11 +87,14 @@ export function sanitizeFrontmatter(raw: string, allowed: readonly string[]): Sa
   if (!FENCE.test(lines[0]!)) return { ok: false, why: 'frontmatter must open on the first line' };
   const end = lines.findIndex((l, i) => i > 0 && FENCE.test(l));
   if (end < 0) return { ok: false, why: 'unterminated frontmatter' };
+  // M3 (Aegis): no C0 (tab included) or C1 control, NEL, LS or PS anywhere in the frontmatter
+  if (FM_UNSAFE.test(lines.slice(1, end).join('\n'))) return { ok: false, why: 'a control or line-separator character in the frontmatter' };
   const out: string[] = [];
   const seen = new Set<string>();
   const dropped: string[] = [];
   let keep = false;
   let current: string | null = null;
+  let contOk = false;
   let hooks = false;
   for (const l of lines.slice(1, end)) {
     if (l.trim() === '') {
@@ -101,6 +105,8 @@ export function sanitizeFrontmatter(raw: string, allowed: readonly string[]): Sa
     if (l.startsWith('\t')) return { ok: false, why: 'a tab-indented frontmatter line' };
     if (l.startsWith(' ') || l === '-' || l.startsWith('- ')) {
       if (current === null) return { ok: false, why: 'a continuation line before any key' };
+      // M3: only after an empty value, a block scalar (| or > with modifiers) or a `- ` list (which needs an empty value)
+      if (!contOk) return { ok: false, why: `a continuation line after the inline value of ${current}` };
       if (keep) out.push(l);
       continue;
     }
@@ -110,6 +116,8 @@ export function sanitizeFrontmatter(raw: string, allowed: readonly string[]): Sa
     if (seen.has(key)) return { ok: false, why: `a duplicate frontmatter key ${key}` };
     seen.add(key);
     current = key;
+    const value = l.slice(m[0].length).trim();
+    contOk = value === '' || value.startsWith('#') || /^[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$/.test(value);
     keep = allowed.includes(key);
     if (key === 'hooks') hooks = true;
     if (keep) out.push(l);
