@@ -17,6 +17,11 @@
  * The kernel registry is built once, at module load, from the contracts'
  * frozen VERBS + CLIENT_RELAYS; a descriptor with a missing tier fails the
  * daemon's start, not a call.
+ *
+ * `hello` and `auth` are NOT in this registry: they are the pre-auth
+ * handshake, outside the tier registry. dispatch.ts handles them before any
+ * registry lookup (no matrix class exists until auth names a principal), and
+ * before auth every other name is refused AUTH without consulting the registry.
  */
 import { CLIENT_RELAYS, VERBS, type Access, type VerbDescriptor } from '@a-company/gnomon-contracts';
 
@@ -91,6 +96,17 @@ export class MethodRegistry {
 
   names(): string[] {
     return [...this.methods.keys()];
+  }
+
+  /**
+   * TEST SEAM ONLY: a fresh, SEALED registry whose stored tiers skip register()'s validation, so a test can prove
+   * tier() and the dispatcher fail closed on a malformed entry that slipped past registration. Never used by the
+   * kernel (KERNEL_METHODS comes from buildKernelMethodRegistry).
+   */
+  static uncheckedForTests(entries: Iterable<{ method: string; kind?: 'verb' | 'relay'; tiers: Record<string, unknown> }>): MethodRegistry {
+    const reg = new MethodRegistry();
+    for (const e of entries) reg.methods.set(e.method, { method: e.method, kind: e.kind ?? 'verb', tiers: e.tiers as unknown as MethodTiers });
+    return reg.seal();
   }
 }
 

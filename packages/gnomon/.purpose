@@ -167,6 +167,9 @@ components:
       REGISTERED with a tier for every matrix class (false or a non-empty
       access string); a missing/undefined/empty tier, an unknown class key, a
       duplicate or a post-seal registration throws MethodRegistrationError.
+      hello/auth are the pre-auth handshake, outside the tier registry
+      (handled first in dispatch.ts). MethodRegistry.uncheckedForTests is
+      the sealed test seam for planting malformed tiers (verb-access.test.ts).
       KERNEL_METHODS is built from the contracts' VERBS + CLIENT_RELAYS
       (RELAY_TIERS: caller principal, readToken/peer false) at module load
       and sealed. tier()/accessOf FAIL CLOSED: unknown method, unknown class

@@ -20,11 +20,6 @@ import {
 
 const ALL_DENY: MethodTiers = { human: false, agent: false, session: false, mod: false, voice: false, readToken: false, peer: false };
 
-/** Plant a stored tier that never went through register() (what a fail-open check would let through). */
-function plant(reg: MethodRegistry, method: string, tiers: Record<string, unknown>): void {
-  (reg as unknown as { methods: Map<string, unknown> }).methods.set(method, { method, kind: 'verb', tiers });
-}
-
 function dispatcher(methods?: MethodRegistry) {
   return createKernelDispatcher({
     authenticator: {} as never, // callAs never authenticates
@@ -75,12 +70,13 @@ describe('§5: every method declares a tier at registration (default deny)', () 
   });
 
   it('FALSIFIER: the caller-scope check fails CLOSED on an undefined permission, an unknown method or class', () => {
-    const r = new MethodRegistry();
-    plant(r, 'x.planted', { human: undefined, agent: 'yes' });
+    // a stored tier that never went through register() (what a fail-open check would let through)
+    const r = MethodRegistry.uncheckedForTests([{ method: 'x.planted', tiers: { human: undefined, agent: 'yes' } }]);
     expect(r.tier('x.planted', 'human')).toBe(false); // Orca: undefined ⇒ allowed; here ⇒ denied
     expect(r.tier('x.planted', 'session')).toBe(false); // key absent
     expect(r.tier('x.planted', 'agent')).toBe('yes');
     expect(r.tier('x.unknown', 'human')).toBe(false);
+    expect(() => r.register({ method: 'x.more', kind: 'verb', tiers: ALL_DENY })).toThrow(/sealed/); // the seam is sealed
     expect(KERNEL_METHODS.tier('status', 'kernel')).toBe(false);
     expect(KERNEL_METHODS.tier('status', '__proto__')).toBe(false);
     expect(accessOf('no.such.verb', 'human')).toBe(false);
@@ -90,12 +86,13 @@ describe('§5: every method declares a tier at registration (default deny)', () 
     // control: the kernel registry lets a mod reach ref.resolve's handler (no read side here ⇒ ENGINE not-implemented)
     expect(await refusalOf(dispatcher().callAs('p:ns/mod-a', 'ref.resolve', { ref: 'x' }))).toEqual({ code: 'ENGINE', reason: 'not-implemented' });
     // the same call with the mod tier undefined never reaches the handler
-    const r = new MethodRegistry();
-    for (const m of KERNEL_METHODS.names()) {
-      const tiers = Object.fromEntries(MATRIX_CLASSES.map((c) => [c, KERNEL_METHODS.tier(m, c)]));
-      if (m === 'ref.resolve') tiers.mod = undefined as never;
-      plant(r, m, tiers);
-    }
+    const r = MethodRegistry.uncheckedForTests(
+      KERNEL_METHODS.names().map((m) => {
+        const tiers: Record<string, unknown> = Object.fromEntries(MATRIX_CLASSES.map((c) => [c, KERNEL_METHODS.tier(m, c)]));
+        if (m === 'ref.resolve') tiers.mod = undefined;
+        return { method: m, kind: KERNEL_METHODS.kindOf(m), tiers };
+      }),
+    );
     expect(await refusalOf(dispatcher(r).callAs('p:ns/mod-a', 'ref.resolve', { ref: 'x' }))).toEqual({ code: 'FORBIDDEN', reason: 'matrix' });
   });
 });
