@@ -17,6 +17,8 @@ import { readBuildStamp, sameBuild, type BuildStamp } from './build-stamp.js';
 
 /** The configured poll cadence of the stamp and the helper binary. */
 export const UPDATE_POLL_MS = 30_000;
+/** Aegis L: at most one upgrade card per kernel per this configured cooldown (a stamp that keeps changing waits). */
+export const UPGRADE_CARD_COOLDOWN_MS = 60 * 60_000;
 
 export interface UpdateWatchOptions {
   stampPath: string;
@@ -24,6 +26,8 @@ export interface UpdateWatchOptions {
   pollMs?: number;
   onKernelUpdate: (next: BuildStamp) => void | Promise<void>;
   helper?: { check(): Promise<unknown> | unknown };
+  cooldownMs?: number;
+  now?: () => number;
 }
 
 export class UpdateWatch {
@@ -31,6 +35,7 @@ export class UpdateWatch {
   readonly #announced = new Set<string>();
   #timer: NodeJS.Timeout | null = null;
   #ticking: Promise<void> | null = null;
+  #lastRaised = -Infinity;
 
   constructor(o: UpdateWatchOptions) {
     this.#o = o;
@@ -61,10 +66,14 @@ export class UpdateWatch {
     }
     const next = readBuildStamp(this.#o.stampPath);
     if (!next || this.#o.loaded === null || sameBuild(next, this.#o.loaded) || this.#announced.has(next.distHash)) return;
+    const now = (this.#o.now ?? Date.now)();
+    if (now - this.#lastRaised < (this.#o.cooldownMs ?? UPGRADE_CARD_COOLDOWN_MS)) return; // tried again after the cooldown
     this.#announced.add(next.distHash);
+    this.#lastRaised = now;
     try {
       await this.#o.onKernelUpdate(next);
     } catch {
+      this.#lastRaised = -Infinity;
       this.#announced.delete(next.distHash); // a raise that failed is tried again on the next tick
     }
   }

@@ -8,10 +8,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { describeUpdate, parseBuildStamp, sameBuild, type BuildStamp } from '../src/kernel/lifecycle/build-stamp.js';
-import { UpdateWatch } from '../src/kernel/lifecycle/update-watch.js';
+import { UpdateWatch, UPGRADE_CARD_COOLDOWN_MS } from '../src/kernel/lifecycle/update-watch.js';
 import { DaemonStopCards, UPGRADE_CARD_TIMEOUT_MS } from '../src/kernel/broker/daemon-stop.js';
 import { mintResumeToken, ResumeGate, resumeRecordOf, RESUME_MAX_MISSES, RESUME_TOKEN_TTL_MS } from '../src/kernel/web/resume.js';
-import { successorArgs } from '../src/kernel/lifecycle/successor.js';
+import { parseHandoff, successorArgs } from '../src/kernel/lifecycle/successor.js';
 import { parseDaemonArgs } from '../src/cli/daemon-cli.js';
 
 const stamp = (n: string, version = '8.0.0'): BuildStamp => ({ schemaVersion: 'gnomon-build:v1', version, commit: `c${n}`, distHash: `sha256:${n.repeat(64).slice(0, 64)}`, guiBundleHash: null });
@@ -46,6 +46,7 @@ describe('#update-watch', () => {
     const w = new UpdateWatch({
       stampPath: file,
       loaded: stamp('a'),
+      cooldownMs: 0,
       onKernelUpdate: (n) => {
         if (failNext) {
           failNext = false;
@@ -63,6 +64,23 @@ describe('#update-watch', () => {
     failNext = true;
     writeFileSync(file, JSON.stringify(stamp('c')));
     await w.tick();
+    await w.tick();
+    expect(seen).toEqual([stamp('b').distHash, stamp('c').distHash]);
+  });
+
+  it('Aegis L: at most one card per cooldown; a newer stamp inside it waits, then raises', async () => {
+    const d = tmp();
+    const file = path.join(d, 'build-id.json');
+    let now = 0;
+    const seen: string[] = [];
+    const w = new UpdateWatch({ stampPath: file, loaded: stamp('a'), now: () => now, onKernelUpdate: (n) => void seen.push(n.distHash) });
+    writeFileSync(file, JSON.stringify(stamp('b')));
+    await w.tick();
+    writeFileSync(file, JSON.stringify(stamp('c')));
+    now = UPGRADE_CARD_COOLDOWN_MS - 1;
+    await w.tick();
+    expect(seen).toEqual([stamp('b').distHash]);
+    now = UPGRADE_CARD_COOLDOWN_MS;
     await w.tick();
     expect(seen).toEqual([stamp('b').distHash, stamp('c').distHash]);
   });
@@ -178,6 +196,13 @@ describe('the successor', () => {
     expect(a[0]).toBe('--disable-sigusr1');
     expect(a).toContain('--foreground');
     expect(a.slice(-2)).toEqual(['--prefer-port', '51234']);
+    const b = successorArgs({ home: path.resolve('h'), preferPort: 51234, listenFd: 17, handoff: { kernelKeyPem: 'k', resume: null } });
+    expect(b.slice(-5)).toEqual(['--prefer-port', '51234', '--web-listen-fd', '3', '--kernel-key-stdin']);
+    const pb = parseDaemonArgs(b);
+    expect(typeof pb === 'object' && [pb.webListenFd, pb.kernelKeyStdin]).toEqual([3, true]);
+    expect(parseDaemonArgs(['--web-listen-fd', '9'])).toMatch(/is 3/);
+    expect(parseHandoff('{"kernelKeyPem":"nope"}')).toBeNull();
+    expect(parseHandoff('not json')).toBeNull();
     expect(a.some((x) => x.startsWith('--ready'))).toBe(false);
     expect(successorArgs({ home: path.resolve('h'), preferPort: null })).not.toContain('--prefer-port');
     const parsed = parseDaemonArgs(a.slice(2));

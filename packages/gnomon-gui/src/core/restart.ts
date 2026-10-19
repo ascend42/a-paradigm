@@ -87,6 +87,21 @@ export function noteResume(s: StorageLike, params: unknown): boolean {
   return true;
 }
 
+/** The successor key the kernel delivered (read only; the marker stays for the reload). */
+export function peekResumeKey(s: StorageLike): string | null {
+  try {
+    const m = JSON.parse(s.getItem(RESTART_KEY) ?? 'null') as Marker | null;
+    return m && typeof m.kernelPublicKey === 'string' && KEY.test(m.kernelPublicKey) ? m.kernelPublicKey : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The re-pin notice of a resume (Aegis L): where the new key came from, in plain words. */
+export function resumeRepinText(from: string, to: string): string {
+  return `kernel key re-pinned from ${from} to ${to}: Gnomon restarted after the update, and the kernel you approved the restart on handed this page the new kernel's key over its verified connection`;
+}
+
 /** SINGLE USE: read and remove the marker; the resume form only when the kernel sent one. */
 export function takeRestart(s: StorageLike): { resumeToken: string; kernelPublicKey: string } | null {
   const raw = s.getItem(RESTART_KEY);
@@ -115,5 +130,8 @@ export async function waitForOrigin(fetchFn: (u: string) => Promise<{ ok: boolea
 }
 
 /** Plain-language guidance when the restarted Gnomon is not at this address (no terminal command as the only path). */
+export const RESTART_KEY_REFUSED =
+  'Gnomon restarted, but the kernel now at this address did not prove the key the old one handed over, so this page did not reconnect. Open Gnomon again: from Gnomon.app, or by running `gnomon` in a terminal.';
+
 export const RESTART_GUIDANCE =
   'Gnomon restarted, but not at this address (its old port was taken). Open Gnomon again: from Gnomon.app, or by running `gnomon` in a terminal. Your sessions were saved and resume in the new window.';

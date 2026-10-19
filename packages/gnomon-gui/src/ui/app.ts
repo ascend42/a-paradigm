@@ -13,7 +13,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
-import { clearRestarting, markRestarting, noteResume, restarting, RESTART_GUIDANCE, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
+import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
@@ -332,9 +332,27 @@ function paintUpdateBanner(): void {
 async function awaitRestart(): Promise<void> {
   put($('conn'), 'restarting…');
   notice('Gnomon is restarting with the new version…');
-  if (await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin)) return void location.reload();
-  clearRestarting(sessionStorage);
-  showReconnect(RESTART_GUIDANCE);
+  if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
+    clearRestarting(sessionStorage);
+    return showReconnect(RESTART_GUIDANCE);
+  }
+  // Aegis H (defence in depth): before the token goes anywhere, the kernel at this address must sign a fresh nonce
+  // with the key the old kernel delivered; otherwise the marker (and its token) is dropped
+  const key = peekResumeKey(sessionStorage);
+  if (key) {
+    const endpointPath = `ws://${location.host}/rpc`;
+    let ok = false;
+    try {
+      ok = await new GnomonClient(await webSocketTransport(endpointPath)).probeKey({ surface: SURFACE, endpointPath, verifyKey: key, subtle: globalThis.crypto?.subtle });
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      clearRestarting(sessionStorage);
+      return showReconnect(RESTART_KEY_REFUSED);
+    }
+  }
+  location.reload();
 }
 
 /** ask-user: the picker's choices in the card element ⇒ the approve note (null = a question is unanswered). */
@@ -457,7 +475,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
     const from = shortKeyId(previousPin);
     const to = shortKeyId(pin.verifyWith);
-    put($('repin-text'), `kernel key re-pinned from ${from} to ${to} (the new key came with a launch from \`gnomon\` or \`gnomon up\`)`);
+    put($('repin-text'), 'resumeToken' in auth ? resumeRepinText(from, to) : `kernel key re-pinned from ${from} to ${to} (the new key came with a launch from \`gnomon\` or \`gnomon up\`)`);
     $('repin').hidden = false;
     void gnomonPost(fetch, '/diag', out.session.guiToken, `kernel key re-pinned from ${from} to ${to}`).catch(() => undefined);
   }

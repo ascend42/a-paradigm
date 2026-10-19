@@ -8,7 +8,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readKernelBuild, writeKernelBuild } from '../src/kernel/lifecycle/build-stamp.js';
-import { mintResumeToken, ResumeGate, resumeRecordOf, RESUME_FILE, RESUME_TOKEN_TTL_MS, takeResumeHandoff, writeResumeHandoff } from '../src/kernel/web/resume.js';
+import { mintResumeToken, parseResumeRecord, ResumeGate, resumeRecordOf, RESUME_TOKEN_TTL_MS } from '../src/kernel/web/resume.js';
 import { acceptUnsignedHelperForTests, DEV_TEST_HELPER_ACK, HelperRepin, HelperUnavailableError, pinHelper, type HelperVerifier } from '../src/kernel/identity/helper.js';
 
 const dirs: string[] = [];
@@ -32,35 +32,27 @@ describe('kernel-build.json', () => {
   });
 });
 
-describe('#gui-resume hand-off', () => {
-  it('written 0600 holding the digest only; taken ONCE (unlinked at once)', () => {
-    const home = tmp();
+describe('#gui-resume hand-off record (stdin, never a file)', () => {
+  it('a valid record parses; expired, over-long TTL, malformed are refused; the record never holds the token', () => {
     const token = mintResumeToken();
-    writeResumeHandoff(home, resumeRecordOf(token, binding, Date.now()));
-    const file = path.join(home, RESUME_FILE);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
-    expect(readFileSync(file, 'utf8')).not.toContain(token); // theft from the home: nothing presentable
-    const rec = takeResumeHandoff(home, Date.now());
-    expect(rec).not.toBeNull();
-    expect(existsSync(file)).toBe(false);
-    expect(takeResumeHandoff(home, Date.now())).toBeNull();
-    const g = new ResumeGate({ record: rec, ns: 'local', isHumanDevice: () => true });
+    const now = Date.now();
+    const rec = resumeRecordOf(token, binding, now);
+    expect(JSON.stringify(rec)).not.toContain(token);
+    const parsed = parseResumeRecord(JSON.parse(JSON.stringify(rec)), now);
+    expect(parsed).toEqual(rec);
+    const g = new ResumeGate({ record: parsed, ns: 'local', isHumanDevice: () => true });
     expect(g.exchange(token).kind).toBe('fresh');
     expect(g.exchange(token).kind).toBe('replay');
+    expect(parseResumeRecord(resumeRecordOf(token, binding, now - RESUME_TOKEN_TTL_MS - 1), now)).toBeNull();
+    expect(parseResumeRecord(resumeRecordOf(token, binding, now, RESUME_TOKEN_TTL_MS * 10), now)).toBeNull();
+    expect(parseResumeRecord({ ...rec, digest: 'x' }, now)).toBeNull();
+    expect(parseResumeRecord(null, now)).toBeNull();
   });
-
-  it('refused (and still unlinked): group-readable, expired, a TTL longer than allowed, a symlink', () => {
-    const home = tmp();
-    const file = path.join(home, RESUME_FILE);
-    writeResumeHandoff(home, resumeRecordOf(mintResumeToken(), binding, Date.now()));
-    chmodSync(file, 0o640);
-    expect(takeResumeHandoff(home, Date.now())).toBeNull();
-    expect(existsSync(file)).toBe(false);
-    writeResumeHandoff(home, resumeRecordOf(mintResumeToken(), binding, Date.now() - RESUME_TOKEN_TTL_MS - 1));
-    expect(takeResumeHandoff(home, Date.now())).toBeNull();
-    writeResumeHandoff(home, resumeRecordOf(mintResumeToken(), binding, Date.now(), RESUME_TOKEN_TTL_MS * 10));
-    expect(takeResumeHandoff(home, Date.now())).toBeNull();
-    expect(existsSync(file)).toBe(false);
+  it('drop() (a fallback port) ⇒ the token is unknown', () => {
+    const token = mintResumeToken();
+    const g = new ResumeGate({ record: resumeRecordOf(token, binding, Date.now()), ns: 'local', isHumanDevice: () => true });
+    g.drop();
+    expect(g.exchange(token).kind).toBe('unknown');
   });
 });
 

@@ -3,7 +3,7 @@
  * is stored only into an existing marker, and the origin poll gives up with guidance.
  */
 import { describe, expect, it } from 'vitest';
-import { isUpgradeCard, markRestarting, noteResume, restarting, RESTART_GUIDANCE, takeRestart, upgradeBannerOf, waitForOrigin, type StorageLike } from '../src/core/restart.js';
+import { isUpgradeCard, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin, type StorageLike } from '../src/core/restart.js';
 
 const mem = (): StorageLike & { m: Map<string, string> } => {
   const m = new Map<string, string>();
@@ -29,6 +29,9 @@ describe('#gui restart', () => {
     expect(restarting(s)).toBe(true);
     expect(noteResume(s, { resumeToken: 'short', kernelPublicKey: KEY })).toBe(false);
     expect(noteResume(s, { resumeToken: TOKEN, kernelPublicKey: KEY })).toBe(true);
+    expect(peekResumeKey(s)).toBe(KEY); // the probe key, read before the reload; the marker stays
+    expect(restarting(s)).toBe(true);
+    expect(resumeRepinText('a', 'b')).toMatch(/restarted after the update/);
     expect(takeRestart(s)).toEqual({ resumeToken: TOKEN, kernelPublicKey: KEY });
     expect(takeRestart(s)).toBeNull();
     expect(restarting(s)).toBe(false);

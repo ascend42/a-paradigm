@@ -203,6 +203,23 @@ export class GnomonClient {
   }
 
   /**
+   * TD-2026-10-19-063 (Aegis H, defence in depth): hello with a fresh client nonce, verify the serverSig against
+   * `verifyKey` (the key the restarted kernel's predecessor delivered), then close WITHOUT auth. True only on a
+   * valid signature over this nonce: the page reloads into the resume form only for the kernel holding that key.
+   */
+  async probeKey(o: { surface: 'browser' | 'wrapper'; endpointPath: string; verifyKey: string; subtle: SubtleCrypto | undefined; rng?: (b: Uint8Array) => Uint8Array }): Promise<boolean> {
+    try {
+      const clientNonce = newClientNonce(o.rng);
+      const hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [...GUI_FEATURES], clientNonce, client: { ...GUI_CLIENT, surface: o.surface } });
+      return (await verifyServerSig(o.subtle, o.verifyKey, hello, o.endpointPath, clientNonce)).ok;
+    } catch {
+      return false;
+    } finally {
+      this.close();
+    }
+  }
+
+  /**
    * hello → verify serverSig (WebCrypto, against `verifyKey`) → auth. On a
    * signature failure the socket is closed and nothing else is sent.
    */

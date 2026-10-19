@@ -10,14 +10,14 @@
  *     `gui.resume{resumeToken, ttlMs}` notification. The kernel keeps only the
  *     sha256 digest, bound to the GUI session's principal and device id and
  *     the root namespace.
- *   HAND-OFF. After the drain, just before the lock is released, the old
- *     kernel writes `<home>/gui-resume.json` (0600, tmp + rename): the DIGEST,
- *     the binding, mintedAt and expiresAt = mintedAt + RESUME_TOKEN_TTL_MS.
- *     The file never holds the token, so a reader of the home (the session
- *     sandbox already denies it) learns nothing it could present.
- *   TAKE (successor, at boot, under the lock). Read once and UNLINKED at once;
- *     refused when it is not a regular file, is group/world-readable, is
- *     malformed, names a TTL longer than RESUME_TOKEN_TTL_MS or has expired.
+ *   HAND-OFF (Aegis M). After the drain the old kernel builds the record
+ *     (the DIGEST, the binding, mintedAt, expiresAt = mintedAt +
+ *     RESUME_TOKEN_TTL_MS) and writes it, with the successor's kernel key, to
+ *     the successor's STDIN pipe. Nothing touches the home: a file planted
+ *     there is never read.
+ *   PORT (Aegis H). The successor serves on the old kernel's listening socket
+ *     itself (an inherited fd), so the port is never unbound across the
+ *     hand-over; if it ends up on any other port the record is DROPPED.
  *   EXCHANGE (`auth {resumeToken}` on the web endpoint, exactly one key):
  *     unknown digest ⇒ unknown-token; after expiresAt ⇒ token-expired; a
  *     second use ⇒ replayed-transcript; a binding whose device is no longer a
@@ -30,12 +30,9 @@
  * are per connection; the new connection has none).
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 
 /** The configured TTL of a resume token, from the hand-off file's write to the successor's exchange. */
 export const RESUME_TOKEN_TTL_MS = 60_000;
-export const RESUME_FILE = 'gui-resume.json';
 /** Wrong tokens tolerated before the record is burned (a guess never succeeds; this caps the noise). */
 export const RESUME_MAX_MISSES = 8;
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
@@ -66,50 +63,20 @@ export function resumeRecordOf(token: string, b: ResumeBinding, now: number, ttl
   return { schemaVersion: 'gnomon-gui-resume:v1', digest: digestOf(token), principal: b.principal, deviceId: b.deviceId, ns: b.ns, mintedAt: now, expiresAt: now + ttlMs };
 }
 
-/** The hand-off: `<home>/gui-resume.json` at 0600, digest only. */
-export function writeResumeHandoff(home: string, rec: ResumeRecord): void {
-  const file = path.join(home, RESUME_FILE);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(rec)}\n`, { mode: 0o600 });
-  fs.chmodSync(tmp, 0o600);
-  fs.renameSync(tmp, file);
-}
-
-/** Read and UNLINK the hand-off at once; null when absent or refused (see the module doc). Never throws. */
-export function takeResumeHandoff(home: string, now: number, platform: string = process.platform): ResumeRecord | null {
-  const file = path.join(home, RESUME_FILE);
-  let raw: string;
-  let st: fs.Stats;
-  try {
-    st = fs.lstatSync(file);
-  } catch {
-    return null;
-  }
-  try {
-    if (!st.isFile()) return null;
-    if (platform !== 'win32' && (st.mode & 0o077) !== 0) return null;
-    if (st.size > 4096) return null;
-    raw = fs.readFileSync(file, 'utf8');
-  } catch {
-    return null;
-  } finally {
-    try {
-      fs.unlinkSync(file);
-    } catch {
-      /* already gone */
-    }
-  }
-  try {
-    const o = JSON.parse(raw) as Record<string, unknown>;
-    if (o.schemaVersion !== 'gnomon-gui-resume:v1') return null;
-    if (typeof o.digest !== 'string' || !DIGEST_SHAPE.test(o.digest)) return null;
-    if (typeof o.principal !== 'string' || typeof o.deviceId !== 'string' || typeof o.ns !== 'string') return null;
-    if (typeof o.mintedAt !== 'number' || typeof o.expiresAt !== 'number') return null;
-    if (o.expiresAt - o.mintedAt > RESUME_TOKEN_TTL_MS || o.expiresAt <= now || o.mintedAt > now + 5_000) return null;
-    return { schemaVersion: 'gnomon-gui-resume:v1', digest: o.digest, principal: o.principal, deviceId: o.deviceId, ns: o.ns, mintedAt: o.mintedAt, expiresAt: o.expiresAt };
-  } catch {
-    return null;
-  }
+/**
+ * The successor's side of the hand-off (Aegis M, TD-2026-10-19-063 review): the record arrives on the successor's
+ * stdin pipe together with its kernel key (lifecycle/successor.ts), NEVER from a file in the home. null when it is
+ * malformed, has expired, or names a TTL longer than RESUME_TOKEN_TTL_MS.
+ */
+export function parseResumeRecord(raw: unknown, now: number): ResumeRecord | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.schemaVersion !== 'gnomon-gui-resume:v1') return null;
+  if (typeof o.digest !== 'string' || !DIGEST_SHAPE.test(o.digest)) return null;
+  if (typeof o.principal !== 'string' || typeof o.deviceId !== 'string' || typeof o.ns !== 'string') return null;
+  if (typeof o.mintedAt !== 'number' || typeof o.expiresAt !== 'number') return null;
+  if (o.expiresAt - o.mintedAt > RESUME_TOKEN_TTL_MS || o.expiresAt <= now || o.mintedAt > now + 5_000) return null;
+  return { schemaVersion: 'gnomon-gui-resume:v1', digest: o.digest, principal: o.principal, deviceId: o.deviceId, ns: o.ns, mintedAt: o.mintedAt, expiresAt: o.expiresAt };
 }
 
 export type ResumeClass = { kind: 'unknown' } | { kind: 'expired' } | { kind: 'replay' } | { kind: 'principal' } | { kind: 'fresh'; binding: ResumeBinding };
@@ -133,6 +100,11 @@ export class ResumeGate {
   constructor(o: ResumeGateOptions) {
     this.#o = o;
     this.#record = o.record;
+  }
+
+  /** Aegis H: the successor did not get its predecessor's port (fallback) ⇒ the record is dropped; no resume. */
+  drop(): void {
+    this.#record = null;
   }
 
   /** Is a record waiting (status; the GUI never sees it). */

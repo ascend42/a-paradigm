@@ -158,6 +158,8 @@ export interface WebEndpointOptions {
    * 127.0.0.1 only and exclusive; taken (or refused) ⇒ an OS-chosen port and status `portFallback` (the GUI explains).
    */
   preferPort?: number;
+  /** Aegis H: the predecessor's listening socket, inherited at this fd (POSIX); tried before `preferPort`. */
+  inheritFd?: number;
   /** TD-2026-10-19-063 #gui-resume: the successor's single-use `{resumeToken}` gate (none: the form is refused unknown-token). */
   resume?: ResumeGate;
 }
@@ -338,6 +340,16 @@ export class WebEndpoint {
     return { port: this.#port, launchToken, expiresAt, kernelPublicKey, bundleHash: this.#bundle.hash, url: `http://127.0.0.1:${this.#port}/#launch=${launchToken}&k=${kernelPublicKey}` };
   }
 
+  /**
+   * Aegis H (TD-2026-10-19-063): take the listening socket OUT of the endpoint without closing it, so stop() leaves
+   * the port bound; the caller hands its fd to the successor and then closes its own copy. Null when not listening.
+   */
+  detachListener(): net.Server | null {
+    const s = this.#listener;
+    this.#listener = null;
+    return s;
+  }
+
   /** TD-2026-10-19-063: one notification to ONE live GUI connection (gui.resume); false when it is gone. */
   notifyConn(connId: string, method: string, params: unknown): boolean {
     for (const c of this.#ws.values()) {
@@ -439,13 +451,28 @@ export class WebEndpoint {
       });
     const want = this.#o.preferPort;
     let bound = false;
-    if (want !== undefined && Number.isInteger(want) && want > 0 && want < 65536) {
+    const fd = this.#o.inheritFd;
+    if (fd !== undefined && Number.isInteger(fd) && fd >= 3) {
+      bound = await new Promise<boolean>((resolve) => {
+        server.once('error', () => resolve(false));
+        server.listen({ fd }, () => resolve(true));
+      });
+      const a = bound ? server.address() : null;
+      // the inherited socket must be the predecessor's: 127.0.0.1, the port it asked for
+      if (bound && (a === null || typeof a === 'string' || a.address !== '127.0.0.1' || (want !== undefined && a.port !== want))) {
+        server.close();
+        bound = false;
+      }
+    }
+    if (!bound && want !== undefined && Number.isInteger(want) && want > 0 && want < 65536) {
       bound = await listenOn(want).then(
         () => true,
         () => false,
       );
       if (!bound) this.#portFallback = want;
     }
+    // Aegis H: on ANY port other than the predecessor's, the GUI resume record is dropped (no resume via a new port)
+    if (this.#portFallback !== null || (!bound && (want !== undefined || fd !== undefined))) this.#o.resume?.drop();
     if (!bound)
       await listenOn(0).catch((err: NodeJS.ErrnoException) => {
         throw new LifecycleRefusal('web-transport-failed', `the kernel cannot listen on 127.0.0.1: ${err.code ?? err.message}`);

@@ -20,7 +20,8 @@ import { mintTestPresence } from '../src/kernel/testing.js';
 import { kernelPinOf } from '../src/cli/daemon-cli.js';
 import { humanDeviceOf } from '../src/cli/rules-cli.js';
 import { GNOMON_VERSION } from '../src/version.js';
-import { RESUME_FILE } from '../src/kernel/web/resume.js';
+import * as net from 'node:net';
+import { spawn } from 'node:child_process';
 import { tempHome } from './daemon-helpers.js';
 import { HELLO, rpc, wsConnect, type RawWs } from './web-helpers.js';
 
@@ -57,6 +58,15 @@ function world() {
   const stampPath = path.join(userHome, 'build-id.json');
   fs.writeFileSync(stampPath, JSON.stringify(stamp('a', '8.0.0')));
   return { home, l, approvalsKey, prompts, sock: sock.path, stampPath };
+}
+
+/** Can a squatter bind 127.0.0.1:<port> exclusively right now? */
+function canBind(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once('error', () => resolve(false));
+    s.listen({ host: '127.0.0.1', port, exclusive: true }, () => s.close(() => resolve(true)));
+  });
 }
 
 async function next(ws: RawWs, pred: (f: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
@@ -112,15 +122,28 @@ describe('self-update: stamp change → card → ONE Touch ID → successor on t
     expect(w.prompts.length).toBe(1);
     const h = d.upgradeHandoff()!;
     expect(h.preferPort).toBe(port);
-    // the home holds the digest only
-    expect(fs.readFileSync(path.join(w.home, RESUME_FILE), 'utf8')).not.toContain(rp.resumeToken);
+    // Aegis M: nothing in the home; the record (digest only) rides the successor's stdin
+    expect(fs.readdirSync(w.home).some((f) => f.includes('resume'))).toBe(false);
+    expect(JSON.stringify(h.resume)).not.toContain(rp.resumeToken);
+    // Aegis H: the old kernel exited and the port is STILL bound (the listener was detached, not closed)
+    expect(await canBind(port)).toBe(false);
+    const fd = (h.listener as unknown as { _handle: { fd: number } })._handle.fd;
+    // the successor PROCESS listens on the inherited fd 3 (what gnomond --web-listen-fd 3 does): same socket, same
+    // port, and the port stays bound while the old process drops its copy
+    const child = spawn(process.execPath, ['-e', "const s=require('node:net').createServer();s.listen({fd:3},()=>{const a=s.address();process.stdout.write(a.address+':'+a.port+'\\n')})"], { stdio: ['ignore', 'pipe', 'ignore', fd] });
+    cleanups.push(() => void child.kill());
+    const line = await new Promise<string>((r) => child.stdout!.once('data', (b: Buffer) => r(b.toString().trim())));
+    expect(line).toBe(`127.0.0.1:${port}`);
+    h.listener!.close();
+    expect(await canBind(port)).toBe(false);
+    child.kill();
+    await new Promise((r) => child.once('exit', r));
 
-    // the successor: the predecessor's minted key, the old port
+    // the successor: the predecessor's minted key, its inherited listening socket, the record from "stdin"
     const signer = new SoftwareEd25519Signer(h.successorKeyPem, 'kernel');
     recordKernelPub(w.home, signer.publicKeyPem);
-    const d2 = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: signer, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, web: { preferPort: port }, update: { stampPath: null } });
+    const d2 = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: signer, resumeHandoff: h.resume, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, web: { preferPort: port }, update: { stampPath: null } });
     cleanups.push(() => d2.shutdown('signal').catch(() => undefined));
-    expect(fs.existsSync(path.join(w.home, RESUME_FILE))).toBe(false); // taken at boot
     for (let i = 0; i < 200 && !(d2.web()?.status() as { listening?: boolean } | undefined)?.listening; i++) await new Promise((r) => setTimeout(r, 50));
     expect((d2.web()!.status() as { port?: number }).port).toBe(port);
 
@@ -132,5 +155,51 @@ describe('self-update: stamp change → card → ONE Touch ID → successor on t
     const again = await guiAuth(port, { resumeToken: rp.resumeToken });
     expect(again.res.error).toBeTruthy();
     expect(JSON.stringify(again.res.error)).toMatch(/replayed-transcript/);
+  }, 60_000);
+
+  it('Aegis H/M: a successor on any other port drops the resume record; a record planted in the home is never read', async () => {
+    const w = world();
+    const d = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: w.l.kernel, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, update: { stampPath: w.stampPath, pollMs: 3_600_000 } });
+    cleanups.push(() => d.shutdown('signal').catch(() => undefined));
+    const found = kernelPinOf(w.home, w.l.kernelKey.keyId)!;
+    const device = humanDeviceOf(w.home);
+    if (typeof device === 'string') throw new Error(device);
+    const s = await connectGnomon({ socketPath: w.sock, client: { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' }, serverKey: found.pin, device });
+    cleanups.push(() => s.conn.close().catch(() => undefined));
+    const url = new URL(((await s.conn.call('gui.open', {}, 30_000)) as { result: { url: string } }).result.url);
+    const port = Number(url.port);
+    const gui = await guiAuth(port, { launchToken: /launch=([^&]+)/.exec(url.hash)![1]! });
+    fs.writeFileSync(w.stampPath, JSON.stringify(stamp('b', '8.0.1')));
+    await d.updateWatch!.tick();
+    const card = [...d.log.read({ reader: { class: 'human' }, kinds: ['approval.request'] })].map((v) => (v as { event: { payload: { card: { cardId: string; kind: string } } } }).event.payload.card).find((c) => c.kind === 'daemon-stop')!;
+    gui.ws.sendJson(rpc(3, 'approve', { cardId: card.cardId, decision: 'accept' }));
+    const rp = (await next(gui.ws, (f) => f.method === 'gui.resume')).params as { resumeToken: string };
+    expect(await d.exited).toBe('upgrade');
+    const h = d.upgradeHandoff()!;
+    // the hand-over socket is lost and a squatter takes the port
+    h.listener!.close();
+    for (let i = 0; i < 100 && !(await canBind(port)); i++) await new Promise((r) => setTimeout(r, 50));
+    const squat = net.createServer();
+    await new Promise<void>((r) => squat.listen({ host: '127.0.0.1', port, exclusive: true }, () => r()));
+    cleanups.push(() => new Promise<void>((r) => squat.close(() => r())));
+    // a planted record in the home (a same-user forger) is ignored: only --kernel-key-stdin hands one over
+    fs.writeFileSync(path.join(w.home, 'gui-resume.json'), JSON.stringify(h.resume), { mode: 0o600 });
+    const signer = new SoftwareEd25519Signer(h.successorKeyPem, 'kernel');
+    recordKernelPub(w.home, signer.publicKeyPem);
+    const d2 = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: signer, resumeHandoff: h.resume, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, web: { preferPort: port }, update: { stampPath: null } });
+    cleanups.push(() => d2.shutdown('signal').catch(() => undefined));
+    for (let i = 0; i < 200 && !(d2.web()?.status() as { listening?: boolean } | undefined)?.listening; i++) await new Promise((r) => setTimeout(r, 50));
+    const st = d2.web()!.status() as { port: number; portFallback?: { wanted: number } };
+    expect(st.port).not.toBe(port);
+    expect(st.portFallback).toEqual({ wanted: port });
+    const back = await guiAuth(st.port, { resumeToken: rp.resumeToken });
+    expect(JSON.stringify(back.res.error)).toMatch(/unknown-token/);
+    // and a successor with NO stdin hand-off ignores the planted file entirely
+    await d2.shutdown('signal');
+    const d3 = await startDaemon({ home: w.home, idleMs: 60_000, kernelSigner: signer, rootAuthority: w.l.root, approvalsKey: w.approvalsKey, web: { preferPort: port }, update: { stampPath: null } });
+    cleanups.push(() => d3.shutdown('signal').catch(() => undefined));
+    for (let i = 0; i < 200 && !(d3.web()?.status() as { listening?: boolean } | undefined)?.listening; i++) await new Promise((r) => setTimeout(r, 50));
+    const back3 = await guiAuth((d3.web()!.status() as { port: number }).port, { resumeToken: rp.resumeToken });
+    expect(JSON.stringify(back3.res.error)).toMatch(/unknown-token/);
   }, 60_000);
 });

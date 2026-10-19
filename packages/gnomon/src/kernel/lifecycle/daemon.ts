@@ -133,7 +133,8 @@ import { registerSeams } from '../internal-seams.js';
 import { VoiceControl } from '../voice/voice-control.js';
 import { defaultBuildStampPath, describeUpdate, readBuildStamp, writeKernelBuild, type BuildStamp } from './build-stamp.js';
 import { UpdateWatch } from './update-watch.js';
-import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, takeResumeHandoff, writeResumeHandoff } from '../web/resume.js';
+import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
+import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
 
 /**
@@ -204,13 +205,15 @@ export interface DaemonOptions {
   maxInFlight?: number;
   writeHighWater?: number;
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
-  web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number };
+  web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number; /** Aegis H: the predecessor's inherited listening socket fd */ inheritFd?: number };
   /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
   automations?: readonly unknown[];
   /** #scheduler clock seam (default Date.now). */
   schedulerNow?: () => number;
   /** Staged-stop grace for supervised children and orphans (default 2 s). */
   childGraceMs?: number;
+  /** TD-2026-10-19-063 (Aegis M): the GUI resume record the predecessor wrote to this successor's stdin (never a file). */
+  resumeHandoff?: ResumeRecord | null;
   /**
    * TD-2026-10-19-063 #update-watch: the build stamp to watch (default: the running bundle's dist/build-id.json;
    * null: none), its poll cadence (default UPDATE_POLL_MS) and the helper re-pin check run on the same tick.
@@ -226,6 +229,10 @@ export interface DaemonOptions {
 export interface UpgradeHandoff {
   preferPort: number | null;
   successorKeyPem: string;
+  /** the GUI resume record (digest + binding) for the successor's stdin, or null */
+  resume: ResumeRecord | null;
+  /** Aegis H: the web listening socket, detached from the endpoint and NOT closed: the successor inherits its fd */
+  listener: net.Server | null;
 }
 
 export interface DaemonStatus {
@@ -461,7 +468,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
   // TD-2026-10-19-063 #gui-resume: take (read + unlink) the predecessor's GUI resume hand-off at once, under the lock
   const resumeGate = new ResumeGate({
-    record: takeResumeHandoff(home, Date.now(), opts.platform ?? process.platform),
+    record: opts.resumeHandoff ?? null,
     ns: authority.ns ?? UNPROVISIONED_NS,
     isHumanDevice: (principal, deviceId) => {
       try {
@@ -718,14 +725,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       .drain(seams.drainDeadlineMs !== undefined ? { deadlineMs: seams.drainDeadlineMs } : {})
       .catch(() => undefined) // a drain that failed part way still exits: the new kernel sweeps what it left (rule 4)
       .then(() => {
-        if (gui && resumeToken) {
-          try {
-            writeResumeHandoff(home, resumeRecordOf(resumeToken, { principal: gui.principal, deviceId: gui.deviceId, ns: authority.ns ?? UNPROVISIONED_NS }, Date.now()));
-          } catch {
-            /* no hand-off: the reloaded GUI asks for presence instead (never a silent reattach) */
-          }
-        }
-        upgradeHandoff = { preferPort, successorKeyPem };
+        const resume = gui && resumeToken ? resumeRecordOf(resumeToken, { principal: gui.principal, deviceId: gui.deviceId, ns: authority.ns ?? UNPROVISIONED_NS }, Date.now()) : null;
+        // Aegis H: keep the port bound: the listener leaves the endpoint open and goes to the successor as an fd
+        const listener = process.platform === 'win32' ? null : (web?.detachListener() ?? null);
+        upgradeHandoff = { preferPort, successorKeyPem, resume, listener };
         return shutdown('upgrade');
       });
   });
@@ -998,6 +1001,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     (web ??= WebEndpoint.create({
       home,
       ...(opts.web?.preferPort !== undefined ? { preferPort: opts.web.preferPort } : {}),
+      ...(opts.web?.inheritFd !== undefined ? { inheritFd: opts.web.inheritFd } : {}),
       resume: resumeGate,
       kernelPublicKeyPem: pem,
       log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
@@ -1118,7 +1122,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     updateWatch.start();
   }
   // the successor of an upgrade (`--prefer-port`) starts its web endpoint at once, so the reloading GUI finds it
-  if (opts.web?.preferPort !== undefined && typeof kernelPem === 'string') void ensureWeb(kernelPem).ensureListening().catch(() => undefined);
+  if ((opts.web?.preferPort !== undefined || opts.web?.inheritFd !== undefined) && typeof kernelPem === 'string') void ensureWeb(kernelPem).ensureListening().catch(() => resumeGate.drop());
+  else resumeGate.drop(); // no hand-over endpoint ⇒ nothing to resume on
   // §2.4 rule 11: resume the drained sessions and retire the old kernel's pending cards (background: never blocks serving)
   const resume = resumeAfterUpgrade(resumePlan, { supervisor, broker }).catch((): ResumeReport => ({ resumed: [], refused: [], retired: [] }));
   modPickup.start(opts.modPickupMs);
