@@ -92,6 +92,18 @@ export const AUTH_WIRE_DESCRIPTOR = deepFreeze({
       preimage: authTokenPreimage('N', 'k', 'rtk:X', '/s', VECTOR_NEGOTIATED),
     },
   },
+  // TD-2026-10-19-063 (founder ruling "ONE Touch ID"; a DELIBERATE clientApiId move): the GUI resume form. The kernel
+  // that accepted an upgrade card sends `gui.resume` to the accepting GUI connection only; the successor accepts
+  // `auth {resumeToken}` exactly once, inside the TTL, as the bound principal (web endpoint only; never presence).
+  resume: {
+    form: { resumeToken: 'base64url(32 random bytes)' },
+    transport: 'web',
+    notification: { method: 'gui.resume', params: ['kernelPublicKey', 'resumeToken', 'ttlMs'] },
+    ttlMs: 60_000,
+    singleUse: true,
+    via: 'resume',
+    refusals: ['replayed-transcript', 'token-expired', 'unknown-token'],
+  },
 });
 
 /**

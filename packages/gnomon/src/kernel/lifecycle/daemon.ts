@@ -72,6 +72,7 @@
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
 import * as nodeOs from 'node:os';
+import { generateKeyPairSync } from 'node:crypto';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperPush, HelperTransport } from '../identity/helper.js';
 import { VoiceArmCustody } from '../broker/arm-custody.js';
@@ -102,7 +103,7 @@ import {
 } from '../socket/index.js';
 import { createGuiOpenHandler } from '../socket/gui-open.js';
 import { createDaemonStopHandler } from '../socket/daemon-stop-verb.js';
-import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
+import { spkiBase64Url, WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
@@ -130,6 +131,10 @@ import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
 import { VoiceControl } from '../voice/voice-control.js';
+import { defaultBuildStampPath, describeUpdate, readBuildStamp, writeKernelBuild, type BuildStamp } from './build-stamp.js';
+import { UpdateWatch } from './update-watch.js';
+import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
+import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
 
 /**
@@ -152,6 +157,8 @@ export type DaemonEvent =
   | { kind: 'daemon.token.revocation.unrecorded'; tokenId: string; error: string }
   /** #budget-fuse: the chain's time ran ahead of the wall clock beyond the skew allowance; the wall clock keys the day (once). */
   | { kind: 'daemon.fuse.clock.skew'; chainAt: string; wall: string }
+  /** TD-2026-10-19-063: #update-watch saw a new build stamp and raised (or found) the upgrade card. */
+  | { kind: 'daemon.update.detected'; from: string | null; to: string; cardId: string | null }
   | SocketEvent;
 
 export interface DaemonOptions {
@@ -198,13 +205,34 @@ export interface DaemonOptions {
   maxInFlight?: number;
   writeHighWater?: number;
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
-  web?: { lingerMs?: number; authDeadlineMs?: number };
+  web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number; /** Aegis H: the predecessor's inherited listening socket fd */ inheritFd?: number };
   /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
   automations?: readonly unknown[];
   /** #scheduler clock seam (default Date.now). */
   schedulerNow?: () => number;
   /** Staged-stop grace for supervised children and orphans (default 2 s). */
   childGraceMs?: number;
+  /** TD-2026-10-19-063 (Aegis M): the GUI resume record the predecessor wrote to this successor's stdin (never a file). */
+  resumeHandoff?: ResumeRecord | null;
+  /**
+   * TD-2026-10-19-063 #update-watch: the build stamp to watch (default: the running bundle's dist/build-id.json;
+   * null: none), its poll cadence (default UPDATE_POLL_MS) and the helper re-pin check run on the same tick.
+   */
+  update?: { stampPath?: string | null; pollMs?: number; helper?: { check(): Promise<unknown> | unknown } };
+}
+
+/**
+ * TD-2026-10-19-063: what an accepted, drained upgrade hands the successor. `successorKeyPem` is the successor's
+ * software kernel key (PKCS#8), minted by THIS kernel at accept so the GUI can be told its public half over the
+ * already-verified channel (gui.resume); it reaches the successor on its stdin pipe only (never argv, env or a file).
+ */
+export interface UpgradeHandoff {
+  preferPort: number | null;
+  successorKeyPem: string;
+  /** the GUI resume record (digest + binding) for the successor's stdin, or null */
+  resume: ResumeRecord | null;
+  /** Aegis H: the web listening socket, detached from the endpoint and NOT closed: the successor inherits its fd */
+  listener: net.Server | null;
 }
 
 export interface DaemonStatus {
@@ -267,6 +295,12 @@ export interface DaemonHandle {
   readonly orphanSweep: { orphans: number; stopped: number };
   /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
   readonly resume: Promise<ResumeReport>;
+  /** TD-2026-10-19-063: set once an upgrade card was ACCEPTED and drained: the successor asks for this web port. */
+  upgradeHandoff(): UpgradeHandoff | null;
+  /** TD-2026-10-19-063 #update-watch (null when no build stamp was loaded). */
+  readonly updateWatch: UpdateWatch | null;
+  /** The build stamp this kernel loaded (null: none). */
+  readonly buildStamp: BuildStamp | null;
 }
 
 /** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
@@ -432,6 +466,19 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     releaseDaemonLock(home, pidfile);
     throw err;
   }
+  // TD-2026-10-19-063 #gui-resume: take (read + unlink) the predecessor's GUI resume hand-off at once, under the lock
+  const resumeGate = new ResumeGate({
+    record: opts.resumeHandoff ?? null,
+    ns: authority.ns ?? UNPROVISIONED_NS,
+    isHumanDevice: (principal, deviceId) => {
+      try {
+        const d = readRegistry(home, authority).devices.get(deviceId);
+        return d !== undefined && d.principalKind === 'human' && d.principalId === principal;
+      } catch {
+        return false;
+      }
+    },
+  });
   const pendingRows = new Set<Promise<unknown>>();
   const appendRow = (kind: string, payload: Record<string, unknown>, ids: { connId?: string; deviceId?: string } = {}): Promise<void> => {
     const p = log.append({ kind, principal: kernelPrincipal, payload, ...ids }).then(() => undefined);
@@ -507,6 +554,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const releases = new Map<string, () => void>();
   let server: SocketServerHandle | null = null;
   let stopping: Promise<void> | null = null;
+  let updateWatch: UpdateWatch | null = null;
+  let upgradeHandoff: UpgradeHandoff | null = null;
   let resolveExited!: (r: DaemonExitReason) => void;
   const exited = new Promise<DaemonExitReason>((r) => (resolveExited = r));
 
@@ -514,6 +563,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     if (stopping) return stopping;
     stopping = (async () => {
       idle.stop();
+      updateWatch?.stop();
       let liveChildren = 0;
       try {
         await scheduler.stop().catch(() => undefined); // an in-flight tick finishes before children stop
@@ -659,13 +709,28 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
   // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason. B1: an `upgrade`
   // accept drains every session first (§2.4 rule 11: session.drained before session.exited), then exits `upgrade`.
-  const stopCards = new DaemonStopCards(broker, (reason) => {
+  // TD-2026-10-19-063: an accept from a live GUI session mints a single-use resume token for THAT connection (sent
+  // to it alone, gui.resume); its digest is handed to the successor in a 0600 file after the drain (#gui-resume).
+  const stopCards = new DaemonStopCards(broker, (reason, ctx) => {
     if (reason !== 'upgrade') return void shutdown(reason);
     if (stopping) return;
+    const gui = web?.access.session(ctx.connId);
+    const resumeToken = gui ? mintResumeToken() : null;
+    const successorKeyPem = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const successorPub = new SoftwareEd25519Signer(successorKeyPem, 'kernel').publicKeyPem;
+    if (gui && resumeToken) web?.notifyConn(ctx.connId, 'gui.resume', { resumeToken, ttlMs: RESUME_TOKEN_TTL_MS, kernelPublicKey: spkiBase64Url(successorPub) });
+    const st = web?.status() as { listening?: boolean; port?: number } | undefined;
+    const preferPort = st?.listening && typeof st.port === 'number' ? st.port : null;
     void supervisor
       .drain(seams.drainDeadlineMs !== undefined ? { deadlineMs: seams.drainDeadlineMs } : {})
       .catch(() => undefined) // a drain that failed part way still exits: the new kernel sweeps what it left (rule 4)
-      .then(() => shutdown('upgrade'));
+      .then(() => {
+        const resume = gui && resumeToken ? resumeRecordOf(resumeToken, { principal: gui.principal, deviceId: gui.deviceId, ns: authority.ns ?? UNPROVISIONED_NS }, Date.now()) : null;
+        // Aegis H: keep the port bound: the listener leaves the endpoint open and goes to the successor as an fd
+        const listener = process.platform === 'win32' ? null : (web?.detachListener() ?? null);
+        upgradeHandoff = { preferPort, successorKeyPem, resume, listener };
+        return shutdown('upgrade');
+      });
   });
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;
@@ -930,9 +995,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const asker = dispatcher.clients().find((c) => c.connId === connId);
     if (!asker) throw new LifecycleRefusal('web-launch-refused', 'no authenticated unix-socket connection with that connId', { connId });
     if (typeof kernelPem !== 'string') throw new LifecycleRefusal('web-launch-refused', 'the kernel key has no public PEM to hand the page (keystore custody is M1.3)');
-    web ??= WebEndpoint.create({
+    return ensureWeb(kernelPem).requestLaunch(asker, via);
+  };
+  const ensureWeb = (pem: string): WebEndpoint =>
+    (web ??= WebEndpoint.create({
       home,
-      kernelPublicKeyPem: kernelPem,
+      ...(opts.web?.preferPort !== undefined ? { preferPort: opts.web.preferPort } : {}),
+      ...(opts.web?.inheritFd !== undefined ? { inheritFd: opts.web.inheritFd } : {}),
+      resume: resumeGate,
+      kernelPublicKeyPem: pem,
       log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
       // §2.4 rule 3 / §11.2: an open GUI WebSocket is a subscriber; a closed one counts for nothing
       holdIdle: () => idle.hold('subscriber'),
@@ -952,9 +1023,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
             ...(opts.clock ? { clock: opts.clock } : {}),
           }),
         }),
-    });
-    return web.requestLaunch(asker, via);
-  };
+    }));
   const onSocketEvent = (e: SocketEvent): void => {
     emit(e);
     if (e.kind === 'socket.connect') diag.connects++;
@@ -1031,6 +1100,30 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     await shutdown('error');
     throw err;
   }
+  // TD-2026-10-19-063: record what this kernel LOADED (0600) for the launcher, and watch the on-disk stamp
+  const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
+  const buildStamp = stampPath ? readBuildStamp(stampPath) : null;
+  try {
+    writeKernelBuild(home, { stamp: buildStamp, pid: pidfile.pid, startedAt: pidfile.startedAt });
+  } catch {
+    /* the launcher then sees no record and never claims a mismatch */
+  }
+  if (stampPath && (buildStamp || opts.update?.helper)) {
+    updateWatch = new UpdateWatch({
+      stampPath,
+      loaded: buildStamp,
+      ...(opts.update?.pollMs !== undefined ? { pollMs: opts.update.pollMs } : {}),
+      ...(opts.update?.helper ? { helper: opts.update.helper } : {}),
+      onKernelUpdate: async (next) => {
+        const card = await stopCards.raiseUpgrade(kernelPrincipal, describeUpdate(buildStamp, next));
+        emit({ kind: 'daemon.update.detected', from: buildStamp?.distHash ?? null, to: next.distHash, cardId: card?.cardId ?? null });
+      },
+    });
+    updateWatch.start();
+  }
+  // the successor of an upgrade (`--prefer-port`) starts its web endpoint at once, so the reloading GUI finds it
+  if ((opts.web?.preferPort !== undefined || opts.web?.inheritFd !== undefined) && typeof kernelPem === 'string') void ensureWeb(kernelPem).ensureListening().catch(() => resumeGate.drop());
+  else resumeGate.drop(); // no hand-over endpoint ⇒ nothing to resume on
   // §2.4 rule 11: resume the drained sessions and retire the old kernel's pending cards (background: never blocks serving)
   const resume = resumeAfterUpgrade(resumePlan, { supervisor, broker }).catch((): ResumeReport => ({ resumed: [], refused: [], retired: [] }));
   modPickup.start(opts.modPickupMs);
@@ -1058,5 +1151,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     scheduler,
     orphanSweep,
     resume,
+    upgradeHandoff: () => upgradeHandoff,
+    updateWatch,
+    buildStamp,
   };
 }

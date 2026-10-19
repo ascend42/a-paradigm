@@ -52,6 +52,9 @@ import { refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
 import { DEV_HOME_MARKER } from './dev-home.js';
+import { readHandoffStdin, spawnSuccessor, successorPlanOf, WEB_LISTEN_FD } from '../kernel/lifecycle/successor.js';
+import { parseResumeRecord, type ResumeRecord } from '../kernel/web/resume.js';
+import { SoftwareEd25519Signer } from '../kernel/log/index.js';
 import { heading, readout, refused } from './readout.js';
 import { humanDeviceOf } from './rules-cli.js';
 
@@ -82,6 +85,12 @@ export interface DaemonArgs {
   readyFd?: number;
   /** The activator's private ready FIFO (ready.ts 'fifo' channel, linux); set only by launchDaemon's re-exec. */
   readyFifo?: string;
+  /** TD-2026-10-19-063: an upgrade successor asks for its predecessor's web port first (127.0.0.1, exclusive). */
+  preferPort?: number;
+  /** TD-2026-10-19-063: the predecessor hands this successor its kernel key on the stdin pipe. */
+  kernelKeyStdin?: boolean;
+  /** Aegis H: the predecessor's web listening socket is inherited at this fd */
+  webListenFd?: number;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -106,6 +115,16 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       const v = argv[++i];
       if (!v || !path.isAbsolute(v)) return '--ready-fifo needs an absolute path';
       out.readyFifo = v;
+    } else if (a === '--kernel-key-stdin') out.kernelKeyStdin = true;
+    else if (a === '--web-listen-fd') {
+      const v = Number(argv[++i]);
+      if (v !== WEB_LISTEN_FD) return `--web-listen-fd is ${WEB_LISTEN_FD}`;
+      out.webListenFd = v;
+    }
+    else if (a === '--prefer-port') {
+      const v = Number(argv[++i]);
+      if (!Number.isInteger(v) || v < 1 || v > 65535) return '--prefer-port needs a port 1..65535';
+      out.preferPort = v;
     } else return `unknown argument ${a}`;
   }
   return out;
@@ -170,11 +189,27 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       throw e;
     }
     opened = hw;
+    // TD-2026-10-19-063: an upgrade successor runs on the key its predecessor minted (the GUI was told its public half)
+    let kernelSigner: SoftwareEd25519Signer | undefined;
+    // Aegis M: a resume record is read ONLY from the stdin hand-off, ONLY when --kernel-key-stdin is set
+    let resumeHandoff: ResumeRecord | null = null;
+    if (args.kernelKeyStdin) {
+      const h = await readHandoffStdin();
+      if (h === null) {
+        process.stderr.write('gnomond: --kernel-key-stdin given but no hand-off arrived on stdin [kernel-key-stdin]\n');
+        return exitCodeOfClass(STARTUP_FAULT_CLASS.identity);
+      }
+      kernelSigner = new SoftwareEd25519Signer(h.kernelKeyPem, 'kernel');
+      resumeHandoff = parseResumeRecord(h.resume, Date.now());
+    }
     const handle = await startDaemon({
+      ...(kernelSigner ? { kernelSigner, resumeHandoff } : {}),
       home,
       ...(hw ? { rootAuthority: hw.root, approvalsKey: hw.approvals, helper: hw.helper } : {}),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
       onEvent: (e) => toStderr(`${JSON.stringify(e)}\n`),
+      ...(args.preferPort !== undefined || args.webListenFd !== undefined ? { web: { ...(args.preferPort !== undefined ? { preferPort: args.preferPort } : {}), ...(args.webListenFd !== undefined ? { inheritFd: args.webListenFd } : {}) } } : {}),
+      ...(hw?.repin ? { update: { helper: { check: () => hw!.repin() } } } : {}),
     });
     const onSignal = (): void => void handle.shutdown('signal');
     process.once('SIGTERM', onSignal);
@@ -187,6 +222,13 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     const reason = await handle.exited;
     process.off('SIGTERM', onSignal);
     process.off('SIGINT', onSignal);
+    // TD-2026-10-19-063: an ACCEPTED upgrade drained, released the lock and socket; now ONE detached successor, then exit
+    const handoff = handle.upgradeHandoff();
+    if (reason === 'upgrade' && handoff) {
+      const fd = (handoff.listener as unknown as { _handle?: { fd?: number } } | null)?._handle?.fd;
+      spawnSuccessor(successorPlanOf(home, handoff.preferPort, { ...(args.idleMs !== undefined ? { idleMs: args.idleMs } : {}), ...(typeof fd === 'number' && fd >= 0 ? { listenFd: fd } : {}), handoff: { kernelKeyPem: handoff.successorKeyPem, resume: handoff.resume } }));
+      handoff.listener?.close(); // the successor holds its own copy of the socket now
+    }
     return exitCodeOfExitReason(reason); // upgrade: ok, 0, no restart (EXIT_REASON_CLASS)
   } catch (err) {
     await opened?.helper.close().catch(() => undefined);

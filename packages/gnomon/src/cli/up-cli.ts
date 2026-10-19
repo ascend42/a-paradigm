@@ -218,7 +218,9 @@ export interface RunningLaunchGrant {
  * root, no helper spawned); the kernel's hello must verify against a key the HOME names (root-signed registry, else
  * keys/kernel-pub.jsonl) before the device signs anything. Throws UpRefusal; never prints, never logs the token.
  */
-export async function requestRunningLaunch(home: string, cwdHint: string | undefined): Promise<RunningLaunchGrant> {
+export type KernelCall = (verb: string, params: Record<string, unknown>) => Promise<{ result: unknown } | { error: { message: string; data?: unknown } }>;
+
+export async function requestRunningLaunch(home: string, cwdHint: string | undefined, opts: { beforeOpen?: (call: KernelCall) => Promise<void> } = {}): Promise<RunningLaunchGrant> {
   let rec;
   try {
     rec = readIdentity(home);
@@ -238,6 +240,8 @@ export async function requestRunningLaunch(home: string, cwdHint: string | undef
     if (!found) throw new UpRefusal('unverified-server', 'the running kernel names a key this home does not record, so its hello proves nothing; no device key is sent to it');
     const s = await connectGnomon({ socketPath: sock.path, client, serverKey: found.pin, device: { principalId: device.principalId, deviceId: device.deviceId, signer: device.signer } });
     try {
+      // TD-2026-10-19-063: the launcher's upgrade check runs on the SAME verified device connection, before gui.open
+      if (opts.beforeOpen) await opts.beforeOpen((verb, params) => s.conn.call(verb, params) as ReturnType<KernelCall>);
       const r = await s.conn.call('gui.open', cwdHint !== undefined ? { cwdHint } : {}, GUI_OPEN_TIMEOUT_MS);
       if ('error' in r) {
         const d = (r.error.data ?? {}) as { reason?: unknown; data?: { reason?: unknown } };

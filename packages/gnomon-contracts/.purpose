@@ -297,7 +297,13 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-194 (voice V0,
+      kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-063 (self-update
+      pickup, founder ruling "ONE Touch ID", a deliberate move) moved
+      clientApiId sha256:99d5c152…97d1 →
+      sha256:fe45ab09a8a9cf2a1a82090e837c8d0dbe9b5f7a2d38ee6fb4bb772ae9013fb8
+      (AUTH_WIRE_DESCRIPTOR gains `resume`: the {resumeToken} web form, the
+      gui.resume notification, its TTL, single use, via 'resume' and its
+      refusals). Before it, TD-2026-10-19-194 (voice V0,
       founder ruling, the one deliberate voice move before any client ships)
       moved clientApiId sha256:f27ecb8b…11a4 →
       sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1

@@ -13,6 +13,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
+import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
@@ -303,6 +304,55 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const pinned = $('pinned');
   clear(pinned);
   if (focused) for (const c of store.stack(focusRepo)) if (c.hsid === focused) pinned.appendChild(mk(c));
+  paintUpdateBanner();
+}
+
+/* ── self-update (TD-2026-10-19-063, core/restart.ts) ───────────── */
+function paintUpdateBanner(): void {
+  const b = upgradeBannerOf([...store.cards.values()].map((c) => ({ cardId: c.cardId, kind: c.kind, card: c.card as Record<string, unknown> })));
+  let el = document.getElementById('update-banner');
+  if (!b) {
+    if (el) el.hidden = true;
+    return;
+  }
+  if (!el) {
+    el = h(doc, 'div', { id: 'update-banner', class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
+    document.body.prepend(el);
+  }
+  clear(el);
+  el.appendChild(h(doc, 'span', null, `${b.text} · `) as unknown as Node);
+  const btn = h(doc, 'button', { type: 'button' }, 'Restart now') as unknown as HTMLButtonElement;
+  // focuses the card only: the restart is the card's accept, with Touch ID
+  btn.addEventListener('click', () => focusCard(b.cardId));
+  el.appendChild(btn);
+  el.hidden = false;
+}
+
+/** The socket closed after this page accepted the upgrade: wait for the successor, then load its bundle. */
+async function awaitRestart(): Promise<void> {
+  put($('conn'), 'restarting…');
+  notice('Gnomon is restarting with the new version…');
+  if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
+    clearRestarting(sessionStorage);
+    return showReconnect(RESTART_GUIDANCE);
+  }
+  // Aegis H (defence in depth): before the token goes anywhere, the kernel at this address must sign a fresh nonce
+  // with the key the old kernel delivered; otherwise the marker (and its token) is dropped
+  const key = peekResumeKey(sessionStorage);
+  if (key) {
+    const endpointPath = `ws://${location.host}/rpc`;
+    let ok = false;
+    try {
+      ok = await new GnomonClient(await webSocketTransport(endpointPath)).probeKey({ surface: SURFACE, endpointPath, verifyKey: key, subtle: globalThis.crypto?.subtle });
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      clearRestarting(sessionStorage);
+      return showReconnect(RESTART_KEY_REFUSED);
+    }
+  }
+  location.reload();
 }
 
 /** ask-user: the picker's choices in the card element ⇒ the approve note (null = a question is unanswered). */
@@ -334,10 +384,15 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
       return;
     }
   }
+  const c0 = store.cards.get(cardId);
+  const upgrade = decision === 'accept' && !!c0 && upgradeBannerOf([{ cardId, kind: c0.kind, card: c0.card as Record<string, unknown> }]) !== null;
+  if (upgrade) markRestarting(sessionStorage, cardId);
   try {
     await client.call('approve', { cardId, decision, ...(note !== null ? { note } : {}) });
     refusals.delete(cardId);
   } catch (err) {
+    // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
+    if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);
     // approve needs the approvals key + presence (#identity M1.3): the refusal is shown as the kernel gave it
     if (err instanceof RpcError) refusals.set(cardId, err.refusal);
   }
@@ -385,7 +440,7 @@ function subscribe(c: GnomonClient): Promise<void> {
 /** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
 const SURFACE = hostSurface();
 
-async function attach(auth: { launchToken: string } | { reconnect: true }, fragmentKey: string | null, hint: CwdHint | null = null): Promise<void> {
+async function attach(auth: { launchToken: string } | { reconnect: true } | { resumeToken: string }, fragmentKey: string | null, hint: CwdHint | null = null): Promise<void> {
   const pin = decidePin(fragmentKey, localStorage.getItem(PIN_KEY));
   if (!pin.ok) return showReconnect(pin.message);
   const endpointPath = `ws://${location.host}/rpc`;
@@ -420,7 +475,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
     const from = shortKeyId(previousPin);
     const to = shortKeyId(pin.verifyWith);
-    put($('repin-text'), `kernel key re-pinned from ${from} to ${to} (the new key came with a launch from \`gnomon\` or \`gnomon up\`)`);
+    put($('repin-text'), 'resumeToken' in auth ? resumeRepinText(from, to) : `kernel key re-pinned from ${from} to ${to} (the new key came with a launch from \`gnomon\` or \`gnomon up\`)`);
     $('repin').hidden = false;
     void gnomonPost(fetch, '/diag', out.session.guiToken, `kernel key re-pinned from ${from} to ${to}`).catch(() => undefined);
   }
@@ -432,6 +487,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
   c.onNotification((method, params) => {
+    if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
     if (p.row) store.apply([p.row]);
@@ -440,6 +496,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   c.onClose(() => {
     client = null;
     session = null;
+    if (restarting(sessionStorage)) return void awaitRestart();
     showReconnect('the connection ended; the GUI session ended with it (D54)');
   });
   try {
@@ -815,6 +872,9 @@ export function main(raw?: string): void {
   applyLayout();
   wire();
   // #bare-entry: the folder hint is decoded here but applied by attach only after the token verified (Aegis M1)
+  // TD-2026-10-19-063: the page that accepted an upgrade reloads once and reattaches with the single-use resume form
+  const resumed = frag ? (clearRestarting(sessionStorage), null) : takeRestart(sessionStorage);
   if (frag) void attach({ launchToken: frag.launchToken }, frag.kernelPublicKey, frag.cwd !== undefined ? cwdHintOf(frag.cwd) : null);
+  else if (resumed) void attach({ resumeToken: resumed.resumeToken }, resumed.kernelPublicKey);
   else showReconnect('This page has no GUI session (a reload, a restart or a token-less launch). Reconnect asks for your presence.');
 }

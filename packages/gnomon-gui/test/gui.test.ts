@@ -609,7 +609,7 @@ describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
   it('L1: a valid launch attaches; only a page without a fragment shows Reconnect', () => {
     const i = app.indexOf('export function main(raw?: string)');
     const body = app.slice(i, app.indexOf('\n}', i));
-    expect(body).toMatch(/if \(frag\) void attach\(\{ launchToken: frag\.launchToken \}, frag\.kernelPublicKey, frag\.cwd !== undefined \? cwdHintOf\(frag\.cwd\) : null\);\n\s*else showReconnect\(/);
+    expect(body).toMatch(/if \(frag\) void attach\(\{ launchToken: frag\.launchToken \}, frag\.kernelPublicKey, frag\.cwd !== undefined \? cwdHintOf\(frag\.cwd\) : null\);\n\s*else if \(resumed\) void attach\(\{ resumeToken: resumed\.resumeToken \}, resumed\.kernelPublicKey\);\n\s*else showReconnect\(/);
   });
   it('L2: the note is cleared on cancel, submit and a later "+ new"; the submit handler requires a trusted event', () => {
     const t = { input: { value: '' }, note: { textContent: null as string | null, hidden: true }, dialog: { hidden: true } };

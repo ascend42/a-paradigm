@@ -37,6 +37,17 @@ export const DAEMON_STOP_REASONS: readonly DaemonStopReason[] = WIRE_REASONS;
 /** A daemon-stop card nobody decides expires into deny after this long; the kernel keeps running. */
 export const DAEMON_STOP_TIMEOUT_MS = 2 * 60_000;
 
+/**
+ * TD-2026-10-19-063 (self-update pickup): the card the KERNEL raises itself when #update-watch sees a new build
+ * stamp lives this long (it waits for the human; expiry is deny: the old kernel keeps running).
+ */
+export const UPGRADE_CARD_TIMEOUT_MS = 24 * 60 * 60_000;
+
+/** Who decided the accept (the broker's effect ctx): the GUI connection a resume token is bound to. */
+export interface DaemonStopAccept {
+  connId: string;
+}
+
 export interface DaemonStopAsker {
   connId: string;
   principal: string | undefined;
@@ -58,7 +69,7 @@ const LINES: Readonly<Record<DaemonStopReason, readonly string[]>> = Object.free
 
 export class DaemonStopCards {
   readonly #broker: ApprovalBroker;
-  readonly #onAccept: (reason: DaemonStopReason) => void;
+  readonly #onAccept: (reason: DaemonStopReason, ctx: DaemonStopAccept) => void;
   readonly #timeoutMs: number;
   #pending: string | null = null;
   /** The reason of the pending (or raising) card: a request for a DIFFERENT reason never gets it (Aegis L2). */
@@ -66,7 +77,7 @@ export class DaemonStopCards {
   /** The in-flight raise (Aegis L5): concurrent requests share it, so two at once still raise ONE card. */
   #raising: Promise<CardV1> | null = null;
 
-  constructor(broker: ApprovalBroker, onAccept: (reason: DaemonStopReason) => void, timeoutMs = DAEMON_STOP_TIMEOUT_MS) {
+  constructor(broker: ApprovalBroker, onAccept: (reason: DaemonStopReason, ctx: DaemonStopAccept) => void, timeoutMs = DAEMON_STOP_TIMEOUT_MS) {
     this.#broker = broker;
     this.#onAccept = onAccept;
     this.#timeoutMs = timeoutMs;
@@ -96,9 +107,41 @@ export class DaemonStopCards {
       lines: [...LINES[reason], `reason: ${reason}`],
       decisions: ['accept', 'reject'],
       timeoutMs: this.#timeoutMs,
-      effect: (decision) => {
+      effect: (decision, ctx) => {
         if (decision !== 'accept') return;
-        setImmediate(() => this.#onAccept(reason));
+        setImmediate(() => this.#onAccept(reason, { connId: ctx.connId }));
+      },
+    });
+    this.#raising = raising;
+    try {
+      const card = await raising;
+      this.#pending = card.cardId;
+      return card;
+    } finally {
+      this.#raising = null;
+    }
+  }
+
+  /**
+   * TD-2026-10-19-063: the kernel's OWN upgrade card, raised when #update-watch sees a new build stamp. It shares
+   * the one-card slot (a launcher's daemon.stop{reason:'upgrade'} then gets THIS card, never a second prompt); a
+   * pending `stop` card is left alone (null: the human is already deciding a stop). Expiry UPGRADE_CARD_TIMEOUT_MS.
+   */
+  async raiseUpgrade(kernelPrincipal: string, summary: string, timeoutMs = UPGRADE_CARD_TIMEOUT_MS): Promise<CardV1 | null> {
+    const open = this.#pending ? this.#broker.card(this.#pending) : undefined;
+    if ((open && open.state === 'pending') || this.#raising) return this.#pendingReason === 'upgrade' ? (open && open.state === 'pending' ? open : this.#raising) : null;
+    this.#pendingReason = 'upgrade';
+    const raising = this.#broker.raise({
+      kind: 'daemon-stop',
+      requestedBy: kernelPrincipal,
+      attended: true,
+      detail: { reason: 'upgrade', connId: 'kernel', update: summary },
+      lines: [`Gnomon was updated: ${summary}`, 'Restart the kernel (gnomond) to run the new build', ...LINES.upgrade.slice(1), 'reason: upgrade'],
+      decisions: ['accept', 'reject'],
+      timeoutMs,
+      effect: (decision, ctx) => {
+        if (decision !== 'accept') return;
+        setImmediate(() => this.#onAccept('upgrade', { connId: ctx.connId }));
       },
     });
     this.#raising = raising;

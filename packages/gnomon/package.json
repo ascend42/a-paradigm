@@ -2,7 +2,7 @@
   "name": "@a-company/gnomon",
   "version": "8.0.0",
   "private": true,
-  "description": "Gnomon \u2014 the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
+  "description": "Gnomon — the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,7 +21,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/build-stamp.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:perf",

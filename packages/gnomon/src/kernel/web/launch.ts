@@ -62,7 +62,7 @@ export type LaunchClass =
   | { kind: 'theft'; consumedBy: string }
   | { kind: 'replay'; consumedBy: string };
 
-export type GuiVia = 'launch' | 'reconnect';
+export type GuiVia = 'launch' | 'reconnect' | 'resume';
 
 export interface GuiSession {
   connId: string;

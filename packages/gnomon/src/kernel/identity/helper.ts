@@ -577,6 +577,13 @@ export class SupervisedHelper implements HelperTransport {
     return t;
   }
 
+  #inFlight = 0;
+
+  /** Requests sent and not yet answered (TD-2026-10-19-063: a helper is re-pinned only when this is 0). */
+  get inFlight(): number {
+    return this.#inFlight;
+  }
+
   request(req: Record<string, unknown>, timeoutMs?: number): Promise<HelperReply> {
     let t: HelperTransport;
     try {
@@ -584,7 +591,8 @@ export class SupervisedHelper implements HelperTransport {
     } catch (e) {
       return Promise.reject(e);
     }
-    return t.request(req, timeoutMs);
+    this.#inFlight++;
+    return t.request(req, timeoutMs).finally(() => void this.#inFlight--);
   }
 
   async close(): Promise<void> {
@@ -592,5 +600,59 @@ export class SupervisedHelper implements HelperTransport {
     const t = this.#cur;
     this.#cur = null;
     await t?.close();
+  }
+}
+
+
+export type HelperRepinOutcome = 'unchanged' | 'busy' | 'respawned' | 'refused';
+
+/**
+ * TD-2026-10-19-063 #update-watch (helper half): a changed helper binary is picked up WITHOUT a card. `check()`
+ * hashes the file at the identity's helperPath; unchanged ⇒ nothing. Changed and a request in flight ⇒ `busy`
+ * (tried on the next tick). Otherwise the file is re-pinned through the EXISTING verify path (pinHelper: designated
+ * requirement / codesign, hash-verify-rehash) and the `serve` child recycled, so the next request starts the new
+ * process through HelperProcess.start (info: protocol + the MIN_HELPER_VERSION floor, pid). `confirm` then checks
+ * the respawned helper still holds this identity's keys. An unsigned or unverifiable file, or a failed confirm,
+ * FAILS CLOSED: the new bytes are never started, the old pin stays (its pre-spawn recheck refuses the changed file),
+ * and the same bytes are not retried.
+ */
+export class HelperRepin {
+  readonly #o: { helperPath: string; holder: { pin: PinnedHelper }; helper: Pick<SupervisedHelper, 'inFlight' | 'recycle'>; verifier?: HelperVerifier; confirm?: () => Promise<boolean> };
+  #refusedSha: string | null = null;
+
+  constructor(o: { helperPath: string; holder: { pin: PinnedHelper }; helper: Pick<SupervisedHelper, 'inFlight' | 'recycle'>; verifier?: HelperVerifier; confirm?: () => Promise<boolean> }) {
+    this.#o = o;
+  }
+
+  async check(): Promise<HelperRepinOutcome> {
+    let sha: string;
+    try {
+      sha = createHash('sha256').update(fs.readFileSync(fs.realpathSync.native(this.#o.helperPath))).digest('hex');
+    } catch {
+      return 'refused';
+    }
+    if (sha === this.#o.holder.pin.sha256) return 'unchanged';
+    if (sha === this.#refusedSha) return 'refused';
+    if (this.#o.helper.inFlight > 0) return 'busy';
+    let next: PinnedHelper;
+    try {
+      next = pinHelper(this.#o.helperPath, this.#o.verifier ? { verifier: this.#o.verifier } : {});
+    } catch {
+      this.#refusedSha = sha;
+      return 'refused';
+    }
+    const prev = this.#o.holder.pin;
+    this.#o.holder.pin = next;
+    await this.#o.helper.recycle();
+    if (this.#o.confirm) {
+      const ok = await this.#o.confirm().catch(() => false);
+      if (!ok) {
+        this.#o.holder.pin = prev;
+        this.#refusedSha = sha;
+        await this.#o.helper.recycle();
+        return 'refused';
+      }
+    }
+    return 'respawned';
   }
 }

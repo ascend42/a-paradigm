@@ -16,6 +16,18 @@ description: >-
 
 components:
   gui:
+    self-update: >-
+      TD-2026-10-19-063 restart (core/restart.ts, PURE but injected storage
+      and fetch): a pending daemon-stop{reason:'upgrade'} card shows the
+      banner "Gnomon was updated · Restart now", whose button only focuses
+      the card (the restart is the card's accept, one Touch ID). This page's
+      own accept sets a single-use sessionStorage marker; the kernel's
+      gui.resume{resumeToken, kernelPublicKey} (this connection only) is
+      stored into that marker only. On close the page polls its origin
+      (ORIGIN_POLL_MS cadence, ORIGIN_POLL_TRIES) and reloads; the reloaded
+      page takes the marker once and attaches with {resumeToken}, re-pinning
+      the successor key that came over the old verified channel. No answer:
+      plain-language guidance (Gnomon.app, or `gnomon`).
     run-modes: >-
       P8-D86/D87 run-mode control (spec §11.4, §11.5): core/modes.ts (PURE)
       reads the focused session's mode ONLY from status.runModes (unknown
