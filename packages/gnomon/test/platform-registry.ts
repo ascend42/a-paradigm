@@ -76,6 +76,10 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/m112-replay.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only keys/ is an ACL via the helper there, not a POSIX mode; replay itself is platform-independent code' },
   // P8-D96 card composition: fixtures are POSIX paths (`/r/f.ts`), which path.resolve rewrites to drive paths on win32.
   { test: 'test/permission-card.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the session runner and its permission channel are darwin-first; win32 path rendering and the case-folded deny path need win32 fixtures there' },
+  // T-2026-10-18-030 (3): mkfifo + POSIX owner-only key modes.
+  { test: 'test/device-key-fifo.test.ts', platforms: ['darwin', 'linux'], na: 'Windows has no FIFO in the filesystem namespace and no O_NONBLOCK flag (named pipes live under \\\\.\\pipe); device-key modes are an ACL via the helper there (P8-D78)' },
+  // T-2026-10-18-028 M5: the helper exec/read denies enforced by sandbox-exec (the darwin session backend).
+  { test: 'test/session-helper-deny.test.ts', platforms: ['darwin'], na: 'the signed helper bundle and its SBPL denies are darwin-only; the Windows helper is a separate principal/service in the parity phase (P8-D78), and linux has no helper' },
   { test: 'test/socket-auth.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint and POSIX device-key modes only; the pipe (P03) and owner-only ACLs come there' },
   { test: 'test/socket-abi.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): read tokens and the G-ABI/G-SOCK suites over the unix-socket endpoint with POSIX device-key and token-file modes; the pipe (P03) comes there' },
   { test: 'test/dev-launch-session.test.ts', platforms: ['darwin'], na: 'the #dev-launch smoke opens a session, which runs only under the darwin session profile (linux/win32 refuse sandbox-unavailable, test/session-profile.test.ts); the fake claude is a POSIX sh wrapper' },

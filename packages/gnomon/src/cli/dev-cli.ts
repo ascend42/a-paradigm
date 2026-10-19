@@ -115,7 +115,7 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
   // Aegis C1 (the same rule as gnomon up): the kernel runs in THIS process, so the process must be clean
   const unsafe = unsafeRuntime(opts.runtime);
   if (unsafe) {
-    refused(io.stderr, 'dev', 'unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js dev up` with no node flags']);
+    refused(io.stderr, 'dev', 'unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js dev up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js dev up`, with no other node flags']);
     return DEV_EXIT_REFUSED;
   }
   let k: DevKernel;

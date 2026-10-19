@@ -49,7 +49,7 @@ export const HELPER_PROTOCOL = 'gnomon-helper:v1';
  * every founder build, so an allowlist shipped with the kernel would break on
  * each rebuild; the floor stops downgrades to known-weaker helpers.
  */
-export const MIN_HELPER_VERSION = '1.2.0';
+export const MIN_HELPER_VERSION = '1.3.0'; // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */
 export const HELPER_REQUIREMENT =
   `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${HELPER_TEAM}" and identifier "${HELPER_IDENTIFIER}"`;
@@ -92,6 +92,10 @@ export interface HelperTransport {
   readonly alive: boolean;
   onExit(cb: () => void): void;
   close(): Promise<void>;
+  /** T-2026-10-18-028 M3: a helper PROCESS is running now (a supervisor that starts on demand may have none). Default: `alive`. */
+  readonly running?: boolean;
+  /** T-2026-10-18-028 M3: end the current helper process (its unlocks die with it) without closing for good. Default: close(). */
+  recycle?(): Promise<void>;
 }
 
 /** Synchronous one-shot (`gnomon-helper once`): root signatures from synchronous callers (the CLI). */
@@ -464,6 +468,17 @@ export class SupervisedHelper implements HelperTransport {
 
   get alive(): boolean {
     return !this.#closed; // starts on demand; a failed start rejects the request
+  }
+
+  /** A helper process is up now (an unlock can exist only in a running process). */
+  get running(): boolean {
+    return !this.#closed && this.#cur?.alive === true;
+  }
+
+  /** End the current process (its unlocks die with it); the next request starts a fresh one, backoff permitting. */
+  async recycle(): Promise<void> {
+    const t = this.#cur;
+    await t?.close();
   }
 
   onExit(cb: () => void): void {

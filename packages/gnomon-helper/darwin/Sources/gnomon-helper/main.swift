@@ -32,7 +32,7 @@
 import Foundation
 import Security
 
-let gnomonHelperVersion = "1.2.0"
+let gnomonHelperVersion = "1.3.0"
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {
@@ -146,7 +146,7 @@ func handle(_ req: Json) throws -> Json {
             return ["sigs": sigs, "kept": kept, "shown": line]
         case (.approvals, "cached"):
             guard let c = conn else { throw bad("a cached sign needs a connId") }
-            guard let ctx = unlocks.use(c, gen: g) else { throw HelperError("no-unlock", "no live unlock for this connection") }
+            guard let ctx = unlocks.use(c, gen: g, signatures: msgs.count) else { throw HelperError("no-unlock", "no live unlock for this connection") }
             do {
                 return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": true]
             } catch {

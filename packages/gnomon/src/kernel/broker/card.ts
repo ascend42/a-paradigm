@@ -113,6 +113,23 @@ export interface SignedPresencePrompt {
   sig: string;
 }
 
+/**
+ * T-2026-10-18-028 M4: the presence prompt is drawn by the OS (LocalAuthentication), not by a
+ * conformant client, so the card line is made plain before it goes in. Every format character
+ * (General_Category Cf: bidi controls and marks, invisible operators, interlinear annotation, …),
+ * every control and the line/paragraph separators are REMOVED, so no requester text can reorder
+ * or hide inside the prompt. The §4.5 sanitizer has already turned bidi controls into visible
+ * `⟨RLO⟩` glyphs; a raw one can only arrive in a block that bypassed it, and is stripped here too.
+ */
+export function promptSafe(text: string): string {
+  return text.replace(/[\p{Cf}\p{Cc}\p{Zl}\p{Zp}]/gu, '');
+}
+
+/** M4: the summary is QUOTED so requester text cannot pose as the prompt's own words; a quote or backslash inside it is escaped. */
+export function quoteSummary(text: string): string {
+  return `"${text.replace(/[\\"]/g, (c) => `\\${c}`)}"`;
+}
+
 export function promptText(r: PresencePromptRecord): string {
   const open = r.guiSessions.n === 1 ? '1 GUI session open' : `${r.guiSessions.n} GUI sessions open`;
   return `Gnomon: ${r.decision} on ${r.kind} card from ${r.requestedBy} — ${r.summary} — on ${r.connId} (${open}). ${r.reason}`;
@@ -124,13 +141,14 @@ export function composePresencePrompt(
   f: { decision: string; connId: string; guiSessions: number; reason: string },
 ): SignedPresencePrompt {
   const first = (card.block as { children?: Array<{ text?: unknown }> }).children?.[0]?.text;
+  const shown = typeof first === 'string' ? promptSafe(first) : '';
   const record: PresencePromptRecord = {
     schemaVersion: 'gnomon-presence-prompt:v1',
     cardId: card.cardId,
     kind: String(card.kind),
     decision: f.decision,
     requestedBy: card.requestedBy,
-    summary: `${card.contentHash.slice(7, 19)}${typeof first === 'string' ? ` ${Array.from(first).slice(0, 120).join('')}` : ''}`,
+    summary: `${card.contentHash.slice(7, 19)}${shown ? ` ${quoteSummary(Array.from(shown).slice(0, 120).join(''))}` : ''}`,
     contentHash: card.contentHash,
     connId: f.connId,
     guiSessions: { n: f.guiSessions },

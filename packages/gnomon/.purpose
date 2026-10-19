@@ -681,9 +681,15 @@ components:
       and moves clientApiId. GUARDS on a home resolved once (lstat plain
       directory, then realpath), each with a falsifier in
       test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
-      NODE_OPTIONS or any node interpreter flag (process.execArgv) →
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) other
+      than exactly --disable-sigusr1, or that flag MISSING (T-2026-10-18-030:
+      the bin shebang `env -S node --disable-sigusr1` passes it) →
       unsafe-env — refused, not re-executed, so no second process holds
-      the helper; missing home / no identity.json → unprovisioned;
+      the helper (scope: an AMBIENT unsafe runtime, not a hostile preload
+      already running as the user); a stdout/stderr 'error' (EIO after
+      SIGHUP) is handled as a stop so the shutdown sweep runs; the device
+      key opens O_NONBLOCK (a swapped-in FIFO cannot hang it,
+      test/device-key-fifo.test.ts); missing home / no identity.json → unprovisioned;
       symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
       live pidfile holder or an answering socket → daemon-running (and the
       O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail
@@ -1216,7 +1222,32 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
-      src/kernel/broker/. P8-D96: RaiseInput.decisions limits a card's signed
+      src/kernel/broker/. T-2026-10-18-028: M2 — UnlockStore ends a cached
+      unlock at UNLOCK_IDLE_MS idle, UNLOCK_ABSOLUTE_MS (60 min) after it
+      opened, or after UNLOCK_MAX_SIGNATURES (64) uses (approval.unlock.
+      dropped{reason: idle|expired|exhausted}); M3 — unlock.drop goes to the
+      helper on every close and failure path (connectionClosed always, a
+      lost keep-sign reply, a close during the keep-sign, a failed cached
+      sign, an ended unlock), and HelperApprovalsKey.dropUnlock escalates a
+      drop the helper does not answer to unlock.drop-all, then recycles the
+      helper process (HelperTransport.running / recycle); helper floor
+      MIN_HELPER_VERSION 1.3.0 (test/unlock-bounds.test.ts).
+      M4 — the presence prompt (drawn by the OS, not a conformant client)
+      gets the card line through promptSafe (every Cf, Cc, Zl, Zp removed)
+      and the summary QUOTED with quote/backslash escaped (quoteSummary,
+      card.ts); the helper strips the same set from the caller text
+      (Protocol.swift promptSafe).
+      M5 (#session-runner, platform/darwin/session-sbpl.ts, profile v4): every
+      session profile ends with helperDenySbpl() — deny process-exec of
+      /GnomonHelper.app(/|$) and /gnomon-helper$, deny file-read* of the
+      bundle (no copy out), regexes on resolved paths; backstop: the helper
+      refuses serve/once under any sandbox (test/session-helper-deny.test.ts).
+      L2 — #freshPrompt: at most ONE outstanding fresh presence prompt per
+      connection (FORBIDDEN{presence, why: prompt-outstanding}), and
+      PROMPT_COOLDOWN_MS (3 s) after a prompt the human declined
+      (why: prompt-cooldown, retryAfterMs); an accepted prompt or an
+      unavailable helper starts no cooldown; PromptRateLimited passes the
+      presence error mapping unchanged (test/prompt-rate.test.ts). P8-D96: RaiseInput.decisions limits a card's signed
       actions (permission slice cards: allow|deny, no always); approve
       refuses any other decision bad-params; expire(cardId, why) logs
       approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect
@@ -1795,6 +1826,15 @@ flows:
       inside 10 min. Not yet built: the session runner and mod host that
       call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object
       and owner-only DACL read-back (G-WIN-02, parity phase P8-D78).
+      T-2026-10-18-030 (1): the clean re-exec passes exactly one node flag,
+      --disable-sigusr1 (env.ts DISABLE_SIGUSR1 / reexecArgs), and
+      runForeground refuses to start without it in execArgv
+      ([sigusr1-enabled]) — a same-user kill -USR1 would otherwise open the
+      V8 inspector in the key-holding process; a JS SIGUSR1 listener never
+      counts. Both bins use `#!/usr/bin/env -S node --disable-sigusr1`.
+      Falsifier: a running gnomond receiving SIGUSR1 opens no inspector and
+      keeps running (test/daemon-lifecycle.test.ts, control arm proves the
+      detector). A SEA must bake the flag into sea-config execArgv.
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
@@ -1807,6 +1847,7 @@ flows:
       - test/idle-exit.test.ts
       - test/home-resolution.test.ts
       - test/reexec-env.test.ts
+      - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]

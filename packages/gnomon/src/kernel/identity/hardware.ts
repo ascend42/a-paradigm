@@ -311,10 +311,28 @@ export class HelperApprovalsKey {
     return { decisionSig, token, kept: reply.kept === true };
   }
 
-  /** Drop a connection's unlock in the helper (idle, closed). Never throws. */
+  /**
+   * Drop a connection's unlock in the helper (idle, expired, exhausted, closed, failed). Never throws.
+   * T-2026-10-18-028 M3: no longer best-effort. A drop the helper does not answer escalates to
+   * `unlock.drop-all`, and if THAT fails the helper process is ended (recycle, else close): its unlocks die with the process
+   * (EOF on stdin, main.swift), and the broker drops its own on the exit (helperExited). Fail closed:
+   * the cost is a fresh prompt on every connection, never a live unlock the kernel lost track of.
+   */
   async dropUnlock(connId: string): Promise<void> {
-    if (!this.#helper.alive) return;
-    await this.#helper.request({ op: 'unlock.drop', connId }).catch(() => undefined);
+    if (!(this.#helper.running ?? this.#helper.alive)) return; // no process, no unlocks (and never start one just to drop)
+    try {
+      await this.#helper.request({ op: 'unlock.drop', connId });
+      return;
+    } catch {
+      /* escalate */
+    }
+    try {
+      await this.#helper.request({ op: 'unlock.drop-all' });
+      return;
+    } catch {
+      /* escalate */
+    }
+    await (this.#helper.recycle ? this.#helper.recycle() : this.#helper.close()).catch(() => undefined);
   }
 
   /** A helper exit drops every unlock (§3.1 failure modes). */

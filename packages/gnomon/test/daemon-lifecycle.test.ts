@@ -9,6 +9,7 @@
  * refusal) live in test/home-resolution.test.ts, which runs everywhere.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import * as net from 'node:net';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -56,7 +57,7 @@ function deadPid(): number {
 }
 
 function startChild(h: string, extra: string[] = []): Promise<{ child: ChildProcess; ready: { pid: number; socketPath: string } }> {
-  const child = spawn(process.execPath, [GNOMOND, '--foreground', '--home', h, ...extra], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--disable-sigusr1', GNOMOND, '--foreground', '--home', h, ...extra], { stdio: ['ignore', 'pipe', 'pipe'] });
   cleanups.push(() => {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   });
@@ -115,7 +116,7 @@ describe('G-DMN-01 one daemon per user', () => {
     const h = home();
     const first = await startChild(h);
     expect(first.ready.pid).toBe(first.child.pid);
-    const second = spawnSync(process.execPath, [GNOMOND, '--foreground', '--home', h], { encoding: 'utf8', timeout: 10_000 });
+    const second = spawnSync(process.execPath, ['--disable-sigusr1', GNOMOND, '--foreground', '--home', h], { encoding: 'utf8', timeout: 10_000 });
     expect(second.status).toBe(1);
     expect(second.stderr).toMatch(/already running.*\[already-running\]/);
     expect(second.stderr).toContain('daemon.lock.refused');
@@ -271,9 +272,57 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     // The detached daemon got home via argv; its env carried no NODE_OPTIONS / GNOMON_*.
     const ps = spawnSync('ps', ['eww', '-o', 'command=', '-p', String(pf.pid)], { encoding: 'utf8' });
     expect(ps.stdout).not.toMatch(/NODE_OPTIONS=|GNOMON_HOME=/);
+    expect(ps.stdout).toContain('--disable-sigusr1'); // the re-exec passes the one flag the foreground daemon requires
     const deadline = Date.now() + 5000;
     while (pidAlive(pf.pid) && Date.now() < deadline) await new Promise((res) => setTimeout(res, 50));
     expect(pidAlive(pf.pid)).toBe(false);
     expect(existsSync(pidPathOf(h))).toBe(false);
+  });
+});
+
+/** True when something accepts a TCP connection on 127.0.0.1:<port>. */
+function portOpen(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = net.connect({ host: '127.0.0.1', port });
+    s.once('connect', () => (s.destroy(), resolve(true)));
+    s.once('error', () => resolve(false));
+  });
+}
+
+describe('T-2026-10-18-030 (1): SIGUSR1 cannot open the V8 inspector in the kernel', () => {
+  it('FALSIFIER: gnomond --foreground refuses to start without --disable-sigusr1 (no pidfile, no socket)', () => {
+    const h = home();
+    const r = spawnSync(process.execPath, [GNOMOND, '--foreground', '--home', h], { encoding: 'utf8', timeout: 10_000 });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('[sigusr1-enabled]');
+    expect(existsSync(pidPathOf(h))).toBe(false);
+  });
+
+  it('FALSIFIER: a running kernel that receives SIGUSR1 opens no inspector port and keeps running', async () => {
+    // control: the same signal against a node WITHOUT the flag does open an inspector (the detector works);
+    // --inspect-port=0 so the control binds an ephemeral port, never 9229
+    const control = spawn(process.execPath, ['--inspect-port=0', '-e', 'setInterval(()=>{},1000)'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    cleanups.push(() => void control.kill('SIGKILL'));
+    let cerr = '';
+    control.stderr!.on('data', (c: Buffer) => (cerr += c.toString('utf8')));
+    await new Promise((r) => setTimeout(r, 300));
+    control.kill('SIGUSR1');
+    const cdl = Date.now() + 5000;
+    while (!cerr.includes('Debugger listening') && Date.now() < cdl) await new Promise((r) => setTimeout(r, 25));
+    expect(cerr).toContain('Debugger listening');
+
+    const h = home();
+    const was9229 = await portOpen(9229);
+    const { child } = await startChild(h);
+    let err = '';
+    child.stderr!.on('data', (c: Buffer) => (err += c.toString('utf8')));
+    child.kill('SIGUSR1');
+    await new Promise((r) => setTimeout(r, 750));
+    expect(err).not.toContain('Debugger listening');
+    expect(child.exitCode).toBeNull(); // ignored, not a crash
+    expect(child.signalCode).toBeNull();
+    if (!was9229) expect(await portOpen(9229)).toBe(false);
+    child.kill('SIGTERM');
+    expect(await exitOf(child)).toBe(0);
   });
 });

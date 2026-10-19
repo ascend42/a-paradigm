@@ -1,0 +1,36 @@
+id: L-2026-10-19-builder-004915-001
+type: milestone
+timestamp: '2026-10-19T00:49:15.193Z'
+author: builder
+title: 'Gnomon hardening lane: SIGUSR1 + T-028 M2-M5, L2'
+summary: Kernel requires --disable-sigusr1 (shebang env -S; gnomond refuses without it); unlock absolute TTL 60 min + 64-signature cap in broker and helper 1.3.0; unlock.drop on every path with escalation; Cf/bidi stripped + summary quoted in presence prompts; session SBPL denies exec/read of GnomonHelper.app and gnomon-helper; one outstanding fresh prompt per connection + 3 s cooldown after a decline. XPC peer check, C3 probe arms, T-032, T-025 deferred to their own lane.
+symbols_touched:
+  - $daemon-lifecycle
+  - '#gnomon-up'
+  - '#dev-launch'
+  - '#identity'
+  - '#approval-broker'
+  - '#gnomon-helper'
+  - '#session-runner'
+learnings:
+  - SBPL signing-identifier on process-exec matches the caller not the target; team-identifier is unbound in sandbox-exec
+  - A bare copy of the signed helper executable is SIGKILLed outside its bundle; the helper serve refuses under any sandbox (exit 3)
+  - A JS SIGUSR1 listener suppresses the inspector on Node 26 but is removable so the guard reads execArgv only
+  - The Edit/Write tools convert backslash-u escapes into raw characters; write such test strings through a placeholder
+tags:
+  - gnomon
+  - security
+  - hardening
+  - milestone
+body: 'Measured: node --disable-sigusr1 ignores SIGUSR1 (no inspector, process lives); without it SIGUSR1 opens 9229. Helper deny probe: regex exec deny catches pinned/copied/renamed-bundle; read deny stops cp. Full suite: gnomon 1245 passed / 5 skipped / 63 todo; contracts 324; mod-sdk 3; local 89; gui 28+11 todo.'
+linked_commits:
+  - 03d7db75
+  - 136b9a43
+  - a9ad6f13
+  - 531cd302
+  - e2720e45
+  - 0d26aa30
+git_context:
+  ref: 0d26aa3012a466f6d0c3a61abef66d6a8cc70233
+  branch: gnomon/hardening
+  dirty: false

@@ -132,6 +132,11 @@ export class FakeHelper implements HelperTransport {
         return { ok: true, publicKey: this.x963(req.key as 'root', String(req.gen)) };
       case 'unlock.drop':
         return { ok: true, dropped: this.unlocks.delete(String(req.connId)) };
+      case 'unlock.drop-all': {
+        const n = this.unlocks.size;
+        this.unlocks.clear();
+        return { ok: true, dropped: n };
+      }
       case 'sign': {
         if (!k) throw new HelperRefusal('not-found', 'no key');
         const msgs = (req.messages as string[]).map((m) => Buffer.from(m, 'base64'));

@@ -34,8 +34,16 @@ prerequisites below apply to both paths.
   process, so anything `NODE_OPTIONS` preloads would run inside the kernel.
   `dev up` and `up` therefore **refuse to start** (`unsafe-env`) when
   `NODE_OPTIONS` is set, or when `node` was started with any flag (`--inspect`,
-  `--require`, `--import` and so on). Run `unset NODE_OPTIONS` first, and start
-  the CLI as plain `node <path>/gnomon.js`.
+  `--require`, `--import` and so on) other than the one it **requires**,
+  `--disable-sigusr1`. Without that flag, any process running as you could
+  `kill -USR1` the kernel and open a debugger in it. Run `unset NODE_OPTIONS`
+  first, and start the CLI as `node --disable-sigusr1 <path>/gnomon.js`, or run
+  `<path>/gnomon.js` directly, since its shebang passes the flag. You need
+  Node 22.14 or later.
+- **What this check covers.** It catches an ambient unsafe runtime: an exported
+  `NODE_OPTIONS` or a stray flag. It does not stop a hostile preload that is
+  already running as you, because that code can scrub the env and `execArgv`
+  before the check reads them.
 
 ## From a fresh clone
 
@@ -47,7 +55,7 @@ npm ci
 npm run build:gnomon
 
 node packages/gnomon/dist/cli/gnomon.js dev init   # provisions ~/.gnomon-dev (once)
-node packages/gnomon/dist/cli/gnomon.js dev up     # runs the kernel in this terminal and prints the GUI URL
+node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js dev up     # runs the kernel in this terminal and prints the GUI URL
 ```
 
 The rest of this guide writes `gnomon` for `node <clone>/packages/gnomon/dist/cli/gnomon.js`.
@@ -170,8 +178,8 @@ available.
 The prerequisites in [Before you start](#before-you-start) still apply. Above
 all, `unset NODE_OPTIONS`. `gnomon up` also runs the kernel in your own Node
 process, and it **refuses** (`REFUSED  UP  unsafe-env`) when `NODE_OPTIONS` is
-set or `node` was started with any flag. It checks this before it reads the
-home or opens the helper.
+set, or when `node` was started with any flag other than `--disable-sigusr1`,
+which it requires. It checks this before it reads the home or opens the helper.
 
 ### Once: build the signed helper and provision the root
 
@@ -197,7 +205,7 @@ another one exists.
 ### Each time: run it
 
 ```sh
-node packages/gnomon/dist/cli/gnomon.js up
+node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js up
 ```
 
 There is no `DEV ONLY` banner. It prints:
@@ -256,7 +264,7 @@ separately running `gnomond`.
 
 | Message | Meaning | Next |
 |---|---|---|
-| `REFUSED  UP  unsafe-env` | `NODE_OPTIONS` is set, or `node` was started with flags (`--inspect*`, `--require`, `--import`, …) | `unset NODE_OPTIONS`; run plain `node <path>/gnomon.js up` |
+| `REFUSED  UP  unsafe-env` | `NODE_OPTIONS` is set, `node` was started with flags (`--inspect*`, `--require`, `--import`, …), or `--disable-sigusr1` is missing | `unset NODE_OPTIONS`; run `node --disable-sigusr1 <path>/gnomon.js up` (or the bin directly) |
 | `REFUSED  UP  unprovisioned` | No home, or no `keys/identity.json` | `gnomon identity init` |
 | `REFUSED  UP  dev-home` | The home carries the DEV-ONLY marker | `gnomon dev up --home <it>` |
 | `REFUSED  UP  daemon-running` | A kernel already runs on this home (`gnomond` or another `up`) | Stop it with Ctrl-C in its terminal, or let it exit on idle. `gnomon open` has no wire verb yet. |

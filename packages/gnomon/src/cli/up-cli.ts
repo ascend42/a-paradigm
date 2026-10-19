@@ -219,7 +219,7 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
   }
   // Aegis C1: before any home is read or the helper opens, the process that will hold the keys must be clean
   const unsafe = unsafeRuntime(deps.runtime);
-  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js up` with no node flags']));
+  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']));
   let k: UpKernel;
   try {
     const { home, isDefault } = resolveUpHome(given, deps.userHome);

@@ -7,7 +7,16 @@
  * daemon re-execs itself with a FIXED env — `PATH` (from root-signed config;
  * until M1.1 ships that config, a fixed system PATH), `HOME`/`USERPROFILE` and
  * locale. Everything else is dropped, explicitly including `NODE_OPTIONS` and
- * every `GNOMON_*`. Node flags (`process.execArgv`) are dropped too.
+ * every `GNOMON_*`. Node flags (`process.execArgv`) are dropped too, except
+ * exactly one that is ADDED: `--disable-sigusr1` (T-2026-10-18-030 (1)).
+ *
+ * Why: a same-user `kill -USR1 <pid>` (or `process._debugProcess(pid)`) opens
+ * the V8 inspector in a running Node process, and neither the env scrub nor an
+ * execArgv check sees it. With `--disable-sigusr1` (Node >= 22.14 / >= 23.7)
+ * Node ignores the signal. The kernel (gnomond --foreground, `gnomon up`,
+ * `gnomon dev up`) refuses to start unless the flag is in its execArgv: a JS
+ * `process.on('SIGUSR1')` listener does NOT count — it can be removed at run
+ * time and is not what the guard reads.
  */
 import { spawn } from 'node:child_process';
 
@@ -54,9 +63,27 @@ export interface DetachOptions {
   path?: string;
 }
 
-/** argv for the re-exec'd foreground daemon. Home travels in argv, never env. */
+/** The one Node flag the kernel runs with, and requires (T-2026-10-18-030 (1)). */
+export const DISABLE_SIGUSR1 = '--disable-sigusr1';
+
+/** True only when `--disable-sigusr1` is an interpreter flag of the process (a JS listener never counts). */
+export function sigusr1Disabled(execArgv: readonly string[] = process.execArgv): boolean {
+  return execArgv.includes(DISABLE_SIGUSR1);
+}
+
+/** The refusal text when the kernel would run with SIGUSR1 able to open the inspector, or null. */
+export function sigusr1Refusal(execArgv: readonly string[] = process.execArgv): string | null {
+  return sigusr1Disabled(execArgv) ? null : `node was started without ${DISABLE_SIGUSR1}: a same-user SIGUSR1 would open the V8 inspector inside the process that holds the keys`;
+}
+
+/**
+ * argv for the re-exec'd foreground daemon. Home travels in argv, never env.
+ * Under node the first arg is `--disable-sigusr1`; a SEA (no entry) cannot take
+ * node flags in argv and must bake it into its sea-config `execArgv` — the
+ * foreground guard refuses it otherwise (fail closed).
+ */
 export function reexecArgs(opts: Pick<DetachOptions, 'entry' | 'home' | 'idleMs'>): string[] {
-  const args = opts.entry ? [opts.entry] : [];
+  const args = opts.entry ? [DISABLE_SIGUSR1, opts.entry] : [];
   args.push('--foreground', '--home', opts.home);
   if (opts.idleMs !== undefined) args.push('--idle-ms', String(opts.idleMs));
   return args;
