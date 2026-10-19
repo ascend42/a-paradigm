@@ -73,6 +73,7 @@ import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPA
 import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
+import { voiceTag, type VoiceTurnLink } from '../voice/voice-control.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -530,7 +531,7 @@ export class LocalLane {
     return s && s.state === 'running' ? s.owner : undefined;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice' }): Promise<{ turn: string; steered?: boolean }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink }): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
@@ -544,7 +545,7 @@ export class LocalLane {
       if (!head || Date.parse(head.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the in-flight turn\'s permit is gone or expired; a steer cannot ride it', {});
       const contentHash = sha(p.text);
       const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
-      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
+      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
       await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
       s.child.stdin?.write(steerLine(p.text));
       return { turn, steered: true };
@@ -563,8 +564,8 @@ export class LocalLane {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = sha(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', ...(p.source === 'voice' ? { source: 'voice' } : {}) }, { session: s.hsid });
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', ...voiceTag(p) }, { session: s.hsid });
     s.child.stdin?.write(inFlight ? followUpLine(p.text) : promptLine(p.text));
     return { turn: turnId(s.hsid, n) };
   }

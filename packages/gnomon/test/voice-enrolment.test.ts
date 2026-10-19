@@ -33,6 +33,12 @@ describe('#gnomon-voice enrolment (root-signed)', () => {
     await forgetSpeaker(home, root, { name: 'founder' });
     expect(readEnrolled(home, root).size).toBe(0);
     await expect(enrolSpeaker(home, root, { name: 'founder', consent: ' ' })).rejects.toThrow(/consent/);
+    // L1: order is the signed seq, not file position — replaying the old enrol line does not resurrect the speaker
+    const lines = fs.readFileSync(enrolmentsPath(home), 'utf8').split('\n').filter(Boolean);
+    fs.appendFileSync(enrolmentsPath(home), `${lines[0]}\n`);
+    expect(readEnrolled(home, root).size).toBe(0);
+    await enrolSpeaker(home, root, { name: 'founder', consent: 'again' });
+    expect(readEnrolled(home, root).has(row.speakerId)).toBe(true);
   });
 
   it('CLI: setup registers p:<ns>/voice (principalKind voice); enrol needs --consent; refused from a kernel-spawned shell', async () => {

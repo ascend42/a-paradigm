@@ -856,6 +856,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       return { seq: r.seq, hash: r.hash, id: r.event.id };
     },
     enrolled: () => readEnrolled(home, authority),
+    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under
+    onAttachmentChange: () => void hub.endReaderClass('voice'),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
   });
   const dispatcherCommon = {

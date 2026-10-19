@@ -663,8 +663,9 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
       case 'peer':
         return 'none';
       case 'voice':
-        // voice slice V1: own attached session + voice.*, redacted (this reader has no attachment ⇒ voice.* only)
-        return !kind.startsWith('voice.') ? 'none' : eff === 2 ? 'none' : column ? 'stub' : eff === 1 ? 'none' : 'limited';
+        // voice slice V1 (Aegis L3): rows of the attached session only, redacted — this matrix reader has no attachment,
+        // so it sees nothing (test/voice-v1.test.ts covers the attached projection)
+        return 'none';
       default:
         return 'throws'; // agent (Move 2): refused rather than guessed
     }

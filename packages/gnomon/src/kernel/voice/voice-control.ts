@@ -33,6 +33,14 @@
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
+/**
+ * Aegis M1 (V1 conditions): a voice turn is forwardable for at most this long after the KERNEL received its
+ * voice.turn.user row (kernel clock, never the client's t0/t1). PTT end-of-speech to send is sub-second in practice
+ * (§14.2 budget < 800 ms); 30 s leaves room for a slow STT pass while bounding replay. Spec §14.7 Forwarding guards.
+ */
+export const VOICE_TURN_MAX_AGE_MS = 30_000;
+/** Aegis L4: the kernel keeps at most this many recent user turns and playback windows (older ones cannot be sent anyway). */
+export const VOICE_WINDOW_CAP = 256;
 export const VOICE_TEXT_MAX_BYTES = 16 * 1024;
 export const VOICE_MODES_V1 = ['ptt', 'conversation'] as const;
 export type VoiceMode = (typeof VOICE_MODES_V1)[number];
@@ -64,8 +72,27 @@ export interface HumanAsker {
 export interface VoiceSessionsPort {
   /** The owner principal of a live session (Claude or local), or undefined. */
   ownerOf(hsid: string): string | undefined;
-  send(owner: string, p: { hsid: string; text: string; source: 'voice' }): Promise<unknown>;
+  send(owner: string, p: { hsid: string; text: string; source: 'voice'; voice: VoiceTurnLink }): Promise<unknown>;
   stop(owner: string, p: { hsid: string; interrupt: true }): Promise<unknown>;
+}
+
+/**
+ * Aegis M4: the link a forwarded voice turn leaves on the KERNEL-signed rows. `session.inject` keeps origin 'client'
+ * (INJECT_ORIGINS is a published closed set; a new 'voice' origin would move clientApiId) and gains `source: 'voice'`;
+ * `turn.sent` carries `source: 'voice'` (§4.10) plus voiceSessionId, turnId and voiceTurnSeq (the cited voice.turn.user
+ * row). Both payloads are opaque to event:v1 (no KIND_PAYLOADS / RESERVED_PAYLOAD_FIELDS row), so nothing published moves.
+ */
+export function voiceTag(p: { source?: 'voice'; voice?: VoiceTurnLink }): Record<string, unknown> {
+  if (p.source !== 'voice') return {};
+  return { source: 'voice', ...(p.voice ? { voiceSessionId: p.voice.voiceSessionId, turnId: p.voice.turnId, voiceTurnSeq: p.voice.turnSeq } : {}) };
+}
+
+/** Aegis M4: what the kernel-signed turn.sent / session.inject rows carry to link a forwarded turn to its voice row. */
+export interface VoiceTurnLink {
+  voiceSessionId: string;
+  turnId: string;
+  /** chain seq of the cited voice.turn.user row */
+  turnSeq: number;
 }
 
 export interface VoiceAppendRow {
@@ -86,7 +113,12 @@ export interface VoiceControlOptions {
   /** Live authenticated voice-class connections (dispatch.ts). */
   voiceConnections(): readonly string[];
   echoTailMs?: number;
+  /** Max kernel-clock age of a forwardable turn (default VOICE_TURN_MAX_AGE_MS). */
+  maxTurnAgeMs?: number;
+  /** Kernel clock (ms). Default Date.now. */
   now?: () => number;
+  /** The attachment started, ended or was replaced (daemon: end every voice log.read follow subscription, Aegis M3). */
+  onAttachmentChange?: () => void;
 }
 
 interface UserTurn {
@@ -96,7 +128,13 @@ interface UserTurn {
   speakerId: string;
   speakerEnrolled: boolean;
   intercepted: string | undefined;
+  /** the client's per-turn mode claim (Aegis M2), cross-checked against the human's attachment mode */
+  mode: string;
   t0: number;
+  t1: number;
+  /** kernel clock when the row was received (Aegis M1) */
+  receivedAt: number;
+  seq: number;
   text: string;
   attachment: string;
 }
@@ -106,6 +144,8 @@ interface Attachment {
   owner: string;
   mode: VoiceMode;
   turns: number;
+  /** kernel clock when the start row was written */
+  startedAt: number;
 }
 
 export function voiceRefusal(reason: string, message: string, data: Record<string, unknown> = {}, code: RefusalCode = 'FORBIDDEN'): RefusedError {
@@ -128,11 +168,31 @@ export class VoiceControl {
   readonly #userTurns = new Map<string, UserTurn>();
   readonly #latestByConn = new Map<string, string>();
   readonly #lastTurnId = new Map<string, string>();
-  readonly #playback: Array<{ t0: number; t1: number }> = [];
+  /** client playback times and the kernel receipt time of each voice.turn.agent row */
+  readonly #playback: Array<{ t0: number; t1: number; receivedAt: number }> = [];
   readonly #forwarded = new Set<string>();
 
   constructor(o: VoiceControlOptions) {
     this.#o = o;
+  }
+
+  #now(): number {
+    return (this.#o.now ?? Date.now)();
+  }
+
+  get maxTurnAgeMs(): number {
+    return this.#o.maxTurnAgeMs ?? VOICE_TURN_MAX_AGE_MS;
+  }
+
+  /** Aegis L4: keep only a recent window of turns and playback (a turn older than maxTurnAgeMs is refused anyway). */
+  #prune(): void {
+    const horizon = this.#now() - 2 * this.maxTurnAgeMs;
+    for (const [id, t] of this.#userTurns) {
+      if (t.receivedAt >= horizon && this.#userTurns.size <= VOICE_WINDOW_CAP) break; // insertion order = receipt order
+      this.#userTurns.delete(id);
+      this.#forwarded.delete(id);
+    }
+    while (this.#playback.length > VOICE_WINDOW_CAP || (this.#playback.length > 0 && this.#playback[0]!.receivedAt < horizon)) this.#playback.shift();
   }
 
   get echoTailMs(): number {
@@ -172,8 +232,11 @@ export class VoiceControl {
     if (!VOICE_MODES_V1.includes(mode)) throw bad('mode is ptt or conversation');
     const owner = this.#o.sessions.ownerOf(p.hsid);
     if (owner === undefined || owner !== asker.principal) throw new RefusedError(refuse({ code: 'NOT_FOUND', data: { reason: 'not-found' } }), '#gnomon-voice: no such live session for this principal');
-    if (this.#attachment) await this.#end(this.#attachment, asker.connId, asker.principal);
-    const a: Attachment = { voiceSessionId: `vs:${ulid()}`, hsid: p.hsid, owner, mode, turns: 0 };
+    const prev = this.#attachment;
+    // Aegis L4: a human replaces only their own attachment (a gone session's attachment is anyone's to replace)
+    if (prev && prev.owner !== asker.principal && this.#o.sessions.ownerOf(prev.hsid) === prev.owner) throw voiceRefusal('voice-target', "voice is attached to another human's session");
+    if (prev) await this.#end(prev, asker.connId, asker.principal);
+    const a: Attachment = { voiceSessionId: `vs:${ulid()}`, hsid: p.hsid, owner, mode, turns: 0, startedAt: this.#now() };
     const r = await this.#o.append({
       kind: 'voice.session.start',
       principal: asker.principal,
@@ -182,12 +245,16 @@ export class VoiceControl {
       session: a.hsid,
     });
     this.#attachment = a; // only after the row is written (log before effect)
+    this.#o.onAttachmentChange?.();
     return { ...r, voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode };
   }
 
   async #end(a: Attachment, connId: string, principal: string): Promise<unknown> {
     const r = await this.#o.append({ kind: 'voice.session.end', principal, payload: { voiceSessionId: a.voiceSessionId, turns: a.turns, compactedTo: null }, connId, session: a.hsid });
-    if (this.#attachment === a) this.#attachment = null;
+    if (this.#attachment === a) {
+      this.#attachment = null;
+      this.#o.onAttachmentChange?.();
+    }
     return { ...r, voiceSessionId: a.voiceSessionId };
   }
 
@@ -209,7 +276,11 @@ export class VoiceControl {
       if (!a || p.voiceSessionId !== a.voiceSessionId) throw voiceRefusal('voice-target', 'no such voice attachment');
       return this.#end(a, c.connId, c.principal);
     }
-    const commit: Array<() => void> = [];
+    const commit: Array<(seq: number) => void> = [];
+    // Aegis M1: the kernel stamps its own receipt time on every turn row; a client-sent receivedAt is refused
+    if (Object.hasOwn(p, 'receivedAt')) throw bad('receivedAt is stamped by the kernel');
+    const receivedAt = this.#now();
+    const stamped = kind === 'voice.turn.user' || kind === 'voice.turn.agent' ? { ...p, receivedAt } : { ...p };
     switch (kind) {
       case 'voice.turn.user': {
         const t = this.#checkTurnCommon(p, kind);
@@ -221,8 +292,11 @@ export class VoiceControl {
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
-        const turn: UserTurn = { turnId: t.turnId, connId: c.connId, principal: c.principal, speakerId: p.speakerId, speakerEnrolled: p.speakerEnrolled, intercepted: p.intercepted as string | undefined, t0: t.t0, text: p.text, attachment: a?.voiceSessionId ?? '' };
-        commit.push(() => {
+        // Aegis M2: a per-turn mode claim, cross-checked at send against the human's attachment mode
+        if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
+        const turn: UserTurn = { turnId: t.turnId, connId: c.connId, principal: c.principal, speakerId: p.speakerId, speakerEnrolled: p.speakerEnrolled, intercepted: p.intercepted as string | undefined, mode: p.mode as string, t0: t.t0, t1: t.t1, receivedAt, seq: 0, text: p.text, attachment: a?.voiceSessionId ?? '' };
+        commit.push((seq) => {
+          turn.seq = seq;
           this.#userTurns.set(t.turnId, turn);
           this.#latestByConn.set(c.connId, t.turnId);
           if (a) a.turns++;
@@ -233,7 +307,7 @@ export class VoiceControl {
         const t = this.#checkTurnCommon(p, kind);
         for (const k of ['textPlanned', 'textSpoken'] as const) if (typeof p[k] !== 'string') throw bad(`${k} is a string`);
         if (Buffer.byteLength(String(p.textPlanned), 'utf8') > VOICE_TEXT_MAX_BYTES) throw bad('textPlanned is at most 16 KiB');
-        commit.push(() => this.#playback.push({ t0: t.t0, t1: t.t1 }));
+        commit.push(() => this.#playback.push({ t0: t.t0, t1: t.t1, receivedAt }));
         break;
       }
       case 'voice.focus':
@@ -248,8 +322,9 @@ export class VoiceControl {
         if (typeof p.deckId !== 'string' || !Array.isArray(p.cardIds) || !p.cardIds.every((x) => typeof x === 'string') || typeof p.textHash !== 'string') throw bad('voice.deck{deckId, cardIds[], textHash}');
         break;
     }
-    const r = await this.#o.append({ kind, principal: c.principal, payload: { ...p }, connId: c.connId, ...(a ? { session: a.hsid } : {}), ...(typeof sensitivity === 'string' ? { sensitivity } : {}) });
-    for (const f of commit) f();
+    this.#prune();
+    const r = await this.#o.append({ kind, principal: c.principal, payload: stamped, connId: c.connId, ...(a ? { session: a.hsid } : {}), ...(typeof sensitivity === 'string' ? { sensitivity } : {}) });
+    for (const f of commit) f(r.seq);
     return r;
   }
 
@@ -293,12 +368,25 @@ export class VoiceControl {
       throw voiceRefusal('voice-stale-utterance', 'the send cites no fresh voice.turn.user of this connection in this attachment (latest turn, never forwarded, same text)');
     }
     if (turn.intercepted) throw voiceRefusal('voice-grammar', 'an intercepted decision or control utterance never reaches a model', { turnId: turn.turnId });
+    // Aegis M1: kernel-clock freshness and attachment order (client t0 AND kernel receipt both after the start)
+    const now = this.#now();
+    if (now - turn.receivedAt > this.maxTurnAgeMs) throw voiceRefusal('voice-stale-utterance', `the turn was received more than ${this.maxTurnAgeMs} ms ago`, { turnId: turn.turnId, maxAgeMs: this.maxTurnAgeMs });
+    if (turn.receivedAt < a.startedAt || turn.t0 < a.startedAt) throw voiceRefusal('voice-stale-utterance', 'the turn precedes the attachment', { turnId: turn.turnId });
     if (!turn.speakerEnrolled || !this.#o.enrolled().has(turn.speakerId)) throw voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
-    if (a.mode !== 'ptt') throw voiceRefusal('voice-off', 'conversation-mode turns are not forwarded in this slice (push-to-talk only)', { turnId: turn.turnId });
+    // Aegis M2 + L5: the turn's mode claim must equal the human's attachment mode; conversation mode is not forwarded in V1
+    if (turn.mode !== a.mode) throw voiceRefusal('voice-off', "the turn's mode does not match the attachment", { turnId: turn.turnId, mode: turn.mode, attachmentMode: a.mode });
+    if (a.mode !== 'ptt') throw voiceRefusal('voice-off', 'conversation-mode turns are not forwarded in this slice (push-to-talk only)', { turnId: turn.turnId, mode: 'conversation' });
     const tail = this.echoTailMs;
+    // echo on the client's playback times ...
     if (this.#playback.some((w) => turn.t0 >= w.t0 && turn.t0 <= w.t1 + tail)) throw voiceRefusal('voice-echo', 'the utterance starts inside our playback or its echo tail', { turnId: turn.turnId, echoTailMs: tail });
+    // ... and on the kernel's receipt times (Aegis M1): an agent row arrives at its playback's start or end, so its
+    // kernel window is [received - duration, received + duration + tail]; the user turn began at received - its duration.
+    const userStart = turn.receivedAt - (turn.t1 - turn.t0);
+    if (this.#playback.some((w) => userStart >= w.receivedAt - (w.t1 - w.t0) && userStart <= w.receivedAt + (w.t1 - w.t0) + tail)) {
+      throw voiceRefusal('voice-echo', 'the utterance starts inside our playback or its echo tail (kernel receipt times)', { turnId: turn.turnId, echoTailMs: tail, clock: 'kernel' });
+    }
     this.#forwarded.add(turn.turnId);
-    return this.#o.sessions.send(a.owner, { hsid: a.hsid, text, source: 'voice' });
+    return this.#o.sessions.send(a.owner, { hsid: a.hsid, text, source: 'voice', voice: { voiceSessionId: a.voiceSessionId, turnId: turn.turnId, turnSeq: turn.seq } });
   }
 
   /** `session.stop` from the voice principal: interrupt only, attached session only. */

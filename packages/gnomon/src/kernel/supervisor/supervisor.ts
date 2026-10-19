@@ -108,6 +108,7 @@ import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type T
 import { traceModeOf } from '../trace/mode.js';
 import { autoEditPass } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
+import { voiceTag, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -1080,7 +1081,7 @@ export class SessionSupervisor {
     return this.#local.ownerOf(hsid);
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice' }): Promise<{ turn: string; steered?: boolean }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink }): Promise<{ turn: string; steered?: boolean }> {
     this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
@@ -1115,8 +1116,8 @@ export class SessionSupervisor {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = turnContentHash(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...(p.source === 'voice' ? { source: 'voice' } : {}) }, { session: s.hsid });
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p) }, { session: s.hsid });
     this.#stdin(s, userMessageLine(p.text));
     return { turn: turnId(s.hsid, n) };
   }

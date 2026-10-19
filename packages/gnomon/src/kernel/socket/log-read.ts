@@ -148,7 +148,8 @@ export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' |
     case 'agent':
       throw new RpcRefusal('UNSUPPORTED', 'reader-unsupported', 'the agent read projection (own subtree) needs the session tree; refused rather than guessed (§9.3)', { milestone: 'Move 2', principalClass: 'agent' });
     case 'voice':
-      // voice slice V1 (#gnomon-voice): own attached session + voice.*, redacted (redaction.ts voice row)
+      // voice slice V1 (#gnomon-voice): rows of the attached session (its voice.* included), redacted; the daemon ends
+      // voice follow subscriptions on every attachment change (SubscriptionHub.endReaderClass, Aegis M3)
       if (scope) return { reader: { class: 'voice', hsid: scope.voiceHsid }, projection: 'voice' };
       throw new RpcRefusal('UNSUPPORTED', 'reader-unsupported', 'the voice read projection (attached session) needs voice arms; refused rather than guessed (§9.3)', { milestone: 'Move 4', principalClass: 'voice' });
     case 'session':
@@ -416,6 +417,16 @@ export class SubscriptionHub {
   /** The connection is gone: end its subscriptions (no drop row — nothing lagged). */
   disconnect(connId: string): void {
     for (const s of [...this.#subs.values()]) if (s.ctx.connId === connId) this.#kill(s);
+  }
+
+  /** #gnomon-voice (Aegis M3): end every subscription of one reader class (voice: on attach, detach or re-attach). */
+  endReaderClass(cls: string): number {
+    let n = 0;
+    for (const s of [...this.#subs.values()]) if (s.reader.class === cls) {
+      this.#kill(s);
+      n++;
+    }
+    return n;
   }
 
   close(): void {

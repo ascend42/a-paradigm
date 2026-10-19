@@ -1830,6 +1830,15 @@ components:
       voice-off in every form; request.voice.arm stays refused (V7).
       src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup |
       enrol | forget, root-signed rows (enrolments.jsonl, voice device key).
+      Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent
+      (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after
+      receipt, never before the attachment, echo checked on kernel times too;
+      per-turn client mode claim cross-checked against the attachment (ptt is a
+      client claim, §A.4); voice follow subscriptions end on every attachment
+      change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry
+      source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice
+      reader sees only its attached session's rows; enrolment order is the
+      signed seq; windows bounded at VOICE_WINDOW_CAP.
     path: src/kernel/voice/
     type: module
     tags: [gnomon, kernel, voice, paradigm-8, move-4]
