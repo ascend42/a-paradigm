@@ -37,6 +37,7 @@
 import { generateKeyPairSync, randomBytes, sign, timingSafeEqual, type KeyObject } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import { authServerPreimage, SETUP_API, SETUP_API_ID, SETUP_TOKEN_BYTES, SETUP_TOKEN_TTL_MS, setupParamsProblem } from '@a-company/gnomon-contracts';
 import { ed25519KeyId } from '../log/signer.js';
 import type { KernelDispatcher } from '../socket/dispatch.js';
@@ -119,6 +120,8 @@ export class SetupEndpoint {
   readonly #now: () => number;
   readonly #key: { priv: KeyObject; pubPem: string; spki: string; keyId: string };
   #web: WebEndpoint | null = null;
+  /** private scratch state (bundle, gui.log): the checks never write the home */
+  readonly #state = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-setup-'));
   #token: Buffer | null = null;
   #expiresAt = 0;
   #consumed = false;
@@ -169,6 +172,7 @@ export class SetupEndpoint {
     if (this.#token) throw new Error('the setup endpoint mints exactly one token');
     const opts: WebEndpointOptions = {
       home: this.#o.home,
+      stateDir: this.#state,
       dispatcher: (endpointPath) => this.#dispatcher(endpointPath),
       // the setup endpoint keeps no kernel log (there is no home log yet) and never logs the token;
       // the one row it acts on: the transport stopped (restart cap, failed respawn) ⇒ setup aborts
@@ -203,6 +207,7 @@ export class SetupEndpoint {
     this.#abort('stopped', 'the setup endpoint stopped');
     await this.#running?.catch(() => undefined);
     await this.#web?.stop('setup-done').catch(() => undefined);
+    fs.rmSync(this.#state, { recursive: true, force: true });
   }
 
   #abort(reason: string, message: string, leftoverGen?: string): void {

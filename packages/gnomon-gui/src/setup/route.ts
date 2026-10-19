@@ -4,14 +4,17 @@
  * #gui-setup state machine (spec §11.1, §11.2 rule 11; T-2026-10-19-005
  * MVP-b) over the closed `gnomon-setup:v1` protocol of the #setup-endpoint:
  *
- *   welcome → preflight (rows; purge leftovers) → name → identity (1 of 2,
- *   2 of 2) → success → handoff          (any refusal → aborted)
+ *   welcome → preflight (rows; purge leftovers; an already-set-up home:
+ *   Finish setup / Start Gnomon) → name → identity (1 of 2, 2 of 2) →
+ *   success → handoff        (a closed socket or a failed handshake → aborted)
  *
- * The page sends ONLY a name, a gen the kernel itself listed, and clicks:
- * every request is a step request; rows and digests are the kernel's. The
- * hello is verified against the fragment setup key BEFORE auth (same check
- * as the launch path, verifyServerSig) and that key is NEVER stored as the
- * kernel pin (no localStorage here).
+ * The screens are the COMPLETE path (no dead end that needs `--cli`): a
+ * refused or cancelled purge, a failed begin or completion return to the
+ * checks with a notice (a failed begin's leftover generation is listed there
+ * with its Delete button). The page sends ONLY a name, a gen the kernel
+ * itself listed, and clicks. The hello is verified against the fragment
+ * setup key BEFORE auth (verifyServerSig, as the launch path) and that key
+ * is NEVER stored as the kernel pin (no localStorage here).
  */
 import { SETUP_API, SETUP_API_ID } from '@a-company/gnomon-contracts';
 import type { HelloResult } from '@a-company/gnomon-contracts';
@@ -39,12 +42,14 @@ export interface SetupState {
   checks: Check[];
   leftover: string[];
   ok: boolean;
-  existing: { rootKeyId: string; createdAt: string } | null;
+  existing: { rootKeyId: string; createdAt: string; registered: boolean } | null;
   defaultName: string;
   name: string | null;
   nameError: string | null;
   presence: Presence | null;
   busy: boolean;
+  /** a recoverable refusal shown on the checks screen (setup goes on) */
+  notice: string | null;
   result: { rootKeyId: string; principalId: string; deviceId: string; files: string[] } | null;
   error: { reason: string; message: string } | null;
   surface: 'browser' | 'wrapper';
@@ -58,7 +63,7 @@ export interface SetupClient {
 }
 
 export function initialState(surface: 'browser' | 'wrapper'): SetupState {
-  return { phase: 'connecting', checks: [], leftover: [], ok: false, existing: null, defaultName: '', name: null, nameError: null, presence: null, busy: false, result: null, error: null, surface };
+  return { phase: 'connecting', checks: [], leftover: [], ok: false, existing: null, defaultName: '', name: null, nameError: null, presence: null, busy: false, notice: null, result: null, error: null, surface };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -81,6 +86,11 @@ export function presenceOf(v: unknown): Presence | null {
   return { n: p.n, of: p.of, purpose: p.purpose, digest12: d, ...(typeof p.key === 'string' ? { key: p.key } : {}), ...(typeof p.gen === 'string' ? { gen: p.gen } : {}) };
 }
 
+const refusalOf = (e: unknown): { reason: string; message: string; data: Record<string, unknown> } =>
+  e instanceof RpcError
+    ? { reason: e.refusal.reason ?? 'error', message: e.refusal.message, data: (e.refusal.data ?? {}) as Record<string, unknown> }
+    : { reason: 'error', message: e instanceof Error ? e.message : 'setup failed', data: {} };
+
 export class SetupFlow {
   state: SetupState;
   readonly #c: SetupClient;
@@ -97,7 +107,7 @@ export class SetupFlow {
       }
     });
     c.onClose(() => {
-      if (this.state.phase !== 'handoff' && this.state.phase !== 'aborted') this.#set({ phase: 'aborted', busy: false, error: { reason: 'socket-closed', message: 'the setup connection closed; setup was cancelled and cleaned up. Start it again.' } });
+      if (this.state.phase !== 'handoff' && this.state.phase !== 'aborted') this.#set({ phase: 'aborted', busy: false, error: { reason: 'socket-closed', message: 'the setup connection closed, so setup was cancelled. Start it again.' } });
     });
   }
 
@@ -107,8 +117,18 @@ export class SetupFlow {
   }
 
   #fail(e: unknown): void {
-    const r = e instanceof RpcError ? { reason: e.refusal.reason ?? 'error', message: e.refusal.message } : { reason: 'error', message: e instanceof Error ? e.message : 'setup failed' };
-    this.#set({ phase: 'aborted', busy: false, error: r });
+    const r = refusalOf(e);
+    this.#set({ phase: 'aborted', busy: false, error: { reason: r.reason, message: r.message } });
+  }
+
+  /** A refusal setup survives: back to the checks (re-run, so a left-over generation shows its Delete button). */
+  async #recover(e: unknown, what: string): Promise<void> {
+    const r = refusalOf(e);
+    if (r.reason === 'socket-closed') return this.#fail(e);
+    const gen = typeof r.data.leftoverGen === 'string' ? r.data.leftoverGen : null;
+    const notice = `${what} did not finish: ${r.message}.${gen ? ` Keys of generation ${gen} were left in the Secure Enclave: delete them below, then try again.` : ''}`;
+    this.#set({ busy: false, presence: null, phase: 'preflight', notice });
+    await this.preflight(notice);
   }
 
   /** hello (verified against the fragment setup key, never pinned) → auth {setupToken} → welcome. */
@@ -127,16 +147,22 @@ export class SetupFlow {
   }
 
   #report(r: Record<string, unknown>): Partial<SetupState> {
-    const ex = r.existing as SetupState['existing'];
-    return { checks: checksOf(r.checks), leftover: Array.isArray(r.leftover) ? r.leftover.filter((g): g is string => typeof g === 'string') : [], ok: r.ok === true, existing: ex && typeof ex === 'object' ? { rootKeyId: str(ex.rootKeyId), createdAt: str(ex.createdAt) } : null, defaultName: str(r.defaultName) };
+    const ex = r.existing as Record<string, unknown> | null;
+    return {
+      checks: checksOf(r.checks),
+      leftover: Array.isArray(r.leftover) ? r.leftover.filter((g): g is string => typeof g === 'string') : [],
+      ok: r.ok === true,
+      existing: ex && typeof ex === 'object' ? { rootKeyId: str(ex.rootKeyId), createdAt: str(ex.createdAt), registered: ex.registered === true } : null,
+      defaultName: str(r.defaultName),
+    };
   }
 
   /** Clicks only request steps. */
-  async preflight(): Promise<void> {
+  async preflight(notice: string | null = null): Promise<void> {
     this.#set({ busy: true });
     try {
       const r = await this.#c.call<Record<string, unknown>>('setup.preflight', {});
-      this.#set({ phase: 'preflight', busy: false, ...this.#report(r) });
+      this.#set({ phase: 'preflight', busy: false, notice, ...this.#report(r) });
     } catch (e) {
       this.#fail(e);
     }
@@ -144,17 +170,17 @@ export class SetupFlow {
 
   async purge(gen: string): Promise<void> {
     if (!this.state.leftover.includes(gen)) return; // only a gen the kernel listed
-    this.#set({ busy: true, presence: null });
+    this.#set({ busy: true, presence: null, notice: null });
     try {
       const r = await this.#c.call<Record<string, unknown>>('setup.purge', { gen });
       this.#set({ busy: false, presence: null, ...this.#report(r) });
     } catch (e) {
-      this.#fail(e);
+      await this.#recover(e, `Deleting generation ${gen}`);
     }
   }
 
   toName(): void {
-    if (this.state.ok && this.state.leftover.length === 0 && !this.state.existing) this.#set({ phase: 'name' });
+    if (this.state.ok && this.state.leftover.length === 0 && !this.state.existing) this.#set({ phase: 'name', notice: null });
   }
 
   /** The name is validated server-side (setup.name); a refusal stays on the name screen. */
@@ -169,16 +195,32 @@ export class SetupFlow {
     }
   }
 
+  #result(r: Record<string, unknown>): SetupState['result'] {
+    return { rootKeyId: str(r.rootKeyId), principalId: str(r.principalId), deviceId: str(r.deviceId), files: Array.isArray(r.files) ? r.files.map(str) : [] };
+  }
+
   async begin(): Promise<void> {
     this.#set({ busy: true });
     try {
       const r = await this.#c.call<Record<string, unknown>>('setup.begin', {});
-      this.#set({ busy: false, presence: null, phase: 'success', result: { rootKeyId: str(r.rootKeyId), principalId: str(r.principalId), deviceId: str(r.deviceId), files: Array.isArray(r.files) ? r.files.map(str) : [] } });
+      this.#set({ busy: false, presence: null, phase: 'success', result: this.#result(r) });
     } catch (e) {
-      this.#fail(e);
+      await this.#recover(e, 'Setup');
     }
   }
 
+  /** An interrupted earlier setup: append the row the root already signed (0 prompts). */
+  async complete(): Promise<void> {
+    this.#set({ busy: true, notice: null });
+    try {
+      const r = await this.#c.call<Record<string, unknown>>('setup.complete', {});
+      this.#set({ busy: false, phase: 'success', result: this.#result(r) });
+    } catch (e) {
+      await this.#recover(e, 'Finishing setup');
+    }
+  }
+
+  /** After success, or on a home that is already fully set up: hand off to the first session. */
   async finish(): Promise<void> {
     this.#set({ busy: true });
     try {

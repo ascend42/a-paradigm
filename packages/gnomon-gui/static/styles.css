@@ -250,3 +250,5 @@ html, body {
 .setup-card.live { border-color: var(--key-edge); }
 .setup-digest { font-family: ui-monospace, Menlo, monospace; font-size: 34px; letter-spacing: 0.08em; margin: 10px 0; color: var(--ink); }
 .setup-name { display: flex; flex-direction: column; gap: 8px; max-width: 32ch; }
+.setup-details { margin: 10px 0; }
+.setup-details summary { cursor: pointer; }

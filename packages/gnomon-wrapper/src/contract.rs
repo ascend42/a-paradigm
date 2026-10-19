@@ -54,7 +54,7 @@ pub enum ChannelLine {
     Setup(SetupGrant),
     Launch(LaunchGrant),
     LaunchFailed { message: String },
-    Refused { reason: String, message: String, next: Vec<String> },
+    Refused { code: String, reason: String, message: String, next: Vec<String> },
     Down { reason: String },
 }
 
@@ -97,6 +97,7 @@ pub fn parse_line(line: &str) -> Result<ChannelLine, &'static str> {
         }
         Some("launch-failed") => Ok(ChannelLine::LaunchFailed { message: text(&v, "message") }),
         Some("refused") => Ok(ChannelLine::Refused {
+            code: text(&v, "code"),
             reason: text(&v, "reason"),
             message: text(&v, "message"),
             next: v.get("next").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).take(8).map(|s| s.chars().take(400).collect()).collect()).unwrap_or_default(),

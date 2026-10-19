@@ -86,7 +86,17 @@ fn send(sh: &Shared, cmd: &str) {
     }
 }
 
-fn refusal_text(reason: &str, message: &str, next: &[String]) -> (String, String) {
+fn refusal_text(code: &str, reason: &str, message: &str, next: &[String]) -> (String, String) {
+    // #setup-endpoint: a setup refusal is about setup, and the fix is the app's (never a terminal command)
+    if code == "setup" {
+        let head = match reason {
+            "socket-closed" => "Gnomon setup was closed before it finished".to_string(),
+            "token-expired" | "idle" => "Gnomon setup timed out".to_string(),
+            "daemon-running" => "a Gnomon kernel is already running on this Mac".to_string(),
+            _ => "Gnomon setup stopped".to_string(),
+        };
+        return (head, format!("{message}\n\nQuit and reopen Gnomon to start setup again. Cancelling setup is always safe."));
+    }
     let head = match reason {
         "unprovisioned" => "Gnomon is not set up on this Mac yet".to_string(),
         "daemon-running" => "a Gnomon kernel is already running on this home".to_string(),
@@ -160,9 +170,9 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
                 Err(e) => show_status(&app, &sh, "Gnomon refused to open the page", &e.to_string(), true),
             },
             Ok(ChannelLine::LaunchFailed { message }) => show_status(&app, &sh, "the kernel could not open its GUI endpoint", &message, true),
-            Ok(ChannelLine::Refused { reason, message, next }) => {
+            Ok(ChannelLine::Refused { code, reason, message, next }) => {
                 saw_terminal = true;
-                let (h, d) = refusal_text(&reason, &message, &next);
+                let (h, d) = refusal_text(&code, &reason, &message, &next);
                 show_status(&app, &sh, &h, &d, true);
             }
             Ok(ChannelLine::Down { reason }) => {
@@ -292,3 +302,18 @@ fn main() {
     });
 }
 
+
+#[cfg(test)]
+mod setup_copy_tests {
+    use super::refusal_text;
+
+    #[test]
+    fn a_setup_refusal_is_setup_specific_and_names_no_terminal_command() {
+        let (h, d) = refusal_text("setup", "socket-closed", "the setup page closed", &["gnomon setup".into()]);
+        assert_eq!(h, "Gnomon setup was closed before it finished");
+        assert!(d.contains("Quit and reopen Gnomon") && !d.contains("Terminal") && !d.contains("gnomon setup") && !d.contains("kernel did not start"));
+        let (h2, d2) = refusal_text("up", "unprovisioned", "no home", &[]);
+        assert_eq!(h2, "Gnomon is not set up on this Mac yet");
+        assert!(!d2.contains("In Terminal"));
+    }
+}

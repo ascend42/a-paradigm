@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { RpcError } from '../src/core/client.js';
 import { parseLaunchFragment, parseSetupFragment } from '../src/core/launch.js';
 import { keyIdOfSpki } from '../src/core/server-sig.js';
-import { digestInstruction, groupDigest, IDENTITY_CARDS, purgeCopy } from '../src/setup/digest.js';
+import { digestInstruction, GLOSSARY, groupDigest, IDENTITY_CARDS, purgeCopy, TWO_PROMPTS_NOTICE } from '../src/setup/digest.js';
 import { presenceOf, SetupFlow, type SetupClient, type SetupState } from '../src/setup/route.js';
 import { screenFor, type SDoc, type SEl } from '../src/setup/screens.js';
 
@@ -52,7 +52,7 @@ const text = (els: SEl[]): string => els.map((e) => [(e as FE).textContent ?? ''
 const buttons = (els: SEl[]): FE[] => els.flatMap((e) => [...((e as FE).tag === 'button' ? [e as FE] : []), ...buttons((e as FE).kids)]);
 
 /** A fake setup server: answers like the #setup-endpoint, signing hello with an ephemeral key. */
-function server(o: { tamperSig?: boolean } = {}) {
+function server(o: { tamperSig?: boolean; failBegin?: string; failPurge?: boolean } = {}) {
   const kp = generateKeyPairSync('ed25519');
   const spki = kp.publicKey.export({ type: 'spki', format: 'der' });
   const calls: Array<[string, unknown]> = [];
@@ -73,6 +73,8 @@ function server(o: { tamperSig?: boolean } = {}) {
         if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(p.name!)) throw new RpcError({ code: 'BAD_REQUEST', reason: 'setup-params', message: 'bad', next: [], data: null });
         return { name: p.name } as T;
       }
+      if (method === 'setup.purge' && o.failPurge) throw new RpcError({ code: 'FORBIDDEN', reason: 'in-use', message: 'generation g is the live identity of /x', next: [], data: null });
+      if (method === 'setup.begin' && o.failBegin) throw new RpcError({ code: 'FORBIDDEN', reason: 'provision-failed', message: 'the helper crashed', next: [], data: { reason: 'provision-failed', leftoverGen: o.failBegin } });
       if (method === 'setup.begin') {
         note('setup.presence', { n: 1, of: 2, purpose: 'approvals-binding', digest12: '3f2a91c07be4' });
         note('setup.presence', { n: 2, of: 2, purpose: 'device-row', digest12: 'aaaabbbbcccc' });
@@ -149,13 +151,15 @@ describe('#gui-setup flow', () => {
 });
 
 describe('#gui-setup screens', () => {
-  const flow = { preflight: async () => undefined, purge: async () => undefined, toName: () => undefined, submitName: async () => undefined, begin: async () => undefined, finish: async () => undefined };
-  const base = (p: Partial<SetupState>): SetupState => ({ phase: 'welcome', checks: [], leftover: [], ok: true, existing: null, defaultName: 'founder', name: null, nameError: null, presence: null, busy: false, result: null, error: null, surface: 'browser', ...p });
+  const flow = { preflight: async () => undefined, purge: async () => undefined, toName: () => undefined, submitName: async () => undefined, begin: async () => undefined, complete: async () => undefined, finish: async () => undefined };
+  const base = (p: Partial<SetupState>): SetupState => ({ phase: 'welcome', checks: [], leftover: [], ok: true, existing: null, defaultName: 'founder', name: null, nameError: null, presence: null, busy: false, result: null, error: null, surface: 'browser', notice: null, ...p });
 
   it('identity: announces exactly 2 prompts; the live card shows the digest big and grouped with the helper-line copy', () => {
     const els = screenFor(DOC, base({ phase: 'identity', presence: { n: 1, of: 2, purpose: 'approvals-binding', digest12: '3f2a91c07be4' } }), flow);
     const t = text(els);
-    expect(t).toContain('EXACTLY 2 Touch ID prompts');
+    expect(t).toContain('EXACTLY 2 Touch ID (or your password) prompts');
+    expect(TWO_PROMPTS_NOTICE).toContain('A third prompt to SIGN during setup is an attack');
+    for (const g of Object.values(GLOSSARY)) expect(t).toContain(g);
     expect(t).toContain(IDENTITY_CARDS['approvals-binding'].title);
     expect(t).toContain(IDENTITY_CARDS['device-row'].title);
     expect(t).toContain(groupDigest('3f2a91c07be4'));
@@ -182,5 +186,38 @@ describe('#gui-setup screens', () => {
 
   it('no innerHTML in the setup sources: every string goes through textContent', () => {
     for (const f of ['route.ts', 'screens.ts', 'digest.ts']) expect(readFileSync(path.join(ROOT, 'src', 'setup', f), 'utf8')).not.toMatch(/innerHTML|insertAdjacentHTML|outerHTML/);
+  });
+
+  it('an already-set-up home offers Finish setup (unregistered) or Start Gnomon (registered), never a dead end', () => {
+    const b1 = buttons(screenFor(DOC, base({ phase: 'preflight', existing: { rootKeyId: 'r', createdAt: 't', registered: false } }), flow)).map((b) => b.textContent);
+    expect(b1).toEqual(['Finish setup']);
+    const b2 = buttons(screenFor(DOC, base({ phase: 'preflight', existing: { rootKeyId: 'r', createdAt: 't', registered: true } }), flow)).map((b) => b.textContent);
+    expect(b2).toEqual(['Start Gnomon']);
+  });
+});
+
+describe('#gui-setup recovery (the screens are the complete path)', () => {
+  async function ready(o: Parameters<typeof server>[0]) {
+    const s = server(o);
+    const f = new SetupFlow(s.client, 'browser', () => undefined);
+    await f.connect({ setupToken: TOK, setupPublicKey: s.spki, endpointPath: EP, subtle: webcrypto.subtle as SubtleCrypto });
+    await f.preflight();
+    return { s, f };
+  }
+  it('a refused purge returns to the checks with a notice; setup goes on', async () => {
+    const { f } = await ready({ failPurge: true });
+    f.state.leftover = ['abcdefabcdef'];
+    await f.purge('abcdefabcdef');
+    expect(f.state.phase).toBe('preflight');
+    expect(f.state.notice).toContain('live identity');
+  });
+  it('a failed begin with a leftover generation returns to the checks and names it (never "nothing half-done")', async () => {
+    const { f } = await ready({ failBegin: 'abcdefabcdef' });
+    f.toName();
+    await f.submitName('founder');
+    await f.begin();
+    expect(f.state.phase).toBe('preflight');
+    expect(f.state.notice).toContain('generation abcdefabcdef were left');
+    expect(text(screenFor(DOC, f.state, f))).not.toContain('half-done');
   });
 });

@@ -351,4 +351,14 @@ describe('#setup-endpoint', () => {
     await ws.nextJson();
     expect(await ws.closed()).toBe(1008);
   });
+
+  it('round 2: the checks are read-only (no ~/.gnomon before begin); one helper fault is ONE FAIL row', async () => {
+    const { ep, home } = rig({ gate: (r) => { if (r.op === 'key.list') throw new Error('helper down'); } });
+    const g = await ep.start();
+    const { ws } = await attach(g);
+    const r = (await call(ws, 3, 'setup.preflight')).result as { checks: Array<{ id: string; status: string }> };
+    expect(fs.existsSync(home)).toBe(false);
+    expect(r.checks.filter((c) => c.status === 'fail').map((c) => c.id)).toEqual(['helper']);
+    expect(r.checks.find((c) => c.id === 'touch-id')?.status).toBe('warn');
+  });
 });
