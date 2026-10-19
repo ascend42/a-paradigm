@@ -90,7 +90,7 @@ export const CLAUDE_HOOK_EVENTS = Object.freeze([
 export const MAX_REFUSED_LOGGED = 64;
 
 /** Read one settings layer: O_NOFOLLOW + fstat (no symlink, a regular file, bounded). null = absent. */
-function readLayer(file: string): { ok: true; text: string } | { ok: false; why: string } | null {
+export function readLayer(file: string): { ok: true; text: string } | { ok: false; why: string } | null {
   let fd: number;
   try {
     fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
