@@ -147,13 +147,18 @@ describe('#gnomon-wrapper channel (in-process)', () => {
     await c.next('down');
   });
 
-  it('a refusal reaches the app on the channel: an unprovisioned home names `gnomon identity init`', async () => {
+  it.skipIf(NO_TRANSPORT)('#setup-endpoint: an unprovisioned home gets a {t:setup} grant on the channel (not a refusal); quit aborts it; the token is on no stderr', async () => {
     const w = world();
     const c = channel();
-    expect(await runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: CLEAN })).toBe(1);
-    const r = await c.next('refused');
-    expect(r).toMatchObject({ code: 'up', reason: 'unprovisioned' });
-    expect((r.next as string[]).join(' ')).toContain('gnomon identity init');
+    const run = runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: CLEAN });
+    const s = await c.next('setup');
+    expect(Object.keys(s)).toEqual(expect.arrayContaining(['bundleHash', 'expiresAt', 'port', 'setupPublicKey', 'setupToken', 't']));
+    expect(String(s.setupToken)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    c.stdin.write('quit\n');
+    expect(await run).toBe(1);
+    expect(c.err.join('')).not.toContain(String(s.setupToken));
+    expect((await c.next('refused')).reason).toBe('stopped');
+    expect(c.lines.some((l) => l.t === 'up')).toBe(false);
   });
 
   it('FALSIFIER: an unsafe runtime is refused on the channel too (the app shows why it did not start)', async () => {

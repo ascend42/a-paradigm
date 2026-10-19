@@ -523,9 +523,9 @@ function wire(): void {
 }
 
 /* ── boot ───────────────────────────────────────────────────────── */
-export function main(): void {
+export function main(raw?: string): void {
   const take = (globalThis as { gnomonTakeLaunch?: () => string }).gnomonTakeLaunch;
-  const frag = parseLaunchFragment(take ? take() : '');
+  const frag = parseLaunchFragment(raw ?? (take ? take() : ''));
   applyLook();
   applyLayout();
   wire();

@@ -546,7 +546,7 @@ describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
     for (const l of app.split('\n').filter((x) => x.includes('attach({ reconnect: true }'))) expect(l).not.toMatch(/cwdHintOf|hint/);
   });
   it('L1: a valid launch attaches; only a page without a fragment shows Reconnect', () => {
-    const i = app.indexOf('export function main()');
+    const i = app.indexOf('export function main(raw?: string)');
     const body = app.slice(i, app.indexOf('\n}', i));
     expect(body).toMatch(/if \(frag\) void attach\(\{ launchToken: frag\.launchToken \}, frag\.kernelPublicKey, frag\.cwd !== undefined \? cwdHintOf\(frag\.cwd\) : null\);\n\s*else showReconnect\(/);
   });

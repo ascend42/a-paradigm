@@ -1,8 +1,12 @@
 /**
  * @symbol #identity
  *
- * `gnomon identity init | status` (spec §3.1 I3 root-signed CLI verbs; M1.3
- * slice 1). Writes to stdio directly: the kernel has zero deps (G-SEC-01).
+ * `gnomon identity init | status | purge-keys` (spec §3.1 I3 root-signed CLI
+ * verbs; M1.3 slice 1). Writes to stdio directly: the kernel has zero deps
+ * (G-SEC-01). Since T-2026-10-19-005 this file is a THIN RENDERER over the
+ * #provisioner engine (kernel/identity/provisioner.ts), which owns every step
+ * below; its output matches the pre-engine CLI except where a ruling corrected it (the digest line "must begin with", the rotate prompt names what rotate does). `gnomon setup`
+ * (setup-cli.ts, #first-run) renders the same engine as a guided flow.
  *
  * `gnomon identity init [--home <abs>] [--helper <path>] [--name <n>] [--host <h>] [--rotate | --recover]`
  * provisions this Mac's REAL root, once:
@@ -20,6 +24,10 @@
  *      prompt text and stderr name the digest the helper's own line shows (H3);
  *   5. commits: old record moved aside (rotate/recover), identity.json
  *      written, THEN the registry row appended (R3), then the journal.
+ *      A rotate re-issues only THIS device's registry row under the new
+ *      root; every other row (other devices, agents) is dropped, and the old
+ *      registry.jsonl is kept aside (registry.jsonl.rotated-<stamp>) as
+ *      evidence — re-register other devices after a rotate.
  * A failure before identity.json is written restores the moved files (R2)
  * and deletes the keys it created — through the live helper, or a fresh one
  * that asks for presence (R4); after it, keys are never deleted. Ctrl-C stops
@@ -27,38 +35,26 @@
  * `gnomon identity purge-keys --gen <g>` deletes another generation's keys,
  * each with fresh presence. The dev/test root
  * (DevTestRootAuthority) is untouched: tests keep using it programmatically.
+ *
+ * HOME: the raw verbs keep honouring `--home` and GNOMON_HOME (operator
+ * tools); `gnomon setup` is strict (never GNOMON_HOME, lstat, no symlink;
+ * Aegis I4, spec §2.4 rule 9).
  */
-import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PRINCIPAL_NAME_PATTERN } from '@a-company/gnomon-contracts';
 import {
-  APPROVALS_ROW_SCHEMA,
-  appendIdentityJournal,
-  deviceKeyPath,
-  HardwareRootAuthority,
-  helperOnceSync,
-  HelperProcess,
-  helperPublicKey,
-  IDENTITY_SCHEMA,
   identityPath,
-  loadDeviceKey,
-  p256FromX963,
-  p256KeyIdOfPem,
-  pemOf,
-  pinHelper,
+  Provisioner,
   readIdentity,
-  appendSignedRegistryRow,
-  deviceRowFor,
-  registryPath,
-  writeIdentity,
-  writeNewDeviceKey,
   type HelperTransport,
   type HelperVerifier,
   type IdentityRecord,
   type PinnedHelper,
+  type ProvisionEvent,
+  type ProvisionOutcome,
 } from '../kernel/identity/index.js';
 import { daemonState, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 
@@ -87,6 +83,8 @@ export interface IdentityDeps {
   handleSignals?: boolean;
   /** tests: report an interrupt at the next step boundary */
   interrupt?: () => boolean;
+  /** tests (I9): throw at the named provisioner step */
+  fault?: (step: string) => void;
 }
 
 const HELPER_EXE_IN_APP = path.join('Contents', 'MacOS', 'gnomon-helper');
@@ -103,12 +101,12 @@ export function defaultHelperPath(metaUrl: string = import.meta.url): string {
   return path.resolve(dir, '../../..', 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app', HELPER_EXE_IN_APP);
 }
 
-function sanitizeName(s: string): string {
+export function sanitizeName(s: string): string {
   const n = s.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[^a-z0-9]+/, '').slice(0, 64);
   return PRINCIPAL_NAME_PATTERN.test(n) ? n : 'founder';
 }
 
-function sanitizeHost(s: string): string {
+export function sanitizeHost(s: string): string {
   const h = s.replace(/\.local$/, '').replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 64);
   return h || 'mac';
 }
@@ -182,31 +180,32 @@ function readLine(stdin: NodeJS.ReadableStream): Promise<string> {
   });
 }
 
-const GEN_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
-function newGeneration(): string {
-  return Array.from(randomBytes(12), (b) => GEN_ALPHABET[b % 36]).join('');
-}
-
 const USAGE =
   'usage: gnomon identity init [--home <abs>] [--helper <abs>] [--name <n>] [--host <h>] [--rotate | --recover]\n' +
   '       gnomon identity purge-keys --gen <gen> [--home <abs>] [--helper <abs>]\n' +
   '       gnomon identity status [--home <abs>]\n';
 
-class Interrupted extends Error {
-  constructor() {
-    super('interrupted (Ctrl-C)');
-    this.name = 'Interrupted';
+/** The raw verbs' rendering of provisioner events: the exact stderr lines of the pre-engine CLI. */
+function renderRaw(io: IdentityIo): (e: ProvisionEvent) => void {
+  return (e) => {
+    if (e.type === 'step' && e.step === 'logged' && e.detail) io.stderr.write(`${JSON.stringify(e.detail)}\n`);
+    if (e.type !== 'presence') return;
+    if (e.purpose === 'rotate-statement') io.stderr.write(`Touch ID: the OLD root signs the rotation (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'approvals-binding') io.stderr.write(`Touch ID 1/2: the root signs your approvals key (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'device-row') io.stderr.write(`Touch ID 2/2: the root signs this device (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'complete-device') io.stderr.write(`Touch ID: the root registers this device (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'purge-old') io.stderr.write(`Touch ID: delete the old ${e.key} key of generation ${e.gen}\n`);
+    else if (e.purpose === 'purge') io.stderr.write(`Touch ID: delete the ${e.key} key of generation ${e.gen}\n`);
+  };
+}
+
+function finish(io: IdentityIo, r: ProvisionOutcome): number {
+  if (r.ok) {
+    say(io, r.output);
+    return EXIT_OK;
   }
+  return refused(io, r.reason, r.message, r.extra);
 }
-
-type KeyEntry = { gen: string; key: string };
-
-async function listKeys(helper: HelperTransport): Promise<KeyEntry[]> {
-  const r = await helper.request({ op: 'key.list' });
-  return Array.isArray(r.keys) ? (r.keys as KeyEntry[]).filter((k) => typeof k?.gen === 'string' && typeof k?.key === 'string') : [];
-}
-
-const gensOf = (keys: KeyEntry[]): string[] => [...new Set(keys.map((k) => k.gen))].sort();
 
 export async function runIdentityCommand(argv: readonly string[], io: IdentityIo, deps: IdentityDeps = {}): Promise<number> {
   const [sub, ...rest] = argv;
@@ -225,6 +224,7 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
   // §3.1 I3: refused from a kernel-spawned shell. Hygiene, NOT a security control (Aegis H4): env -u
   // defeats it; the boundary is the presence prompt on every root signature.
   if (env.GNOMON_HSID) return refused(io, 'forbidden', 'gnomon identity init is a human-only, root-signed verb; it is refused from a kernel-spawned shell');
+  // the raw verb honours GNOMON_HOME (an operator tool); `gnomon setup` does not (Aegis I4, spec §2.4 rule 9)
   const home = args.home ?? resolveGnomonHome({ env });
   if (daemonState(home).state === 'running') return refused(io, 'daemon-running', 'stop the daemon first (it would keep running on the old root)');
 
@@ -237,215 +237,58 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
   const mode: 'init' | 'rotate' | 'recover' = args.rotate ? 'rotate' : args.recover ? 'recover' : 'init';
   if (existing && mode === 'init') return refused(io, 'exists', `a root already exists for this home (${existing.rootKeyId}); rotating it is explicit: gnomon identity init --rotate`, { rootKeyId: existing.rootKeyId });
   if (!existing && mode !== 'init') return refused(io, 'nothing-to-rotate', `no identity to ${mode}; run gnomon identity init`);
+  const tty = deps.isTty ?? io.stdin.isTTY === true;
   if (mode !== 'init') {
-    const tty = deps.isTty ?? io.stdin.isTTY === true;
     if (!tty && !deps.confirm) return refused(io, 'not-interactive', `--${mode} needs an interactive terminal and a typed confirmation`);
     io.stderr.write(
       mode === 'rotate'
-        ? `ROTATE the root of ${home} (${existing!.rootKeyId}). The OLD root signs the change; every registry row is re-issued under the new root; the old registry is kept as evidence. Type "rotate" to continue:\n> `
+        ? `ROTATE the root of ${home} (${existing!.rootKeyId}). The OLD root signs the change; THIS device's registry row is re-issued under the new root, every other row (other devices, agents) is dropped, and the old registry is kept aside as evidence. Type "rotate" to continue:\n> `
         : `RECOVER ${home}: the root ${existing!.rootKeyId} is LOST. A new root starts a NEW namespace; nothing signed by the lost root carries over, and the recovery is logged as unsigned by it. Type "recover" to continue:\n> `,
     );
     const answer = await (deps.confirm ?? (() => readLine(io.stdin)))();
     if (answer !== mode) return refused(io, 'not-confirmed', `${mode} was not confirmed`);
   }
 
-  // pin the signed helper (fail closed)
-  const helperPath = args.helper ?? existing?.helperPath ?? defaultHelperPath();
-  let pin: PinnedHelper;
-  try {
-    pin = pinHelper(helperPath, deps.verifier ? { verifier: deps.verifier } : {});
-  } catch (e) {
-    return refused(io, 'helper-unavailable', e instanceof Error ? e.message : 'the helper could not be pinned', { helperPath });
-  }
-  const startHelper = (): HelperTransport => (deps.start ? deps.start(pin) : HelperProcess.start(pin));
-  let helper = startHelper();
-  const once = deps.once ? deps.once(pin) : helperOnceSync(pin);
-
   // Ctrl-C (R4): the first one stops at the next step boundary and cleans up; a second exits at once
-  let interrupted = false;
+  const ac = new AbortController();
   const onSigint = (): void => {
-    if (interrupted) {
+    if (ac.signal.aborted) {
       io.stderr.write('gnomon identity: interrupted twice; exiting without cleanup\n');
       process.exit(130);
     }
-    interrupted = true;
+    ac.abort();
     io.stderr.write('gnomon identity: interrupted — cancel any open Touch ID prompt; cleaning up after the current step\n');
   };
+  const p = new Provisioner({
+    home,
+    helperPath: args.helper ?? existing?.helperPath ?? defaultHelperPath(),
+    ...(deps.verifier ? { verifier: deps.verifier } : {}),
+    ...(deps.start ? { start: deps.start } : {}),
+    ...(deps.once ? { once: deps.once } : {}),
+    ...(deps.interrupt ? { interrupt: deps.interrupt } : {}),
+    ...(deps.fault ? { fault: deps.fault } : {}),
+    signal: ac.signal,
+  });
+  p.on('event', renderRaw(io));
   if (deps.handleSignals !== false) process.on('SIGINT', onSigint);
-  const step = (): void => {
-    if (interrupted || deps.interrupt?.()) throw new Interrupted();
-  };
-
-  const gen = newGeneration();
-  const created: Array<'root' | 'approvals'> = [];
-  const moved: Array<{ from: string; to: string }> = [];
-  let recordWritten = false;
   try {
-    // H4: what the Secure Enclave already holds decides what may happen
-    const keys = await listKeys(helper);
-    const others = gensOf(keys.filter((k) => k.gen !== existing?.gen));
-    if (others.length) return refused(io, 'keys-exist', `the Secure Enclave already holds Gnomon keys of generation(s) ${others.join(', ')}; remove them first: gnomon identity purge-keys --gen <gen>`, { gens: others });
-    const oldRootHeld = existing ? keys.some((k) => k.gen === existing!.gen && k.key === 'root') : false;
-    let oldRoot: HardwareRootAuthority | null = null;
-    if (mode === 'rotate') {
-      if (!oldRootHeld) return refused(io, 'old-root-missing', `the old root (${existing!.rootKeyId}) is not in the Secure Enclave, so it cannot sign the rotation; if it is lost use: gnomon identity init --recover`);
-      const pem = await helperPublicKey(helper, 'root', existing!.gen);
-      if (!pem || p256KeyIdOfPem(pem) !== existing!.rootKeyId) return refused(io, 'old-root-mismatch', 'the Secure Enclave root of this generation does not match identity.json');
-      oldRoot = new HardwareRootAuthority({ gen: existing!.gen, rootPublicKeyPem: existing!.rootPublicKeyPem }, { helper, once });
-    }
-    if (mode === 'recover') {
-      if (keys.some((k) => k.gen === existing!.gen)) return refused(io, 'old-root-present', `keys of the old generation ${existing!.gen} are still in the Secure Enclave: use --rotate (root present) or purge-keys --gen ${existing!.gen}`);
-    }
-
-    // rotate (H4/H2): the OLD root signs the statement that lets the helper create the new generation
-    let rotation: { row: Record<string, unknown>; statement: string; sig: string } | null = null;
-    if (oldRoot) {
-      const row = { schemaVersion: 'gnomon-root-rotate:v1', fromKeyId: existing!.rootKeyId, fromGen: existing!.gen, toGen: gen, at: new Date().toISOString() };
-      io.stderr.write(`Touch ID: the OLD root signs the rotation (the prompt must end with ${oldRoot.digestFor(row)})\n`);
-      step();
-      rotation = { row, ...(await oldRoot.signForHelper(row)) };
-    }
-
-    // the Secure Enclave keys of the new generation (no prompt)
-    const pubs: Record<'root' | 'approvals', string> = { root: '', approvals: '' };
-    for (const k of ['root', 'approvals'] as const) {
-      step();
-      const r = await helper.request({ op: 'key.create', key: k, gen, ...(rotation ? { rotate: { fromGen: existing!.gen, statement: rotation.statement, sig: rotation.sig } } : {}) });
-      created.push(k);
-      pubs[k] = pemOf(p256FromX963(String(r.publicKey)));
-    }
-    const root = new HardwareRootAuthority({ gen, rootPublicKeyPem: pubs.root }, { helper, once });
-    const name = args.name ?? sanitizeName(os.userInfo().username);
-    const host = args.host ?? sanitizeHost(os.hostname());
-    const principalId = `p:${root.ns}/${name}`;
-
-    // two root signatures, each with presence; nothing is written yet
-    const row = { schemaVersion: APPROVALS_ROW_SCHEMA, keyId: p256KeyIdOfPem(pubs.approvals), publicKeyPem: pubs.approvals, principalId, gen };
-    io.stderr.write(`Touch ID 1/2: the root signs your approvals key (the prompt must end with ${root.digestFor(row)})\n`);
-    step();
-    const binding = await root.signRowAsync(row);
-    let device;
-    try {
-      device = loadDeviceKey(home);
-    } catch {
-      device = writeNewDeviceKey(home);
-    }
-    const deviceRow = deviceRowFor(root.ns, { host, name, principalKind: 'human', publicKeyPem: device.publicKeyPem });
-    io.stderr.write(`Touch ID 2/2: the root signs this device (the prompt must end with ${root.digestFor(deviceRow)})\n`);
-    step();
-    const deviceSig = await root.signRowAsync(deviceRow);
-    step();
-
-    // commit: move the old record aside, write the new one, THEN the registry row (R3: no orphan row)
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    if (existing) {
-      for (const f of [identityPath(home), registryPath(home)]) {
-        if (!fs.existsSync(f)) continue;
-        const to = `${f}.${mode === 'rotate' ? 'rotated' : 'recovered'}-${stamp}`;
-        fs.renameSync(f, to);
-        moved.push({ from: f, to });
-      }
-    }
-    const rec: IdentityRecord = {
-      schemaVersion: IDENTITY_SCHEMA,
-      gen,
-      rootKeyId: root.rootKeyId,
-      rootPublicKeyPem: pubs.root,
-      ns: root.ns,
-      approvals: { row, ...binding },
-      principalId,
-      deviceId: deviceRow.deviceId!,
-      helperPath: pin.exe,
-      createdAt: new Date().toISOString(),
-      ...(existing && mode === 'rotate' ? { rotatedFrom: existing.rootKeyId } : {}),
-      ...(existing && mode === 'recover' ? { recoveredFrom: existing.rootKeyId } : {}),
-    };
-    writeIdentity(home, rec);
-    recordWritten = true; // from here on, keys are never deleted (R2): the record names them
-    appendSignedRegistryRow(home, deviceRow, deviceSig);
-    if (rotation) {
-      appendIdentityJournal(home, { op: 'rotate', row: rotation.row, signer: existing!.rootKeyId, statement: rotation.statement, sig: rotation.sig });
-      io.stderr.write(`${JSON.stringify({ logged: 'identity.rotate', from: existing!.rootKeyId, to: root.rootKeyId, signedByOldRoot: true })}\n`);
-    }
-    if (mode === 'recover') {
-      appendIdentityJournal(home, { op: 'recover', lostRoot: existing!.rootKeyId, lostNs: existing!.ns, newRoot: root.rootKeyId, newNs: root.ns, signedByLostRoot: false, at: rec.createdAt });
-      io.stderr.write(`${JSON.stringify({ logged: 'identity.recover', lost: existing!.rootKeyId, newRoot: root.rootKeyId, newNamespace: root.ns, signedByLostRoot: false })}\n`);
-    }
-    appendIdentityJournal(home, { op: mode === 'init' ? 'init' : mode === 'rotate' ? 'rotated' : 'recovered', gen, rootKeyId: root.rootKeyId, approvalsKeyId: row.keyId, principalId, deviceId: rec.deviceId, at: rec.createdAt });
-    // Aegis round 3 (optional): offer to retire the old generation's keys in the same run. Never automatic:
-    // each delete is a fresh touch, and a decline or failure leaves the rotate itself done.
-    let purgedOld: string[] | null = null;
-    if (mode === 'rotate' && (deps.confirmPurge || (deps.isTty ?? io.stdin.isTTY === true))) {
-      io.stderr.write(`Delete the OLD generation ${existing!.gen} from the Secure Enclave now (one touch per key)? Type "purge" to delete, anything else to keep it:\n> `);
-      const ans = await (deps.confirmPurge ?? (() => readLine(io.stdin)))();
-      if (ans === 'purge') {
-        purgedOld = [];
-        for (const k of ['approvals', 'root'] as const) {
-          try {
-            io.stderr.write(`Touch ID: delete the old ${k} key of generation ${existing!.gen}\n`);
-            await helper.request({ op: 'key.delete', key: k, gen: existing!.gen, reason: `Gnomon: delete the old ${k} key of generation ${existing!.gen}` }, 120_000);
-            purgedOld.push(k);
-          } catch {
-            break; // reported: the remaining key stays, purge-keys can remove it later
-          }
-        }
-        appendIdentityJournal(home, { op: 'purge', gen: existing!.gen, deleted: purgedOld, at: new Date().toISOString() });
-      }
-    }
-    say(io, {
-      provisioned: true,
-      home,
-      rootKeyId: root.rootKeyId,
-      ns: root.ns,
-      principalId,
-      deviceId: rec.deviceId,
-      approvalsKeyId: row.keyId,
-      helper: pin.exe,
-      deviceKey: deviceKeyPath(home),
+    const r = await p.provision({
       mode,
-      ...(mode === 'rotate' ? { retiredGen: existing!.gen, ...(purgedOld?.length === 2 ? { purgedOld } : { purge: `gnomon identity purge-keys --gen ${existing!.gen}`, ...(purgedOld ? { purgedOld } : {}) }) } : {}),
-    });
-    return EXIT_OK;
-  } catch (e) {
-    let leftover: string | null = null;
-    if (!recordWritten) {
-      // R2: put the old record back exactly as it was
-      for (const m of moved.reverse()) {
-        try {
-          fs.renameSync(m.to, m.from);
-        } catch {
-          /* reported below */
-        }
-      }
-      // R4: remove the keys this attempt created — through the live helper (no prompt: it created them),
-      // else through a FRESH helper, which asks for presence (H2)
-      if (created.length) {
-        if (!helper.alive) {
-          try {
-            helper = startHelper();
-          } catch {
-            /* reported below */
+      existing,
+      name: args.name ?? sanitizeName(os.userInfo().username),
+      host: args.host ?? sanitizeHost(os.hostname()),
+      ...(mode === 'rotate' && (deps.confirmPurge || tty)
+        ? {
+            confirmPurgeOld: async () => {
+              io.stderr.write(`Delete the OLD generation ${existing!.gen} from the Secure Enclave now (one touch per key)? Type "purge" to delete, anything else to keep it:\n> `);
+              return (await (deps.confirmPurge ?? (() => readLine(io.stdin)))()) === 'purge';
+            },
           }
-        }
-        let ok = true;
-        for (const k of [...created].reverse()) {
-          try {
-            await helper.request({ op: 'key.delete', key: k, gen, reason: 'Gnomon: remove the keys of a failed identity init' });
-          } catch {
-            ok = false;
-          }
-        }
-        if (!ok) leftover = gen;
-      }
-    }
-    return refused(io, e instanceof Interrupted ? 'interrupted' : 'provision-failed', e instanceof Error ? e.message : 'provisioning failed', {
-      recordWritten,
-      restored: !recordWritten && moved.length > 0,
-      ...(leftover ? { leftoverGen: leftover, purge: `gnomon identity purge-keys --gen ${leftover}` } : { createdKeysDeleted: recordWritten ? [] : created }),
+        : {}),
     });
+    return finish(io, r);
   } finally {
     if (deps.handleSignals !== false) process.off('SIGINT', onSigint);
-    await helper.close().catch(() => undefined);
   }
 }
 
@@ -469,31 +312,17 @@ async function purgeKeys(argv: readonly string[], io: IdentityIo, deps: Identity
     return refused(io, 'identity-malformed', e instanceof Error ? e.message : 'identity.json is unreadable', { path: identityPath(home) });
   }
   if (existing?.gen === args.gen) return refused(io, 'in-use', `generation ${args.gen} is this home's live identity; rotate or recover instead`);
-  let pin: PinnedHelper;
-  try {
-    pin = pinHelper(args.helper ?? existing?.helperPath ?? defaultHelperPath(), deps.verifier ? { verifier: deps.verifier } : {});
-  } catch (e) {
-    return refused(io, 'helper-unavailable', e instanceof Error ? e.message : 'the helper could not be pinned');
-  }
-  const helper = deps.start ? deps.start(pin) : HelperProcess.start(pin);
-  try {
-    const held = (await listKeys(helper)).filter((k) => k.gen === args.gen);
-    if (!held.length) return refused(io, 'not-found', `no Gnomon keys of generation ${args.gen} in the Secure Enclave`);
-    const deleted: string[] = [];
-    // approvals first, so the root of the generation is still there to sign the root's own delete statement
-    for (const k of ['approvals', 'root'].filter((x) => held.some((h) => h.key === x))) {
-      io.stderr.write(`Touch ID: delete the ${k} key of generation ${args.gen}\n`);
-      await helper.request({ op: 'key.delete', key: k, gen: args.gen, reason: `Gnomon: delete the ${k} key of generation ${args.gen}` }, 120_000);
-      deleted.push(k);
-    }
-    appendIdentityJournal(home, { op: 'purge', gen: args.gen, deleted, at: new Date().toISOString() });
-    say(io, { purged: true, gen: args.gen, deleted });
-    return EXIT_OK;
-  } catch (e) {
-    return refused(io, 'purge-failed', e instanceof Error ? e.message : 'purge failed');
-  } finally {
-    await helper.close().catch(() => undefined);
-  }
+  const p = new Provisioner({
+    home,
+    helperPath: args.helper ?? existing?.helperPath ?? defaultHelperPath(),
+    ...(deps.verifier ? { verifier: deps.verifier } : {}),
+    ...(deps.start ? { start: deps.start } : {}),
+  });
+  p.on('event', renderRaw(io));
+  const r = await p.purgeGeneration(args.gen);
+  // the pre-engine CLI's pin refusal carried no helperPath here
+  if (!r.ok && r.reason === 'helper-unavailable') return refused(io, r.reason, r.message);
+  return finish(io, r);
 }
 
 function identityStatus(argv: readonly string[], io: IdentityIo): number {

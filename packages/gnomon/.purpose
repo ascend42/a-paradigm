@@ -722,6 +722,114 @@ components:
       - test/bare-entry.test.ts
       - ../gnomon-gui/test/gui.test.ts
 
+  provisioner:
+    description: >-
+      #provisioner (spec §3.1 Provisioner; T-2026-10-19-005 MVP-a) — the ONE
+      engine behind `gnomon identity init|--rotate|--recover|purge-keys`
+      (identity-cli.ts, a thin renderer, byte-identical output) and the guided
+      #first-run (and the GUI setup phase, MVP-b). An EventEmitter with an
+      AbortSignal: events step / presence {n, of, purpose, digest12} / done /
+      aborted; it renders nothing. Enforces Aegis I1 (a root signature is
+      accepted only when the helper's own prompt line, reply.shown, names the
+      digest shown: helperLineShows; HardwareRootAuthority.signRowShown), I5
+      (helper path pinned, from the caller default or identity.json), I6 (a
+      generation it did not create is never adopted; purgeGeneration takes
+      presence per key), I7 (ROOT_PROMPT_BUDGET init 2 / rotate 3 / recover 2
+      / complete 0), I8 (O_EXCL `<home>.provisioning.lock`, provisioning-locked,
+      before key.list), I9 (pre-commit failure restores moved files and
+      deletes only keys it created), I10 (after identity.json, keys are never
+      deleted; completeDevice() appends the device row the root signed during
+      that provisioning, saved in identity.json as pendingDeviceRow with
+      deviceKeyId — verified under the root, keyId === device key on disk ===
+      deviceKeyId, deviceId/principalId === the record's; ZERO new signatures,
+      budget 0; no saved row → no-saved-device-row, use --rotate; Aegis
+      HIGH-1), I12 (validates name/host itself).
+    path: src/kernel/identity/provisioner.ts
+    type: module
+    tags: [gnomon, kernel, identity, setup]
+    related: ["#identity", "#first-run", "#setup-preflight", "#gnomon-helper"]
+    tests:
+      - test/identity-cli.test.ts
+      - test/setup.test.ts
+
+  setup-endpoint:
+    description: >-
+      #setup-endpoint (spec §11.2 rule 11, §2.4 rule 9; T-2026-10-19-005
+      MVP-b) — the SETUP MODE loopback endpoint: a #web-endpoint (same
+      gnomon-web transport child, rules.ts, 127.0.0.1 only, the SAME pinned
+      #gui bundle) whose dispatcher is the closed gnomon-setup:v1 protocol
+      (gnomon-contracts setup.ts, own SETUP_API_ID; clientApiId unchanged):
+      hello / auth {setupToken} / setup.preflight / setup.name / setup.begin /
+      setup.purge {gen} / setup.complete (I10, the saved row, 0 prompts) /
+      setup.finish, events setup.state and setup.presence
+      {n,of,purpose,digest12}. No gnomon-rpc verb is reachable. An ephemeral
+      Ed25519 setup key signs serverSig. One setup connection; a closed
+      socket aborts the #provisioner at its next step boundary. Exact params
+      key sets: the page carries only name, a server-listed gen, and clicks.
+      Entry: bare gnomon / gnomon setup on a TTY print the setup URL (and
+      every expected digest: the terminal is the surface to trust); gnomon
+      setup --cli keeps the prompts; up --wrapper emits {t:setup,...} and then
+      continues into {t:up}. Falsified in test/setup-endpoint.test.ts
+      (G-SET-08..14) and test/wrapper-channel.test.ts. Never hangs: it
+      settles on finish (also for an already-set-up home), token expiry, a
+      10 min idle cap, socket close, transport stop or token reuse; a refused
+      purge (GNOMON_HOME guard, in-use / identity-malformed) or a failed
+      begin returns to the checks. The checks are read-only: setup state
+      lives in a private scratch dir and the home is created at begin.
+    path: src/kernel/setup/setup-endpoint.ts
+    type: service
+    related: ["#provisioner", "#setup-preflight", "#web-endpoint", "#gui-setup", "#first-run"]
+    tests:
+      - test/setup-endpoint.test.ts
+      - test/wrapper-channel.test.ts
+    gates: ["^setup-token", "^unprovisioned-only"]
+    tags: [kernel, setup, web]
+  setup-preflight:
+    description: >-
+      #setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no
+      key, no file write, no prompt; only key.list): helper signed+pinned and
+      not from a sandboxed shell, touch-id (helper 1.4.0 presence.available:
+      LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil;
+      off = warn), claude (resolved, pin none/match/mismatch → `gnomon session
+      repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags),
+      node floor, leftover generations (purge, never adopt), home state (dev
+      marker, symlink, malformed identity.json: shown, never touched). Each
+      check {id, status pass|warn|fail, detail, fix}. INFORMATIVE only (Aegis
+      I12): #provisioner and #gnomon-up enforce on their own.
+    path: src/kernel/setup/preflight.ts
+    type: module
+    tags: [gnomon, kernel, setup]
+    related: ["#first-run", "#provisioner"]
+    tests:
+      - test/setup.test.ts
+
+  first-run:
+    description: >-
+      #first-run (spec §2.4 rule 9) — the guided first run. Default: the
+      setup SCREENS (#setup-endpoint, #gui-setup; `gnomon setup` and bare
+      `gnomon` print a one-shot setup URL and every expected digest, the
+      terminal being the surface to trust; Gnomon.app runs it in its
+      window). `gnomon setup --cli` keeps the plain readline prompts (no in-terminal UI, P8-D51): welcome paragraph,
+      #setup-preflight results with fixes, leftover generations offered for
+      purge, a name prompt prefilled from $USER (PRINCIPAL_NAME_PATTERN,
+      re-checked by #provisioner), "exactly 2 Touch ID prompts; a third is an
+      attack", then 1 of 2 / 2 of 2 each preceded by the expected digest shown
+      big and grouped on the terminal (I2), a summary (root keyId, principal,
+      device, files) and the hand-off to #gnomon-up's runUp in the same
+      process. Bare `gnomon` (#bare-entry) on a TTY with an unprovisioned
+      default home runs it first, then continues with the folder hint. Home
+      strict (I4: never GNOMON_HOME, lstat, symlink refused — the raw
+      `gnomon identity init` still honours GNOMON_HOME/--home). Gated by
+      ^unprovisioned-only. `up` / `up --wrapper` unprovisioned refusals now
+      name the first run.
+    path: src/cli/setup-cli.ts
+    type: module
+    tags: [gnomon, cli, setup, onboarding]
+    related: ["#provisioner", "#setup-preflight", "#bare-entry", "#gnomon-up", "$first-run", "^unprovisioned-only"]
+    tests:
+      - test/setup.test.ts
+      - test/bare-entry.test.ts
+
   gnomon-up:
     description: >-
       #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>] [--wrapper]`, the
@@ -2020,6 +2128,18 @@ components:
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]
 flows:
+  first-run:
+    description: >-
+      $first-run (spec §2.4 rule 9): unprovisioned Mac → `gnomon` (or `gnomon
+      setup`) → #setup-preflight → leftover purge (presence per key) → name →
+      #provisioner init (lock, key.list, key.create ×2, root sign 1 of 2 and
+      2 of 2 with shown digests, commit identity.json then registry row) →
+      summary → #gnomon-up runUp in the same process (TTY launch URL, folder
+      hint). Resume: an identity whose registry row is missing is completed
+      as its own root-signed step (I10).
+    steps: ["#first-run", "#setup-preflight", "#provisioner", "#gnomon-up"]
+    tags: [gnomon, setup]
+
   daemon-lifecycle:
     description: >-
       $daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation —
@@ -2098,6 +2218,26 @@ flows:
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 gates:
+  setup-token:
+    description: >-
+      ^setup-token (spec §11.2 rule 11) — the one-shot setup token of the
+      #setup-endpoint: 32 bytes, 60 s TTL, single use, carried only in the URL
+      fragment #setup=<tok>&k=<spki>[&cwd=…] on the TTY line or the wrapper's
+      channel pipe; never argv, env, files or logs. A reuse inside the TTL
+      aborts provisioning and journals setup.token-reuse (no token in it); a
+      second setup connection is refused.
+    prizes: []
+  unprovisioned-only:
+    description: >-
+      ^unprovisioned-only (spec §2.4 rule 9): #first-run provisions only a
+      home with NO keys/identity.json. An existing identity is shown
+      (createdAt, root keyId) and never adopted or replaced; a malformed one
+      is shown, never touched; a dev or symlinked home is refused. The one
+      write allowed on a provisioned home is the I10 completion of a missing
+      registry row (the saved, already root-signed row; no new signature). Needs a portal.yaml
+      gate entry once Gnomon's portal is authored.
+    tags: [gnomon, setup]
+
   subscription-only:
     description: >-
       ^subscription-only (spec §10 law 7, D35): no kernel-spawned Claude

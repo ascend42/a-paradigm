@@ -129,6 +129,8 @@ export interface BlobSource {
 
 export interface WebEndpointOptions {
   home: string;
+  /** #setup-endpoint: where the bundle is materialized and gui.log goes (default: home). The setup checks are read-only, so setup mode keeps its state in a private scratch dir; the home stays protected. */
+  stateDir?: string;
   /** Build the endpoint's dispatcher for `endpointPath` (`ws://127.0.0.1:<port>/rpc`) with the web auth hook. */
   dispatcher: (endpointPath: string, web: WebAuthHook) => KernelDispatcher;
   log: WebLog;
@@ -453,8 +455,8 @@ export class WebEndpoint {
     this.#state = 'starting';
     const scriptPath = this.#o.scriptPath ?? defaultChildScript();
     if (!scriptPath) throw new LifecycleRefusal('web-transport-failed', 'the gnomon-web transport child is not built (dist/transport/gnomon-web.js)');
-    const bundleDir = this.#bundle.dir || materializeGuiBundle(this.#o.home);
-    const plan = this.#launcher({ scriptPath, bundleDir, protectedDirs: [this.#o.home], forbiddenTrees: [path.join(this.#o.home, 'keys')] });
+    const bundleDir = this.#bundle.dir || materializeGuiBundle(this.#o.stateDir ?? this.#o.home);
+    const plan = this.#launcher({ scriptPath, bundleDir, protectedDirs: [this.#o.home, ...(this.#o.stateDir ? [this.#o.stateDir] : [])], forbiddenTrees: [path.join(this.#o.home, 'keys')] });
     this.#plan = plan;
     // fd 3 = the IPC channel: it carries only the connected sockets the kernel hands over (WEB_CONN_MESSAGE)
     const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: plan.env, windowsHide: true });
@@ -740,7 +742,7 @@ export class WebEndpoint {
   }
 
   #appendGuiLog(session: GuiSession, body: Buffer): void {
-    const dir = path.join(this.#o.home, 'logs');
+    const dir = path.join(this.#o.stateDir ?? this.#o.home, 'logs');
     const file = path.join(dir, 'gui.log');
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 });

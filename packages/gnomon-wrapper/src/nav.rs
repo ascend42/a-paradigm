@@ -4,6 +4,8 @@
 //!   - `Status`: only the app's own bundled status page (no network, no token);
 //!   - `Kernel{port}`: only `http://127.0.0.1:<port>` — the one origin the browser
 //!     also uses, so the kernel's rule-3 lock has one origin to check.
+//!   - `Setup{port}` (#setup-endpoint, first run): only `http://127.0.0.1:<port>` of the
+//!     setup endpoint, after the native setup preflight verified its bundle and setup key.
 //! Anything else (another port, `localhost`, a userinfo trick, another scheme,
 //! a `tauri://` page while the kernel page is up) is refused.
 
@@ -11,6 +13,7 @@
 pub enum Phase {
     Status,
     Kernel { port: u16 },
+    Setup { port: u16 },
 }
 
 /// The origin the app's bundled assets are served from on this OS.
@@ -36,7 +39,7 @@ fn same_origin(url: &str, origin: &str) -> bool {
 pub fn navigation_allowed(url: &str, phase: Phase) -> bool {
     match phase {
         Phase::Status => same_origin(url, APP_ORIGIN),
-        Phase::Kernel { port } => port != 0 && same_origin(url, &kernel_origin(port)),
+        Phase::Kernel { port } | Phase::Setup { port } => port != 0 && same_origin(url, &kernel_origin(port)),
     }
 }
 
@@ -68,6 +71,19 @@ mod tests {
             assert!(!navigation_allowed(bad, p), "{bad} must be refused");
         }
         assert!(!navigation_allowed("http://127.0.0.1:0/", Phase::Kernel { port: 0 }));
+    }
+
+    #[test]
+    fn setup_phase_allows_only_its_origin() {
+        let p = Phase::Setup { port: 4321 };
+        assert!(navigation_allowed("http://127.0.0.1:4321/#setup=x&k=y", p));
+        for bad in ["http://127.0.0.1:43210/", "http://localhost:4321/", "http://127.0.0.1:4321@evil.example/", "tauri://localhost/index.html", "about:blank", ""] {
+            assert!(!navigation_allowed(bad, p), "{bad} must be refused");
+        }
+        assert!(!navigation_allowed("http://127.0.0.1:0/", Phase::Setup { port: 0 }));
+        // the setup port does not open the kernel origin of another port, nor the reverse
+        assert!(!navigation_allowed("http://127.0.0.1:4322/", p));
+        assert!(!navigation_allowed("http://127.0.0.1:4321/", Phase::Kernel { port: 4322 }));
     }
 
     #[test]

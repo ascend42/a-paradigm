@@ -235,3 +235,20 @@ html, body {
 .ask-q { border: 1px solid currentColor; border-radius: 4px; padding: 0.4rem 0.6rem; }
 .ask-opt { display: block; }
 .ask-free { width: 100%; margin-top: 0.3rem; }
+
+/* #gui-setup (spec §11.1): the first-run screens */
+.setup { max-width: 68ch; margin: 0 auto; padding: 28px 18px; color: var(--ink); }
+.setup-title { font-size: 22px; margin: 0 0 14px; }
+.setup-text { line-height: 1.5; margin: 8px 0; }
+.setup-text.fail { color: var(--fail); }
+.setup-checks { list-style: none; padding: 0; margin: 12px 0; border-top: 1px solid var(--rule); }
+.setup-check { display: grid; grid-template-columns: 4em 9em 1fr; gap: 4px 10px; padding: 5px 0; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
+.setup-check.warn .setup-mark { color: var(--warn-ink); }
+.setup-check.fail .setup-mark { color: var(--fail); font-weight: 600; }
+.setup-fix { grid-column: 3; color: var(--sec); }
+.setup-card { border: 1px solid var(--rule); background: var(--sheet); padding: 12px 14px; margin: 12px 0; }
+.setup-card.live { border-color: var(--key-edge); }
+.setup-digest { font-family: ui-monospace, Menlo, monospace; font-size: 34px; letter-spacing: 0.08em; margin: 10px 0; color: var(--ink); }
+.setup-name { display: flex; flex-direction: column; gap: 8px; max-width: 32ch; }
+.setup-details { margin: 10px 0; }
+.setup-details summary { cursor: pointer; }

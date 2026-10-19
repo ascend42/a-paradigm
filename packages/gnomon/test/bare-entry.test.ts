@@ -131,13 +131,13 @@ describe('#bare-entry: help and dispatch', () => {
 });
 
 describe('#bare-entry: refusals', () => {
-  it('an unprovisioned home surfaces the existing refusal with `next: gnomon identity init`; nothing starts', async () => {
+  it('an unprovisioned home off a terminal surfaces the existing refusal with `next: gnomon setup` (#first-run); nothing starts', async () => {
     const uh = tmpDir('gu-');
     const x = io();
     expect(await runBareCommand([], x, { userHome: uh, cwd: uh, runtime: CLEAN, start: () => Promise.reject(new Error('must not start')) })).toBe(1);
     const err = x.e.join('');
     expect(err).toContain('REFUSED  GNOMON  unprovisioned');
-    expect(err).toContain('next: gnomon identity init');
+    expect(err).toContain('next: gnomon setup');
   });
   it('the unsafe-env guard still runs first (NODE_OPTIONS)', async () => {
     const uh = tmpDir('gu-');

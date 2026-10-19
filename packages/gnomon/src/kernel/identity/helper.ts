@@ -49,7 +49,8 @@ export const HELPER_PROTOCOL = 'gnomon-helper:v1';
  * every founder build, so an allowlist shipped with the kernel would break on
  * each rebuild; the floor stops downgrades to known-weaker helpers.
  */
-export const MIN_HELPER_VERSION = '1.3.0'; // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
+export const MIN_HELPER_VERSION = '1.4.0'; // 1.4.0: T-2026-10-19-005 MVP-b presence.available (no prompt)
+// was 1.3.0: // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */
 export const HELPER_REQUIREMENT =
   `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${HELPER_TEAM}" and identifier "${HELPER_IDENTIFIER}"`;

@@ -36,6 +36,9 @@
  * pins it from the launch fragment and this CLI pins it in-process; other
  * socket clients report serverVerified:false.
  */
+import { hasIdentityFile } from '../kernel/identity/index.js';
+import { runGuiSetup, type GuiSetupDeps } from './setup-cli.js';
+import { deviceRegistered } from '../kernel/setup/setup-endpoint.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -63,7 +66,7 @@ export const UP_EXIT_USAGE = 64;
 
 export const UP_USAGE = `gnomon ${GNOMON_VERSION} up — run the kernel on your provisioned home and open the GUI
 usage: gnomon up [--home <abs>] [--wrapper]   (default ~/.gnomon; GNOMON_HOME is not read)
-  Needs \`gnomon identity init\` first. Refuses a dev home and a home whose kernel already runs.
+  Needs \`gnomon setup\` first (bare \`gnomon\` runs it for you). Refuses a dev home and a home whose kernel already runs.
   --wrapper: spawned by Gnomon.app (#gnomon-wrapper): the launch grant goes on the stdout pipe the app holds, never a terminal.
 `;
 
@@ -99,10 +102,38 @@ export interface UpKernel extends InProcessKernel {
   readonly deviceId: string;
 }
 
-const initHint = (home: string, dflt: boolean): string => `gnomon identity init${dflt ? '' : ` --home ${home}`}`;
+/** #first-run: the default home is set up by the guided `gnomon setup` (bare `gnomon` runs it on a terminal). */
+const initHint = (home: string, dflt: boolean): string => (dflt ? 'gnomon setup   (or just `gnomon` in a repo: it sets this Mac up first)' : `gnomon identity init --home ${home}`);
+/** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json. */
+function unprovisionedHome(userHome?: string): boolean {
+  const h = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(h);
+  } catch {
+    return true;
+  }
+  return st.isDirectory() && !isDevHome(h) && !hasIdentityFile(h);
+}
+
+/** Gnomon.app: an unprovisioned home is set up in the app window (#setup-endpoint); a refusal names the step, never a command to paste. */
+/** identity.json exists but this device's registry row does not (a setup interrupted before its last step). */
+function unregisteredHome(userHome?: string): boolean {
+  const h = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  try {
+    const st = fs.lstatSync(h);
+    if (!st.isDirectory() || isDevHome(h)) return false;
+    const rec = readIdentity(h);
+    return rec !== null && !deviceRegistered(h, rec);
+  } catch {
+    return false;
+  }
+}
+
+export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet: quit and reopen Gnomon, and it walks you through setup in its window';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
-export function resolveUpHome(given: string | undefined, userHome: string = os.homedir()): { home: string; isDefault: boolean } {
+export function resolveUpHome(given: string | undefined, userHome: string = os.userInfo().homedir): { home: string; isDefault: boolean } {
   const raw = given ?? resolveGnomonHome({ env: {}, homedir: userHome });
   const isDefault = given === undefined;
   let st: fs.Stats;
@@ -153,7 +184,7 @@ function deviceOf(home: string, hw: OpenedIdentity): { kind: 'device'; deviceId:
   }
   const row = reg.devices.get(hw.record.deviceId);
   if (!row || row.principalKind !== 'human' || row.principalId !== hw.record.principalId || row.keyId !== cred.signer.keyId) {
-    throw new UpRefusal('device-unregistered', 'this device key has no matching human registry row signed by this root', [`re-provision: gnomon identity init --rotate (keeps the device key)`]);
+    throw new UpRefusal('device-unregistered', 'this device key has no matching human registry row signed by this root', [`gnomon setup   (it finishes an interrupted setup; otherwise re-provision: gnomon identity init --rotate)`]);
   }
   return { kind: 'device', deviceId: row.deviceId, principalId: row.principalId, privateKeyPem: cred.privateKeyPem };
 }
@@ -171,7 +202,7 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
     if (e instanceof IdentityError) throw new UpRefusal(`identity-${e.reason}`, `the hardware identity of ${home} cannot be opened: ${e.message}`);
     throw e;
   }
-  if (!hw) throw new UpRefusal('unprovisioned', `${home} has no hardware identity (keys/identity.json)`, ['gnomon identity init']);
+  if (!hw) throw new UpRefusal('unprovisioned', `${home} has no hardware identity (keys/identity.json)`, ['gnomon setup']);
   let handle: DaemonHandle;
   let device: ReturnType<typeof deviceOf>;
   try {
@@ -194,7 +225,7 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
 }
 
 function report(io: LaunchTtyIo, e: UpRefusal, wrapper = false, code = 'up'): number {
-  if (wrapper) channelRefused(io, code, e.reason, e.message, e.next);
+  if (wrapper) channelRefused(io, code, e.reason, e.message, e.reason === 'unprovisioned' ? [WRAPPER_SETUP_NEXT] : e.next);
   else refused(io.stderr, code, e.reason, e.message, e.next);
   return UP_EXIT_REFUSED;
 }
@@ -254,6 +285,11 @@ export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<
   }
   const unsafe = unsafeRuntime(deps.runtime);
   if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper, code);
+  // #setup-endpoint: the app sets up an unprovisioned home, and finishes an interrupted one (device-unregistered), in its window
+  if (wrapper && given === undefined && (unprovisionedHome(deps.userHome) || unregisteredHome(deps.userHome))) {
+    const s = await runGuiSetup(io, { ...(deps as GuiSetupDeps), handleSignals: false }, 'wrapper');
+    if (s.code !== 0) return UP_EXIT_REFUSED;
+  }
   let k: UpKernel;
   let home: string | undefined;
   try {

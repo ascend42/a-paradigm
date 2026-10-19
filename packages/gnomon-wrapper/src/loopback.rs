@@ -219,6 +219,11 @@ fn ws_read_text(s: &mut TcpStream, pending: &mut Vec<u8>) -> Result<String, Pref
 
 /// The wrapper's own hello on the kernel's endpoint; returns the hello result and the clientNonce sent.
 pub fn ws_hello(port: u16) -> Result<(Hello, String), PreflightError> {
+    ws_hello_api(port, "gnomon-rpc:v1")
+}
+
+/// The wrapper's hello speaking `api` (`gnomon-rpc:v1` on the kernel, `gnomon-setup:v1` on the #setup-endpoint).
+pub fn ws_hello_api(port: u16, api: &str) -> Result<(Hello, String), PreflightError> {
     let mut s = connect(port)?;
     let key = STANDARD.encode(random::<16>());
     let req = format!(
@@ -234,7 +239,7 @@ pub fn ws_hello(port: u16) -> Result<(Hello, String), PreflightError> {
     let client_nonce = URL_SAFE_NO_PAD.encode(random::<32>());
     let hello = json!({
         "jsonrpc": "2.0", "rpc": "gnomon-rpc:v1", "id": 1, "method": "hello",
-        "params": { "clientApis": ["gnomon-rpc:v1"], "features": [], "clientNonce": client_nonce,
+        "params": { "clientApis": [api], "features": [], "clientNonce": client_nonce,
                     "client": { "name": "gnomon-wrapper", "version": env!("CARGO_PKG_VERSION"), "surface": "wrapper" } }
     });
     ws_send_text(&mut s, hello.to_string().as_bytes())?;
@@ -255,8 +260,21 @@ pub fn ws_hello(port: u16) -> Result<(Hello, String), PreflightError> {
 
 /// The whole preflight for a launch grant (port, kernel key, bundle hash); Ok means the page may load.
 pub fn preflight(port: u16, kernel_public_key: &str, bundle_hash: &str, pin: &str) -> Result<(), PreflightError> {
+    preflight_api(port, kernel_public_key, bundle_hash, pin, "gnomon-rpc:v1")
+}
+
+/// #setup-endpoint: the SAME pin and serverSig checks against the ephemeral setup key, speaking gnomon-setup:v1.
+/// Ok means the setup page may load (its digests are then trustworthy in this window: bundle and key verified natively).
+pub fn setup_preflight(port: u16, setup_public_key: &str, bundle_hash: &str, pin: &str) -> Result<(), PreflightError> {
+    preflight_api(port, setup_public_key, bundle_hash, pin, "gnomon-setup:v1")
+}
+
+fn preflight_api(port: u16, kernel_public_key: &str, bundle_hash: &str, pin: &str, api: &str) -> Result<(), PreflightError> {
     bundle::check_reported(bundle_hash, pin).map_err(PreflightError::Bundle)?;
-    let (hello, sent) = ws_hello(port)?;
+    let (hello, sent) = ws_hello_api(port, api)?;
+    if hello.client_api != api {
+        return Err(PreflightError::Protocol("the endpoint answered another protocol"));
+    }
     verify::verify_server_sig(kernel_public_key, &hello, &format!("ws://127.0.0.1:{port}/rpc"), &sent).map_err(PreflightError::Sig)?;
     let mut served = Vec::new();
     for name in bundle::pin_files() {
@@ -282,6 +300,14 @@ mod tests {
         // bind then drop: the port is (almost certainly) closed now
         let p = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         assert!(matches!(preflight(p, "k", bundle::PIN, bundle::PIN), Err(PreflightError::Io(_))));
+    }
+
+    #[test]
+    fn setup_preflight_fails_closed_like_the_launch_path() {
+        let p = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        assert!(matches!(setup_preflight(p, "k", bundle::PIN, bundle::PIN), Err(PreflightError::Io(_))));
+        let other = format!("sha256:{}", "1".repeat(64));
+        assert_eq!(setup_preflight(1, "k", &other, bundle::PIN), Err(PreflightError::Bundle(BundleError::PinMismatch)));
     }
 
     #[test]
