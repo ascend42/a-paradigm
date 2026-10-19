@@ -16,7 +16,7 @@ DEV ONLY path, is [docs/guides/gnomon-dogfood.md](../../docs/guides/gnomon-dogfo
 
 ## What you need
 
-- macOS 15 or later with SIP on, and Node 22.14 or later (Node 24 recommended).
+- macOS 15 or later with SIP on, and Node 24 or later (22.14+ on 22.x and 23.7+ on 23.x also work: they have `--disable-sigusr1`).
 - Claude Code from the **native installer** (`~/.local/bin/claude`), logged in
   with your **subscription**. Gnomon refuses API billing (`BILLING_REFUSED`).
 - `NODE_OPTIONS` **unset** in your shell. Gnomon refuses to run its kernel
@@ -42,7 +42,7 @@ different clone, and tells you what to remove if you mean to switch.
 
 ```sh
 node packages/gnomon-helper/scripts/build-darwin.mjs   # the signed Secure Enclave helper
-gnomon identity init --name <you>                      # two Touch ID prompts
+gnomon identity init --name <you>                      # two Touch ID prompts; <you> is lowercase: a-z 0-9 . _ -
 gnomon identity status
 ```
 

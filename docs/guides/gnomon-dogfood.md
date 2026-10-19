@@ -46,7 +46,7 @@ works in any terminal and passes `--disable-sigusr1` through its shebang.
   `kill -USR1` the kernel and open a debugger in it. Run `unset NODE_OPTIONS`
   first, and start the CLI as `node --disable-sigusr1 <path>/gnomon.js`, or run
   `<path>/gnomon.js` directly, since its shebang passes the flag. You need
-  Node 22.14 or later.
+  Node 22.14 or later on 22.x, 23.7 or later on 23.x, or any 24+ (the installer checks this: `node-too-old`).
 - **What this check covers.** It catches an ambient unsafe runtime: an exported
   `NODE_OPTIONS` or a stray flag. It does not stop a hostile preload that is
   already running as you, because that code can scrub the env and `execArgv`
