@@ -171,9 +171,9 @@ describe('M3: unlock.drop on every close and failure path', () => {
   it('FALSIFIER: a drop the helper does not answer escalates to drop-all, then ends the helper process', async () => {
     const r = rig();
     await r.decide();
-    r.helper.failOps.add('unlock.drop');
+    r.helper.failOps.add('conn.close'); // helper 1.6.0: a close goes out as conn.close (unlock + every arm naming the connId)
     await r.broker.connectionClosed(A);
-    expect(r.helper.ops.slice(-2)).toEqual(['unlock.drop', 'unlock.drop-all']);
+    expect(r.helper.ops.slice(-3)).toEqual(['conn.close', 'unlock.drop-all', 'arm.close-all']);
     expect(r.helper.recycled).toBe(0);
     await r.decide(); // a fresh unlock again
     r.helper.failOps.add('unlock.drop-all');

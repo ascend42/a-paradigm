@@ -134,6 +134,8 @@ export interface ApprovalsKey {
   signDecision?(req: DecisionSignRequest): Promise<DecisionSignResult>;
   /** Drop a connection's unlock where the key lives (the helper). */
   dropUnlock?(connId: string): Promise<void>;
+  /** Helper 1.6.0 (`conn.close`): drop the connection's unlock AND close every voice arm naming it. Preferred over dropUnlock on close. */
+  connectionClosed?(connId: string): Promise<void>;
 }
 export const NO_APPROVALS_KEY: ApprovalsKey = Object.freeze({ verify: () => 'unavailable' as const, available: () => false });
 
@@ -486,7 +488,8 @@ export class ApprovalBroker {
   async connectionClosed(connId: string): Promise<void> {
     this.#cooldownFrom.delete(connId); // L2 state is per connection; a connId is never reused
     const had = this.unlocks.drop(connId);
-    await this.#dropHelperUnlock(connId);
+    if (this.#approvals.connectionClosed) await this.#approvals.connectionClosed(connId).catch(() => undefined);
+    else await this.#dropHelperUnlock(connId);
     if (had) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
   }
 
@@ -499,6 +502,17 @@ export class ApprovalBroker {
   async helperExited(): Promise<void> {
     for (const connId of this.unlocks.connIds()) {
       if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'helper-exit' }, { connId }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Helper 1.6.0 session push (screen lock, screensaver, display or system sleep, user switch; §14.7, §A.1):
+   * the helper has already invalidated every cached unlock, so the broker drops every reference it holds and
+   * logs approval.unlock.dropped{reason: 'screen-lock'} (every session cause, as for the disarm rows).
+   */
+  async helperSessionEnded(cause: string): Promise<void> {
+    for (const connId of this.unlocks.connIds()) {
+      if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'screen-lock', cause }, { connId }).catch(() => undefined);
     }
   }
 

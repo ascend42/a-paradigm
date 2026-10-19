@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 /** A fake `gnomon-helper serve`: echoes the id; op `bad-id` answers with the wrong id; op `die` exits. */
-function fakeServe(dir: string, version = '1.5.0'): string {
+function fakeServe(dir: string, version = '1.6.0'): string {
   const f = path.join(dir, 'gnomon-helper');
   fs.writeFileSync(
     f,
@@ -59,7 +59,9 @@ process.stdin.on('data', (d) => {
     buf = buf.slice(i + 1);
     if (req.op === 'die') process.exit(1);
     const id = req.op === 'bad-id' ? 999 : req.id;
-    const info = { protocol: 'gnomon-helper:v1', version: '${version}' };
+    const info = { protocol: 'gnomon-helper:v2', version: '${version}' };
+    if (req.op === 'push-lock') process.stdout.write(JSON.stringify({ push: 'session', cause: 'screen-lock', arms: ['arm:x'], unlocks: 1, seq: 1 }) + '\\n');
+    if (req.op === 'push-bad') process.stdout.write(JSON.stringify({ push: 'session', cause: 'lid', arms: [], unlocks: 0, seq: 1 }) + '\\n');
     process.stdout.write(JSON.stringify(req.op === 'refuse' ? { id, ok: false, error: 'presence-denied', message: 'no' } : { id, ok: true, op: req.op, ...(req.op === 'info' ? info : {}) }) + '\\n');
   }
 });
@@ -118,15 +120,49 @@ describe('HelperProcess (serve)', () => {
     expect(h.alive).toBe(false);
   });
 
+  it('falsifier (V5, helper 1.6.0): a 1.5.0 helper (no arms, no session push) is below the floor', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.5.0'), { verifier: DEV }));
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.6.0/);
+    expect(h.alive).toBe(false);
+  });
+
+  it('protocol v2: an unsolicited session push (screen lock) reaches onPush and does not disturb the reply in flight', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp()), { verifier: DEV }));
+    const pushes: unknown[] = [];
+    h.onPush((p) => pushes.push(p));
+    const reply = await h.request({ op: 'push-lock' });
+    expect(reply.op).toBe('push-lock');
+    expect(pushes).toEqual([{ push: 'session', cause: 'screen-lock', arms: ['arm:x'], unlocks: 1, seq: 1 }]);
+    expect(h.alive).toBe(true);
+    await h.close();
+  });
+
+  it('protocol v2: a malformed push kills the helper (fail closed: every unlock and arm dies with it)', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp()), { verifier: DEV }));
+    let exited = false;
+    h.onExit(() => (exited = true));
+    await expect(h.request({ op: 'push-bad' })).rejects.toThrow(/malformed/);
+    expect(h.alive).toBe(false);
+    expect(exited).toBe(true);
+  });
+
+  it('helper EOF: the exit listeners hear it (the daemon maps that to approval.voice.disarm{reason:helper-exit})', async () => {
+    const h = HelperProcess.start(pinHelper(fakeServe(tmp()), { verifier: DEV }));
+    let exited = false;
+    h.onExit(() => (exited = true));
+    await expect(h.request({ op: 'die' })).rejects.toThrow(HelperUnavailableError);
+    expect(exited).toBe(true);
+  });
+
   it('falsifier (setup helper-line-mismatch, 2026-10-19): a 1.4.0 helper (root signs without `shown`) is below the floor', async () => {
     const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.4.0'), { verifier: DEV }));
-    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.5.0/);
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.6.0/);
     expect(h.alive).toBe(false);
   });
 
   it('falsifier (T-2026-10-18-028 M2): a 1.2.0 helper (no absolute unlock TTL, no signature cap) is below the floor', async () => {
     const h = HelperProcess.start(pinHelper(fakeServe(tmp(), '1.2.0'), { verifier: DEV }));
-    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.5.0/);
+    await expect(h.request({ op: 'key.public' })).rejects.toThrow(/older than the minimum 1.6.0/);
     expect(h.alive).toBe(false);
   });
 

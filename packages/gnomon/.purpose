@@ -687,7 +687,7 @@ components:
       The unsigned verifier exists only behind DEV_TEST_HELPER_ACK.
       Round 2: the pin is hash → verify → re-hash (H5); after spawn the
       RUNNING child is code-sign-verified by pid and must answer `info` with
-      gnomon-helper:v1 and version ≥ MIN_HELPER_VERSION before any request
+      gnomon-helper:v2 (helper 1.6.0) and version ≥ MIN_HELPER_VERSION before any request
       (H1 c — a version floor, not a CDHash allowlist, because timestamped
       signatures change every build); the platform check is
       src/platform/helper-verifier.ts (R6); SupervisedHelper never restarts
@@ -1601,7 +1601,19 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
-      src/kernel/broker/. T-2026-10-18-028: M2 — UnlockStore ends a cached
+      src/kernel/broker/. Helper 1.6.0 (V5, TD-2026-10-19-194, §14.7, S29-K5):
+      arm-custody.ts VoiceArmCustody keeps voice-arm REFERENCES only (the
+      unlock is in the helper per armId) and appends approval.voice.disarm
+      {armId, reason} for every arm on a helper session push (reason
+      screen-lock), helper exit (helper-exit) or a pair connection closing
+      (conn-closed). Reasons are local literals pending the contracts
+      VOICE_DISARM_REASONS (V0). A push also drops every cached-unlock
+      reference (helperSessionEnded); connectionClosed sends conn.close.
+      HelperApprovalsKey gains openArm, signUnderArm, closeArm,
+      closeAllArms, connectionClosed and onHelperPush; HelperProcess parses
+      the v2 push (a malformed one kills the helper); MIN_HELPER_VERSION
+      1.6.0, HELPER_PROTOCOL gnomon-helper:v2 (test/voice-arm-custody.test.ts,
+      test/identity-helper-pin.test.ts). T-2026-10-18-028: M2 — UnlockStore ends a cached
       unlock at UNLOCK_IDLE_MS idle, UNLOCK_ABSOLUTE_MS (60 min) after it
       opened, or after UNLOCK_MAX_SIGNATURES (64) uses (approval.unlock.
       dropped{reason: idle|expired|exhausted}); M3 — unlock.drop goes to the
