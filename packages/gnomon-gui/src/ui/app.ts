@@ -152,6 +152,14 @@ const sameKeys = (a: readonly ChatItem[], b: readonly ChatItem[]): boolean => {
  * where it is while heights are measured and items arrive (no jump, no reset to the top). `remeasure` (a width
  * change) rebuilds the height index from the per-width cache and keeps the same reading position.
  */
+/** The page's own scroll writes, so the scroll handler can tell them from the user's (they must not change stickiness). */
+let selfTop = -1;
+let lastTop = 0;
+function setScroll(vp: HTMLElement, top: number): void {
+  vp.scrollTop = top;
+  selfTop = vp.scrollTop;
+}
+
 function paintTranscript(remeasure = false): void {
   const vp = $('viewport');
   const anchor = items.length ? heights.indexAt(vp.scrollTop) : 0;
@@ -170,10 +178,10 @@ function paintTranscript(remeasure = false): void {
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
     $('spacer').style.height = `${heights.total()}px`;
-    if (follow.shouldStick) vp.scrollTop = vp.scrollHeight;
+    if (follow.shouldStick) setScroll(vp, vp.scrollHeight);
     else if (items.length) {
       const want = heights.offsetOf(Math.min(anchor, items.length - 1)) + anchorDelta;
-      if (Math.abs(vp.scrollTop - want) >= 1) vp.scrollTop = want;
+      if (Math.abs(vp.scrollTop - want) >= 1) setScroll(vp, want);
     }
     const { start, end } = visibleRange(heights, vp.scrollTop, vp.clientHeight || 600);
     for (const [i, el] of mounted)
@@ -530,11 +538,36 @@ function wire(): void {
     'scroll',
     () => {
       const vp = $('viewport');
-      follow.onScroll(isAtBottom(vp.scrollTop, vp.clientHeight, vp.scrollHeight));
+      const top = vp.scrollTop;
+      const own = Math.abs(top - selfTop) < 1; // the page's own write echoing back: stickiness unchanged
+      if (!own) follow.onScroll(isAtBottom(top, vp.clientHeight, vp.scrollHeight), top < lastTop - 0.5);
+      lastTop = top;
       paintTranscript();
     },
     { passive: true },
   );
+  // intent to read back unsticks BEFORE the next streamed paint can snap the view down
+  const releaseUp = (): void => {
+    if (!follow.shouldStick) return;
+    follow.release();
+    paintTranscript();
+  };
+  $('viewport').addEventListener('wheel', (e) => {
+    if ((e as WheelEvent).deltaY < 0) releaseUp();
+  }, { passive: true });
+  let touchY = 0;
+  $('viewport').addEventListener('touchstart', (e) => {
+    touchY = (e as TouchEvent).touches[0]?.clientY ?? 0;
+  }, { passive: true });
+  $('viewport').addEventListener('touchmove', (e) => {
+    const y = (e as TouchEvent).touches[0]?.clientY ?? touchY;
+    if (y > touchY + 2) releaseUp(); // finger moves down ⇒ content scrolls up
+    touchY = y;
+  }, { passive: true });
+  $('viewport').addEventListener('keydown', (e) => {
+    const k = (e as KeyboardEvent).key;
+    if (k === 'ArrowUp' || k === 'PageUp' || k === 'Home') releaseUp();
+  });
   new ResizeObserver(() => {
     const w = $('viewport').clientWidth;
     if (w !== width) {

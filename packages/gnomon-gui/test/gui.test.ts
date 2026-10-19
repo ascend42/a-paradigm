@@ -831,11 +831,28 @@ describe('#gui transcript stickiness (founder rule)', () => {
     f.jump(); // the "↓ latest" key
     expect([f.shouldStick, f.showJump, f.unseen]).toEqual([true, false, 0]);
   });
+  it('FALSIFIER (founder dogfood: snap-back): a small step up near the bottom unsticks; wheel-up intent releases before the next paint', () => {
+    const f = new Follow();
+    f.onScroll(true, true); // a 10 px wheel tick up: still inside the slack, but moving up
+    expect(f.shouldStick).toBe(false);
+    f.onAppend(4); // streamed rows arrive: nothing snaps
+    expect([f.shouldStick, f.unseen]).toEqual([false, 4]);
+    f.onScroll(true, false); // back down to the bottom by hand
+    expect([f.shouldStick, f.unseen]).toEqual([true, 0]);
+    f.release(); // wheel up / PageUp / touch drag
+    expect(f.shouldStick).toBe(false);
+  });
+  it('app.ts ignores its own scroll writes and releases on wheel-up, touch and keys', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/const own = Math\.abs\(top - selfTop\) < 1/);
+    expect(app).toMatch(/addEventListener\('wheel'/);
+    expect(app).toMatch(/'PageUp'/);
+  });
   it('app.ts scrolls only when stuck, never on send, and never rebuilds the feed with markup', () => {
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
     const sendFn = app.slice(app.indexOf('async function send('), app.indexOf('async function openSession('));
     expect(sendFn).not.toMatch(/scrollTop|follow\.jump|paintTranscript\(/);
-    expect(app).toMatch(/if \(follow\.shouldStick\) vp\.scrollTop = vp\.scrollHeight/);
+    expect(app).toMatch(/if \(follow\.shouldStick\) setScroll\(vp, vp\.scrollHeight\)/);
     expect(app).not.toMatch(/replaceChildren|innerHTML/);
   });
 });

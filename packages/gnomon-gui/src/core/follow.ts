@@ -40,10 +40,22 @@ export class Follow {
     return !this.#stuck;
   }
 
-  /** A scroll position the user reached (scroll event): at the bottom sticks and clears the count; anywhere else unsticks. */
-  onScroll(atBottom: boolean): void {
-    this.#stuck = atBottom;
-    if (atBottom) this.#unseen = 0;
+  /**
+   * A scroll the USER made (never one the page made itself). Moving up always unsticks, however small the step
+   * (the slack only decides re-sticking), so a gentle wheel tick near the bottom is never snapped back (founder
+   * dogfood 2026-10-19). Reaching the bottom while moving down sticks again and clears the count.
+   */
+  onScroll(atBottom: boolean, movedUp = false): void {
+    if (movedUp) this.#stuck = false;
+    else if (atBottom) {
+      this.#stuck = true;
+      this.#unseen = 0;
+    } else this.#stuck = false;
+  }
+
+  /** Intent to read back (wheel up, touch drag down, ArrowUp / PageUp / Home): unstick before the next paint can snap. */
+  release(): void {
+    this.#stuck = false;
   }
 
   /** `n` items appended (a row arrived or the user sent): counted only while scrolled up; never changes stickiness. */
