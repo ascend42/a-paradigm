@@ -61,10 +61,10 @@ gates:
     check: constant-time equal(auth.setupToken, the minted token) AND now < expiresAt AND not yet consumed AND no other setup connection
     prizes: []
   unprovisioned-only:
-    description: 'Gnomon first-run provisions only a home with NO keys/identity.json (spec §2.4 rule 9). An existing identity is shown (createdAt, root keyId) and never adopted or replaced; a malformed one is shown, never touched; a dev or symlinked home is refused. The one write allowed on a provisioned home is the I10 completion of a missing device registry row (the saved, already root-signed row; no new signature). Enforced by gnomon setup, bare gnomon, up --wrapper routing and the #setup-endpoint setup.begin / setup.complete.'
+    description: 'Gnomon first-run provisions only a home with NO keys/identity.json (spec §2.4 rule 9). An existing identity is shown (createdAt, root keyId) and never adopted or replaced; a malformed one is shown, never touched; a dev or symlinked home is refused. The writes allowed on a provisioned home are the I10 completion of a missing device registry row (the saved, already root-signed row; no new signature) and setup.purge of a leftover, non-live key generation the checks listed (behind a presence prompt; the live and GNOMON_HOME generations are protected). Enforced by gnomon setup, bare gnomon, up --wrapper routing and the #setup-endpoint setup.begin / setup.complete.'
     type: access
     location: packages/gnomon/src/cli/setup-cli.ts + src/cli/up-cli.ts + src/kernel/setup/setup-endpoint.ts (#first-run, #setup-endpoint)
-    check: ~/.gnomon is missing, or a real non-dev directory with no keys/identity.json; else only setup.complete of a missing registry row for the existing identity
+    check: ~/.gnomon is missing, or a real non-dev directory with no keys/identity.json; else only setup.complete of a missing registry row for the existing identity, or setup.purge of a listed non-live leftover generation
     prizes: []
   gate-check:
     description: Internal gate used by the @a-company/portal SDK for validating gate definitions and checks (see packages/portal/sdk/.purpose).

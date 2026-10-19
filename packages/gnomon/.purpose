@@ -893,7 +893,8 @@ components:
       stop() removes that scratch dir BEFORE it waits for a running step, so
       the wrapper's quit / stdin EOF (Gnomon.app Cmd-Q, which kills the
       kernel at most 10 s later) cleans it even with a Touch ID prompt held
-      open; an EOF that came before waitSetup listened also stops it.
+      open; an EOF that came before waitSetup listened also stops it. A
+      failed rm (e.g. EACCES) never rejects stop(); the next run sweeps it.
     path: src/kernel/setup/setup-endpoint.ts
     type: service
     related: ["#provisioner", "#setup-preflight", "#web-endpoint", "#gui-setup", "#first-run"]

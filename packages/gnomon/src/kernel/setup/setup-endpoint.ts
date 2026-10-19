@@ -260,7 +260,11 @@ export class SetupEndpoint {
   async stop(): Promise<void> {
     this.#abort('stopped', 'the setup endpoint stopped');
     await this.#web?.stop('setup-done').catch(() => undefined);
-    fs.rmSync(this.#state, { recursive: true, force: true });
+    try {
+      fs.rmSync(this.#state, { recursive: true, force: true });
+    } catch {
+      /* e.g. EACCES: never let a failed rm reject stop() (callers `void` it) or skip the wait; the next run sweeps it */
+    }
     await this.#running?.catch(() => undefined);
   }
 
