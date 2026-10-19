@@ -1,0 +1,19 @@
+id: L-2026-10-19-builder-004604-001
+type: insight
+timestamp: '2026-10-19T00:46:04.489Z'
+author: builder
+title: Wrapper surface marker, node discovery and bundle pin (M1.13)
+summary: 'Surface: frozen non-configurable window.gnomonSurface=wrapper defined at document start on the 127.0.0.1 origin only; GUI hostSurface trusts only that descriptor; display only, no clientApiId move (wrapper already in CLIENT_SURFACES). Node: local.signed.json runner.node when its sha256 matches, else the build-time realpath of which node compiled into the signed binary. Bundle: channel bundleHash must equal the compiled pin and served files must re-hash to it.'
+symbols_touched:
+  - '#gnomon-wrapper'
+  - '#gui'
+commit: 249de987
+tags:
+  - gnomon
+  - M1.13
+  - insight
+confidence: 0.8
+git_context:
+  ref: 60989ae14d210401271607b157ecd0ca3a5718e0
+  branch: gnomon/m113-wrapper
+  dirty: true
