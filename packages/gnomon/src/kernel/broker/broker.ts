@@ -78,6 +78,8 @@ import { HardwarePresenceDenied, HelperUnlockGone, type DecisionSignRequest, typ
 import { baseClass, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
+import { SESSION_DISARM_REASON } from './arm-custody.js';
+import type { HelperSessionCause } from '../identity/helper.js';
 
 /** A refusal thrown by the broker (reasons are registered refusal reasons; scanned by test/refusal-reasons.test.ts). */
 export function fail(code: RefusalCode, reason: string, message: string, data?: RefusalData & { gate?: RefusalGate }): RefusedError {
@@ -134,6 +136,8 @@ export interface ApprovalsKey {
   signDecision?(req: DecisionSignRequest): Promise<DecisionSignResult>;
   /** Drop a connection's unlock where the key lives (the helper). */
   dropUnlock?(connId: string): Promise<void>;
+  /** Helper 1.6.0 (`conn.close`): drop the connection's unlock AND close every voice arm naming it. Preferred over dropUnlock on close. */
+  connectionClosed?(connId: string): Promise<void>;
 }
 export const NO_APPROVALS_KEY: ApprovalsKey = Object.freeze({ verify: () => 'unavailable' as const, available: () => false });
 
@@ -486,7 +490,8 @@ export class ApprovalBroker {
   async connectionClosed(connId: string): Promise<void> {
     this.#cooldownFrom.delete(connId); // L2 state is per connection; a connId is never reused
     const had = this.unlocks.drop(connId);
-    await this.#dropHelperUnlock(connId);
+    if (this.#approvals.connectionClosed) await this.#approvals.connectionClosed(connId).catch(() => undefined);
+    else await this.#dropHelperUnlock(connId);
     if (had) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
   }
 
@@ -499,6 +504,17 @@ export class ApprovalBroker {
   async helperExited(): Promise<void> {
     for (const connId of this.unlocks.connIds()) {
       if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'helper-exit' }, { connId }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Helper 1.6.0 session push (screen lock, screensaver, display or system sleep, user switch; §14.7, §A.1):
+   * logs approval.unlock.dropped{reason: SESSION_DISARM_REASON[cause], cause}, the same mapping as the disarm rows.
+   * logs approval.unlock.dropped{reason: 'screen-lock'} (every session cause, as for the disarm rows).
+   */
+  async helperSessionEnded(cause: HelperSessionCause): Promise<void> {
+    for (const connId of this.unlocks.connIds()) {
+      if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: SESSION_DISARM_REASON[cause], cause }, { connId }).catch(() => undefined);
     }
   }
 

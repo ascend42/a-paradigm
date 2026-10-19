@@ -1,17 +1,25 @@
 // gnomon-helper (darwin) — the signed helper of the Gnomon kernel (spec §3.1,
-// §16, §18; M1.3 slice 1). Holds what the kernel must never hold: the root
-// and approvals P-256 keys in the Secure Enclave, behind presence.
+// §16, §18; M1.3 slice 1; 1.6.0 voice arm custody, §14.7). Holds what the
+// kernel must never hold: the root and approvals P-256 keys in the Secure
+// Enclave, behind presence, and every evaluated LAContext (cached unlocks per
+// connId, voice arms per armId, S29-K5).
 //
 //   gnomon-helper --version        print the version, exit 0
 //   gnomon-helper serve            NDJSON request/reply loop on stdin/stdout
 //                                  (the kernel's long-lived child: holds the
-//                                  per-connection approvals unlocks; EOF on
-//                                  stdin ends it and every unlock with it)
+//                                  per-connection approvals unlocks and the
+//                                  voice arms; EOF on stdin ends it and every
+//                                  unlock and arm with it). Requests run on a
+//                                  reader thread; the main thread runs the
+//                                  run loop that observes lock / screensaver /
+//                                  display sleep / system sleep / user switch
+//                                  (SessionWatch.swift) and PUSHES an event.
 //   gnomon-helper once             one request line in, one reply line out
-//                                  (root signatures from the CLI)
+//                                  (root signatures from the CLI; no observer,
+//                                  it holds nothing past its one reply)
 //
-// Ops (Protocol.swift for the wire format and bounds):
-//   info
+// Ops, protocol gnomon-helper:v2 (Protocol.swift for the wire format and bounds; Server.swift):
+//   info                                      → {version, protocol, pid, signing, unlocks, arms}
 //   key.list                                  → {keys: [{gen, key}]}
 //   key.create  {key, gen, rotate?}           → {publicKey}   (refuses `exists`; refuses `other-generation`
 //                                               when a key of another gen exists, unless `rotate` carries
@@ -21,218 +29,36 @@
 //   key.delete  {key, gen, reason}            → {deleted, statement, sig?}  FRESH presence over a
 //                                               helper-composed delete statement, signed by the root of
 //                                               gen when it exists (H2); no presence only for a gen this
-//                                               process created itself (failed-provision cleanup)
+//                                               process created itself (failed-provision cleanup).
+//                                               Deleting approvals drops every unlock and arm.
 //   sign        {key, gen, mode: fresh|cached, connId?, keep?, reason, messages[]}
-//                                             → {sigs[], kept}
+//                                             → {sigs[], kept}   NEVER the voice domain (G-BRK-06)
 //   presence.available                        → {available, biometrics, error?}  (LAContext canEvaluatePolicy; NEVER a prompt)
 //   unlock.drop {connId}                      → {dropped}
 //   unlock.drop-all                           → {dropped: n}
+//   (v2) arm.open  {armId, gen, humanConnId, voiceConnId, hardSeconds, idleSeconds?, maxSignatures?, reason, messages[]}
+//                                             → {sigs[], armId, kept, shown}  FRESH presence; the prompt names
+//                                               the pair and bounds; refuses arm-exists, arm-limit (Bounds.maxArms,
+//                                               its own cap), arm-invalidated (a session event during the prompt)
+//   (v2) arm.sign  {armId, gen, humanConnId, voiceConnId, messages[]}
+//                                             → {sigs[], armId}  ONLY gnomon:approve-voice:v1, only for that pair;
+//                                               `no-arm` otherwise; never a prompt
+//   (v2) arm.close {armId}                    → {closed}
+//   (v2) arm.close-all                        → {closed: n}
+//   (v2) conn.close {connId}                  → {dropped, arms[]}  the connection's unlock and every arm naming it
+//   (v2) push {push:"session", cause, arms[], unlocks, seq}   unsolicited, after invalidating everything
 //
 // Refuses to run sandboxed (P8-D68): {"ok":false,"error":"sandboxed"}, exit 3.
 
 import Foundation
-import LocalAuthentication
-import Security
 
-let gnomonHelperVersion = "1.5.0"
+// gnomonHelperVersion and helperProtocol live in Protocol.swift (a main.swift global is never initialized under `swift test`)
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {
     // Aegis M5 (round 3): if the check cannot be made, assume sandboxed — fail CLOSED
     guard let h = dlopen(nil, RTLD_NOW), let s = dlsym(h, "sandbox_check") else { return true }
     return unsafeBitCast(s, to: SandboxCheck.self)(getpid(), nil, 0) != 0
-}
-
-func signingInfo() -> Json {
-    var code: SecCode?
-    guard SecCodeCopySelf([], &code) == errSecSuccess, let c = code else { return [:] }
-    var st: SecStaticCode?
-    SecCodeCopyStaticCode(c, [], &st)
-    var info: CFDictionary?
-    guard let s = st, SecCodeCopySigningInformation(s, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-          let d = info as? Json else { return [:] }
-    return ["identifier": d[kSecCodeInfoIdentifier as String] as? String ?? NSNull(), "team": d[kSecCodeInfoTeamIdentifier as String] as? String ?? NSNull()]
-}
-
-let unlocks = Unlocks()
-/// Exactly the (key, gen) pairs THIS process created (a failed provision may remove those, and only
-/// those, without presence — Aegis round 3: a pair, never a whole generation).
-var createdHere = Set<String>()
-func createdKey(_ k: KeyClass, _ g: String) -> String { "\(k.rawValue).\(g)" }
-
-/// Aegis H2: a rotate statement — `gnomon:row-sig:v1\n` + canonical JSON
-/// {schemaVersion: gnomon-root-rotate:v1, fromGen, toGen, …} — signed (DER) by the root of fromGen.
-func checkRotate(_ req: Json, toGen: String) throws {
-    guard let r = req["rotate"] as? Json else { throw HelperError("other-generation", "keys of another generation exist; creating new ones needs a rotate statement signed by the old root") }
-    let fromGen = try generation(["gen": r["fromGen"] as Any])
-    guard let st = (r["statement"] as? String).flatMap({ Data(base64Encoded: $0) }), st.count <= Bounds.maxMessageBytes,
-          let sig = (r["sig"] as? String).flatMap({ Data(base64Encoded: $0) }) else { throw bad("rotate needs {fromGen, statement, sig}") }
-    let prefix = Data("gnomon:row-sig:v1\n".utf8)
-    guard st.starts(with: prefix), let obj = try? JSONSerialization.jsonObject(with: st.subdata(in: prefix.count..<st.count)) as? Json,
-          obj["schemaVersion"] as? String == "gnomon-root-rotate:v1", obj["fromGen"] as? String == fromGen, obj["toGen"] as? String == toGen else {
-        throw HelperError("rotate-refused", "the rotate statement does not name this generation change")
-    }
-    guard verifyBy(.root, fromGen, message: st, signature: sig) else { throw HelperError("rotate-refused", "the rotate statement is not signed by the root of \(fromGen)") }
-}
-
-func handle(_ req: Json) throws -> Json {
-    let op = try str(req, "op")
-    switch op {
-    case "info":
-        return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": unlocks.count]
-
-    case "presence.available":
-        // #setup-preflight (T-2026-10-19-005 MVP-b): canEvaluatePolicy only asks whether a prompt COULD run; it never shows one
-        let ctx = LAContext()
-        var bioErr: NSError?
-        let bio = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &bioErr)
-        var anyErr: NSError?
-        let any = ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &anyErr)
-        ctx.invalidate()
-        var r: Json = ["available": any, "biometrics": bio]
-        if let e = bioErr ?? anyErr { r["error"] = "LAError \(e.code)" }
-        return r
-
-    case "key.list":
-        return ["keys": listKeys().map { ["gen": $0.gen, "key": $0.key.rawValue] }]
-
-    case "key.create":
-        let k = try keyClass(req)
-        let g = try generation(req)
-        if listKeys().contains(where: { $0.gen != g }) { try checkRotate(req, toGen: g) }
-        let pub = try createKey(k, g)
-        createdHere.insert(createdKey(k, g))
-        return ["publicKey": pub]
-
-    case "key.public":
-        return ["publicKey": try publicKeyB64(try loadPrivateKey(try keyClass(req), try generation(req), context: nil))]
-
-    case "key.delete":
-        let k = try keyClass(req)
-        let g = try generation(req)
-        var nonce = Data(count: 16)
-        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        let statement = Data("gnomon:key-delete:v1\n\(k.rawValue)\n\(g)\n\(nonce.base64EncodedString())".utf8)
-        var out: Json = ["statement": statement.base64EncodedString()]
-        if !createdHere.contains(createdKey(k, g)) {
-            // Aegis H2: fresh presence over a statement the HELPER composed; the root of gen signs it when it exists
-            let ctx = try evaluatePresence(promptText(try reason(req), "Gnomon Helper: DELETE the \(k.rawValue) key of generation \(g) (\(digest12(statement)))"))
-            defer { ctx.invalidate() }
-            if let root = try? loadPrivateKey(.root, g, context: ctx) {
-                var err: Unmanaged<CFError>?
-                guard let sig = SecKeyCreateSignature(root, .ecdsaSignatureMessageX962SHA256, statement as CFData, &err) as Data? else { throw cfError(err, "sign") }
-                out["sig"] = sig.base64EncodedString()
-            }
-        }
-        if k == .approvals { _ = unlocks.dropAll() }
-        out["deleted"] = deleteKey(k, g)
-        createdHere.remove(createdKey(k, g))
-        return out
-
-    case "sign":
-        let k = try keyClass(req)
-        let g = try generation(req)
-        let mode = try str(req, "mode")
-        let msgs = try messages(req, for: k, cached: mode == "cached")
-        let conn = try connId(req)
-        let keep = try optBool(req, "keep")
-        let line = helperLine(key: k, messages: msgs)
-        switch (k, mode) {
-        case (.root, "fresh"):
-            // presence PER SIGNATURE: a new context, evaluated, used once, invalidated
-            guard !keep else { throw bad("the root key never keeps an unlock") }
-            let ctx = try evaluatePresence(promptText(try reason(req), line))
-            defer { ctx.invalidate() }
-            // "shown": the kernel checks the line names the digest it displayed (provisioner helperLineShows)
-            return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": false, "shown": line]
-        case (.approvals, "fresh"):
-            if keep && conn == nil { throw bad("keep needs a connId") }
-            let ctx = try evaluatePresence(promptText(try reason(req), line))
-            let sigs: [String]
-            do {
-                sigs = try signAll(try loadPrivateKey(k, g, context: ctx), msgs)
-            } catch {
-                ctx.invalidate()
-                throw error
-            }
-            var kept = false
-            if keep, let c = conn { kept = unlocks.put(c, gen: g, ctx: ctx) }
-            if !kept { ctx.invalidate() }
-            return ["sigs": sigs, "kept": kept, "shown": line]
-        case (.approvals, "cached"):
-            guard let c = conn else { throw bad("a cached sign needs a connId") }
-            guard let ctx = unlocks.use(c, gen: g, signatures: msgs.count) else { throw HelperError("no-unlock", "no live unlock for this connection") }
-            do {
-                return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": true]
-            } catch {
-                unlocks.drop(c) // a context the system invalidated (lock screen, sleep) is gone for good
-                throw HelperError("no-unlock", "the unlock of this connection no longer signs")
-            }
-        default:
-            throw bad("mode must be fresh (root, approvals) or cached (approvals)")
-        }
-
-    case "unlock.drop":
-        guard let c = try connId(req) else { throw bad("unlock.drop needs a connId") }
-        return ["dropped": unlocks.drop(c)]
-
-    case "unlock.drop-all":
-        return ["dropped": unlocks.dropAll()]
-
-    default:
-        throw bad("unknown op")
-    }
-}
-
-/// Answer one raw line. Never throws; the id is echoed when it is an int or a short string.
-func answer(_ line: Data) -> Data {
-    var id: Any = NSNull()
-    guard line.count <= Bounds.maxLineBytes else { return replyLine(["id": id, "ok": false, "error": "bad-request", "message": "line too long"]) }
-    guard let obj = try? JSONSerialization.jsonObject(with: line), let req = obj as? Json else {
-        return replyLine(["id": id, "ok": false, "error": "bad-request", "message": "not a JSON object"])
-    }
-    if let n = req["id"] as? Int { id = n } else if let s = req["id"] as? String, s.count <= 64 { id = s }
-    do {
-        var out = try handle(req)
-        out["id"] = id
-        out["ok"] = true
-        return replyLine(out)
-    } catch let e as HelperError {
-        var out: Json = ["id": id, "ok": false, "error": e.code, "message": String(e.message.prefix(300))]
-        if let s = e.status { out["status"] = s }
-        return replyLine(out)
-    } catch {
-        return replyLine(["id": id, "ok": false, "error": "internal", "message": String("\(error)".prefix(300))])
-    }
-}
-
-/// Read stdin as raw bytes and split on \n (a UTF-8 character split across reads is never corrupted).
-func serve(onlyOne: Bool) -> Int32 {
-    let input = FileHandle.standardInput
-    var buf = Data()
-    var discarding = false
-    while true {
-        let chunk = input.availableData
-        if chunk.isEmpty { break } // EOF: the kernel is gone; the unlocks die with this process
-        buf.append(chunk)
-        while let nl = buf.firstIndex(of: 0x0A) {
-            let line = buf.subdata(in: buf.startIndex..<nl)
-            buf.removeSubrange(buf.startIndex...nl)
-            if discarding {
-                discarding = false
-                FileHandle.standardOutput.write(replyLine(["id": NSNull(), "ok": false, "error": "bad-request", "message": "line too long"]))
-            } else if !line.isEmpty {
-                FileHandle.standardOutput.write(answer(line))
-            }
-            if onlyOne { return 0 }
-        }
-        if buf.count > Bounds.maxLineBytes {
-            buf.removeAll(keepingCapacity: false)
-            discarding = true
-        }
-    }
-    _ = unlocks.dropAll()
-    return 0
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -242,16 +68,31 @@ if arguments.contains("--version") || arguments.contains("-v") {
     exit(0)
 }
 
+let output = Output()
+
 if isSandboxed() {
-    FileHandle.standardOutput.write(replyLine(["id": NSNull(), "ok": false, "error": "sandboxed", "message": "the helper refuses to run sandboxed (P8-D68)"]))
+    output.emit(replyLine(["id": NSNull(), "ok": false, "error": "sandboxed", "message": "the helper refuses to run sandboxed (P8-D68)"]))
     exit(3)
 }
 
+let server = Server()
+
 switch arguments.first {
 case "serve":
-    exit(serve(onlyOne: false))
+    // the observer registers on the main thread, which then runs the main run loop for its notifications,
+    // IOKit power messages and the 250 ms poll; requests are served on a reader thread
+    let watch = SessionWatch(custody: server.custody, source: SystemSessionEvents(), output: output)
+    watch.start()
+    let reader = Thread {
+        let code = server.serve(onlyOne: false, output: output) // EOF: invalidates every unlock and arm
+        exit(code)
+    }
+    reader.stackSize = 1 << 20
+    reader.start()
+    CFRunLoopRun()
+    exit(0)
 case "once":
-    exit(serve(onlyOne: true))
+    exit(server.serve(onlyOne: true, output: output))
 default:
     FileHandle.standardError.write(Data("usage: gnomon-helper --version | serve | once\n".utf8))
     exit(64)

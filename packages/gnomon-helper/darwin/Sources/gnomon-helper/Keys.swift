@@ -14,7 +14,10 @@
 //              sign can never raise a prompt; dropped after 15 idle minutes,
 //              60 minutes after it opened, after 64 signatures (T-2026-10-18-028
 //              M2: hard bounds the idle timer cannot slide), on unlock.drop, and
-//              when this process exits.
+//              when this process exits; helper 1.6.0 also on conn.close, on any
+//              session event (lock, screensaver, display or system sleep, user
+//              switch: SessionWatch.swift) and never for the voice domain.
+//              Voice ARMS are a separate store (Custody.swift).
 
 import Foundation
 import LocalAuthentication
@@ -141,7 +144,8 @@ func signAll(_ priv: SecKey, _ msgs: [Data]) throws -> [String] {
     }
 }
 
-/// Per-connection approvals unlocks (bounded; idle-expiring).
+/// Per-connection approvals unlocks (bounded; idle-expiring). Not thread-safe on its own: every access goes
+/// through Custody.sync (Custody.swift).
 final class Unlocks {
     private struct Entry {
         let gen: String

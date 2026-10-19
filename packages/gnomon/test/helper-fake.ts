@@ -1,5 +1,5 @@
 /**
- * An in-memory stand-in for the signed helper (`gnomon-helper:v1`): software
+ * An in-memory stand-in for the signed helper (`gnomon-helper:v2`, helper 1.6.0 arms + session push): software
  * P-256 keys play the Secure Enclave, `touch` plays the human. Tests only —
  * it behaves like packages/gnomon-helper/darwin (domain allowlist per key,
  * DER signatures, per-connId cached unlocks, no-unlock, presence-denied;
@@ -9,10 +9,11 @@
  * the gen, the helper's own prompt line).
  */
 import { createHash, generateKeyPairSync, sign as cryptoSign, verify as cryptoVerify, type KeyObject } from 'node:crypto';
-import { HelperRefusal, HelperUnavailableError, type HelperReply, type HelperTransport } from '../src/kernel/identity/helper.js';
+import { HelperRefusal, HelperUnavailableError, type HelperPush, type HelperReply, type HelperSessionCause, type HelperTransport } from '../src/kernel/identity/helper.js';
 
 const DOMAINS: Record<string, string[]> = { root: ['gnomon:row-sig:v1\n'], approvals: ['gnomon:approve:v1\n', 'gnomon:presence:v1\n'] };
 const CACHED_DOMAINS = ['gnomon:approve:v1\n'];
+const ARM_DOMAINS = ['gnomon:approve-voice:v1\n']; // G-BRK-06: in no other list
 const d12 = (m: Buffer): string => createHash('sha256').update(m).digest('hex').slice(0, 12);
 
 /** The helper's own prompt line, as packages/gnomon-helper/darwin/Sources/gnomon-helper/Protocol.swift helperLine builds it (Aegis MEDIUM-3). */
@@ -67,10 +68,27 @@ export interface FakeHelperOptions {
 export class FakeHelper implements HelperTransport {
   readonly keys = new Map<string, { priv: KeyObject; pub: KeyObject }>();
   readonly unlocks = new Set<string>();
+  /** helper 1.6.0: voice arms, a separate store keyed by armId */
+  readonly arms = new Map<string, { human: string; voice: string }>();
   prompts: string[] = [];
   signs: Array<{ key: string; mode: string; connId?: string; n: number }> = [];
   #alive = true;
   readonly #exit: Array<() => void> = [];
+  readonly #push: Array<(p: HelperPush) => void> = [];
+  #seq = 0;
+
+  onPush(cb: (p: HelperPush) => void): void {
+    this.#push.push(cb);
+  }
+
+  /** The helper's session observer fires: every arm and unlock is invalidated, then one push goes out. */
+  sessionEvent(cause: HelperSessionCause): HelperPush {
+    const p: HelperPush = { push: 'session', cause, arms: [...this.arms.keys()].sort(), unlocks: this.unlocks.size, seq: ++this.#seq };
+    this.arms.clear();
+    this.unlocks.clear();
+    for (const cb of this.#push) cb(p);
+    return p;
+  }
   readonly #other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   readonly createdHere = new Set<string>();
   /** every prompt as the helper would show it (caller text + the helper's own line) */
@@ -98,6 +116,7 @@ export class FakeHelper implements HelperTransport {
   revive(): void {
     this.#alive = true;
     this.unlocks.clear();
+    this.arms.clear();
     this.createdHere.clear();
   }
 
@@ -114,6 +133,7 @@ export class FakeHelper implements HelperTransport {
   crash(): void {
     this.#alive = false;
     this.unlocks.clear();
+    this.arms.clear();
     for (const cb of this.#exit) cb();
   }
 
@@ -170,6 +190,39 @@ export class FakeHelper implements HelperTransport {
         return { ok: true, publicKey: this.x963(req.key as 'root', String(req.gen)) };
       case 'unlock.drop':
         return { ok: true, dropped: this.unlocks.delete(String(req.connId)) };
+      case 'conn.close': {
+        const c = String(req.connId);
+        const closed = [...this.arms].filter(([, a]) => a.human === c || a.voice === c).map(([id]) => id);
+        for (const id of closed) this.arms.delete(id);
+        return { ok: true, dropped: this.unlocks.delete(c), arms: closed };
+      }
+      case 'arm.close':
+        return { ok: true, closed: this.arms.delete(String(req.armId)) };
+      case 'arm.close-all': {
+        const n = this.arms.size;
+        this.arms.clear();
+        return { ok: true, closed: n };
+      }
+      case 'arm.open': {
+        const k = this.keys.get(`${String(req.gen)}.approvals`); // arm ops always use the approvals key
+        if (!k) throw new HelperRefusal('not-found', 'no key');
+        if (this.arms.has(String(req.armId))) throw new HelperRefusal('arm-exists', 'live');
+        const msgs = (req.messages as string[]).map((m) => Buffer.from(m, 'base64'));
+        for (const m of msgs) if (!DOMAINS.approvals!.some((d) => m.subarray(0, d.length).toString() === d)) throw new HelperRefusal('domain-refused', 'domain');
+        this.prompts.push(String(req.reason));
+        if (!this.#touch()) throw new HelperRefusal('presence-denied', 'cancelled');
+        this.arms.set(String(req.armId), { human: String(req.humanConnId), voice: String(req.voiceConnId) });
+        return { ok: true, armId: req.armId, kept: true, shown: 'arm', sigs: msgs.map((m) => cryptoSign('sha256', m, { key: k.priv, dsaEncoding: 'der' }).toString('base64')) };
+      }
+      case 'arm.sign': {
+        const k = this.keys.get(`${String(req.gen)}.approvals`); // arm ops always use the approvals key
+        if (!k) throw new HelperRefusal('not-found', 'no key');
+        const msgs = (req.messages as string[]).map((m) => Buffer.from(m, 'base64'));
+        for (const m of msgs) if (!ARM_DOMAINS.some((d) => m.subarray(0, d.length).toString() === d)) throw new HelperRefusal('domain-refused', 'domain');
+        const a = this.arms.get(String(req.armId));
+        if (!a || a.human !== req.humanConnId || a.voice !== req.voiceConnId) throw new HelperRefusal('no-arm', 'no arm');
+        return { ok: true, armId: req.armId, sigs: msgs.map((m) => cryptoSign('sha256', m, { key: k.priv, dsaEncoding: 'der' }).toString('base64')) };
+      }
       case 'unlock.drop-all': {
         const n = this.unlocks.size;
         this.unlocks.clear();

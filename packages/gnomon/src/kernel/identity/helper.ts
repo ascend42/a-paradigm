@@ -3,7 +3,7 @@
  *
  * #identity (spec §3.1 root + approvals keys, §16 keys row, G-HLP-01; M1.3
  * slice 1) — the kernel's side of the signed helper (`packages/gnomon-helper`,
- * protocol `gnomon-helper:v1`, NDJSON over the child's stdin/stdout).
+ * protocol `gnomon-helper:v2`, NDJSON over the child's stdin/stdout).
  *
  * TRUST BEFORE SPAWN. The kernel never runs a helper it has not pinned:
  *   1. the path is resolved ONCE (realpathSync.native) and must be a regular
@@ -38,7 +38,7 @@ import { helperVerifierFor } from '../../platform/helper-verifier.js';
 
 export const HELPER_TEAM = 'SW4BMQ8PNL';
 export const HELPER_IDENTIFIER = 'gnomon.helper';
-export const HELPER_PROTOCOL = 'gnomon-helper:v1';
+export const HELPER_PROTOCOL = 'gnomon-helper:v2'; // v2 (helper 1.6.0): voice arm ops + the unsolicited session push
 /**
  * Aegis H1 (c): identifier + team is not enough (every binary the team signs
  * as gnomon.helper passes it, an old one included). After spawn and before
@@ -49,7 +49,7 @@ export const HELPER_PROTOCOL = 'gnomon-helper:v1';
  * every founder build, so an allowlist shipped with the kernel would break on
  * each rebuild; the floor stops downgrades to known-weaker helpers.
  */
-export const MIN_HELPER_VERSION = '1.5.0'; // 1.5.0: root fresh signs return `shown` (setup's helper-line check), decisionSig v2 prompt line; 1.4.0: presence.available
+export const MIN_HELPER_VERSION = '1.6.0'; // 1.6.0: protocol v2, voice arms (own store), approve-voice under an arm only, lock/sleep observer push; 1.5.0: root fresh signs return `shown` (setup's helper-line check), decisionSig v2 prompt line; 1.4.0: presence.available
 // was 1.3.0: // 1.3.0: T-2026-10-18-028 M2 (absolute unlock TTL + signature cap in the helper)
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */
 export const HELPER_REQUIREMENT =
@@ -87,11 +87,39 @@ export class HelperRefusal extends Error {
 
 export type HelperReply = Record<string, unknown>;
 
+/**
+ * Protocol v2 (helper 1.6.0, spec §14.7, S29-K5): what the helper's session observer saw. On any of
+ * these the helper has ALREADY invalidated every voice arm and every cached unlock before it pushed.
+ */
+export const HELPER_SESSION_CAUSES = ['screen-lock', 'screensaver', 'display-sleep', 'system-sleep', 'user-switch'] as const;
+export type HelperSessionCause = (typeof HELPER_SESSION_CAUSES)[number];
+
+/** An unsolicited helper frame: `{push:'session', cause, arms[], unlocks, seq}` — never carries an `id`. */
+export interface HelperPush {
+  push: 'session';
+  cause: HelperSessionCause;
+  /** arm ids the helper closed (informational: the kernel ends EVERY arm it holds, fail closed) */
+  arms: string[];
+  unlocks: number;
+  seq: number;
+}
+
+/** Parse a push frame strictly; null = not a well-formed push (the transport then treats the line as protocol garbage). */
+export function parseHelperPush(o: Record<string, unknown>): HelperPush | null {
+  if (o.push !== 'session' || 'id' in o) return null;
+  if (typeof o.cause !== 'string' || !(HELPER_SESSION_CAUSES as readonly string[]).includes(o.cause)) return null;
+  const arms = Array.isArray(o.arms) && o.arms.length <= 64 && o.arms.every((a) => typeof a === 'string' && a.length <= 64) ? (o.arms as string[]) : null;
+  if (!arms || !Number.isSafeInteger(o.unlocks) || !Number.isSafeInteger(o.seq)) return null;
+  return { push: 'session', cause: o.cause as HelperSessionCause, arms, unlocks: o.unlocks as number, seq: o.seq as number };
+}
+
 /** What the kernel talks to: one serialized request at a time. Fakes implement this in tests. */
 export interface HelperTransport {
   request(req: Record<string, unknown>, timeoutMs?: number): Promise<HelperReply>;
   readonly alive: boolean;
   onExit(cb: () => void): void;
+  /** Protocol v2: an unsolicited session push (lock, sleep, user switch) arrived; the helper already ended every arm and unlock. */
+  onPush?(cb: (p: HelperPush) => void): void;
   close(): Promise<void>;
   /** T-2026-10-18-028 M3: a helper PROCESS is running now (a supervisor that starts on demand may have none). Default: `alive`. */
   readonly running?: boolean;
@@ -290,6 +318,7 @@ export class HelperProcess implements HelperTransport {
   #alive = true;
   #ready = false;
   readonly #exitCbs: Array<() => void> = [];
+  readonly #pushCbs: Array<(p: HelperPush) => void> = [];
 
   private constructor(child: ChildProcess) {
     this.#child = child;
@@ -386,15 +415,37 @@ export class HelperProcess implements HelperTransport {
     }
   }
 
+  onPush(cb: (p: HelperPush) => void): void {
+    this.#pushCbs.push(cb);
+  }
+
   #onLine(line: string): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      parsed = undefined;
+    }
+    // protocol v2: an unsolicited push (no id) may arrive at any time, in flight or not
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && 'push' in parsed) {
+      const push = this.#ready ? parseHelperPush(parsed as Record<string, unknown>) : null;
+      if (!push) {
+        this.#gone(new HelperUnavailableError('protocol', 'the helper pushed a malformed frame'));
+        this.#child.kill('SIGKILL');
+        return;
+      }
+      for (const cb of this.#pushCbs) {
+        try {
+          cb(push);
+        } catch {
+          /* a listener's failure never blocks the others */
+        }
+      }
+      return;
+    }
     const p = this.#inflight;
     if (!p) return; // unsolicited: ignored
-    let id: unknown;
-    try {
-      id = (JSON.parse(line) as { id?: unknown }).id;
-    } catch {
-      id = undefined;
-    }
+    const id = parsed !== null && typeof parsed === 'object' ? (parsed as { id?: unknown }).id : undefined;
     if (id !== p.id) {
       this.#gone(new HelperUnavailableError('protocol', 'the helper answered out of order'));
       this.#child.kill('SIGKILL');
@@ -486,6 +537,13 @@ export class SupervisedHelper implements HelperTransport {
     this.#exitCbs.push(cb);
   }
 
+  readonly #pushCbs: Array<(p: HelperPush) => void> = [];
+
+  /** Pushes from whichever helper process is current (each started process is subscribed once). */
+  onPush(cb: (p: HelperPush) => void): void {
+    this.#pushCbs.push(cb);
+  }
+
   #ensure(): HelperTransport {
     if (this.#closed) throw new HelperUnavailableError('closed', 'the helper was closed');
     if (this.#cur?.alive) return this.#cur;
@@ -495,6 +553,16 @@ export class SupervisedHelper implements HelperTransport {
     this.#backoff = now - this.#lastStart > HELPER_RESTART_MAX_MS ? HELPER_RESTART_MIN_MS : Math.min(HELPER_RESTART_MAX_MS, Math.max(HELPER_RESTART_MIN_MS, this.#backoff * 2));
     this.#lastStart = now;
     const t = this.#start();
+    t.onPush?.((p) => {
+      if (this.#cur !== t) return; // a stale process
+      for (const cb of this.#pushCbs) {
+        try {
+          cb(p);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
     t.onExit(() => {
       if (this.#cur === t) this.#cur = null;
       for (const cb of this.#exitCbs) {

@@ -73,7 +73,8 @@
  */
 import * as nodeOs from 'node:os';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
-import type { HelperTransport } from '../identity/helper.js';
+import type { HelperPush, HelperTransport } from '../identity/helper.js';
+import { VoiceArmCustody } from '../broker/arm-custody.js';
 import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
@@ -169,7 +170,7 @@ export interface DaemonOptions {
   /** Root seam (default: UnprovisionedRootAuthority). Tests pass a DevTestRootAuthority; gnomond passes the HardwareRootAuthority of a provisioned home (M1.3). */
   rootAuthority?: RootAuthority;
   /** M1.3: the approvals key (HelperApprovalsKey behind the signed helper). Default: none (approve refuses UNSUPPORTED presence). */
-  approvalsKey?: ApprovalsKey & { onHelperExit?(cb: () => void): void };
+  approvalsKey?: ApprovalsKey & { onHelperExit?(cb: () => void): void; onHelperPush?(cb: (p: HelperPush) => void): void; closeArm?(armId: string): Promise<void> };
   /** M1.3: the helper child the keys live behind; closed (EOF: every unlock dies) at shutdown. */
   helper?: HelperTransport;
   /** Test seam: the auth clock (nonce expiry). */
@@ -639,6 +640,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
+  // helper 1.6.0 (§14.7, S29-K5): voice-arm references. A helper exit or a session push (lock, sleep, user
+  // switch) disarms every arm (approval.voice.disarm); a push also drops every cached-unlock reference.
+  const ak = opts.approvalsKey;
+  const voiceArms = new VoiceArmCustody(brokerLog, ak?.closeArm ? { closeArm: (a) => ak.closeArm!(a) } : null);
+  ak?.onHelperExit?.(() => void voiceArms.helperExited());
+  ak?.onHelperPush?.((p) => {
+    void voiceArms.helperPushed(p);
+    void broker.helperSessionEnded(p.cause);
+  });
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
   // T-2026-10-19-014 B0 (F3): the daemon-stop card; an accept shuts down with the card's reason. B1: an `upgrade`
   // accept drains every session first (§2.4 rule 11: session.drained before session.exited), then exits `upgrade`.

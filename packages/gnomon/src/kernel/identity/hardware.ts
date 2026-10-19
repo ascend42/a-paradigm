@@ -32,7 +32,7 @@ import { canonicalJson, nsFromRootPublicKey } from '@a-company/gnomon-contracts'
 import { KeyRing, p256KeyId, signaturePreimage, type SignatureDomain } from '../log/signer.js';
 import { beginHardwarePresence, completeHardwarePresence, PresenceToken, type PresenceBinding, type PresencePurpose } from './presence.js';
 import { RootUnavailableError, RootVerifier, rowMessage, type RootAuthority } from './root-authority.js';
-import { HELPER_SIGN_TIMEOUT_MS, HelperRefusal, HelperUnavailableError, type HelperOnceSync, type HelperReply, type HelperTransport } from './helper.js';
+import { HELPER_SIGN_TIMEOUT_MS, HelperRefusal, HelperUnavailableError, type HelperOnceSync, type HelperPush, type HelperReply, type HelperTransport } from './helper.js';
 
 /** The helper's prompt text is bounded (the helper refuses > 512 chars). */
 export const HELPER_REASON_MAX = 500;
@@ -353,9 +353,109 @@ export class HelperApprovalsKey {
     await (this.#helper.recycle ? this.#helper.recycle() : this.#helper.close()).catch(() => undefined);
   }
 
-  /** A helper exit drops every unlock (§3.1 failure modes). */
+  /**
+   * A connection closed (protocol v2 `conn.close`): the helper drops its cached unlock AND closes every
+   * voice arm naming it (§14.7). Never throws; escalates like dropUnlock (drop-all + close-all, then end
+   * the process), so a closed connection never leaves a live arm behind.
+   */
+  async connectionClosed(connId: string): Promise<void> {
+    if (!(this.#helper.running ?? this.#helper.alive)) return;
+    try {
+      await this.#helper.request({ op: 'conn.close', connId });
+      return;
+    } catch {
+      /* escalate */
+    }
+    try {
+      await this.#helper.request({ op: 'unlock.drop-all' });
+      await this.#helper.request({ op: 'arm.close-all' });
+      return;
+    } catch {
+      /* escalate */
+    }
+    await (this.#helper.recycle ? this.#helper.recycle() : this.#helper.close()).catch(() => undefined);
+  }
+
+  /**
+   * Open a voice arm (§14.7, S29-K5): ONE fresh presence prompt, bound by the helper to {humanConnId,
+   * voiceConnId}; the evaluated context stays in the helper keyed by armId. `messages` are signed in the
+   * same touch under the FRESH approvals domains (the voice-arm card decision; G-BRK-06: never the voice
+   * domain). Throws HardwarePresenceDenied on a declined prompt, HelperRefusal otherwise (arm-exists,
+   * arm-limit, arm-invalidated: the session locked during the prompt).
+   */
+  async openArm(req: { armId: string; humanConnId: string; voiceConnId: string; hardSeconds: number; idleSeconds?: number; maxSignatures?: number; prompt: string; messages: string[] }): Promise<{ sigs: Buffer[]; shown: unknown }> {
+    const messages = req.messages.map((m) => b64('approve', m));
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request(
+        {
+          op: 'arm.open',
+          armId: req.armId,
+          gen: this.gen,
+          humanConnId: req.humanConnId,
+          voiceConnId: req.voiceConnId,
+          hardSeconds: req.hardSeconds,
+          ...(req.idleSeconds !== undefined ? { idleSeconds: req.idleSeconds } : {}),
+          ...(req.maxSignatures !== undefined ? { maxSignatures: req.maxSignatures } : {}),
+          reason: withCheck(req.prompt, messages),
+          messages,
+        },
+        HELPER_SIGN_TIMEOUT_MS,
+      );
+    } catch (e) {
+      if (e instanceof HelperRefusal && e.code === 'presence-denied') throw new HardwarePresenceDenied('declined at the prompt');
+      throw e;
+    }
+    const sigs = sigsOf(reply, messages.length);
+    req.messages.forEach((m, i) => {
+      if (this.verify(this.principalId, m, sigs[i]!.toString('base64')) !== 'ok') throw new HardwarePresenceDenied('the helper returned an arm signature that does not verify');
+    });
+    return { sigs, shown: reply.shown };
+  }
+
+  /** Sign voice decisions under a live arm (domain `gnomon:approve-voice:v1` ONLY, G-BRK-06). Each signature is verified before use. */
+  async signUnderArm(req: { armId: string; humanConnId: string; voiceConnId: string; messages: string[] }): Promise<Buffer[]> {
+    const messages = req.messages.map((m) => b64('approveVoice', m));
+    const reply = await this.#helper.request({ op: 'arm.sign', armId: req.armId, gen: this.gen, humanConnId: req.humanConnId, voiceConnId: req.voiceConnId, messages });
+    const sigs = sigsOf(reply, messages.length);
+    req.messages.forEach((m, i) => {
+      if (this.#ring.verify(this.keyId, 'approveVoice', m, sigs[i]!) !== 'ok') throw new HardwarePresenceDenied('the helper returned a voice signature that does not verify');
+    });
+    return sigs;
+  }
+
+  /** Close one arm in the helper. Never throws: a close the helper does not answer escalates to ending the process. */
+  async closeArm(armId: string): Promise<void> {
+    if (!(this.#helper.running ?? this.#helper.alive)) return;
+    try {
+      await this.#helper.request({ op: 'arm.close', armId });
+      return;
+    } catch {
+      /* escalate */
+    }
+    await (this.#helper.recycle ? this.#helper.recycle() : this.#helper.close()).catch(() => undefined);
+  }
+
+  /** Close every arm in the helper (never throws; escalates like closeArm). */
+  async closeAllArms(): Promise<void> {
+    if (!(this.#helper.running ?? this.#helper.alive)) return;
+    try {
+      await this.#helper.request({ op: 'arm.close-all' });
+      return;
+    } catch {
+      /* escalate */
+    }
+    await (this.#helper.recycle ? this.#helper.recycle() : this.#helper.close()).catch(() => undefined);
+  }
+
+  /** A helper exit drops every unlock and every arm (§3.1 failure modes, S29-K5). */
   onHelperExit(cb: () => void): void {
     this.#helper.onExit(cb);
+  }
+
+  /** Protocol v2: the helper's session observer ended every arm and unlock (lock, sleep, user switch). */
+  onHelperPush(cb: (p: HelperPush) => void): void {
+    this.#helper.onPush?.(cb);
   }
 
   /** Fresh presence for a non-decision purpose (challenge only). */

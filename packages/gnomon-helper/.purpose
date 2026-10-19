@@ -28,7 +28,27 @@ components:
       and line/paragraph separator from the caller text before the OS prompt. Each key signs
       only its own domain prefixes (root: row-sig, presence; approvals:
       approve, presence). Inputs bounded before any key is touched. Refuses
-      to run sandboxed (P8-D68). Never prints key material. Later: the
+      to run sandboxed (P8-D68). Never prints key material. Helper 1.6.0
+      (protocol gnomon-helper:v2, V5 of TD-2026-10-19-194, spec §14.7,
+      S29-K5, G-BRK-06): voice ARMS in their own store (Custody.swift, cap
+      Bounds.maxArms 8, separate from maxUnlocks 32), opened by arm.open
+      (fresh presence bound to {humanConnId, voiceConnId}); arm.sign signs
+      ONLY gnomon:approve-voice:v1 for that pair, and neither fresh nor
+      cached signing ever accepts that domain; arm.close(-all); conn.close
+      drops a connId's unlock and every arm naming it. SessionWatch.swift
+      observes screen lock, screensaver, display sleep, system sleep and
+      user switch (distributed + NSWorkspace notifications, IOKit power, a
+      250 ms CGSession poll), invalidates every arm and unlock, bumps the
+      epoch (a prompt open across the event is never kept), then pushes an
+      unsolicited {push:'session', cause, arms, unlocks, seq} line. serve
+      runs requests on a reader thread and the main run loop for the
+      observer; Output serializes stdout. Aegis V5 fixes: arm.sign parses the
+      frozen gnomon:voice-decision:v1 preimage (gnomon-contracts
+      voice-decision.ts) and refuses unless it names this arm and pair;
+      arm.open and arm.sign fail closed on a locked, off-console or unknown
+      session (CGSessionProbe); maxSignatures required (ceiling 1024); the
+      helper arm line leads the prompt, caller text capped at 120. Unit tests: darwin/Tests (swift
+      test). Later: the
       kernel-key keystore item, the keystore log anchor, XPC under launchd,
       the Windows pipe, job objects, WFP, launch-token hand-off.
     path: darwin/Sources/gnomon-helper/
