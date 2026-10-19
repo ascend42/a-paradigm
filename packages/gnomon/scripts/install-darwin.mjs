@@ -17,12 +17,45 @@ const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(PKG, '..', '..');
 export const BIN_DIRS = Object.freeze(['/opt/homebrew/bin', '/usr/local/bin']);
 
-/** Null when the runtime is fit to install from; else why not. */
-export function runtimeProblem(env = process.env, version = process.versions.node) {
-  if (env.NODE_OPTIONS !== undefined && env.NODE_OPTIONS.trim() !== '') return 'NODE_OPTIONS is set: gnomon refuses to run its kernel under it (unsafe-env). Run `unset NODE_OPTIONS` (and remove it from your shell profile), then run this again';
+/** True when node has --disable-sigusr1: 22.14+ on 22.x, 23.7+ on 23.x, any 24+. */
+export function nodeFloorOk(version) {
   const [maj, min] = version.split('.').map(Number);
-  if (maj < 22 || (maj === 22 && min < 14)) return `node ${version} is too old: gnomon needs node 22.14 or later (for --disable-sigusr1)`;
+  if (maj === 22) return min >= 14;
+  if (maj === 23) return min >= 7;
+  return maj >= 24;
+}
+
+/** Null when the runtime is fit to install from; else {reason, message}. */
+export function runtimeProblem(env = process.env, version = process.versions.node) {
+  if (env.NODE_OPTIONS !== undefined && env.NODE_OPTIONS.trim() !== '') return { reason: 'unsafe-env', message: 'NODE_OPTIONS is set: gnomon refuses to run its kernel under it (unsafe-env). Run `unset NODE_OPTIONS` (and remove it from your shell profile), then run this again' };
+  if (!nodeFloorOk(version)) return { reason: 'node-too-old', message: `node ${version} lacks --disable-sigusr1: gnomon needs node 22.14+ on 22.x, 23.7+ on 23.x, or 24 and later` };
   return null;
+}
+
+/** A directory as a comparable key: resolved, trailing separators dropped, realpath'd when it exists. */
+export function dirKey(d) {
+  const r = path.resolve(d);
+  try {
+    return fs.realpathSync.native(r);
+  } catch {
+    return r;
+  }
+}
+
+/** The first PATH directory holding a `gnomon` that is NOT `dir` (compared as dirKey), or null. */
+export function shadowingDir(dir, pathVar = process.env.PATH ?? '') {
+  const want = dirKey(dir);
+  for (const d of pathVar.split(path.delimiter).filter(Boolean)) {
+    if (!fs.existsSync(path.join(d, 'gnomon'))) continue;
+    return dirKey(d) === want ? null : d;
+  }
+  return null;
+}
+
+/** True when `dir` (as dirKey) is on PATH. */
+export function onPath(dir, pathVar = process.env.PATH ?? '') {
+  const want = dirKey(dir);
+  return pathVar.split(path.delimiter).filter(Boolean).some((d) => dirKey(d) === want);
 }
 
 /**
@@ -63,6 +96,12 @@ export function placeLink(target, dirs = BIN_DIRS) {
   return { ok: true, dir: writable[0], link, action: 'linked' };
 }
 
+/** The text for a failed build: a refusal and a next step, never a stack trace. */
+export function buildRefusal(e) {
+  const how = e && typeof e.status === 'number' ? `exit ${e.status}` : e && e.code ? String(e.code) : 'failed';
+  return `REFUSED  INSTALL  build\n  npm run build:gnomon ${how} (its output is above)\n  next: fix the build error above (often: npm ci), then run this again\n`;
+}
+
 export const NEXT_STEPS = `next steps (once):
   1. the signed Secure Enclave helper:   node packages/gnomon-helper/scripts/build-darwin.mjs
   2. optional hardware test, BEFORE identity init:
@@ -83,12 +122,17 @@ function main(argv) {
   if (process.platform !== 'darwin') process.stderr.write('install-darwin: this installer is written for macOS; continuing (the kernel runs on linux without the GUI launch)\n');
   const bad = runtimeProblem();
   if (bad) {
-    process.stderr.write(`REFUSED  INSTALL  unsafe-env\n  ${bad}\n`);
+    process.stderr.write(`REFUSED  INSTALL  ${bad.reason}\n  ${bad.message}\n`);
     return 1;
   }
   if (build) {
     process.stdout.write('building: npm run build:gnomon\n');
-    execFileSync('npm', ['run', 'build:gnomon'], { cwd: REPO, stdio: 'inherit' });
+    try {
+      execFileSync('npm', ['run', 'build:gnomon'], { cwd: REPO, stdio: 'inherit' });
+    } catch (e) {
+      process.stderr.write(buildRefusal(e));
+      return 1;
+    }
   }
   const target = path.join(PKG, 'dist', 'cli', 'gnomon.js');
   if (!fs.existsSync(target)) {
@@ -102,9 +146,9 @@ function main(argv) {
     return 1;
   }
   process.stdout.write(`${r.action === 'linked' ? 'LINKED' : 'ALREADY LINKED'}  ${r.link} -> ${fs.realpathSync.native(target)}\n`);
-  const onPath = (process.env.PATH ?? '').split(path.delimiter).find((d) => fs.existsSync(path.join(d, 'gnomon')));
-  if (onPath && onPath !== r.dir) process.stdout.write(`  note: ${path.join(onPath, 'gnomon')} comes first on your PATH and is not this link\n`);
-  else if (!onPath) process.stdout.write(`  note: ${r.dir} is not on your PATH; add it to your shell profile\n`);
+  const shadow = shadowingDir(r.dir);
+  if (shadow) process.stdout.write(`  note: ${path.join(shadow, 'gnomon')} comes first on your PATH and is not this link\n`);
+  else if (!onPath(r.dir)) process.stdout.write(`  note: ${r.dir} is not on your PATH; add it to your shell profile\n`);
   process.stdout.write(`\n${NEXT_STEPS}\n`);
   return 0;
 }

@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error -- a zero-dep .mjs script, no declaration file
-import { NEXT_STEPS, placeLink, runtimeProblem } from '../scripts/install-darwin.mjs';
+import { buildRefusal, dirKey, NEXT_STEPS, nodeFloorOk, onPath, placeLink, runtimeProblem, shadowingDir } from '../scripts/install-darwin.mjs';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { PKG_ROOT } from './helpers.js';
 import { privateTmpRoot } from './daemon-helpers.js';
@@ -62,8 +62,8 @@ describe('#bare-entry installer', () => {
     expect(r.message).toContain('does not use sudo');
   });
   it('NODE_OPTIONS and node < 22.14 are refused; the next steps name helper, hardware test, identity init, the app and repin', () => {
-    expect(runtimeProblem({ NODE_OPTIONS: '--require x' }, '24.0.0')).toContain('unset NODE_OPTIONS');
-    expect(runtimeProblem({}, '22.13.0')).toContain('22.14');
+    expect(runtimeProblem({ NODE_OPTIONS: '--require x' }, '24.0.0')).toMatchObject({ reason: 'unsafe-env', message: expect.stringContaining('unset NODE_OPTIONS') });
+    expect(runtimeProblem({}, '22.13.0')).toMatchObject({ reason: 'node-too-old' });
     expect(runtimeProblem({}, '24.1.0')).toBeNull();
     for (const s of ['gnomon-helper/scripts/build-darwin.mjs', 'GNOMON_HW_TESTS=1', 'gnomon identity init', 'gnomon-wrapper/scripts/build-darwin.mjs', 'repin-claude']) expect(NEXT_STEPS).toContain(s);
   });
@@ -71,5 +71,36 @@ describe('#bare-entry installer', () => {
     const src = fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'install-darwin.mjs'), 'utf8');
     const code = src.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
     expect(code).not.toMatch(/\.gnomon['"/]|homedir|keys\/|sudo['"]/);
+  });
+});
+
+describe('#bare-entry installer (round 3)', () => {
+  it('node floor: 22.14+ on 22.x, 23.7+ on 23.x, 24+; anything else is node-too-old', () => {
+    for (const v of ['22.14.0', '22.20.1', '23.7.0', '23.11.0', '24.0.0', '26.0.0']) expect(nodeFloorOk(v), v).toBe(true);
+    for (const v of ['20.18.0', '21.7.3', '22.13.1', '23.6.1']) {
+      expect(nodeFloorOk(v), v).toBe(false);
+      expect(runtimeProblem({}, v)).toMatchObject({ reason: 'node-too-old' });
+    }
+  });
+  it('a failed build is a refusal with a next step, not a stack trace', () => {
+    const t = buildRefusal(Object.assign(new Error('Command failed: npm run build:gnomon'), { status: 2 }));
+    expect(t).toMatch(/^REFUSED {2}INSTALL {2}build\n/);
+    expect(t).toContain('exit 2');
+    expect(t).toContain('  next: ');
+    expect(t).not.toMatch(/\bat \S+:\d+/);
+  });
+  it('the PATH-shadow check compares normalized dirs: a trailing slash or a symlinked spelling is the same dir', () => {
+    const w = world();
+    fs.symlinkSync(w.target, path.join(w.local, 'gnomon'));
+    const alias = path.join(w.d, 'alias-bin');
+    fs.symlinkSync(w.local, alias);
+    expect(dirKey(`${w.local}${path.sep}`)).toBe(w.local);
+    expect(shadowingDir(w.local, [`${w.local}${path.sep}`].join(path.delimiter))).toBeNull();
+    expect(shadowingDir(w.local, [alias].join(path.delimiter))).toBeNull();
+    expect(onPath(w.local, `${alias}${path.sep}`)).toBe(true);
+    const other = path.join(w.d, 'other-bin');
+    fs.mkdirSync(other);
+    fs.writeFileSync(path.join(other, 'gnomon'), '');
+    expect(shadowingDir(w.local, [other, w.local].join(path.delimiter))).toBe(other);
   });
 });
