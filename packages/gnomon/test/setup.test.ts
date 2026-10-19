@@ -191,6 +191,30 @@ describe('gnomon setup (#first-run)', () => {
     expect(readIdentity(homeOf(u))!.gen).not.toBe('test0001');
   });
 
+  it('G-SET-04 (MEDIUM-2): a generation that is the live root of the GNOMON_HOME home is never purged; purgeGeneration re-checks every visible record under the lock', async () => {
+    const fake = new FakeHelper(null);
+    const other = path.join(tmp(), 'other-home');
+    const p = new Provisioner({ home: other, helperPath: exe(tmp()), verifier: DEV, start: view(fake, []), once: () => (q) => fake.handle(q) });
+    const made = await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' });
+    expect(made.ok).toBe(true);
+    const gen = readIdentity(other)!.gen;
+    const prompts = fake.prompts.length;
+
+    const u = tmp();
+    const o = io(['purge']);
+    const r = await runSetup(o.io, deps(u, fake, [], { runtime: { env: { GNOMON_HOME: other }, execArgv: ['--disable-sigusr1'] } }));
+    expect(r.code).toBe(1);
+    expect(o.errText()).toContain('in-use');
+    expect(fake.prompts.length).toBe(prompts); // no delete prompt
+    expect(fake.keys.has(`${gen}.root`)).toBe(true);
+
+    // the engine itself: its own home's live generation, and any home it is told about, refuse under the lock
+    expect(await p.purgeGeneration(gen)).toMatchObject({ ok: false, reason: 'in-use' });
+    const q = new Provisioner({ home: homeOf(u), helperPath: exe(tmp()), verifier: DEV, start: view(fake, []) });
+    expect(await q.purgeGeneration(gen, { alsoCheckHomes: [other] })).toMatchObject({ ok: false, reason: 'in-use' });
+    expect(fake.keys.has(`${gen}.root`)).toBe(true);
+  });
+
   it('G-SET-05 (I7, I8): two concurrent runs — the second refuses provisioning-locked and sends no key.create; a third root sign is never asked', async () => {
     const u = tmp();
     const home = homeOf(u);

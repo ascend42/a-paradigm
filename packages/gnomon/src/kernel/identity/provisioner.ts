@@ -439,13 +439,23 @@ export class Provisioner extends EventEmitter {
   }
 
   /** I6: delete one generation's SE keys, each with fresh presence (H2). Never the live identity's (the caller checks). */
-  async purgeGeneration(gen: string): Promise<ProvisionOutcome> {
+  async purgeGeneration(gen: string, opts: { alsoCheckHomes?: readonly string[] } = {}): Promise<ProvisionOutcome> {
     const pin = this.#pin();
     if ('ok' in pin) return pin;
     const helper = this.#startHelper(pin);
     let release: (() => void) | null = null;
     try {
       release = acquireProvisionLock(this.#o.home);
+      // Aegis MEDIUM-2: under the lock, no identity.json this run can see may name the generation (never purge blind)
+      for (const h of [this.#o.home, ...(opts.alsoCheckHomes ?? [])]) {
+        let rec: IdentityRecord | null;
+        try {
+          rec = readIdentity(h);
+        } catch (e) {
+          return this.#refuse('identity-malformed', `${identityPath(h)} is unreadable, so it may name generation ${gen}: ${e instanceof Error ? e.message : 'malformed'}`);
+        }
+        if (rec?.gen === gen) return this.#refuse('in-use', `generation ${gen} is the live identity of ${h}; rotate or recover instead`);
+      }
       const held = (await listHelperKeys(helper)).filter((k) => k.gen === gen);
       if (!held.length) return this.#refuse('not-found', `no Gnomon keys of generation ${gen} in the Secure Enclave`);
       const deleted: string[] = [];

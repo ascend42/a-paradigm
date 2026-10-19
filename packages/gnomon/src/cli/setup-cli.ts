@@ -37,6 +37,7 @@ import {
   HardwareRootAuthority,
   identityPath,
   Provisioner,
+  readIdentity,
   readRegistry,
   registryPath,
   deviceKeyPath,
@@ -227,10 +228,21 @@ export async function runSetup(io: LaunchTtyIo, deps: SetupDeps = {}): Promise<S
     if (homeCheck?.status === 'fail') return stop(new SetupRefusal('unfit-home', homeCheck.detail, homeCheck.fix ? [homeCheck.fix] : []));
 
     // I6: leftover generations are offered for purge (presence per key), never adopted
+    // MEDIUM-2: GNOMON_HOME is read here ONLY to protect the home it names from a purge, never to choose the home
+    const otherHome = env.GNOMON_HOME && path.isAbsolute(env.GNOMON_HOME) ? path.resolve(env.GNOMON_HOME) : null;
     for (const gen of report.leftover) {
-      const a = await rl.ask(`\nThe Secure Enclave holds old Gnomon keys (generation ${gen}) that no home uses. Setup needs them gone.\nType "purge" to delete them (one Touch ID per key), anything else to stop:\n> `);
+      if (otherHome) {
+        let other: IdentityRecord | null = null;
+        try {
+          other = readIdentity(otherHome);
+        } catch {
+          return stop(new SetupRefusal('identity-malformed', `the home GNOMON_HOME names (${otherHome}) has an unreadable identity.json that may use generation ${gen}; not purging blind`));
+        }
+        if (other?.gen === gen) return stop(new SetupRefusal('in-use', `generation ${gen} is the live identity of ${otherHome} (GNOMON_HOME); setup will not delete it`, ['unset GNOMON_HOME only if that home is really gone, or keep it and use `gnomon identity init --home <abs>`']));
+      }
+      const a = await rl.ask(`\nThe Secure Enclave holds Gnomon keys (generation ${gen}) not used by ~/.gnomon (another home set by GNOMON_HOME/--home may use it). Setup needs them gone.\nType "purge" to delete them (one Touch ID per key), anything else to stop:\n> `);
       if (a !== 'purge') return stop(new SetupRefusal('keys-exist', `generation ${gen} was kept; setup does not adopt keys it did not create`, [`gnomon identity purge-keys --gen ${gen}`]));
-      const r = await engine(deps.helperPath ?? defaultHelperPath()).purgeGeneration(gen);
+      const r = await engine(deps.helperPath ?? defaultHelperPath()).purgeGeneration(gen, otherHome ? { alsoCheckHomes: [otherHome] } : {});
       if (!r.ok) return stop(new SetupRefusal(r.reason, r.message));
       io.stdout.write(`  deleted generation ${gen}\n`);
     }
