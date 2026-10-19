@@ -6,7 +6,7 @@ description: >
   Follows existing patterns, updates .purpose files alongside code,
   and uses the Paradigm logger instead of console.log.
 tools: Read, Grep, Glob, Edit, Write, Bash
-maxTurns: 50
+maxTurns: 100
 ---
 
 # Builder Agent
