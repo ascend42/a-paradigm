@@ -23,8 +23,9 @@
  */
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
-import { DISABLE_SIGUSR1, selectSocketPath, sigusr1Refusal, type DaemonHandle } from '../kernel/lifecycle/index.js';
+import { DISABLE_SIGUSR1, isLifecycleRefusal, selectSocketPath, sigusr1Refusal, type DaemonHandle } from '../kernel/lifecycle/index.js';
 import type { LaunchGrant } from '../kernel/web/endpoint.js';
+import { LAUNCH_GRANT_CAP } from '../kernel/web/launch-cap.js';
 import { GnomonClient, type ClientCredential, type KernelKeyPin } from '../clients/ts/index.js';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
@@ -220,8 +221,8 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
  * (`wrapper-channel`): the channel is a pipe or a socket the parent holds.
  */
 export const WRAPPER_CHANNEL = 'gnomon-wrapper-channel:v1';
-/** At most this many `launch` grants per minute on one channel (one in flight at a time). */
-export const WRAPPER_LAUNCH_CAP = 8;
+/** At most this many `launch` grants per minute (one in flight at a time): the kernel's shared launch-grant cap. */
+export const WRAPPER_LAUNCH_CAP = LAUNCH_GRANT_CAP;
 
 /**
  * The next step for an `unsafe-env` refusal in --wrapper mode: the APP spawned
@@ -292,19 +293,10 @@ export async function serveWrapperChannel(k: InProcessKernel, io: LaunchTtyIo, o
   io.stderr.write(`UP  ${o.noun} (in this process, wrapper channel)\n`);
   readout(io.stderr, o.rows);
   channelLine(io.stdout, { t: 'up' });
-  // repeated `launch` commands are capped: one mint in flight, at most WRAPPER_LAUNCH_CAP per minute
-  let minting = false;
-  const recent: number[] = [];
+  // repeated `launch` commands are capped by the web endpoint's ONE launch-grant cap (kernel/web/launch-cap.ts:
+  // one mint in flight, at most LAUNCH_GRANT_CAP a minute), shared with the terminal and `gui.open`, never added on top
   const mint = async (): Promise<void> => {
     if (stopping) return;
-    const now = Date.now();
-    while (recent.length && now - recent[0]! > 60_000) recent.shift();
-    if (minting || recent.length >= WRAPPER_LAUNCH_CAP) {
-      channelLine(io.stdout, { t: 'launch-failed', message: minting ? 'a launch is already being minted' : `more than ${WRAPPER_LAUNCH_CAP} launch requests in a minute` });
-      return;
-    }
-    recent.push(now);
-    minting = true;
     try {
       const g = await k.launch();
       // the kernel may have begun stopping while the token was minted: never hand out a grant then
@@ -312,11 +304,13 @@ export async function serveWrapperChannel(k: InProcessKernel, io: LaunchTtyIo, o
       // the grant's own fields only: the url is rebuilt by the wrapper (it never needs a second copy of the token)
       channelLine(io.stdout, { t: 'launch', port: g.port, launchToken: g.launchToken, kernelPublicKey: g.kernelPublicKey, bundleHash: g.bundleHash, expiresAt: g.expiresAt });
     } catch (e) {
+      if (isLifecycleRefusal(e) && e.reason === 'web-launch-capped') {
+        channelLine(io.stdout, { t: 'launch-failed', message: e.message.replace(/^gnomond: /, '') });
+        return;
+      }
       const m = e instanceof Error ? e.message : String(e);
       refused(io.stderr, o.code, 'web-launch', m);
       channelLine(io.stdout, { t: 'launch-failed', message: m });
-    } finally {
-      minting = false;
     }
   };
   const rl = readline.createInterface({ input: io.stdin, terminal: false });

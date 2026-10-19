@@ -9,3 +9,4 @@ export * from './dispatch.js';
 export * from './client.js';
 export * from './log-read.js';
 export * from './status-numbers.js';
+export * from './gui-open.js';

@@ -14,6 +14,11 @@
  *     order; a decision or expiry removes THAT card only, so deciding a later
  *     card leaves earlier ones pending and untouched; per-project filtering
  *     uses the request row's `scope.repo`; the global inbox shows all.
+ *   - Read position (journal.cursor, P8-D98, §5): `logId` + `position` form
+ *     the `{logId, seq}` cursor the next log.read resumes from. A seq means
+ *     something only inside one log, so `reset()` drops everything when the
+ *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
+ *     re-reads from the start.
  */
 
 export interface Row {
@@ -60,6 +65,10 @@ export class GuiStore {
   #cardSeq = 0;
   head = 0;
   rowsSeen = 0;
+  /** The log these rows came from (a page's / subscription's `logId`); null before the first read. */
+  logId: string | null = null;
+  /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
+  position = 0;
   readonly #listeners = new Set<(what: Set<string>) => void>();
 
   onChange(fn: (what: Set<string>) => void): () => void {
@@ -73,6 +82,37 @@ export class GuiStore {
 
   transcript(hsid: string): readonly Row[] {
     return this.#transcripts.get(hsid) ?? [];
+  }
+
+  /** The resume cursor `{logId, seq}`, or undefined (read from the start). */
+  cursor(): { logId: string; seq: number } | undefined {
+    const seq = Math.max(this.position, this.head);
+    return this.logId !== null && seq > 0 ? { logId: this.logId, seq } : undefined;
+  }
+
+  /** Record a page's `next` (rows scanned past the last visible one). */
+  advance(next: number): void {
+    if (Number.isSafeInteger(next) && next > this.position) this.position = next;
+  }
+
+  /** The kernel named the log it read from; another log than ours ⇒ our seqs mean nothing there: start over. */
+  adopt(logId: string): void {
+    if (this.logId !== null && this.logId !== logId) this.reset();
+    this.logId = logId;
+  }
+
+  /** Drop every row-derived state (cursor-epoch): the GUI re-reads from the start of the current log. */
+  reset(): void {
+    this.sessions.clear();
+    this.#transcripts.clear();
+    this.kernelFeed.length = 0;
+    this.cards.clear();
+    this.#cardSeq = 0;
+    this.head = 0;
+    this.rowsSeen = 0;
+    this.position = 0;
+    this.logId = null;
+    this.#emit(new Set(['reset', 'sessions', 'cards', 'feed']));
   }
 
   /** Apply a batch of rows (backlog page or one live event); notifies once. */

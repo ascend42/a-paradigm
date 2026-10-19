@@ -137,6 +137,22 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    journal-cursor: >-
+      BUILT (slice A4, T-2026-10-19-001, TD-2026-10-19-648 item 8, §5):
+      SERVER_FEATURES = ['journal.cursor'] (inside the signed
+      canonical(features)). log.read `since` is the {logId, seq} cursor
+      (validateLogReadCursor); a cursor whose logId is not the current log
+      (another kernel, or a quarantined predecessor) is
+      BAD_REQUEST{cursor-epoch}; a bare-seq since is refused bad-since for
+      every view (no caller sends one; it is the epoch-blind resume the
+      cursor exists to stop); any resume on a connection that did not
+      negotiate journal.cursor is refused bad-since{needs}, never degraded.
+      A read with no since starts at the current log and needs no feature.
+      The cursor rides the envelope (page cursor/logId, subscription reply
+      logId, each event notification's cursor, end.cursor); limited-view
+      rows carry seq only (no hash, prev, sig or log). kernel.call (mods,
+      in-process) carries SERVER_FEATURES; connectGnomon offers
+      DEFAULT_FEATURES. Tests: test/socket-log-read.test.ts (journal.cursor).
     planned-001-move: >-
       PLANNED, not built (TD-2026-10-19-648; spec §5, §7.4, §3.9). In the
       batched clientApiId move T-2026-10-19-001: the log.read cursor
@@ -810,14 +826,45 @@ components:
       test/fixtures/cwd-hint.v1.json, Aegis L3); the GUI
       (#gui, core/launch.ts cwdHintOf/applyCwdHint) applies the same rule,
       prefills only a clean absolute path and never submits. A kernel
-      already running on the home is NOT joined and no second one starts:
-      `REFUSED GNOMON already-running`, exit 3 (BARE_EXIT_ALREADY_RUNNING),
-      naming the instance from the pidfile pid classified via `ps -o
-      command=` (Gnomon.app / gnomon up / gnomond; never echoed; diagnostic
-      only) and how to open the folder in that window. DESIGN (lore):
-      minting a URL from a running kernel needs a `gnomon open` wire verb
-      that moves clientApiId — queued with the batched bump
-      T-2026-10-19-001 (design note in spec §2.4 rule 8), not added here.
+      already running on the home: no second one starts. On an interactive
+      terminal bare `gnomon` asks it for a launch grant over the P8-D98
+      human-device verb `gui.open {cwdHint}` (up-cli.ts requestRunningLaunch:
+      this home's device key + root-signed human row checked like
+      startUpKernel's deviceOf, the kernel hello verified against the home's
+      pin via kernelPinOf, then device auth; T-2026-10-19-001 A3) and
+      prints/opens that URL with the same `&cwd=` fragment (ATTACHED readout).
+      Not a terminal: the TTY check runs BEFORE the RPC, nothing on stdout,
+      no gui.open call, `REFUSED GNOMON already-running`, exit 3
+      (BARE_EXIT_ALREADY_RUNNING), naming the instance from the pidfile pid
+      classified via `ps -o command=` (diagnostic only). The kernel side is
+      #socket src/kernel/socket/gui-open.ts (createGuiOpenHandler, wired in
+      DispatcherOptions.humanVerbs by the daemon): verified human device
+      only; cwdHint ≤ 1024 UTF-8 bytes else BAD_REQUEST{cwd-hint-too-long},
+      returned verbatim, never read or logged; the grant is the in-process
+      requestWebLaunch's (single-use, at most 60 s) under the ONE shared
+      launch-grant cap src/kernel/web/launch-cap.ts (LaunchGrantCap on
+      WebEndpoint.requestLaunch: one in flight, 8 a minute across the
+      terminal, the wrapper channel and gui.open — shared, not added on
+      top; ENGINE{web-launch-capped}). Fairness (Aegis M2): gui.open is a
+      `socket` asker that may hold at most LAUNCH_GRANT_SOCKET_SHARE (4) of
+      the 8 window slots, so the in-process asker (terminal, wrapper) always
+      keeps the rest; a socket mint in flight (a cold start) makes ONE
+      in-process asker wait and go next, never refuses it; a mint that
+      throws refunds its slot (the token is the mint's last throwing step).
+      The human-device verbs are UNIX-SOCKET ONLY (Aegis L1): the daemon
+      builds them as their own `humanVerbs` object and hands it only to the
+      unix dispatcher (daemon.ts dispatcherOptionsFor), so the web
+      dispatcher reports them unavailable and refuses them. A grant whose
+      caller's connection closed during the mint is withdrawn
+      (GuiAccess.withdraw via WebEndpoint.withdrawLaunch, Aegis L2), never
+      left pending. Falsified in test/gui-open.test.ts and
+      test/human-device-verbs.test.ts. Hardening: requestRunningLaunch
+      refuses a gui.open grant whose url fails isOpenableUrl
+      (gui-open-bad-grant) and sanitizes the server's refusal text
+      (sanitizeDisplayText); bare entry builds `&cwd=` from its own capped
+      folder, never the kernel's echoed cwdHint (Aegis L3, L4). log.read's
+      one-page since-ahead is judged against releasedHead(), as subscribe
+      does (Aegis L6).
       Also `gnomon help|--help|-h` (GNOMON_HELP, one line per verb) and an
       unknown verb → usage exit 64 without echoing it.
       scripts/install-darwin.mjs is the idempotent installer (build, link
@@ -1475,6 +1522,12 @@ components:
       keys outside that file fail offline verify (residual).
 
   gnomon-ts-client:
+    journal-cursor: >-
+      Offers CLIENT_FEATURES = ['journal.cursor'] by default; subscribe
+      takes since as {logId, seq}, cursor() and end.cursor hand the cursor
+      back; isCursorEpoch(err) tells the caller to re-read from the start.
+      The conformance runner covers the bare-seq and cursor-epoch refusals
+      (refusal.bad-request) and resumes subscribe.since by cursor.
     description: >-
       #gnomon-ts-client (spec §4.9, §5, §12.8; §19.1 M1.12 slice 2).
       src/clients/ts/ — the published TypeScript client, built ONLY on

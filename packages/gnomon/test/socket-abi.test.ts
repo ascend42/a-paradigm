@@ -149,7 +149,7 @@ async function asToken(r: Rig, token: string): Promise<GnomonSession> {
 async function helloThenAuth(r: Rig, params: unknown): Promise<{ c: RpcConnection; resp: RpcResponseFrame }> {
   const c = await RpcConnection.open(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
+  await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: ['journal.cursor'], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
   return { c, resp: await c.call('auth', params) };
 }
 
@@ -163,7 +163,7 @@ function tokenProof(token: string, hello: HelloResult, endpointPath: string): { 
 async function helloOn(r: Rig): Promise<{ c: RpcConnection; hello: HelloResult }> {
   const c = await RpcConnection.open(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  const h = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
+  const h = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: ['journal.cursor'], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
   return { c, hello: (h as { result: HelloResult }).result };
 }
 
@@ -400,7 +400,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     cleanups.push(() => d.shutdown('signal'));
     const c = await RpcConnection.open(d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
+    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: ['journal.cursor'], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(errOf(await c.call('auth', { tokenId: 'rtk:' + '0'.repeat(26), sig: 'AA==' }))).toMatchObject({ c: 'AUTH', reason: 'root-unprovisioned', milestone: 'M1.3' });
   });
 
@@ -409,7 +409,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     const pid = `p:${r.root.ns}/console`;
     const a = mintReadToken(r.home, r.root, { principalId: pid, ttlMs: 60 * 60_000 });
     const s = await asToken(r, a.token);
-    ok(await s.conn.call('log.read', { follow: true, since: r.d.log.head().seq }));
+    ok(await s.conn.call('log.read', { follow: true, since: { logId: r.d.log.logId, seq: r.d.log.head().seq } }));
     revokeReadToken(r.home, r.root, a.tokenId);
     for (let i = 0; i < 100 && !s.conn.closed; i++) await sleep(20);
     expect(s.conn.closed).toBe(true);
@@ -452,7 +452,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     const r = await rig();
     const K = r.d.kernelPrincipal;
     const L = r.d.log;
-    const since = L.head().seq;
+    const since = { logId: L.logId, seq: L.head().seq }; // journal.cursor
     const inj = (await L.append({ kind: 'session.inject', principal: K, session: HSID, payload: { origin: 'client', hash: SHA, bytes: 3 } })).seq;
     const req = (await L.append({ kind: 'approval.request', principal: K, session: HSID, payload: { cardId: 'c1', tool_input: 'MARK-tool-input' } })).seq;
     const sens = (await L.append({ kind: 'config.prefs', principal: K, sensitivity: 'sensitive', payload: { note: 'VISIBLE-sensitive-row' } })).seq;

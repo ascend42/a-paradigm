@@ -6,3 +6,4 @@ export * from './gui-pin.js';
 export * from './rules.js';
 export * from './launch.js';
 export * from './endpoint.js';
+export * from './launch-cap.js';

@@ -89,7 +89,13 @@ import { refusalWith, type RefusalWithMessage } from './rpc.js';
 
 export const NONCE_TTL_MS = 30_000;
 export const SERVER_CLIENT_APIS: readonly string[] = Object.freeze([GNOMON_RPC_V1]);
-export const SERVER_FEATURES: readonly string[] = Object.freeze([]);
+/**
+ * Hello features this kernel built (§4.9, §2.4 rule 11): negotiated per client inside canonical(features), which
+ * serverSig and auth both sign. `journal.cursor` (P8-D98, TD-2026-10-19-648 item 8): log.read's `{logId, seq}`
+ * cursor (log-read.ts); a client that does not offer it is refused any resume, never served a bare-seq one.
+ * `session.resume` stays reserved until drain-and-resume lands.
+ */
+export const SERVER_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
 /** Bound on client-supplied strings that reach the log (name, version, surface). */
 export const MAX_CLIENT_FIELD = 128;
 /** Accepted transcripts remembered for replay detection. */

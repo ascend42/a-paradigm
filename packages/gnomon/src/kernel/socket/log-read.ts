@@ -25,6 +25,23 @@
  *     `{redacted: true}`; no hash/sig/prev), whatever the token's principal;
  *     peer: refused by the matrix before reaching here.
  *
+ * CURSOR (journal.cursor, TD-2026-10-19-648 item 8, P8-D98): a seq means
+ * something only inside one log, so `since` is the cursor `{logId, seq}`.
+ * A cursor whose logId is not this kernel's CURRENT log (another kernel's,
+ * or a log a quarantine replaced, §19.1) is refused
+ * BAD_REQUEST{cursor-epoch}: the client re-reads from the start instead of
+ * resuming at a seq that names a different event. A bare-seq `since` is
+ * refused BAD_REQUEST{bad-since} for every view: no caller still sends one,
+ * and a bare seq is exactly the epoch-blind resume the cursor exists to stop.
+ * Resuming (any `since`) needs the `journal.cursor` hello feature; a
+ * connection that did not negotiate it is refused bad-since{needs}, never
+ * served a degraded seq-only resume. A read with no `since` starts at the
+ * head of the current log and is epoch-safe, so it needs no feature. The
+ * cursor rides the ENVELOPE (page `cursor`/`logId`, subscription reply
+ * `logId`, each event notification's `cursor`, a drop's `end.cursor`); rows
+ * of limited views (read token, community client, mod) carry `seq` only,
+ * with no hash, prev or log (redaction.ts).
+ *
  * PAGES: `{since?, until?, kinds?, scope?, limit?}` (`until`/`limit` are
  * optional params added under the compatible-additive rule) → `{rows, next,
  * head, caughtUp, projection, withheld}`. `since` is a seq: rows with seq >
@@ -56,7 +73,7 @@
  * buffer. Each live subscription holds the idle monitor ('subscriber'); a
  * subscription ends with its connection (no extra verb exists to cancel).
  */
-import { isHsid, monotonicUlidFactory, RefusedError, type EventV1 } from '@a-company/gnomon-contracts';
+import { isHsid, monotonicUlidFactory, RefusedError, validateLogReadCursor, type EventV1, type LogReadCursor } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/kernel-log.js';
 import { mayBeVisible, type LogView, type ReaderClass } from '../log/redaction.js';
 import { RpcRefusal } from './rpc.js';
@@ -76,7 +93,10 @@ const KIND_PATTERN = /^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*(\.\*)?$/;
 const PUMP_ROWS_PER_TICK = 512;
 const PUMP_SCAN_PER_TICK = 4096;
 
-export type ReadLog = Pick<KernelLog, 'readPage' | 'getById' | 'head' | 'onCommit' | 'onRelease' | 'releasedHead'>;
+export type ReadLog = Pick<KernelLog, 'readPage' | 'getById' | 'head' | 'onCommit' | 'onRelease' | 'releasedHead' | 'logId'>;
+
+/** The hello feature that carries the `{logId, seq}` cursor (advertised in auth.ts SERVER_FEATURES). */
+export const JOURNAL_CURSOR_FEATURE = 'journal.cursor';
 
 /** A row too large for one frame: what the reader may know of it anyway. */
 export interface OversizeView {
@@ -145,15 +165,37 @@ export interface LogReadParams {
 const bad = (reason: string, message: string): RpcRefusal => new RpcRefusal('BAD_REQUEST', reason, message);
 const seqOk = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 
-export function parseLogReadParams(params: unknown): LogReadParams {
+/** What the cursor check needs from the connection and the log. */
+export interface CursorContext {
+  /** The hello features this connection negotiated (ConnAuthState.features). */
+  features: readonly string[];
+  /** The kernel's current log (KernelLog.logId). */
+  logId: string;
+}
+
+const cursorOf = (logId: string, seq: number): LogReadCursor => ({ logId, seq });
+
+/** `since` → the seq inside the current log; refuses a bare seq, a malformed cursor, a missing feature and another log's cursor. */
+function parseSince(since: unknown, cc: CursorContext): number {
+  if (!cc.features.includes(JOURNAL_CURSOR_FEATURE)) {
+    throw new RpcRefusal('BAD_REQUEST', 'bad-since', `resuming log.read needs the ${JOURNAL_CURSOR_FEATURE} hello feature (offer it in hello); omit since to read from the start`, { needs: JOURNAL_CURSOR_FEATURE });
+  }
+  if (typeof since === 'number') throw bad('bad-since', 'since is the cursor {logId, seq} (journal.cursor); a bare seq is refused because a seq names an event only inside one log');
+  const errors = validateLogReadCursor(since);
+  if (errors.length) throw bad('bad-since', `since must be a {logId, seq} cursor: ${errors.slice(0, 3).join('; ')}`);
+  const c = since as LogReadCursor;
+  if (c.logId !== cc.logId) {
+    throw new RpcRefusal('BAD_REQUEST', 'cursor-epoch', 'the cursor names another log (another kernel, or one a quarantine replaced): re-read from the start (omit since)');
+  }
+  return c.seq;
+}
+
+export function parseLogReadParams(params: unknown, cc: CursorContext): LogReadParams {
   if (params === undefined || params === null) params = {};
   if (typeof params !== 'object' || Array.isArray(params)) throw bad('bad-params', 'log.read params must be an object');
   const p = params as Record<string, unknown>;
   const out: LogReadParams = { since: 0, limit: PAGE_DEFAULT_ROWS, follow: false };
-  if (p.since !== undefined) {
-    if (!seqOk(p.since)) throw bad('bad-since', 'since must be a non-negative integer seq (rows with seq > since)');
-    out.since = p.since;
-  }
+  if (p.since !== undefined) out.since = parseSince(p.since, cc);
   if (p.until !== undefined) {
     if (!seqOk(p.until)) throw bad('bad-until', 'until must be a non-negative integer seq');
     out.until = p.until;
@@ -208,6 +250,16 @@ function scopeMatcher(want: Record<string, string>): (v: LogView) => boolean {
   };
 }
 
+/**
+ * A limited view's row carries `seq` only as its position: the projection already dropped hash/sig/prev, and the
+ * envelope's `log` goes too, so a row never doubles as a cursor; the logId rides the page/subscription envelope.
+ */
+function limitedRow(v: LogView, reader: ReaderClass): LogView {
+  if (reader.class === 'human' || v.view !== 'full' || !('log' in v.event)) return v;
+  const { log: _log, ...event } = v.event as typeof v.event & { log?: unknown };
+  return { ...v, event: event as typeof v.event };
+}
+
 function sized(v: LogView): { row: LogView | OversizeView; bytes: number } {
   const bytes = Buffer.byteLength(JSON.stringify(v));
   if (bytes <= ROW_MAX_BYTES) return { row: v, bytes };
@@ -219,8 +271,10 @@ function sized(v: LogView): { row: LogView | OversizeView; bytes: number } {
 /* ── one page ─────────────────────────────────────────────────────────────── */
 
 export function readOnePage(log: ReadLog, grant: ReaderGrant, p: LogReadParams): Record<string, unknown> {
-  const head = log.head().seq;
-  if (p.since > head) throw bad('since-ahead', `since ${p.since} is past the head ${head}`);
+  const logId = log.logId;
+  // Aegis L6: since-ahead is judged against the RELEASED head, as subscribe does (an unreleased row is not a reader's)
+  const released = log.releasedHead();
+  if (p.since > released) throw bad('since-ahead', `since ${p.since} is past the released head ${released}`);
   const rows: Array<LogView | OversizeView> = [];
   let total = 0;
   const page = log.readPage({
@@ -231,7 +285,7 @@ export function readOnePage(log: ReadLog, grant: ReaderGrant, p: LogReadParams):
     ...(p.kinds ? { kinds: p.kinds } : {}),
     ...(p.match ? { match: p.match } : {}),
     visit: (v) => {
-      const s = sized(v);
+      const s = sized(limitedRow(v, grant.reader));
       rows.push(s.row);
       total += s.bytes;
       return rows.length < p.limit && total < PAGE_MAX_BYTES;
@@ -240,6 +294,8 @@ export function readOnePage(log: ReadLog, grant: ReaderGrant, p: LogReadParams):
   return {
     rows,
     next: page.lastScanned,
+    cursor: cursorOf(logId, page.lastScanned),
+    logId,
     head: page.head,
     caughtUp: page.caughtUp,
     projection: grant.projection,
@@ -347,7 +403,7 @@ export class SubscriptionHub {
       sub.started = true;
       this.#pump(sub);
     });
-    return { subscription: sub.id, since: p.since, head, projection: grant.projection, ...(grant.fullView ? { fullView: grant.fullView } : {}), backlogCap: this.cap };
+    return { subscription: sub.id, since: p.since, logId: this.#o.log.logId, head, projection: grant.projection, ...(grant.fullView ? { fullView: grant.fullView } : {}), backlogCap: this.cap };
   }
 
   /** The connection is gone: end its subscriptions (no drop row — nothing lagged). */
@@ -422,14 +478,14 @@ export class SubscriptionHub {
         ...(s.kinds ? { kinds: s.kinds } : {}),
         ...(s.match ? { match: s.match } : {}),
         visit: (v) => {
-          const { row } = sized(v);
+          const { row } = sized(limitedRow(v, s.reader));
           let sent: boolean;
           try {
-            sent = s.ctx.notify('event', { subscription: s.id, row });
+            sent = s.ctx.notify('event', { subscription: s.id, row, cursor: cursorOf(this.#o.log.logId, v.seq) });
           } catch {
             // the frame could not be encoded: end the subscription visibly, never skip a row silently
             this.#kill(s);
-            s.ctx.notify('event', { subscription: s.id, end: { reason: 'internal', since: s.cursor } });
+            s.ctx.notify('event', { subscription: s.id, end: { reason: 'internal', since: s.cursor, cursor: cursorOf(this.#o.log.logId, s.cursor) } });
             return false;
           }
           if (!sent) {
@@ -459,7 +515,7 @@ export class SubscriptionHub {
     this.#kill(s);
     this.#stats.dropped++;
     try {
-      s.ctx.notify('event', { subscription: s.id, end: { reason: 'dropped', lag, since } });
+      s.ctx.notify('event', { subscription: s.id, end: { reason: 'dropped', lag, since, cursor: cursorOf(this.#o.log.logId, since) } });
     } catch {
       /* a tiny frame; cannot exceed the cap */
     }

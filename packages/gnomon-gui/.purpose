@@ -12,6 +12,13 @@ description: >-
 
 components:
   gui:
+    journal-cursor: >-
+      Slice A4 (P8-D98): the hello offers journal.cursor; core/client.ts
+      followLog pages then follows with the store's {logId, seq} cursor
+      (GuiStore.cursor/advance/adopt); on BAD_REQUEST{cursor-epoch} (or a
+      page from another log) GuiStore.reset() clears every row-derived
+      state and the read starts over from the current log (once; a second
+      refusal surfaces). Tests: test/gui.test.ts (journal.cursor).
     description: >-
       #gui (spec §11.1-§11.5, §4.5). #bare-entry (§2.4 rule 8): the fragment
       may carry an optional `cwd` folder hint (base64url UTF-8, ≤ 1024 bytes;

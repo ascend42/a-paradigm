@@ -11,6 +11,7 @@
 import type { CardV1 } from './card.js';
 import type { ChangeNoteV1 } from './change-note.js';
 import type { EventV1 } from './event.js';
+import type { LogReadCursor } from './rpc.js';
 
 type Open = Record<string, unknown>;
 
@@ -88,8 +89,12 @@ export interface LogAppendResult extends Open {
 }
 
 export interface LogReadParams {
-  /** A bare seq today; the `{logId, seq}` cursor (LogReadCursor, P8-D98, §5) replaces it when `journal.cursor` is built. */
-  since?: number;
+  /**
+   * The `{logId, seq}` cursor (LogReadCursor, P8-D98, §5): rows with seq > cursor.seq on that log. Needs the
+   * `journal.cursor` hello feature; a bare seq is refused `bad-since`, a cursor from another log `cursor-epoch`.
+   * Omit it to read from the start of the current log.
+   */
+  since?: LogReadCursor;
   until?: number;
   kinds?: string[];
   scope?: Open;
@@ -106,12 +111,16 @@ export type LogRow =
 export interface LogReadPage extends Open {
   rows: LogRow[];
   next: number;
+  /** The resume cursor `{logId, seq: next}` (journal.cursor): pass it back as `since`. */
+  cursor: LogReadCursor;
   head: number;
   caughtUp: boolean;
 }
 export interface LogSubscribeResult extends Open {
   subscription: string;
   since: number;
+  /** The current log: with a delivered row's seq it forms the resume cursor (journal.cursor). */
+  logId: string;
   head: number;
 }
 

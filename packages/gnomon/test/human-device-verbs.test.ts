@@ -7,12 +7,18 @@
  */
 import { describe, expect, it } from 'vitest';
 import { HUMAN_DEVICE_VERBS, RESERVED_HELLO_FEATURES } from '@a-company/gnomon-contracts';
+import { dispatcherOptionsFor } from '../src/kernel/lifecycle/daemon.js';
 import { createKernelDispatcher, KERNEL_METHODS, RpcRefusal, SERVER_FEATURES, type HumanDeviceVerbPorts } from '../src/kernel/socket/index.js';
 
 type Who = { kind: 'human' | 'agent' | 'session' | 'mod' | 'voice' | 'peer' | 'kernel'; credential?: 'device' | 'gui' | 'unset' } | { kind: 'readToken' };
 
-function rig(humanVerbs?: HumanDeviceVerbPorts) {
+function rig(humanVerbs?: HumanDeviceVerbPorts, transport?: 'unix' | 'web') {
+  const common = {
+    status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial' as const, source: 'test' }), root: () => ({ state: 'dev-test' as const, rootKeyId: null }) },
+    log: async () => undefined,
+  };
   const d = createKernelDispatcher({
+    ...(transport ? dispatcherOptionsFor(transport, common, { humanVerbs: humanVerbs ?? {} }) : {}),
     authenticator: {
       now: () => Date.now(),
       checkToken: () => ({ ok: true }),
@@ -30,7 +36,7 @@ function rig(humanVerbs?: HumanDeviceVerbPorts) {
     } as never,
     status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: null }) },
     log: async () => undefined,
-    ...(humanVerbs ? { humanVerbs } : {}),
+    ...(!transport && humanVerbs ? { humanVerbs } : {}),
   });
   let n = 0;
   const connect = async (who: Who) => {
@@ -98,9 +104,29 @@ describe('human-device verbs (P8-D98)', () => {
   });
 });
 
+describe('human-device verbs are unix-socket only (Aegis L1, structural)', () => {
+  it('the web dispatcher gets no human-verb port: status reports them unavailable and a call is refused, the port never reached', async () => {
+    const called: string[] = [];
+    const ports: HumanDeviceVerbPorts = { 'gui.open': async () => (called.push('gui.open'), {}), 'rules.revoke': async () => (called.push('rules.revoke'), {}) };
+    const web = rig(ports, 'web');
+    const wcall = await web.connect({ kind: 'human' });
+    const st = (await wcall('status')) as { humanDeviceVerbs: Array<{ verb: string; available: boolean }> };
+    for (const v of VERB_NAMES) expect(st.humanDeviceVerbs.find((x) => x.verb === v)?.available, v).toBe(false);
+    for (const v of VERB_NAMES) expect(await refusal(wcall(v, { ruleId: 'card:x' }))).toEqual({ code: 'ENGINE', reason: 'not-implemented' });
+    expect(called).toEqual([]);
+    // the SAME ports on the unix dispatcher are available and reached
+    const unix = rig(ports, 'unix');
+    const ucall = await unix.connect({ kind: 'human' });
+    const us = (await ucall('status')) as { humanDeviceVerbs: Array<{ verb: string; available: boolean }> };
+    for (const v of VERB_NAMES) expect(us.humanDeviceVerbs.find((x) => x.verb === v)?.available, v).toBe(true);
+    await ucall('gui.open');
+    expect(called).toEqual(['gui.open']);
+  });
+});
+
 describe('reserved hello features are not advertised', () => {
-  it('SERVER_FEATURES names none of journal.cursor, session.resume', () => {
-    for (const f of RESERVED_HELLO_FEATURES) expect(SERVER_FEATURES).not.toContain(f);
-    expect(SERVER_FEATURES).toEqual([]);
+  it('SERVER_FEATURES advertises journal.cursor (built, slice A4) and not session.resume', () => {
+    expect(RESERVED_HELLO_FEATURES).toContain('journal.cursor');
+    expect(SERVER_FEATURES).toEqual(['journal.cursor']);
   });
 });

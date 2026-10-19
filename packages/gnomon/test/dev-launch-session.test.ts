@@ -78,12 +78,12 @@ describe.skipIf(!SANDBOX_OK)('#dev-launch smoke: dev init → dev kernel → dev
 
     // the reply, read back through the API the GUI uses
     const rows: Row[] = [];
-    let since = 0;
+    let since: unknown; // journal.cursor: the page's {logId, seq}
     const deadline = Date.now() + 10_000;
     while (!rows.some((r) => kindOf(r) === 'turn.result' && hsidOf(r) === opened.hsid) && Date.now() < deadline) {
-      const page = (await c.call('log.read', { since, kinds: ['turn.event', 'turn.result', 'session.refused', 'approval.request'] })) as { rows: Row[]; next: number };
+      const page = (await c.call('log.read', { ...(since ? { since } : {}), kinds: ['turn.event', 'turn.result', 'session.refused', 'approval.request'] })) as { rows: Row[]; cursor: unknown };
       rows.push(...page.rows);
-      since = page.next;
+      since = page.cursor;
       await new Promise((r) => setTimeout(r, 50));
     }
     const mine = rows.filter((r) => hsidOf(r) === opened.hsid);

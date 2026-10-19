@@ -13,12 +13,18 @@
  * `hello` first, `auth` second; `serverSig` is verified between them and on a
  * failure NOTHING more is sent. Each hello carries a fresh `clientNonce`
  * (T-2026-10-18-016) that the result must echo and serverSig must cover.
+ * The hello offers `journal.cursor` (P8-D98): every log.read resume sends the
+ * `{logId, seq}` cursor (`followLog`), and a `cursor-epoch` refusal clears
+ * the store and re-reads from the start.
  */
 import { CLIENT_API_ID, type HelloResult } from '@a-company/gnomon-contracts';
 import { newClientNonce, verifyServerSig, type SigVerdict } from './server-sig.js';
+import type { GuiStore, Row } from './store.js';
 
 export const RPC = 'gnomon-rpc:v1' as const;
 export const GUI_CLIENT = Object.freeze({ name: 'gnomon-gui', version: '8.0.0-m1.10.1' });
+/** Hello features the GUI implements: the `{logId, seq}` log.read cursor (P8-D98, §5). */
+export const GUI_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
 
 /** The message channel the client needs: one JSON text per message. */
 export interface Transport {
@@ -206,7 +212,7 @@ export class GnomonClient {
     try {
       // inside the try (Aegis r2): an engine without getRandomValues fails the hello stage visibly, never throws out of connect
       clientNonce = newClientNonce(o.rng);
-      hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [], clientNonce, client: { ...GUI_CLIENT, surface: o.surface } });
+      hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [...GUI_FEATURES], clientNonce, client: { ...GUI_CLIENT, surface: o.surface } });
     } catch (err) {
       return { ok: false, stage: 'hello', ...(err instanceof RpcError ? { refusal: err.refusal } : {}), message: err instanceof Error ? err.message : 'hello failed' };
     }
@@ -232,4 +238,36 @@ export class GnomonClient {
  */
 export function gnomonPost(fetchFn: typeof fetch, path: '/diag' | `/blob/${string}`, guiToken: string, body?: string): Promise<Response> {
   return fetchFn(path, { method: 'POST', referrerPolicy: 'same-origin', credentials: 'omit', cache: 'no-store', headers: { 'X-Gnomon-Token': guiToken }, ...(body !== undefined ? { body } : {}) });
+}
+
+/** The kernel refused a resume because the cursor names another log (a quarantine replaced it, or another kernel). */
+export function isCursorEpoch(err: unknown): boolean {
+  return err instanceof RpcError && err.refusal.code === 'BAD_REQUEST' && err.refusal.reason === 'cursor-epoch';
+}
+
+/**
+ * Backlog pages then the follow subscription, every resume carrying the store's `{logId, seq}` cursor
+ * (journal.cursor). On `cursor-epoch` the store is cleared and the read starts over from the head of the
+ * current log, once; a second refusal surfaces to the caller.
+ */
+export async function followLog(c: Pick<GnomonClient, 'call'>, store: GuiStore): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      for (;;) {
+        const since = store.cursor();
+        const page = await c.call<{ rows: Row[]; next: number; caughtUp: boolean; logId: string }>('log.read', { ...(since ? { since } : {}), limit: 1000 });
+        store.adopt(page.logId);
+        store.apply(page.rows);
+        store.advance(page.next);
+        if (page.caughtUp) break;
+      }
+      const since = store.cursor();
+      const sub = await c.call<{ logId: string }>('log.read', { ...(since ? { since } : {}), follow: true });
+      store.adopt(sub.logId);
+      return;
+    } catch (err) {
+      if (attempt > 0 || !isCursorEpoch(err)) throw err;
+      store.reset();
+    }
+  }
 }

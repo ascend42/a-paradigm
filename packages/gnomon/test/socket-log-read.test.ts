@@ -25,6 +25,7 @@ import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kerne
 import { projectForReader, projectionStats, sha256TaggedFast, SoftwareEd25519Signer, type AnchorStore, type HeadAnchor, type LogView } from '../src/kernel/log/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { resolveRef } from '../src/kernel/refs/index.js';
+import { quarantineLog } from '../src/kernel/log/quarantine.js';
 import {
   connectGnomon,
   createKernelDispatcher,
@@ -82,7 +83,7 @@ async function session(r: Rig): Promise<GnomonSession> {
 async function rawAuthed(r: Rig) {
   const c = await rawConnect(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  c.send(requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }));
+  c.send(requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: ['journal.cursor'], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }));
   const [h] = await c.next(1);
   const hello = (h as { result: HelloResult }).result;
   c.send(requestFrame(2, 'auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, hello, r.d.pidfile.socketPath) }));
@@ -92,6 +93,8 @@ async function rawAuthed(r: Rig) {
 }
 
 const K = (r: Rig) => r.d.kernelPrincipal;
+/** The journal.cursor resume point `{logId, seq}` on the rig's current log. */
+const cur = (r: Rig, seq: number) => ({ logId: r.d.log.logId, seq });
 type Res = Record<string, unknown>;
 const ok = (f: RpcResponseFrame): Res => {
   if ('error' in f) throw new Error(`refused: ${JSON.stringify(f.error)}`);
@@ -281,14 +284,15 @@ describe('log.read pages', () => {
     for (let i = 0; i < 250; i++) await r.d.log.append({ kind: 'config.prefs', principal: K(r), payload: { i }, ...(i % 2 ? { session: HSID } : {}) });
     const s = await session(r);
     const got: number[] = [];
-    let since = 0;
+    let since: unknown;
     let extra = 0;
     for (let guard = 0; guard < 50; guard++) {
-      const page = ok(await s.conn.call('log.read', { since, limit: 40, kinds: ['config.prefs'] }));
+      const page = ok(await s.conn.call('log.read', { ...(since ? { since } : {}), limit: 40, kinds: ['config.prefs'] }));
       const rows = page.rows as LogView[];
       expect(rows.length).toBeLessThanOrEqual(40);
       got.push(...rows.map((v) => v.seq));
-      since = page.next as number;
+      expect(page.cursor).toEqual(cur(r, page.next as number)); // the page hands back the resume cursor
+      since = page.cursor;
       if (extra < 60) {
         for (let i = 0; i < 20; i++) await r.d.log.append({ kind: 'config.prefs', principal: K(r), payload: { late: extra++ } });
       }
@@ -313,8 +317,12 @@ describe('log.read pages', () => {
       [{ limit: 1001 }, 'bad-limit'],
       [{ since: -1 }, 'bad-since'],
       [{ since: 1.5 }, 'bad-since'],
-      [{ since: head + 5 }, 'since-ahead'],
-      [{ since: 3, until: 2 }, 'bad-until'],
+      [{ since: 3 }, 'bad-since'], // a bare seq: refused, the cursor is {logId, seq}
+      [{ since: { seq: 3 } }, 'bad-since'],
+      [{ since: { logId: r.d.log.logId, seq: 0 } }, 'bad-since'],
+      [{ since: { logId: r.d.log.logId, seq: 3, hash: 'x' } }, 'bad-since'],
+      [{ since: cur(r, head + 5) }, 'since-ahead'],
+      [{ since: cur(r, 3), until: 2 }, 'bad-until'],
       [{ kinds: [] }, 'bad-kinds'],
       [{ kinds: ['Bad Kind'] }, 'bad-kinds'],
       [{ scope: { hsid: 'nope' } }, 'bad-scope'],
@@ -389,6 +397,104 @@ describe('ref.resolve (#ref-resolver)', () => {
 });
 
 /* ── subscriptions ────────────────────────────────────────────────────────── */
+
+/* ── journal.cursor: the {logId, seq} cursor (P8-D98, TD-2026-10-19-648 item 8, §5) ── */
+
+describe('journal.cursor: log.read resumes by {logId, seq}', () => {
+  const otherLogOf = (logId: string) => `${logId.slice(0, -1)}${logId.endsWith('0') ? '1' : '0'}`;
+
+  it('the kernel advertises journal.cursor inside the signed features; a client that offers it gets it', async () => {
+    const r = await rig();
+    const s = await session(r);
+    expect(s.hello.features).toEqual(['journal.cursor']);
+  });
+
+  it("a cursor from another log is refused BAD_REQUEST{cursor-epoch}, page and subscription", async () => {
+    const r = await rig();
+    const s = await session(r);
+    const since = { logId: otherLogOf(r.d.log.logId), seq: 1 };
+    expect(errOf(await s.conn.call('log.read', { since }))).toMatchObject({ code: -32600, c: 'BAD_REQUEST', reason: 'cursor-epoch' });
+    expect(errOf(await s.conn.call('log.read', { since, follow: true }))).toMatchObject({ code: -32600, c: 'BAD_REQUEST', reason: 'cursor-epoch' });
+    // the same seq on the current log is served
+    expect(ok(await s.conn.call('log.read', { since: cur(r, 1) }))).toMatchObject({ logId: r.d.log.logId });
+  });
+
+  it('a cursor from a quarantined log is refused cursor-epoch by the successor kernel; reading from the start works', async () => {
+    const t = tempHome('gq-');
+    cleanups.push(t.cleanup);
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    registerKernelKey(t.home, root, kernel.publicKeyPem);
+    const devKey = writeNewDeviceKey(t.home);
+    const entry = registerDevice(t.home, root, { host: 'mac-1', name: 'founder', publicKeyPem: devKey.publicKeyPem, principalKind: 'human' });
+    const reg = readRegistry(t.home, new RootVerifier(root.publicKeyPem));
+    const pin = { keyId: kernel.keyId, publicKeyPem: reg.kernelKeys.get(kernel.keyId)! };
+    const cred = { principalId: entry.principalId, deviceId: entry.deviceId, signer: loadDeviceKey(t.home) };
+    const d1 = await startDaemon({ home: t.home, idleMs: 60_000, kernelSigner: kernel, rootAuthority: root });
+    const r1 = { home: t.home, d: d1, pin, cred };
+    const s1 = await session(r1);
+    const page = ok(await s1.conn.call('log.read', { limit: 1000 }));
+    const old = page.cursor as { logId: string; seq: number };
+    expect(old).toEqual({ logId: d1.log.logId, seq: page.next });
+    const kernelPrincipal = d1.kernelPrincipal;
+    await s1.conn.close();
+    await d1.shutdown('signal');
+    await quarantineLog({ home: t.home, signer: kernel, kernelPrincipal, authorizedBy: 'interactive-confirm' });
+    // the quarantine moved the old home (registry included) into evidence: register the same keys in the new one
+    registerKernelKey(t.home, root, kernel.publicKeyPem);
+    const again = registerDevice(t.home, root, { host: 'mac-1', name: 'founder', publicKeyPem: devKey.publicKeyPem, principalKind: 'human' });
+    const cred2 = { ...cred, principalId: again.principalId, deviceId: again.deviceId };
+    const d2 = await startDaemon({ home: t.home, idleMs: 60_000, kernelSigner: kernel, rootAuthority: root });
+    cleanups.push(() => d2.shutdown('signal'));
+    expect(d2.log.logId).not.toBe(old.logId);
+    const s2 = await session({ home: t.home, d: d2, pin, cred: cred2 });
+    expect(errOf(await s2.conn.call('log.read', { since: old }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'cursor-epoch' });
+    const fresh = ok(await s2.conn.call('log.read', { limit: 1000 }));
+    expect(fresh.logId).toBe(d2.log.logId);
+    expect((fresh.rows as LogView[])[0]!.seq).toBe(1);
+  });
+
+  it('a connection that did not negotiate journal.cursor is refused any resume (never served a bare-seq one)', async () => {
+    const r = await rig();
+    const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred, features: [] });
+    cleanups.push(() => s.conn.close());
+    expect(s.hello.features).toEqual([]);
+    for (const since of [cur(r, 1), 1]) {
+      expect(errOf(await s.conn.call('log.read', { since }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-since' });
+      expect(errOf(await s.conn.call('log.read', { since, follow: true }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-since' });
+    }
+    const f = await s.conn.call('log.read', { since: cur(r, 1) });
+    expect('error' in f && f.error.data.data).toMatchObject({ needs: 'journal.cursor' });
+  });
+
+  it('limited views carry seq only: rows have no hash, prev, sig or log; the cursor rides the envelope', async () => {
+    const r = await rig();
+    await r.d.log.append({ kind: 'config.prefs', principal: K(r), payload: { a: 1 } });
+    const s = await session(r);
+    const page = ok(await s.conn.call('log.read', { limit: 1000 }));
+    expect(page.projection).toBe('community-client');
+    expect(page).toMatchObject({ logId: r.d.log.logId, cursor: cur(r, page.next as number) });
+    const rows = page.rows as Array<{ seq: number; view: string; event?: Record<string, unknown>; stub?: Record<string, unknown> }>;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(typeof row.seq).toBe('number');
+      for (const k of ['hash', 'prev', 'sig', 'log', 'logId']) {
+        expect(row).not.toHaveProperty(k);
+        if (row.event) expect(row.event).not.toHaveProperty(k);
+        if (row.stub) expect(row.stub).not.toHaveProperty(k);
+      }
+    }
+    // the stream: each event notification carries {logId, seq} beside a seq-only row
+    const c = await rawAuthed(r);
+    c.send(requestFrame(3, 'log.read', { follow: true, kinds: ['config.prefs'], since: cur(r, r.d.log.head().seq) }));
+    const [reply] = await c.next(1);
+    expect((reply as { result: Res }).result).toMatchObject({ logId: r.d.log.logId });
+    await r.d.log.append({ kind: 'config.prefs', principal: K(r), payload: { a: 2 } });
+    const [ev] = (await c.next(1)) as Array<{ params: { row: { seq: number; event: Record<string, unknown> }; cursor: unknown } }>;
+    expect(ev!.params.cursor).toEqual(cur(r, ev!.params.row.seq));
+    for (const k of ['hash', 'prev', 'sig', 'log']) expect(ev!.params.row.event).not.toHaveProperty(k);
+  });
+});
 
 describe('log.read{follow} subscriptions (§4.9)', () => {
   it('the reply is written before the first event notification (ctx.afterReply)', async () => {
@@ -499,7 +605,7 @@ describe('log.read{follow} subscriptions (§4.9)', () => {
   it('G-SOCK-03: daemon, real cap (10 000): a reader that stops reading is dropped, socket.subscription.dropped is logged with its connId, memory stays bounded', async () => {
     const r = await rig();
     const c = await rawAuthed(r);
-    c.send(requestFrame(3, 'log.read', { follow: true, kinds: ['config.prefs'], since: r.d.log.head().seq }));
+    c.send(requestFrame(3, 'log.read', { follow: true, kinds: ['config.prefs'], since: cur(r, r.d.log.head().seq) }));
     const [sub] = await c.next(1);
     const subId = (sub as { result: { subscription: string } }).result.subscription;
     c.conn.pause(); // the slow reader
@@ -532,11 +638,11 @@ describe('log.read{follow} subscriptions (§4.9)', () => {
   it('subscription caps: at most 8 per connection; since past the head and until are refused', async () => {
     const r = await rig();
     const s = await session(r);
-    for (let i = 0; i < 8; i++) ok(await s.conn.call('log.read', { follow: true, since: r.d.log.head().seq }));
+    for (let i = 0; i < 8; i++) ok(await s.conn.call('log.read', { follow: true, since: cur(r, r.d.log.head().seq) }));
     expect(errOf(await s.conn.call('log.read', { follow: true }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'subscription-cap' });
     const s2 = await session(r);
     expect(errOf(await s2.conn.call('log.read', { follow: true, until: 3 }))).toMatchObject({ reason: 'bad-until' });
-    expect(errOf(await s2.conn.call('log.read', { follow: true, since: 10_000_000 }))).toMatchObject({ reason: 'since-ahead' });
+    expect(errOf(await s2.conn.call('log.read', { follow: true, since: cur(r, 10_000_000) }))).toMatchObject({ reason: 'since-ahead' });
   });
 });
 
@@ -800,7 +906,7 @@ describe('round 2: nits', () => {
   it('follow:true on a JSON-RPC notification (no id) opens no subscription', async () => {
     const r = await rigOnce();
     const c = await rawAuthed(r);
-    c.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'log.read', params: { follow: true, since: r.d.log.head().seq } });
+    c.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'log.read', params: { follow: true, since: cur(r, r.d.log.head().seq) } });
     await sleep(50);
     expect(r.d.subscriptions().active).toBe(0);
     c.send(requestFrame(9, 'status', {}));

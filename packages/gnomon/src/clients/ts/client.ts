@@ -21,7 +21,10 @@
  *           2 relays); a refusal rejects with the contracts `RefusedError`;
  *   subscribe → `log.read{follow}`: rows arrive in seq order through a callback,
  *           and a final `end` (dropped / internal / closed) is reported, never
- *           swallowed.
+ *           swallowed. Resume points are the `{logId, seq}` cursor
+ *           (`journal.cursor`, offered by default, P8-D98): `since` takes it,
+ *           `cursor()` and `end.cursor` hand it back; a cursor from another
+ *           log is refused `cursor-epoch` — re-read from the start.
  *
  * Logging goes through an injected `ClientLogPort` (Paradigm-logger shaped;
  * the kernel package ships zero dependencies, G-SEC-01). No platform branches.
@@ -43,6 +46,7 @@ import {
   type ClientMethodResults,
   type HelloParams,
   type HelloResult,
+  type LogReadCursor,
   type LogReadParams,
   type LogRow,
   type LogSubscribeResult,
@@ -141,16 +145,28 @@ function refusedFrom(error: { code?: unknown; message?: unknown; data?: unknown 
   return new RefusedError(data, typeof error.message === 'string' ? error.message : 'refused');
 }
 
+/** Hello features this client implements: the `{logId, seq}` log.read cursor (P8-D98, §5). */
+export const CLIENT_FEATURES: readonly string[] = Object.freeze(['journal.cursor']);
+
+/** True when a refusal says the cursor names another log: drop local state and re-read from the start (no `since`). */
+export function isCursorEpoch(err: unknown): boolean {
+  const r = (err as { refusal?: { code?: unknown; data?: { reason?: unknown } } } | undefined)?.refusal;
+  return r?.code === 'BAD_REQUEST' && r.data?.reason === 'cursor-epoch';
+}
+
+type SubEntry = { h: SubscriptionHandlers; logId?: string; seq: number };
+const cursorOf = (e: SubEntry): LogReadCursor | undefined => (e.logId !== undefined && e.seq > 0 ? { logId: e.logId, seq: e.seq } : undefined);
+
 export interface SubscriptionHandlers {
   /** One row, in seq order. */
   row(row: LogRow): void;
   /** The subscription ended: `dropped` (lagged past the cap: re-subscribe from `since`), `internal`, or `closed` (connection gone). */
-  end?(end: { reason: string; since?: number; lag?: number }): void;
+  end?(end: { reason: string; since?: number; lag?: number; cursor?: LogReadCursor }): void;
 }
 
 export interface Subscription extends LogSubscribeResult {
-  /** The highest seq delivered so far (resume point after a drop). */
-  readonly cursor: () => number;
+  /** The `{logId, seq}` of the highest row delivered so far (the resume `since` after a drop); undefined before any row. */
+  readonly cursor: () => LogReadCursor | undefined;
 }
 
 export interface ConnectOptions {
@@ -159,7 +175,7 @@ export interface ConnectOptions {
   endpointPath?: string;
   client: HelloParams['client'];
   clientApis?: string[];
-  features?: string[];
+  features?: readonly string[];
   /** Required before any credential is sent. */
   kernelKey?: KernelKeyPin;
   credential?: ClientCredential;
@@ -175,7 +191,7 @@ export class GnomonClient {
   readonly #log?: ClientLogPort;
   readonly #timeoutMs: number;
   readonly #pending = new Map<number, (f: Frame) => void>();
-  readonly #subs = new Map<string, { h: SubscriptionHandlers; cursor: number }>();
+  readonly #subs = new Map<string, SubEntry>();
   #buf: Buffer = Buffer.alloc(0);
   #nextId = 1;
   #closed = false;
@@ -209,7 +225,7 @@ export class GnomonClient {
     const c = new GnomonClient(sock, o.log, o.timeoutMs ?? 5000);
     try {
       const offeredApis = o.clientApis ?? [GNOMON_RPC_V1];
-      const offeredFeatures = o.features ?? [];
+      const offeredFeatures = o.features ?? CLIENT_FEATURES;
       const clientNonce = newClientNonce();
       c.hello = (await c.#request('hello', { clientApis: offeredApis, features: offeredFeatures, clientNonce, client: o.client })) as HelloResult;
       if (validateHelloResult(c.hello).length) throw new ClientAuthError('bad-hello', 'hello result does not validate');
@@ -262,13 +278,15 @@ export class GnomonClient {
 
   /** `log.read{follow:true}`: backlog then live rows, in seq order, through `h.row`. */
   async subscribe(params: Omit<LogReadParams, 'follow'>, h: SubscriptionHandlers): Promise<Subscription> {
-    const entry = { h, cursor: params.since ?? 0 };
+    const entry: SubEntry = { h, ...(params.since ? { logId: params.since.logId } : {}), seq: params.since?.seq ?? 0 };
     // bound SYNCHRONOUSLY when the reply frame is read: the kernel writes the reply first, and
     // event frames in the same chunk are dispatched before an awaiting caller resumes
     let r: LogSubscribeResult;
     try {
       r = (await this.#request('log.read', { ...params, follow: true }, (result) => {
         const sub = (result as { subscription?: unknown }).subscription;
+        const logId = (result as { logId?: unknown }).logId;
+        if (typeof logId === 'string') entry.logId = logId;
         if (typeof sub === 'string') this.#subs.set(sub, entry);
       })) as LogSubscribeResult;
     } catch (err) {
@@ -277,7 +295,7 @@ export class GnomonClient {
       if ((err as { code?: string }).code === 'ETIMEDOUT') await this.close();
       throw err;
     }
-    return Object.assign(r, { cursor: () => entry.cursor });
+    return Object.assign(r, { cursor: () => cursorOf(entry) });
   }
 
   close(): Promise<void> {
@@ -368,12 +386,15 @@ export class GnomonClient {
     if (!s) return; // not ours (or already ended)
     if (p.end && typeof p.end === 'object') {
       this.#subs.delete(id);
-      s.h.end?.(p.end as { reason: string });
+      const end = p.end as { reason: string; since?: number; cursor?: LogReadCursor };
+      s.h.end?.({ ...end, ...(end.cursor === undefined && cursorOf(s) ? { cursor: cursorOf(s) } : {}) });
       return;
     }
     const row = p.row as LogRow;
     if (row && typeof row.seq === 'number') {
-      s.cursor = row.seq;
+      s.seq = row.seq;
+      const c = p.cursor as { logId?: unknown } | undefined;
+      if (c && typeof c.logId === 'string') s.logId = c.logId;
       s.h.row(row);
     }
   }
@@ -385,7 +406,10 @@ export class GnomonClient {
     const unknown = { local: new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'delivery-unknown' } }), 'connection dropped before the reply: delivery unknown') };
     for (const cb of this.#pending.values()) cb(unknown);
     this.#pending.clear();
-    for (const s of this.#subs.values()) s.h.end?.({ reason: 'closed', since: s.cursor });
+    for (const s of this.#subs.values()) {
+      const cursor = cursorOf(s);
+      s.h.end?.({ reason: 'closed', since: s.seq, ...(cursor ? { cursor } : {}) });
+    }
     this.#subs.clear();
   }
 }

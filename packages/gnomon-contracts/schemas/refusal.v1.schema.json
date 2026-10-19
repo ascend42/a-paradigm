@@ -320,7 +320,9 @@
             "claim-expired",
             "claim-superseded",
             "cursor-epoch",
-            "draining"
+            "draining",
+            "cwd-hint-too-long",
+            "connection-gone"
           ],
           "x-gnomon-additive": true
         },

@@ -93,8 +93,11 @@ import {
   type SocketServerHandle,
   type SubscriptionStats,
   type KernelDispatcher,
+  type HumanDeviceVerbPorts,
 } from '../socket/index.js';
+import { createGuiOpenHandler } from '../socket/gui-open.js';
 import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
+import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
@@ -108,7 +111,6 @@ import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
-import type { HumanDeviceVerbPorts } from '../socket/dispatch.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
@@ -197,6 +199,15 @@ export interface DaemonStatus {
   uptimeMs: number;
 }
 
+/**
+ * The per-transport dispatcher options (Aegis L1): the unix-socket dispatcher gets the common options PLUS the
+ * unix-only ports (the human-device verbs); the web dispatcher gets the common options alone. Structural: a
+ * GUI WebSocket can never see a human-device verb port, whatever the common object grows.
+ */
+export function dispatcherOptionsFor<C extends object>(transport: 'unix' | 'web', common: C, unixOnly: { humanVerbs: HumanDeviceVerbPorts }): C & { humanVerbs?: HumanDeviceVerbPorts } {
+  return transport === 'unix' ? { ...common, humanVerbs: unixOnly.humanVerbs } : { ...common };
+}
+
 export interface DaemonHandle {
   readonly pidfile: DaemonPidfile;
   readonly via: EndpointVia;
@@ -213,7 +224,7 @@ export interface DaemonHandle {
   readonly exited: Promise<DaemonExitReason>;
   shutdown(reason: DaemonExitReason): Promise<void>;
   /** `gnomon open` (kernel side): start the web endpoint if needed and mint a launch token for an authenticated human device connection. */
-  requestWebLaunch(connId: string): Promise<LaunchGrant>;
+  requestWebLaunch(connId: string, via?: LaunchAsker): Promise<LaunchGrant>;
   /** The web endpoint, once started (null before the first launch). */
   web(): WebEndpoint | null;
   /** Supervised children (sessions, local runners, mods): stopped and awaited before every exit. */
@@ -778,15 +789,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         return { seq: r.seq };
       },
   });
-  // P8-D98 human-device verbs: one handler module per verb (socket/<verb>.ts), one key per verb here
-  const humanVerbs: HumanDeviceVerbPorts = {
-    'rules.revoke': createRulesRevokeHandler({
-      lookup: (ruleId) => syncRuleBook().get(ruleId),
-      append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
-    }),
-  };
   const dispatcherCommon = {
-    humanVerbs,
     mods: createModRelayPort(mods),
     sessions,
     approvals,
@@ -799,9 +802,21 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     log: logSocketRow,
     status: statusSource,
   };
-  const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherCommon });
+  // P8-D98 human-device verbs (#socket): UNIX SOCKET ONLY (Aegis L1). They ride in their own object, handed to the
+  // unix dispatcher alone (dispatcherOptionsFor), so the web dispatcher has no port for them: its status reports
+  // them unavailable and a call is refused not-implemented. gui.open is the in-process launch path, under the
+  // endpoint's shared launch-grant cap as a `socket` asker (its own share, launch-cap.ts).
+  // One handler module per verb (socket/<verb>.ts), one key per verb here.
+  const humanVerbs: HumanDeviceVerbPorts = {
+    'rules.revoke': createRulesRevokeHandler({
+      lookup: (ruleId) => syncRuleBook().get(ruleId),
+      append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
+    }),
+    'gui.open': createGuiOpenHandler({ requestLaunch: (connId: string) => requestWebLaunch(connId, 'socket'), withdrawLaunch: (t: string) => void web?.withdrawLaunch(t) }),
+  };
+  const dispatcher = createKernelDispatcher({ authenticator, ...dispatcherOptionsFor('unix', dispatcherCommon, { humanVerbs }) });
   const kernelPem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
-  const requestWebLaunch = async (connId: string): Promise<LaunchGrant> => {
+  const requestWebLaunch = async (connId: string, via: LaunchAsker = 'in-process'): Promise<LaunchGrant> => {
     const asker = dispatcher.clients().find((c) => c.connId === connId);
     if (!asker) throw new LifecycleRefusal('web-launch-refused', 'no authenticated unix-socket connection with that connId', { connId });
     if (typeof kernelPem !== 'string') throw new LifecycleRefusal('web-launch-refused', 'the kernel key has no public PEM to hand the page (keystore custody is M1.3)');
@@ -815,7 +830,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ...(opts.web?.authDeadlineMs !== undefined ? { authDeadlineMs: opts.web.authDeadlineMs } : {}),
       dispatcher: (endpointPath, webHook) =>
         createKernelDispatcher({
-          ...dispatcherCommon,
+          ...dispatcherOptionsFor('web', dispatcherCommon, { humanVerbs }),
           web: webHook,
           authenticator: new SocketAuthenticator({
             home,
@@ -828,7 +843,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           }),
         }),
     });
-    return web.requestLaunch(asker);
+    return web.requestLaunch(asker, via);
   };
   const onSocketEvent = (e: SocketEvent): void => {
     emit(e);

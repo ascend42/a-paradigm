@@ -109,7 +109,7 @@ describe('hello negotiation (§4.9)', () => {
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, clientApis: ['gnomon-rpc:v1', 'gnomon-rpc:v9'], serverKey: r.pin });
     cleanups.push(() => s.conn.close());
     expect(validateHelloResult(s.hello)).toEqual([]);
-    expect(s.hello).toMatchObject({ clientApi: 'gnomon-rpc:v1', features: [], serverKeyId: r.d.kernelSigner.keyId, clientApiId: CLIENT_API_ID, kitId: KIT_ID });
+    expect(s.hello).toMatchObject({ clientApi: 'gnomon-rpc:v1', features: ['journal.cursor'], serverKeyId: r.d.kernelSigner.keyId, clientApiId: CLIENT_API_ID, kitId: KIT_ID });
     expect(s.serverVerified).toBe(true);
     expect(s.clientApiIdMatches).toBe(true);
     // hello is answered once per connection
@@ -373,7 +373,8 @@ describe('verb dispatch skeleton (§5)', () => {
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred });
     cleanups.push(() => s.conn.close());
     const got: Record<string, unknown> = {};
-    for (const m of CLIENT_METHODS.filter((x) => x !== 'status' && x !== 'log.read' && x !== 'ref.resolve')) {
+    // gui.open is served since T-2026-10-19-001 A3 (test/gui-open.test.ts): it mints a launch grant, so it is not in this loop
+    for (const m of CLIENT_METHODS.filter((x) => x !== 'status' && x !== 'log.read' && x !== 'ref.resolve' && x !== 'gui.open')) {
       const f = await s.conn.call(m, {});
       expect('error' in f).toBe(true);
       const e = (f as { error: { code: number; data: { data: { reason: string; milestone?: string } } } }).error;
@@ -391,8 +392,7 @@ describe('verb dispatch skeleton (§5)', () => {
       'oracle.run': [-32000, 'not-implemented', 'M2.3'],
       'mod.view': [-32600, 'bad-params', undefined], // served since M1.11 slice 2 (#mod-host relays): {} has no name/viewId
       'mod.command': [-32600, 'bad-params', undefined],
-      // P8-D98 human-device verbs: a human device connection reaches the stub (no port wired yet)
-      'gui.open': [-32000, 'not-implemented', 'T-2026-10-19-001'],
+      // P8-D98 human-device verbs: rules.revoke is wired (A1); gui.open is excluded above (A3)
       'rules.revoke': [-32600, 'bad-params', undefined], // A1 wired the handler: an empty params object is refused by its own params check
     });
   });
