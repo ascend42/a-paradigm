@@ -109,7 +109,7 @@ describe('honesty CI falsifiers: every rule fails on a planted violation', () =>
     expect(details('Fork with `session.fork`.')).toEqual(['a verb or kind the descriptors lack: session.fork']);
     expect(details('Then call session.fork in prose.')).toEqual(['a verb or kind the descriptors lack: session.fork']);
     expect(details('`session.open{model, force}`')).toEqual(['a param session.open does not declare: force']);
-    expect(details('`CAS_LOST{stale-claim}`')).toEqual(['a refusal reason the descriptors lack: CAS_LOST{stale-claim}']); // reserved, not built: named only when it lands
+    expect(details('`CAS_LOST{claim-stolen}`')).toEqual(['a refusal reason the descriptors lack: CAS_LOST{claim-stolen}']); // stale-claim became real in P8-D98
     expect(details('`CLAIM_EXPIRED`')).toEqual(['a refusal code the descriptors lack: CLAIM_EXPIRED']);
     expect(details('or CLAIM_EXPIRED in prose')).toEqual(['a refusal code the descriptors lack: CLAIM_EXPIRED']);
     expect(details('pass `--force` to win')).toEqual(['a CLI flag no frozen descriptor lists: --force']);
