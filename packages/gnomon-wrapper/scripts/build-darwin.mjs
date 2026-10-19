@@ -15,7 +15,7 @@
 //   4. codesign --verify --strict --deep, then the WRAPPER_REQUIREMENT check.
 // Build-time records compiled into the binary (build.rs): the node path
 // (GNOMON_WRAPPER_NODE, else the realpath of `which node`) and the absolute
-// gnomon.js (GNOMON_WRAPPER_GNOMON_JS, else this checkout's). Notarize with
+// kernel package (GNOMON_WRAPPER_GNOMON_PKG, else this checkout's packages/gnomon), each with its hash. Notarize with
 // scripts/notarize-darwin.mjs afterwards.
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
@@ -39,7 +39,7 @@ function fail(m) {
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   if (process.platform !== 'darwin') fail('this script builds the macOS app; the Windows wrapper is the parity phase');
   const unsigned = process.argv.includes('--unsigned');
-  const js = process.env.GNOMON_WRAPPER_GNOMON_JS ?? path.resolve(PKG_ROOT, '..', 'gnomon', 'dist', 'cli', 'gnomon.js');
+  const js = path.join(process.env.GNOMON_WRAPPER_GNOMON_PKG ?? path.resolve(PKG_ROOT, '..', 'gnomon'), 'dist', 'cli', 'gnomon.js');
   if (!existsSync(js)) fail(`${js} is missing: run \`npm run build:gnomon\` first (the app runs this kernel)`);
 
   const cargoBin = path.join(process.env.HOME ?? '', '.cargo', 'bin');

@@ -54,12 +54,23 @@ Security posture:
 - **Logs.** `~/Library/Logs/Gnomon/kernel.log` (0600) holds the kernel's stderr
   and the wrapper's own lines. It never contains a token or a key.
 
-Node: the app first uses the pinned node of the local lane config
-(`~/.gnomon/local.signed.json`, `runner.node`), but only if its sha256 matches
-`runner.nodeSha256`. Otherwise it uses the node recorded in the binary at build
-time: `GNOMON_WRAPPER_NODE`, else the realpath of `which node`. The log names
-which one it used. The kernel script path is recorded at build time too
-(`GNOMON_WRAPPER_GNOMON_JS`, else this checkout's `packages/gnomon/dist/cli/gnomon.js`).
+Trust root (pinned at build time, re-checked before every spawn):
+
+- **Node.** The build records the node path as found (`GNOMON_WRAPPER_NODE`,
+  else `which node`, so `/opt/homebrew/bin/node` stays a symlink) and the
+  sha256 of its realpath target.
+- **Kernel.** The build records `packages/gnomon` (`GNOMON_WRAPPER_GNOMON_PKG`
+  overrides it) and a hash of its `dist/` plus `package.json`
+  (`gnomon-wrapper-kernel-tree:v1`). The dist bundles its workspace deps.
+
+Before each launch the app re-hashes both. On a mismatch it refuses with
+"Gnomon.app was built against a different node/kernel … Rebuild the app". A
+`brew upgrade node`, `npm run build:gnomon` or `git pull` all cause that
+mismatch.
+
+The local lane config's runner node is not used until the wrapper can verify
+its root signature. The pins hold only up to the spawn: a same-user process
+could still swap the files in that window, which is the §15.1 posture.
 
 ## Build, sign, notarize (founder, macOS)
 

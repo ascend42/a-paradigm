@@ -5,15 +5,23 @@
 //                            read from packages/gnomon/src/kernel/web/gui-bundle.ts
 //   GNOMON_GUI_BUNDLE_FILES  that bundle's file names (comma-separated), for the
 //                            served-hash check (the wrapper re-hashes what the port serves)
-//   GNOMON_BUILD_NODE        the node the app runs its kernel child with: the
-//                            build env GNOMON_WRAPPER_NODE if set, else the
-//                            realpath of `which node` on the build machine
+//   GNOMON_BUILD_NODE        the node the app runs its kernel child with, AS FOUND
+//                            (a symlink such as /opt/homebrew/bin/node is kept, so a
+//                            `brew upgrade` is detected rather than followed silently):
+//                            the build env GNOMON_WRAPPER_NODE if set, else `which node`
+//   GNOMON_BUILD_NODE_SHA256 sha256 of that node's realpath target (Aegis C1)
 //   GNOMON_BUILD_NODE_SOURCE "build-env" | "which" | "none"
-//   GNOMON_BUILD_GNOMON_JS   the absolute packages/gnomon/dist/cli/gnomon.js
-//                            (GNOMON_WRAPPER_GNOMON_JS overrides at build time)
+//   GNOMON_BUILD_GNOMON_PKG  the absolute packages/gnomon directory
+//                            (GNOMON_WRAPPER_GNOMON_PKG overrides at build time)
+//   GNOMON_BUILD_KERNEL_TREE gnomon-wrapper-kernel-tree:v1 of its dist/ + package.json
+//                            (src/tree.rs, shared with the app; Aegis C1); empty when
+//                            dist is not built — the app then refuses to spawn
 // Build-time inputs only: nothing here is read from the environment at RUN time.
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[path = "src/tree.rs"]
+mod tree;
 
 fn gui_pin(manifest: &Path) -> (String, Vec<String>) {
     let src = manifest.join("../gnomon/src/kernel/web/gui-bundle.ts");
@@ -40,22 +48,20 @@ fn gui_pin(manifest: &Path) -> (String, Vec<String>) {
     (hash, files)
 }
 
-fn build_node() -> (String, &'static str) {
+/// (path as found, sha256 of its realpath target, source)
+fn build_node() -> (String, String, &'static str) {
     println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_NODE");
-    if let Ok(p) = std::env::var("GNOMON_WRAPPER_NODE") {
-        let real = std::fs::canonicalize(&p).unwrap_or_else(|e| panic!("GNOMON_WRAPPER_NODE={p}: {e}"));
-        return (real.display().to_string(), "build-env");
-    }
-    match Command::new("/usr/bin/which").arg("node").output() {
-        Ok(o) if o.status.success() => {
-            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            match std::fs::canonicalize(&p) {
-                Ok(real) => (real.display().to_string(), "which"),
-                Err(_) => (String::new(), "none"),
-            }
-        }
-        _ => (String::new(), "none"),
-    }
+    let (found, source) = match std::env::var("GNOMON_WRAPPER_NODE") {
+        Ok(p) => (p, "build-env"),
+        Err(_) => match Command::new("/usr/bin/which").arg("node").output() {
+            Ok(o) if o.status.success() => (String::from_utf8_lossy(&o.stdout).trim().to_string(), "which"),
+            _ => return (String::new(), String::new(), "none"),
+        },
+    };
+    let Ok(real) = std::fs::canonicalize(&found) else { return (String::new(), String::new(), "none") };
+    println!("cargo:rerun-if-changed={}", real.display());
+    let sha = tree::sha256_file(&real).unwrap_or_else(|e| panic!("gnomon-wrapper build: cannot hash node: {e}"));
+    (found, sha, source)
 }
 
 fn main() {
@@ -63,17 +69,22 @@ fn main() {
     let (hash, files) = gui_pin(&manifest);
     println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_HASH={hash}");
     println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_FILES={}", files.join(","));
-    let (node, source) = build_node();
+    let (node, node_sha, source) = build_node();
     println!("cargo:rustc-env=GNOMON_BUILD_NODE={node}");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={node_sha}");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE={source}");
-    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_GNOMON_JS");
-    let js = match std::env::var("GNOMON_WRAPPER_GNOMON_JS") {
+    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_GNOMON_PKG");
+    let pkg = match std::env::var("GNOMON_WRAPPER_GNOMON_PKG") {
         Ok(p) => PathBuf::from(p),
         Err(_) => {
-            let p = manifest.join("../gnomon/dist/cli/gnomon.js");
+            let p = manifest.join("../gnomon");
             std::fs::canonicalize(&p).unwrap_or(p)
         }
     };
-    println!("cargo:rustc-env=GNOMON_BUILD_GNOMON_JS={}", js.display());
+    println!("cargo:rustc-env=GNOMON_BUILD_GNOMON_PKG={}", pkg.display());
+    println!("cargo:rerun-if-changed={}", pkg.join("dist").display());
+    println!("cargo:rerun-if-changed={}", pkg.join("package.json").display());
+    let tree = tree::kernel_tree_hash(&pkg).unwrap_or_default();
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_TREE={tree}");
     tauri_build::build();
 }

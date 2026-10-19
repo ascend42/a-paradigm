@@ -32,6 +32,7 @@ getrandom = "=0.3.4"
 
 [build-dependencies]
 tauri-build = { version = "=2.7.3", features = [] }
+sha2 = "=0.10.9"
 
 [profile.release]
 codegen-units = 1

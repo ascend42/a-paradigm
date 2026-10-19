@@ -14,4 +14,5 @@ pub mod kernel;
 pub mod loopback;
 pub mod nav;
 pub mod surface;
+pub mod tree;
 pub mod verify;

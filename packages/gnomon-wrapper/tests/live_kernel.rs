@@ -12,13 +12,13 @@
 #![cfg(target_os = "macos")]
 
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, ChannelLine};
-use gnomon_wrapper::kernel::{child_command, BUILD_GNOMON_JS, BUILD_NODE};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_KERNEL_TREE, BUILD_NODE};
 use gnomon_wrapper::loopback::{preflight, PreflightError};
 use gnomon_wrapper::verify::SigError;
 
@@ -31,12 +31,15 @@ fn tmp() -> PathBuf {
 
 #[test]
 fn native_preflight_against_a_live_dev_kernel() {
-    let js = Path::new(BUILD_GNOMON_JS);
-    if BUILD_NODE.is_empty() || !js.is_file() {
-        eprintln!("SKIP live_kernel: no build-time node ({BUILD_NODE:?}) or no {} (npm run build:gnomon)", js.display());
+    if BUILD_NODE.is_empty() || BUILD_KERNEL_TREE.is_empty() {
+        // CI=true never skips: the native job builds packages/gnomon/dist first (gnomon.yml)
+        assert!(std::env::var("CI").is_err(), "live_kernel would SKIP on CI: build packages/gnomon/dist before cargo test");
+        eprintln!("SKIP live_kernel: no build-time node ({BUILD_NODE:?}) or no kernel tree (npm run build:gnomon, then rebuild)");
         return;
     }
-    let node = Path::new(BUILD_NODE);
+    // the app's own trust-root check (Aegis C1) passes on a fresh build: the same node and kernel it will spawn
+    let t = check_trust_root().expect("the build-time pins hold on the build machine");
+    let (node, js) = (t.node.as_path(), t.gnomon_js.as_path());
     let d = tmp();
     let dev_home = d.join("devhome");
     let env: Vec<(String, String)> = vec![("HOME".into(), d.display().to_string()), ("LANG".into(), "en_US.UTF-8".into())];

@@ -313,17 +313,21 @@ node packages/gnomon-wrapper/scripts/notarize-darwin.mjs   # notarytool (gnomon-
 open packages/gnomon-wrapper/target/release/bundle/macos   # drag Gnomon.app to /Applications
 ```
 
-The app records two things at build time, inside the signed binary: the node it
-runs (the realpath of `which node`, or `GNOMON_WRAPPER_NODE=<abs>`) and this
-clone's `packages/gnomon/dist/cli/gnomon.js`. If `~/.gnomon/local.signed.json`
-pins a runner node and that node's sha256 matches the pin, the app uses it
-instead. `~/Library/Logs/Gnomon/kernel.log` says which node it used.
+At build time the app pins, inside the signed binary:
+- the node it runs: `which node`, or `GNOMON_WRAPPER_NODE=<abs>`, plus the
+  sha256 of that node's real file;
+- a hash of this clone's `packages/gnomon/dist` and `package.json`.
 
-Rebuild the app when any of these happen:
-- you move the clone;
-- `npm run build:gnomon` changes the GUI bundle. The app refuses a bundle other
-  than its pin ("the kernel serves a GUI bundle this app was not built for");
-- `brew upgrade node` removes the recorded node.
+Before every launch it re-hashes both. `~/Library/Logs/Gnomon/kernel.log` names
+the node and kernel it used.
+
+Rebuild the app (`build-darwin.mjs`) after any of these. Until you do, the
+window says "Gnomon.app was built against a different node or kernel … Rebuild
+the app":
+- `brew upgrade node`;
+- `npm run build:gnomon`, a `git pull` that changes dist, or moving the clone;
+- a change to the GUI bundle. The app also refuses a GUI bundle other than its
+  pin.
 
 ### Each time: open it
 
@@ -347,7 +351,7 @@ surface has no extensions. `status.guiSessions[].surface` reads `wrapper`.
 | a Gnomon kernel is already running on this home | `gnomond` or a terminal `gnomon up` holds `~/.gnomon` | Stop that kernel (Ctrl-C in its terminal), then open Gnomon again |
 | Gnomon refused to open the page: … serverSig … | The listener on the port did not sign with the kernel key the child reported | Quit and reopen; if it repeats, check `kernel.log` |
 | Gnomon refused to open the page: … bundle … | The served GUI is not the bundle this app was built for | Rebuild the app from the same clone (`build-darwin.mjs`) |
-| Gnomon cannot find node / its kernel | The recorded node or `gnomon.js` is gone | `npm run build:gnomon`, or rebuild the app |
+| Gnomon.app was built against a different node or kernel | node or `packages/gnomon/dist` changed since the build (brew upgrade, build:gnomon, git pull) | Rebuild the app (`build-darwin.mjs`) |
 | the kernel stopped / exited | The kernel child ended | Read `~/Library/Logs/Gnomon/kernel.log`; quit and reopen |
 
 Notes:

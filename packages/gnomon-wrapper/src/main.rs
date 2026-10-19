@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, ChannelLine};
-use gnomon_wrapper::kernel::{child_command, find_node, BUILD_GNOMON_JS};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_GNOMON_PKG};
 use gnomon_wrapper::loopback::preflight;
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
 use gnomon_wrapper::surface::{IPC_DISABLED_SCRIPT, SURFACE_SCRIPT};
@@ -99,22 +99,19 @@ fn refusal_text(reason: &str, message: &str, next: &[String]) -> (String, String
         detail.push_str(&format!("\n\nnext: {n}"));
     }
     if reason == "unprovisioned" {
-        detail.push_str(&format!("\n\nIn Terminal:\n  node {BUILD_GNOMON_JS} identity init\nthen open Gnomon again."));
+        detail.push_str(&format!("\n\nIn Terminal:\n  node {BUILD_GNOMON_PKG}/dist/cli/gnomon.js identity init\nthen open Gnomon again."));
     }
     (head, detail)
 }
 
 fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
-    let home = user_home().join(".gnomon");
-    let (node, source) = match find_node(&home) {
-        Ok(x) => x,
-        Err(e) => return show_status(&app, &sh, "Gnomon cannot find node", &e, true),
+    // Aegis C1: node and the kernel tree are re-hashed against the build's pins before EVERY spawn
+    let t = match check_trust_root() {
+        Ok(t) => t,
+        Err(e) => return show_status(&app, &sh, "Gnomon.app was built against a different node or kernel", &e, true),
     };
-    let js = PathBuf::from(BUILD_GNOMON_JS);
-    if !js.is_file() {
-        return show_status(&app, &sh, "Gnomon cannot find its kernel", &format!("{} is missing.\n\nBuild it: npm run build:gnomon (in the a-paradigm checkout), then open Gnomon again.", js.display()), true);
-    }
-    sh.log(&format!("node {} ({source}); kernel {}", node.display(), js.display()));
+    let (node, js) = (t.node.clone(), t.gnomon_js.clone());
+    sh.log(&format!("node {} (recorded {} via {}; sha256 equals the build pin); kernel {} (tree equals the build pin)", node.display(), t.node_recorded.display(), t.node_source, js.display()));
     let env: Vec<(String, String)> = std::env::vars().collect();
     let stderr = sh.log.lock().unwrap().as_ref().and_then(|f| f.try_clone().ok()).map(Stdio::from).unwrap_or_else(Stdio::null);
     let mut child = match child_command(&node, &js, None, &env, stderr).spawn() {
@@ -132,7 +129,7 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
             }
             Ok(ChannelLine::Launch(g)) => match preflight(g.port, &g.kernel_public_key, &g.bundle_hash, PIN) {
                 Ok(()) => {
-                    sh.log(&format!("preflight ok on port {}: serverSig and bundle pin verified", g.port));
+                    sh.log(&format!("preflight ok on port {}: hello serverSig verified against the channel key; channel bundleHash equals the compiled pin; the served files re-hash to it", g.port));
                     *sh.phase.lock().unwrap() = Phase::Kernel { port: g.port };
                     if let (Some(w), Ok(u)) = (app.get_webview_window("main"), Url::parse(&g.url())) {
                         let _ = w.navigate(u);
