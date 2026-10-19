@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T22:50:30.187Z'
+generated: '2026-10-19T23:17:02.607Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
