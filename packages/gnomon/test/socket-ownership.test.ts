@@ -32,7 +32,11 @@ function home(): string {
 
 function rawListen(p: string): Promise<net.Server> {
   return new Promise((resolve, reject) => {
-    const s = net.createServer((c) => c.end('raw\n'));
+    // a holder probe connects and destroys at once: on Linux the reply write then resets (ECONNRESET), which is no test failure
+    const s = net.createServer((c) => {
+      c.on('error', () => undefined);
+      c.end('raw\n');
+    });
     s.once('error', reject);
     s.listen(p, () => resolve(s));
   });
