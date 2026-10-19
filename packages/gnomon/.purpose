@@ -2325,7 +2325,9 @@ flows:
       authenticates). gnomond seals the inherited ready fd first thing
       (sealReadyFd: re-open via /proc/self/fd or /dev/fd with O_CLOEXEC,
       close the inheritable one; unsealable => closed) so the identity helper
-      and web child cannot forge it; residual: win32 handle inheritance.
+      and web child cannot forge it; residuals: win32 handle inheritance, and
+      linux (libuv's stdio pipe is a socketpair /proc/self/fd cannot re-open,
+      so the fd stays inheritable; pid + socketPath pin still applies).
       Exit codes are defined ONLY in
       lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
       75 transient, 78 config; config/superseded never restart, transient

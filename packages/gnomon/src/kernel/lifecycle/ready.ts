@@ -35,9 +35,9 @@
  * as an identity: only M1.4 mutual auth (hello serverSig + auth) authenticates
  * the kernel. The kernel seals the inherited fd at startup (sealReadyFd) so a
  * child it spawns before ready (the identity helper, the web transport)
- * cannot write a forged line: on Linux the fd is re-opened through
- * /proc/self/fd with O_CLOEXEC (Node always adds it) and the inheritable one
- * closed; macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
+ * cannot write a forged line: the fd is re-opened through /dev/fd with
+ * O_CLOEXEC (Node always adds it) and the inheritable one closed. On Linux it
+ * stays inheritable (a socketpair: see sealReadyFd's RESIDUAL); macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
  * never reach a child (verified), and the same re-open via /dev/fd is applied
  * as belt and braces. RESIDUAL (Windows): the inherited handle stays
  * inheritable to the kernel's own children until writeReady closes it; Node
@@ -77,9 +77,24 @@ export const HELLO_PROBE_MS = 1000;
  * not be sealed: the fd is then closed (no line beats a forgeable line) and
  * the activator falls back to probing the socket. win32 returns `fd` as is
  * (residual, see the header).
+ *
+ * RESIDUAL (Linux): libuv hands stdio 'pipe' slots over as an AF_UNIX
+ * socketpair, and /proc/self/fd/N cannot re-open a socket (ENXIO), so on Linux
+ * the fd stays inheritable like win32 (CI 39222038624: closing it turned every
+ * ready into a socket-probe attach). The activator still pins pid + socketPath,
+ * and nothing trusts the ready identity (only M1.4 mutual auth does). A
+ * private FIFO in place of the socketpair is the follow-up (T-2026-10-19-011).
+ * macOS /dev/fd/N has dup semantics, so the re-open works there for sockets too.
  */
 export function sealReadyFd(fd: number, platform: NodeJS.Platform = process.platform): number | null {
   if (platform === 'win32') return fd;
+  if (platform === 'linux') {
+    try {
+      if (fs.fstatSync(fd).isSocket()) return fd;
+    } catch {
+      return null; // not open: nothing to write to
+    }
+  }
   const via = platform === 'linux' ? `/proc/self/fd/${fd}` : `/dev/fd/${fd}`;
   try {
     // O_NONBLOCK: opening a pipe whose reader is gone fails (ENXIO) instead of blocking
