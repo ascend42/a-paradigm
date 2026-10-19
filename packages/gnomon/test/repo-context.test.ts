@@ -459,6 +459,14 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     expect(c.memoryDirs).toEqual([]);
     expect(c.memoryRefused[0]!.why).toMatch(new RegExp(`^${parts.join('/').replace(/\./g, '\\.')}: an @ import reaches outside the repo`));
   });
+  it.each([['CLAUDE.local.md'], ['claude-notes.MD'], ['Claude.Local.md']])('F4: a nested %s is audited like CLAUDE.md', (name) => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'sub', name), '@~/.ssh/id\n');
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused[0]!.why).toMatch(new RegExp(`^sub/${name.replace(/\./g, '\\.')}: an @ import reaches outside the repo`));
+  });
   it('a clean subtree passes; a nested file that only imports inside the repo passes', () => {
     const w = world();
     put(path.join(w.repo, 'CLAUDE.md'), 'top\n');

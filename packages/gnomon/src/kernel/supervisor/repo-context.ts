@@ -261,7 +261,7 @@ export function memoryFilesUnder(dir: string, maxDirs: number = MAX_SUBTREE_DIRS
       if (lower === 'node_modules' && e.isDirectory()) continue; // dependency trees: not walked (write-denied by the steering match; residual)
       const p = path.join(cur.d, e.name);
       if (e.isSymbolicLink()) {
-        if (lower === 'claude.md' || lower === '.claude' || cur.rules || (cur.claude && lower === 'rules')) return { ok: false, why: `${rel(p)} is a symlink` };
+        if (MEMORY_NAME.test(e.name) || lower === '.claude' || cur.rules || (cur.claude && lower === 'rules')) return { ok: false, why: `${rel(p)} is a symlink` };
         if (lower === 'node_modules') continue; // a linked dependency tree: like node_modules itself
         // F1 (Aegis): a symlinked DIR is realpath'd. Claude may read files through it (and lazy-load its CLAUDE.md), so
         // a target outside the git top-level or inside any node_modules refuses; one elsewhere in the repo is walked anyway
@@ -277,12 +277,14 @@ export function memoryFilesUnder(dir: string, maxDirs: number = MAX_SUBTREE_DIRS
         continue; // in-repo: that location is walked on its own
       }
       if (e.isDirectory()) stack.push({ d: p, claude: lower === '.claude', rules: cur.rules || (cur.claude && lower === 'rules') });
-      else if (e.isFile() && (lower === 'claude.md' || (cur.rules && isMd(lower)))) files.push(p);
+      else if (e.isFile() && (MEMORY_NAME.test(e.name) || (cur.rules && isMd(lower)))) files.push(p);
     }
   }
   return { ok: true, files: files.sort(), dirs };
 }
 const VCS_DIR = '.' + 'git';
+/** F4 (Aegis): every name the steering deny covers (CLAUDE.md, CLAUDE.local.md, claude-notes.MD, …), any case. */
+const MEMORY_NAME = /^claude[^/\\]*\.md$/i;
 
 /**
  * H1 (Aegis): audit one memory dir in the KERNEL. Refused (the whole dir is not added) when any memory file is a
