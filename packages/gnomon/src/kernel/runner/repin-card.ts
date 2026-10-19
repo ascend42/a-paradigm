@@ -190,8 +190,17 @@ export class ClaudeRepinCards {
           signer: { team: sig.team, verified: sig.verified },
           approval: { cardId: card.cardId, contentHash: card.contentHash, ...(ctx.decisionSig ? { decisionSig: ctx.decisionSig } : {}), ...(ctx.rootSig ? { rootSig: ctx.rootSig } : {}) },
         });
-        // M1: every other pending re-pin card is superseded (expired into deny, never decided)
-        for (const id of this.#pending.values()) if (id !== card.cardId && this.#o.broker.card(id)?.state === 'pending') await this.#o.broker.expire(id, 'cancelled');
+        // M1: every other pending re-pin card is superseded (expired into deny, never decided). The pin is
+        // already written, so a failed expire must not fail this effect (Aegis re-check): those cards would
+        // fail M1's from-check anyway.
+        for (const id of this.#pending.values()) {
+          if (id === card.cardId || this.#o.broker.card(id)?.state !== 'pending') continue;
+          try {
+            await this.#o.broker.expire(id, 'cancelled');
+          } catch {
+            // best effort; the stale card is refused by the from-check if approved later
+          }
+        }
       },
     });
     this.#pending.set(to, card.cardId);
