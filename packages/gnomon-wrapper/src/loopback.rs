@@ -78,6 +78,11 @@ fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
 
 /// GET a static path; returns the body of a 200.
 pub fn http_get(port: u16, path: &str) -> Result<Vec<u8>, PreflightError> {
+    http_get_with_head(port, path).map(|(_, b)| b)
+}
+
+/// GET a static path; returns the response head and the body of a 200.
+pub fn http_get_with_head(port: u16, path: &str) -> Result<(String, Vec<u8>), PreflightError> {
     let mut s = connect(port)?;
     let req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\nAccept-Encoding: identity\r\n\r\n");
     s.write_all(req.as_bytes()).map_err(|e| PreflightError::Io(e.kind().to_string()))?;
@@ -106,7 +111,7 @@ pub fn http_get(port: u16, path: &str) -> Result<Vec<u8>, PreflightError> {
             return Err(PreflightError::Protocol("short body"));
         }
     }
-    Ok(body)
+    Ok((head, body))
 }
 
 fn dechunk(mut b: &[u8]) -> Result<Vec<u8>, PreflightError> {

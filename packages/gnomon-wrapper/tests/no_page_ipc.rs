@@ -34,6 +34,17 @@ fn no_devtools_feature_and_devtools_only_in_debug() {
 }
 
 #[test]
+fn falsifier_no_subframe_can_load_on_either_page() {
+    // Aegis C3 (b): the kernel's CSP (rule 6, verbatim in rules.ts) and the status page's both
+    // forbid frames, so on_navigation (main frame) is the only navigation the wrapper must lock
+    let rules = include_str!("../../gnomon/src/kernel/web/rules.ts");
+    assert!(rules.contains("\"frame-src 'none'\"") && rules.contains("\"frame-ancestors 'none'\""));
+    let c: Value = serde_json::from_str(CONF).unwrap();
+    assert_eq!(c["app"]["security"]["csp"]["frame-src"], "'none'");
+    assert_eq!(c["app"]["security"]["csp"]["default-src"], "'none'");
+}
+
+#[test]
 fn the_only_remote_url_is_the_loopback_kernel() {
     // every navigation goes through the origin lock; every new window is denied
     assert!(MAIN.contains(".on_navigation(") && MAIN.contains("navigation_allowed("));

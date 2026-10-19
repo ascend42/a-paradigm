@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, ChannelLine};
 use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_KERNEL_TREE, BUILD_NODE};
-use gnomon_wrapper::loopback::{preflight, PreflightError};
+use gnomon_wrapper::loopback::{http_get_with_head, preflight, PreflightError};
 use gnomon_wrapper::verify::SigError;
 
 fn tmp() -> PathBuf {
@@ -88,6 +88,12 @@ fn native_preflight_against_a_live_dev_kernel() {
     }
     stdin.write_all(b"launch\n").unwrap();
     let ChannelLine::Launch(g) = next("launch") else { unreachable!() };
+
+    // Aegis C3 (b): the page the wrapper loads is served under a CSP that forbids every subframe,
+    // so the main-frame origin lock (on_navigation) is the whole navigation surface
+    let (head, _) = http_get_with_head(g.port, "/").expect("GET /");
+    let csp = head.lines().find(|l| l.to_ascii_lowercase().starts_with("content-security-policy:")).expect("a CSP header").to_string();
+    assert!(csp.contains("frame-src 'none'") && csp.contains("frame-ancestors 'none'") && csp.contains("default-src 'none'"), "{csp}");
 
     let genuine = preflight(g.port, &g.kernel_public_key, &g.bundle_hash, PIN);
     let foreign = preflight(g.port, "MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE", &g.bundle_hash, PIN);
