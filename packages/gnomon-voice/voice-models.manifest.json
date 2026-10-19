@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "voiceModels:v1",
+  "note": "sha256/size of the release assets (k2-fsa/sherpa-onnx GitHub releases). silero_vad and the speaker model were downloaded and hashed 2026-10-19 (silero matches GitHub's asset digest); the two archives' digests are GitHub's asset digests. Archive member names are what sherpa-onnx documents for these releases.",
+  "models": [
+    {
+      "id": "silero-vad",
+      "role": "vad",
+      "kind": "file",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+      "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+      "size": 643854,
+      "files": { "model": "silero_vad.onnx" }
+    },
+    {
+      "id": "parakeet-tdt-0.6b-v2-int8",
+      "role": "stt",
+      "kind": "tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
+      "sha256": "157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad",
+      "size": 482468385,
+      "root": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
+      "files": { "encoder": "encoder.int8.onnx", "decoder": "decoder.int8.onnx", "joiner": "joiner.int8.onnx", "tokens": "tokens.txt" }
+    },
+    {
+      "id": "kokoro-int8-en-v0_19",
+      "role": "tts",
+      "kind": "tar.bz2",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-en-v0_19.tar.bz2",
+      "sha256": "c9f0dd393615805b0bab050c340834d5e684e732aec91c0e860cd30e982c08bd",
+      "size": 103248205,
+      "root": "kokoro-int8-en-v0_19",
+      "files": { "model": "model.int8.onnx", "voices": "voices.bin", "tokens": "tokens.txt", "dataDir": "espeak-ng-data" }
+    },
+    {
+      "id": "campplus-sv-en-voxceleb-16k",
+      "role": "speaker",
+      "kind": "file",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "sha256": "357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b",
+      "size": 29596978,
+      "files": { "model": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx" }
+    }
+  ]
+}
