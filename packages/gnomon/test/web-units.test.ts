@@ -48,11 +48,15 @@ describe('G-WEB-02 origin lock (one origin) and G-WEB-04 Sec-Fetch-Site', () => 
     expect(decideUpgrade({ method: 'GET', path: '/rpc', headers }, P)).toMatchObject({ ok: false, fail: 'sec-fetch-site' });
     expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toMatchObject({ kind: 'refuse', fail: 'sec-fetch-site' });
   });
-  it('a MISSING Sec-Fetch-Site passes an upgrade with the exact Origin (Chrome sends none on the WebSocket handshake), never a non-static route', () => {
+  it('a MISSING Sec-Fetch-Site passes an upgrade with the exact Origin (Chrome sends none on the WebSocket handshake), and the token-gated /diag and /blob POSTs (flagged sfsAbsent), never /rpc', () => {
     const headers: Record<string, string> = { ...UP };
     delete headers['sec-fetch-site'];
     expect(decideUpgrade({ method: 'GET', path: '/rpc', headers }, P)).toEqual({ ok: true });
-    expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toMatchObject({ kind: 'refuse', fail: 'sec-fetch-site' });
+    expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toEqual({ kind: 'diag', sfsAbsent: true });
+    expect(routeHttp({ method: 'POST', path: `/blob/${'a'.repeat(64)}`, headers }, P)).toEqual({ kind: 'blob', sha: 'a'.repeat(64), sfsAbsent: true });
+    expect(routeHttp({ method: 'POST', path: '/rpc', headers }, P)).toMatchObject({ kind: 'refuse', fail: 'sec-fetch-site' });
+    expect(routeHttp({ method: 'POST', path: '/diag', headers: { ...headers, origin: 'http://evil.example' } }, P)).toMatchObject({ kind: 'refuse', fail: 'origin' });
+    expect(routeHttp({ method: 'POST', path: '/diag', headers: H }, P)).toEqual({ kind: 'diag' });
     const foreign = { ...headers, origin: 'http://evil.example' };
     expect(decideUpgrade({ method: 'GET', path: '/rpc', headers: foreign }, P)).toMatchObject({ ok: false, fail: 'origin' });
   });

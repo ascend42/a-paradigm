@@ -17,8 +17,9 @@
  *   `no-referrer` policy a POST would carry `Origin: null`).
  *   rule 5 (CSRF, `G-WEB-04`): no cookie is set or read; a present `Sec-Fetch-Site`
  *     must be `same-origin` or `none` on every non-static request and the upgrade,
- *     else 403 + socket.auth.fail{reason:'sec-fetch-site'}; it must be PRESENT on
- *     /diag and /blob, while an upgrade without it is accepted on the exact Origin (rule 3);
+ *     else 403 + socket.auth.fail{reason:'sec-fetch-site'}; an ABSENT one is accepted on
+ *     an upgrade (exact Origin, rule 3) and on /diag and /blob (exact Origin AND a live
+ *     X-Gnomon-Token, which endpoint.ts checks on every such request: see checkCrossSite);
  *     the only HTTP credential is `X-Gnomon-Token` (a live GUI token) on
  *     `/diag` and `/blob/<sha>`. There is no HTTP RPC: verbs travel on the
  *     authenticated WebSocket only.
@@ -130,8 +131,8 @@ export function bundlePath(target: string): string | null {
 export type HttpRoute =
   | { kind: 'refuse'; status: number; fail?: FailReason; nonStatic: boolean }
   | { kind: 'static'; file: string; contentType: string }
-  | { kind: 'diag' }
-  | { kind: 'blob'; sha: string };
+  | { kind: 'diag'; sfsAbsent?: true }
+  | { kind: 'blob'; sha: string; sfsAbsent?: true };
 
 /** The non-static routes: `/rpc` and `/diag` exactly; only `/blob/` is a prefix. */
 const isNonStatic = (p: string): boolean => p === '/rpc' || p === '/diag' || p === '/blob' || p.startsWith('/blob/');
@@ -141,12 +142,25 @@ const isNonStatic = (p: string): boolean => p === '/rpc' || p === '/diag' || p =
  * may arrive with NO Sec-Fetch-Site: Chrome does not send Fetch Metadata on the WebSocket handshake
  * (first dogfood run 2026-10-19: every Chrome GUI and setup page was refused 403). The exact Origin
  * (always sent by browsers on a WebSocket handshake) is then the cross-site defence; a PRESENT
- * Sec-Fetch-Site must still say same-origin or none. Non-static HTTP routes keep requiring it.
+ * Sec-Fetch-Site must still say same-origin or none.
+ *
+ * `tokenGated` (the /diag and /blob POSTs, Aegis finding 2, T-2026-10-19-006 item 5): an ABSENT
+ * Sec-Fetch-Site is accepted there too, because the route is then served ONLY with a live
+ * X-Gnomon-Token (endpoint.ts #onHttp checks it on every diag/blob route, no bypass). Not verified
+ * on a real browser here whether Chrome and WKWebView send Fetch Metadata on these loopback POSTs,
+ * and the header is not what makes them safe:
+ *   - a browser always sends Origin on a POST and a page cannot forge it, so the exact-Origin check
+ *     above already refuses every cross-origin browser request;
+ *   - X-Gnomon-Token is not a CORS-safelisted header, so a cross-origin fetch must preflight
+ *     (OPTIONS), and the kernel never answers with Access-Control-Allow-*: the POST is never sent;
+ *   - the token is a live per-session secret only the GUI page holds; a non-browser local process
+ *     that could forge Origin could forge Sec-Fetch-Site just as easily, so only the token stops it.
+ * /rpc keeps requiring the header (it carries no token; it is refused 426 anyway).
  */
-export function checkCrossSite(headers: HeaderMap, port: number, opts: { upgrade?: boolean } = {}): FailReason | null {
+export function checkCrossSite(headers: HeaderMap, port: number, opts: { upgrade?: boolean; tokenGated?: boolean } = {}): FailReason | null {
   if (headers.origin !== expectedOrigin(port)) return 'origin';
   const sfs = headers['sec-fetch-site'];
-  if (sfs === undefined && opts.upgrade) return null;
+  if (sfs === undefined && (opts.upgrade || opts.tokenGated)) return null;
   if (sfs !== 'same-origin' && sfs !== 'none') return 'sec-fetch-site';
   return null;
 }
@@ -157,14 +171,16 @@ export function routeHttp(req: { method: string; path: string; headers: HeaderMa
   const q = req.path.indexOf('?');
   const p = q === -1 ? req.path : req.path.slice(0, q);
   if (isNonStatic(p)) {
-    const bad = checkCrossSite(req.headers, port);
+    // /diag and /blob are token-gated (checkCrossSite); /rpc carries no token and keeps requiring Sec-Fetch-Site
+    const bad = checkCrossSite(req.headers, port, { tokenGated: p !== '/rpc' });
     if (bad) return { kind: 'refuse', status: 403, fail: bad, nonStatic: true };
     if (p === '/rpc') return { kind: 'refuse', status: 426, nonStatic: true }; // the WebSocket only; no HTTP RPC
-    if (p === '/diag') return req.method === 'POST' ? { kind: 'diag' } : { kind: 'refuse', status: 405, nonStatic: true };
+    const absent = req.headers['sec-fetch-site'] === undefined ? ({ sfsAbsent: true } as const) : {};
+    if (p === '/diag') return req.method === 'POST' ? { kind: 'diag', ...absent } : { kind: 'refuse', status: 405, nonStatic: true };
     const m = /^\/blob\/([0-9a-f]{64})$/.exec(p);
     if (!m) return { kind: 'refuse', status: 404, nonStatic: true };
     // POST (Aegis M1.10 ruling): a same-origin GET carries no Origin, and rule 3 needs the exact Origin on every non-static route
-    return req.method === 'POST' ? { kind: 'blob', sha: m[1]! } : { kind: 'refuse', status: 405, nonStatic: true };
+    return req.method === 'POST' ? { kind: 'blob', sha: m[1]!, ...absent } : { kind: 'refuse', status: 405, nonStatic: true };
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') return { kind: 'refuse', status: 405, nonStatic: false };
   const file = bundlePath(req.path);

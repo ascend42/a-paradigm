@@ -8,7 +8,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
-import { scanFabrication, scanGuardNames, scanLatencyDocs, scanSteering, type SourceText } from './honesty.js';
+import { GUIDE_TOPICS } from '../src/cli/guide-topics.js';
+import { scanFabrication, scanGuardNames, scanGuides, scanLatencyDocs, scanSteering, type GuideText, type SourceText } from './honesty.js';
 import { PKG_ROOT } from './helpers.js';
 
 const REPO = path.resolve(PKG_ROOT, '..', '..');
@@ -56,6 +57,11 @@ describe('honesty CI: the Gnomon tree passes (the gate)', () => {
   it('G-HON-07 (docs): every measured latency names its method and machine', () => {
     expect(scanLatencyDocs(docs)).toEqual([]);
   });
+  it('G-HON-08 (gnomon guide): every compiled-in topic names only verbs, params and reasons the frozen descriptors have', () => {
+    expect(GUIDE_TOPICS.map((t) => t.id)).toEqual(['spawn', 'claims', 'cards', 'refusals']);
+    for (const t of GUIDE_TOPICS) expect((t.body.match(/`[^`\n]+`/g) ?? []).length, t.id).toBeGreaterThan(10); // a check over unmarked text proves nothing
+    expect(scanGuides(GUIDE_TOPICS)).toEqual([]);
+  });
 });
 
 describe('honesty CI falsifiers: every rule fails on a planted violation', () => {
@@ -95,6 +101,24 @@ describe('honesty CI falsifiers: every rule fails on a planted violation', () =>
     // budgets and configured intervals are exempt (the BUDGET EXEMPTION, pending ratification)
     expect(scanLatencyDocs(f('the budget is p99 < 5 ms', 'README.md'))).toEqual([]);
     expect(scanLatencyDocs(f('renamed 50 ms after the first row; a 500 ms debounce', 'README.md'))).toEqual([]);
+  });
+  it('G-HON-08 (gnomon guide): a planted verb, param, reason, code, flag, topic or latency fails the check', () => {
+    const g = (body: string, id = 'fixture'): GuideText[] => [{ id, summary: 'a fixture guide', body }];
+    const details = (body: string): string[] => scanGuides(g(body)).map((x) => x.detail);
+    expect(details('Fork with `session.fork{hsid}`.')).toEqual(['a verb the descriptors lack: session.fork']);
+    expect(details('Fork with `session.fork`.')).toEqual(['a verb or kind the descriptors lack: session.fork']);
+    expect(details('Then call session.fork in prose.')).toEqual(['a verb or kind the descriptors lack: session.fork']);
+    expect(details('`session.open{model, force}`')).toEqual(['a param session.open does not declare: force']);
+    expect(details('`CAS_LOST{stale-claim}`')).toEqual(['a refusal reason the descriptors lack: CAS_LOST{stale-claim}']); // reserved, not built: named only when it lands
+    expect(details('`CLAIM_EXPIRED`')).toEqual(['a refusal code the descriptors lack: CLAIM_EXPIRED']);
+    expect(details('or CLAIM_EXPIRED in prose')).toEqual(['a refusal code the descriptors lack: CLAIM_EXPIRED']);
+    expect(details('pass `--force` to win')).toEqual(['a CLI flag no frozen descriptor lists: --force']);
+    expect(details('pass --force to win')).toEqual(['a CLI flag no frozen descriptor lists: --force']);
+    expect(details('see `gnomon guide nope`')).toEqual(['an unknown guide topic: gnomon guide nope']);
+    expect(details('a `shiny` term')).toEqual(['a term the descriptors do not name: shiny']);
+    expect(scanGuides(g('A claim takes 40 ms.')).map((x) => x.rule)).toEqual(['G-HON-07']);
+    // passes: declared verbs, params, codes, reasons, kinds and terms
+    expect(details('`contract.claim{contractId, nodeId, op:\'claim\'}` may answer `CAS_LOST`; `FORBIDDEN{presence}`; `contract.claimed`; `retry-corrected`; `gnomon guide fixture`; at most 2 hours.')).toEqual([]);
   });
   it('G-HON-03 / G-HON-07 (status): a bare count, a subset past its denominator, an unprovenanced latency', () => {
     expect(checkStatusNumbers({ cardsPending: 3 }).map((x) => x.rule)).toEqual(['G-HON-03']);

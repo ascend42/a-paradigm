@@ -468,6 +468,8 @@ async function waitSetup(io: LaunchTtyIo, deps: GuiSetupDeps, via: 'tty' | 'wrap
   if (via === 'wrapper') {
     io.stdin.on('data', onData);
     io.stdin.on('end', onEnd);
+    // an EOF that came before the listener (the app quit while the endpoint was starting) never re-emits 'end'
+    if ((io.stdin as { readableEnded?: boolean }).readableEnded === true) onEnd();
   }
   try {
     return await ep.done;

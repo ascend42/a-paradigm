@@ -726,9 +726,10 @@ export class WebEndpoint {
     if (route.kind === 'static') {
       return this.#send({ t: 'static', rid: r.rid, file: route.file, headers: { ...securityHeaders(this.#port, false), 'content-type': route.contentType } });
     }
+    // the gate an absent Sec-Fetch-Site rests on (rules.ts checkCrossSite tokenGated): every diag/blob route needs it
     const session = this.access.sessionForToken(r.headers['x-gnomon-token']);
     if (!session) {
-      this.#logFail('gui-token', { path: route.kind });
+      this.#logFail('gui-token', { path: route.kind, ...(route.sfsAbsent ? { secFetchSite: 'absent' } : {}) });
       return this.#respond(r.rid, 403, true);
     }
     if (route.kind === 'diag') {
