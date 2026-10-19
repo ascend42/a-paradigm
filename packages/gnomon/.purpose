@@ -2398,8 +2398,12 @@ flows:
       dir, read end opened by the activator before the spawn, only its path
       passed (`--ready-fifo`), the kernel opens the write end O_CLOEXEC
       (FIFO/owner/mode/inode checked, O_NOFOLLOW) and unlinks the name first
-      thing, the activator removes the dir at settle; no mkfifo => the fd
-      fallback. macOS keeps the sealed fd (kqueue never reports the FIFO
+      thing, the activator removes the dir at settle; mkfifo runs by
+      absolute path (/usr/bin, then /bin, never PATH); a FIFO failure passes
+      NO ready channel (never the unsealable fd, Aegis L1): the tail and the
+      attached outcome's readyDowngrade record `ready fifo unavailable:
+      <code>; probing the socket` and the socket is probed until the global
+      deadline. macOS keeps the sealed fd (kqueue never reports the FIFO
       writer's close, losing the no-ready-line fallback). Residual: win32
       handle inheritance; pid + socketPath pin applies on every channel.
       Exit codes are defined ONLY in

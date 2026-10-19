@@ -222,6 +222,7 @@ export async function activateDetached(
       break;
     case 'attached':
       process.stdout.write(`gnomond already running at ${outcome.socketPath}\n`);
+      if (outcome.readyDowngrade) process.stderr.write(`gnomon: ${outcome.readyDowngrade}\n`);
       break;
     case 'exited':
       process.stderr.write(

@@ -43,7 +43,11 @@
  * a fresh 0700 dir), opens its read end before the spawn and passes only the
  * PATH (`--ready-fifo`); the kernel opens the write end itself (O_CLOEXEC from
  * birth, nothing inherited) and unlinks the name before spawning anything, and
- * the activator removes the dir when the launch settles. Residual: a
+ * the activator removes the dir when the launch settles. When the FIFO cannot
+ * be made (Aegis L1), the 'fifo' channel never downgrades to the inherited
+ * fd: the kernel gets NO ready channel, the activator records `ready fifo
+ * unavailable: <code>; probing the socket` and goes straight to the
+ * no-ready-line socket probe, bounded by the global deadline. Residual: a
  * same-user process could open the FIFO by path in the window before the
  * kernel's first statement (same-user is outside the boundary, S29-K6), and
  * the line stays an unauthenticated hint either way. macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
@@ -96,11 +100,13 @@ export const HELLO_PROBE_MS = 1000;
  * Linux: libuv hands stdio 'pipe' slots over as an AF_UNIX socketpair, and
  * /proc/self/fd/N cannot re-open a socket (ENXIO), so an inherited ready fd
  * cannot be sealed there. Linux therefore uses the 'fifo' channel
- * (openReadyFifo, T-2026-10-19-011) and never inherits a ready fd; this
- * branch only remains for the fallback when the activator could not make a
- * FIFO (no mkfifo): the fd then stays inheritable like win32, and the
- * activator still pins pid + socketPath. macOS /dev/fd/N has dup semantics,
- * so the re-open works there for sockets too.
+ * (openReadyFifo, T-2026-10-19-011), and since Aegis L1 a FIFO failure no
+ * longer falls back to the fd (the activator passes no ready channel and
+ * probes). The socket branch below is reached only when a caller asks for
+ * the 'fd' channel on Linux explicitly (LaunchOptions.readyChannel, or a
+ * hand-run `gnomond --ready-fd`): the fd then stays inheritable like win32,
+ * and the activator still pins pid + socketPath. macOS /dev/fd/N has dup
+ * semantics, so the re-open works there for sockets too.
  */
 export function sealReadyFd(fd: number, platform: NodeJS.Platform = process.platform): number | null {
   if (platform === 'win32') return fd;
@@ -145,28 +151,45 @@ export function defaultReadyChannel(platform: NodeJS.Platform = process.platform
   return platform === 'linux' ? 'fifo' : 'fd';
 }
 
-/**
- * Activator side: a FIFO in a fresh 0700 dir (mkdtemp) under the tmp dir,
- * created 0600 by mkfifo(1) (Node has no mkfifo). Null when it cannot be made
- * or does not read back as our private FIFO; the caller falls back to 'fd'.
- */
-export function makeReadyFifo(parent: string = os.tmpdir()): { dir: string; fifo: string } | null {
-  let dir: string;
-  try {
-    dir = fs.mkdtempSync(path.join(parent, 'gnomon-ready-'));
-  } catch {
-    return null;
-  }
+/** mkfifo(1) by absolute path, never resolved through PATH (Aegis L1). */
+export const MKFIFO_PATHS = ['/usr/bin/mkfifo', '/bin/mkfifo'] as const;
+
+/** Why a ready FIFO could not be made: an errno code where there is one, else a short reason. */
+function failureCode(err: unknown): string {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  if (typeof code === 'string') return code;
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** makeReadyFifo with the failure reason kept (the activator records it). Throws on failure. */
+function makeReadyFifoOrThrow(parent: string = os.tmpdir()): { dir: string; fifo: string } {
+  const mkfifo = MKFIFO_PATHS.find((p) => fs.existsSync(p));
+  if (!mkfifo) throw Object.assign(new Error('no mkfifo at /usr/bin or /bin'), { code: 'ENOENT' });
+  const dir = fs.mkdtempSync(path.join(parent, 'gnomon-ready-'));
   const fifo = path.join(dir, 'ready');
   try {
-    execFileSync('mkfifo', ['-m', '600', fifo], { stdio: 'ignore', timeout: 5000 });
+    execFileSync(mkfifo, ['-m', '600', fifo], { stdio: 'ignore', timeout: 5000, env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' } });
     const d = fs.lstatSync(dir);
     const f = fs.lstatSync(fifo);
     const uid = process.getuid?.();
     if (!d.isDirectory() || (d.mode & 0o077) !== 0 || !f.isFIFO() || (f.mode & 0o077) !== 0 || (uid !== undefined && (d.uid !== uid || f.uid !== uid))) throw new Error('not private');
     return { dir, fifo };
-  } catch {
+  } catch (err) {
     fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
+}
+
+/**
+ * Activator side: a FIFO in a fresh 0700 dir (mkdtemp) under the tmp dir,
+ * created 0600 by mkfifo(1) at an absolute path (Node has no mkfifo). Null
+ * when it cannot be made or does not read back as our private FIFO; the
+ * activator then passes NO ready channel and probes the socket (Aegis L1).
+ */
+export function makeReadyFifo(parent: string = os.tmpdir()): { dir: string; fifo: string } | null {
+  try {
+    return makeReadyFifoOrThrow(parent);
+  } catch {
     return null;
   }
 }
@@ -270,7 +293,7 @@ export class BoundedTail {
 export type LaunchOutcome =
   | { kind: 'ready'; identity: DaemonReadyIdentity }
   /** Lost the race (or no ready line, Windows fallback): another kernel answers on the socket. */
-  | { kind: 'attached'; socketPath: string; via: 'superseded' | 'no-ready-line' | 'socket-probe' }
+  | { kind: 'attached'; socketPath: string; via: 'superseded' | 'no-ready-line' | 'socket-probe'; readyDowngrade?: string }
   /** The child exited before ready and no winner answers. */
   | { kind: 'exited'; code: number | null; signal: NodeJS.Signals | null; class: DaemonExitClass; stderrTail: string }
   /** Still not ready at the deadline and no socket answers; the child is left running. */
@@ -292,6 +315,8 @@ export interface LaunchOptions extends DetachOptions {
   probeSocket?: (socketPath: string) => Promise<boolean>;
   /** Test seam: the pid the pidfile names as the lock holder (default: readPidfile(home)). */
   lockHolderPid?: () => number | null;
+  /** Test seam: make the ready FIFO (default: mkfifo at an absolute path); a throw or null is a FIFO failure. */
+  makeFifo?: () => { dir: string; fifo: string } | null;
 }
 
 /** Does a gnomon kernel answer `hello` on the socket within `ms`? (A bare connect only proves something accepts.) */
@@ -332,26 +357,35 @@ function defaultSpawn(execPath: string, args: string[], env: Record<string, stri
 }
 
 /** The activator's read end of the ready FIFO, opened BEFORE the spawn (so the kernel's non-blocking open finds a reader). */
-function openFifoReader(): { dir: string; fifo: string; stream: net.Socket } | null {
-  const made = makeReadyFifo();
-  if (!made) return null;
+function openFifoReader(make: () => { dir: string; fifo: string } | null): { dir: string; fifo: string; stream: net.Socket } | { error: string } {
+  let made: { dir: string; fifo: string } | null;
+  try {
+    made = make();
+  } catch (err) {
+    return { error: failureCode(err) };
+  }
+  if (!made) return { error: 'unavailable' };
   try {
     const fd = fs.openSync(made.fifo, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
     return { ...made, stream: new net.Socket({ fd, readable: true, writable: false }) };
-  } catch {
+  } catch (err) {
     fs.rmSync(made.dir, { recursive: true, force: true });
-    return null;
+    return { error: failureCode(err) };
   }
 }
 
 /** Activator side: spawn the detached kernel and wait for its ready line (or its classified exit). */
 export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
-  // 'fifo' (linux): a private FIFO's path; when it cannot be made, the inherited fd (sealReadyFd's fallback)
-  const fifo = (opts.readyChannel ?? defaultReadyChannel()) === 'fifo' ? openFifoReader() : null;
+  // 'fifo' (linux): a private FIFO's path. When it cannot be made there is NO ready channel (Aegis L1: never the
+  // unsealable inherited fd): the activator records the downgrade and probes the socket until the global deadline.
+  const wantFifo = (opts.readyChannel ?? defaultReadyChannel()) === 'fifo';
+  const opened = wantFifo ? openFifoReader(opts.makeFifo ?? (() => makeReadyFifoOrThrow())) : null;
+  const fifo = opened && !('error' in opened) ? opened : null;
+  const fifoDowngrade = opened && 'error' in opened ? `ready fifo unavailable: ${opened.error}; probing the socket` : null;
   const dropFifo = (): void => {
     if (fifo) fs.rmSync(fifo.dir, { recursive: true, force: true });
   };
-  const args = reexecArgs(fifo ? { ...opts, readyFifo: fifo.fifo } : { ...opts, readyFd: READY_FD });
+  const args = reexecArgs(fifo ? { ...opts, readyFifo: fifo.fifo } : fifoDowngrade ? { ...opts } : { ...opts, readyFd: READY_FD });
   const env = cleanReexecEnv(opts.sourceEnv ?? process.env, opts.path !== undefined ? { path: opts.path } : {});
   let child: ChildProcess;
   try {
@@ -363,7 +397,11 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
   }
   const tail = new BoundedTail(opts.tailBytes);
   const stderr = child.stdio[2] as NodeJS.ReadableStream | null;
-  const readyStream: NodeJS.ReadableStream | null = fifo ? (fifo.stream as NodeJS.ReadableStream) : ((child.stdio[READY_FD] ?? null) as NodeJS.ReadableStream | null);
+  const readyStream: NodeJS.ReadableStream | null = fifo
+    ? (fifo.stream as NodeJS.ReadableStream)
+    : fifoDowngrade
+      ? null
+      : ((child.stdio[READY_FD] ?? null) as NodeJS.ReadableStream | null);
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const deadline = Date.now() + timeoutMs;
   const probe = (): Promise<boolean> => (opts.probeSocket ?? helloProbe)(opts.socketPath);
@@ -388,7 +426,7 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
       if (settled) return;
       settled = true;
       release();
-      resolve(o);
+      resolve(fifoDowngrade && o.kind === 'attached' ? { ...o, readyDowngrade: fifoDowngrade } : o);
     };
     const timedOut = (): LaunchOutcome => ({ kind: 'timeout', pid: child.pid, stderrTail: tail.text() });
     const rejectReady = (why: string): void => {
@@ -439,6 +477,14 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
         });
       }, 100);
     });
+    if (fifoDowngrade) {
+      // no ready channel at all: say so where it is seen (the tail; `attached` carries readyDowngrade), then probe
+      tail.push(Buffer.from(`activator: ${fifoDowngrade}\n`));
+      noReadyLine = true;
+      void waitForSocket(probe, Math.max(0, deadline - Date.now()), stopped).then((up) => {
+        if (up) settle({ kind: 'attached', socketPath: opts.socketPath, via: 'no-ready-line' });
+      });
+    }
     child.once('error', (err) => {
       tail.push(Buffer.from(`spawn failed: ${err.message}\n`));
       settle({ kind: 'exited', code: null, signal: null, class: 'internal', stderrTail: tail.text() });

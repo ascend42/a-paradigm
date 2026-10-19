@@ -342,4 +342,44 @@ describe('§2.4 rule 2: the ready FIFO channel (T-2026-10-19-011: linux has no s
     closeSync(fd!);
     expect(existsSync(made.fifo)).toBe(false);
   });
+
+  describe('Aegis L1: a FIFO failure never downgrades to the unsealable inherited fd', () => {
+    function downgradeLaunch(c: FakeChild, probe: () => boolean, timeoutMs = 2000) {
+      let seen: string[] = [];
+      const p = launchDaemon({
+        execPath: 'node',
+        home: '/home/u/.gnomon',
+        socketPath: SOCK,
+        timeoutMs,
+        readyChannel: 'fifo',
+        makeFifo: () => {
+          throw Object.assign(new Error('too many open files'), { code: 'EMFILE' });
+        },
+        spawnChild: (_e, args) => ((seen = args), c),
+        probeSocket: async () => probe(),
+        lockHolderPid: () => 4242,
+      });
+      return { p, args: () => seen };
+    }
+
+    it('FALSIFIER: no ready fd and no FIFO are passed; a line on the inherited pipe is ignored; the outcome comes from the probe', async () => {
+      const c = fakeChild();
+      let n = 0;
+      const s = downgradeLaunch(c, () => ++n >= 3);
+      c.ready.write(line(4242)); // a forgeable fd-3 line: must not be read
+      const o = await s.p;
+      expect(s.args()).not.toContain('--ready-fd');
+      expect(s.args()).not.toContain('--ready-fifo');
+      expect(o).toEqual({ kind: 'attached', socketPath: SOCK, via: 'no-ready-line', readyDowngrade: 'ready fifo unavailable: EMFILE; probing the socket' });
+    });
+
+    it('with no socket answering, the probe ends at the global deadline and the tail records the downgrade', async () => {
+      const c = fakeChild();
+      const t0 = Date.now();
+      const o = await downgradeLaunch(c, () => false, 300).p;
+      expect(o.kind).toBe('timeout');
+      expect(Date.now() - t0).toBeLessThan(1_500);
+      if (o.kind === 'timeout') expect(o.stderrTail).toContain('activator: ready fifo unavailable: EMFILE; probing the socket');
+    });
+  });
 });
