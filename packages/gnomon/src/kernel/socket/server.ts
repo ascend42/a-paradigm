@@ -102,6 +102,8 @@ export interface SocketServerOptions {
   socketPath: string;
   /** How long a connect probe may take before the old holder is "undecided" (default 1 s). */
   holderProbeMs?: number;
+  /** Test seam: replaces probeSocketHolder when publishing over an existing name (default: the real probe). */
+  holderProbe?: (socketPath: string, timeoutMs: number) => Promise<HolderProbe>;
   handle: RpcHandler;
   maxFrameBytes?: number;
   /** Inbound frame cap before auth (default 16 KiB, never above maxFrameBytes). */
@@ -146,6 +148,8 @@ export function verifySocketAcl(socketPath: string, mode: number = SOCKET_MODE):
 }
 
 export const DEFAULT_HOLDER_PROBE_MS = 1_000;
+/** Pause before the confirming re-probe of a holder that refused (Darwin: a full backlog also refuses). */
+export const HOLDER_REPROBE_DELAY_MS = 100;
 
 /** The socket directory must be ours and 0700 (no group/other bits): no bind-then-chmod window exists inside it. */
 export function assertPrivateDir(dir: string): void {
@@ -165,7 +169,8 @@ export type HolderProbe = { holder: 'alive' } | { holder: 'dead' } | { holder: '
 
 /**
  * Prove the holder of a unix socket dead by connecting (§2.4 rule 1, Orca audit "Adopt 2"): ECONNREFUSED is the
- * ONLY proof of death; ENOENT means nothing is there; a connect is alive; a timeout, EPERM, EACCES or anything
+ * ONLY proof of death (strong but not absolute on Darwin, where a live listener with a full accept queue also
+ * refuses — publishSocket therefore re-probes once before acting on it); ENOENT means nothing is there; a connect is alive; a timeout, EPERM, EACCES or anything
  * else is UNDECIDED — "can't tell" is never "dead".
  */
 export function probeSocketHolder(socketPath: string, timeoutMs: number = DEFAULT_HOLDER_PROBE_MS, connect: (p: string) => net.Socket = (p) => net.createConnection(p)): Promise<HolderProbe> {
@@ -194,7 +199,7 @@ export function probeSocketHolder(socketPath: string, timeoutMs: number = DEFAUL
  * the name is taken, replace it by rename() ONLY after probeSocketHolder proved the old holder dead. A live or
  * undecided holder is refused and its socket is left in place.
  */
-async function publishSocket(bindPath: string, target: string, probeMs: number): Promise<void> {
+async function publishSocket(bindPath: string, target: string, probeMs: number, probeHolder: (p: string, ms: number) => Promise<HolderProbe> = probeSocketHolder): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       fs.linkSync(bindPath, target);
@@ -212,7 +217,14 @@ async function publishSocket(bindPath: string, target: string, probeMs: number):
       st = null;
     }
     if (st && !st.isSocket()) throw new LifecycleRefusal('endpoint-busy', `${target} exists and is not a socket; not touching it`, { socketPath: target, holder: 'not-a-socket' });
-    const probe: HolderProbe = st ? await probeSocketHolder(target, probeMs) : { holder: 'gone' };
+    let probe: HolderProbe = st ? await probeHolder(target, probeMs) : { holder: 'gone' };
+    if (probe.holder === 'dead') {
+      // On Darwin ECONNREFUSED is strong but NOT absolute proof of death: a LIVE listener whose accept queue
+      // (backlog) is momentarily full also refuses. Re-probe once after a short pause before renaming over the
+      // name (Aegis L1); only a second refusal is taken as death. A live holder that has drained answers connect.
+      await new Promise((r) => setTimeout(r, HOLDER_REPROBE_DELAY_MS));
+      probe = await probeHolder(target, probeMs);
+    }
     if (probe.holder === 'alive') throw new LifecycleRefusal('endpoint-busy', `${target} is held by a live process that answers connect`, { socketPath: target, holder: 'alive' });
     if (probe.holder === 'undecided') {
       throw new LifecycleRefusal('endpoint-busy', `cannot prove the holder of ${target} dead (${probe.why}); refusing to reclaim it — stop the other process or remove the socket by hand once it is surely dead`, { socketPath: target, holder: 'undecided', why: probe.why });
@@ -482,7 +494,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     if (!pipe) {
       fs.chmodSync(bindPath, SOCKET_MODE);
       verifySocketAcl(bindPath);
-      await publishSocket(bindPath, opts.socketPath, opts.holderProbeMs ?? DEFAULT_HOLDER_PROBE_MS);
+      await publishSocket(bindPath, opts.socketPath, opts.holderProbeMs ?? DEFAULT_HOLDER_PROBE_MS, opts.holderProbe);
       const st = fs.lstatSync(opts.socketPath);
       published = { dev: st.dev, ino: st.ino };
       verifySocketAcl(opts.socketPath);

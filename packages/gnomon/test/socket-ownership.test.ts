@@ -15,7 +15,7 @@ import * as net from 'node:net';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
-import { listenSocket, probeSocketHolder } from '../src/kernel/socket/server.js';
+import { listenSocket, probeSocketHolder, type HolderProbe } from '../src/kernel/socket/server.js';
 import { tempHome } from './daemon-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
@@ -69,6 +69,41 @@ describe('socket ownership (never "can\'t tell" ⇒ "dead")', () => {
     cleanups.push(() => srv.close());
     expect(await reaches(sock)).not.toMatch(/^error:/);
     expect(readdirSync(h).filter((n) => n.startsWith('.s'))).toEqual([]);
+  });
+
+  it('Aegis L1: one ECONNREFUSED is not enough — a holder that refuses once (Darwin full backlog) and then answers is kept', async () => {
+    const h = home();
+    const sock = path.join(h, 'g.sock');
+    const live = await rawListen(sock);
+    cleanups.push(() => new Promise<void>((r) => live.close(() => r())));
+    const seen: string[] = [];
+    const flaky = async (p: string, ms: number): Promise<HolderProbe> => {
+      seen.push('probe');
+      return seen.length === 1 ? { holder: 'dead' } : probeSocketHolder(p, ms); // first refusal, then the truth
+    };
+    const err = await listenSocket({ socketPath: sock, handle: noop, holderProbe: flaky }).catch((e: unknown) => e);
+    expect(seen.length).toBe(2); // re-probed before acting on "dead"
+    expect((err as LifecycleRefusal).reason).toBe('endpoint-busy');
+    expect((err as LifecycleRefusal).detail.holder).toBe('alive');
+    expect(await reaches(sock)).toBe('raw');
+  });
+
+  it('Aegis L1 control: two refusals in a row are death — the name is reclaimed', async () => {
+    const h = home();
+    const sock = path.join(h, 'g.sock');
+    const tmp = path.join(h, 't.sock');
+    const dead = await rawListen(tmp);
+    linkSync(tmp, sock);
+    await new Promise<void>((r) => dead.close(() => r()));
+    let n = 0;
+    const counting = (p: string, ms: number): Promise<HolderProbe> => {
+      n++;
+      return probeSocketHolder(p, ms);
+    };
+    const srv = await listenSocket({ socketPath: sock, handle: noop, holderProbe: counting });
+    cleanups.push(() => srv.close());
+    expect(n).toBe(2);
+    expect(await reaches(sock)).not.toMatch(/^error:/);
   });
 
   it('a live holder is never unlinked: refused endpoint-busy{holder:alive}, its socket still answers', async () => {

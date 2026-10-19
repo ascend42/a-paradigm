@@ -181,7 +181,9 @@ components:
       window), binds a private random sibling name (.s<8 hex>), chmods and
       reads it back, then publishes: link() when the public name is free,
       else rename() over it only after probeSocketHolder proved the old
-      holder dead (ECONNREFUSED). A connect = live holder; timeout, EPERM or
+      holder dead (ECONNREFUSED, confirmed by a second probe after
+      HOLDER_REPROBE_DELAY_MS — Aegis L1: on Darwin a live listener with a
+      full accept queue also refuses). A connect = live holder; timeout, EPERM or
       any other error = undecided; both refused endpoint-busy{holder} and the
       old socket is left in place. Node's server.close() unlinks only the
       private bind name; close() removes the public name only while its
