@@ -79,12 +79,12 @@ export interface VoiceSessionsPort {
 /**
  * Aegis M4: the link a forwarded voice turn leaves on the KERNEL-signed rows. `session.inject` keeps origin 'client'
  * (INJECT_ORIGINS is a published closed set; a new 'voice' origin would move clientApiId) and gains `source: 'voice'`;
- * `turn.sent` carries `source: 'voice'` (§4.10) plus voiceSessionId, turnId and voiceTurnSeq (the cited voice.turn.user
+ * `turn.sent` carries `source: 'voice'` (§4.10) plus voiceSessionId, voiceTurnId and voiceTurnSeq (the cited voice.turn.user
  * row). Both payloads are opaque to event:v1 (no KIND_PAYLOADS / RESERVED_PAYLOAD_FIELDS row), so nothing published moves.
  */
 export function voiceTag(p: { source?: 'voice'; voice?: VoiceTurnLink }): Record<string, unknown> {
   if (p.source !== 'voice') return {};
-  return { source: 'voice', ...(p.voice ? { voiceSessionId: p.voice.voiceSessionId, turnId: p.voice.turnId, voiceTurnSeq: p.voice.turnSeq } : {}) };
+  return { source: 'voice', ...(p.voice ? { voiceSessionId: p.voice.voiceSessionId, voiceTurnId: p.voice.turnId, voiceTurnSeq: p.voice.turnSeq } : {}) };
 }
 
 /** Aegis M4: what the kernel-signed turn.sent / session.inject rows carry to link a forwarded turn to its voice row. */
