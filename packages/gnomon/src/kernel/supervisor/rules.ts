@@ -24,15 +24,24 @@
  * the window is not formed — fail closed, the card is raised again) and at
  * most MAX_RULES rules (oldest dropped first, same fail-closed direction).
  *
- * REVOKE is not built: it needs a new event kind (`approval.rule.revoked`),
- * which moves clientApiId — reported, not added (the task's STOP rule).
+ * The learned row's match mode is EXACT only (TD-2026-10-19-528 F2): v1
+ * `matchExact:true`, or `match:'exact'`; a row carrying any other `match`
+ * value forms no rule (an always-rule never widens).
+ *
+ * REVOKE (P8-D98, TD-2026-10-19-528 F1): a kernel-signed
+ * `approval.rule.revoked{ruleId, repoKey, tool, connId}` (written by the
+ * `rules.revoke` human-device verb, socket/rules-revoke.ts) removes the rule
+ * and forgets the card's `always` decision, so a replayed learned row for the
+ * same card never brings it back. A forged revoked row is ignored like any
+ * other forged row. A revoke never widens anything: a later `always` on a
+ * NEW card learns a new rule (a new id).
  * `gnomon rules list` reads the same fold offline (rules-cli.ts).
  */
 import { inputHash } from './permission.js';
 
 export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
-export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned'] as const);
+export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked'] as const);
 
 export interface RuleRow {
   seq?: number;
@@ -94,11 +103,21 @@ export class RuleBook {
       while (this.#always.size > MAX_TRACKED_REQUESTS) this.#always.delete(this.#always.values().next().value!);
     } else if (r.kind === 'approval.rule.learned') {
       const cardId = p.cardId;
-      if (typeof cardId !== 'string' || p.matchExact !== true || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || p.presence === 'cached') return;
+      const exact = 'match' in p ? p.match === 'exact' : p.matchExact === true; // F2: exact only
+      if (typeof cardId !== 'string' || !exact || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || p.presence === 'cached') return;
       const req = this.#requests.get(cardId);
       if (!req || req.tool !== p.tool || !this.#always.has(cardId)) return;
       bump(this.#rules, cardId, { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh') }, MAX_RULES);
+    } else if (r.kind === 'approval.rule.revoked') {
+      if (typeof p.ruleId !== 'string') return;
+      this.#rules.delete(p.ruleId);
+      this.#always.delete(p.ruleId);
     }
+  }
+
+  /** The standing rule with this id, or null (revoked or never learned). */
+  get(ruleId: string): AlwaysRule | null {
+    return this.#rules.get(ruleId) ?? null;
   }
 
   /** The rule an exact (repoKey, tool, inputHash) matches, or null. */

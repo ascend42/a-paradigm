@@ -5,9 +5,22 @@
  * only; a forged row of any kind, a cached-presence learn, a missing
  * `always` decision or a tool mismatch forms no rule; a rule matches only
  * its exact (repoKey, tool, inputHash). `gnomon rules list` reads the same
- * fold from a VERIFIED log; revoke is refused (needs a new event kind).
+ * fold from a VERIFIED log.
+ *
+ * Revoke (P8-D98, TD-2026-10-19-528 F1/F2): a kernel-signed
+ * approval.rule.revoked removes the rule (the exact match raises the card
+ * again), a forged one is ignored, a fresh `always` on a new card learns a
+ * new rule, `rules list` hides the revoked rule, the #rules-revoke handler
+ * refuses an unknown id NOT_FOUND, and `gnomon rules revoke` works end to end
+ * against a running daemon as the home's human device.
  */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { startDaemon, type DaemonHandle } from '../src/kernel/lifecycle/index.js';
+import { createRulesRevokeHandler, type RulesRevokeDeps } from '../src/kernel/socket/rules-revoke.js';
+import { RpcRefusal } from '../src/kernel/socket/index.js';
+import { loadDevHome, provisionDevHome } from '../src/cli/dev-home.js';
 import { recordKernelPub } from '../src/kernel/identity/index.js';
 import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
 import { KeyRing, SoftwareEd25519Signer, type KernelLog } from '../src/kernel/log/index.js';
@@ -108,7 +121,100 @@ describe('#always-rules: derived from kernel-signed rows only, exact match only'
   });
 });
 
-describe('#rules-cli: `gnomon rules list` reads a VERIFIED log; revoke is refused', () => {
+const revokedRow = (ruleId: string, by: { principal?: string; keyId?: string } = {}): RuleRow => ({
+  principal: by.principal ?? K,
+  keyId: by.keyId ?? KEY,
+  kind: 'approval.rule.revoked',
+  payload: { ruleId, repoKey: REPO, tool: 'Bash', connId: 'conn:x' },
+});
+
+describe('#always-rules: revoke (approval.rule.revoked) and the exact-only match (F1/F2)', () => {
+  const h = inputHash(INPUT);
+  it('after a kernel-signed revoke the exact match is gone (the card is raised again) and list hides it', () => {
+    const b = book([...learnRows(card(1)), ...learnRows(card(2), { input: { command: 'ls' } })]);
+    expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(1));
+    b.fold(revokedRow(card(1)));
+    expect(b.match(REPO, 'Bash', h)).toBeNull();
+    expect(b.get(card(1))).toBeNull();
+    expect(b.list().map((r) => r.ruleId)).toEqual([card(2)]);
+  });
+
+  it('a forged revoked row (another principal, a non-kernel key, no key) is ignored', () => {
+    for (const forge of [{ principal: 'p:abcdefgh/founder' }, { keyId: 'device-key' }, { keyId: undefined as unknown as string }]) {
+      const b = book(learnRows(card(1)));
+      b.fold({ ...revokedRow(card(1)), ...forge });
+      expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(1));
+    }
+  });
+
+  it('a replayed learned row for the revoked card never brings it back; a fresh `always` on a new card learns a new rule', () => {
+    const b = book(learnRows(card(1)));
+    b.fold(revokedRow(card(1)));
+    b.fold(learnRows(card(1))[2]!);
+    expect(b.match(REPO, 'Bash', h)).toBeNull();
+    for (const r of learnRows(card(3))) b.fold(r);
+    expect(b.match(REPO, 'Bash', h)?.ruleId).toBe(card(3));
+  });
+
+  it("F2: `match:'exact'` learns; any other match value forms no rule", () => {
+    const withMatch = (m: unknown) => {
+      const rows = learnRows(card(1));
+      const { matchExact: _drop, ...rest } = rows[2]!.payload as Record<string, unknown>;
+      rows[2] = { ...rows[2]!, payload: { ...rest, match: m } };
+      return book(rows).list().length;
+    };
+    expect(withMatch('exact')).toBe(1);
+    for (const m of ['prefix', 'glob', 'any', null, true]) expect(withMatch(m)).toBe(0);
+  });
+});
+
+describe('#rules-revoke: the rules.revoke handler', () => {
+  const ctx = { connId: 'conn:test-1', principal: 'p:local/founder', surface: 'cli', isLive: () => true };
+  const rig = () => {
+    const b = book(learnRows(card(1)));
+    const appended: Array<{ payload: unknown; connId: string }> = [];
+    const deps: RulesRevokeDeps = {
+      lookup: (id) => b.get(id),
+      append: async (payload, ids) => {
+        appended.push({ payload, connId: ids.connId });
+        b.fold(revokedRow(payload.ruleId)); // the kernel-signed row the daemon would write
+      },
+    };
+    return { b, appended, handler: createRulesRevokeHandler(deps) };
+  };
+  const refusalOf = async (p: Promise<unknown>) => {
+    try {
+      await p;
+    } catch (e) {
+      if (e instanceof RpcRefusal) return e.refusal.code;
+      throw e;
+    }
+    return 'no refusal';
+  };
+
+  it('revokes a standing rule: one row stamped with THIS connection, then the match is gone', async () => {
+    const r = rig();
+    expect(await r.handler(ctx, { ruleId: card(1) })).toEqual({ ruleId: card(1), revoked: true });
+    expect(r.appended).toEqual([{ payload: { ruleId: card(1), repoKey: REPO, tool: 'Bash', connId: 'conn:test-1' }, connId: 'conn:test-1' }]);
+    expect(r.b.match(REPO, 'Bash', inputHash(INPUT))).toBeNull();
+  });
+
+  it('an unknown id is NOT_FOUND; a second (even concurrent) revoke of one rule writes one row', async () => {
+    const r = rig();
+    expect(await refusalOf(r.handler(ctx, { ruleId: card(9) }))).toBe('NOT_FOUND');
+    const both = await Promise.allSettled([r.handler(ctx, { ruleId: card(1) }), r.handler(ctx, { ruleId: card(1) })]);
+    expect(both.map((x) => x.status)).toEqual(['fulfilled', 'rejected']);
+    expect(r.appended).toHaveLength(1);
+  });
+
+  it('bad params are BAD_REQUEST and write nothing', async () => {
+    const r = rig();
+    for (const p of [undefined, null, [], 'card', {}, { ruleId: 7 }, { ruleId: 'rule:1' }, { ruleId: card(1), extra: 1 }]) expect(await refusalOf(r.handler(ctx, p))).toBe('BAD_REQUEST');
+    expect(r.appended).toEqual([]);
+  });
+});
+
+describe('#rules-cli: `gnomon rules list` reads a VERIFIED log', () => {
   const homes: Array<() => void> = [];
   const logs: KernelLog[] = [];
   afterEach(async () => {
@@ -121,7 +227,7 @@ describe('#rules-cli: `gnomon rules list` reads a VERIFIED log; revoke is refuse
     return { out, err, io: { stdout: { write: (s: string) => (out.push(s), true) }, stderr: { write: (s: string) => (err.push(s), true) } } };
   };
 
-  it('lists the kernel-signed rule; a row appended under another principal is not a rule; revoke exits 1 UNSUPPORTED', async () => {
+  it('lists the kernel-signed rule; a row appended under another principal is not a rule', async () => {
     const t = tempHome('rules-');
     homes.push(t.cleanup);
     const KERNEL = kernelPrincipalOf();
@@ -144,10 +250,71 @@ describe('#rules-cli: `gnomon rules list` reads a VERIFIED log; revoke is refuse
     const txt = io();
     expect(await runRulesCommand(['list', t.home], txt.io)).toBe(0);
     expect(txt.out.join('')).toContain('1 standing always-allow rule(s)');
-    const rv = io();
-    expect(await runRulesCommand(['revoke', card(1)], rv.io)).toBe(1);
-    expect(rv.err.join('')).toContain('REFUSED  UNSUPPORTED');
     const bad = io();
     expect(await runRulesCommand(['list', 'relative/home'], bad.io)).toBe(64);
+  });
+});
+
+describe('#rules-cli: `gnomon rules revoke` end to end (running daemon, human device)', () => {
+  const homes: Array<() => void> = [];
+  const daemons: DaemonHandle[] = [];
+  afterEach(async () => {
+    for (const d of daemons.splice(0)) await d.shutdown('signal').catch(() => undefined);
+    for (const c of homes.splice(0)) c();
+  });
+  const io = () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    return { out, err, io: { stdout: { write: (s: string) => (out.push(s), true) }, stderr: { write: (s: string) => (err.push(s), true) } } };
+  };
+
+  it('revokes the rule over the socket; list hides it; a second revoke and an unknown id are NOT_FOUND', async () => {
+    const t = tempHome('rv-');
+    homes.push(t.cleanup);
+    fs.mkdirSync(path.dirname(t.home), { recursive: true });
+    const userHome = fs.realpathSync.native(path.dirname(t.home));
+    const home = path.join(userHome, 'devhome');
+    provisionDevHome(home, { userHome });
+    const l = loadDevHome(home, { userHome });
+    const KERNEL = kernelPrincipalOf(l.root); // the daemon's principal: namespaced by the home's root
+    recordKernelPub(home, l.kernelKey.publicKeyPem);
+    const ring = new KeyRing();
+    ring.addEd25519(l.kernelKey.publicKeyPem);
+    const log = openKernelLog({ home, kernelPrincipal: KERNEL, signer: l.kernel, keyRing: ring });
+    for (const r of learnRows(card(1), { principal: KERNEL })) await log.append({ kind: r.kind, principal: KERNEL, payload: r.payload as Record<string, unknown> });
+    await log.close();
+
+    const before = io();
+    const bc = await runRulesCommand(['list', home, '--json'], before.io);
+    expect(before.err.join('')).toBe('');
+    expect(bc).toBe(0);
+    expect((JSON.parse(before.out.join('')) as { rules: Array<{ ruleId: string }> }).rules.map((r) => r.ruleId)).toEqual([card(1)]);
+
+    // no daemon yet: refused, not UNSUPPORTED
+    const down = io();
+    expect(await runRulesCommand(['revoke', card(1), '--home', home], down.io)).toBe(1);
+    expect(down.err.join('')).toContain('not-running');
+
+    const d = await startDaemon({ home, idleMs: 60_000, kernelSigner: l.kernel, rootAuthority: l.root });
+    daemons.push(d);
+    const ok = io();
+    const okCode = await runRulesCommand(["revoke", card(1), "--home", home, "--json"], ok.io);
+    expect(ok.err.join("")).toBe("");
+    expect(okCode).toBe(0);
+    expect(JSON.parse(ok.out.join(''))).toEqual({ ruleId: card(1), revoked: true });
+    const again = io();
+    expect(await runRulesCommand(['revoke', card(1), '--home', home], again.io)).toBe(1);
+    expect(again.err.join('')).toContain('NOT_FOUND');
+    const unknown = io();
+    expect(await runRulesCommand(['revoke', card(7), '--home', home], unknown.io)).toBe(1);
+    expect(unknown.err.join('')).toContain('NOT_FOUND');
+    const usage = io();
+    expect(await runRulesCommand(['revoke', '--home', home], usage.io)).toBe(64);
+    await d.shutdown('signal');
+    daemons.splice(0);
+
+    const after = io();
+    expect(await runRulesCommand(['list', home, '--json'], after.io)).toBe(0);
+    expect((JSON.parse(after.out.join('')) as { rules: unknown[] }).rules).toEqual([]);
   });
 });
