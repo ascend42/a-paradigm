@@ -27,7 +27,19 @@ async function setupMain(setupToken: string, setupPublicKey: string): Promise<vo
   document.body.appendChild(root);
   const doc = document as unknown as SDoc;
   const endpointPath = `ws://${location.host}/rpc`;
-  const client = new GnomonClient(await webSocketTransport(endpointPath), { callTimeoutMs: 0 });
+  let transport;
+  try {
+    transport = await webSocketTransport(endpointPath);
+  } catch {
+    // never a blank page: say what happened and where to go next (textContent only)
+    const h = document.createElement('h1');
+    h.textContent = 'Gnomon setup could not connect';
+    const p = document.createElement('p');
+    p.textContent = 'This page could not reach the setup service on this Mac. It may have stopped or the link may have expired. Go back to the terminal (or reopen Gnomon) for a fresh link.';
+    root.append(h, p);
+    return;
+  }
+  const client = new GnomonClient(transport, { callTimeoutMs: 0 });
   const flow: SetupFlow = new SetupFlow(client, hostSurface(), (s) => renderSetup(doc, root as unknown as SEl, s, flow));
   renderSetup(doc, root as unknown as SEl, flow.state, flow);
   await flow.connect({ setupToken, setupPublicKey, endpointPath, subtle: globalThis.crypto?.subtle });

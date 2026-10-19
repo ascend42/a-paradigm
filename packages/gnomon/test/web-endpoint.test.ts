@@ -116,7 +116,6 @@ describe('G-WEB-02/03/04 at the wire: no non-Gnomon origin reaches a verb (M1.4 
       [{ ...GOOD(port), Origin: `http://localhost:${port}` }, 403, 'origin'],
       [{ Host: `127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin' }, 403, 'origin'],
       [{ ...GOOD(port), 'Sec-Fetch-Site': 'cross-site' }, 403, 'sec-fetch-site'],
-      [{ Host: `127.0.0.1:${port}`, Origin: `http://127.0.0.1:${port}` }, 403, 'sec-fetch-site'],
       [{ ...GOOD(port), Host: `attacker.example:${port}` }, 421, 'host'],
       [{ ...GOOD(port), Host: `localhost:${port}` }, 421, 'host'],
     ];

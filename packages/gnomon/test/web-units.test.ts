@@ -43,12 +43,18 @@ describe('G-WEB-02 origin lock (one origin) and G-WEB-04 Sec-Fetch-Site', () => 
     expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toMatchObject({ kind: 'refuse', status: 403, fail: 'origin' });
     expect(routeHttp({ method: 'POST', path: `/blob/${'a'.repeat(64)}`, headers }, P)).toMatchObject({ kind: 'refuse', status: 403, fail: 'origin' });
   });
-  it.each([undefined, 'cross-site', 'same-site'])('Sec-Fetch-Site %j ⇒ 403 (missing is refused)', (sfs) => {
-    const headers: Record<string, string> = { ...UP };
-    if (sfs === undefined) delete headers['sec-fetch-site'];
-    else headers['sec-fetch-site'] = sfs;
+  it.each(['cross-site', 'same-site'])('Sec-Fetch-Site %j ⇒ 403 on an upgrade and a non-static route', (sfs) => {
+    const headers: Record<string, string> = { ...UP, 'sec-fetch-site': sfs };
     expect(decideUpgrade({ method: 'GET', path: '/rpc', headers }, P)).toMatchObject({ ok: false, fail: 'sec-fetch-site' });
     expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toMatchObject({ kind: 'refuse', fail: 'sec-fetch-site' });
+  });
+  it('a MISSING Sec-Fetch-Site passes an upgrade with the exact Origin (Chrome sends none on the WebSocket handshake), never a non-static route', () => {
+    const headers: Record<string, string> = { ...UP };
+    delete headers['sec-fetch-site'];
+    expect(decideUpgrade({ method: 'GET', path: '/rpc', headers }, P)).toEqual({ ok: true });
+    expect(routeHttp({ method: 'POST', path: '/diag', headers }, P)).toMatchObject({ kind: 'refuse', fail: 'sec-fetch-site' });
+    const foreign = { ...headers, origin: 'http://evil.example' };
+    expect(decideUpgrade({ method: 'GET', path: '/rpc', headers: foreign }, P)).toMatchObject({ ok: false, fail: 'origin' });
   });
   it('same-origin and none pass; static files skip the origin check; there is no HTTP RPC', () => {
     expect(decideUpgrade({ method: 'GET', path: '/rpc', headers: UP }, P)).toEqual({ ok: true });
@@ -223,7 +229,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:46d037fdc08c7263777b628a2b6ba9eee259beeb2c321d4355c9176780a7d08b');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:16323c4b02762468ac2dc2f6e1deb06afb47d36209137735bacfe37192d7d6eb');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));

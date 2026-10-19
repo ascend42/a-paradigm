@@ -15,9 +15,10 @@
  *   send `Origin` on a same-origin POST (never on a same-origin GET), and the
  *   page sends them with `referrerPolicy: 'same-origin'` (under the page's
  *   `no-referrer` policy a POST would carry `Origin: null`).
- *   rule 5 (CSRF, `G-WEB-04`): no cookie is set or read; `Sec-Fetch-Site` must
- *     be present and `same-origin` or `none` on every non-static request
- *     (the upgrade included), else 403 + socket.auth.fail{reason:'sec-fetch-site'};
+ *   rule 5 (CSRF, `G-WEB-04`): no cookie is set or read; a present `Sec-Fetch-Site`
+ *     must be `same-origin` or `none` on every non-static request and the upgrade,
+ *     else 403 + socket.auth.fail{reason:'sec-fetch-site'}; it must be PRESENT on
+ *     /diag and /blob, while an upgrade without it is accepted on the exact Origin (rule 3);
  *     the only HTTP credential is `X-Gnomon-Token` (a live GUI token) on
  *     `/diag` and `/blob/<sha>`. There is no HTTP RPC: verbs travel on the
  *     authenticated WebSocket only.
@@ -135,10 +136,17 @@ export type HttpRoute =
 /** The non-static routes: `/rpc` and `/diag` exactly; only `/blob/` is a prefix. */
 const isNonStatic = (p: string): boolean => p === '/rpc' || p === '/diag' || p === '/blob' || p.startsWith('/blob/');
 
-/** Origin + Sec-Fetch-Site for a non-static request or an upgrade (rules 3, 5). */
-export function checkCrossSite(headers: HeaderMap, port: number): FailReason | null {
+/**
+ * Origin + Sec-Fetch-Site for a non-static request or an upgrade (rules 3, 5). A WebSocket handshake
+ * may arrive with NO Sec-Fetch-Site: Chrome does not send Fetch Metadata on the WebSocket handshake
+ * (first dogfood run 2026-10-19: every Chrome GUI and setup page was refused 403). The exact Origin
+ * (always sent by browsers on a WebSocket handshake) is then the cross-site defence; a PRESENT
+ * Sec-Fetch-Site must still say same-origin or none. Non-static HTTP routes keep requiring it.
+ */
+export function checkCrossSite(headers: HeaderMap, port: number, opts: { upgrade?: boolean } = {}): FailReason | null {
   if (headers.origin !== expectedOrigin(port)) return 'origin';
   const sfs = headers['sec-fetch-site'];
+  if (sfs === undefined && opts.upgrade) return null;
   if (sfs !== 'same-origin' && sfs !== 'none') return 'sec-fetch-site';
   return null;
 }
@@ -170,7 +178,7 @@ export type UpgradeVerdict = { ok: true } | { ok: false; status: number; fail?: 
 export function decideUpgrade(req: { method: string; path: string; headers: HeaderMap }, port: number): UpgradeVerdict {
   const h = req.headers;
   if (h.host !== expectedHost(port)) return { ok: false, status: 421, fail: 'host' };
-  const bad = checkCrossSite(h, port);
+  const bad = checkCrossSite(h, port, { upgrade: true });
   if (bad) return { ok: false, status: 403, fail: bad };
   if (req.path !== '/rpc') return { ok: false, status: 404 };
   if (req.method !== 'GET') return { ok: false, status: 400 };
