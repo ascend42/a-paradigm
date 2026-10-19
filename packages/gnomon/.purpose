@@ -1929,20 +1929,33 @@ components:
       §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed
       app); the csrutil parser test keeps the exact macOS 15 stdout fixture.
       TRANSCRIPTS (TD-2026-10-19-814 item 1, probe p-resume darwin; profile
-      v5): a Claude Code session (supervisor claudeTranscripts: true; local
+      v6): a Claude Code session (supervisor claudeTranscripts: true; local
       sessions never) gets policy.allowWrite = [<userClaudeDir>/projects,
       subpath], rendered (allow file-write* ...) AFTER the ~/.claude write
       deny (SBPL last match wins), then (deny file-write* ...) again on
-      policy.denyWriteAlways (denies inside the carve-back) + the T-008 git
-      regexes; no later rule allows writes. ~/.claude/settings*, plugins,
+      policy.denyWriteAlways + the T-008 git regexes; no later rule allows
+      writes. denyWriteAlways = the projects dir itself as a LITERAL (Aegis
+      M1: no rm/rename/symlink swap of it; children still match the allow;
+      the supervisor's ensureTranscriptDir creates it before the spawn, never
+      over an existing entry), the denies inside it, and the steering regex
+      re-rooted AT projects (Aegis L3; the home-rooted one would re-close
+      ~/.claude). Hardlinks (Aegis M2): measured on macOS 15 that link(2)
+      into projects from a write-denied source (~/.claude/settings.json,
+      ~/.claude.json) is refused by the source's write deny; no file-link
+      rule needed, tests assert it. ~/.claude/settings*, plugins,
       CLAUDE.md, the rest of ~/.claude and ~/.claude.json stay denied. The
       allow is derived from the user Claude dir only (a flag, never an input
       path: no manifest can widen it) and WITHHELD fail closed
       (allowWriteRefused, logged session.sandbox{phase:'transcripts-withheld'})
       when projects resolves elsewhere (symlink) or another deny covers it.
-      policy.json's Edit deny on ~/.claude/** is unchanged. Residual: Claude
-      Code auto-memory (~/.claude/projects/<cwd>/memory/) is inside the
-      carve-back. Linux/Windows: data only, no backend.
+      policy.json's Edit deny on ~/.claude/** is unchanged. Residual,
+      ACCEPTED by the founder (TD-2026-10-19-814): (a) a session can write
+      (and delete) memory and transcripts for ANY cwd's projects/<enc>/, not
+      only its own; (b) it can forge transcript history a later --resume
+      loads; (c) the readers include the user's own unsandboxed Claude Code;
+      (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can
+      redirect a later write by the host's Claude Code outside projects.
+      Linux/Windows: data only, no backend.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

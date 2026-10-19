@@ -83,7 +83,7 @@ import { hsidShort, mintHsid, refuse, RefusedError, turnId, type RefusalCode } f
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, buildSessionPolicy, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_TRANSCRIPTS_REL, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
@@ -235,6 +235,25 @@ function refused(code: RefusalCode, message: string, data: Record<string, unknow
 
 const sha = (s: string | Buffer): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
 
+/**
+ * Aegis M1 (TD-2026-10-19-814): create `<userClaudeDir>/projects` (owner-only) when NOTHING is at that path. An
+ * existing entry — a dir, or a link the policy then refuses to carve back — is left exactly as found.
+ */
+export function ensureTranscriptDir(userClaudeDir: string): void {
+  const dir = path.join(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
+  try {
+    fs.lstatSync(dir);
+    return;
+  } catch {
+    /* absent: create it */
+  }
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch {
+    /* a race or a read-only home: the policy resolves whatever is there and fails closed on a link */
+  }
+}
+
 /** Aegis H1: every path a session could use to swap the binary the kernel runs next — write-denied. */
 export function binaryDenies(row: ClaudeCodePlatformRow, userHome: string, sourceReal: string, explicit?: string): PolicyPath[] {
   const expand = (p: string): string => (p.startsWith('~/') ? path.join(userHome, p.slice(2)) : p);
@@ -338,6 +357,10 @@ export class SessionSupervisor {
         repoCtx = buildRepoContext({ cwd: req.cwd, userHome, outDir: path.join(dir, 'context') });
         await this.#o.log('gate-class.detected', repoContextRow(hsid, repoCtx, repoSettingsInfo([req.cwd, ...(req.worktree ? [req.worktree] : [])])), { session: hsid });
       }
+      // Aegis M1 (TD-2026-10-19-814): the transcript dir exists BEFORE the spawn, so the profile's literal re-deny of it
+      // names a real dir (the session can then neither remove, rename nor replace it). Never over an existing entry:
+      // a link there is the policy's fail-closed case, not ours to repair.
+      ensureTranscriptDir(userClaudeDir);
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,

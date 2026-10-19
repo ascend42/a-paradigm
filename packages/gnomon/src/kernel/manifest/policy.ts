@@ -110,7 +110,11 @@ export interface SessionPolicy {
    * and only for a Claude session (`claudeTranscripts`). Never an input path: no manifest or caller can name one.
    */
   allowWrite: PolicyPath[];
-  /** denyWrite entries lying inside an allowWrite path, re-denied AFTER it so the carve-back reopens nothing else */
+  /**
+   * re-denied AFTER allowWrite so the carve-back reopens nothing else: each allowWrite root itself (literal — it can
+   * be neither removed, renamed nor replaced; Aegis M1), the denyWrite entries inside it, and the steering regexes
+   * re-rooted at it (Aegis L3)
+   */
   denyWriteAlways: PolicyPath[];
   /** why the transcript carve-back was withheld (fail closed: no allow), when `claudeTranscripts` asked for it */
   allowWriteRefused?: string;
@@ -342,7 +346,19 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     else if (other.length) allowWriteRefused = `transcript dir is covered by another write deny (${other.map((d) => `${d.class}:${d.match}:${d.path}`).join(', ')})`;
     else allowWrite.push({ path: real, match: 'subpath', class: 'transcripts' });
   }
-  const denyWriteAlways = uniq(denyWrite.filter((d) => allowWrite.some((a) => d.path !== a.path && within(d.path, a.path))));
+  // Aegis M1: the carve-back root itself is re-denied (literal): its children match on their own paths, so transcripts
+  // are still written, but `projects` cannot be removed, renamed or swapped for a link (a link there would redirect
+  // the user's own unsandboxed Claude Code). Aegis L3: a steering regex whose root holds the carve-back is re-rooted
+  // AT it (the original regex would also match `~/.claude` itself and re-close the whole allow); one rooted inside it
+  // is re-denied as is. The supervisor creates `projects` before the spawn, so the literal never names a missing dir.
+  const steeringAgain = denyWrite.flatMap((d) =>
+    d.match !== 'steering' ? [] : allowWrite.flatMap((a): PolicyPath[] => (within(a.path, d.path) ? [{ path: a.path, match: 'steering', class: d.class }] : within(d.path, a.path) ? [d] : [])),
+  );
+  const denyWriteAlways = uniq([
+    ...allowWrite.map((a): PolicyPath => ({ path: a.path, match: 'literal', class: a.class })),
+    ...denyWrite.filter((d) => d.match !== 'steering' && allowWrite.some((a) => d.path !== a.path && within(d.path, a.path))),
+    ...steeringAgain,
+  ]);
   if (inp.endpointPort !== null && !(Number.isInteger(inp.endpointPort) && inp.endpointPort > 0 && inp.endpointPort < 65536)) {
     throw new TypeError(`#manifest-loader: endpoint port must be 1..65535 or null, got ${String(inp.endpointPort)}`);
   }

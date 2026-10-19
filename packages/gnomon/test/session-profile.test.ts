@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sessionProfileSbpl, extraGitDenies, DARWIN_LAUNCHERS, SbplError } from '../src/platform/darwin/session-sbpl.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../src/kernel/sandbox/session.js';
-import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
+import { binaryDenies, ensureTranscriptDir } from '../src/kernel/supervisor/supervisor.js';
 import { PERSISTENCE_PATHS, realpathLoose, buildSessionPolicy, claudePermissions, type SessionPolicyInput } from '../src/kernel/manifest/policy.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { parseCsrutilStatus } from '../src/platform/darwin/macos.js';
@@ -115,7 +115,7 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     for (let i = lines.length - 1; i >= 0; i--) if (/^\((allow|deny) file-write\* /.test(lines[i]!) && lines[i]!.includes(needle)) return { i, verb: lines[i]!.slice(1, lines[i]!.indexOf(' ')) };
     return { i: -1, verb: '' };
   };
-  it('profile text: the projects allow comes AFTER the ~/.claude deny; settings.json and ~/.claude.json stay denied; nothing re-covers the allow', () => {
+  it('profile text: the projects allow comes AFTER the ~/.claude deny; settings.json and ~/.claude.json stay denied; nothing re-covers the allow but the projects dir itself (literal)', () => {
     w = sessionWorld();
     const sb = sessionProfileSbpl(worldPolicy(w, 4321, [], [], { claudeTranscripts: true }), extras(w));
     const lines = sb.split('\n');
@@ -128,10 +128,10 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     expect(lines.filter((l) => l.startsWith('(allow file-write*'))).toEqual([`(allow file-write* (subpath "${projects(w)}"))`]);
     for (const l of lines.slice(iAllow + 1).filter((x) => x.startsWith('(deny file-write*'))) {
       expect(l).not.toContain(`(subpath "${claudeDir(w)}")`);
-      expect(l).not.toContain(`"${projects(w)}"`);
+      expect(l).not.toContain(`(subpath "${projects(w)}")`);
       expect(l).not.toContain(`(subpath "${w.userHome}")`);
     }
-    expect(lastWriteRule(sb, `"${projects(w)}"`)).toMatchObject({ i: iAllow, verb: 'allow' });
+    expect(lastWriteRule(sb, `(subpath "${projects(w)}")`)).toMatchObject({ i: iAllow, verb: 'allow' });
     // ~/.claude/settings.json and ~/.claude.json: their last matching write rule is a deny (the subpath allow names only projects)
     expect(path.join(claudeDir(w), 'settings.json').startsWith(projects(w) + path.sep)).toBe(false);
     expect(lastWriteRule(sb, `(subpath "${claudeDir(w)}")`).verb).toBe('deny');
@@ -159,10 +159,58 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     w = sessionWorld();
     const inner = path.join(projects(w), 'enc', 'pinned');
     const p = worldPolicy(w, null, [{ path: inner, match: 'literal', class: 'binary' }], [], { claudeTranscripts: true });
-    expect(p.denyWriteAlways).toEqual([{ path: inner, match: 'literal', class: 'binary' }]);
+    expect(p.denyWriteAlways).toEqual([{ path: projects(w), match: 'literal', class: 'transcripts' }, { path: inner, match: 'literal', class: 'binary' }]);
     const sb = sessionProfileSbpl(p, extras(w));
     expect(lastWriteRule(sb, `(literal "${inner}")`).verb).toBe('deny');
     expect(lastWriteRule(sb, `(literal "${inner}")`).i).toBeGreaterThan(lastWriteRule(sb, `(subpath "${projects(w)}")`).i);
+  });
+  it('Aegis M1: the projects dir itself is literal-denied AFTER the allow (no remove, rename or swap); its children still fall to the allow', () => {
+    w = sessionWorld();
+    const p = worldPolicy(w, null, [], [], { claudeTranscripts: true });
+    expect(p.denyWriteAlways).toContainEqual({ path: projects(w), match: 'literal', class: 'transcripts' });
+    const sb = sessionProfileSbpl(p, extras(w));
+    const lit = lastWriteRule(sb, `(literal "${projects(w)}")`);
+    expect(lit.verb).toBe('deny');
+    expect(lit.i).toBeGreaterThan(lastWriteRule(sb, `(subpath "${projects(w)}")`).i);
+    // never a subpath or prefix re-deny of the carve-back: that would close the transcripts again
+    expect(p.denyWriteAlways.filter((d) => d.path === projects(w) && d.match !== 'literal')).toEqual([]);
+  });
+  it('Aegis L3: a steering regex whose root holds the carve-back is re-denied AFTER the allow, re-rooted at projects (the original would re-close ~/.claude itself)', () => {
+    w = sessionWorld();
+    // the production shape: the memory chain's top is the user home, so the steering regex covers ~/.claude/projects
+    const p = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: claudeDir(w), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.userHome, claudeTranscripts: true });
+    expect(p.allowWrite.map((a) => a.path)).toEqual([projects(w)]);
+    expect(p.denyWrite).toContainEqual({ path: w.userHome, match: 'steering', class: 'settings' });
+    expect(p.denyWriteAlways).toContainEqual({ path: projects(w), match: 'steering', class: 'settings' });
+    expect(p.denyWriteAlways.some((d) => d.match === 'steering' && d.path === w.userHome)).toBe(false);
+    const sb = sessionProfileSbpl(p, extras(w));
+    const lines = sb.split('\n');
+    const iAllow = lines.indexOf(`(allow file-write* (subpath "${projects(w)}"))`);
+    const re = projects(w).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const iAgain = lines.findIndex((l, i) => i > iAllow && l.startsWith('(deny file-write* ') && l.includes(`(regex #"^${re}/(.+/)?\\.[Cc][Ll][Aa][Uu][Dd][Ee](/.*)?$")`) && l.includes(`(regex #"^${re}/(.+/)?[Cc][Ll][Aa][Uu][Dd][Ee][^/]*\\.[Mm][Dd]$")`));
+    expect(iAllow).toBeGreaterThan(-1);
+    expect(iAgain).toBeGreaterThan(iAllow);
+    // the user-home-rooted steering regex is NOT repeated after the allow (it matches ~/.claude/** and would undo the carve-back)
+    const homeRe = w.userHome.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    for (const l of lines.slice(iAllow + 1)) expect(l).not.toContain(`(regex #"^${homeRe}/(.+/)?`);
+  });
+  it('Aegis L3: a steering root INSIDE the carve-back is re-denied as is', () => {
+    w = sessionWorld();
+    const inner = path.join(projects(w), 'enc');
+    fs.mkdirSync(inner, { recursive: true });
+    const p = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: claudeDir(w), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: inner, claudeTranscripts: true });
+    expect(p.denyWriteAlways).toContainEqual({ path: inner, match: 'steering', class: 'settings' });
+  });
+  it('Aegis M1: ensureTranscriptDir creates a missing projects dir (owner-only) and leaves an existing entry exactly as found', () => {
+    w = sessionWorld();
+    ensureTranscriptDir(claudeDir(w));
+    expect(fs.lstatSync(projects(w)).isDirectory()).toBe(true);
+    expect(fs.statSync(projects(w)).mode & 0o777).toBe(0o700);
+    fs.rmdirSync(projects(w));
+    fs.symlinkSync(w.userHome, projects(w));
+    ensureTranscriptDir(claudeDir(w));
+    expect(fs.lstatSync(projects(w)).isSymbolicLink()).toBe(true);
+    expect(worldPolicy(w, null, [], [], { claudeTranscripts: true }).allowWrite).toEqual([]);
   });
   it('fail closed: ~/.claude/projects linked to ~/.claude, the user home or the Gnomon home ⇒ no allow, reason recorded', () => {
     for (const target of [(x: SessionWorld) => claudeDir(x), (x: SessionWorld) => x.userHome, (x: SessionWorld) => x.home]) {
