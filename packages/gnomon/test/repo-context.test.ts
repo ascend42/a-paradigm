@@ -348,6 +348,21 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
     expect(c.memoryRefused[0]!.why).toMatch(/outside the repo/);
     expect(repoContextLines(c)[0]).toMatch(/^repo memory NOT loaded \(P8-D97 audit\): \.: /);
   });
+  it.each([
+    ['@~/ that does not exist', '@~/.ssh/not-there\n', /outside the repo/],
+    ['an absolute path that does not exist', () => `@${path.join(root, 'nowhere', 'x.md')}\n`, /outside the repo/],
+    ['@../ that does not exist', '@../../not-there.md\n', /outside the repo/],
+    ['a % in the token', '@docs%2f..%2f..%2fx.md\n', /contains %/],
+    ['&#64;', 'see &#64;~/.ssh/x\n', /entity-encoded/],
+    ['&#x40;', 'see &#X40;../x\n', /entity-encoded/],
+    ['&commat;', 'see &Commat;../x\n', /entity-encoded/],
+  ])('R2: %s refuses, whether or not the target exists', (_n, text, why) => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), typeof text === 'function' ? text() : text);
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused[0]!.why).toMatch(why);
+  });
   it.skipIf(!canSymlink)('a symlinked CLAUDE.md, .claude/CLAUDE.md, rules file or in-repo import refuses the dir', () => {
     for (const mk of [
       (w: ReturnType<typeof world>) => fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, 'CLAUDE.md'), 'file'),

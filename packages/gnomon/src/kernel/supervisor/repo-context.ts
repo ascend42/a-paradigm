@@ -200,11 +200,20 @@ export function memoryDirsOf(cwd: string, userHome: string): string[] {
 const IMPORT_RE = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g;
 export const MAX_IMPORT_DEPTH = 5;
 
-/** The `@` import targets of a memory file, resolved the way Claude resolves them (`~/` = the user home). Code spans are NOT skipped: stricter than Claude. */
-export function importTargets(text: string, file: string, userHome: string): string[] {
+/** R2 (Aegis): an entity-encoded `@` (`&#64;`, `&#x40;`, `&commat;`) in a memory file refuses its dir. */
+const ENCODED_AT = /&#0*64;|&#x0*40;|&commat;/i;
+
+/**
+ * The `@` imports of a memory file, resolved the way Claude resolves them (`~/` = the user home). Code spans are NOT
+ * skipped (stricter than Claude). `refuse` is set when the file carries an entity-encoded `@` or an import token
+ * containing `%` (R2: no percent-encoded path tricks).
+ */
+export function importAudit(text: string, file: string, userHome: string): { targets: string[]; refuse: string | null } {
+  if (ENCODED_AT.test(text)) return { targets: [], refuse: 'an entity-encoded @ (&#64;, &#x40; or &commat;)' };
   const out: string[] = [];
   for (const m of text.matchAll(IMPORT_RE)) {
     let t = m[1] ?? '';
+    if (t.includes('%')) return { targets: [], refuse: `an @ import token contains % (${t.length > 64 ? `${t.slice(0, 64)}…` : t})` };
     const hash = t.indexOf('#');
     if (hash !== -1) t = t.slice(0, hash);
     t = t.replaceAll('\\ ', ' ');
@@ -213,7 +222,12 @@ export function importTargets(text: string, file: string, userHome: string): str
     if (!accepted) continue;
     out.push(t.startsWith('~/') ? path.join(userHome, t.slice(2)) : path.isAbsolute(t) ? path.normalize(t) : path.resolve(path.dirname(file), t));
   }
-  return out;
+  return { targets: out, refuse: null };
+}
+
+/** The resolved import targets only (see importAudit). */
+export function importTargets(text: string, file: string, userHome: string): string[] {
+  return importAudit(text, file, userHome).targets;
 }
 
 /** The memory files of one dir (CLAUDE.md, .claude/CLAUDE.md, .claude/rules/**.md); a symlink anywhere on the way refuses. */
@@ -277,15 +291,20 @@ export function auditMemoryDir(dir: string, top: string, userHome: string): { ok
     seen.add(file);
     const got = readFile(file);
     if (!got.ok) return `${rel(file)}: ${got.why}`;
+    const imp = importAudit(got.buf.toString('utf8'), file, userHome);
+    if (imp.refuse) return `${rel(file)}: ${imp.refuse}`;
     if (depth >= MAX_IMPORT_DEPTH) return null;
-    for (const t of importTargets(got.buf.toString('utf8'), file, userHome)) {
+    for (const t of imp.targets) {
+      const outside = (x: string): string => `${rel(file)}: an @ import reaches outside the repo (${x.length > 120 ? `${x.slice(0, 120)}…` : x})`;
+      // R2 (Aegis): the lexical check runs BEFORE lstat, so an out-of-repo import refuses whether or not it exists
+      if (!isUnder(topReal, path.resolve(t))) return outside(t);
       let st: fs.Stats;
       try {
         st = fs.lstatSync(t);
       } catch {
-        continue; // nothing there: nothing to load
+        continue; // an in-repo target that does not exist: nothing to load
       }
-      if (!isUnder(topReal, path.resolve(t)) || !isUnder(topReal, realpathLoose(t))) return `${rel(file)}: an @ import reaches outside the repo (${t.length > 120 ? `${t.slice(0, 120)}…` : t})`;
+      if (!isUnder(topReal, realpathLoose(t))) return outside(t);
       if (st.isSymbolicLink()) return `${rel(file)}: an @ import is a symlink (${rel(t)})`;
       if (st.isFile()) {
         const w = visit(t, depth + 1);
