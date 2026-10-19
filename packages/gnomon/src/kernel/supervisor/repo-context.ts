@@ -430,13 +430,23 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
           why = 'over the context budget';
           break;
         }
-        if (f === 'SKILL.md') {
-          const t = sanitized(`${r}/SKILL.md`, got.buf, SKILL_KEYS, true);
+        const fRel = `${r}/${f.split(path.sep).join('/')}`;
+        if (path.basename(f) === 'SKILL.md') {
+          // H3: EVERY SKILL.md, at any depth, is sanitized like the skill's own
+          const t = sanitized(fRel, got.buf, SKILL_KEYS, true);
           if (t === null) {
             why = '';
             break;
           }
           mine.push({ dst: path.join('skills', e.name, f), data: t });
+        } else if (f.endsWith('.md')) {
+          // H3: any other .md whose frontmatter declares hooks (or cannot be read as frontmatter) refuses the skill
+          const fm = sanitizeFrontmatter(got.buf.toString('utf8'), []);
+          if (!fm.ok || fm.hooks) {
+            why = `${f.split(path.sep).join('/')}: ${fm.ok ? 'a nested .md declares hooks' : fm.why}`;
+            break;
+          }
+          mine.push({ dst: path.join('skills', e.name, f), data: got.buf });
         } else mine.push({ dst: path.join('skills', e.name, f), data: got.buf });
       }
       if (why !== null) {

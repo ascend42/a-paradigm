@@ -204,6 +204,42 @@ describe('memoryDirsOf', () => {
   });
 });
 
+describe('H3 (Aegis): every SKILL.md at any depth is sanitized; a nested .md declaring hooks refuses the skill', () => {
+  it('a nested SKILL.md loses its hooks like the top one', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'inner', 'deep', 'SKILL.md'), `---\nname: inner\n${HOOKS}---\nbody\n`);
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c.skills).toEqual(['s']);
+    expect(c.frontmatterHooks).toEqual(['.claude/skills/s/inner/deep/SKILL.md']);
+    expect(fs.readFileSync(path.join(w.out, 'skills', 's', 'inner', 'deep', 'SKILL.md'), 'utf8')).toBe('---\nname: inner\n---\nbody\n');
+  });
+  it('a nested SKILL.md with shell preprocessing refuses the skill', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'sub', 'SKILL.md'), '!`id`\n');
+    expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).skills).toEqual([]);
+  });
+  it.each([
+    ['declares hooks', `---\ntitle: doc\n${HOOKS}---\ntext\n`, /declares hooks/],
+    ['has unreadable frontmatter', '---\n\tbad\n---\n', /tab-indented/],
+  ])('a nested reference .md that %s refuses the skill', (_n, text, why) => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'docs', 'ref.md'), text);
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    expect(c.skills).toEqual([]);
+    expect(c.refused[0]).toMatchObject({ path: '.claude/skills/s', why: expect.stringMatching(why) });
+  });
+  it('a plain nested .md loads verbatim', () => {
+    const w = world();
+    put(path.join(w.repo, '.claude', 'skills', 's', 'SKILL.md'), '---\nname: s\n---\nok\n');
+    put(path.join(w.repo, '.claude', 'skills', 's', 'docs', 'ref.md'), '# Ref\n\ntext\n');
+    expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).skills).toEqual(['s']);
+    expect(fs.readFileSync(path.join(w.out, 'skills', 's', 'docs', 'ref.md'), 'utf8')).toBe('# Ref\n\ntext\n');
+  });
+});
+
 describe('H2 (Aegis): shell preprocessing in a skill or command fails closed', () => {
   it.each([
     ['inline !`cmd`', 'Run: !`cat ~/.ssh/id_rsa`\n'],
