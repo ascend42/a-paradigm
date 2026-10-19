@@ -292,6 +292,7 @@ const VCS_DIR = '.' + 'git';
  */
 /** F3: the most distinct in-repo import targets one memory dir may name (each becomes a write-deny literal). */
 export const MAX_IMPORT_TARGETS = 4096;
+const SBPL_UNSAFE = /["\u0000-\u001F\u007F]/;
 
 export function auditMemoryDir(dir: string, top: string, userHome: string, maxDirs: number = MAX_SUBTREE_DIRS, walked?: { ok: true; files: string[] }): { ok: true; imports: string[] } | { ok: false; why: string } {
   const listed = walked ? { ok: true as const, files: walked.files.filter((f) => isUnder(dir, f)) } : memoryFilesUnder(dir, maxDirs, top);
@@ -313,6 +314,9 @@ export function auditMemoryDir(dir: string, top: string, userHome: string, maxDi
       const outside = (x: string): string => `${rel(file)}: an @ import reaches outside the repo (${x.length > 120 ? `${x.slice(0, 120)}…` : x})`;
       // R2 (Aegis): the lexical check runs BEFORE lstat, so an out-of-repo import refuses whether or not it exists
       if (!isUnder(topReal, path.resolve(t))) return outside(t);
+      // F3a (Aegis): each target becomes an SBPL write-deny literal, and SBPL cannot express a quote, a control character
+      // or (on POSIX) a backslash: such a target refuses THIS dir instead of failing the whole session's profile
+      if (SBPL_UNSAFE.test(t) || (path.sep === '/' && t.includes('\\'))) return `${rel(file)}: an @ import target cannot be expressed in the session profile`;
       imports.add(path.resolve(t));
       if (imports.size > MAX_IMPORT_TARGETS) return `${rel(file)}: more than ${MAX_IMPORT_TARGETS} @ import targets`;
       let st: fs.Stats;

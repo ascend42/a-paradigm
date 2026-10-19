@@ -537,6 +537,17 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     put(path.join(w.repo, 'CLAUDE.md'), '@docs/a.md @~/.ssh/x\n');
     expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).importTargets).toEqual([]);
   });
+  it.each([['a quote', '@docs/a"b.md\n'], ['a control character', '@docs/a\u0001b.md\n']])('F3a: an import target with %s refuses only its dir (never the session profile)', (_n, text) => {
+    const w = world();
+    const pkg = path.join(w.repo, 'pkg');
+    put(path.join(w.repo, 'CLAUDE.md'), text);
+    put(path.join(pkg, 'CLAUDE.md'), 'fine\n');
+    const c = buildRepoContext({ cwd: pkg, userHome: w.home, outDir: w.out });
+    expect(c.memoryDirs).toEqual([pkg]);
+    expect(c.memoryRefused[0]!.why).toMatch(/cannot be expressed in the session profile/);
+    expect(c.importTargets).toEqual([]);
+    expect(() => buildSessionPolicy({ home: path.join(root, 'gh'), cwd: pkg, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memoryImports: c.importTargets })).not.toThrow();
+  });
   it('F2: the policy read-denies dependency-shipped memory (dep-steering) and mirrors it as Claude Read rules', () => {
     const w = world();
     const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });
