@@ -13,7 +13,13 @@ description: >-
 components:
   gui:
     description: >-
-      #gui (spec §11.1-§11.5, §4.5). static/boot.js reads the launch fragment
+      #gui (spec §11.1-§11.5, §4.5). #bare-entry (§2.4 rule 8): the fragment
+      may carry an optional `cwd` folder hint (base64url UTF-8, ≤ 1024 bytes;
+      a malformed one drops the hint, never the launch); core/launch.ts
+      cwdHintOf escapes and caps it for display and applyCwdHint opens the
+      new-session form, shows it as text in #ns-hint, prefills #ns-cwd only
+      when clean and absolute, and never submits — session.open stays on the
+      human's click (test/gui.test.ts). static/boot.js reads the launch fragment
       (#launch=<token>&k=<spki>) and clears it with history.replaceState
       before any other script, handing it to app.js once. core/launch.ts
       decides the key pin (localStorage holds only the kernel public key;

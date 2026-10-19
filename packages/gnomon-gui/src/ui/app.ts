@@ -13,7 +13,7 @@
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
-import { decidePin, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
+import { applyCwdHint, cwdHintOf, decidePin, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
@@ -516,5 +516,8 @@ export function main(): void {
   applyLayout();
   wire();
   if (frag) void attach({ launchToken: frag.launchToken }, frag.kernelPublicKey);
+  // #bare-entry: a folder hint only prefills and shows; the form is submitted by the human's click alone
+  const hint = frag?.cwd !== undefined ? cwdHintOf(frag.cwd) : null;
+  if (hint) applyCwdHint({ input: $<HTMLInputElement>('ns-cwd'), note: $('ns-hint'), dialog: $('new-session-dialog') }, hint);
   else showReconnect('This page has no GUI session (a reload, a restart or a token-less launch). Reconnect asks for your presence.');
 }

@@ -193,10 +193,24 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
   return { ...k, home, identity: hw, deviceId: device.deviceId };
 }
 
-function report(io: LaunchTtyIo, e: UpRefusal, wrapper = false): number {
-  if (wrapper) channelRefused(io, 'up', e.reason, e.message, e.next);
-  else refused(io.stderr, 'up', e.reason, e.message, e.next);
+function report(io: LaunchTtyIo, e: UpRefusal, wrapper = false, code = 'up'): number {
+  if (wrapper) channelRefused(io, code, e.reason, e.message, e.next);
+  else refused(io.stderr, code, e.reason, e.message, e.next);
   return UP_EXIT_REFUSED;
+}
+
+/** How `runUp` was reached: `gnomon up` (argv parsed by runUpCommand) or bare `gnomon` (#bare-entry, bare-cli.ts). */
+export interface UpRun {
+  given?: string;
+  wrapper?: boolean;
+  /** The refusal code word (default `up`; bare `gnomon` passes `gnomon`). */
+  code?: string;
+  /** #bare-entry: extra readout rows (the folder hint, already escaped for display). */
+  rows?: ReadonlyArray<readonly [string, string | number]>;
+  /** #bare-entry: the fragment-only hint appended to each terminal launch URL. */
+  urlSuffix?: string;
+  /** #bare-entry: a kernel already running on the home is reported by the caller (another instance, not a fault). */
+  onRunning?: (e: UpRefusal, home: string) => number;
 }
 
 export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, deps: UpDeps = {}): Promise<number> {
@@ -222,34 +236,46 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
       return UP_EXIT_USAGE;
     }
   }
+  return runUp(io, deps, { ...(given !== undefined ? { given } : {}), wrapper });
+}
+
+/** The `gnomon up` body after argv: every guard in order, then serve. Shared with bare `gnomon` (#bare-entry). */
+export async function runUp(io: LaunchTtyIo, deps: UpDeps, run: UpRun): Promise<number> {
+  const { given, wrapper = false } = run;
+  const code = run.code ?? 'up';
   // Aegis C1: before any home is read or the helper opens, the process that will hold the keys must be clean
   // #gnomon-wrapper: the channel must be the parent's pipe BEFORE anything else (a refusal itself goes on it)
   if (wrapper) {
     const bad = wrapperChannelProblem(io);
     if (bad) {
-      refused(io.stderr, 'up', 'wrapper-channel', bad, ['open Gnomon.app, or run `gnomon up` without --wrapper in a terminal']);
+      refused(io.stderr, code, 'wrapper-channel', bad, ['open Gnomon.app, or run `gnomon up` without --wrapper in a terminal']);
       return UP_EXIT_REFUSED;
     }
   }
   const unsafe = unsafeRuntime(deps.runtime);
-  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper);
+  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper, code);
   let k: UpKernel;
+  let home: string | undefined;
   try {
-    const { home, isDefault } = resolveUpHome(given, deps.userHome);
-    await refuseUnfitHome(home, isDefault);
-    k = await startUpKernel(home, deps);
+    const resolved = resolveUpHome(given, deps.userHome);
+    home = resolved.home;
+    await refuseUnfitHome(resolved.home, resolved.isDefault);
+    k = await startUpKernel(resolved.home, deps);
   } catch (e) {
-    if (e instanceof UpRefusal) return report(io, e, wrapper);
+    if (e instanceof UpRefusal) {
+      if (e.reason === 'daemon-running' && run.onRunning && home !== undefined) return run.onRunning(e, home);
+      return report(io, e, wrapper, code);
+    }
     if (isLifecycleRefusal(e)) {
-      if (wrapper) channelRefused(io, 'up', e.reason, e.message);
-      else refused(io.stderr, 'up', e.reason, e.message);
+      if (wrapper) channelRefused(io, code, e.reason, e.message);
+      else refused(io.stderr, code, e.reason, e.message);
       return UP_EXIT_REFUSED;
     }
     throw e;
   }
   const r = k.identity.record;
-  const code = await (wrapper ? serveWrapperChannel : serveInProcess)(k, io, {
-    code: 'up',
+  const served = await (wrapper ? serveWrapperChannel : serveInProcess)(k, io, {
+    code,
     noun: 'kernel',
     rows: [
       ['home', k.home],
@@ -258,8 +284,10 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
       ['device', `${k.deviceId} as ${k.client.principal ?? r.principalId}`],
       ['approve', 'from the GUI: Touch ID per decision (the helper prompt names Gnomon)'],
       ['kernel key', 'ephemeral for this run (other socket clients report serverVerified:false)'],
+      ...(run.rows ?? []),
     ],
     keysHint: 'Enter = a fresh URL (a reload cannot Reconnect yet)   q or Ctrl-C = stop',
+    ...(run.urlSuffix && !wrapper ? { urlSuffix: run.urlSuffix } : {}),
   });
-  return code === 0 ? UP_EXIT_OK : UP_EXIT_REFUSED;
+  return served === 0 ? UP_EXIT_OK : UP_EXIT_REFUSED;
 }

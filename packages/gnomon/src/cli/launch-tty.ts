@@ -102,14 +102,16 @@ export async function attachInProcess(handle: DaemonHandle, o: { home: string; c
 }
 
 /** Print a launch URL — only to an interactive terminal: the token never lands in a pipe, a file or a log. */
-export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string): Promise<boolean> {
+export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string, urlSuffix = ''): Promise<boolean> {
   // checked BEFORE minting: with nothing to show it on, no endpoint is started and no token exists
   if (io.stdout.isTTY !== true) {
     io.stdout.write('  gui     not started: the launch URL is printed only to an interactive terminal (it carries a single-use token)\n');
     return false;
   }
   const g = await k.launch();
-  io.stdout.write(`\n  open this in your browser within 60 s (single use):\n\n  ${g.url}\n\n  ${keysHint}\n`);
+  // #bare-entry: urlSuffix is a fragment-only hint (`&cwd=<base64url>`, built by bare-cli.ts): it rides after the
+  // token in the SAME line, never a second copy of the token, and a fragment is never sent to the server
+  io.stdout.write(`\n  open this in your browser within 60 s (single use):\n\n  ${g.url}${urlSuffix}\n\n  ${keysHint}\n`);
   return true;
 }
 
@@ -125,6 +127,8 @@ export interface ServeOptions {
   rows: ReadonlyArray<readonly [string, string | number]>;
   /** The line under the URL (which keys do what). */
   keysHint: string;
+  /** #bare-entry: a fragment-only suffix appended to every terminal launch URL (`&cwd=<base64url>`); never on the wrapper channel. */
+  urlSuffix?: string;
 }
 
 /**
@@ -164,7 +168,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   io.stdout.write(`UP  ${o.noun} (in this process)\n`);
   readout(io.stdout, o.rows);
   try {
-    await printLaunch(k, io, o.keysHint);
+    await printLaunch(k, io, o.keysHint, o.urlSuffix);
   } catch (e) {
     refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e), ['the kernel stays up for socket clients; Ctrl-C to stop']);
   }
@@ -173,7 +177,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
     rl = readline.createInterface({ input: io.stdin, terminal: false });
     rl.on('line', (l) => {
       if (l.trim() === 'q') stop();
-      else void printLaunch(k, io, o.keysHint).catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)));
+      else void printLaunch(k, io, o.keysHint, o.urlSuffix).catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)));
     });
   }
   const reason = await k.handle.exited;

@@ -6,8 +6,9 @@
  * #dev-launch adds `gnomon dev init|up` (dev-cli.ts, DEV ONLY until M1.3);
  * M1.3 slice 1 adds `gnomon identity init|status` (identity-cli.ts);
  * #gnomon-up adds `gnomon up` (up-cli.ts: the kernel on the provisioned home);
- * every other verb is still the placeholder.
+ * #bare-entry adds bare `gnomon` (bare-cli.ts: up + a folder hint) and `gnomon help`.
  */
+import { BARE_EXIT_USAGE, GNOMON_HELP, runBareCommand } from './bare-cli.js';
 import { gnomondEntryFrom, runDaemonCommand } from './daemon-cli.js';
 import { runDevCommand } from './dev-cli.js';
 import { runIdentityCommand } from './identity-cli.js';
@@ -117,6 +118,22 @@ if (argv[0] === 'daemon') {
       process.exitCode = 70;
     },
   );
-} else {
+} else if (argv.length === 0) {
+  // #bare-entry: bare `gnomon` in a folder = `gnomon up` with this folder as a GUI hint (bare-cli.ts)
+  runBareCommand(argv, { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h') {
+  process.stdout.write(GNOMON_HELP);
+} else if (argv[0] === '--version' || argv[0] === '-v') {
   process.exitCode = runPlaceholderBin('gnomon', argv);
+} else {
+  process.stderr.write(`gnomon: unknown command (${argv[0]!.length} chars)\n${GNOMON_HELP}`);
+  process.exitCode = BARE_EXIT_USAGE;
 }

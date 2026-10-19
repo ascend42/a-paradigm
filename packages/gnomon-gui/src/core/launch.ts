@@ -15,6 +15,13 @@
  * visible, never silent). A page without a fragment (Reconnect) verifies
  * every `hello` against the pin; with no pin it has nothing to verify against
  * and refuses to send anything (`no-pin`).
+ *
+ * #bare-entry (spec §2.4 rule 8): bare `gnomon` may append `&cwd=<base64url
+ * utf-8>` — a FOLDER HINT, an unverified claim from a same-user process. It
+ * only prefills the new-session form and is shown as plain text (escaped,
+ * capped); it never opens a session, approves a card or skips one, and a
+ * path that needs escaping is shown but never prefilled (cwdHintOf,
+ * applyCwdHint).
  */
 
 export const PIN_KEY = 'gnomon.kernelPublicKey.v1';
@@ -23,6 +30,69 @@ const B64URL = /^[A-Za-z0-9_-]+$/;
 export interface LaunchFragment {
   launchToken: string;
   kernelPublicKey: string;
+  /** #bare-entry: the raw base64url folder hint, when present (decode with cwdHintOf). */
+  cwd?: string;
+}
+
+/** The largest folder hint carried (UTF-8 bytes; the CLI's HINT_MAX_BYTES) and its base64url length. */
+export const CWD_HINT_MAX_BYTES = 1024;
+const CWD_B64_MAX = Math.ceil((CWD_HINT_MAX_BYTES * 4) / 3);
+/** Display cap, in code points (the CLI's DISPLAY_CAP). */
+export const CWD_DISPLAY_CAP = 240;
+
+/** Code points escaped for display (the CLI's displayPath rule): C0, DEL + C1, soft hyphen, ALM, MVS, zero-width + bidi marks, LS/PS, embeddings/overrides, word joiner + isolates, BOM, U+FFFD (invalid UTF-8), backslash. */
+const ESCAPE_RANGES: ReadonlyArray<readonly [number, number]> = [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x61c, 0x61c], [0x180e, 0x180e], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x2069], [0xfeff, 0xfeff], [0xfffd, 0xfffd], [0x5c, 0x5c]];
+const escapes = (c: string): boolean => {
+  const n = c.codePointAt(0)!;
+  return ESCAPE_RANGES.some(([a, b]) => n >= a && n <= b);
+};
+
+export interface CwdHint {
+  /** The path for display: escaped and capped, for textContent only. */
+  display: string;
+  /** The value to prefill the cwd field with, or null when the path is shown but not prefilled. */
+  prefill: string | null;
+  /** Why it is not prefilled (null when it is). */
+  why: string | null;
+}
+
+/** Decode a base64url folder hint; null when it is not one. Invalid UTF-8 decodes to U+FFFD (then never prefilled). */
+export function cwdHintOf(b64: string): CwdHint | null {
+  if (!B64URL.test(b64) || b64.length > CWD_B64_MAX) return null;
+  let bytes: Uint8Array;
+  try {
+    const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (b64.length % 4)) % 4));
+    bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  } catch {
+    return null;
+  }
+  if (bytes.length === 0 || bytes.length > CWD_HINT_MAX_BYTES) return null;
+  const p = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  const cps = [...p];
+  const display = cps.slice(0, CWD_DISPLAY_CAP).map((c) => (c === '\\' ? '\\\\' : escapes(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c)).join('') + (cps.length > CWD_DISPLAY_CAP ? `… (+${cps.length - CWD_DISPLAY_CAP} chars)` : '');
+  const why = cps.some(escapes) ? 'it holds characters that had to be escaped to show it; type the path yourself' : !p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p) ? 'it is not an absolute path' : null;
+  return { display, prefill: why ? null : p, why };
+}
+
+/** The new-session form elements a hint touches: values and text only (no submit is reachable from here). */
+export interface CwdHintTarget {
+  input: { value: string };
+  note: { textContent: string | null; hidden: boolean };
+  dialog: { hidden: boolean };
+}
+
+/**
+ * Show a folder hint: open the new-session form, prefill the cwd field when
+ * the path is clean, and say where it came from in plain text. It never
+ * submits: session.open still needs the human's click on `open`.
+ */
+export function applyCwdHint(t: CwdHintTarget, hint: CwdHint): void {
+  t.note.textContent = hint.prefill !== null
+    ? `Suggested by \`gnomon\` in a terminal (not verified): ${hint.display} — check it, then open.`
+    : `A terminal suggested a folder that is not prefilled (${hint.why}): ${hint.display}`;
+  t.note.hidden = false;
+  if (hint.prefill !== null) t.input.value = hint.prefill;
+  t.dialog.hidden = false;
 }
 
 /** Parse a location.hash; null when it is not a well-formed launch fragment. */
@@ -39,9 +109,12 @@ export function parseLaunchFragment(hash: string): LaunchFragment | null {
   }
   const launchToken = params.get('launch');
   const kernelPublicKey = params.get('k');
-  if (!launchToken || !kernelPublicKey || params.size !== 2) return null;
+  const cwd = params.get('cwd');
+  if (!launchToken || !kernelPublicKey || params.size !== (cwd === undefined ? 2 : 3)) return null;
   if (!B64URL.test(launchToken) || !B64URL.test(kernelPublicKey)) return null;
   if (launchToken.length > 128 || kernelPublicKey.length > 256) return null;
+  // a malformed hint drops the hint, never the launch: the token and key are the kernel's, the hint is a terminal's claim
+  if (cwd !== undefined && cwdHintOf(cwd) !== null) return { launchToken, kernelPublicKey, cwd };
   return { launchToken, kernelPublicKey };
 }
 

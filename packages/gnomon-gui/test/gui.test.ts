@@ -13,7 +13,7 @@ import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
 import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
-import { decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
+import { applyCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
@@ -450,4 +450,71 @@ describe('deferred to M1.10 slice 2', () => {
   it.todo('bundled JetBrains Mono / Fraunces font files (law 6); streaming Markdown renderer with raw HTML disabled; kit.Diff per-hunk; kit.Image via POST /blob + blob: URL');
   it.todo('React renderer (spec §11.1) when the Doodle canvas lands (§12.7); composer history, kill ring, undo, paste collapse, ⇧Tab run mode, Esc interrupt');
   it.todo('strictness/run-mode header control (G-STR-09), voice-arm indicator (G-GUI-13), wrapper surface detection');
+});
+
+describe('#bare-entry folder hint (spec §2.4 rule 8): prefilled and shown as text, never acted on', () => {
+  const b64 = (s: string | Uint8Array): string => Buffer.from(s as never).toString('base64url');
+  const target = () => {
+    const submits: string[] = [];
+    return { input: { value: '' }, note: { textContent: null as string | null, hidden: true }, dialog: { hidden: true }, requestSubmit: () => submits.push('requestSubmit'), submit: () => submits.push('submit'), submits };
+  };
+  const CTRL = new RegExp('[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\ufffd]');
+  it('the fragment carries an optional cwd; a malformed hint drops the hint, never the launch; any other key is still refused', () => {
+    const c = b64('/Users/matt/repo');
+    expect(parseLaunchFragment(`#launch=t&k=K&cwd=${c}`)).toEqual({ launchToken: 't', kernelPublicKey: 'K', cwd: c });
+    expect(parseLaunchFragment('#launch=t&k=K&cwd=%2Fetc')).toEqual({ launchToken: 't', kernelPublicKey: 'K' });
+    expect(parseLaunchFragment(`#launch=t&k=K&cwd=${'A'.repeat(2000)}`)).toEqual({ launchToken: 't', kernelPublicKey: 'K' });
+    for (const bad of [`#launch=t&k=K&cwd=${c}&x=1`, `#launch=t&k=K&cwd=${c}&cwd=${c}`, `#launch=t&cwd=${c}`]) expect(parseLaunchFragment(bad)).toBeNull();
+  });
+  it('a clean absolute path is prefilled and named as an unverified suggestion; the form opens and is NOT submitted', () => {
+    const t = target();
+    applyCwdHint(t, cwdHintOf(b64('/Users/matt/my "repo"'))!);
+    expect(t.input.value).toBe('/Users/matt/my "repo"');
+    expect(t.note.textContent).toContain('not verified');
+    expect(t.note.textContent).toContain('/Users/matt/my "repo"');
+    expect(t.note.hidden).toBe(false);
+    expect(t.dialog.hidden).toBe(false);
+    expect(t.submits).toEqual([]);
+  });
+  it('FALSIFIER: hostile paths (newline, ESC, bidi override, NUL, invalid UTF-8, backslash) are shown escaped and never prefilled', () => {
+    const cases: Array<[string | Uint8Array, string]> = [
+      ['/tmp/a' + String.fromCodePoint(0x0a) + 'b', '\\u{a}'],
+      ['/tmp/' + String.fromCodePoint(0x1b) + '[31mred', '\\u{1b}'],
+      ['/tmp/' + String.fromCodePoint(0x202e) + 'gnp.exe', '\\u{202e}'],
+      ['/tmp/a' + String.fromCodePoint(0) + 'b', '\\u{0}'],
+      [Uint8Array.from([0x2f, 0x74, 0xff, 0xfe, 0x78]), '\\u{fffd}'],
+      ['/tmp/a\\b', '\\\\'],
+    ];
+    for (const [raw, frag] of cases) {
+      const h = cwdHintOf(b64(raw))!;
+      expect(h.prefill, JSON.stringify(String(raw))).toBeNull();
+      expect(h.display).toContain(frag);
+      expect(h.display).not.toMatch(CTRL);
+      const t = target();
+      applyCwdHint(t, h);
+      expect(t.input.value).toBe('');
+      expect(t.note.textContent).toContain('not prefilled');
+      expect(t.submits).toEqual([]);
+    }
+    expect(cwdHintOf(b64('relative/dir'))!.prefill).toBeNull();
+  });
+  it('FALSIFIER: a very long path is capped for display; over the byte cap it is not a hint at all', () => {
+    const long = `/${'a'.repeat(900)}`;
+    const h = cwdHintOf(b64(long))!;
+    expect([...h.display].length).toBeLessThan(CWD_DISPLAY_CAP + 20);
+    expect(h.display).toContain('(+661 chars)');
+    expect(h.prefill).toBe(long); // clean: the field holds the whole path, the note shows the capped one
+    expect(cwdHintOf(b64(`/${'a'.repeat(1100)}`))).toBeNull();
+  });
+  it('app.ts applies the hint through applyCwdHint only: the hint path never calls openSession, session.open or a submit', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    const i = src.indexOf('#bare-entry: a folder hint');
+    expect(i).toBeGreaterThan(0);
+    const block = src.slice(i, src.indexOf('\n}', i));
+    expect(block).toContain('applyCwdHint(');
+    expect(block).not.toMatch(/openSession|session\.open|requestSubmit|\.submit\(|attended/);
+    const lib = readFileSync(path.join(ROOT, 'src', 'core', 'launch.ts'), 'utf8');
+    expect(lib.slice(lib.indexOf('export function applyCwdHint'))).not.toMatch(/requestSubmit|\.submit\(|innerHTML|session\.open/);
+    expect(readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8')).toContain('<p id="ns-hint" class="meta" hidden></p>');
+  });
 });
