@@ -2306,7 +2306,18 @@ flows:
       polling. A child that exits superseded (lost lock race) or transient
       before ready makes the activator wait for the winner's socket and
       report `attached` (exit 0, no error); no ready line on a live child
-      (Windows fallback) = one socket wait. Exit codes are defined ONLY in
+      (Windows fallback) = socket probing until the GLOBAL deadline. Probes
+      are a 1 s `hello` RPC (not a bare connect) and every probe loop stops
+      once the launch settles. Our own live child owning the socket (pidfile
+      names it) at the deadline = timeout, never attached. The ready line is
+      capped at 4 KiB and must name the child pid AND the expected
+      socketPath, else it is rejected (noted in the tail). kernelPrincipal
+      from it is an unauthenticated hint, never pinned (only M1.4 mutual auth
+      authenticates). gnomond seals the inherited ready fd first thing
+      (sealReadyFd: re-open via /proc/self/fd or /dev/fd with O_CLOEXEC,
+      close the inheritable one; unsealable => closed) so the identity helper
+      and web child cannot forge it; residual: win32 handle inheritance.
+      Exit codes are defined ONLY in
       lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
       75 transient, 78 config; config/superseded never restart, transient
       and internal restart with backoff. Every LifecycleRefusalReason is

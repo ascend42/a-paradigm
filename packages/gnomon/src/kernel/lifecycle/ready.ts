@@ -17,12 +17,37 @@
  * `attached`. Only when no winner answers in time is it a (transient) fault.
  *
  * Fallback (the Windows named-pipe path, or a kernel that cannot write the fd):
- * if the ready pipe closes without a line while the child is alive, or the
- * deadline passes, the socket is probed once; a live socket is `attached`.
+ * if the ready pipe closes without a line while the child is alive, the socket
+ * is probed until the GLOBAL deadline; a kernel that answers is `attached`.
+ * At the deadline the socket is probed once more, but an answer from OUR OWN
+ * child (the pidfile names it: it bound the socket and never wrote ready) is
+ * `timeout`, not `attached`. "Answers" is a short-deadline `hello` RPC, not a
+ * bare connect: something that merely accepts connections is not a kernel.
+ * Every probe loop stops the moment the launch settles.
+ *
+ * The ready line is bounded (READY_LINE_MAX, 4 KiB): more bytes without a
+ * newline, a line that does not parse, a pid that is not our child or a
+ * socketPath that is not the one we asked for is a malformed ready and is
+ * ignored (noted in the stderr tail); the exit or the deadline decides.
+ *
+ * TRUST (Aegis M2): the ready line is an UNAUTHENTICATED hint from a process
+ * we just spawned. `kernelPrincipal` from it must NEVER be pinned or treated
+ * as an identity: only M1.4 mutual auth (hello serverSig + auth) authenticates
+ * the kernel. The kernel seals the inherited fd at startup (sealReadyFd) so a
+ * child it spawns before ready (the identity helper, the web transport)
+ * cannot write a forged line: on Linux the fd is re-opened through
+ * /proc/self/fd with O_CLOEXEC (Node always adds it) and the inheritable one
+ * closed; macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
+ * never reach a child (verified), and the same re-open via /dev/fd is applied
+ * as belt and braces. RESIDUAL (Windows): the inherited handle stays
+ * inheritable to the kernel's own children until writeReady closes it; Node
+ * has no SetHandleInformation. Tracked for the Windows parity phase (P8-D78).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
-import { canConnectSocket } from './endpoint.js';
+import { newClientNonce, rpcCall } from '../socket/client.js';
+import { GNOMON_VERSION } from '../../version.js';
+import { readPidfile } from './pidfile.js';
 import { cleanReexecEnv, reexecArgs, type DetachOptions } from './env.js';
 import { classifyExitCode, DAEMON_EXIT, type DaemonExitClass, type DaemonExitCode } from './exit-codes.js';
 
@@ -37,6 +62,38 @@ export interface DaemonReadyIdentity {
   startedAt: string;
   socketPath: string;
   kernelPrincipal: string;
+}
+
+/** The ready line's byte bound: more without a newline is a malformed ready (Aegis L4). */
+export const READY_LINE_MAX = 4096;
+
+/** Per-attempt deadline of the `hello` probe. */
+export const HELLO_PROBE_MS = 1000;
+
+/**
+ * Kernel side, FIRST thing at startup (before anything is spawned): make the
+ * inherited ready fd close-on-exec so no child of the kernel can write a
+ * forged ready line. Returns the fd to write to later, or null when it could
+ * not be sealed: the fd is then closed (no line beats a forgeable line) and
+ * the activator falls back to probing the socket. win32 returns `fd` as is
+ * (residual, see the header).
+ */
+export function sealReadyFd(fd: number, platform: NodeJS.Platform = process.platform): number | null {
+  if (platform === 'win32') return fd;
+  const via = platform === 'linux' ? `/proc/self/fd/${fd}` : `/dev/fd/${fd}`;
+  try {
+    // O_NONBLOCK: opening a pipe whose reader is gone fails (ENXIO) instead of blocking
+    const sealed = fs.openSync(via, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK);
+    fs.closeSync(fd);
+    return sealed;
+  } catch {
+    try {
+      fs.closeSync(fd);
+    } catch {
+      /* already closed */
+    }
+    return null;
+  }
 }
 
 /** Kernel side: write the ready line on `fd` and close it. Never throws (a gone reader is not the kernel's fault). */
@@ -117,20 +174,40 @@ export interface LaunchOptions extends DetachOptions {
   tailBytes?: number;
   /** Test seam: the spawn. */
   spawnChild?: (execPath: string, args: string[], env: Record<string, string>) => ChildProcess;
+  /** Test seam: does a kernel answer on the socket (default: helloProbe). */
+  probeSocket?: (socketPath: string) => Promise<boolean>;
+  /** Test seam: the pid the pidfile names as the lock holder (default: readPidfile(home)). */
+  lockHolderPid?: () => number | null;
 }
 
-/** Probe the socket every 50 ms until it answers or `ms` pass (attach to a winner still binding). */
-function waitForSocket(socketPath: string, ms: number): Promise<boolean> {
+/** Does a gnomon kernel answer `hello` on the socket within `ms`? (A bare connect only proves something accepts.) */
+export async function helloProbe(socketPath: string, ms = HELLO_PROBE_MS): Promise<boolean> {
+  try {
+    const r = await rpcCall(
+      socketPath,
+      'hello',
+      { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: newClientNonce(), client: { name: 'gnomon-activator', version: GNOMON_VERSION, surface: 'cli' } },
+      { timeoutMs: ms },
+    );
+    return 'result' in r;
+  } catch {
+    return false;
+  }
+}
+
+/** Probe every 50 ms until it answers, `ms` pass, or `stopped()` (the launch settled: never outlive it). */
+function waitForSocket(probe: () => Promise<boolean>, ms: number, stopped: () => boolean): Promise<boolean> {
   const deadline = Date.now() + ms;
   return new Promise((resolve) => {
-    const probe = (): void => {
-      void canConnectSocket(socketPath).then((up) => {
+    const tick = (): void => {
+      if (stopped()) return resolve(false);
+      void probe().then((up) => {
         if (up) resolve(true);
-        else if (Date.now() >= deadline) resolve(false);
-        else setTimeout(probe, 50);
+        else if (stopped() || Date.now() >= deadline) resolve(false);
+        else setTimeout(tick, 50);
       });
     };
-    probe();
+    tick();
   });
 }
 
@@ -146,11 +223,18 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
   const tail = new BoundedTail(opts.tailBytes);
   const stderr = child.stdio[2] as NodeJS.ReadableStream | null;
   const readyStream = child.stdio[READY_FD] as NodeJS.ReadableStream | null;
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const deadline = Date.now() + timeoutMs;
+  const probe = (): Promise<boolean> => (opts.probeSocket ?? helloProbe)(opts.socketPath);
+  const lockHolder = opts.lockHolderPid ?? ((): number | null => readPidfile(opts.home)?.pid ?? null);
 
   return new Promise<LaunchOutcome>((resolve) => {
     let settled = false;
     let readyBuf = '';
+    let readyDone = false; // the first line (or an overflow) was judged; later bytes are ignored
+    let noReadyLine = false;
     let timer: NodeJS.Timeout | undefined;
+    const stopped = (): boolean => settled;
     const release = (): void => {
       if (timer) clearTimeout(timer);
       (stderr as unknown as { destroy?: () => void } | null)?.destroy?.();
@@ -164,30 +248,44 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
       release();
       resolve(o);
     };
-    const probeThen = (orElse: () => LaunchOutcome, via: 'no-ready-line' | 'socket-probe'): void => {
-      void canConnectSocket(opts.socketPath).then((up) => settle(up ? { kind: 'attached', socketPath: opts.socketPath, via } : orElse()));
+    const timedOut = (): LaunchOutcome => ({ kind: 'timeout', pid: child.pid, stderrTail: tail.text() });
+    const rejectReady = (why: string): void => {
+      readyDone = true;
+      readyBuf = '';
+      tail.push(Buffer.from(`activator: ready line rejected: ${why}\n`));
     };
 
     stderr?.on('data', (c: Buffer) => tail.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))));
     stderr?.on('error', () => undefined);
     readyStream?.on('error', () => undefined);
     readyStream?.on('data', (c: Buffer) => {
+      if (readyDone || settled) return;
       readyBuf += c.toString('utf8');
       const nl = readyBuf.indexOf('\n');
-      if (nl === -1) return;
-      const identity = parseReadyLine(readyBuf.slice(0, nl));
-      if (identity && identity.pid === child.pid) settle({ kind: 'ready', identity });
-      // a malformed or foreign line is ignored: the exit or the deadline decides
+      if (nl === -1) {
+        if (Buffer.byteLength(readyBuf) > READY_LINE_MAX) rejectReady(`more than ${READY_LINE_MAX} bytes without a newline`);
+        return;
+      }
+      const line = readyBuf.slice(0, nl);
+      if (Buffer.byteLength(line) > READY_LINE_MAX) return rejectReady(`longer than ${READY_LINE_MAX} bytes`);
+      const identity = parseReadyLine(line);
+      if (!identity) return rejectReady('malformed');
+      if (identity.pid !== child.pid) return rejectReady(`pid ${identity.pid} is not the spawned child ${child.pid ?? '?'}`);
+      if (identity.socketPath !== opts.socketPath) return rejectReady(`socketPath ${JSON.stringify(identity.socketPath)} is not the expected ${JSON.stringify(opts.socketPath)}`);
+      readyDone = true;
+      settle({ kind: 'ready', identity });
+      // a rejected line is not an outcome: the exit or the deadline decides
     });
     readyStream?.on('end', () => {
-      if (settled || child.exitCode !== null || child.signalCode !== null) return;
-      // the pipe closed without a line while the child lives (no fd 3 on this platform): fall back to one probe after a beat
+      if (settled || readyDone || child.exitCode !== null || child.signalCode !== null) return;
+      // the pipe closed without a line while the child lives (no fd 3 on this platform, or the kernel could not seal it):
+      // after a beat, probe until the GLOBAL deadline, never past it
       setTimeout(() => {
-        if (!settled && child.exitCode === null && child.signalCode === null) {
-          void waitForSocket(opts.socketPath, opts.timeoutMs ?? 15_000).then((up) =>
-            settle(up ? { kind: 'attached', socketPath: opts.socketPath, via: 'no-ready-line' } : { kind: 'timeout', pid: child.pid, stderrTail: tail.text() }),
-          );
-        }
+        if (settled || child.exitCode !== null || child.signalCode !== null) return;
+        noReadyLine = true;
+        void waitForSocket(probe, Math.max(0, deadline - Date.now()), stopped).then((up) => {
+          if (up) settle({ kind: 'attached', socketPath: opts.socketPath, via: 'no-ready-line' });
+        });
       }, 100);
     });
     child.once('error', (err) => {
@@ -203,13 +301,23 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
         const exited = (): LaunchOutcome => ({ kind: 'exited', code, signal, class: cls, stderrTail: tail.text() });
         if (cls === 'superseded' || cls === 'transient') {
           // a lost lock race (or a racer mid-bind): the winner may still be binding its socket
-          void waitForSocket(opts.socketPath, opts.attachWaitMs ?? 5000).then((up) =>
+          void waitForSocket(probe, opts.attachWaitMs ?? 5000, stopped).then((up) =>
             settle(up ? { kind: 'attached', socketPath: opts.socketPath, via: cls === 'superseded' ? 'superseded' : 'socket-probe' } : exited()),
           );
         } else settle(exited());
       }, 20);
     });
-    timer = setTimeout(() => probeThen(() => ({ kind: 'timeout', pid: child.pid, stderrTail: tail.text() }), 'socket-probe'), opts.timeoutMs ?? 15_000);
+    timer = setTimeout(() => {
+      if (settled) return;
+      void probe().then((up) => {
+        if (!up) return settle(timedOut());
+        // our own live child bound the socket but never wrote ready: that is a timeout, not an attach
+        // (the pidfile is only used to downgrade, the safe direction). In no-ready-line mode the child is expected to own it.
+        const ours = child.exitCode === null && child.signalCode === null && child.pid !== undefined && lockHolder() === child.pid;
+        if (ours && !noReadyLine) return settle(timedOut());
+        settle({ kind: 'attached', socketPath: opts.socketPath, via: noReadyLine ? 'no-ready-line' : 'socket-probe' });
+      });
+    }, timeoutMs);
   });
 }
 

@@ -11,14 +11,19 @@
  * exit-code table and the stderr tail run everywhere in
  * test/daemon-exit-codes.test.ts.
  */
+import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
+import type { ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   canConnectSocket,
   DAEMON_EXIT,
   DAEMON_READY_SCHEMA,
+  exitCodeOfLaunch,
   launchDaemon,
+  READY_LINE_MAX,
   pidAlive,
   pidPathOf,
   readPidfile,
@@ -115,5 +120,124 @@ describe('§2.4 rule 2: readiness handshake (Orca Adopt 3)', () => {
     expect(Date.now() - t0).toBeLessThan(10_000);
     expect(readPidfile(real)).toBeNull();
     expect(pidPathOf(real)).toBeTruthy();
+  });
+});
+
+/** A fake detached kernel: stdio[2] = stderr, stdio[3] = the ready pipe. No real process. */
+type FakeChild = ChildProcess & { ready: PassThrough; err: PassThrough; die(code: number): void };
+function fakeChild(pid = 4242): FakeChild {
+  const ee = new EventEmitter() as unknown as FakeChild & { exitCode: number | null; signalCode: null };
+  const ready = new PassThrough();
+  const err = new PassThrough();
+  Object.assign(ee, {
+    pid,
+    exitCode: null,
+    signalCode: null,
+    stdio: [null, null, err, ready],
+    ready,
+    err,
+    unref: () => undefined,
+    kill: () => true,
+    die(code: number) {
+      (ee as { exitCode: number | null }).exitCode = code;
+      ready.end();
+      ee.emit('exit', code, null);
+    },
+  });
+  return ee;
+}
+
+const SOCK = '/home/u/.gnomon/run/gnomon.sock';
+function seamLaunch(child: FakeChild, o: { probe: () => boolean; holder?: number | null; timeoutMs?: number; attachWaitMs?: number }) {
+  let probes = 0;
+  const p = launchDaemon({
+    execPath: 'node',
+    home: '/home/u/.gnomon',
+    socketPath: SOCK,
+    timeoutMs: o.timeoutMs ?? 400,
+    attachWaitMs: o.attachWaitMs ?? 200,
+    spawnChild: () => child,
+    probeSocket: async () => (probes++, o.probe()),
+    lockHolderPid: () => o.holder ?? null,
+  });
+  return { p, probes: () => probes };
+}
+const line = (pid: number, socketPath = SOCK): string =>
+  `${JSON.stringify({ schemaVersion: DAEMON_READY_SCHEMA, pid, startedAt: 't', socketPath, kernelPrincipal: 'k' })}\n`;
+
+describe('§2.4 rule 2: launcher decisions over the spawnChild seam (every platform)', () => {
+  it('a well-formed ready line from the child with the expected socketPath is ready', async () => {
+    const c = fakeChild();
+    const { p } = seamLaunch(c, { probe: () => false });
+    c.ready.write(line(4242));
+    expect((await p).kind).toBe('ready');
+  });
+
+  it('FALSIFIER: a forged socketPath is rejected; our own child owning the socket at the deadline is timeout, not attached', async () => {
+    const c = fakeChild();
+    const { p } = seamLaunch(c, { probe: () => true, holder: 4242 });
+    c.ready.write(line(4242, '/attacker/gnomon.sock'));
+    const o = await p;
+    expect(o.kind).toBe('timeout');
+    if (o.kind === 'timeout') expect(o.stderrTail).toContain('ready line rejected: socketPath');
+  });
+
+  it('at the deadline a socket owned by ANOTHER kernel is attached (socket-probe)', async () => {
+    const c = fakeChild();
+    const o = await seamLaunch(c, { probe: () => true, holder: 999 }).p;
+    expect(o).toEqual({ kind: 'attached', socketPath: SOCK, via: 'socket-probe' });
+  });
+
+  it('FALSIFIER: a ready line over READY_LINE_MAX without a newline is malformed, even if a valid line follows', async () => {
+    const c = fakeChild();
+    const { p } = seamLaunch(c, { probe: () => false });
+    c.ready.write('x'.repeat(READY_LINE_MAX + 1));
+    c.ready.write(`\n${line(4242)}`);
+    const o = await p;
+    expect(o.kind).toBe('timeout');
+    if (o.kind === 'timeout') expect(o.stderrTail).toContain('without a newline');
+  });
+
+  it('no ready line (pipe closed, child alive): probes the socket and attaches via no-ready-line', async () => {
+    const c = fakeChild();
+    let n = 0;
+    const t0 = Date.now();
+    const { p } = seamLaunch(c, { probe: () => ++n >= 3, timeoutMs: 5_000 });
+    c.ready.end();
+    expect(await p).toEqual({ kind: 'attached', socketPath: SOCK, via: 'no-ready-line' });
+    expect(Date.now() - t0).toBeLessThan(2_000);
+  });
+
+  it('FALSIFIER: the no-ready-line wait ends at the GLOBAL deadline, and no probe runs after the launch settled', async () => {
+    const c = fakeChild();
+    const t0 = Date.now();
+    const s = seamLaunch(c, { probe: () => false, timeoutMs: 400 });
+    c.ready.end();
+    expect((await s.p).kind).toBe('timeout');
+    expect(Date.now() - t0).toBeLessThan(1_000); // was deadline + a fresh full timeout
+    const after = s.probes();
+    await sleep(250);
+    expect(s.probes()).toBe(after);
+  });
+
+  it('FALSIFIER: superseded exit with no winner answering is exited/superseded (activator exit 75), and the probe loop stops', async () => {
+    const c = fakeChild();
+    const s = seamLaunch(c, { probe: () => false, attachWaitMs: 200, timeoutMs: 10_000 });
+    c.err.write('another kernel serves this home [already-running]\n');
+    c.die(DAEMON_EXIT.superseded);
+    const o = await s.p;
+    expect(o).toMatchObject({ kind: 'exited', code: 4, class: 'superseded' });
+    if (o.kind === 'exited') expect(o.stderrTail).toContain('[already-running]');
+    expect(exitCodeOfLaunch(o)).toBe(DAEMON_EXIT.transient);
+    const after = s.probes();
+    await sleep(200);
+    expect(s.probes()).toBe(after);
+  });
+
+  it('superseded exit while the winner answers is attached via superseded', async () => {
+    const c = fakeChild();
+    const s = seamLaunch(c, { probe: () => true, timeoutMs: 10_000 });
+    c.die(DAEMON_EXIT.superseded);
+    expect(await s.p).toEqual({ kind: 'attached', socketPath: SOCK, via: 'superseded' });
   });
 });

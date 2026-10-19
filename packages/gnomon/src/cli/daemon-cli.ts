@@ -19,12 +19,12 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   canConnectSocket,
-  DAEMON_EXIT,
   DEFAULT_IDLE_EXIT_MS,
   exitCodeOfClass,
   exitCodeOfLaunch,
   exitCodeOfRefusal,
   launchDaemon,
+  sealReadyFd,
   STARTUP_FAULT_CLASS,
   writeReady,
   daemonState,
@@ -119,6 +119,9 @@ export function daemonHomeOf(args: { home?: string }): string {
  * is run directly.
  */
 export async function runForeground(args: DaemonArgs, runtime: { execArgv: readonly string[] } = { execArgv: process.execArgv }): Promise<number> {
+  // Aegis M2: seal the inherited ready fd FIRST, before anything (the identity helper, the web transport) is spawned,
+  // so no child of the kernel can write a forged ready line; unsealable => closed, the activator probes the socket
+  const readyFd = args.readyFd !== undefined ? sealReadyFd(args.readyFd) : null;
   // Exit codes are classified (exit-codes.ts): config faults never restart, transient ones may.
   if (refuseDevHome(daemonHomeOf(args))) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
   const sig = sigusr1Refusal(runtime.execArgv);
@@ -156,7 +159,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     process.once('SIGINT', onSignal);
     process.stdout.write(`${JSON.stringify({ ready: true, pid: handle.pidfile.pid, socketPath: handle.pidfile.socketPath })}\n`);
     if (args.readyFd !== undefined) {
-      writeReady(args.readyFd, { pid: handle.pidfile.pid, startedAt: handle.pidfile.startedAt, socketPath: handle.pidfile.socketPath, kernelPrincipal: handle.kernelPrincipal });
+      if (readyFd !== null) writeReady(readyFd, { pid: handle.pidfile.pid, startedAt: handle.pidfile.startedAt, socketPath: handle.pidfile.socketPath, kernelPrincipal: handle.kernelPrincipal });
       toStderr = () => undefined; // the activator stopped reading; detached events went nowhere before the handshake too
     }
     await handle.exited;
@@ -169,7 +172,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
       process.stderr.write(`${err.message} [${err.reason}]\n`);
       return exitCodeOfRefusal(err.reason);
     }
-    throw err; // gnomond.ts maps it to DAEMON_EXIT.internal
+    throw err; // gnomond.ts maps it to DAEMON_EXIT.internal (exit-codes.ts)
   }
 }
 
