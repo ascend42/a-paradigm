@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-19T22:17:16.875Z",
+    "generatedAt": "2026-10-19T22:17:27.595Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 128,
+      "module": 129,
       "cli": 3,
       "tool": 45,
       "tool-group": 10,
@@ -3199,6 +3199,19 @@
         "#web-endpoint",
         "$flow",
         "#identity"
+      ],
+      "componentType": "module"
+    },
+    "gnomon-voice": {
+      "id": "gnomon-voice",
+      "name": "Gnomon Voice",
+      "symbol": "#gnomon-voice",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#gnomon-voice kernel side, slice V1 talk-only (spec §14.1-14.4, §14.7 Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026, TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts: attachment ONLY by a human gesture (log.append voice.session.start|end on a first-party GUI/device connection; the kernel mints voiceSessionId and writes the row); voice session.send to the attached session only, source voice forced, riding the attaching human's turn permit (never its own), accepted only for the voice connection's latest voice.turn.user in this attachment from an enrolled speaker, not intercepted, push-to-talk, outside every voice.turn.agent playback window + echoTailMs (750). Refusals are FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn, voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off (conversation mode). session.stop interrupt only; voice.* shape-validated; the voice reader sees its attached session + voice.*, redacted. approve stays voice-off in every form; request.voice.arm stays refused (V7). src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup | enrol | forget, root-signed rows (enrolments.jsonl, voice device key). Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after receipt, never before the attachment, echo checked on kernel times too; per-turn client mode claim cross-checked against the attachment (ptt is a client claim, §A.4); voice follow subscriptions end on every attachment change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice reader sees only its attached session's rows; enrolment order is the signed seq; windows bounded at VOICE_WINDOW_CAP.",
+      "visualTags": [],
+      "related": [
+        "$voice-turn"
       ],
       "componentType": "module"
     },
@@ -11395,16 +11408,6 @@
       "visualTags": [],
       "related": []
     },
-    "gnomon-voice": {
-      "id": "gnomon-voice",
-      "name": "Gnomon Voice",
-      "symbol": "#gnomon-voice",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Referenced from #contract-voice-allowlist",
-      "visualTags": [],
-      "related": []
-    },
     "ns-hint": {
       "id": "ns-hint",
       "name": "Ns Hint",
@@ -14403,6 +14406,14 @@
       "symbol": "$flow",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
       "description": "Referenced from #approval-broker",
+      "steps": []
+    },
+    "voice-turn": {
+      "id": "voice-turn",
+      "name": "Voice Turn",
+      "symbol": "$voice-turn",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #gnomon-voice",
       "steps": []
     },
     "shift-flow": {
@@ -19457,6 +19468,10 @@
       "category": "components",
       "id": "approval-broker"
     },
+    "#gnomon-voice": {
+      "category": "components",
+      "id": "gnomon-voice"
+    },
     "#budget-fuse": {
       "category": "components",
       "id": "budget-fuse"
@@ -23745,10 +23760,6 @@
       "category": "components",
       "id": "web-endpoint."
     },
-    "#gnomon-voice": {
-      "category": "components",
-      "id": "gnomon-voice"
-    },
     "$voice-approval": {
       "category": "flows",
       "id": "voice-approval"
@@ -23812,6 +23823,10 @@
     "$flow": {
       "category": "flows",
       "id": "flow"
+    },
+    "$voice-turn": {
+      "category": "flows",
+      "id": "voice-turn"
     },
     "^claude": {
       "category": "gates",
