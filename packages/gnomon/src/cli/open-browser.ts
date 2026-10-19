@@ -121,20 +121,23 @@ export function terminalOpener(o: { noOpen?: boolean; env?: Readonly<Record<stri
 }
 
 /**
- * Show a single-use URL on the terminal: hand it to the browser first (when an opener is given), then print
- * either `opened in your browser` with the URL below as the fallback, or the plain copy-this line.
- * The caller has already checked the TTY; the URL goes nowhere but the TTY and osascript's stdin.
+ * Show a single-use URL on the terminal. With an opener the URL is printed FIRST (so a slow or hung osascript
+ * never holds back the fallback, Aegis L2), then handed to the browser, and a failure is reported under it;
+ * without one, the plain copy-this line. The caller has already checked the TTY; the URL goes nowhere but the
+ * TTY and osascript's stdin.
  */
 export async function presentUrl(out: { write(s: string): unknown }, url: string, opener: BrowserOpener | null, copyLine: string): Promise<boolean> {
-  let r: OpenResult | null = null;
-  if (opener) {
-    try {
-      r = await opener(url);
-    } catch (e) {
-      r = { ok: false, reason: e instanceof Error ? e.message : String(e) };
-    }
+  if (!opener) {
+    out.write(`\n  ${copyLine}:\n\n  ${url}\n`);
+    return false;
   }
-  if (r?.ok) out.write(`\n  opened in your browser (single use, 60 s)\n  if it didn't open: ${url}\n`);
-  else out.write(`${r && !r.ok ? `\n  (could not open your browser: ${r.reason})` : ''}\n  ${copyLine}:\n\n  ${url}\n`);
-  return r?.ok === true;
+  out.write(`\n  opening in your browser (single use, 60 s)\n  if it doesn't open: ${url}\n`);
+  let r: OpenResult;
+  try {
+    r = await opener(url);
+  } catch (e) {
+    r = { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  if (!r.ok) out.write(`  (could not open your browser: ${r.reason}; ${copyLine.toLowerCase()} above)\n`);
+  return r.ok;
 }

@@ -55,8 +55,8 @@ describe('darwin: GUI setup on a terminal opens each setup URL', () => {
     for (const u of opened) expect(u).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/#setup=[A-Za-z0-9_-]+&k=[A-Za-z0-9_-]+&cwd=L3g$/);
     expect(new Set(opened).size).toBe(3);
     const out = t.o.join('');
-    expect(out.split('opened in your browser').length - 1).toBe(3);
-    for (const u of opened) expect(out).toContain(`if it didn't open: ${u}`);
+    expect(out.split('opening in your browser').length - 1).toBe(3);
+    for (const u of opened) expect(out).toContain(`if it doesn't open: ${u}`);
   }, 30_000);
 
   it('--no-open: the setup URL is printed only, the opener is never called', async () => {
@@ -66,6 +66,6 @@ describe('darwin: GUI setup on a terminal opens each setup URL', () => {
     expect(r.code).toBe(1);
     expect(opened).toEqual([]);
     expect(t.o.join('')).toMatch(/open this in your browser within 60 s \(single use\) to set up Gnomon on screens:\n\n {2}http:\/\/127\.0\.0\.1:\d+\/#setup=/);
-    expect(t.o.join('')).not.toContain('opened in your browser');
+    expect(t.o.join('')).not.toContain('opening in your browser');
   }, 30_000);
 });

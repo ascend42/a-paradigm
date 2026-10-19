@@ -183,9 +183,17 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   let rl: readline.Interface | null = null;
   if (io.stdin.isTTY === true) {
     rl = readline.createInterface({ input: io.stdin, terminal: false });
+    let presenting = false; // one fresh URL at a time: holding Enter does not fan out tabs (Aegis L1)
     rl.on('line', (l) => {
       if (l.trim() === 'q') stop();
-      else void printLaunch(k, io, o.keysHint, o.urlSuffix, o.opener ?? null).catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)));
+      else if (!presenting) {
+        presenting = true;
+        void printLaunch(k, io, o.keysHint, o.urlSuffix, o.opener ?? null)
+          .catch((e: unknown) => refused(io.stderr, o.code, 'web-launch', e instanceof Error ? e.message : String(e)))
+          .finally(() => {
+            presenting = false;
+          });
+      }
     });
   }
   const reason = await k.handle.exited;

@@ -110,19 +110,24 @@ describe('openInDefaultBrowser: the URL travels on stdin only', () => {
 });
 
 describe('the terminal: opened, or printed as before', () => {
-  it('opened: "opened in your browser" with the URL kept below as the fallback; failed: the copy line, as today', async () => {
+  it('the URL is printed BEFORE the open attempt (Aegis L2); a failed open is reported under it; no opener: the copy line', async () => {
     const ok: string[] = [];
     expect(await presentUrl({ write: (s: string) => ok.push(s) }, URL1, async () => ({ ok: true }), 'open this')).toBe(true);
-    expect(ok.join('')).toContain('opened in your browser');
-    expect(ok.join('')).toContain(`if it didn't open: ${URL1}`);
+    expect(ok.join('')).toContain('opening in your browser');
+    expect(ok.join('')).toContain(`if it doesn't open: ${URL1}`);
+    const order: string[] = [];
+    await presentUrl({ write: (s: string) => order.push(`w:${s.includes(URL1)}`) }, URL1, async () => (order.push('open'), { ok: true }), 'open this');
+    expect(order[0]).toBe('w:true'); // printed first
     const no: string[] = [];
     expect(await presentUrl({ write: (s: string) => no.push(s) }, URL1, async () => ({ ok: false, reason: 'osascript exited 1' }), 'open this')).toBe(false);
-    expect(no.join('')).toContain(`open this:\n\n  ${URL1}\n`);
+    expect(no.join('')).toContain(`if it doesn't open: ${URL1}`);
     expect(no.join('')).toContain('could not open your browser: osascript exited 1');
-    expect(no.join('')).not.toContain('opened in your browser');
+    const plain: string[] = [];
+    expect(await presentUrl({ write: (s: string) => plain.push(s) }, URL1, null, 'open this')).toBe(false);
+    expect(plain.join('')).toContain(`open this:\n\n  ${URL1}\n`);
     const thrown: string[] = [];
     await presentUrl({ write: (s: string) => thrown.push(s) }, URL1, () => Promise.reject(new Error('boom')), 'open this');
-    expect(thrown.join('')).toContain(`  ${URL1}\n`);
+    expect(thrown.join('')).toContain(`if it doesn't open: ${URL1}\n`);
     const off: string[] = [];
     await presentUrl({ write: (s: string) => off.push(s) }, URL1, null, 'open this');
     expect(off.join('')).toBe(`\n  open this:\n\n  ${URL1}\n`);
@@ -136,8 +141,8 @@ describe('the terminal: opened, or printed as before', () => {
     const t = tty(true);
     expect(await printLaunch(k, t.io, 'Enter = a fresh URL', '&cwd=abc', open)).toBe(true);
     expect(opened).toEqual(['http://127.0.0.1:51234/#launch=T0k&k=KEY&cwd=abc']);
-    expect(t.o.join('')).toContain('opened in your browser');
-    expect(t.o.join('')).toContain("if it didn't open: http://127.0.0.1:51234/#launch=T0k&k=KEY&cwd=abc");
+    expect(t.o.join('')).toContain('opening in your browser');
+    expect(t.o.join('')).toContain("if it doesn't open: http://127.0.0.1:51234/#launch=T0k&k=KEY&cwd=abc");
     expect(t.o.join('')).toContain('Enter = a fresh URL');
     // the Enter keypress calls printLaunch again: the fresh URL opens too
     await printLaunch(k, t.io, 'Enter = a fresh URL', '&cwd=abc', open);
