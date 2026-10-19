@@ -1,0 +1,34 @@
+id: TD-2026-10-19-063
+timestamp: '2026-10-19T22:31:23.646Z'
+title: 'Seamless re-pin and self-update: GUI flows, no terminal steps'
+decision: >-
+  (1) Re-pin the Claude binary from the GUI. The kernel pre-stages an `install` card (target claude-binary; from, to,
+  version, signer) when a session open is refused or the 60 s poll detects a change. One fresh Touch ID pins it, with no
+  typing and no daemon stop. Running sessions keep their old copy. The kernel never auto-pins. If root class costs more
+  than one Touch ID, use gate-class. (2) An unsigned binary, or one from a non-Anthropic signer, is ALLOWED with a loud
+  card (claim-mismatch flag, red first line, Deny focused by default). (3) Self-update: the kernel watches a dist build
+  stamp and raises a daemon-stop{upgrade} card; the GUI banner offers [Restart now]. The restart drains, hands over to a
+  successor on the same port, resumes sessions, and the tab reloads itself. A changed helper respawns silently through
+  the verify path. The launcher raises the upgrade card when it sees a stale daemon. (4) FOUNDER RULING: move
+  clientApiId again to add a resume/reconnect auth form, so a restart costs ONE Touch ID, not two. (5) An idle stale
+  daemon still needs Touch ID to restart (the F3 standing rule is kept).
+rationale: >-
+  The founder said terminal steps after an update are "not only confusing but again this isn't seemless as gnomon should
+  be". The UI-first rule applies to every step, including upgrades and re-pins.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#supervisor'
+  - '#session-runner'
+  - '#gui'
+  - '#approval-broker'
+status: active
+tags:
+  - gnomon
+  - ux
+  - paradigm-8
