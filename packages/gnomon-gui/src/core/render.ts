@@ -23,7 +23,7 @@
  * block, flags as visible badges beside the decision keys, and the
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
-import { BIDI_GLYPHS, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { BIDI_GLYPHS, canonicalJson, hex, sanitizeDisplayText, sha256 } from '@a-company/gnomon-contracts';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
 /** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
@@ -58,8 +58,8 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
-const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type)$/;
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
 export function h(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, ...children: Array<MiniEl | string | null | undefined | false>): MiniEl {
@@ -148,6 +148,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     }
     case 'Image':
       return h(doc, 'div', { class: 'blk blk-image', role: 'img', 'aria-label': str(data.alt) }, `[image] ${str(data.alt)}`);
+    case 'ask-user':
+      // the kernel's structured questions: the card's picker renders them (askDetailOf), the text lines above show them
+      return h(doc, 'span', { class: 'blk blk-ask-user' });
     case 'Canvas':
       return h(doc, 'div', { class: 'blk blk-canvas' }, `[canvas ${str(data.ds)}] rendered by the host surface`);
     default:
@@ -170,6 +173,8 @@ export interface CardView {
   /** decisions whose kernel signature verified; [] ⇒ no decision keys */
   decisions: string[];
   decidable: boolean;
+  /** ask-user: the questions from the card's contentHash-verified structured detail (askDetailOf); null ⇒ no picker */
+  ask?: AskCardDetail | null;
 }
 
 /** Flags the GUI shows for a card: the kernel's `flags[]` plus any the sanitizer finds in the body (union, never fewer). */
@@ -179,16 +184,125 @@ export function cardFlags(card: Record<string, unknown>, kernelFlags: readonly s
   return [...s].sort();
 }
 
+/** One question of an ask-user card, from the kernel's STRUCTURED detail (display only: the kernel validates the answer). */
+export interface AskCardQuestion {
+  n: number;
+  /** the RAW question text (the answer key the kernel matches exactly; shown only through the sanitizer) */
+  question: string;
+  header: string | null;
+  multiSelect: boolean;
+  options: string[];
+}
+
+export interface AskCardDetail {
+  questions: AskCardQuestion[];
+  maxAnswerChars: number;
+}
+
+/** contentHash exactly as the kernel's broker computes it (card.ts contentHashOf): sha256 over canonical {kind, requestedBy, hsid, detail, flags}. */
+export function cardContentHash(card: { kind?: unknown; requestedBy?: unknown; hsid?: unknown; flags?: unknown }, detail: unknown): string {
+  const flags = Array.isArray(card.flags) ? [...(card.flags as string[])].sort() : [];
+  return `sha256:${hex(sha256(canonicalJson({ kind: card.kind, requestedBy: card.requestedBy, hsid: card.hsid ?? null, detail, flags })))}`;
+}
+
+/**
+ * Aegis C1: the ask-user picker's questions come ONLY from the card block's
+ * `{type:'ask-user', detail}` node whose detail hashes (with the card's kind,
+ * requester, session and flags) to the card's contentHash — the hash the
+ * kernel-signed actions bind. Display text is never parsed. A missing,
+ * malformed or non-matching detail ⇒ null (no picker).
+ */
+export function askDetailOf(card: Record<string, unknown>): AskCardDetail | null {
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'ask-user');
+  if (nodes.length !== 1) return null;
+  const detail = (nodes[0] as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  if (typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const d = detail as { questions?: unknown; maxAnswerChars?: unknown };
+  if (!Array.isArray(d.questions) || d.questions.length === 0 || typeof d.maxAnswerChars !== 'number' || !(d.maxAnswerChars > 0)) return null;
+  const questions: AskCardQuestion[] = [];
+  for (const [i, raw] of d.questions.entries()) {
+    const q = raw as { question?: unknown; header?: unknown; multiSelect?: unknown; options?: unknown } | null;
+    if (!q || typeof q.question !== 'string' || !Array.isArray(q.options) || typeof q.multiSelect !== 'boolean' || (q.header !== null && typeof q.header !== 'string')) return null;
+    const options: string[] = [];
+    for (const o of q.options) {
+      if (!o || typeof (o as { label?: unknown }).label !== 'string') return null;
+      options.push((o as { label: string }).label);
+    }
+    questions.push({ n: i + 1, question: q.question, header: (q.header as string | null) ?? null, multiSelect: q.multiSelect, options });
+  }
+  return { questions, maxAnswerChars: d.maxAnswerChars };
+}
+
+/** A picker's choices per question: the chosen option indexes and the free text (free text wins when non-empty). */
+export interface AskPick {
+  chosen: number[];
+  free: string;
+}
+
+/**
+ * The approve note for an ask-user card: the plain answer text for one
+ * question, JSON `{answers:{question: answer}}` for several; null when a
+ * question is left unanswered (no key is sent then). The answers object has
+ * a null prototype, so a question named `__proto__` is an ordinary key.
+ */
+export function askNote(qs: readonly AskCardQuestion[], picks: ReadonlyMap<number, AskPick>): string | null {
+  const answers = Object.create(null) as Record<string, string>;
+  for (const q of qs) {
+    const p = picks.get(q.n);
+    const free = p?.free.trim() ?? '';
+    const labels = (p?.chosen ?? []).map((i) => q.options[i]).filter((x): x is string => typeof x === 'string');
+    const a = free !== '' ? free : labels.join(', ');
+    if (a === '') return null;
+    answers[q.question] = a;
+  }
+  if (!qs.length) return null;
+  return qs.length === 1 ? answers[qs[0]!.question]! : JSON.stringify({ answers });
+}
+
+function askPicker(ctx: RenderCtx, cardId: string, ask: AskCardDetail): MiniEl {
+  const { doc } = ctx;
+  return h(
+    doc,
+    'div',
+    { class: 'ask-picker', 'data-ask-card': cardId },
+    ...ask.questions.map((q) =>
+      h(
+        doc,
+        'fieldset',
+        { class: 'ask-q', 'data-ask-q': String(q.n) },
+        h(doc, 'legend', null, q.header ? `${q.header}: ${q.question}` : q.question),
+        ...q.options.map((o, j) =>
+          h(doc, 'label', { class: 'ask-opt' }, h(doc, 'input', { type: q.multiSelect ? 'checkbox' : 'radio', name: `ask-${cardId}-${q.n}`, value: String(j), 'data-ask-q': String(q.n), 'data-ask-opt': String(j) }), ` ${o}`),
+        ),
+        h(doc, 'input', {
+          type: 'text',
+          class: 'ask-free',
+          maxlength: String(ask.maxAnswerChars),
+          'aria-label': `your own answer to question ${q.n}: ${q.question}`,
+          placeholder: q.options.length ? 'or type your own answer' : 'type your answer',
+          'data-ask-q': String(q.n),
+          'data-ask-free': '1',
+        }),
+      ),
+    ),
+  );
+}
+
 /** The kernel-owned card region. Decision keys only for verified actions on a decidable card. */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
   const keys = v.decidable && v.decisions.length ? v.decisions : [];
+  const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   return h(
     doc,
     'section',
     { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
     h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
+    ask ? askPicker(ctx, v.cardId, ask) : null,
     h(
       doc,
       'div',

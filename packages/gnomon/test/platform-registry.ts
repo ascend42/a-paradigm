@@ -73,6 +73,7 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // M1.11 slice 2: #mod-host in the real daemon (unix socket + POSIX device-key modes).
   { test: 'test/mod-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/mod-append-budget.test.ts', na: 'Windows parity phase (P8-D78): the daemon endpoint is a unix socket and device keys use POSIX modes; the pure clamp and budget half runs everywhere in the sibling' },
   // M1.12 slice 3 replay: the rig writes kernel keys into an owner-only keys/ dir (POSIX modes in #identity).
+  { test: 'test/always-rules.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the rules CLI test records kernel pubs under an owner-only keys/ (a POSIX mode; an ACL via the helper on win32); the rule fold itself is platform-independent code' },
   { test: 'test/m112-replay.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only keys/ is an ACL via the helper there, not a POSIX mode; replay itself is platform-independent code' },
   // P8-D96 card composition: fixtures are POSIX paths (`/r/f.ts`), which path.resolve rewrites to drive paths on win32.
   { test: 'test/permission-card.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the session runner and its permission channel are darwin-first; win32 path rendering and the case-folded deny path need win32 fixtures there' },

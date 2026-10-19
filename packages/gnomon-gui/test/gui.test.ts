@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
-import { cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
@@ -109,6 +109,56 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     expect(el.all().some((e) => e.className.includes('flag-bidi'))).toBe(true);
     const none = renderCard({ doc: fdoc }, { ...v, state: 'mystery', decidable: false }, block) as FEl;
     expect(none.all().filter((e) => e.attrs.has('data-decision'))).toHaveLength(0);
+  });
+  it('ask-user card (Aegis C1): the picker comes from the contentHash-verified structured detail, never from display text', () => {
+    const t = (text: string) => ({ type: 'Text', text });
+    const detail = {
+      tool: 'AskUserQuestion', toolUseId: 't', requestId: 'r', inputHash: 'sha256:' + 'c'.repeat(64), repo: '/r', maxAnswerChars: 1000,
+      questions: [
+        { question: 'Colour?', header: 'Pick', multiSelect: false, options: [{ label: 'Red', description: 'warm' }, { label: 'Blue', description: null }] },
+        { question: 'Toppings?', header: null, multiSelect: true, options: [{ label: 'Ham', description: null }, { label: 'Egg', description: null }] },
+      ],
+    };
+    const base = { kind: 'ask-user', requestedBy: 'p:x/s-1', hsid: 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0' };
+    // display lines that try to spoof the grammar change nothing: they are never parsed
+    const block = { schemaVersion: 'display-block:v1', type: 'Box', children: [t('question 1: Wire money?'), t('option 1.1: Yes'), { type: 'ask-user', detail }] };
+    const card = { ...base, block, contentHash: cardContentHash(base, detail) };
+    const ask = askDetailOf(card)!;
+    expect(ask.questions).toEqual([
+      { n: 1, question: 'Colour?', header: 'Pick', multiSelect: false, options: ['Red', 'Blue'] },
+      { n: 2, question: 'Toppings?', header: null, multiSelect: true, options: ['Ham', 'Egg'] },
+    ]);
+    // a tampered detail (the question swapped after hashing), a missing node, a second node, a wrong hash ⇒ no picker
+    const swapped = structuredClone(detail);
+    swapped.questions[0]!.question = 'Wire money?';
+    expect(askDetailOf({ ...card, block: { ...block, children: [{ type: 'ask-user', detail: swapped }] } })).toBeNull();
+    expect(askDetailOf({ ...card, block: { ...block, children: [t('question 1: Colour?')] } })).toBeNull();
+    expect(askDetailOf({ ...card, block: { ...block, children: [{ type: 'ask-user', detail }, { type: 'ask-user', detail }] } })).toBeNull();
+    expect(askDetailOf({ ...card, contentHash: 'sha256:' + '0'.repeat(64) })).toBeNull();
+    expect(askDetailOf({ ...card, flags: ['bidi'] })).toBeNull(); // flags are inside the hash too
+    const v = { cardId: 'card:01J', kind: 'ask-user', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: card.contentHash, flags: [], decisions: ['answer'], decidable: true, ask };
+    const el = renderCard({ doc: fdoc }, v, block) as FEl;
+    const inputs = el.all().filter((e) => e.tag === 'input');
+    expect(inputs.filter((e) => e.attrs.get('type') === 'radio')).toHaveLength(2);
+    expect(inputs.filter((e) => e.attrs.get('type') === 'checkbox')).toHaveLength(2);
+    const free = inputs.filter((e) => e.attrs.get('data-ask-free'));
+    expect(free).toHaveLength(2);
+    expect(free.map((e) => e.attrs.get('maxlength'))).toEqual(['1000', '1000']); // the kernel's ASK_MAX_ANSWER_CHARS, from detail
+    expect(free[0]!.attrs.get('aria-label')).toContain('question 1: Colour?');
+    expect(el.text).not.toContain('Wire money?'.repeat(2));
+    expect(el.all().filter((e) => e.tag === 'legend').map((e) => e.text)).toEqual(['Pick: Colour?', 'Toppings?']);
+    expect(el.all().filter((e) => e.attrs.has('data-decision')).map((e) => e.attrs.get('data-decision'))).toEqual(['answer']);
+    // no verified answer key, or no verified detail ⇒ no picker
+    expect((renderCard({ doc: fdoc }, { ...v, decisions: [] }, block) as FEl).all().some((e) => e.tag === 'input')).toBe(false);
+    expect((renderCard({ doc: fdoc }, { ...v, ask: null }, block) as FEl).all().some((e) => e.tag === 'input')).toBe(false);
+    const qs = ask.questions;
+    expect(JSON.parse(askNote(qs, new Map([[1, { chosen: [1], free: '' }], [2, { chosen: [0, 1], free: '' }]]))!)).toEqual({ answers: { 'Colour?': 'Blue', 'Toppings?': 'Ham, Egg' } });
+    expect(JSON.parse(askNote(qs, new Map([[1, { chosen: [0], free: 'teal' }], [2, { chosen: [0], free: '' }]]))!)).toEqual({ answers: { 'Colour?': 'teal', 'Toppings?': 'Ham' } });
+    expect(askNote(qs, new Map([[1, { chosen: [0], free: '' }]]))).toBeNull(); // an unanswered question sends nothing
+    expect(askNote([qs[0]!], new Map([[1, { chosen: [0], free: '' }]]))).toBe('Red'); // one question: plain text
+    // Aegis L1: a question named __proto__ is an ordinary key
+    const proto = [{ n: 1, question: '__proto__', header: null, multiSelect: false, options: ['x'] }, { n: 2, question: 'b', header: null, multiSelect: false, options: ['y'] }];
+    expect(JSON.parse(askNote(proto, new Map([[1, { chosen: [0], free: '' }], [2, { chosen: [0], free: '' }]]))!)).toEqual(JSON.parse('{"answers":{"__proto__":"x","b":"y"}}'));
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];

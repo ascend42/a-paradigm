@@ -50,7 +50,7 @@ function rig(presence: PresenceProvider) {
   });
   // `always` is fresh-class: every one prompts, whatever unlock the connection holds
   const decide = async (connId = A) => {
-    const c = await broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' } });
+    const c = await broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } }); // `always` needs a rule scope (always-rules)
     return broker.approve(H(connId), { cardId: c.cardId, decision: 'always', decisionSig: sig(c.cardId, 'always', c.contentHash) });
   };
   return { broker, rows, mono, decide };

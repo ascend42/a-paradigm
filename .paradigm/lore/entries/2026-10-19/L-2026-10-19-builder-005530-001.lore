@@ -1,0 +1,22 @@
+id: L-2026-10-19-builder-005530-001
+type: insight
+timestamp: '2026-10-19T00:55:30.145Z'
+author: builder
+title: Ask-user picker trusts only contentHash-verified structured detail; answer binding is an accepted cached-class risk
+summary: 'card:v1 has no detail field, so the kernel carries the validated questions in one ask-user block node holding the exact hashed detail; the GUI recomputes contentHash (contracts sha256 + canonicalJson) and builds the picker only on a match, so display text is never parsed. Aegis C3 resolved as option (b): approveMessage is kernel-local (not a clientApiId input), but the helper signs what the kernel received, so binding noteHash would not stop a frame rewriter who can already flip a cached deny; recorded in spec 3.4, batched into T-2026-10-19-001.'
+symbols_touched:
+  - '#supervisor'
+  - '#gui'
+  - '#approval-broker'
+tags:
+  - decision
+  - gnomon
+  - approvals
+  - security
+linked_commits:
+  - 6ee40ed1
+confidence: 0.8
+git_context:
+  ref: 6ee40ed138bb378d0289d87137f2eb84857954b9
+  branch: gnomon/gui-complete
+  dirty: false

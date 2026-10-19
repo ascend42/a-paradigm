@@ -13,13 +13,14 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import { assertPermissionChannel, buildClaudeArgv, parseStreamLine } from '../src/adapters/claude-code/adapter.js';
-import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider } from '../src/kernel/broker/index.js';
+import { ApprovalBroker, approvalsKeyFrom, contentHashOf, PresenceDenied, type PresenceProvider } from '../src/kernel/broker/index.js';
+import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
-import { ASK_USER_DENY, composePermission, inputHash } from '../src/kernel/supervisor/permission.js';
+import { ASK_MAX_ANSWER_CHARS, ASK_USER_NO_ANSWER, composePermission, FIELD_BODY_PREFIX, inputHash, parseAskAnswer, PLAN_FILE } from '../src/kernel/supervisor/permission.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
@@ -41,10 +42,14 @@ afterEach(async () => {
 function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+  // S-L1: the rule book folds the rig's rows as KERNEL-signed (principal + kernel key), as the daemon's chain reader does
+  const book = new RuleBook({ principal: 'p:abcdefgh/kernel', isKernelKey: (k) => k === 'kernel-key' });
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
     if (o.slowRequestMs && kind === 'approval.request') await new Promise((res) => setTimeout(res, o.slowRequestMs));
     rows.push({ kind, payload });
+    book.fold({ seq: rows.length, kind, principal: 'p:abcdefgh/kernel', keyId: 'kernel-key', payload: structuredClone(payload) });
   };
+  const gate = { denyPresence: false };
   const kernel = SoftwareEd25519Signer.generate('kernel');
   const fuse = new BudgetFuse({ kernel, logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
@@ -52,10 +57,16 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   const ring = new KeyRing();
   const keyId = ring.addP256(publicKey);
   const prompts: string[] = [];
-  const touching: PresenceProvider = { prove: async (req) => (prompts.push(req.prompt.text), mintTestPresence(req.purpose, { bind: req.binding })) };
+  const touching: PresenceProvider = {
+    prove: async (req) => {
+      prompts.push(req.prompt.text);
+      if (gate.denyPresence) throw new PresenceDenied('declined at the prompt');
+      return mintTestPresence(req.purpose, { bind: req.binding });
+    },
+  };
   const now = o.now;
   const broker = new ApprovalBroker({ kernel, kernelPrincipal: 'p:abcdefgh/kernel', log, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, guiSessions: () => 1, ...(now ? { clock: () => now.t } : {}) });
-  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true });
+  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash) => book.match(repoKey, tool, hash) });
   live.push(() => children.stopAll('test-end'));
   const sig = (cardId: string, decision: string, contentHash: string, approver = HUMAN) =>
     cryptoSign('sha256', signaturePreimage('approve', approveMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: approver })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
@@ -65,13 +76,13 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   const idx = (k: string, pred: (p: Record<string, unknown>) => boolean = () => true) => rows.findIndex((r) => r.kind === k && pred(r.payload));
   const answers = () => trace(w).filter((t) => t.t === 'perm-answer');
   const pending = () => broker.cards().filter((c) => c.state === 'pending');
-  const open = async (steps: unknown[], extra: Record<string, unknown> = {}) => {
+  const open = async (steps: unknown[], extra: Record<string, unknown> = {}, cwd: string = w.cwd) => {
     setMode(w, { permissionAsk: { steps, ...extra } });
-    const s = await sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
+    const s = await sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd });
     await sup.send(HUMAN, { hsid: s.hsid, text: 'go' });
     return s;
   };
-  return { rows, fuse, broker, sup, approve, kinds, idx, answers, pending, prompts, open };
+  return { rows, fuse, broker, sup, approve, kinds, idx, answers, pending, prompts, open, gate, book };
 }
 
 const marker = () => path.join(w.cwd, 'marker.txt');
@@ -111,11 +122,29 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
     expect(texts.join('').replaceAll('  ↳ ', '')).toContain(command);
     expect(texts.some((t) => t.includes(tail))).toBe(true);
   });
-  it('9 (pure half). a permission card offers allow|deny only; card text per tool', () => {
+  it('item 3 (pure). ExitPlanMode with input:{} shows the session-carried plan text, labelled as not part of the request and pinned by planHash; a plan in the request wins', () => {
+    const ctx = { repo: '/r', denyWrite: [] };
+    const req = { requestId: 'pl', toolName: 'ExitPlanMode', toolUseId: 't', input: {} };
+    const none = composePermission(req, ctx);
+    expect(none.kind === 'card' && none.lines).toContain('(the plan text is not in the request)');
+    const att = composePermission(req, { ...ctx, planText: { text: '1. write plan.txt\n2. test', source: 'plan-file' } });
+    expect(att.kind === 'card' && att.lines).toEqual(expect.arrayContaining(['(the plan text is not in the request; shown from a Write the session requested (it may not have run))', `${FIELD_BODY_PREFIX}1. write plan.txt`, `${FIELD_BODY_PREFIX}2. test`, '  └ end of plan']));
+    expect(att.kind === 'card' && att.detail.planHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    // a different attached text ⇒ a different detail (the card's contentHash covers what is shown)
+    const other = composePermission(req, { ...ctx, planText: { text: '1. rm -rf /', source: 'plan-file' } });
+    expect(other.kind === 'card' && other.detail.planHash).not.toBe(att.kind === 'card' && att.detail.planHash);
+    const inReq = composePermission({ ...req, input: { plan: 'from request' } }, { ...ctx, planText: { text: 'ignored', source: 'tool_use' } });
+    expect(inReq.kind === 'card' && inReq.lines.join('\n')).not.toContain('ignored');
+    expect(inReq.kind === 'card' && inReq.detail.planHash).toBeUndefined();
+    expect(PLAN_FILE.test('/Users/x/.claude/plans/brave-otter.md')).toBe(true);
+    expect(PLAN_FILE.test('/Users/x/repo/plans/a.md')).toBe(false);
+  });
+
+  it('9 (pure half). a permission card offers allow|deny|always; card text per tool', () => {
     const ctx = { repo: '/r', denyWrite: [] };
     const bash = composePermission({ requestId: 'a', toolName: 'Bash', toolUseId: 't', input: { command: 'rm -rf build\necho done' } }, ctx);
-    expect(bash).toMatchObject({ kind: 'card', cardKind: 'permission', decisions: ['allow', 'deny'] });
-    expect(bash.kind === 'card' && bash.lines).toEqual(expect.arrayContaining(['rm -rf build', 'echo done']));
+    expect(bash).toMatchObject({ kind: 'card', cardKind: 'permission', decisions: ['allow', 'deny', 'always'] });
+    expect(bash.kind === 'card' && bash.lines).toEqual(expect.arrayContaining([`${FIELD_BODY_PREFIX}rm -rf build`, `${FIELD_BODY_PREFIX}echo done`]));
     const big = 'x'.repeat(5000);
     const wr = composePermission({ requestId: 'b', toolName: 'Write', toolUseId: 't', input: { file_path: '/r/f', content: big } }, ctx);
     expect(wr.kind === 'card' && wr.lines.join('\n')).toMatch(/5000 bytes · inputHash sha256:[0-9a-f]{64}/);
@@ -167,7 +196,7 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(await waitFor(() => r.pending().length === 1)).toBe(true);
     const card = r.pending()[0]!;
     expect(card).toMatchObject({ kind: 'permission', hsid: s.hsid, requestedBy: s.principalId });
-    expect((card.actions as Array<{ decision: string }>).map((a) => a.decision)).toEqual(['allow', 'deny']);
+    expect((card.actions as Array<{ decision: string }>).map((a) => a.decision)).toEqual(['allow', 'deny', 'always']);
     expect(fs.existsSync(marker())).toBe(false); // not before the decision
     const decided = await r.approve(card.cardId, 'allow');
     expect(decided.presence).toBe('fresh'); // Touch ID-shaped: the first decision on a connection takes fresh presence
@@ -290,18 +319,81 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(r.rows.filter((x) => x.kind === 'session.inject' && x.payload.origin === 'kernel')).toEqual([]);
   });
 
-  it('9. `always` is not an action of a slice permission card and is refused bad-params', async () => {
+  const wr = (id: string, content: string) => ({ request: { id, tool: 'Write', input: { file_path: marker(), content } } });
+
+  it('9. `always` takes FRESH presence every time, even under this connection\'s cached unlock (G-BRK-05); a declined prompt refuses it while a cached allow still passes', async () => {
     const r = rig();
-    await r.open([writeReq('a-1')], { hold: true });
+    await r.open([wr('a-1', 'one'), wr('a-2', 'two'), wr('a-3', 'three'), wr('a-4', 'four')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 4)).toBe(true);
+    const [c1, c2, c3, c4] = r.pending();
+    expect((c1!.actions as Array<{ decision: string }>).map((a) => a.decision)).toContain('always');
+    expect((await r.approve(c1!.cardId, 'allow')).presence).toBe('fresh'); // opens the cached unlock
+    expect(r.prompts).toHaveLength(1);
+    expect((await r.approve(c2!.cardId, 'always')).presence).toBe('fresh');
+    expect(r.prompts).toHaveLength(2); // a prompt despite the unlock
+    // presence declined: `always` is refused and learns nothing; `allow` rides the cached unlock
+    r.gate.denyPresence = true;
+    const e = (await r.approve(c3!.cardId, 'always').then(() => null, (x: unknown) => x)) as RefusedError;
+    expect(e).toBeInstanceOf(RefusedError);
+    expect(e.refusal.code).toBe('FORBIDDEN');
+    expect(r.prompts).toHaveLength(3);
+    expect((await r.approve(c4!.cardId, 'allow')).presence).toBe('cached');
+    expect(r.prompts).toHaveLength(3);
+    const learned = r.kinds('approval.rule.learned').map((x) => x.payload);
+    expect(learned).toEqual([expect.objectContaining({ cardId: c2!.cardId, tool: 'Write', matchExact: true, presence: 'fresh', repoKey: expect.stringMatching(/^sha256:/) })]);
+    expect(r.book.list().map((x) => x.ruleId)).toEqual([c2!.cardId]);
+  });
+
+  it('9b. a learned rule answers an EXACT later match allow with no card (approval.auto modeRef rule:<cardId>); a different input or a different repo raises a card', async () => {
+    const r = rig();
+    await r.open([wr('b-1', 'two')], { hold: true });
     expect(await waitFor(() => r.pending().length === 1)).toBe(true);
     const c = r.pending()[0]!;
-    expect((c.actions as Array<{ decision: string }>).some((a) => a.decision === 'always')).toBe(false);
-    const e = (await r.approve(c.cardId, 'always').then(() => null, (x: unknown) => x)) as RefusedError;
+    await r.approve(c.cardId, 'always');
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'b-1'))).toBe(true);
+    // same repo, same tool, same input ⇒ auto; a different content ⇒ card
+    await r.open([wr('b-2', 'two'), wr('b-3', 'two!')], { hold: true });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'b-2') && r.pending().length === 1)).toBe(true);
+    expect(r.answers().find((a) => a.id === 'b-2')).toMatchObject({ behavior: 'allow', updatedInput: { file_path: marker(), content: 'two' } });
+    const auto = r.kinds('approval.auto').map((x) => x.payload);
+    expect(auto).toEqual([{ hsid: expect.any(String), tool: 'Write', inputHash: inputHash({ file_path: marker(), content: 'two' }), modeRef: `rule:${c.cardId}` }]);
+    expect(r.idx('approval.auto')).toBeLessThan(r.idx('session.inject', (p) => p.requestId === 'b-2'));
+    expect(JSON.stringify(auto)).not.toContain('"two"'); // the input hash, never the input
+    // a different repo (another session root) with the identical input ⇒ a card, never the rule
+    const other = path.join(w.cwd, 'other-repo');
+    fs.mkdirSync(other);
+    await r.open([wr('b-4', 'two')], { hold: true }, other);
+    expect(await waitFor(() => r.pending().length === 2)).toBe(true);
+    expect(r.kinds('approval.auto')).toHaveLength(1);
+    expect(r.answers().some((a) => a.id === 'b-4' || a.id === 'b-3')).toBe(false);
+  });
+
+  it('9d. an approval.auto row that fails to write never leaves the request unanswered: it falls through to the card', async () => {
+    const r = rig();
+    await r.open([wr('f-1', 'z')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    await r.approve(r.pending()[0]!.cardId, 'always');
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'f-1'))).toBe(true);
+    r.broker.auto = async () => {
+      throw new Error('log unavailable');
+    };
+    await r.open([wr('f-2', 'z')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true); // a card, not a silent allow and not a hang
+    expect(r.answers().some((a) => a.id === 'f-2')).toBe(false);
+    await r.approve(r.pending()[0]!.cardId, 'deny');
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'f-2'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'f-2')!.behavior).toBe('deny');
+  });
+
+  it('9c. `always` is offered only on permission cards: a plan or ask-user card refuses it bad-params before any prompt', async () => {
+    const r = rig();
+    await r.open([{ request: { id: 'p-1', tool: 'ExitPlanMode', input: { plan: 'x' } } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const e = (await r.approve(r.pending()[0]!.cardId, 'always').then(() => null, (x: unknown) => x)) as RefusedError;
     expect(e).toBeInstanceOf(RefusedError);
-    expect(e.refusal.code).toBe('BAD_REQUEST');
     expect(e.refusal.data).toMatchObject({ reason: 'bad-params' });
+    expect(r.prompts).toEqual([]);
     expect(r.kinds('approval.rule.learned')).toEqual([]);
-    expect(r.prompts).toEqual([]); // refused before any presence prompt
   });
 
   it('10. a write under the policy denyWrite is denied with no card', async () => {
@@ -330,13 +422,104 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(rej.message).toContain('split step 1 first');
   });
 
-  it('12. (moved from the assistant path) AskUserQuestion: turn.ask-user on the request path, denied "ask in your reply", no card', async () => {
+  const P01B_ASK = { questions: [{ question: 'Which colour do you prefer?', header: 'Colour', options: [{ label: 'Red', description: 'Choose red' }, { label: 'Blue', description: 'Choose blue' }], multiSelect: false }] };
+
+  it('12. AskUserQuestion is an ask-user card; a plain-text answer ⇒ allow with updatedInput = {...input, answers}; the answer text is in no row', async () => {
     const r = rig();
-    const s = await r.open([{ request: { id: 'q-1', tool: 'AskUserQuestion', toolUseId: 'toolu_q', input: { questions: [{ question: 'Which?', options: [{ label: 'a' }] }] } } }]);
+    const s = await r.open([{ request: { id: 'q-1', tool: 'AskUserQuestion', toolUseId: 'toolu_q', input: P01B_ASK } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    expect(c.kind).toBe('ask-user');
+    expect((c.actions as Array<{ decision: string }>).map((a) => a.decision)).toEqual(['answer']);
+    expect(c.timeoutAt).toBeDefined();
+    const texts = (c.block as { children: Array<{ text: string }> }).children.map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['question 1: Which colour do you prefer?', 'option 1.1: Red', 'about 1.2: Choose blue']));
+    expect(r.kinds('turn.ask-user')[0]!.payload).toMatchObject({ hsid: s.hsid, toolUseId: 'toolu_q', cardId: c.cardId, questions: 1 });
+    await r.approve(c.cardId, 'answer', { note: 'Blue, but teal-ish' });
     expect(await waitFor(() => r.answers().some((a) => a.id === 'q-1'))).toBe(true);
-    expect(r.answers()[0]).toMatchObject({ behavior: 'deny', message: ASK_USER_DENY });
-    expect(r.kinds('turn.ask-user')[0]!.payload).toMatchObject({ hsid: s.hsid, toolUseId: 'toolu_q', cardId: null });
-    expect(r.broker.cards()).toEqual([]);
+    const a = r.answers()[0]!;
+    expect(a.behavior).toBe('allow');
+    expect(a.updatedInput).toEqual({ ...P01B_ASK, answers: { 'Which colour do you prefer?': 'Blue, but teal-ish' } });
+    // never logged in text: approval.decide carries noteHash/noteBytes only
+    const dec = r.kinds('approval.decide')[0]!.payload;
+    expect(dec.note).toBeUndefined();
+    expect(dec.noteHash).toMatch(/^sha256:/);
+    for (const row of r.rows) if (row.kind !== 'approval.request') expect(JSON.stringify(row.payload)).not.toContain('teal-ish');
+  });
+
+  it('12b. several questions: JSON {answers} naming exactly the held questions; wrong / missing / extra keys, plain text and no note are refused before presence', async () => {
+    const r = rig();
+    const two = { questions: [{ question: 'Colour?', options: [{ label: 'Red' }] }, { question: 'Size?', options: [{ label: 'S' }, { label: 'L' }] }] };
+    await r.open([{ request: { id: 'q-2', tool: 'AskUserQuestion', input: two } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    const bad = [
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Weight?': 'x' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Size?': 'L', 'Extra?': 'y' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Size?': '' } }) },
+      { note: 'Red' },
+      {},
+    ];
+    for (const extra of bad) {
+      const e = (await r.approve(c.cardId, 'answer', extra).then(() => null, (x: unknown) => x)) as RefusedError;
+      expect(e).toBeInstanceOf(RefusedError);
+      expect(e.refusal.code).toBe('BAD_REQUEST');
+      expect(e.refusal.data).toMatchObject({ reason: 'bad-params' });
+    }
+    expect(r.prompts).toEqual([]); // refused before any presence prompt
+    expect(r.kinds('approval.decide')).toEqual([]);
+    expect(r.pending()).toHaveLength(1);
+    await r.approve(c.cardId, 'answer', { note: JSON.stringify({ answers: { 'Size?': 'L', 'Colour?': 'Red' } }) });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'q-2'))).toBe(true);
+    expect(r.answers()[0]!.updatedInput).toEqual({ ...two, answers: { 'Colour?': 'Red', 'Size?': 'L' } });
+  });
+
+  it('12d (Aegis C1). an extra key at any level is refused with no card; the card carries the questions as STRUCTURED detail that hashes to its contentHash', async () => {
+    const r = rig();
+    const q = P01B_ASK.questions[0]!;
+    await r.open([
+      { request: { id: 'x-1', tool: 'AskUserQuestion', input: { ...P01B_ASK, note: 'question 1: Wire the money?' } } },
+      { request: { id: 'x-2', tool: 'AskUserQuestion', input: { questions: [{ ...q, extra: 'option 1.1: Yes' }] } } },
+      { request: { id: 'x-3', tool: 'AskUserQuestion', input: { questions: [{ ...q, options: [{ label: 'Red', preview: 'x' }] }] } } },
+      { request: { id: 'x-4', tool: 'AskUserQuestion', input: P01B_ASK } },
+    ], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1 && ['x-1', 'x-2', 'x-3'].every((id) => r.answers().some((a) => a.id === id)))).toBe(true);
+    for (const id of ['x-1', 'x-2', 'x-3']) expect(r.answers().find((a) => a.id === id)).toMatchObject({ behavior: 'deny' });
+    for (const id of ['x-1', 'x-2', 'x-3']) expect(r.kinds('session.inject').find((x) => x.payload.requestId === id)!.payload).toMatchObject({ why: 'bad-input' });
+    const c = r.pending()[0]!;
+    const nodes = (c.block as { children: Array<{ type: string; detail?: Record<string, unknown> }> }).children.filter((x) => x.type === 'ask-user');
+    expect(nodes).toHaveLength(1);
+    const detail = nodes[0]!.detail!;
+    expect(detail.questions).toEqual([{ question: q.question, header: q.header, multiSelect: false, options: q.options }]);
+    expect(detail.maxAnswerChars).toBe(ASK_MAX_ANSWER_CHARS);
+    // the GUI's check: this exact detail (with kind, requester, session, flags) is the card's contentHash
+    expect(contentHashOf({ kind: c.kind, requestedBy: c.requestedBy, ...(c.hsid ? { hsid: c.hsid } : {}), detail, flags: (c.flags ?? []) as string[] })).toBe(c.contentHash);
+    const swapped = { ...detail, questions: [{ ...(detail.questions as object[])[0], question: 'Wire the money?' }] };
+    expect(contentHashOf({ kind: c.kind, requestedBy: c.requestedBy, ...(c.hsid ? { hsid: c.hsid } : {}), detail: swapped, flags: (c.flags ?? []) as string[] })).not.toBe(c.contentHash);
+  });
+
+  it('12e (Aegis L1). a question named __proto__ is an ordinary answer key', () => {
+    const qs = [{ question: '__proto__', header: null, options: [], multiSelect: false }, { question: 'b', header: null, options: [], multiSelect: false }];
+    const a = parseAskAnswer(qs, JSON.stringify({ answers: JSON.parse('{"__proto__":"x","b":"y"}') }));
+    expect('answers' in a && Object.keys(a.answers)).toEqual(['__proto__', 'b']);
+    expect('answers' in a && JSON.parse(JSON.stringify(a.answers))).toEqual(JSON.parse('{"__proto__":"x","b":"y"}'));
+    const one = parseAskAnswer([qs[0]!], 'plain');
+    expect('answers' in one && Object.keys(one.answers)).toEqual(['__proto__']);
+  });
+
+  it('12c. an unanswered ask-user card expires after 10 min into deny "no answer"; a malformed AskUserQuestion is denied with no card', async () => {
+    const now = { t: Date.now() };
+    const r = rig({ now });
+    await r.open([{ request: { id: 'q-3', tool: 'AskUserQuestion', input: P01B_ASK } }, { request: { id: 'q-4', tool: 'AskUserQuestion', input: { questions: [{ question: 'a\nb' }] } } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1 && r.answers().some((a) => a.id === 'q-4'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'q-4')).toMatchObject({ behavior: 'deny' });
+    now.t += 9 * 60_000;
+    expect(await r.broker.expireDue()).toEqual([]);
+    now.t += 2 * 60_000;
+    expect(await r.broker.expireDue()).toHaveLength(1);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'q-3'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'q-3')).toMatchObject({ behavior: 'deny', message: ASK_USER_NO_ANSWER });
   });
 
   it('Aegis detector: a gated tool that runs with no can_use_tool request ⇒ approval.suspect{ungated-tool-use}; a requested one and an ungated Read do not', async () => {

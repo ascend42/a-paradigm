@@ -14,7 +14,7 @@ import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contract
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { decidePin, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { cardFlags, h, renderCard, type MiniDoc } from '../core/render.js';
+import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -181,6 +181,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         flags: cardFlags(c.card, c.flags),
         decisions: verified.get(verifiedKey(c.cardId, String(c.card.contentHash ?? ''))) ?? [],
         decidable: isCardDecidable(c.card as never),
+        ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -200,10 +201,37 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   if (focused) for (const c of store.stack(focusRepo)) if (c.hsid === focused) pinned.appendChild(mk(c));
 }
 
-async function decide(cardId: string, decision: string): Promise<void> {
+/** ask-user: the picker's choices in the card element ⇒ the approve note (null = a question is unanswered). */
+function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
+  const c = store.cards.get(cardId);
+  if (!c) return null;
+  const ask = askDetailOf(c.card);
+  if (!ask) return null;
+  const qs = ask.questions;
+  const picks = new Map<number, AskPick>();
+  for (const q of qs) picks.set(q.n, { chosen: [], free: '' });
+  for (const el of Array.from(cardEl.querySelectorAll<HTMLInputElement>('input[data-ask-q]'))) {
+    const p = picks.get(Number(el.dataset.askQ));
+    if (!p) continue;
+    if (el.dataset.askFree) p.free = el.value;
+    else if (el.checked) p.chosen.push(Number(el.dataset.askOpt));
+  }
+  return askNote(qs, picks);
+}
+
+async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null): Promise<void> {
   if (!client) return;
+  let note: string | null = null;
+  if (decision === 'answer') {
+    note = cardEl ? askNoteFrom(cardEl, cardId) : null;
+    if (note === null) {
+      refusals.set(cardId, { code: 'BAD_REQUEST', reason: 'bad-params', message: 'answer every question: pick an option or type an answer', next: [], data: null });
+      void paintStack();
+      return;
+    }
+  }
   try {
-    await client.call('approve', { cardId, decision });
+    await client.call('approve', { cardId, decision, ...(note !== null ? { note } : {}) });
     refusals.delete(cardId);
   } catch (err) {
     // approve needs the approvals key + presence (#identity M1.3): the refusal is shown as the kernel gave it
@@ -415,7 +443,7 @@ function wire(): void {
   $('session-search').addEventListener('input', paintSessions);
   const onCard = (e: Event): void => {
     const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
-    if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!);
+    if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null);
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
     if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
   };

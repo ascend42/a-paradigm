@@ -105,6 +105,7 @@ import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
+import { catchUp, RuleBook, RULE_KINDS } from '../supervisor/rules.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
@@ -554,6 +555,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     if (p?.file === LOCAL_CONFIG_FILE && p.signed === true && typeof p.version === 'number' && p.version > localHighWater) localHighWater = p.version;
   }
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
+  const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
@@ -568,6 +570,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         repoKey,
         setHash,
       ),
+    // S-L1: standing `always` rules, folded incrementally from KERNEL-signed approval.* rows only (rules.ts)
+    alwaysRule: (repoKey, tool, hash) => {
+      catchUp(ruleBook, {
+        head: () => log.head().seq,
+        read: function* (fromSeq, toSeq) {
+          for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
+            if (v.view === 'full') yield { seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+          }
+        },
+      });
+      return ruleBook.match(repoKey, tool, hash);
+    },
     ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,

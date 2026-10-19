@@ -1549,8 +1549,33 @@ components:
       composes the card (Bash full command; Edit path + old/new; Write path,
       bytes, excerpt, inputHash; other tools capped canonical JSON; detail
       {tool, toolUseId, requestId, inputHash, repo, path?}), auto-denies
-      writes under denyWrite and AskUserQuestion ("ask in your reply"), and
-      maps the outcome: only allow / approve-plan allow. updatedInput is the
+      writes under denyWrite and malformed AskUserQuestion input, and
+      maps the outcome: only allow / approve-plan / answer allow. ASK-USER
+      (gui-complete item 1): AskUserQuestion is an `ask-user` card (cached
+      class, decision `answer` only, 10 min timeout => deny "no answer");
+      the questions are validated (<= 8, <= 16 options, one-line bounded
+      text) and shown in a fixed line grammar (question N / option N.M) the
+      GUI picker reads; approve{decision:'answer', note} carries the plain
+      answer (one question) or JSON {answers:{question: answer}}, checked by
+      parseAskAnswer against the KERNEL-held questions before presence
+      (broker RaiseInput.checkNote, BAD_REQUEST bad-params); the allow is
+      updatedInput = {...kernel-held input, answers}; approval.decide logs
+      noteHash/noteBytes only (privateNote). ROUND 2 (Aegis C1/L1/L4): the
+      AskUserQuestion schema is closed (an extra key at any level is
+      bad-input); the questions are structured card detail (inside
+      contentHash) carried in one {type:'ask-user', detail} block node the
+      GUI verifies against contentHash; answers are null-prototype objects;
+      every multi-line field body is fenced by fieldLines (FIELD_BODY_PREFIX
+      + an end marker; model-chosen keys JSON-quoted), the shared helper
+      that replaces the hardening lane's T-032(2) copy. Accepted risk (spec
+      §3.4, Aegis C3, T-2026-10-19-001): the note is in neither the
+      decisionSig nor the presence binding. PLAN TEXT (item 3):
+      claude 2.1.302 sends ExitPlanMode with input:{} (p01b planMode, after
+      a plan-file Write the session policy denies); the supervisor keeps the
+      assistant tool_use ExitPlanMode input.plan (by tool_use id, bounded)
+      and the last `.claude/plans/*.md` Write content, and the plan card
+      shows it labelled "not in the request" with detail.planHash (so the
+      contentHash covers it); a plan in the request wins. updatedInput is the
       kernel-held input; never updatedPermissions. Deny on no broker, raise
       failure, expiry, cancel (control_cancel_request => expire
       'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
@@ -1626,7 +1651,51 @@ components:
     tests:
       - test/session-supervisor.test.ts
       - test/repo-hooks.test.ts
+      - test/permission-session.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07]
+
+  always-rules:
+    description: >-
+      #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in
+      src/kernel/supervisor/rules.ts. Permission cards offer allow | deny |
+      always; `always` is fresh presence EVERY time (classes.ts, G-BRK-05)
+      and needs the card's ruleScope {repoKey} (else bad-params). The broker
+      logs approval.rule.learned{cardId, tool, matchExact, presence,
+      repoKey}. RuleBook folds KERNEL-signed rows only (kernel principal +
+      kernel key): approval.request (permission card, tool, tool_input) +
+      approval.decide{always} + approval.rule.learned (presence != cached,
+      same tool) => a rule keyed (repoKey, tool, inputHash of the canonical
+      tool_input); forged rows of any kind are ignored. The supervisor answers
+      an EXACT match allow with no card after broker.auto =>
+      approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
+      different input, tool or repo raises the card. updatedInput is the
+      kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp (Aegis C2: lastSeq advances to the captured head, past every scanned row; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
+      incrementally from the chain (fromSeq). Not built: revoke (needs a new
+      event kind approval.rule.revoked, moves clientApiId) and the strictness
+      L1 suspension of rules (M2.10).
+    path: src/kernel/supervisor/rules.ts
+    type: module
+    tags: [gnomon, kernel, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/permission-session.test.ts
+    oracles: [G-BRK-05]
+
+  rules-cli:
+    description: >-
+      #rules-cli `gnomon rules list [<home>] [--json]` / `gnomon rules revoke
+      <id>` (src/cli/rules-cli.ts). list verifies the home's kernel log
+      read-only (verifyLog with the home's kernel pubs, like gnomon replay)
+      and folds the verified rows through #always-rules; an unverified log
+      is refused INTEGRITY_BROKEN. revoke is refused UNSUPPORTED (needs a new
+      kernel event kind).
+    path: src/cli/rules-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+    oracles: [G-BRK-05]
 
   local-runner:
     description: >-
