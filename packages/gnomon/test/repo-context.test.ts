@@ -363,6 +363,21 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
     expect(c.memoryDirs).toEqual([]);
     expect(c.memoryRefused[0]!.why).toMatch(why);
   });
+  it('R3: an import chain still importing at depth 5 refuses; a chain that ends by depth 5 passes', () => {
+    const chain = (w: ReturnType<typeof world>, n: number, last: string) => {
+      put(path.join(w.repo, 'CLAUDE.md'), '@d1.md\n');
+      for (let i = 1; i <= n; i++) put(path.join(w.repo, `d${i}.md`), i < n ? `@d${i + 1}.md\n` : last);
+    };
+    let w = world();
+    chain(w, 5, 'end, no import\n');
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
+    fs.rmSync(root, { recursive: true, force: true });
+    w = world();
+    chain(w, 5, '@d6.md\n'); // d5 is at depth 5 and still imports (d6 need not exist)
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused[0]!.why).toMatch(/deeper than 5/);
+  });
   it.skipIf(!canSymlink)('a symlinked CLAUDE.md, .claude/CLAUDE.md, rules file or in-repo import refuses the dir', () => {
     for (const mk of [
       (w: ReturnType<typeof world>) => fs.symlinkSync(path.join(w.repo, 'real.md'), path.join(w.repo, 'CLAUDE.md'), 'file'),

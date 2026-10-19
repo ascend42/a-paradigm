@@ -293,7 +293,8 @@ export function auditMemoryDir(dir: string, top: string, userHome: string): { ok
     if (!got.ok) return `${rel(file)}: ${got.why}`;
     const imp = importAudit(got.buf.toString('utf8'), file, userHome);
     if (imp.refuse) return `${rel(file)}: ${imp.refuse}`;
-    if (depth >= MAX_IMPORT_DEPTH) return null;
+    // R3 (Aegis): past the depth cap an import that would still be followed refuses, never silently stops
+    if (depth >= MAX_IMPORT_DEPTH && imp.targets.length) return `${rel(file)}: an @ import chain deeper than ${MAX_IMPORT_DEPTH}`;
     for (const t of imp.targets) {
       const outside = (x: string): string => `${rel(file)}: an @ import reaches outside the repo (${x.length > 120 ? `${x.slice(0, 120)}…` : x})`;
       // R2 (Aegis): the lexical check runs BEFORE lstat, so an out-of-repo import refuses whether or not it exists
