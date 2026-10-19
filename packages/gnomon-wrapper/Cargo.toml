@@ -1,0 +1,41 @@
+# #gnomon-wrapper (spec §11.1, §11.2 rule 2, §16, §18; M1.13, P8-D56).
+# Tauri is pinned EXACT (spec §18, law 6), as is every direct dependency.
+# rust-version is the floor; the toolchain is stable 1.92 (no rust-toolchain.toml
+# yet: pinning a named channel would make rustup download one on first build).
+[package]
+name = "gnomon-wrapper"
+version = "8.0.0"
+edition = "2021"
+rust-version = "1.92"
+description = "Gnomon desktop wrapper: a Tauri 2 shell over the system WebView that hosts the localhost GUI as the default daily surface"
+license = "MIT"
+publish = false
+build = "build.rs"
+
+[lib]
+name = "gnomon_wrapper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gnomon-wrapper"
+path = "src/main.rs"
+
+[dependencies]
+# No "devtools" feature: the inspector exists only in debug builds (Tauri's default), never in release.
+tauri = { version = "=2.12.4", features = [] }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std"] }
+sha2 = "=0.10.9"
+base64 = "=0.22.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "=1.0.151"
+getrandom = "=0.3.4"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

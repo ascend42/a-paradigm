@@ -1,18 +1,29 @@
 version: "2.0"
 description: >-
-  Gnomon wrapper — the Tauri 2 shell (Rust; WKWebView / WebView2) that is the
-  GUI's default surface (docs/specs/gnomon.md §11, §16, §18; M1.13, P8-D56).
-  PR-0 placeholder: README only, because no Rust toolchain was on the scaffold
-  machine. Probe P08 (PR-2) adds Cargo.toml, rust-toolchain.toml and the exact
-  Tauri pin.
+  Gnomon wrapper — Gnomon.app, the Tauri 2 shell (Rust over WKWebView) that is
+  the GUI's default daily surface (docs/specs/gnomon.md §11.1, §11.2 rule 2,
+  §16, §18; M1.13, P8-D56). Slice 1 is macOS; WebView2 and the native
+  capture-exclusion panel (S29-K8, M4.6) are later phases with seams left.
 
 components:
   gnomon-wrapper:
     description: >-
-      Will take the token, kernel public key and bundle hash on stdin, load
-      http://127.0.0.1:<port> as its only origin, disable IPC for page content
-      and verify serverSig natively. Not built yet; the gnomon.yml native job
-      builds it on windows-latest once Cargo.toml exists.
-    path: README.md
+      Package-level component (allowlisted in packages/gnomon/test/symbol-allowlist.json:
+      Appendix A treats gnomon-wrapper as a package, not a spec node). Tauri
+      pinned exact (=2.12.4; tauri-build =2.7.3). One window whose main frame
+      is in exactly one phase the NATIVE side moves (src/nav.rs): the bundled
+      status page (tauri://localhost) or the one kernel origin
+      http://127.0.0.1:<port>; on_navigation refuses every other URL (another
+      port, localhost, userinfo tricks, other schemes) and on_new_window
+      denies. IPC is disabled for page content (src/surface.rs): invoke_system
+      replaces Tauri's invoke script with a stub that holds no invoke key and
+      throws, there is no command and no invoke handler, capabilities: [] (the
+      generated gen/schemas/capabilities.json is {}), withGlobalTauri: false,
+      freezePrototype: true. Devtools only in debug builds (no devtools
+      feature). A document-start script defines a frozen
+      window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the
+      GUI reads to declare hello surface wrapper and drop the extension-risk
+      badge (display only). Hardened runtime with an EMPTY entitlements set.
+    path: src
     type: module
-    tags: [gnomon, wrapper, tauri, rust, paradigm-8, placeholder]
+    tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]
