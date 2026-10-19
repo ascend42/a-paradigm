@@ -430,7 +430,7 @@ describe('block buttons and the client (C6, I5)', () => {
     expect(sent.length).toBe(1);
     t.onClose!(1006);
     await expect(inFlight).rejects.toMatchObject({ refusal: { code: 'DELIVERY_UNKNOWN', reason: 'delivery-unknown' } });
-    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'CLOSED', reason: 'socket-closed' } });
+    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'CLOSED', reason: 'connection-closed' } });
     expect(sent.length).toBe(1);
   });
   it('FALSIFIER: a call while the WebSocket is not OPEN (closing, before onclose) is CLOSED and sends nothing — never DELIVERY_UNKNOWN', async () => {
@@ -439,7 +439,7 @@ describe('block buttons and the client (C6, I5)', () => {
     const t = { send: (s: string) => void sent.push(s), isOpen: () => open, close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
     const c = new GnomonClient(t, { callTimeoutMs: 5000 });
     open = false; // readyState left OPEN; onclose has not fired yet
-    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'CLOSED', reason: 'socket-closed' } });
+    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'CLOSED', reason: 'connection-closed' } });
     expect(sent.length).toBe(0);
   });
   it('T-2026-10-18-016 r2: an engine whose RNG throws fails the hello stage visibly and sends nothing (connect never throws)', async () => {

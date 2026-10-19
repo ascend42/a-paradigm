@@ -177,7 +177,7 @@ export class GnomonClient {
   /** One call; rejects with RpcError carrying the refusal. */
   call<T = unknown>(method: string, params?: unknown): Promise<T> {
     // provably never sent (closed, or the socket left OPEN) ⇒ CLOSED; DELIVERY_UNKNOWN is only for a sent frame
-    if (this.#closed || this.#t.isOpen?.() === false) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: 'the connection is closed', next: [], data: null }));
+    if (this.#closed || this.#t.isOpen?.() === false) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'connection-closed', message: 'the connection is closed', next: [], data: null }));
     const id = this.#nextId++;
     return new Promise<T>((resolve, reject) => {
       const timer =

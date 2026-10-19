@@ -107,7 +107,7 @@ export class SetupFlow {
       }
     });
     c.onClose(() => {
-      if (this.state.phase !== 'handoff' && this.state.phase !== 'aborted') this.#set({ phase: 'aborted', busy: false, error: { reason: 'socket-closed', message: 'the setup connection closed, so setup was cancelled. Start it again.' } });
+      if (this.state.phase !== 'handoff' && this.state.phase !== 'aborted') this.#set({ phase: 'aborted', busy: false, error: { reason: 'connection-closed', message: 'the setup connection closed, so setup was cancelled. Start it again.' } });
     });
   }
 
@@ -125,7 +125,7 @@ export class SetupFlow {
   async #recover(e: unknown, what: string): Promise<void> {
     const r = refusalOf(e);
     // final refusals end setup (Aegis L-A: a wrong helper line, one prompt too many, the attempt cap)
-    if (r.reason === 'socket-closed' || r.reason === 'delivery-unknown' || r.reason === 'setup-stopped' || r.data.final === true) return this.#set({ phase: 'aborted', busy: false, presence: null, error: { reason: r.reason, message: `setup was stopped: ${r.message}` } });
+    if (r.reason === 'connection-closed' || r.reason === 'delivery-unknown' || r.reason === 'setup-stopped' || r.data.final === true) return this.#set({ phase: 'aborted', busy: false, presence: null, error: { reason: r.reason, message: `setup was stopped: ${r.message}` } });
     const gen = typeof r.data.leftoverGen === 'string' ? r.data.leftoverGen : null;
     const retry = what === 'Setup' ? ' If you try again, this retry shows 2 NEW codes.' : '';
     const notice = `${what} did not finish: ${r.message}.${gen ? ` Keys of generation ${gen} were left in the Secure Enclave: delete them below, then try again.` : ''}${retry}`;

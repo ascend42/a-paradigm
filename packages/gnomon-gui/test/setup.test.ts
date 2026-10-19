@@ -146,7 +146,7 @@ describe('#gui-setup flow', () => {
     const s = server();
     const f = new SetupFlow(s.client, 'wrapper', () => undefined);
     s.closeNow(1006);
-    expect(f.state).toMatchObject({ phase: 'aborted', error: { reason: 'socket-closed' } });
+    expect(f.state).toMatchObject({ phase: 'aborted', error: { reason: 'connection-closed' } });
     expect(presenceOf({ n: 1, of: 2, purpose: 'device-row', digest12: '<img src=x>' })).toBeNull();
   });
 });
