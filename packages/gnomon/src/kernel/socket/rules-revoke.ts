@@ -42,13 +42,13 @@ export function createRulesRevokeHandler(d: RulesRevokeDeps): HumanDeviceVerbHan
 }
 
 async function revokeOne(d: RulesRevokeDeps, connId: string, params: unknown): Promise<RulesRevokeResult> {
-  if (params === null || typeof params !== 'object' || Array.isArray(params)) throw new RpcRefusal('BAD_REQUEST', 'params', 'rules.revoke takes {ruleId}');
+  if (params === null || typeof params !== 'object' || Array.isArray(params)) throw new RpcRefusal('BAD_REQUEST', 'bad-params', 'rules.revoke takes {ruleId}');
   const extra = Object.keys(params).filter((k) => k !== 'ruleId');
-  if (extra.length > 0) throw new RpcRefusal('BAD_REQUEST', 'params', `rules.revoke takes only {ruleId} (unknown: ${extra.slice(0, 4).join(', ')})`);
+  if (extra.length > 0) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `rules.revoke takes only {ruleId} (unknown: ${extra.slice(0, 4).join(', ')})`);
   const ruleId = (params as { ruleId?: unknown }).ruleId;
-  if (typeof ruleId !== 'string' || !RULE_ID_PATTERN.test(ruleId)) throw new RpcRefusal('BAD_REQUEST', 'params', 'ruleId must be the card id the rule was learned on (card:<ULID>)');
+  if (typeof ruleId !== 'string' || !RULE_ID_PATTERN.test(ruleId)) throw new RpcRefusal('BAD_REQUEST', 'bad-params', 'ruleId must be the card id the rule was learned on (card:<ULID>)');
   const rule = d.lookup(ruleId);
-  if (!rule) throw new RpcRefusal('NOT_FOUND', 'no-such-rule', `no standing always-allow rule ${ruleId} (unknown, or already revoked)`, { ruleId });
+  if (!rule) throw new RpcRefusal('NOT_FOUND', 'not-found', `no standing always-allow rule ${ruleId} (unknown, or already revoked)`, { ruleId });
   await d.append({ ruleId, repoKey: rule.repoKey, tool: rule.tool, connId }, { connId });
   d.lookup(ruleId); // fold the new row now: the next permission check raises the card again
   return { ruleId, revoked: true };
