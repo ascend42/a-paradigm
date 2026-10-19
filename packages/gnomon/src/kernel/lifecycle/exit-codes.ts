@@ -18,7 +18,10 @@
  *
  * Codes 64/70/75/78 are the sysexits(3) values (EX_USAGE, EX_SOFTWARE,
  * EX_TEMPFAIL, EX_CONFIG), so launchd/systemd conventions read them right.
- * The client verbs (`gnomon daemon status|stop`) keep their own 0/1/3.
+ * The client verbs (`gnomon daemon status|stop`) keep their own 0/1/3, and
+ * their usage error keeps 64, the CLI-wide usage code every `gnomon` verb has
+ * used since PR-5 (it happens to equal EX_USAGE; it is not this table's row).
+ * `gnomon daemon --detach|start` is an activator and returns this table.
  */
 import type { LifecycleRefusalReason } from './refusal.js';
 

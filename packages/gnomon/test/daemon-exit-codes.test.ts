@@ -3,7 +3,7 @@
  * activator's bounded stderr tail (T-2026-10-19-009 item 3). Pure logic, every
  * platform; the real-process handshake is test/daemon-ready.test.ts.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BoundedTail,
   classifyExitCode,
@@ -15,7 +15,7 @@ import {
   reexecArgs,
   restartable,
 } from '../src/kernel/lifecycle/index.js';
-import { parseDaemonArgs } from '../src/cli/daemon-cli.js';
+import { EXIT_NOT_RUNNING, EXIT_REFUSED, EXIT_USAGE, parseDaemonArgs, runDaemonCommand } from '../src/cli/daemon-cli.js';
 
 describe('§2.4 rule 2: classified exit codes', () => {
   it('every code has exactly one class, and only transient/internal may restart', () => {
@@ -75,5 +75,16 @@ describe('§2.4 rule 2: ready line and stderr tail', () => {
     expect(reexecArgs({ entry: 'g.js', home: '/h', readyFd: 3 }).slice(-2)).toEqual(['--ready-fd', '3']);
     expect(parseDaemonArgs(['--foreground', '--ready-fd', '3'])).toMatchObject({ foreground: true, readyFd: 3 });
     expect(typeof parseDaemonArgs(['--ready-fd', '1'])).toBe('string');
+  });
+
+  it('client verbs keep 0/1/3 and the CLI-wide usage code 64 (unchanged since PR-5)', async () => {
+    expect([EXIT_REFUSED, EXIT_NOT_RUNNING, EXIT_USAGE]).toEqual([1, 3, 64]);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(await runDaemonCommand(['bogus'], '/nonexistent/gnomond.js')).toBe(64);
+      expect(await runDaemonCommand(['status', '--home', 'relative'], '/nonexistent/gnomond.js')).toBe(64);
+    } finally {
+      err.mockRestore();
+    }
   });
 });

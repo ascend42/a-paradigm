@@ -57,7 +57,8 @@ export function refuseDevHome(home: string, err: { write(s: string): unknown } =
 export const EXIT_OK = 0;
 export const EXIT_REFUSED = 1;
 export const EXIT_NOT_RUNNING = 3;
-export const EXIT_USAGE = DAEMON_EXIT.usage;
+/** The CLI-wide usage code (unchanged since PR-5, same as every `gnomon` verb); gnomond's own table is exit-codes.ts. */
+export const EXIT_USAGE = 64;
 
 export interface DaemonArgs {
   foreground: boolean;
