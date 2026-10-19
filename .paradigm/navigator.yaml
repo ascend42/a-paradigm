@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T22:30:57.073Z'
+generated: '2026-10-19T00:34:49.105Z'
 structure: {}
 key_files:
   config:
@@ -281,6 +281,8 @@ symbols:
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
+  '#purpose-component-always-rules': packages/gnomon/
+  '#purpose-component-rules-cli': packages/gnomon/
   '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/

@@ -13,7 +13,7 @@
  *     (answer; the questions validated and shown in a fixed line grammar the
  *     GUI picker reads, askLines; the answer checked by parseAskAnswer),
  *     `permission` for every other tool
- *     with decisions allow | deny ONLY (no `always` in this slice). The lines
+ *     with decisions allow | deny | always (always: fresh presence, a standing exact-match rule, rules.ts). The lines
  *     are kernel-composed from the request, split on newlines, then
  *     sanitized and WRAPPED by the install card's wrappedBlock (Aegis C1):
  *     a line longer than MAX_LINE continues on `  ↳ ` lines, never cut. The
@@ -67,7 +67,7 @@ export interface AskQuestion {
   options: Array<{ label: string; description: string | null }>;
   multiSelect: boolean;
 }
-export const PERMISSION_DECISIONS = Object.freeze(['allow', 'deny'] as const);
+export const PERMISSION_DECISIONS = Object.freeze(['allow', 'deny', 'always'] as const);
 export const PLAN_DECISIONS = Object.freeze(['approve-plan', 'reject'] as const);
 /** pending can_use_tool requests per session; past it every new request is denied with no card */
 export const MAX_PENDING_PERMISSIONS = 64;
@@ -234,7 +234,7 @@ function card(cardKind: CardKindP, decisions: readonly string[], detail: Record<
 export function answerFor(cardKind: CardKindP, decision: string, note?: string): { behavior: 'allow' } | { behavior: 'deny'; message: string } {
   // ask-user: the allow (with the validated answers) is built by the supervisor from parseAskAnswer; here only the deny
   if (cardKind === 'ask-user') return { behavior: 'deny', message: decision === 'answer' ? 'Denied: the answer could not be used.' : ASK_USER_NO_ANSWER };
-  if (cardKind === 'permission' && decision === 'allow') return { behavior: 'allow' };
+  if (cardKind === 'permission' && (decision === 'allow' || decision === 'always')) return { behavior: 'allow' };
   if (cardKind === 'plan' && decision === 'approve-plan') return { behavior: 'allow' };
   if (cardKind === 'plan' && decision === 'reject') return { behavior: 'deny', message: note ? `The human rejected the plan: ${note}` : 'The human rejected the plan.' };
   if (decision === 'deny') return { behavior: 'deny', message: note ? `The human denied this: ${note}` : 'The human denied this tool use.' };

@@ -97,7 +97,7 @@ import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_PENDING_PERMISSI
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
-import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
+import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -126,7 +126,7 @@ export interface SupervisorOptions {
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
-  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect'>>;
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect' | 'auto'>>;
   /** the Gnomon home (session dirs, the claude pin and its private copy) */
   home: string;
   /** the user's home (the ~/.claude layers); the child's HOME is forced to it */
@@ -146,6 +146,8 @@ export interface SupervisorOptions {
   hooksMode?: SessionHooksMode;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
+  /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string) => { ruleId: string } | null;
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
@@ -675,6 +677,21 @@ export class SessionSupervisor {
       return;
     }
     const b = this.#o.broker;
+    const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
+    if (plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
+      // S-L1: an exact (repo, tool, inputHash) match of a kernel-derived `always` rule ⇒ allow with no card, approval.auto first
+      let rule: { ruleId: string } | null = null;
+      try {
+        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash) ?? null;
+      } catch {
+        rule = null; // an unreadable rule source never allows
+      }
+      if (rule) {
+        await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: `rule:${rule.ruleId}` });
+        await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
+        return;
+      }
+    }
     if (!b || typeof b.decisionOf !== 'function' || s.pending.size >= MAX_PENDING_PERMISSIONS) {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
@@ -697,7 +714,7 @@ export class SessionSupervisor {
         }
       : {};
     try {
-      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask });
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask, ...(plan.cardKind === 'permission' ? { ruleScope: { repoKey } } : {}) });
       cardId = card.cardId;
     } catch {
       await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny

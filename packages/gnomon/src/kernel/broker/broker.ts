@@ -177,6 +177,8 @@ export interface RaiseInput {
   checkNote?: (decision: string, note: string | undefined) => string | null;
   /** The note is the human's private answer: approval.decide carries {noteHash, noteBytes}, never the text. */
   privateNote?: boolean;
+  /** `always` (S-L1): the repo the standing rule is scoped to; carried on approval.rule.learned. A card without it never takes `always`. */
+  ruleScope?: { repoKey: string };
 }
 
 export interface DecideContext {
@@ -212,6 +214,7 @@ interface CardRecord {
   note?: string;
   checkNote?: RaiseInput['checkNote'];
   privateNote?: boolean;
+  ruleScope?: { repoKey: string };
 }
 
 /** tool.permission default timeout (expires into deny). Other kinds wait. */
@@ -291,7 +294,7 @@ export class ApprovalBroker {
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
-    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), waiters: [] });
     return card;
   }
 
@@ -337,6 +340,16 @@ export class ApprovalBroker {
     r.card = { ...r.card, state: 'expired' };
     for (const w of r.waiters.splice(0)) w(into);
     return true;
+  }
+
+  /**
+   * approval.auto (§9.1, B3): a request answered allow with NO card because a
+   * kernel-derived standing rule matched it exactly. Carries the inputHash
+   * (a sensitive FIELD label), never the tool input. Must reject if the row
+   * was not written (the caller answers only after it).
+   */
+  async auto(p: { hsid: string; tool: string; inputHash: string; modeRef: string }): Promise<void> {
+    await this.#o.log('approval.auto', { hsid: p.hsid, tool: p.tool, inputHash: p.inputHash, modeRef: p.modeRef }, { session: p.hsid });
   }
 
   /** approval.suspect from the kernel's own observation (B3: only the broker appends approval.*). */
@@ -446,6 +459,7 @@ export class ApprovalBroker {
     const cls = baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
     if (r.decisions && decision !== 'withdraw' && !r.decisions.includes(decision)) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not one of this card's actions (${r.decisions.join(', ')})`, { cardId });
+    if (decision === 'always' && !r.ruleScope) throw fail('BAD_REQUEST', 'bad-params', 'this card has no rule scope: always is not available on it', { cardId });
     if (r.checkNote) {
       const why = r.checkNote(decision, typeof p.note === 'string' ? p.note : undefined);
       if (why !== null) throw fail('BAD_REQUEST', 'bad-params', why, { cardId });
@@ -577,7 +591,7 @@ export class ApprovalBroker {
       { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(rootSig ? { rootSig } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
       { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) },
     );
-    if (decision === 'always') await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, matchExact: true, presence }, { connId: ctx.connId });
+    if (decision === 'always') await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, matchExact: true, presence, repoKey: r.ruleScope?.repoKey ?? null }, { connId: ctx.connId });
     for (const why of this.#suspicions(ctx, isCli, prov, presence, cls)) {
       await this.#o.log('approval.suspect', { cardId, connId: ctx.connId, why, provenance: cli }, { connId: ctx.connId });
     }

@@ -89,7 +89,7 @@ function rig(o: { presence?: PresenceProvider; now?: { t: number }; root?: DevTe
 
 /** A human connection; `credential: 'gui'` = a launch-token GUI session (the only class that may hold an unlock, Aegis C1). */
 const H = (connId = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', surface: string | null = 'browser', credential = 'gui') => ({ connId, principal: HUMAN, principalClass: 'human', surface, credential });
-const permission = (b: ApprovalBroker, lines = ['Bash: rm -rf build/']) => b.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'rm -rf build/' }, lines, tool: 'Bash', toolInput: { command: 'rm -rf build/' } });
+const permission = (b: ApprovalBroker, lines = ['Bash: rm -rf build/']) => b.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'rm -rf build/' }, lines, tool: 'Bash', toolInput: { command: 'rm -rf build/' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
 
 async function refusal(p: Promise<unknown>): Promise<{ code: string; gate: string; reason?: string; data: Record<string, unknown> }> {
   const e = await p.then(

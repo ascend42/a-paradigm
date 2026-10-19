@@ -1606,7 +1606,51 @@ components:
     tests:
       - test/session-supervisor.test.ts
       - test/repo-hooks.test.ts
+      - test/permission-session.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07]
+
+  always-rules:
+    description: >-
+      #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in
+      src/kernel/supervisor/rules.ts. Permission cards offer allow | deny |
+      always; `always` is fresh presence EVERY time (classes.ts, G-BRK-05)
+      and needs the card's ruleScope {repoKey} (else bad-params). The broker
+      logs approval.rule.learned{cardId, tool, matchExact, presence,
+      repoKey}. RuleBook folds KERNEL-signed rows only (kernel principal +
+      kernel key): approval.request (permission card, tool, tool_input) +
+      approval.decide{always} + approval.rule.learned (presence != cached,
+      same tool) => a rule keyed (repoKey, tool, inputHash of the canonical
+      tool_input); forged rows of any kind are ignored. The supervisor answers
+      an EXACT match allow with no card after broker.auto =>
+      approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
+      different input, tool or repo raises the card. updatedInput is the
+      kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds
+      incrementally from the chain (fromSeq). Not built: revoke (needs a new
+      event kind approval.rule.revoked, moves clientApiId) and the strictness
+      L1 suspension of rules (M2.10).
+    path: src/kernel/supervisor/rules.ts
+    type: module
+    tags: [gnomon, kernel, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/permission-session.test.ts
+    oracles: [G-BRK-05]
+
+  rules-cli:
+    description: >-
+      #rules-cli `gnomon rules list [<home>] [--json]` / `gnomon rules revoke
+      <id>` (src/cli/rules-cli.ts). list verifies the home's kernel log
+      read-only (verifyLog with the home's kernel pubs, like gnomon replay)
+      and folds the verified rows through #always-rules; an unverified log
+      is refused INTEGRITY_BROKEN. revoke is refused UNSUPPORTED (needs a new
+      kernel event kind).
+    path: src/cli/rules-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+    oracles: [G-BRK-05]
 
   local-runner:
     description: >-
