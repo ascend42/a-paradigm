@@ -33,6 +33,10 @@
  *     worktree `.claude/**` and `CLAUDE*.md` (prefix), and the same pair for
  *     every memory-chain dir (P8-D97, `memoryDirs`); every input layersHash
  *     reads is covered (test-proved);
+ *   - trace (read + write, #trace-capture): `<cwd>/.gnomon/trace/**` (and the
+ *     worktree's), the dir itself included, plus a literal write deny on
+ *     `<cwd>/.gnomon` (it cannot be renamed, removed or planted as a link), so a
+ *     session can neither read, hide nor alter its own trace;
  *   - transcripts (write ALLOW, TD-2026-10-19-814 item 1, probe p-resume
  *     darwin): `<userClaudeDir>/projects/**` is carved back out of the
  *     `~/.claude` write deny for a Claude session (`claudeTranscripts`), so
@@ -85,7 +89,7 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'trace';
 }
 
 export interface SessionPolicy {
@@ -297,6 +301,11 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     ]),
   ];
   const browsers = (inp.browserProfileDirs ?? []).map((d) => P(d, 'subpath', 'browser-profile'));
+  // #trace-capture: a session can neither read, hide nor alter its own trace — `<root>/.gnomon/trace` is read- and
+  // write-denied (subpath: the dir itself too, so it cannot be renamed or replaced), and `<root>/.gnomon` itself is
+  // write-denied (literal: it cannot be renamed away, removed or planted as a link). Always, traced or not.
+  const trace: PolicyPath[] = roots.map((r) => P(path.join(r, '.gnomon', 'trace'), 'subpath', 'trace'));
+  const traceParent: PolicyPath[] = roots.map((r) => P(path.join(r, '.gnomon'), 'literal', 'trace'));
   const settings: PolicyPath[] = [
     P(path.join(home), 'subpath', 'gnomon-home'),
     P(inp.userClaudeDir, 'subpath', 'settings'),
@@ -331,7 +340,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
   });
   const git = gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git')]);
-  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]);
+  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...trace, ...traceParent, ...extra]);
   // TD-2026-10-19-814 item 1: the transcript carve-back. Fail closed (no allow) when ~/.claude/projects is a link
   // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
   // `.claude` dirs anywhere) covers it — the allow must reopen exactly ~/.claude/projects and nothing else.
@@ -365,10 +374,10 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   return {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
-    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
+    denyRead: uniq([...keys, ...browsers, ...kernelLog, ...trace, P(home, 'subpath', 'gnomon-home'), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
     allowRead: uniq(allowRead),
     allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
-    denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),
+    denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog, ...trace]),
     denyWrite,
     allowWrite,
     denyWriteAlways,

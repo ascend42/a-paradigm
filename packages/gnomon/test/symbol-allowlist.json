@@ -5,6 +5,7 @@
     { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },
     { "symbol": "#gnomon-local", "reason": "package-level component of @a-company/gnomon-local (the local-model session child, spec §13.1); spec names the executable, the node is #local-runner" },
     { "symbol": "#rules-revoke", "reason": "the rules.revoke human-device verb handler (P8-D98 slice A1, src/kernel/socket/rules-revoke.ts); the spec names the verb in prose (§3.4, §5) and the batched move adds no Appendix A node" },
+    { "symbol": "#trace-capture", "reason": "the per-project raw stream capture (src/kernel/trace/); spec §3.3 describes it in plain words on purpose, so Appendix A has no node for it" },
     { "symbol": "#gnomon-guide", "reason": "the `gnomon guide` CLI verb (T-2026-10-19-015); spec §5's guide paragraph and §9.7 name it in plain words on purpose (the Orca Adapt 7–13 pass adds no node span), so Appendix A has no node for it" },
     { "symbol": "#gnomon-probes", "reason": "M1.0 probe harness (§19.1 probe table); Appendix A notes: the probe table names no node span on purpose" },
     { "symbol": "#contract-event-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },

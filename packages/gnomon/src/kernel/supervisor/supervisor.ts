@@ -68,6 +68,10 @@
  *   #local-runner's lane (local-session.ts) — routing, the fallback card, the
  *   local spawn; `any` routed to Claude comes back here. send/stop/status of
  *   a local hsid are the lane's.
+ * #trace-capture (trace/): when the human traced the session's cwd (trace/mode.ts, read at every open and
+ *   resume), every stdin line (#stdin) and every stdout line is teed, as sent and received, with kernel notes
+ *   (spawn argv redacted, exit, drain interrupt) to `<cwd>/.gnomon/trace/`; the session.sandbox row says
+ *   `traced: true` (or `traced: false, traceRefused`). The tee never blocks the session (bounded queue, counted drops).
  * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
  *   ~/.claude.json only through its law-7 projection, so Claude's routine
  *   rewrites never fire — a change logs session.layers.changed{which} and a
@@ -100,6 +104,8 @@ import { LocalLane, type LocalLaneOptions } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
+import { openTraceStream, redactArgv, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
+import { traceModeOf } from '../trace/mode.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -223,6 +229,10 @@ export interface SupervisorOptions {
   local?: LocalLaneConfig;
   /** TEST RIG ONLY: the local probe's fetch */
   localProbeFetch?: LocalLaneOptions['probeFetch'];
+  /** #trace-capture: is this cwd traced? default: the human's toggle in the Gnomon home (trace/mode.ts traceModeOf), read at every open and resume */
+  traceMode?: (cwd: string) => boolean;
+  /** TEST RIG ONLY: #trace-capture writer bounds and a stub sink (a slow disk) */
+  traceOptions?: TraceOpenOptions;
 }
 
 export interface OpenRequest {
@@ -270,7 +280,12 @@ interface Session {
   policy: SessionPolicy;
   /** §2.4 rule 11: set when the drain wrote this session's session.drained row */
   drained?: DrainOutcome;
+  /** #trace-capture: the raw stream tee when the cwd is traced */
+  trace: TraceStream | null;
 }
+
+/** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
+const SECRET_ENV = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
 
 interface PendingPermission {
   cardId: string | null;
@@ -467,6 +482,8 @@ export class SessionSupervisor {
     let child: ChildProcess | null = null;
     let tracked = false;
     let live: Session | null = null;
+    let trace: TraceStream | null = null;
+    let traceRefused: string | null = null;
     try {
       const bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
       const priv = await prepareClaude(this.#o.home, bin.real, { allowScripts: this.#o.allowScripts === true });
@@ -586,6 +603,15 @@ export class SessionSupervisor {
         wHash = wNow;
       }
       this.#refuseIfDraining('session.open'); // a drain that began during preflight: nothing is forked (the catch releases the permit)
+      // #trace-capture: the human's per-folder toggle, read at every open and resume; a refused trace dir is reported on session.sandbox
+      if (this.#o.traceMode?.(req.cwd) ?? traceModeOf(this.#o.home, req.cwd)) {
+        try {
+          trace = openTraceStream(req.cwd, hsid, { ...this.#o.traceOptions, secrets: Object.entries(env).filter(([k, v]) => SECRET_ENV.test(k) && typeof v === 'string').map(([, v]) => v) });
+          trace.ctl({ event: 'spawn', argv: redactArgv(argv), envKeys, ...(r ? { resume: r.uuid } : {}) });
+        } catch (e) {
+          traceRefused = e instanceof TraceRefused ? e.reason : 'trace-unavailable';
+        }
+      }
       const intent = await this.#o.children.intend({ kind: 'session', hsid });
       child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
       // the exit/close listeners are attached SYNCHRONOUSLY, before any await. 'exit' only lets paused stdout
@@ -604,7 +630,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -613,6 +639,7 @@ export class SessionSupervisor {
         hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
         ...(r ? { resumedFrom: r.drainedEventId, drainOutcome: r.outcome } : {}),
+        ...(trace ? { traced: true } : traceRefused ? { traced: false, traceRefused } : {}),
       }, { session: hsid });
       if (r) {
         this.#resumed.add(hsid);
@@ -621,6 +648,10 @@ export class SessionSupervisor {
       }
       return { hsid, principalId, backend: 'claude-code', state: s.state, ...(priv.pin === 'first-use' ? { binaryPin: `first-use pin ${priv.sha256} from ${priv.source}` } : {}) };
     } catch (err) {
+      if (trace && !live) {
+        trace.ctl({ event: 'open-failed' });
+        void trace.close();
+      }
       if (tracked && child) {
         // round 3: a failure after track — stop the group; the wired exit path releases the permits
         await this.#o.children.stop(child, 'open-failed').catch(() => undefined);
@@ -720,7 +751,10 @@ export class SessionSupervisor {
     };
     out?.setEncoding('utf8');
     out?.on('data', (chunk: string) => {
-      split.push(chunk, (line) => queue(() => this.#onLine(s, line)), (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
+      split.push(chunk, (line) => {
+        s.trace?.out(line); // #trace-capture: tee the line as received, before anything acts on it
+        queue(() => this.#onLine(s, line));
+      }, (bytes) => (s.trace?.ctl({ event: 'line-dropped', bytes }), queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid }))));
     });
     s.child.stderr?.on('data', (b: Buffer) => {
       s.stderrBytes += b.length; // capped: counted, never buffered
@@ -742,7 +776,11 @@ export class SessionSupervisor {
     s.turnPermits = [];
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
-    this.#history.push({ hsid: s.hsid, principalId: s.principalId, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode, ...(s.drained ? { drained: s.drained } : {}) });
+    if (s.trace) {
+      s.trace.ctl({ event: 'exit', code: s.child.exitCode, signal: s.child.signalCode, ...(s.drained ? { drained: s.drained } : {}) });
+      void s.trace.close(); // never awaited: a hung disk must not hold the exit path
+    }
+    this.#history.push({ hsid: s.hsid, principalId: s.principalId, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode, ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) });
     while (this.#history.length > HISTORY_CAP) this.#history.shift();
     this.#wake();
   }
@@ -953,6 +991,12 @@ export class SessionSupervisor {
     if (s.state !== 'running') return;
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', hash: sha(line), bytes: Buffer.byteLength(line, 'utf8'), channel: 'permission', ...meta }, { session: s.hsid });
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) return;
+    this.#stdin(s, line);
+  }
+
+  /** Every stdin line goes through here: #trace-capture tees it exactly as written. */
+  #stdin(s: Session, line: string): void {
+    s.trace?.in(line);
     s.child.stdin?.write(line);
   }
 
@@ -1023,7 +1067,7 @@ export class SessionSupervisor {
     const contentHash = sha(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash }, { session: s.hsid });
-    s.child.stdin?.write(userMessageLine(p.text));
+    this.#stdin(s, userMessageLine(p.text));
     return { turn: turnId(s.hsid, n) };
   }
 
@@ -1031,7 +1075,7 @@ export class SessionSupervisor {
     if (this.#local.has(p.hsid)) return this.#local.stop(principal, p);
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
-      if (s.state === 'running') s.child.stdin?.write(controlInterruptLine());
+      if (s.state === 'running') this.#stdin(s, controlInterruptLine());
       return { signals: ['control_request:interrupt'], exited: false };
     }
     return this.#stopSession(s, 'session.stop');
@@ -1044,7 +1088,8 @@ export class SessionSupervisor {
     await this.#expirePending(s, expireWhy);
     const signals = ['control_request:interrupt', 'stdin:close'];
     try {
-      s.child.stdin?.write(controlInterruptLine());
+      this.#stdin(s, controlInterruptLine());
+      s.trace?.ctl({ event: 'stdin-close', reason });
       s.child.stdin?.end();
     } catch {
       /* the pipe may already be gone */
@@ -1124,6 +1169,7 @@ export class SessionSupervisor {
 
   async #drainSession(s: Session, outcome: DrainOutcome, deadlineMs: number, deadlineSource: DrainReport['deadlineSource']): Promise<DrainRecord | null> {
     if (outcome === 'interrupted') {
+      s.trace?.ctl({ event: 'drain-interrupt', deadlineMs, deadlineSource });
       // Aegis L5: a failed interrupt write is recorded, never swallowed (the drain still proceeds: the stop below ends the turn)
       await this.#write(s, controlInterruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() =>
         this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'drain', deadlineMs, deadlineSource, failed: true }, { session: s.hsid }).catch(() => undefined),
@@ -1160,7 +1206,7 @@ export class SessionSupervisor {
   /** status.sessions: live sessions + a bounded history of exited ones */
   status(): Array<Record<string, unknown>> {
     return [
-      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, ...(s.drained ? { drained: s.drained } : {}) })),
+      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) })),
       ...this.#history,
       ...this.#local.status(),
     ];
