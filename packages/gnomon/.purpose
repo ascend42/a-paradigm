@@ -2072,6 +2072,11 @@ components:
       (codesign, team Q6L2SF6YDW) and anything else sets claim-mismatch; the
       effect re-hashes the copy and writes the pin with signer + approval
       {cardId, contentHash, decisionSig}; live sessions keep their copy.
+      Aegis fixes: the effect refuses unless the pin still equals the card's
+      `from` (no rollback) and expires every other pending re-pin card; the
+      card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a
+      denied sha's refusal says "re-pin denied; restart Gnomon to re-offer";
+      the offline CLI prints the codesign signer (loud on a mismatch).
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

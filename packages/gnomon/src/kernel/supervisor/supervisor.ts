@@ -234,7 +234,7 @@ export interface SupervisorOptions {
    * TD-2026-10-19-063: an open refused claude_binary_changed pre-stages the re-pin card (runner/repin-card.ts);
    * resolves its cardId (null: none raised), which the refusal names for the GUI's [Re-pin]. A failure is ignored.
    */
-  onClaudeBinaryChanged?: (sourceReal: string) => Promise<string | null>;
+  onClaudeBinaryChanged?: (sourceReal: string, found: string | null) => Promise<{ cardId: string | null; next?: string }>;
   /** TEST RIG ONLY: the OS version probe (default: the platform's sw_vers). Tests pass a LOWER version to exercise the floor refusal. */
   macosMajor?: () => number | null;
   /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
@@ -512,8 +512,10 @@ export class SessionSupervisor {
       const bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
       const priv = await prepareClaude(this.#o.home, bin.real, { allowScripts: this.#o.allowScripts === true }).catch(async (e: unknown) => {
         if (!(e instanceof PreflightRefusal) || e.code !== 'claude_binary_changed' || !this.#o.onClaudeBinaryChanged) throw e;
-        const cardId = await this.#o.onClaudeBinaryChanged(bin.real).catch(() => null);
-        throw new PreflightRefusal(e.code, e.message.replace(/^#session-runner: /, ''), { ...e.data, ...(cardId ? { cardId } : {}) });
+        const found = typeof e.data.found === 'string' ? e.data.found : null;
+        const r = await this.#o.onClaudeBinaryChanged(bin.real, found).catch(() => ({ cardId: null }) as { cardId: string | null; next?: string });
+        const message = r.next ? `the claude binary differs from the pinned sha256 — ${r.next}` : e.message.replace(/^#session-runner: /, '');
+        throw new PreflightRefusal(e.code, message, { ...e.data, ...(r.cardId ? { cardId: r.cardId } : {}), ...(r.next ? { next: r.next } : {}) });
       });
       const userClaudeDir = path.join(userHome, row.userClaudeDir);
       const userClaudeJson = defaultClaudeJson(userClaudeDir);

@@ -46,10 +46,12 @@ import { binaryKind, readClaudePin, repinClaudeBinary, sha256File } from './bina
 export const REPIN_CARD_TTL_MS = 24 * 60 * 60 * 1000;
 /** Poll cadence of the resolved claude source. */
 export const REPIN_POLL_MS = 60_000;
+/** The open refusal's `next` once a human denied the new sha (L4). */
+export const REPIN_DENIED_NEXT = 're-pin denied; restart Gnomon to re-offer';
 
 export interface RepinCardOptions {
   home: string;
-  broker: Pick<ApprovalBroker, 'raise' | 'card' | 'decisionOf'>;
+  broker: Pick<ApprovalBroker, 'raise' | 'card' | 'decisionOf' | 'expire'>;
   /** the kernel principal (the card's requestedBy) */
   requestedBy: string;
   verifier: PlatformClaudeVerifier;
@@ -90,6 +92,18 @@ export class ClaudeRepinCards {
     return null;
   }
 
+  /** A human denied `sha` (the open refusal then says so instead of pointing at a card). */
+  denied(sha: string): boolean {
+    return this.#suppressed.has(sha);
+  }
+
+  /** The supervisor hook: stage, then name the card or the denial for the refusal. */
+  async onRefused(sourceReal: string, found: string | null): Promise<{ cardId: string | null; next?: string }> {
+    const c = await this.stage(sourceReal);
+    if (found && this.denied(found)) return { cardId: null, next: REPIN_DENIED_NEXT };
+    return { cardId: c?.cardId ?? this.pendingCardId() };
+  }
+
   /** The poll: stat the resolved source; on a change, stage. Never writes a pin. */
   poll(): Promise<CardV1 | null> {
     const real = this.#o.source();
@@ -102,8 +116,11 @@ export class ClaudeRepinCards {
       return Promise.resolve(null);
     }
     if (id === this.#seen) return Promise.resolve(null);
-    this.#seen = id;
-    return this.stage(real);
+    // L4: remembered only once the stage succeeded, so a failed stage is retried at the next poll
+    return this.stage(real).then((c) => {
+      this.#seen = id;
+      return c;
+    });
   }
 
   /** Copy, hash and check the signer of `sourceReal`; raise a re-pin card unless pinned, pending or suppressed. */
@@ -116,13 +133,17 @@ export class ClaudeRepinCards {
   async #stage(sourceReal: string): Promise<CardV1 | null> {
     const pin = readClaudePin(this.#o.home);
     if (!pin) return null; // trust on first use is the open path's (commitPin), never a card's
-    const kind = binaryKind(sourceReal);
-    if (kind !== 'native' && !(kind === 'script' && this.#o.allowScripts)) return null; // the open refuses it claude_binary_unsupported
     const dir = path.join(this.#o.home, 'bin');
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const tmp = path.join(dir, `.claude-stage-${process.pid}-${Date.now()}`);
     await fs.promises.copyFile(sourceReal, tmp, fs.constants.COPYFILE_EXCL);
     await fs.promises.chmod(tmp, 0o500);
+    // L1: the kind of the COPY (the bytes executed), never the source
+    const kind = binaryKind(tmp);
+    if (kind !== 'native' && !(kind === 'script' && this.#o.allowScripts)) {
+      await fs.promises.rm(tmp, { force: true });
+      return null; // the open refuses it claude_binary_unsupported
+    }
     const to = await sha256File(tmp); // the bytes hashed (and signature-checked) are the bytes executed
     const prior = this.#pending.get(to);
     if (to === pin.sha256 || this.#suppressed.has(to) || (prior && this.#o.broker.card(prior)?.state === 'pending')) {
@@ -159,6 +180,8 @@ export class ClaudeRepinCards {
       timeoutMs: REPIN_CARD_TTL_MS,
       effect: async (decision, ctx) => {
         if (decision !== 'allow') return;
+        // M1: no rollback — an older card (from a pin since replaced) never pins
+        if (readClaudePin(this.#o.home)?.sha256 !== detail.from) throw new Error('#session-runner: the pin moved since this re-pin card was raised');
         // TOCTOU: the copy is re-hashed right before the pin names it
         if ((await sha256File(exec)) !== to) throw new Error('#session-runner: the staged claude copy changed before the re-pin');
         const st = fs.statSync(exec);
@@ -167,6 +190,8 @@ export class ClaudeRepinCards {
           signer: { team: sig.team, verified: sig.verified },
           approval: { cardId: card.cardId, contentHash: card.contentHash, ...(ctx.decisionSig ? { decisionSig: ctx.decisionSig } : {}), ...(ctx.rootSig ? { rootSig: ctx.rootSig } : {}) },
         });
+        // M1: every other pending re-pin card is superseded (expired into deny, never decided)
+        for (const id of this.#pending.values()) if (id !== card.cardId && this.#o.broker.card(id)?.state === 'pending') await this.#o.broker.expire(id, 'cancelled');
       },
     });
     this.#pending.set(to, card.cardId);

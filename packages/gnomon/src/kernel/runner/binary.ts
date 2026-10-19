@@ -123,10 +123,6 @@ export interface PreparedClaude {
  * Writes no pin: commitPin does, after the sandboxed preflight passed (N1).
  */
 export async function prepareClaude(home: string, sourceReal: string, opts: { allowScripts?: boolean } = {}): Promise<PreparedClaude> {
-  const kind = binaryKind(sourceReal);
-  if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
-    throw new PreflightRefusal('claude_binary_unsupported', `the claude at ${sourceReal} is not a self-contained native executable (${kind}); install the native build (an npm cli.js needs its package)`, { kind });
-  }
   const pin = readClaudePin(home);
   const dir = path.join(home, 'bin');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -140,6 +136,12 @@ export async function prepareClaude(home: string, sourceReal: string, opts: { al
   const tmp = path.join(dir, `.claude-tmp-${process.pid}-${Date.now()}`);
   await fs.promises.copyFile(sourceReal, tmp, fs.constants.COPYFILE_EXCL);
   await fs.promises.chmod(tmp, 0o500);
+  // TD-2026-10-19-063 L1: the kind of the COPY (the bytes executed), never the source
+  const kind = binaryKind(tmp);
+  if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
+    await fs.promises.rm(tmp, { force: true });
+    throw new PreflightRefusal('claude_binary_unsupported', `the claude at ${sourceReal} is not a self-contained native executable (${kind}); install the native build (an npm cli.js needs its package)`, { kind });
+  }
   const digest = await sha256File(tmp); // the bytes hashed are the bytes executed
   if (pin && pin.sha256 !== digest) {
     await fs.promises.rm(tmp, { force: true });

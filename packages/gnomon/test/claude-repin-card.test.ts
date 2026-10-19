@@ -12,9 +12,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ApprovalBroker, approvalsKeyFrom, PresenceDenied, type PresenceProvider } from '../src/kernel/broker/index.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
-import { commitPin, prepareClaude, readClaudePin, REPIN_NEXT } from '../src/kernel/runner/binary.js';
+import { commitPin, prepareClaude, readClaudePin, repinClaudeBinary, REPIN_NEXT, sha256File } from '../src/kernel/runner/binary.js';
+import { RefusedError } from '@a-company/gnomon-contracts';
 import { PreflightRefusal } from '../src/kernel/runner/preflight.js';
-import { ClaudeRepinCards, REPIN_CARD_TTL_MS } from '../src/kernel/runner/repin-card.js';
+import { ClaudeRepinCards, REPIN_CARD_TTL_MS, REPIN_DENIED_NEXT } from '../src/kernel/runner/repin-card.js';
 import { CLAUDE_EXPECTED_TEAM, claudeRequirement, type PlatformClaudeVerifier } from '../src/platform/claude-verifier.js';
 import { runSessionCommand } from '../src/cli/session-cli.js';
 import { tempHome } from './daemon-helpers.js';
@@ -187,5 +188,83 @@ describe('TD-2026-10-19-063 the GUI re-pin card', () => {
     expect(await runSessionCommand(['repin-claude', '--home', t.home], { stdin, stdout: { isTTY: false, write: () => true }, stderr: { write: (x: string) => (err += x) } })).toBe(1);
     expect(err).toContain('interactive terminal');
     expect(readClaudePin(t.home)).toBeNull();
+  });
+});
+
+describe('TD-2026-10-19-063 Aegis fixes', () => {
+  const allow = (w: ReturnType<typeof world>, card: { cardId: string; contentHash: string }) => w.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: w.sig(card.cardId, 'allow', card.contentHash) });
+  it('M1: approving one re-pin card expires every other pending one', async () => {
+    const w = world({ presence: touches([]) });
+    await firstUse(w);
+    w.write();
+    const c1 = (await w.repin.stage(w.src))!;
+    w.write();
+    const c2 = (await w.repin.stage(w.src))!;
+    expect(c2.cardId).not.toBe(c1.cardId);
+    await allow(w, c2);
+    expect(readClaudePin(w.home)!.approval!.cardId).toBe(c2.cardId);
+    expect(w.broker.card(c1.cardId)!.state).toBe('expired');
+    expect(w.rows.find((r) => r.kind === 'approval.expire')!.payload).toMatchObject({ cardId: c1.cardId, into: 'deny', why: 'cancelled' });
+  });
+  it('M1: an older card whose `from` is no longer the pin never pins (no rollback)', async () => {
+    const w = world({ presence: touches([]) });
+    await firstUse(w);
+    w.write();
+    const old = (await w.repin.stage(w.src))!;
+    w.write();
+    repinClaudeBinary(w.home, await sha256File(w.src), w.src); // the pin moved (offline CLI)
+    const before = fs.readFileSync(path.join(w.home, 'claude-pin.json'));
+    await expect(allow(w, old)).rejects.toThrow();
+    expect(fs.readFileSync(path.join(w.home, 'claude-pin.json')).equals(before)).toBe(true);
+    expect(w.rows.some((r) => r.kind === 'approval.effect.failed' && r.payload.cardId === old.cardId)).toBe(true);
+  });
+  it('M3: the claude-binary re-pin is voice-hand-only (the voice principal and the voice intent form)', async () => {
+    const w = world({ presence: touches([]) });
+    await firstUse(w);
+    w.write();
+    const card = (await w.repin.stage(w.src))!;
+    for (const [ctx, params] of [
+      [{ ...H, principalClass: 'voice' }, { cardId: card.cardId, decision: 'deny' }],
+      [H, { cardId: card.cardId, decision: 'allow', via: 'voice' }],
+    ] as const) {
+      const e = await w.broker.approve(ctx, params).then(() => null, (x: unknown) => x);
+      expect(e).toBeInstanceOf(RefusedError);
+      expect((e as RefusedError).refusal).toMatchObject({ code: 'FORBIDDEN', data: { reason: 'voice-hand-only' } });
+    }
+    expect(w.broker.card(card.cardId)!.state).toBe('pending');
+  });
+  it('L4: after a deny the refusal says so; a failed stage is retried by the next poll', async () => {
+    const w = world({ presence: touches([]) });
+    await firstUse(w);
+    w.write();
+    const card = (await w.repin.stage(w.src))!;
+    await w.broker.approve(H, { cardId: card.cardId, decision: 'deny', decisionSig: w.sig(card.cardId, 'deny', card.contentHash) });
+    await new Promise((r) => setImmediate(r));
+    expect(await w.repin.onRefused(w.src, await sha256File(w.src))).toEqual({ cardId: null, next: REPIN_DENIED_NEXT });
+    const w2 = world();
+    await firstUse(w2);
+    w2.write();
+    const bin = path.join(w2.home, 'bin');
+    fs.renameSync(bin, `${bin}.away`);
+    fs.writeFileSync(bin, 'not a dir'); // the stage cannot copy (platform-free: no permission bits)
+    await expect(w2.repin.poll()).rejects.toThrow();
+    fs.rmSync(bin);
+    fs.renameSync(`${bin}.away`, bin);
+    expect(await w2.repin.poll()).not.toBeNull(); // not remembered as seen
+  });
+  it('L5: the offline CLI prints the signer, loudly when it is not the expected publisher', async () => {
+    const w = world();
+    await firstUse(w);
+    w.write();
+    const stdin = Object.assign(new PassThrough(), { isTTY: true });
+    stdin.end('nope\n');
+    let out = '';
+    expect(await runSessionCommand(['repin-claude', '--home', w.home, '--claude', w.src], { stdin, stdout: { isTTY: true, write: (x: string) => (out += x) }, stderr: { write: () => true } }, { verifier: unsigned })).toBe(1);
+    expect(out).toContain('signer  NOT signed by the expected publisher');
+    const stdin2 = Object.assign(new PassThrough(), { isTTY: true });
+    stdin2.end('nope\n');
+    let out2 = '';
+    await runSessionCommand(['repin-claude', '--home', w.home, '--claude', w.src], { stdin: stdin2, stdout: { isTTY: true, write: (x: string) => (out2 += x) }, stderr: { write: () => true } }, { verifier: signed });
+    expect(out2).toContain('signer  Anthropic PBC (Q6L2SF6YDW)');
   });
 });

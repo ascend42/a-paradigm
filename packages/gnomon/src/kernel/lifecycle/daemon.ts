@@ -770,7 +770,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const repinTimer = setInterval(() => void repin.poll().catch(() => undefined), REPIN_POLL_MS);
   repinTimer.unref();
   const supervisor: SessionSupervisor = new SessionSupervisor({
-    onClaudeBinaryChanged: async (real) => (await repin.stage(real))?.cardId ?? repin.pendingCardId(),
+    onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
     hooksMode: fuseCfg.sessions.hooks,
