@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-19T22:56:21.626Z",
+    "generatedAt": "2026-10-19T23:17:10.745Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -2759,7 +2759,7 @@
       "symbol": "#contract-client-api-id",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-194 (voice V0, founder ruling, the one deliberate voice move before any client ships) moved clientApiId sha256:f27ecb8b…11a4 → sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1 (descriptor gains voiceClosedValues = VOICE_CLOSED_VALUES: approval.voice.disarm.reason and refusal.voice-strictness.ceiling [null-level, manual]; statusFields gain arms, armCustody); kitId, modAbiId and abiId unchanged. P8-D98 (T-2026-10-19-001) moved clientApiId once (re-moved inside the same unreleased move for the drain-and-resume wire, Aegis M1, and once more for the #trace-capture wire, TD-2026-10-19-057 / Aegis M5: session.sandbox{traced, traceRefused} reserved, closedValues session.sandbox.traceRefused [trace-unsafe, trace-unavailable]): sha256:1faf47f5…8720 → sha256:f27ecb8b3ee5c1a4ad08d4c5eda427a63aebba8ba31963baed3c9d53e3e611a4 (descriptor gains humanDeviceVerbs — gui.open, rules.revoke and, with TD-2026-10-19-339 inside the same unreleased move, daemon.stop{reason?} with closedValues daemon.stop.reason [stop, upgrade] — helloFeatures.reserved, logReadCursor, closedValues and DECISION_SIG_DESCRIPTOR — the decisionSig v2 marker gnomon:decision:v2, its decisions [answer] and one fixed message vector); kitId and modAbiId unchanged. P8-D93 moved clientApiId once (hello clientNonce + session.compacted): sha256:fd576e6d… → sha256:1faf47f5…8720 (round 2: server-sig domain v2, closed compaction-reason enum; round 3: AUTH_WIRE_DESCRIPTOR — the three auth domains and one fixed preimage vector per auth form — is a CLIENT_API_DESCRIPTOR input, so a domain or layout change moves the id); kitId unchanged. kitId = sha256(canonicalJson(kit:v1 block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) + \"\\n\" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC code map, ADDITIVE_ENUMS, every published client JSON Schema and the non-schema M1.1 reservations (verb param values, content parts, status fields); modAbiId is not an input. src/schemas.ts builds the schemas from the TS constants; schemas/client-api.ids.json pins the values per release.",
+      "description": "kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-063 (self-update pickup, founder ruling \"ONE Touch ID\", a deliberate move) moved clientApiId sha256:99d5c152…97d1 → sha256:fe45ab09a8a9cf2a1a82090e837c8d0dbe9b5f7a2d38ee6fb4bb772ae9013fb8 (AUTH_WIRE_DESCRIPTOR gains `resume`: the {resumeToken} web form, the gui.resume notification, its TTL, single use, via 'resume' and its refusals). Before it, TD-2026-10-19-194 (voice V0, founder ruling, the one deliberate voice move before any client ships) moved clientApiId sha256:f27ecb8b…11a4 → sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1 (descriptor gains voiceClosedValues = VOICE_CLOSED_VALUES: approval.voice.disarm.reason and refusal.voice-strictness.ceiling [null-level, manual]; statusFields gain arms, armCustody); kitId, modAbiId and abiId unchanged. P8-D98 (T-2026-10-19-001) moved clientApiId once (re-moved inside the same unreleased move for the drain-and-resume wire, Aegis M1, and once more for the #trace-capture wire, TD-2026-10-19-057 / Aegis M5: session.sandbox{traced, traceRefused} reserved, closedValues session.sandbox.traceRefused [trace-unsafe, trace-unavailable]): sha256:1faf47f5…8720 → sha256:f27ecb8b3ee5c1a4ad08d4c5eda427a63aebba8ba31963baed3c9d53e3e611a4 (descriptor gains humanDeviceVerbs — gui.open, rules.revoke and, with TD-2026-10-19-339 inside the same unreleased move, daemon.stop{reason?} with closedValues daemon.stop.reason [stop, upgrade] — helloFeatures.reserved, logReadCursor, closedValues and DECISION_SIG_DESCRIPTOR — the decisionSig v2 marker gnomon:decision:v2, its decisions [answer] and one fixed message vector); kitId and modAbiId unchanged. P8-D93 moved clientApiId once (hello clientNonce + session.compacted): sha256:fd576e6d… → sha256:1faf47f5…8720 (round 2: server-sig domain v2, closed compaction-reason enum; round 3: AUTH_WIRE_DESCRIPTOR — the three auth domains and one fixed preimage vector per auth form — is a CLIENT_API_DESCRIPTOR input, so a domain or layout change moves the id); kitId unchanged. kitId = sha256(canonicalJson(kit:v1 block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) + \"\\n\" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC code map, ADDITIVE_ENUMS, every published client JSON Schema and the non-schema M1.1 reservations (verb param values, content parts, status fields); modAbiId is not an input. src/schemas.ts builds the schemas from the TS constants; schemas/client-api.ids.json pins the values per release.",
       "visualTags": [],
       "related": [
         "#trace-capture"
@@ -3024,6 +3024,28 @@
         "#web-endpoint"
       ],
       "componentType": "module"
+    },
+    "update-watch": {
+      "id": "update-watch",
+      "name": "Update Watch",
+      "symbol": "#update-watch",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#update-watch (TD-2026-10-19-063, flow 2) — self-update pickup. The build writes dist/build-id.json {version, commit, distHash, guiBundleHash} (scripts/build-stamp.mjs); at boot the kernel writes <home>/kernel-build.json (0600) with what it loaded (lifecycle/build-stamp.ts). lifecycle/update-watch.ts polls the stamp on the configured cadence UPDATE_POLL_MS (30 s) and, once per distinct new stamp, the kernel raises its OWN daemon-stop{reason:'upgrade'} card (broker/daemon-stop.ts raiseUpgrade, UPGRADE_CARD_TIMEOUT_MS 24 h, first line \"Gnomon was updated: v→v′ (commit)\"; at most one per UPGRADE_CARD_COOLDOWN_MS 1 h per kernel (Aegis L); it shares the one-card slot with a launcher's daemon.stop{reason:'upgrade'}). Accept takes one Touch ID (F3), drains (§2.4 rule 11), releases the lock and socket, and runForeground spawns ONE detached successor (lifecycle/successor.ts: reexecArgs + cleanReexecEnv + --prefer-port <old web port>, 127.0.0.1 only, exclusive; a taken port falls back and status reports web.portFallback). The helper binary is watched on the same tick (identity/helper.ts HelperRepin): changed + nothing in flight ⇒ re-pinned through pinHelper and `serve` recycled, no card; unsigned, unverifiable or not holding this identity's keys ⇒ fail closed.",
+      "visualTags": [],
+      "related": [
+        "!daemon-update-detected"
+      ]
+    },
+    "gui-resume": {
+      "id": "gui-resume",
+      "name": "Gui Resume",
+      "symbol": "#gui-resume",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#gui-resume (TD-2026-10-19-063, founder ruling \"ONE Touch ID\") — the `{resumeToken}` web auth form (kernel/web/resume.ts). Minted only when an upgrade card is accepted from a live GUI session: 32 random bytes sent to THAT connection alone (gui.resume notification); the digest, bound to the session's principal, device id and root ns, is handed to the successor on its STDIN pipe together with its kernel key (Aegis M: never a file; a record planted in the home is never read, and none is read without --kernel-key-stdin). The successor serves on the old kernel's listening socket, inherited as fd 3 (--web-listen-fd), so the port is never unbound (Aegis H); on any other port the record is dropped. The GUI checks the successor signs a fresh nonce with the delivered key before it reloads. Refused if malformed, expired or with a TTL above RESUME_TOKEN_TTL_MS 60 s; accepted ONCE: replay, expiry, a device no longer that principal's human device, or another root ns are refused; RESUME_MAX_MISSES wrong tokens burn it. It authenticates a GUI connection only — never presence, never a card decision.",
+      "visualTags": [],
+      "related": []
     },
     "bare-entry": {
       "id": "bare-entry",
@@ -15872,6 +15894,15 @@
       "description": "Referenced from #claude-stream-session",
       "related": []
     },
+    "daemon-update-detected": {
+      "id": "daemon-update-detected",
+      "name": "Daemon Update Detected",
+      "symbol": "!daemon-update-detected",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #update-watch",
+      "related": []
+    },
     "schema-registered": {
       "id": "schema-registered",
       "name": "Schema Registered",
@@ -19425,6 +19456,14 @@
     "#wrapper-channel": {
       "category": "components",
       "id": "wrapper-channel"
+    },
+    "#update-watch": {
+      "category": "components",
+      "id": "update-watch"
+    },
+    "#gui-resume": {
+      "category": "components",
+      "id": "gui-resume"
     },
     "#bare-entry": {
       "category": "components",
@@ -23801,6 +23840,10 @@
     "#state": {
       "category": "components",
       "id": "state"
+    },
+    "!daemon-update-detected": {
+      "category": "signals",
+      "id": "daemon-update-detected"
     },
     "$USER": {
       "category": "flows",
