@@ -72,6 +72,13 @@ prompt-free half and records `partial`.
   about 15 short haiku turns on the subscription, around 3 minutes. Run it with
   `node packages/gnomon/probes/run.mjs p01b-permission-channel --timeout 900000`
   after `npm run build`. It needs no TTY.
+- **P-resume** (`p-resume`, T-2026-10-19-014, before drain-and-resume slice B2) runs real `claude`
+  with the adapter argv: a new session killed mid-Bash-call, a `--resume` with regenerated `--settings`
+  and `--plugin-dir`, and a `--resume` under the profile exactly as generated. Three short haiku turns.
+  Runs A and B append a probe-local `(allow file-write* (subpath "~/.claude/projects"))` after the
+  generated profile, because the profile denies writes to `~/.claude` and no transcript is written
+  without it. Run it yourself: `node packages/gnomon/probes/run.mjs p-resume --timeout 600000` after
+  `npm run build`.
 - **S29-10** is a stub (`s29-10-voice-custody/README.md`). It needs the signed
   helper (M1.1) and the wrapper panel (M1.13).
 

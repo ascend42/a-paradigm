@@ -1,0 +1,553 @@
+{
+  "probe": "p-resume",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claudeBinary": "~/.local/bin/claude",
+    "claudeVersion": "2.1.303 (Claude Code)",
+    "model": "haiku",
+    "claudeInvocationsThisRun": 3,
+    "candidateAllow": "(allow file-write* (subpath \"~/.claude/projects\"))",
+    "policyClaudeRules": {
+      "denyRead": [],
+      "allowRead": [],
+      "denyReadAlways": [],
+      "denyWrite": [
+        "subpath:~/.claude",
+        "subpath:<tmp>/work/.claude"
+      ]
+    },
+    "profileLinesNamingDotClaude": [
+      "(deny file-write* (literal \\\"~/.bash_login\\\") (literal \\\"~/.bash_profile\\\") (literal \\\"~/.bashrc\\\") (subpath \\\"~/.claude\\\") (literal \\\"~/.claude.json\\\") (subpath \\\"~/.config/fish\\\") (subpath \\\"~/.config/git\\\") (literal \\\"~/.gitconfig\\\") (literal \\\"~/.local/bin/claude\\\") (subpath \\\"~/.local/share/claude/versions\\\") (literal \\\"~/.local/share/claude/versions/2.1.303\\\") (literal \\\"~/.profile\\\") (subpa"
+    ],
+    "answers": {
+      "q1StockProfileDeniesTranscriptWrite": true,
+      "q1WithAllowTranscriptCreated": true,
+      "q1WithAllowTranscriptGrewOnResume": true,
+      "q1StockProfileRecallsCodeword": true,
+      "q1StockProfileTranscriptGrew": false,
+      "encodedDirPredicted": "-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work",
+      "encodedDirActual": "-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work",
+      "q2": {
+        "killedMidCall": true,
+        "sleepCallsBeforeKill": 1,
+        "sleepCallsAfterResumeContinue": 1
+      },
+      "q3": {
+        "resumedInit": {
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default",
+          "hasNotebookEdit": true,
+          "hasWebSearch": false,
+          "plugins": [
+            "gnomon-presume-l2",
+            "paradigm",
+            "rust-analyzer-lsp",
+            "swift-lsp",
+            "stripe",
+            "vercel",
+            "posthog",
+            "neon",
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "presumeSkills": [
+            "gnomon-presume-l2:presume-beta",
+            "gnomon-presume-l2:presume-beta"
+          ]
+        },
+        "newLayerApplies": true,
+        "newPluginOnly": true
+      },
+      "q4": {
+        "requested": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+        "streamIdsB": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ],
+        "streamIdsC": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ],
+        "transcriptIds": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ]
+      }
+    },
+    "runs": {
+      "A": {
+        "name": "A new (S1,P1) +allow; codeword, Bash sleep 20, SIGKILL mid-call",
+        "ms": 9373,
+        "exit": {
+          "code": null,
+          "sig": "SIGKILL",
+          "stderrTail": ""
+        },
+        "resume": false,
+        "uuidRequested": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+        "layer": "layer-1",
+        "streamSessionIds": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ],
+        "lineTypes": [
+          "system.hook_started",
+          "system.hook_response",
+          "system.init",
+          "system.status",
+          "user",
+          "stream_event",
+          "system.thinking_tokens",
+          "assistant",
+          "rate_limit_event",
+          "control_request",
+          "control_response",
+          "system.task_started"
+        ],
+        "replayedHistory": 1,
+        "init": {
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default",
+          "hasNotebookEdit": false,
+          "hasWebSearch": true,
+          "plugins": [
+            "gnomon-presume-l1",
+            "paradigm",
+            "rust-analyzer-lsp",
+            "swift-lsp",
+            "stripe",
+            "vercel",
+            "posthog",
+            "neon",
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "presumeSkills": [
+            "gnomon-presume-l1:presume-alpha",
+            "gnomon-presume-l1:presume-alpha"
+          ]
+        },
+        "events": [
+          {
+            "at": 4344,
+            "ev": "can_use_tool:Bash"
+          },
+          {
+            "at": 9346,
+            "ev": "SIGKILL-pgroup (Bash call running)"
+          }
+        ],
+        "toolUses": [
+          "Bash:{\"command\":\"sleep 20\",\"description\":\"Pause for 20 seconds\"}"
+        ],
+        "texts": [],
+        "result": null,
+        "transcript": {
+          "exists": true,
+          "file": "~/.claude/projects/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work/0bac96b2-a05d-4b48-9f5f-d9bab166a40c.jsonl",
+          "encodedDir": "-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work",
+          "lineCount": 28,
+          "sessionIds": [
+            "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+          ],
+          "types": [
+            "queue-operation",
+            "attachment",
+            "user",
+            "atis-latch",
+            "api-request-shape",
+            "api-request-blob",
+            "api-request",
+            "last-prompt",
+            "assistant"
+          ],
+          "mentionsLayer1": false,
+          "mentionsLayer2": false,
+          "tail": [
+            {
+              "type": "api-request-shape",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "api-request-blob",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": [
+                "text:<system-reminder>\nCodebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: Th",
+                "text:<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# userEmail\nThe user's email ad",
+                "text:<system-reminder>\nAttribution for git commits and pull requests you create from here on (this replaces Claude Code's own",
+                "text:Remember this codeword for later: PLUM-7342. Now run the shell command `sleep 20` with your Bash tool, then reply with t"
+              ]
+            },
+            {
+              "type": "api-request-blob",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": [
+                "text:# Environment\nYou have been invoked in the following environment: \n - Primary working directory: <tmp>/work\n - Is a git "
+              ]
+            },
+            {
+              "type": "api-request",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "last-prompt",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "atis-latch",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "assistant",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": [
+                "thinking"
+              ]
+            },
+            {
+              "type": "assistant",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": [
+                "tool_use:Bash:{\"command\":\"sleep 20\",\"description\":\"Pause for 20 seconds\"}"
+              ]
+            }
+          ]
+        }
+      },
+      "B": {
+        "name": "B resume (S2,P2) +allow; \"continue\"",
+        "ms": 26146,
+        "exit": {
+          "code": 0,
+          "sig": null,
+          "stderrTail": ""
+        },
+        "resume": true,
+        "uuidRequested": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+        "layer": "layer-2",
+        "streamSessionIds": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ],
+        "lineTypes": [
+          "system.hook_started",
+          "system.hook_response",
+          "system.init",
+          "system.status",
+          "user",
+          "stream_event",
+          "system.thinking_tokens",
+          "assistant",
+          "rate_limit_event",
+          "control_request",
+          "control_response",
+          "system.task_started",
+          "system.task_notification",
+          "result.success"
+        ],
+        "replayedHistory": 1,
+        "init": {
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default",
+          "hasNotebookEdit": true,
+          "hasWebSearch": false,
+          "plugins": [
+            "gnomon-presume-l2",
+            "paradigm",
+            "rust-analyzer-lsp",
+            "swift-lsp",
+            "stripe",
+            "vercel",
+            "posthog",
+            "neon",
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "presumeSkills": [
+            "gnomon-presume-l2:presume-beta",
+            "gnomon-presume-l2:presume-beta"
+          ]
+        },
+        "events": [
+          {
+            "at": 4101,
+            "ev": "can_use_tool:Bash"
+          },
+          {
+            "at": 25668,
+            "ev": "stdin-closed"
+          }
+        ],
+        "toolUses": [
+          "Bash:{\"command\":\"sleep 20\",\"description\":\"Pause for 20 seconds\"}"
+        ],
+        "texts": [
+          "The earlier `sleep 20` was interrupted before it returned a result, so I'm running it again.",
+          "ok"
+        ],
+        "result": {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 2,
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "reply": "ok"
+        },
+        "transcript": {
+          "exists": true,
+          "file": "~/.claude/projects/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work/0bac96b2-a05d-4b48-9f5f-d9bab166a40c.jsonl",
+          "encodedDir": "-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work",
+          "lineCount": 53,
+          "sessionIds": [
+            "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+          ],
+          "types": [
+            "queue-operation",
+            "attachment",
+            "user",
+            "atis-latch",
+            "api-request-shape",
+            "api-request-blob",
+            "api-request",
+            "last-prompt",
+            "assistant",
+            "mode",
+            "system",
+            "cost-state"
+          ],
+          "mentionsLayer1": false,
+          "mentionsLayer2": false,
+          "tail": [
+            {
+              "type": "api-request",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "last-prompt",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "mode",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "atis-latch",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "assistant",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": [
+                "text:ok"
+              ]
+            },
+            {
+              "type": "system",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": null
+            },
+            {
+              "type": "last-prompt",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "cost-state",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            }
+          ]
+        }
+      },
+      "C": {
+        "name": "C resume (S2,P2) stock profile; recall codeword",
+        "ms": 3689,
+        "exit": {
+          "code": 0,
+          "sig": null,
+          "stderrTail": ""
+        },
+        "resume": true,
+        "uuidRequested": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+        "layer": "layer-2",
+        "streamSessionIds": [
+          "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+        ],
+        "lineTypes": [
+          "system.hook_started",
+          "system.hook_response",
+          "system.init",
+          "system.status",
+          "user",
+          "stream_event",
+          "assistant",
+          "rate_limit_event",
+          "result.success"
+        ],
+        "replayedHistory": 1,
+        "init": {
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "model": "claude-haiku-5-5",
+          "permissionMode": "default",
+          "hasNotebookEdit": true,
+          "hasWebSearch": false,
+          "plugins": [
+            "gnomon-presume-l2",
+            "paradigm",
+            "rust-analyzer-lsp",
+            "swift-lsp",
+            "stripe",
+            "vercel",
+            "posthog",
+            "neon",
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "presumeSkills": [
+            "gnomon-presume-l2:presume-beta",
+            "gnomon-presume-l2:presume-beta"
+          ]
+        },
+        "events": [
+          {
+            "at": 2429,
+            "ev": "stdin-closed"
+          }
+        ],
+        "toolUses": [],
+        "texts": [
+          "PLUM-7342"
+        ],
+        "result": {
+          "subtype": "success",
+          "is_error": false,
+          "num_turns": 1,
+          "session_id": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+          "reply": "PLUM-7342"
+        },
+        "transcript": {
+          "exists": true,
+          "file": "~/.claude/projects/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work/0bac96b2-a05d-4b48-9f5f-d9bab166a40c.jsonl",
+          "encodedDir": "-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-presume-jeQAg7-work",
+          "lineCount": 53,
+          "sessionIds": [
+            "0bac96b2-a05d-4b48-9f5f-d9bab166a40c"
+          ],
+          "types": [
+            "queue-operation",
+            "attachment",
+            "user",
+            "atis-latch",
+            "api-request-shape",
+            "api-request-blob",
+            "api-request",
+            "last-prompt",
+            "assistant",
+            "mode",
+            "system",
+            "cost-state"
+          ],
+          "mentionsLayer1": false,
+          "mentionsLayer2": false,
+          "tail": [
+            {
+              "type": "api-request",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "last-prompt",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "mode",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "atis-latch",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "assistant",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": [
+                "text:ok"
+              ]
+            },
+            {
+              "type": "system",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": false,
+              "content": null
+            },
+            {
+              "type": "last-prompt",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            },
+            {
+              "type": "cost-state",
+              "sessionId": "0bac96b2-a05d-4b48-9f5f-d9bab166a40c",
+              "isSidechain": null,
+              "content": null
+            }
+          ]
+        }
+      }
+    },
+    "notes": [
+      "Every run uses the GENERATED session profile (sandbox-exec), the adapter argv (buildClaudeArgv with resume true/false), --setting-sources from settingSourcesFor(audited), --include-partial-messages and --replay-user-messages (adapter defaults), a private copy of claude, and answers every can_use_tool with allow.",
+      "Runs A and B append candidateAllow after the generated profile (probe-local; the profile generator is NOT changed). Run C uses the profile exactly as generated.",
+      "Layer 1 = policy.json denying NotebookEdit + plugin gnomon-presume-l1 (skill presume-alpha); layer 2 = policy.json denying WebSearch + plugin gnomon-presume-l2 (skill presume-beta), each in its own session dir, as a regenerated layersHash would be.",
+      "Run A is SIGKILLed (whole process group) 5 s after the Bash can_use_tool is allowed, i.e. while `sleep 20` runs.",
+      "An earlier run of this probe (5 invocations: new / resume / new+kill / resume-no-message / resume-continue, all under the stock profile) crashed in its own evidence code, because no transcript file ever appeared under ~/.claude/projects for any of its sessions; that run recorded only this fact. Total claude invocations for P-resume = 5 + claudeInvocationsThisRun."
+    ]
+  },
+  "specRefs": [
+    "§2.4 rule 11 (drain and resume)",
+    "§3.3 argv (--session-id | --resume)",
+    "§15.5 session profile",
+    "TD-2026-10-19-908"
+  ],
+  "at": "2026-10-19T16:01:28.722Z"
+}
