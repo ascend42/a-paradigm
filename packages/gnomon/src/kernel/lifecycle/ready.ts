@@ -8,7 +8,8 @@
  * writes exactly one line, `gnomonReady:v1 {pid, startedAt, socketPath,
  * kernelPrincipal}`, on that fd and closes it. The activator keeps a bounded
  * tail of the child's stderr, so a kernel that dies before ready is reported
- * with its own words and its classified exit code (exit-codes.ts) — no more
+ * with its own words (its stderr is read to 'end', capped at STDERR_DRAIN_MS)
+ * and its classified exit code (exit-codes.ts) — no more
  * 5 × 200 ms socket polling and "did not come up".
  *
  * Losing the race is not an error: two activators that both saw no socket
@@ -66,6 +67,9 @@ export interface DaemonReadyIdentity {
 
 /** The ready line's byte bound: more without a newline is a malformed ready (Aegis L4). */
 export const READY_LINE_MAX = 4096;
+
+/** After the child's exit, how long the activator waits at most for its stderr to end before judging the tail. */
+export const STDERR_DRAIN_MS = 250;
 
 /** Per-attempt deadline of the `hello` probe. */
 export const HELLO_PROBE_MS = 1000;
@@ -270,8 +274,17 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
       tail.push(Buffer.from(`activator: ready line rejected: ${why}\n`));
     };
 
+    // the stderr tail is judged only once the pipe ended (or STDERR_DRAIN_MS after the exit): never a fixed beat
+    let stderrEnded = stderr === null;
+    const onStderrEnd: Array<() => void> = [];
+    const stderrDone = (): void => {
+      stderrEnded = true;
+      for (const f of onStderrEnd.splice(0)) f();
+    };
     stderr?.on('data', (c: Buffer) => tail.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))));
-    stderr?.on('error', () => undefined);
+    stderr?.on('error', stderrDone);
+    stderr?.on('end', stderrDone);
+    stderr?.on('close', stderrDone);
     readyStream?.on('error', () => undefined);
     readyStream?.on('data', (c: Buffer) => {
       if (readyDone || settled) return;
@@ -310,9 +323,12 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
     child.once('exit', (code, signal) => {
       if (settled) return;
       const cls = classifyExitCode(code);
-      // let the last stderr bytes drain before judging
-      setTimeout(() => {
-        if (settled) return;
+      // let the last stderr bytes drain before judging: wait for its 'end', capped (a grandchild may hold the pipe open)
+      let judged = false;
+      const judge = (): void => {
+        if (judged || settled) return;
+        judged = true;
+        clearTimeout(drainCap);
         const exited = (): LaunchOutcome => ({ kind: 'exited', code, signal, class: cls, stderrTail: tail.text() });
         if (cls === 'superseded' || cls === 'transient') {
           // a lost lock race (or a racer mid-bind): the winner may still be binding its socket
@@ -320,7 +336,10 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
             settle(up ? { kind: 'attached', socketPath: opts.socketPath, via: cls === 'superseded' ? 'superseded' : 'socket-probe' } : exited()),
           );
         } else settle(exited());
-      }, 20);
+      };
+      const drainCap = setTimeout(judge, STDERR_DRAIN_MS);
+      if (stderrEnded) judge();
+      else onStderrEnd.push(judge);
     });
     timer = setTimeout(() => {
       if (settled) return;

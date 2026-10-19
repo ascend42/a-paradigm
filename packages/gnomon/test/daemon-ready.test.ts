@@ -24,6 +24,7 @@ import {
   exitCodeOfLaunch,
   launchDaemon,
   READY_LINE_MAX,
+  STDERR_DRAIN_MS,
   pidAlive,
   pidPathOf,
   readPidfile,
@@ -232,6 +233,29 @@ describe('§2.4 rule 2: launcher decisions over the spawnChild seam (every platf
     const after = s.probes();
     await sleep(200);
     expect(s.probes()).toBe(after);
+  });
+
+  it('stderr written after the exit is in the tail: the activator waits for stderr end, not a fixed 20 ms', async () => {
+    const c = fakeChild();
+    const s = seamLaunch(c, { probe: () => false, timeoutMs: 10_000 });
+    c.die(DAEMON_EXIT.config);
+    setTimeout(() => c.err.end('late words [unsafe-home]\n'), 120); // past the old 20 ms beat, within the cap
+    const o = await s.p;
+    expect(o).toMatchObject({ kind: 'exited', class: 'config' });
+    if (o.kind === 'exited') expect(o.stderrTail).toContain('late words [unsafe-home]');
+  });
+
+  it('a stderr that never ends (a grandchild holds it) is judged at the STDERR_DRAIN_MS cap', async () => {
+    const c = fakeChild();
+    const t0 = Date.now();
+    const s = seamLaunch(c, { probe: () => false, timeoutMs: 10_000 });
+    c.err.write('early\n');
+    c.die(DAEMON_EXIT.config);
+    const o = await s.p;
+    const took = Date.now() - t0;
+    expect(o.kind).toBe('exited');
+    expect(took).toBeGreaterThanOrEqual(STDERR_DRAIN_MS - 20);
+    expect(took).toBeLessThan(STDERR_DRAIN_MS + 1_000);
   });
 
   it('superseded exit while the winner answers is attached via superseded', async () => {
