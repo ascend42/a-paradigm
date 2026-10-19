@@ -18,6 +18,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runBareCommand } from '../src/cli/bare-cli.js';
 import { groupDigest, runSetup, type SetupDeps } from '../src/cli/setup-cli.js';
+import { runUp } from '../src/cli/up-cli.js';
 import {
   acceptUnsignedHelperForTests,
   DEV_TEST_HELPER_ACK,
@@ -338,6 +339,62 @@ describe('gnomon setup (#first-run)', () => {
       expect(fake.signs.length - before, what).toBe(0);
       expect(fs.existsSync(registryPath(home)) ? fs.readFileSync(registryPath(home), 'utf8').trim() : '', what).toBe('');
     }
+  });
+
+  it('L6: the engine re-judges the home under the lock — a symlinked home refuses unsafe-home before any key', async () => {
+    const u = tmp();
+    const real = tmp();
+    fs.symlinkSync(real, homeOf(u));
+    const fake = new FakeHelper(null);
+    const ops: string[] = [];
+    const p = new Provisioner({ home: homeOf(u), helperPath: exe(tmp()), verifier: DEV, start: view(fake, ops), once: () => (q) => fake.handle(q) });
+    expect(await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' })).toMatchObject({ ok: false, reason: 'unsafe-home' });
+    expect(ops.filter((x) => x.startsWith('key.'))).toEqual([]);
+    expect(fs.readdirSync(real)).toEqual([]);
+  });
+
+  it('L7: up on a home whose registry row is missing names gnomon setup', async () => {
+    const u = tmp();
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(u, fake, [], { fault: (s) => {
+      if (s === 'registry') throw new Error('crash');
+    } }))).code).toBe(1);
+    const o = io([]);
+    const code = await runUp(o.io, { userHome: u, verifier: DEV, startHelper: view(fake, []), runtime: { env: {}, execArgv: ['--disable-sigusr1'] }, start: () => Promise.reject(new Error('must not start')) }, {});
+    expect(code).toBe(1);
+    expect(o.errText()).toContain('device-unregistered');
+    expect(o.errText()).toContain('next: gnomon setup');
+  });
+
+  it('bare gnomon continues into up when setup finds the Mac already set up (another run won the race)', async () => {
+    const donor = tmp();
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(donor, fake))).code).toBe(0);
+    const u = tmp();
+    const out: string[] = [];
+    const base = io([]);
+    // the home is unprovisioned when bare checks; a racing run provisions it before setup reads it
+    const stdout = {
+      isTTY: true,
+      write: (s: string) => {
+        if (s.includes('Welcome to Gnomon') && !fs.existsSync(path.join(homeOf(u), 'keys'))) fs.cpSync(path.join(homeOf(donor), 'keys'), path.join(homeOf(u), 'keys'), { recursive: true }), fs.chmodSync(path.join(homeOf(u), 'keys'), 0o700);
+        out.push(s);
+        return true;
+      },
+    };
+    const run = runBareCommand([], { stdin: base.io.stdin, stdout, stderr: base.io.stderr }, {
+      userHome: u,
+      cwd: u,
+      verifier: DEV,
+      startHelper: view(fake, []),
+      runtime: { env: {}, execArgv: ['--disable-sigusr1'] },
+      start: () => Promise.reject(new Error('reached up')),
+      setup: deps(u, fake),
+    });
+    const got = await run.catch((e: Error) => e.message);
+    await new Promise((r) => setImmediate(r));
+    expect(got, base.errText()).toBe('reached up');
+    expect(out.join('')).toContain('Already set up');
   });
 
   it('routing: bare gnomon on a TTY with an unprovisioned home runs setup first; off a TTY it is up\'s refusal naming gnomon setup', async () => {

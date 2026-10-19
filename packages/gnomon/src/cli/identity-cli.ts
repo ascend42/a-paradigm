@@ -5,7 +5,7 @@
  * verbs; M1.3 slice 1). Writes to stdio directly: the kernel has zero deps
  * (G-SEC-01). Since T-2026-10-19-005 this file is a THIN RENDERER over the
  * #provisioner engine (kernel/identity/provisioner.ts), which owns every step
- * below; its output is byte-identical to the pre-engine CLI. `gnomon setup`
+ * below; its output matches the pre-engine CLI except where a ruling corrected it (the digest line "must begin with", the rotate prompt names what rotate does). `gnomon setup`
  * (setup-cli.ts, #first-run) renders the same engine as a guided flow.
  *
  * `gnomon identity init [--home <abs>] [--helper <path>] [--name <n>] [--host <h>] [--rotate | --recover]`
@@ -24,6 +24,10 @@
  *      prompt text and stderr name the digest the helper's own line shows (H3);
  *   5. commits: old record moved aside (rotate/recover), identity.json
  *      written, THEN the registry row appended (R3), then the journal.
+ *      A rotate re-issues only THIS device's registry row under the new
+ *      root; every other row (other devices, agents) is dropped, and the old
+ *      registry.jsonl is kept aside (registry.jsonl.rotated-<stamp>) as
+ *      evidence — re-register other devices after a rotate.
  * A failure before identity.json is written restores the moved files (R2)
  * and deletes the keys it created — through the live helper, or a fresh one
  * that asks for presence (R4); after it, keys are never deleted. Ctrl-C stops
@@ -186,10 +190,10 @@ function renderRaw(io: IdentityIo): (e: ProvisionEvent) => void {
   return (e) => {
     if (e.type === 'step' && e.step === 'logged' && e.detail) io.stderr.write(`${JSON.stringify(e.detail)}\n`);
     if (e.type !== 'presence') return;
-    if (e.purpose === 'rotate-statement') io.stderr.write(`Touch ID: the OLD root signs the rotation (the prompt must end with ${e.digest12})\n`);
-    else if (e.purpose === 'approvals-binding') io.stderr.write(`Touch ID 1/2: the root signs your approvals key (the prompt must end with ${e.digest12})\n`);
-    else if (e.purpose === 'device-row') io.stderr.write(`Touch ID 2/2: the root signs this device (the prompt must end with ${e.digest12})\n`);
-    else if (e.purpose === 'complete-device') io.stderr.write(`Touch ID: the root registers this device (the prompt must end with ${e.digest12})\n`);
+    if (e.purpose === 'rotate-statement') io.stderr.write(`Touch ID: the OLD root signs the rotation (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'approvals-binding') io.stderr.write(`Touch ID 1/2: the root signs your approvals key (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'device-row') io.stderr.write(`Touch ID 2/2: the root signs this device (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
+    else if (e.purpose === 'complete-device') io.stderr.write(`Touch ID: the root registers this device (the prompt's last line must begin with "Gnomon Helper: root key signs 1: ${e.digest12}")\n`);
     else if (e.purpose === 'purge-old') io.stderr.write(`Touch ID: delete the old ${e.key} key of generation ${e.gen}\n`);
     else if (e.purpose === 'purge') io.stderr.write(`Touch ID: delete the ${e.key} key of generation ${e.gen}\n`);
   };
@@ -238,7 +242,7 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
     if (!tty && !deps.confirm) return refused(io, 'not-interactive', `--${mode} needs an interactive terminal and a typed confirmation`);
     io.stderr.write(
       mode === 'rotate'
-        ? `ROTATE the root of ${home} (${existing!.rootKeyId}). The OLD root signs the change; every registry row is re-issued under the new root; the old registry is kept as evidence. Type "rotate" to continue:\n> `
+        ? `ROTATE the root of ${home} (${existing!.rootKeyId}). The OLD root signs the change; THIS device's registry row is re-issued under the new root, every other row (other devices, agents) is dropped, and the old registry is kept aside as evidence. Type "rotate" to continue:\n> `
         : `RECOVER ${home}: the root ${existing!.rootKeyId} is LOST. A new root starts a NEW namespace; nothing signed by the lost root carries over, and the recovery is logged as unsigned by it. Type "recover" to continue:\n> `,
     );
     const answer = await (deps.confirm ?? (() => readLine(io.stdin)))();
