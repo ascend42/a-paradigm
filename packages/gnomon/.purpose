@@ -2455,8 +2455,8 @@ gates:
       (createdAt, root keyId) and never adopted or replaced; a malformed one
       is shown, never touched; a dev or symlinked home is refused. The one
       write allowed on a provisioned home is the I10 completion of a missing
-      registry row (the saved, already root-signed row; no new signature). Needs a portal.yaml
-      gate entry once Gnomon's portal is authored.
+      registry row (the saved, already root-signed row; no new signature).
+      Declared in the repo-root portal.yaml (gates: unprovisioned-only).
     tags: [gnomon, setup]
 
   subscription-only:
