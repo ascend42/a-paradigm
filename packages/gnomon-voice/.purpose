@@ -1,0 +1,71 @@
+version: "2.0"
+description: >-
+  Gnomon voice (docs/specs/gnomon.md §14; the spec node #gnomon-voice is the
+  kernel-supervised voice child and is not built yet). This directory holds
+  its first native piece, the darwin audio I/O binary (TD-2026-10-19-298,
+  slice V2b, T-2026-10-19-026): io-darwin/ is a SwiftPM package (swift-tools
+  5.9, macOS 14), scripts/build-voice-io.mjs bundles and signs it as
+  GnomonVoiceIO.app (bin/, gitignored; checksums.json after a signed build).
+  PROBES.md holds the founder's P1 (TCC attribution) and P7 (AEC leak) steps.
+  macOS only: CI builds and tests it on the macOS runner of the native job,
+  never on Windows or Linux.
+
+components:
+  gnomon-voice-io:
+    description: >-
+      The voice child's audio I/O, mic only (no keychain group, no network,
+      writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same
+      framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON
+      (stdin commands, stdout replies and events), 0x02 capture (stdout:
+      hostTimeNs:u64le sampleRate:u32le s16le, 16 kHz mono after voice
+      processing), 0x03 playback (stdin: sampleRate:u32le s16le mono TTS,
+      8-48 kHz). Commands info, mic.on, mic.off, play.stop (barge-in flush),
+      play.end, route.get, hotkeys.set {bindings}, quit; each gets one reply
+      {type:'reply', id, op, ok}. Events (tUs monotonic µs, the capture
+      clock): ready, mic, route {route, aec: vpio|headphones|none}, level
+      {rmsDBFS, peakDBFS} ~15 Hz, playback.start {audibleAtUs},
+      playback.end {reason: drained|stopped|mic-switch|route-change|exit},
+      hotkey {action: talk|mic-toggle|mode-toggle, phase: down|up}, engine,
+      error, exit. Mic on = one AVAudioEngine with
+      inputNode.setVoiceProcessingEnabled(true) (VoiceProcessingIO AEC) and
+      a player node in the same engine, so TTS is the echo reference; mic
+      off stops and releases that engine (no orange dot) and TTS plays via an
+      output-only engine that never touches inputNode. Route from CoreAudio
+      (default output device transport + built-in data source, listeners
+      on both). Hotkeys via Carbon RegisterEventHotKey, press and release,
+      no Input Monitoring; defaults ctrl+alt+space (talk), ctrl+alt+m,
+      ctrl+alt+a; reported only, the controller acts. Mic modes re-spawn
+      with TCC responsibility disclaimed so the Microphone grant names
+      GnomonVoiceIO (probe P1; --no-disclaim is the control). Aegis V2b
+      fixes: MicGate (a mic.off during an open TCC prompt wins, generation
+      counter; mic.on refused not-disclaimed unless disclaimed or
+      --no-disclaim), DisclaimToken (disclaimed only when argv
+      --disclaim-token equals the env token; a stray env var is ignored),
+      ParentWatch (kqueue EVFILT_PROC NOTE_EXIT on the re-spawning and the
+      original parent: the child exits with either), re-spawn path from
+      _NSGetExecutablePath + realpath only, a tap generation so no capture or
+      level frame follows mic:false, a bounded stdout queue (one writer
+      thread, no lock held in write(2), capture frames dropped first with a
+      capture.dropped event), transport in mic and route events. --version,
+      --selftest (1 s smoke), --probe-aec <file> (P7); stdin EOF exits 0.
+      VoiceIOCore (frame codec, command parser, hotkey config, level and
+      route math, mic gate, disclaim token, parent watch) is pure or
+      Darwin-only and covered by swift test (37 XCTests).
+    path: io-darwin/
+    type: module
+    tags: [gnomon, voice, native, swift, paradigm-8, audio, v2b]
+  gnomon-voice-io-build:
+    description: >-
+      scripts/build-voice-io.mjs: swift build -c release → GnomonVoiceIO.app
+      (bundle id gnomon.voice-io, LSUIElement, NSMicrophoneUsageDescription
+      "Gnomon voice listens only while the mic is on."), codesign
+      --options runtime --timestamp with the one Developer ID Application
+      identity of team SW4BMQ8PNL (looked up via the helper's signing.mjs),
+      exactly one entitlement com.apple.security.device.audio-input, no
+      provisioning profile and no keychain group; verifies --strict, the
+      VOICE_IO_REQUIREMENT, the entitlement set and the runtime flag; sha256
+      into checksums.json (advisory). --unsigned for CI. No notarization
+      (founder-run).
+    path: scripts/
+    type: module
+    tags: [gnomon, voice, signing, build, v2b]
