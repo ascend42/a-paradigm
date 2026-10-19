@@ -2341,9 +2341,16 @@ flows:
       authenticates). gnomond seals the inherited ready fd first thing
       (sealReadyFd: re-open via /proc/self/fd or /dev/fd with O_CLOEXEC,
       close the inheritable one; unsealable => closed) so the identity helper
-      and web child cannot forge it; residuals: win32 handle inheritance, and
-      linux (libuv's stdio pipe is a socketpair /proc/self/fd cannot re-open,
-      so the fd stays inheritable; pid + socketPath pin still applies).
+      and web child cannot forge it. Linux (libuv's stdio pipe is a
+      socketpair /proc/self/fd cannot re-open) uses the 'fifo' channel
+      instead (T-2026-10-19-011): a private 0600 FIFO in a fresh 0700 mkdtemp
+      dir, read end opened by the activator before the spawn, only its path
+      passed (`--ready-fifo`), the kernel opens the write end O_CLOEXEC
+      (FIFO/owner/mode/inode checked, O_NOFOLLOW) and unlinks the name first
+      thing, the activator removes the dir at settle; no mkfifo => the fd
+      fallback. macOS keeps the sealed fd (kqueue never reports the FIFO
+      writer's close, losing the no-ready-line fallback). Residual: win32
+      handle inheritance; pid + socketPath pin applies on every channel.
       Exit codes are defined ONLY in
       lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal,
       75 transient, 78 config; config/superseded never restart, transient

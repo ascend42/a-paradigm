@@ -75,6 +75,9 @@ describe('§2.4 rule 2: ready line and stderr tail', () => {
     expect(reexecArgs({ entry: 'g.js', home: '/h', readyFd: 3 }).slice(-2)).toEqual(['--ready-fd', '3']);
     expect(parseDaemonArgs(['--foreground', '--ready-fd', '3'])).toMatchObject({ foreground: true, readyFd: 3 });
     expect(typeof parseDaemonArgs(['--ready-fd', '1'])).toBe('string');
+    expect(reexecArgs({ entry: 'g.js', home: '/h', readyFifo: '/t/gnomon-ready-x/ready' }).slice(-2)).toEqual(['--ready-fifo', '/t/gnomon-ready-x/ready']);
+    expect(parseDaemonArgs(['--foreground', '--ready-fifo', '/t/r'])).toMatchObject({ readyFifo: '/t/r' });
+    expect(typeof parseDaemonArgs(['--ready-fifo', 'rel/r'])).toBe('string');
   });
 
   it('client verbs keep 0/1/3 and the CLI-wide usage code 64 (unchanged since PR-5)', async () => {

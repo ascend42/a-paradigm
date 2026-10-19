@@ -24,6 +24,7 @@ import {
   exitCodeOfLaunch,
   exitCodeOfRefusal,
   launchDaemon,
+  openReadyFifo,
   sealReadyFd,
   STARTUP_FAULT_CLASS,
   writeReady,
@@ -66,6 +67,8 @@ export interface DaemonArgs {
   idleMs?: number;
   /** The activator's inherited ready pipe (§2.4 rule 2, ready.ts); set only by launchDaemon's re-exec. */
   readyFd?: number;
+  /** The activator's private ready FIFO (ready.ts 'fifo' channel, linux); set only by launchDaemon's re-exec. */
+  readyFifo?: string;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -86,6 +89,10 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       const v = Number(argv[++i]);
       if (!Number.isInteger(v) || v < 3) return '--ready-fd needs an inherited fd >= 3';
       out.readyFd = v;
+    } else if (a === '--ready-fifo') {
+      const v = argv[++i];
+      if (!v || !path.isAbsolute(v)) return '--ready-fifo needs an absolute path';
+      out.readyFifo = v;
     } else return `unknown argument ${a}`;
   }
   return out;
@@ -121,7 +128,9 @@ export function daemonHomeOf(args: { home?: string }): string {
 export async function runForeground(args: DaemonArgs, runtime: { execArgv: readonly string[] } = { execArgv: process.execArgv }): Promise<number> {
   // Aegis M2: seal the inherited ready fd FIRST, before anything (the identity helper, the web transport) is spawned,
   // so no child of the kernel can write a forged ready line; unsealable => closed, the activator probes the socket
-  const readyFd = args.readyFd !== undefined ? sealReadyFd(args.readyFd) : null;
+  // (the 'fifo' channel: open our write end O_CLOEXEC and unlink the name, before anything is spawned)
+  const readyFd = args.readyFd !== undefined ? sealReadyFd(args.readyFd) : args.readyFifo !== undefined ? openReadyFifo(args.readyFifo) : null;
+  const launched = args.readyFd !== undefined || args.readyFifo !== undefined;
   // Exit codes are classified (exit-codes.ts): config faults never restart, transient ones may.
   if (refuseDevHome(daemonHomeOf(args))) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
   const sig = sigusr1Refusal(runtime.execArgv);
@@ -131,7 +140,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
   }
   // Launched by an activator: its stderr pipe goes away once we are ready, and a write to it then is EPIPE, not a crash.
   let toStderr = (s: string): void => void process.stderr.write(s);
-  if (args.readyFd !== undefined) process.stderr.on('error', () => undefined);
+  if (launched) process.stderr.on('error', () => undefined);
   let opened: { helper: { close(): Promise<void> } } | null = null;
   try {
     const home = daemonHomeOf(args);
@@ -158,7 +167,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
     process.once('SIGTERM', onSignal);
     process.once('SIGINT', onSignal);
     process.stdout.write(`${JSON.stringify({ ready: true, pid: handle.pidfile.pid, socketPath: handle.pidfile.socketPath })}\n`);
-    if (args.readyFd !== undefined) {
+    if (launched) {
       if (readyFd !== null) writeReady(readyFd, { pid: handle.pidfile.pid, startedAt: handle.pidfile.startedAt, socketPath: handle.pidfile.socketPath, kernelPrincipal: handle.kernelPrincipal });
       toStderr = () => undefined; // the activator stopped reading; detached events went nowhere before the handshake too
     }

@@ -37,15 +37,26 @@
  * the kernel. The kernel seals the inherited fd at startup (sealReadyFd) so a
  * child it spawns before ready (the identity helper, the web transport)
  * cannot write a forged line: the fd is re-opened through /dev/fd with
- * O_CLOEXEC (Node always adds it) and the inheritable one closed. On Linux it
- * stays inheritable (a socketpair: see sealReadyFd's RESIDUAL); macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
+ * O_CLOEXEC (Node always adds it) and the inheritable one closed. Linux's
+ * inherited pipe is an unsealable socketpair, so Linux uses the 'fifo'
+ * channel instead (ReadyChannel): the activator makes a private FIFO (0600 in
+ * a fresh 0700 dir), opens its read end before the spawn and passes only the
+ * PATH (`--ready-fifo`); the kernel opens the write end itself (O_CLOEXEC from
+ * birth, nothing inherited) and unlinks the name before spawning anything, and
+ * the activator removes the dir when the launch settles. Residual: a
+ * same-user process could open the FIFO by path in the window before the
+ * kernel's first statement (same-user is outside the boundary, S29-K6), and
+ * the line stays an unauthenticated hint either way. macOS libuv spawns with POSIX_SPAWN_CLOEXEC_DEFAULT, so unlisted fds
  * never reach a child (verified), and the same re-open via /dev/fd is applied
  * as belt and braces. RESIDUAL (Windows): the inherited handle stays
  * inheritable to the kernel's own children until writeReady closes it; Node
  * has no SetHandleInformation. Tracked for the Windows parity phase (P8-D78).
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { newClientNonce, rpcCall } from '../socket/client.js';
 import { GNOMON_VERSION } from '../../version.js';
 import { readPidfile } from './pidfile.js';
@@ -82,13 +93,14 @@ export const HELLO_PROBE_MS = 1000;
  * the activator falls back to probing the socket. win32 returns `fd` as is
  * (residual, see the header).
  *
- * RESIDUAL (Linux): libuv hands stdio 'pipe' slots over as an AF_UNIX
- * socketpair, and /proc/self/fd/N cannot re-open a socket (ENXIO), so on Linux
- * the fd stays inheritable like win32 (CI 39222038624: closing it turned every
- * ready into a socket-probe attach). The activator still pins pid + socketPath,
- * and nothing trusts the ready identity (only M1.4 mutual auth does). A
- * private FIFO in place of the socketpair is the follow-up (T-2026-10-19-011).
- * macOS /dev/fd/N has dup semantics, so the re-open works there for sockets too.
+ * Linux: libuv hands stdio 'pipe' slots over as an AF_UNIX socketpair, and
+ * /proc/self/fd/N cannot re-open a socket (ENXIO), so an inherited ready fd
+ * cannot be sealed there. Linux therefore uses the 'fifo' channel
+ * (openReadyFifo, T-2026-10-19-011) and never inherits a ready fd; this
+ * branch only remains for the fallback when the activator could not make a
+ * FIFO (no mkfifo): the fd then stays inheritable like win32, and the
+ * activator still pins pid + socketPath. macOS /dev/fd/N has dup semantics,
+ * so the re-open works there for sockets too.
  */
 export function sealReadyFd(fd: number, platform: NodeJS.Platform = process.platform): number | null {
   if (platform === 'win32') return fd;
@@ -110,6 +122,87 @@ export function sealReadyFd(fd: number, platform: NodeJS.Platform = process.plat
       fs.closeSync(fd);
     } catch {
       /* already closed */
+    }
+    return null;
+  }
+}
+
+/**
+ * How the ready line travels. 'fd': an inherited stdio pipe (slot 3, sealed by
+ * sealReadyFd). 'fifo': a private FIFO whose PATH the kernel gets
+ * (`--ready-fifo`); the kernel opens the write end itself, so the fd is
+ * O_CLOEXEC from birth and nothing is inherited.
+ */
+export type ReadyChannel = 'fd' | 'fifo';
+
+/**
+ * Linux uses the FIFO (its inherited pipe is an unsealable socketpair). macOS
+ * keeps the sealed inherited fd: it is verified there, and kqueue never
+ * reports the FIFO writer's close to libuv (no 'end'), which would lose the
+ * no-ready-line fallback. win32 has no FIFOs.
+ */
+export function defaultReadyChannel(platform: NodeJS.Platform = process.platform): ReadyChannel {
+  return platform === 'linux' ? 'fifo' : 'fd';
+}
+
+/**
+ * Activator side: a FIFO in a fresh 0700 dir (mkdtemp) under the tmp dir,
+ * created 0600 by mkfifo(1) (Node has no mkfifo). Null when it cannot be made
+ * or does not read back as our private FIFO; the caller falls back to 'fd'.
+ */
+export function makeReadyFifo(parent: string = os.tmpdir()): { dir: string; fifo: string } | null {
+  let dir: string;
+  try {
+    dir = fs.mkdtempSync(path.join(parent, 'gnomon-ready-'));
+  } catch {
+    return null;
+  }
+  const fifo = path.join(dir, 'ready');
+  try {
+    execFileSync('mkfifo', ['-m', '600', fifo], { stdio: 'ignore', timeout: 5000 });
+    const d = fs.lstatSync(dir);
+    const f = fs.lstatSync(fifo);
+    const uid = process.getuid?.();
+    if (!d.isDirectory() || (d.mode & 0o077) !== 0 || !f.isFIFO() || (f.mode & 0o077) !== 0 || (uid !== undefined && (d.uid !== uid || f.uid !== uid))) throw new Error('not private');
+    return { dir, fifo };
+  } catch {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return null;
+  }
+}
+
+/**
+ * Kernel side, FIRST thing at startup (as sealReadyFd): open the write end of
+ * the activator's FIFO and unlink its name, so no process the kernel spawns
+ * later can open it by path. Node opens O_CLOEXEC, so the fd itself is never
+ * inherited. O_NONBLOCK: a reader that is gone fails (ENXIO) instead of
+ * blocking; O_NOFOLLOW and the FIFO/owner/mode checks (before and after the
+ * open, same inode) refuse anything that is not the activator's private FIFO.
+ * Null on any doubt: the activator then decides by the exit or the deadline.
+ */
+export function openReadyFifo(fifo: string): number | null {
+  let fd: number | null = null;
+  try {
+    if (!path.isAbsolute(fifo)) return null;
+    const uid = process.getuid?.();
+    const before = fs.lstatSync(fifo);
+    if (!before.isFIFO() || (before.mode & 0o077) !== 0 || (uid !== undefined && before.uid !== uid)) return null;
+    fd = fs.openSync(fifo, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW);
+    const after = fs.fstatSync(fd);
+    if (!after.isFIFO() || after.ino !== before.ino || after.dev !== before.dev) throw new Error('swapped');
+    try {
+      fs.unlinkSync(fifo);
+    } catch {
+      /* the activator cleans its dir anyway */
+    }
+    return fd;
+  } catch {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* already closed */
+      }
     }
     return null;
   }
@@ -191,6 +284,8 @@ export interface LaunchOptions extends DetachOptions {
   attachWaitMs?: number;
   /** stderr tail bound (default 8 KiB). */
   tailBytes?: number;
+  /** The ready transport (default defaultReadyChannel(): 'fifo' on linux, 'fd' elsewhere). */
+  readyChannel?: ReadyChannel;
   /** Test seam: the spawn. */
   spawnChild?: (execPath: string, args: string[], env: Record<string, string>) => ChildProcess;
   /** Test seam: does a kernel answer on the socket (default: helloProbe). */
@@ -231,17 +326,44 @@ function waitForSocket(probe: () => Promise<boolean>, ms: number, stopped: () =>
 }
 
 function defaultSpawn(execPath: string, args: string[], env: Record<string, string>): ChildProcess {
-  return spawn(execPath, args, { detached: true, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'pipe'], env });
+  // the ready pipe is inherited only on the 'fd' channel; the 'fifo' channel passes a path instead
+  const stdio: Array<'ignore' | 'pipe'> = args.includes('--ready-fd') ? ['ignore', 'ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'];
+  return spawn(execPath, args, { detached: true, windowsHide: true, stdio, env });
+}
+
+/** The activator's read end of the ready FIFO, opened BEFORE the spawn (so the kernel's non-blocking open finds a reader). */
+function openFifoReader(): { dir: string; fifo: string; stream: net.Socket } | null {
+  const made = makeReadyFifo();
+  if (!made) return null;
+  try {
+    const fd = fs.openSync(made.fifo, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+    return { ...made, stream: new net.Socket({ fd, readable: true, writable: false }) };
+  } catch {
+    fs.rmSync(made.dir, { recursive: true, force: true });
+    return null;
+  }
 }
 
 /** Activator side: spawn the detached kernel and wait for its ready line (or its classified exit). */
 export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
-  const args = reexecArgs({ ...opts, readyFd: READY_FD });
+  // 'fifo' (linux): a private FIFO's path; when it cannot be made, the inherited fd (sealReadyFd's fallback)
+  const fifo = (opts.readyChannel ?? defaultReadyChannel()) === 'fifo' ? openFifoReader() : null;
+  const dropFifo = (): void => {
+    if (fifo) fs.rmSync(fifo.dir, { recursive: true, force: true });
+  };
+  const args = reexecArgs(fifo ? { ...opts, readyFifo: fifo.fifo } : { ...opts, readyFd: READY_FD });
   const env = cleanReexecEnv(opts.sourceEnv ?? process.env, opts.path !== undefined ? { path: opts.path } : {});
-  const child = (opts.spawnChild ?? defaultSpawn)(opts.execPath, args, env);
+  let child: ChildProcess;
+  try {
+    child = (opts.spawnChild ?? defaultSpawn)(opts.execPath, args, env);
+  } catch (err) {
+    fifo?.stream.destroy();
+    dropFifo();
+    throw err;
+  }
   const tail = new BoundedTail(opts.tailBytes);
   const stderr = child.stdio[2] as NodeJS.ReadableStream | null;
-  const readyStream = child.stdio[READY_FD] as NodeJS.ReadableStream | null;
+  const readyStream: NodeJS.ReadableStream | null = fifo ? (fifo.stream as NodeJS.ReadableStream) : ((child.stdio[READY_FD] ?? null) as NodeJS.ReadableStream | null);
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const deadline = Date.now() + timeoutMs;
   const probe = (): Promise<boolean> => (opts.probeSocket ?? helloProbe)(opts.socketPath);
@@ -258,6 +380,7 @@ export function launchDaemon(opts: LaunchOptions): Promise<LaunchOutcome> {
       if (timer) clearTimeout(timer);
       (stderr as unknown as { destroy?: () => void } | null)?.destroy?.();
       (readyStream as unknown as { destroy?: () => void } | null)?.destroy?.();
+      dropFifo(); // the FIFO and its dir go when the launch settles (the kernel already unlinked the name it opened)
       child.removeAllListeners('exit');
       child.unref();
     };

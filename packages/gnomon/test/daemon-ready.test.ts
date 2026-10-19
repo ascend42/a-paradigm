@@ -12,7 +12,8 @@
  * test/daemon-exit-codes.test.ts.
  */
 import { EventEmitter } from 'node:events';
-import { mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, constants as FS, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import path from 'node:path';
@@ -22,7 +23,11 @@ import {
   DAEMON_EXIT,
   DAEMON_READY_SCHEMA,
   exitCodeOfLaunch,
+  defaultReadyChannel,
   launchDaemon,
+  makeReadyFifo,
+  openReadyFifo,
+  writeReady,
   READY_LINE_MAX,
   STDERR_DRAIN_MS,
   pidAlive,
@@ -157,6 +162,7 @@ function seamLaunch(child: FakeChild, o: { probe: () => boolean; holder?: number
     socketPath: SOCK,
     timeoutMs: o.timeoutMs ?? 400,
     attachWaitMs: o.attachWaitMs ?? 200,
+    readyChannel: 'fd', // the fake child's stdio[3]; the FIFO channel has its own tests
     spawnChild: () => child,
     probeSocket: async () => (probes++, o.probe()),
     lockHolderPid: () => o.holder ?? null,
@@ -263,5 +269,77 @@ describe('§2.4 rule 2: launcher decisions over the spawnChild seam (every platf
     const s = seamLaunch(c, { probe: () => true, timeoutMs: 10_000 });
     c.die(DAEMON_EXIT.superseded);
     expect(await s.p).toEqual({ kind: 'attached', socketPath: SOCK, via: 'superseded' });
+  });
+});
+
+describe('§2.4 rule 2: the ready FIFO channel (T-2026-10-19-011: linux has no sealable inherited fd)', () => {
+  it('linux defaults to the FIFO; macOS keeps the sealed inherited fd; win32 the fd', () => {
+    expect(defaultReadyChannel('linux')).toBe('fifo');
+    expect(defaultReadyChannel('darwin')).toBe('fd');
+    expect(defaultReadyChannel('win32')).toBe('fd');
+  });
+
+  it('a real gnomond is ready over the FIFO; no ready fd is inherited; the FIFO and its 0700 dir are gone once settled', async () => {
+    const h = home();
+    reap(h);
+    let seen: string[] = [];
+    const o = await launch(h, {
+      readyChannel: 'fifo',
+      spawnChild: (execPath, args, env) => ((seen = args), spawn(execPath, args, { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env })),
+    });
+    expect(o.kind).toBe('ready');
+    expect(seen).not.toContain('--ready-fd');
+    const fifo = seen[seen.indexOf('--ready-fifo') + 1]!;
+    expect(path.isAbsolute(fifo)).toBe(true);
+    expect(existsSync(path.dirname(fifo))).toBe(false);
+    if (o.kind === 'ready') expect(o.identity.pid).toBe(readPidfile(h)!.pid);
+  });
+
+  it('a fake child writing through openReadyFifo is ready; the name is unlinked at the open (no later child can open it)', async () => {
+    const c = fakeChild();
+    let unlinkedAtOpen = false;
+    const p = launchDaemon({
+      execPath: 'node',
+      home: '/home/u/.gnomon',
+      socketPath: SOCK,
+      timeoutMs: 2000,
+      readyChannel: 'fifo',
+      spawnChild: (_e, args) => {
+        const fifo = args[args.indexOf('--ready-fifo') + 1]!;
+        setTimeout(() => {
+          const fd = openReadyFifo(fifo);
+          unlinkedAtOpen = fd !== null && !existsSync(fifo);
+          if (fd !== null) writeReady(fd, { pid: 4242, startedAt: 't', socketPath: SOCK, kernelPrincipal: 'k' });
+        }, 50);
+        return c;
+      },
+      probeSocket: async () => false,
+      lockHolderPid: () => null,
+    });
+    expect((await p).kind).toBe('ready');
+    expect(unlinkedAtOpen).toBe(true);
+  });
+
+  it('openReadyFifo refuses anything but a private FIFO, and a FIFO with no reader', () => {
+    const made = makeReadyFifo()!;
+    cleanups.push(() => rmSync(made.dir, { recursive: true, force: true }));
+    expect(openReadyFifo(made.fifo)).toBeNull(); // no reader: ENXIO, never blocks
+    const reg = path.join(made.dir, 'regular');
+    writeFileSync(reg, '', { mode: 0o600 });
+    expect(openReadyFifo(reg)).toBeNull();
+    const link = path.join(made.dir, 'link');
+    symlinkSync(made.fifo, link);
+    const reader = openSync(made.fifo, FS.O_RDONLY | FS.O_NONBLOCK);
+    cleanups.push(() => closeSync(reader));
+    expect(openReadyFifo(link)).toBeNull(); // a symlink, even to a good FIFO
+    const open = path.join(made.dir, 'open');
+    execFileSync('mkfifo', ['-m', '644', open]);
+    chmodSync(open, 0o644);
+    expect(openReadyFifo(open)).toBeNull(); // group/other bits
+    expect(openReadyFifo('relative/ready')).toBeNull();
+    const fd = openReadyFifo(made.fifo); // positive control
+    expect(fd).not.toBeNull();
+    closeSync(fd!);
+    expect(existsSync(made.fifo)).toBe(false);
   });
 });
