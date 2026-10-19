@@ -393,7 +393,7 @@ describe('verb dispatch skeleton (§5)', () => {
       'mod.command': [-32600, 'bad-params', undefined],
       // P8-D98 human-device verbs: a human device connection reaches the stub (no port wired yet)
       'gui.open': [-32000, 'not-implemented', 'T-2026-10-19-001'],
-      'rules.revoke': [-32000, 'not-implemented', 'T-2026-10-19-001'],
+      'rules.revoke': [-32600, 'params', undefined], // A1 wired the handler: an empty params object is refused by its own params check
     });
   });
 
