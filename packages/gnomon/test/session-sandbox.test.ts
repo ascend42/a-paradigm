@@ -77,6 +77,8 @@ beforeAll(async () => {
   fs.symlinkSync(path.join(versions, '2.1.302'), path.join(w.userHome, '.local', 'bin', 'claude'));
   for (const d of ['.ssh', 'Library/LaunchAgents', '.config/git']) fs.mkdirSync(path.join(w.userHome, d), { recursive: true });
   // T-2026-10-18-010: a populated Gnomon home — the kernel log, a sibling session, the pin, this session's own dir, the exec'd copy
+  // Aegis M1 (gui.open): the on-disk identity record a same-user gui.open caller presents, beside keys/device.key
+  fs.writeFileSync(path.join(w.home, 'keys', 'identity.json'), '{}\n');
   for (const d of ['log/segments', 'sessions/own', 'sessions/sibling', 'bin']) fs.mkdirSync(path.join(w.home, ...d.split('/')), { recursive: true });
   for (const f of ['kernel.db', 'kernel.db-wal', 'log/segments/000001.db', 'sessions/sibling/session.key', 'sessions/own/policy.json', 'claude-pin.json']) fs.writeFileSync(path.join(w.home, ...f.split('/')), 'x\n');
   fs.writeFileSync(path.join(w.home, 'bin', 'claude-copy'), '#!/bin/sh\necho copy_ran\n', { mode: 0o755 });
@@ -95,6 +97,8 @@ beforeAll(async () => {
 cd "${w.cwd}"
 echo hi > ./wrote.txt 2>/dev/null && echo "write_work=ok" || echo "write_work=fail"
 (cat "${w.home}/keys/device.key") >/dev/null 2>&1 && echo "read_keys=allowed" || echo "read_keys=blocked"
+(cat "${w.home}/keys/identity.json") >/dev/null 2>&1 && echo "read_identity=allowed" || echo "read_identity=blocked"
+(/usr/bin/find "${w.home}/keys" -type f) >/dev/null 2>&1 && echo "find_keys=allowed" || echo "find_keys=blocked"
 (echo x > "${w.home}/x") 2>/dev/null && echo "write_home=allowed" || echo "write_home=blocked"
 (echo x > "${w.linked}/x") 2>/dev/null && echo "write_linked=allowed" || echo "write_linked=blocked"
 (echo x > "${w.userHome}/.claude/settings.json") 2>/dev/null && echo "write_user_claude=allowed" || echo "write_user_claude=blocked"
@@ -216,6 +220,10 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
   });
   it('T-2026-10-18-010: keys, the kernel log (kernel.db, its WAL, sealed segments), a sibling session dir and the rest of the home are unreadable (EPERM)', () => {
     expect(out).toMatchObject({ read_keys: 'blocked', list_keys: 'blocked', read_kernel_db: 'blocked', read_kernel_wal: 'blocked', read_segment: 'blocked', read_sibling: 'blocked', list_sessions: 'blocked', read_pin: 'blocked' });
+  });
+  it('Aegis M1 (gui.open): a session cannot read the on-disk device key or identity a same-user gui.open caller would need (keys/ read-denied)', () => {
+    // gui.open mints a GUI session for any same-user holder of this home's device key; the session sandbox denying keys/ is the boundary
+    expect(out).toMatchObject({ read_keys: 'blocked', read_identity: 'blocked', find_keys: 'blocked', list_keys: 'blocked' });
   });
   it('Aegis C4: a HARDLINK of a key (or kernel.db) into the worktree cannot be read (it fails at the ln or the cat)', ({ annotate }) => {
     void annotate(`hardlink_ln=${out.hardlink_ln}`);
