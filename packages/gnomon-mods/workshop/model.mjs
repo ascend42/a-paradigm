@@ -3,18 +3,21 @@
 // Every attribute is derived from kernel event fields the host projects
 // (session.open{hsid, backend, project}, session.exited, turn.partial,
 // turn.result, approval.request{cardId, kind, hsid}, approval.decide,
-// approval.expire, warpline.knot{hsid}); nothing here reads model text.
+// approval.expire, warpline.knot{hsid}, mod.paused{name, reason},
+// mod.health{name, ok}); nothing here reads model text.
 
 /** Bounds (the feed is kernel-written, but a mod never trusts a count). */
 export const MAX_SESSIONS = 256;
 export const MAX_CARDS = 256;
+export const MAX_PAUSED = 64;
 export const HUES = 8;
 export const WORK_TYPES = Object.freeze(['builder', 'reviewer', 'teacher', 'tender']);
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;
+const MOD = /^[a-z][a-z0-9-]{0,63}$/;
 
 export function emptyState() {
-  return { sessions: new Map(), cards: new Map() };
+  return { sessions: new Map(), cards: new Map(), paused: new Map() };
 }
 
 const firstKey = (m) => m.keys().next().value;
@@ -63,6 +66,15 @@ export function apply(state, event) {
       state.cards.set(id, { kind: typeof p.kind === 'string' && KIND.test(p.kind) ? p.kind : 'card', hsid });
       break;
     }
+    case 'mod.paused': {
+      if (typeof p.name !== 'string' || !MOD.test(p.name)) break;
+      if (!state.paused.has(p.name) && state.paused.size >= MAX_PAUSED) state.paused.delete(firstKey(state.paused));
+      state.paused.set(p.name, typeof p.reason === 'string' && KIND.test(p.reason) ? p.reason : 'paused');
+      break;
+    }
+    case 'mod.health':
+      if (p.ok === true && typeof p.name === 'string') state.paused.delete(p.name);
+      break;
     case 'approval.decide':
     case 'approval.expire':
       if (typeof p.cardId === 'string') state.cards.delete(p.cardId);
@@ -103,6 +115,15 @@ export function render(state, prefs = {}) {
         title: `working ${working.filter(([, s]) => s.streaming).length} of ${working.length}`,
         children: working.length ? working.map(([, s]) => cap(s)) : [{ type: 'Text', text: 'no sessions', tone: 'quiet' }],
       },
+      ...(state.paused.size
+        ? [
+            {
+              type: 'Box',
+              title: `paused ${state.paused.size}`,
+              children: [...state.paused.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([name, why]) => ({ type: 'Text', text: `⏸ mod ${name} paused (${why})`, tone: 'paused' })),
+            },
+          ]
+        : []),
     ],
   };
 }

@@ -18,16 +18,20 @@
  *   approval.decide   {cardId}
  *   approval.expire   {cardId}
  *   warpline.knot     {hsid?}     (violet)
+ *   mod.paused        {name, reason}   (Aegis C2: a pause is visible in the Workshop)
+ *   mod.health        {name, ok}       (a successful start clears it)
  */
 import { createHash } from 'node:crypto';
 
-export const FEED_KINDS: readonly string[] = Object.freeze(['session.open', 'session.exited', 'turn.partial', 'turn.result', 'approval.request', 'approval.decide', 'approval.expire', 'warpline.knot']);
+export const FEED_KINDS: readonly string[] = Object.freeze(['session.open', 'session.exited', 'turn.partial', 'turn.result', 'approval.request', 'approval.decide', 'approval.expire', 'warpline.knot', 'mod.paused', 'mod.health']);
 /** The capability that grants the feed. */
 export const FEED_CAPABILITY = 'log.read';
 export const FEED_HUES = 8;
 
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;
+const MOD = /^[a-z][a-z0-9-]{0,63}$/;
+const REASON = /^[a-z][a-z0-9-]{0,31}$/;
 const id = (v: unknown): string | undefined => (typeof v === 'string' && ID.test(v) ? v : undefined);
 
 export interface FeedEvent {
@@ -68,6 +72,14 @@ export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknow
       out.kind = typeof card.kind === 'string' && KIND.test(card.kind) ? card.kind : 'card';
       const h = id(card.hsid);
       if (h) out.hsid = h;
+      break;
+    }
+    case 'mod.paused':
+    case 'mod.health': {
+      if (typeof p.name !== 'string' || !MOD.test(p.name)) return null;
+      out.name = p.name;
+      if (e.kind === 'mod.paused') out.reason = typeof p.reason === 'string' && REASON.test(p.reason) ? p.reason : 'paused';
+      else out.ok = p.ok === true;
       break;
     }
     case 'approval.decide':

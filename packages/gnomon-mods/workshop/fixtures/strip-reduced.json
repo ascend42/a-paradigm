@@ -7,7 +7,8 @@
       { "kind": "approval.request", "payload": { "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZC", "kind": "permission", "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA" } },
       { "kind": "approval.request", "payload": { "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZD", "kind": "plan", "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB" } },
       { "kind": "approval.decide", "payload": { "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZD" } },
-      { "kind": "warpline.knot", "payload": { "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB" } }
+      { "kind": "warpline.knot", "payload": { "hsid": "hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB" } },
+      { "kind": "mod.paused", "payload": { "name": "hello", "reason": "user" } }
     ]
   },
   "width": 40,

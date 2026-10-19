@@ -101,7 +101,7 @@ import { declaredEffects, effectsFor, methodEffect, type CallContext } from './e
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
-import { isUserPaused } from './control.js';
+import { isUserPaused, modNames } from './control.js';
 import { FEED_CAPABILITY, projectFeedEvent } from './feed.js';
 
 const isLink = (p: string): boolean => {
@@ -285,8 +285,32 @@ export class ModHost {
     return {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
-      paused: [...this.#paused.values()].map((p) => ({ name: p.name, why: p.why, cardId: p.cardId })).sort((a, b) => a.name.localeCompare(b.name)),
+      paused: this.#pausedView(),
     };
+  }
+
+  /**
+   * Paused mods (Aegis C2): the in-memory pauses PLUS every `gnomon mod pause`
+   * marker on disk, so a user pause is visible from the moment it is written
+   * and across kernel restarts, whether or not the mod was ever started.
+   */
+  #pausedView(): Array<{ name: string; why: string; cardId: string | null }> {
+    const out = new Map<string, { name: string; why: string; cardId: string | null }>();
+    for (const p of this.#paused.values()) out.set(p.name, { name: p.name, why: p.why, cardId: p.cardId });
+    for (const n of modNames(this.#o.home)) if (!out.has(n) && isUserPaused(this.#o.home, n)) out.set(n, { name: n, why: 'user', cardId: null });
+    return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Aegis C2 fail-closed: a pause marker written while the child runs refuses
+   * every call NOW (the pickup's next scan only reaps the child); the stop is
+   * started here too.
+   */
+  #userPausedLive(r: Running): boolean {
+    if (r.stopping || !isUserPaused(this.#o.home, r.name)) return false;
+    this.#emit('mod.paused', { name: r.name, reason: 'user', files: [] });
+    void this.stop(r.name, 'paused').catch(() => undefined);
+    return true;
   }
 
   /** Mods whose linked folder is being watched (tests / inspect). */
@@ -347,7 +371,9 @@ export class ModHost {
    */
   async admit(name: string): Promise<void> {
     if (typeof name !== 'string' || !MOD_NAME.test(name)) throw new ModRefusal('NOT_INSTALLED', 'malformed mod name', { reason: 'not-found' });
-    if (this.#running.has(name)) return;
+    const live = this.#running.get(name);
+    if (live && this.#userPausedLive(live)) throw new ModRefusal('PAUSED', `${name} is paused (gnomon mod pause)`, { name, why: 'user' });
+    if (live) return;
     const p = this.#paused.get(name);
     if (p) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: p.why, cardId: p.cardId });
     if (this.#down.has(name) || this.restarts(name) >= RESTART_CAP.n) {
@@ -587,6 +613,7 @@ export class ModHost {
 
   #require(name: string): Running {
     const r = this.#running.get(name);
+    if (r && this.#userPausedLive(r)) throw new ModRefusal('PAUSED', `${name} is paused (gnomon mod pause)`, { name, why: 'user' });
     if (r) return r;
     if (this.#paused.has(name)) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name });
     throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });

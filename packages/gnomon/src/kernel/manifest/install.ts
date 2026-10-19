@@ -64,7 +64,7 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
  * hash; test/workshop-mod.test.ts holds the pin.
  */
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
-  'sha256:8afd0d33d26addd8255b918f1e45d0db8d065392fdc0367dea2f9177c02b9507', // packages/gnomon-mods/workshop 1.0.0
+  'sha256:07a1cf2c8a61ba9f17681f6af4308b859ffcc35ab6f9f225a4946f5a915223e6', // packages/gnomon-mods/workshop 1.0.0
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();

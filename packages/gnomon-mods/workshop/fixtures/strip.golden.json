@@ -30,6 +30,17 @@
           "tone": "violet"
         }
       ]
+    },
+    {
+      "type": "Box",
+      "title": "paused 1",
+      "children": [
+        {
+          "type": "Text",
+          "text": "⏸ mod hello paused (user)",
+          "tone": "paused"
+        }
+      ]
     }
   ]
 }

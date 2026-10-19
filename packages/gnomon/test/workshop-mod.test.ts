@@ -62,7 +62,29 @@ async function installedWorkshop() {
   const card = broker.card(cardId)!;
   const sig = cryptoSign('sha256', signaturePreimage('approve', approveMessage({ cardId, decision: 'install', cardContentHash: card.contentHash, approverPrincipalId: HUMAN })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
   await broker.approve(H, { cardId, decision: 'install', decisionSig: sig });
-  return { root, home, auth, host, out: out.join(''), events };
+  return { root, home, auth, host, broker, children, out: out.join(''), events };
+}
+
+/** The example mod, plus a command that reports how many `event` notifications it received. */
+const HELLO_COUNTING = `
+import { serveMod } from './gnomon-mod-sdk.mjs';
+let events = 0;
+serveMod({
+  onEvent: () => { events++; },
+  views: { 'hello.panel': async () => ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hello' }) },
+  commands: { 'hello.bump': async () => ({ ok: true }), 'hello.events': async () => ({ events }) },
+  tools: { 'hello.greet': async () => ({ greeting: 'hello' }), 'hello.count': async () => ({ count: 0 }) },
+});
+`;
+
+async function installHello(w: { root: string; home: string; auth: DevTestRootAuthority }): Promise<void> {
+  const m = JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8'));
+  m.provides.commands.push({ id: 'hello.events', title: 'Events received' });
+  const src = writeModFolder(path.join(w.root, 'hello'), m, HELLO_COUNTING);
+  const st = stageInstall({ home: w.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: w.auth });
+  if (st.state !== 'staged') throw new Error('expected staged');
+  const bind = installPresenceBinding(st.cardId, readStaged(w.home, 'hello', st.cardId)!.card.contentHash, 'install');
+  decideInstallCard(w.home, 'hello', st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: w.auth });
 }
 
 const fixture = (f: string) => JSON.parse(fs.readFileSync(path.join(WORKSHOP, 'fixtures', f), 'utf8'));
@@ -70,7 +92,8 @@ const fixture = (f: string) => JSON.parse(fs.readFileSync(path.join(WORKSHOP, 'f
 describe('#workshop-mod', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
     const h = hashSourceTree(WORKSHOP, 'workshop', () => undefined).packageHash;
-    expect([...FIRST_PARTY_PACKAGE_HASHES]).toContain(h);
+    // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
+    expect([...FIRST_PARTY_PACKAGE_HASHES], `the Workshop tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
 
   it('it echoes the current modAbiId (a mod-ABI move needs a new Workshop build)', () => {
@@ -130,16 +153,58 @@ describe('#workshop-mod', () => {
     expect(projectFeedEvent({ kind: 'approval.request', payload: { card: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', kind: 'Not A Kind!' } } })!.payload.kind).toBe('card');
   });
 
-  it('falsifier: a running mod without the log.read capability gets no feed', async () => {
+  it('falsifier: a running mod without the log.read capability receives no event notification at all', async () => {
     const w = await installedWorkshop();
     await w.host.start('workshop');
-    const src = writeModFolder(path.join(w.root, 'hello'), JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8')), fs.readFileSync(path.join(EXAMPLE_MOD, 'index.mjs'), 'utf8'));
-    const st = stageInstall({ home: w.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: w.auth });
-    if (st.state !== 'staged') throw new Error('expected staged');
-    const bind = installPresenceBinding(st.cardId, readStaged(w.home, 'hello', st.cardId)!.card.contentHash, 'install');
-    decideInstallCard(w.home, 'hello', st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: w.auth });
+    await installHello(w);
     expect(await w.host.start('hello')).toMatchObject({ state: 'running' });
     expect(w.host.running()).toEqual(['hello', 'workshop']);
     expect(w.host.feed({ kind: 'turn.partial', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } })).toBe(1);
+    expect(w.host.feed({ kind: 'session.open', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA', cwd: '/p' } })).toBe(1);
+    expect(await w.host.runCommand('hello', 'hello.events', null)).toEqual({ events: 0 });
+    // positive control: the counter has teeth (its own modns kind does reach it)
+    expect(w.host.sendEvent('hello', { kind: 'modns.hello.greeted' })).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await w.host.runCommand('hello', 'hello.events', null)).toEqual({ events: 1 });
+  });
+
+  it('Aegis C2: a paused mod is visible (status, Workshop) and every path that relies on it fails closed', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('workshop');
+    await installHello(w);
+    await w.host.start('hello');
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const pickup = new StagedCardPickup({ home: w.home, broker: w.broker, authority: w.auth, host: w.host, emit: (kind, payload) => void rows.push({ kind, payload }) });
+    const out: string[] = [];
+    const io = { stdout: { write: (x: string) => out.push(x) }, stderr: { write: (x: string) => out.push(x) } };
+    expect(await runModCommand(['pause', 'hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
+    // visible before the kernel even acts on it (the marker is read by status)
+    expect((w.host.status().paused as Array<{ name: string; why: string }>).map((p) => `${p.name}:${p.why}`)).toEqual(['hello:user']);
+    // fail closed at once, before the pickup reaps the child: the first call is refused and stops it
+    await expect(w.host.runCommand('hello', 'hello.bump', null)).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await pickup.scan();
+    expect(w.host.running()).toEqual(['workshop']);
+    const paused = [...rows, ...w.events].find((r) => r.kind === 'mod.paused')!;
+    expect(paused.payload).toMatchObject({ name: 'hello', reason: 'user' });
+    // the Workshop shows it (the row reaches it through the feed)
+    expect(w.host.feed({ kind: 'mod.paused', payload: paused.payload })).toBe(1);
+    expect(JSON.stringify((await w.host.render('workshop', 'workshop.strip', null)).block)).toContain('⏸ mod hello paused (user)');
+    // fail closed: relays, commands, tools, admission and a plain start all refuse or stay paused
+    const H2 = { principal: HUMAN, connId: H.connId };
+    await expect(w.host.relayView({ name: 'hello', viewId: 'hello.panel', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.relayCommand({ name: 'hello', commandId: 'hello.bump', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.callTool('hello', 'hello.greet', {}, { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.admit('hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
+    expect(await w.host.start('hello')).toMatchObject({ state: 'paused', why: 'user' });
+    expect(w.host.feed({ kind: 'turn.partial', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } })).toBe(1); // only the workshop
+    // the pause survives a kernel restart: a fresh host shows it from the marker
+    const fresh = createModHostForTest({ home: w.home, trust: w.auth, children: w.children }, { launcher: unsandboxedModLauncher });
+    expect((fresh.status().paused as Array<{ name: string }>).map((p) => p.name)).toEqual(['hello']);
+    await expect(fresh.admit('hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
+    // start clears it
+    expect(await runModCommand(['start', 'hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
+    await pickup.scan();
+    expect(w.host.running()).toEqual(['hello', 'workshop']);
+    expect(w.host.status().paused).toEqual([]);
   });
 });
