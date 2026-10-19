@@ -7,7 +7,7 @@ description: >
   issues for Builder to fix.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash, NotebookEdit
-maxTurns: 20
+maxTurns: 40
 ---
 
 # Security Agent
