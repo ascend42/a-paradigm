@@ -47,6 +47,7 @@ import {
   RESERVED_HELLO_FEATURES,
   LOG_READ_CURSOR_KEYS,
   D98_CLOSED_VALUES,
+  VOICE_CLOSED_VALUES,
 } from './rpc.js';
 import { APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, decisionMessageV2 } from './card.js';
 import { JSON_RPC_CODES } from './refusal.js';
@@ -134,6 +135,8 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   logReadCursor: LOG_READ_CURSOR_KEYS,
   closedValues: D98_CLOSED_VALUES,
   decisionSig: DECISION_SIG_DESCRIPTOR,
+  // TD-2026-10-19-194 (voice V0): closed disarm reasons + voice-strictness ceilings; status.arms/armCustody ride statusFields.
+  voiceClosedValues: VOICE_CLOSED_VALUES,
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {

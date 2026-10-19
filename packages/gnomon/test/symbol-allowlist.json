@@ -18,6 +18,7 @@
     { "symbol": "#contract-card-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-gnomon-rpc-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-client-api-id", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-voice-allowlist", "reason": "contract sub-component of #gnomon-contracts; spec has no node (serves #gnomon-voice, $voice-approval, ^voice-armed; TD-2026-10-19-194)" },
     { "symbol": "#gnomon-mod-sdk", "reason": "package-level component of @a-company/gnomon-mod-sdk (spec §18 names the package; Appendix A has no node)" }
   ]
 }

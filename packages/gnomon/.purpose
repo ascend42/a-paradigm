@@ -1601,13 +1601,17 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
+      Voice (TD-2026-10-19-194): whether voice may take a decision is
+      gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
+      classes.ts; test/voice-golden.test.ts pins abiId and checks the list
+      against KIND_DECISIONS.
       src/kernel/broker/. Helper 1.6.0 (V5, TD-2026-10-19-194, §14.7, S29-K5):
       arm-custody.ts VoiceArmCustody keeps voice-arm REFERENCES only (the
       unlock is in the helper per armId) and appends approval.voice.disarm
-      {armId, reason} for every arm on a helper session push (reason
-      screen-lock), helper exit (helper-exit) or a pair connection closing
-      (conn-closed). Reasons are local literals pending the contracts
-      VOICE_DISARM_REASONS (V0). A push also drops every cached-unlock
+      {armId, reason, cause?} for every arm on a helper session push (reason
+      per cause from contracts VOICE_DISARM_REASONS: screen-lock (also
+      screensaver), display-sleep, system-sleep, user-switch), helper exit
+      (helper-exit) or a pair connection closing (conn-closed). A push also drops every cached-unlock
       reference (helperSessionEnded); connectionClosed sends conn.close.
       HelperApprovalsKey gains openArm, signUnderArm, closeArm,
       closeAllArms, connectionClosed and onHelperPush; HelperProcess parses

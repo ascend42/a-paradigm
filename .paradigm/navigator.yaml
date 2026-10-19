@@ -1,5 +1,9 @@
 version: '1.0'
+<<<<<<< HEAD
 generated: '2026-10-19T21:41:43.267Z'
+=======
+generated: '2026-10-19T21:42:53.811Z'
+>>>>>>> 45872e25
 structure: {}
 key_files:
   config:
@@ -257,6 +261,7 @@ symbols:
   '#purpose-component-contract-card-v1': packages/gnomon-contracts/
   '#purpose-component-contract-gnomon-rpc-v1': packages/gnomon-contracts/
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
+  '#purpose-component-contract-voice-allowlist': packages/gnomon-contracts/
   '#purpose-component-gui': packages/gnomon-gui/
   '#purpose-component-gui-setup': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
@@ -1357,6 +1362,8 @@ symbols:
   ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
+  '#purpose-ref-component-gnomon-voice': packages/gnomon-contracts/
+  $purpose-ref-flow-voice-approval: packages/gnomon-contracts/
   '#purpose-ref-component-ns-hint': packages/gnomon-gui/
   '#purpose-ref-component-ns-cwd': packages/gnomon-gui/
   '#purpose-ref-component-launch': packages/gnomon-gui/

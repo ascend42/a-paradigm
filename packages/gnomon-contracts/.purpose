@@ -297,7 +297,14 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). P8-D98 (T-2026-10-19-001) moved
+      kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-194 (voice V0,
+      founder ruling, the one deliberate voice move before any client ships)
+      moved clientApiId sha256:f27ecb8b…11a4 →
+      sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1
+      (descriptor gains voiceClosedValues = VOICE_CLOSED_VALUES:
+      approval.voice.disarm.reason and refusal.voice-strictness.ceiling
+      [null-level, manual]; statusFields gain arms, armCustody); kitId,
+      modAbiId and abiId unchanged. P8-D98 (T-2026-10-19-001) moved
       clientApiId once (re-moved inside the same unreleased move for the
       drain-and-resume wire, Aegis M1, and once more for the #trace-capture
       wire, TD-2026-10-19-057 / Aegis M5: session.sandbox{traced, traceRefused}
@@ -326,3 +333,41 @@ components:
       - test/refusal-rpc.test.ts
       - test/contracts.test.ts
       - test/m1-1-reservations.test.ts
+
+  contract-voice-allowlist:
+    description: >-
+      The voice allowlist (spec §14.7 "The allowlist", D58, D61, D62, D66;
+      TD-2026-10-19-194, T-2026-10-19-026 voice slice V0) — pure data plus
+      pure functions, the AUTHORITATIVE hand-only mechanism for #gnomon-voice
+      decisions in $voice-approval under ^voice-armed: VOICE_CLASSES
+      reversible ⊂ gate ⊂ judgment (cumulative, as the D62 grant sets);
+      VOICE_ALLOWLIST, one frozen row per CardKind {approve{class →
+      decisions it adds}, deny[]}: reversible = permission allow|deny,
+      ask-user answer, plan approve-plan; gate adds gate-class allow,
+      fallback fallback-cloud, budget resume; judgment adds knot resolve,
+      verdict accept|reject; deny[] = the D66 row (each kind's deny-direction
+      decision, deny or reject, under any class, no hold; founder ruling:
+      incident and daemon-stop have EMPTY deny rows — fully hand-only). Default deny:
+      anything not named (incl. every unknown kind or decision) is
+      hand-only; any card flag refuses every decision but withdraw, deny
+      included (voice-ineligible); flags is a REQUIRED argument (Aegis M1). voiceDecisionCheck(class, kind, decision, flags) →
+      {ok, hold, via} | {ok:false, reason voice-off|voice-class|
+      voice-hand-only|voice-ineligible} (all reserved in refusal.ts);
+      voiceMayDecide is its boolean form; voiceApprovingDecisions;
+      voiceAllowlistCoversCardKinds. withdraw (undo during the hold) is ok on
+      any kind with an approving row at any class, never blocked by flags;
+      the caller checks state held under the same armId. Also reserved here
+      (event.ts/rpc.ts): the closed VOICE_DISARM_REASONS (21 values, incl.
+      daemon-exit, helper-exit) and status.arms / status.armCustody. Callers pass the EFFECTIVE class; the
+      strictness overlay, null-level ceiling, manual-mode deny-only clamp and
+      every runtime broker check live in #approval-broker (later voice
+      slices). Not a clientApiId input (pin unchanged; test/voice-golden.test.ts
+      pins the clientApiId literal, packages/gnomon/test/voice-golden.test.ts
+      the abiId literal and that every allowlisted pair is a valid
+      KIND_DECISIONS pair in classes.ts).
+    path: src/voice-allowlist.ts
+    type: module
+    tags: [gnomon, contracts, voice, paradigm-8]
+    tests:
+      - test/voice-allowlist.test.ts
+      - test/voice-golden.test.ts
