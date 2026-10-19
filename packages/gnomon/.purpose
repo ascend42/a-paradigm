@@ -2294,6 +2294,8 @@ flows:
       exited | alive | unverifiable (no snapshot / failed re-check / win32
       ⇒ unverifiable, never folded). Residual: a descendant reparented to
       init before the stop began is unreachable; lstart is 1 s resolution.
+      A leader already gone at snapshot time with no group member left ⇒
+      unverifiable + treeDetail 'leader-gone-before-stop', never exited.
       T-2026-10-19-009 item 3 (readiness handshake, Orca Adopt 3): the
       activator (lifecycle/ready.ts launchDaemon, used by `gnomon daemon
       --detach` and plain gnomond) spawns the kernel with an inherited ready

@@ -34,7 +34,10 @@
  * never folded into `exited` or `alive`. A stopped child's exit row waits for
  * the verdict. A descendant already reparented to init BEFORE the stop began
  * (double-fork whose parent already exited) is not reachable by the ppid walk
- * and not in the group: residual, reported.
+ * and not in the group: residual, reported. When the leader is already gone
+ * at snapshot time and no group member is left, the ppid walk has nothing to
+ * start from, so the verdict is `unverifiable` with
+ * `treeDetail:'leader-gone-before-stop'`, never `exited`.
  *
  * sweepOrphans (rule 4, G-DMN-04): on start, every KERNEL-written
  * `session.spawned` with no `session.exited` / `session.orphaned` is an orphan
@@ -114,6 +117,8 @@ interface Tracked {
   stopReason?: string;
   /** Set synchronously when a stop begins; the exit row waits for it. */
   tree?: Promise<TreeVerdict>;
+  /** Why the verdict is `unverifiable` when it is not "no snapshot" (session.exited{treeDetail}). */
+  treeDetail?: string;
   /** The exit-row write (sessions). */
   row?: Promise<void>;
 }
@@ -221,6 +226,7 @@ export class DaemonChildren {
           signal: input.child.signalCode,
           ...(t.stopReason ? { reason: t.stopReason } : {}),
           ...(tree ? { tree } : {}),
+          ...(t.treeDetail ? { treeDetail: t.treeDetail } : {}),
         })
         .catch(() => undefined);
     });
@@ -253,7 +259,18 @@ export class DaemonChildren {
     const desc =
       session && control.snapshot
         ? await control.snapshot().then(
-            (rows) => (rows ? descendantsOf(rows, t.pid) : null),
+            (rows) => {
+              if (!rows) return null;
+              const d = descendantsOf(rows, t.pid);
+              // the leader died before the stop: its out-of-group descendants were already reparented to init and
+              // the ppid walk cannot see them; with no group member left there is nothing to walk from — unknown, not exited
+              const leaderGone = !isLive(child) || !rows.some((r) => r.pid === t.pid);
+              if (leaderGone && d.length === 0) {
+                t.treeDetail = 'leader-gone-before-stop';
+                return null;
+              }
+              return d;
+            },
             () => null,
           )
         : null;

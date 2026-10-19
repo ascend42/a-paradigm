@@ -304,6 +304,20 @@ describe('descendant sweep on stop (T-2026-10-19-009 item 1): tree verdict exite
     expect((await stopOne(childControl())).tree).toBe('unverifiable'); // the Windows parity row has no snapshot
   });
 
+  it('a leader already gone at snapshot time with no group member left is unverifiable (leader-gone-before-stop), never exited', async () => {
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const control = treeControl(() => []); // the leader is not in the table: its descendants were reparented to init
+    const children = new DaemonChildren({ append: async (kind, payload) => void rows.push({ kind, payload }), control, boot: BOOT, graceMs: 150 });
+    const s = sleeper();
+    control.register(s);
+    await children.track({ kind: 'session', child: s, hsid: 'h-gone' });
+    await children.stopAll('stop');
+    expect(rows.find((r) => r.kind === 'session.exited')?.payload).toMatchObject({ tree: 'unverifiable', treeDetail: 'leader-gone-before-stop' });
+    // a leader that is present keeps the plain verdict and no detail
+    const live = await stopOne(treeControl(() => [L()]));
+    expect(live.tree).toBe('exited');
+  });
+
   it('descendantsOf walks ppid and adds group members, never the root or init; parsePsTable reads lstart rows', () => {
     const rows: ProcRow[] = [
       { pid: 10, ppid: 1, pgid: 10, start: 'r' },
