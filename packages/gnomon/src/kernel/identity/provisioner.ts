@@ -170,15 +170,18 @@ export function acquireProvisionLock(home: string): ProvisionLock {
     }
     if (fd !== null) {
       let ino: number;
+      // inode numbers are reused at once on some filesystems (ext4, tmpfs): a per-run nonce in the body is what
+      // tells this run's lock from a successor's that got the same inode
+      const body = `${JSON.stringify({ pid: process.pid, at: new Date().toISOString(), nonce: randomBytes(16).toString('hex') })}\n`;
       try {
-        fs.writeSync(fd, `${JSON.stringify({ pid: process.pid, at: new Date().toISOString() })}\n`);
+        fs.writeSync(fd, body);
         ino = fs.fstatSync(fd).ino;
       } finally {
         fs.closeSync(fd);
       }
       const mine = (): boolean => {
         try {
-          return fs.lstatSync(p).ino === ino;
+          return fs.lstatSync(p).ino === ino && fs.readFileSync(p, 'utf8') === body;
         } catch {
           return false;
         }
@@ -199,11 +202,13 @@ export function acquireProvisionLock(home: string): ProvisionLock {
     }
     let holder: number | undefined;
     let seenIno: number;
+    let seenBody: string;
     try {
       const st = fs.lstatSync(p);
       if (!st.isFile()) throw new ProvisionStop('provisioning-locked', `${p} exists and is not a lock file; remove it by hand`, { lock: p });
       seenIno = st.ino;
-      const v = JSON.parse(fs.readFileSync(p, 'utf8')) as { pid?: unknown };
+      seenBody = fs.readFileSync(p, 'utf8');
+      const v = JSON.parse(seenBody) as { pid?: unknown };
       holder = typeof v.pid === 'number' ? v.pid : undefined;
     } catch (e) {
       if (e instanceof ProvisionStop) throw e;
@@ -213,7 +218,7 @@ export function acquireProvisionLock(home: string): ProvisionLock {
     if (holder === undefined || pidAlive(holder)) throw new ProvisionStop('provisioning-locked', `another provisioning run${holder !== undefined ? ` (pid ${holder})` : ''} holds ${p}; ${byHand}`, { lock: p });
     // L4: a crashed holder's lock is removed only if it is still the SAME file we judged; then re-race once
     try {
-      if (fs.lstatSync(p).ino === seenIno) fs.unlinkSync(p);
+      if (fs.lstatSync(p).ino === seenIno && fs.readFileSync(p, 'utf8') === seenBody) fs.unlinkSync(p);
     } catch {
       /* re-race */
     }
