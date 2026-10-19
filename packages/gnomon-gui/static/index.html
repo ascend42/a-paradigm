@@ -30,14 +30,14 @@
 <div id="session-list" class="list"></div>
 </nav>
 <section id="pane-transcript" class="pane transcript" aria-label="transcript">
-<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span class="head-right"><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" hidden>show raw events</button></span></div>
+<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span class="head-right"><span class="mode-wrap"><button id="mode-btn" class="key quiet mode-btn kernel-owned" type="button" hidden aria-haspopup="menu" aria-expanded="false" title="Run mode of this session (⇧Tab in the composer cycles it)">mode: —</button><span id="mode-menu" class="mode-menu" role="menu" hidden></span></span><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" hidden>show raw events</button></span></div>
 <div class="feed">
 <div id="viewport" class="viewport" tabindex="0" aria-label="conversation"><div id="spacer" class="spacer-v"></div></div>
 <button id="jump-latest" class="key jump" type="button" hidden>↓ latest</button>
 </div>
 <div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
 <form id="composer" class="composer" autocomplete="off">
-<textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline." aria-label="composer"></textarea>
+<textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode." aria-label="composer"></textarea>
 <div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><button class="key" type="submit">send</button></div>
 </form>
 </section>

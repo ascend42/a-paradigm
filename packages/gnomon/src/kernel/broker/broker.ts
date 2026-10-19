@@ -430,8 +430,17 @@ export class ApprovalBroker {
    * (a sensitive FIELD label), never the tool input. Must reject if the row
    * was not written (the caller answers only after it).
    */
-  async auto(p: { hsid: string; tool: string; inputHash: string; modeRef: string }): Promise<void> {
-    await this.#o.log('approval.auto', { hsid: p.hsid, tool: p.tool, inputHash: p.inputHash, modeRef: p.modeRef }, { session: p.hsid });
+  async auto(p: { hsid: string; tool: string; inputHash: string; modeRef: string; path?: string }): Promise<void> {
+    await this.#o.log('approval.auto', { hsid: p.hsid, tool: p.tool, ...(p.path !== undefined ? { path: p.path } : {}), inputHash: p.inputHash, modeRef: p.modeRef }, { session: p.hsid });
+  }
+
+  /**
+   * approval.mode.set (§3.4 run modes, B3: only the broker appends approval.*): a run mode changed for a repo or
+   * one session. Tightening is written with presence `none`; a loosening only from its strictness card's effect,
+   * after fresh presence. Must reject if the row was not written (the caller changes nothing then).
+   */
+  async modeSet(p: { scope: { repo: string; hsid: string | null }; from: string; to: string; by: Record<string, unknown>; presence: 'none' | 'fresh' }, ids: { connId?: string; session?: string } = {}): Promise<void> {
+    await this.#o.log('approval.mode.set', { scope: { repo: p.scope.repo, ...(p.scope.hsid ? { hsid: p.scope.hsid } : {}) }, from: p.from, to: p.to, by: p.by, presence: p.presence }, ids);
   }
 
   /** approval.suspect from the kernel's own observation (B3: only the broker appends approval.*). */

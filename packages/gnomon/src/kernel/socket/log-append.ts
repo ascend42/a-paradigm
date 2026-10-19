@@ -28,6 +28,13 @@
  *      FORBIDDEN{modns-not-own} for anything else. Voice appends only
  *      `voice.*` ⇒ ENGINE{not-implemented, Move 4}; anything else FORBIDDEN.
  *
+ * P8-D86/D87: ONE request kind is served — `request.mode.set` from the human
+ * on a first-party connection (credential `gui`, the launch-token GUI session,
+ * or `device`, this home's human device) goes to the run-mode control BEFORE
+ * this gate (dispatch.ts `requests`; broker/run-mode.ts), which validates it
+ * and writes the KERNEL-signed request row itself. Every other caller and
+ * kind still lands here.
+ *
  * So in M1.4 NO principal can append through the socket: every outcome is a
  * refusal, and no path reaches KernelLog.append (falsifier: a client-chosen
  * kernel kind on the chain). The kind is validated (contracts KIND_PATTERN /

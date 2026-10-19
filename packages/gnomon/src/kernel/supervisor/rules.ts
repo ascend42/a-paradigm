@@ -172,7 +172,7 @@ export function ruleSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): Rul
  * head (RuleSource), so the advance never passes a row the read could not
  * return; a row seq above the captured head is never folded early either.
  */
-export function catchUp(book: RuleBook, src: RuleSource): boolean {
+export function catchUp(book: Pick<RuleBook, 'lastSeq' | 'fold' | 'advanceTo'>, src: RuleSource): boolean {
   const head = src.head();
   if (head <= book.lastSeq) return false;
   for (const r of src.read(book.lastSeq + 1, head)) {

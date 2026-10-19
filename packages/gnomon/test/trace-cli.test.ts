@@ -39,7 +39,7 @@ function tmp(prefix: string): string {
   return d;
 }
 
-async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boolean } = {}) {
+async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boolean; modes?: boolean } = {}) {
   const home = tmp('gnomon-trace-home-');
   const claudeDir = tmp('gnomon-trace-claude-');
   const work = tmp('gnomon-trace-work-');
@@ -61,6 +61,12 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   await at(2, 'turn.sent', { hsid: HSID, turn: `turn:${HSID}/1`, permitId: 'pmt:1', contentHash: turnContentHash(PROMPT) });
   await at(5, 'approval.request', { card: { cardId: 'card:1', kind: 'permission', hsid: HSID }, tool: 'Bash' });
   await at(6, 'approval.decide', { cardId: 'card:1', decision: 'allow', approver: 'human:founder' }, undefined);
+  if (opts.modes) {
+    // P8-D87: a session-scoped loosening, then an edit auto-approved by it (no card)
+    await at(6.2, 'request.mode.set', { repo: 'sha256:' + 'a'.repeat(64), hsid: HSID, to: 'auto-edits' });
+    await at(6.4, 'approval.mode.set', { scope: { repo: 'sha256:' + 'a'.repeat(64), hsid: HSID }, from: 'ask', to: 'auto-edits', by: { principal: 'human:founder', connId: 'conn:gui' }, presence: 'fresh' });
+    await at(6.6, 'approval.auto', { hsid: HSID, tool: 'Write', path: path.join(work, 'src', 'a.ts'), inputHash: 'sha256:' + 'b'.repeat(64), modeRef: 'mode:auto-edits' });
+  }
   await at(8, 'turn.result', { hsid: HSID, usage: { tokens: 1234 }, cost: 0.0123, subtype: 'success', isError: false });
   await at(9, 'session.exited', { hsid: HSID, pid: 2, code: 0, signal: null }, undefined);
   await at(10, 'daemon.exit', { reason: 'idle' }, undefined);
@@ -162,6 +168,18 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
     const good = await fixture();
     await runTraceCommand(['--home', good.home], g.io, { claudeDir: good.claudeDir });
     expect(g.out.join('')).toContain('✓ matches log');
+  });
+
+  it('P8-D87: shows auto-approved edits (approval.auto) and run-mode changes plainly', async () => {
+    const f = await fixture({ modes: true });
+    const s = await traceJson(f);
+    expect(s.events.filter((e) => e.source === 'log').map((e) => e.kind)).toEqual(expect.arrayContaining(['request.mode.set', 'approval.mode.set', 'approval.auto']));
+    const o = io();
+    expect(await runTraceCommand(['--home', f.home], o.io, { claudeDir: f.claudeDir })).toBe(0);
+    const text = o.out.join('');
+    expect(text).toContain(`AUTO-APPROVED Write  ${path.join(f.work, 'src', 'a.ts')}  (run mode auto-edits, no card)`);
+    expect(text).toContain('run mode ask → auto-edits  this session  presence fresh');
+    expect(text).toContain('asked for run mode auto-edits  (this session)');
   });
 
   it('reports a rewritten log row as a broken hash chain', async () => {

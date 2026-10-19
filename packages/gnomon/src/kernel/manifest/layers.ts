@@ -225,3 +225,57 @@ export function collectGitInputs(repo: string): HashInput[] {
 export function gitHash(repo: string): string {
   return digestInputs(GIT_HASH_SCHEMA, collectGitInputs(repo));
 }
+
+/**
+ * §15.7 gate-class, as a PATH test (P8-D87 run mode `auto-edits`): the hashes above detect a gate-class change
+ * after the fact; an edit the kernel is asked to pass with no card is tested BEFORE it runs, on its path relative
+ * to the session root. The set is the hashed layers' (`.claude/**`, `CLAUDE.md`, `CLAUDE.local.md`, `.git/**`,
+ * `.gitattributes`) plus the rest of §15.7's list (`.gnomon/**`, test config, `package.json` and lockfiles,
+ * pipeline files) and the files that run or route code at the repo's say (`.husky/**`, `.mcp.json`, npm/yarn rc;
+ * Aegis H2: editor/devcontainer/toolchain dirs, lint/format configs, hook and task runners, build scripts, env
+ * loaders, other agents' steering files). A non-ASCII name anywhere is gate-class (`non-ascii`).
+ * Case-folded and segment-wise, so `.Claude/x`, `sub/.git/hooks/y` and `docs/Claude-notes.md` all count; every
+ * name the steering deny covers (`claude*.md`, any case, anywhere) counts. Returns the matched rule, or null.
+ * Conservative on purpose: a false positive costs one card, a false negative an unasked write.
+ */
+const GATE_DIRS: ReadonlySet<string> = new Set([
+  '.claude', '.gnomon', '.git', '.github', '.gitlab', '.circleci', '.husky', '.buildkite',
+  // Aegis H2: editor/devcontainer/toolchain dirs that run code or steer an agent (tasks.json, launch configs, plugins, hooks)
+  '.vscode', '.idea', '.cursor', '.devcontainer', '.yarn', '.cargo', '.paradigm', '.lefthook',
+]);
+const GATE_FILES: ReadonlySet<string> = new Set([
+  '.gitattributes', '.gitmodules', '.gitlab-ci.yml', '.travis.yml', 'azure-pipelines.yml', 'jenkinsfile', 'bitbucket-pipelines.yml',
+  'package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bun.lock', 'bun.lockb',
+  '.npmrc', '.yarnrc', '.yarnrc.yml', '.mcp.json', 'pytest.ini', 'tox.ini', 'conftest.py', 'noxfile.py',
+  // Aegis H2: hook runners, build/task runners, package build scripts, env loaders and other agents' steering files
+  '.pnpmfile.cjs', '.pre-commit-config.yaml', 'lefthook.yml', 'lefthook.yaml',
+  'makefile', 'gnumakefile', 'justfile', 'taskfile.yml', 'taskfile.yaml',
+  'setup.py', 'setup.cfg', 'pyproject.toml', 'build.rs', 'cargo.toml', 'mise.toml', '.mise.toml', '.tool-versions', '.envrc',
+  'agents.md', 'gemini.md', '.cursorrules', '.windsurfrules',
+]);
+const GATE_TEST_CONFIG = /^(vitest|vite|jest|playwright|cypress|karma|mocha|ava|wdio|nightwatch)\.(config|workspace)(\.[a-z0-9]+)+$|^\.mocharc(\.[a-z0-9]+)*$|^babel\.config(\.[a-z0-9]+)+$/;
+/** Aegis H2: config files that load and run code (lint/format plugins, staged-file hooks), any extension. */
+const GATE_CODE_CONFIG = /^(eslint\.config\..+|\.eslintrc.*|prettier\.config\..+|\.prettierrc.*|\.lintstagedrc.*|lint-staged\.config\..+|\.lefthook.*)$/;
+const GATE_MEMORY_NAME = /^claude[^/\\]*\.md$/;
+// eslint-disable-next-line no-control-regex
+const NON_ASCII = /[^\x00-\x7f]/;
+
+export function gateClassPathRule(relPath: string): string | null {
+  const raw = relPath.split(/[\\/]+/).filter((s) => s !== '' && s !== '.');
+  // Aegis H2 (L3): a non-ASCII name anywhere in the path (a lookalike `.gіt`, a fullwidth `ｍakefile`, a combining
+  // mark) is never judged by this list — it goes to a card
+  if (raw.some((s) => NON_ASCII.test(s))) return 'non-ascii';
+  // win32 aliases of a name: an 8.3 short name (`GIT~1`), an alternate data stream (`Makefile:x`) ⇒ a card; trailing
+  // dots and spaces (NTFS drops them: `Makefile.` IS `Makefile`) are dropped before matching, on every OS
+  if (raw.some((s) => s.includes(':') || /~\d/.test(s))) return 'win-alias';
+  const segs = raw.map((s) => s.replace(/[. ]+$/, '').toLowerCase()).map((s, i) => (s === '' ? raw[i]! : s));
+  if (segs.length === 0 || segs.includes('..')) return 'outside-root';
+  for (const s of segs.slice(0, -1)) if (GATE_DIRS.has(s)) return `dir:${s}`;
+  const base = segs[segs.length - 1]!;
+  if (GATE_DIRS.has(base)) return `dir:${base}`;
+  if (GATE_MEMORY_NAME.test(base)) return 'memory-file';
+  if (GATE_FILES.has(base)) return `file:${base}`;
+  if (GATE_TEST_CONFIG.test(base)) return 'test-config';
+  if (GATE_CODE_CONFIG.test(base)) return 'code-config';
+  return null;
+}

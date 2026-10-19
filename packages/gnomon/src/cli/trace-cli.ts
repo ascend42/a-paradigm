@@ -224,7 +224,7 @@ function readRows(home: string): { rows: LogRow[]; chain: ChainCheck } {
   return { rows, chain };
 }
 
-const hsidOf = (r: LogRow): string | null => r.session ?? str(r.payload.hsid) ?? str(obj(r.payload.card).hsid) ?? str(obj(r.payload.permit).hsid);
+const hsidOf = (r: LogRow): string | null => r.session ?? str(r.payload.hsid) ?? str(obj(r.payload.card).hsid) ?? str(obj(r.payload.permit).hsid) ?? str(obj(r.payload.scope).hsid);
 
 /** Sessions in open order (first session.open seq). */
 function sessionsOf(rows: readonly LogRow[]): string[] {
@@ -529,6 +529,18 @@ function detailOf(e: TraceEvent, full: boolean): string {
       return show(`card ${String(p.cardId)}  ${String(p.decision ?? '?')}${p.approver ? `  by ${String(p.approver)}` : ''}`, full);
     case 'approval.expire':
       return show(`card ${String(p.cardId)}  into ${String(p.into ?? '?')}${p.why ? `  (${String(p.why)})` : ''}`, full);
+    case 'approval.auto': {
+      // P8-D87: a request answered allow with NO card — by run mode auto-edits, or by a standing always rule
+      const ref = String(p.modeRef ?? '?');
+      const why = ref.startsWith('mode:') ? `run mode ${ref.slice(5)}` : ref.startsWith('rule:') ? `always rule ${ref.slice(5)}` : ref;
+      return show(`AUTO-APPROVED ${String(p.tool ?? '?')}${typeof p.path === 'string' ? `  ${p.path}` : ''}  (${why}, no card)  ${String(p.inputHash ?? '')}`, full);
+    }
+    case 'approval.mode.set': {
+      const sc = obj(p.scope);
+      return show(`run mode ${String(p.from ?? '?')} → ${String(p.to ?? '?')}  ${typeof sc.hsid === 'string' ? 'this session' : `repo ${String(sc.repo ?? '?')}`}  presence ${String(p.presence ?? '?')}`, full);
+    }
+    case 'request.mode.set':
+      return show(`asked for run mode ${String(p.to ?? '?')}${typeof p.hsid === 'string' ? '  (this session)' : `  (repo ${String(p.repo ?? '?')})`}`, full);
     default:
       if (e.source === 'capture' && typeof e.redacted === 'string') return show(`[redacted] ${e.redacted}  ${String(e.hash)}  ${String(e.bytes)} bytes`, full);
       if (e.source === 'capture') return show(`${String(e.type)}${e.subtype ? `/${String(e.subtype)}` : ''}${full ? `  ${JSON.stringify(e.line)}` : ''}`, full);

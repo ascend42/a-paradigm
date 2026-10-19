@@ -45,7 +45,7 @@
 import * as path from 'node:path';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
-import { realpathLoose, type PolicyPath } from '../manifest/policy.js';
+import { realpathFollow, realpathLoose, UnresolvablePath, type PolicyPath } from '../manifest/policy.js';
 import { wrappedBlock } from '../manifest/install.js';
 
 export const ASK_USER_DENY = 'ask in your reply; the human answers in chat';
@@ -167,11 +167,23 @@ function isSteering(rel: string): boolean {
   return parts.slice(0, -1).some((x) => x.toLowerCase() === '.claude') || parts.at(-1)?.toLowerCase() === '.claude' || /^claude[^/\\]*\.md$/i.test(parts.at(-1) ?? '');
 }
 
-/** Is `p` (absolute, realpath'd loosely) under one of the deny entries? Returns the matching entry. */
+/**
+ * Is `p` under one of the deny entries? Returns the matching entry. Tested at the lexical path, at realpathLoose and
+ * (Aegis H1) at realpathFollow — where the write LANDS, a dangling symlink followed — so `x -> .claude/settings.json`
+ * with no settings file yet is denied like the file itself. A path whose symlinks cannot be followed (a loop, an
+ * unreadable component) is denied outright: the first entry, else a synthetic `settings` literal.
+ */
 export function deniedWrite(p: string, deny: readonly PolicyPath[], platform: string = process.platform): PolicyPath | null {
   const fold = foldsCase(platform) ? (x: string) => x.toLowerCase() : (x: string) => x;
   const real = realpathLoose(p);
-  for (const raw of new Set([path.resolve(p), real])) {
+  let lands: string;
+  try {
+    lands = realpathFollow(p);
+  } catch (e) {
+    if (e instanceof UnresolvablePath) return deny.find((d) => d.match === 'steering') ?? deny[0] ?? { path: path.resolve(p), match: 'literal', class: 'settings' };
+    throw e;
+  }
+  for (const raw of new Set([path.resolve(p), real, lands])) {
     const cand = fold(raw);
     for (const d of deny) {
       const dp = fold(d.path);

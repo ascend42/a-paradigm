@@ -185,6 +185,8 @@ html, body {
 .trow.role-tool::before { content: "↳ "; color: var(--sec); }
 .trow.role-result, .trow.role-system { color: var(--sec); font-size: 11px; padding-top: 2px; padding-bottom: 4px; }
 .trow.role-card { color: var(--warn-ink); font-size: 12px; }
+.trow.role-auto { color: var(--sec); font-size: 11px; padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow.role-auto::before { content: "✓ "; color: var(--sec); }
 .trow.role-error { color: var(--fail); }
 .trow.role-raw { font-size: 12px; color: var(--ink2); }
 .trow .t { color: var(--sec); font-size: 11px; margin-right: 8px; }
@@ -288,3 +290,17 @@ html, body {
   .desk.open-sessions > .scrim, .desk.open-stack > .scrim { display: block; position: absolute; inset: 0; z-index: 2; background: rgba(15, 17, 22, 0.35); }
   .sheet-card { min-width: 0; width: calc(100vw - 32px); }
 }
+
+/* run-mode control (§11.4, P8-D87): kernel-owned state, a small menu under the header button */
+.mode-wrap { position: relative; display: inline-flex; }
+.mode-btn { white-space: nowrap; }
+.mode-btn.mode-auto-edits { color: var(--warn-ink); }
+.mode-menu { position: absolute; top: 100%; right: 0; z-index: 20; min-width: 300px; max-width: min(420px, calc(100vw - 32px)); margin-top: 4px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); }
+.mode-menu[hidden] { display: none; }
+.mode-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; background: none; border: 0; border-radius: 3px; color: var(--ink); font: inherit; cursor: pointer; }
+.mode-item:hover:not([disabled]), .mode-item:focus-visible { background: var(--rule); outline: none; }
+.mode-item[disabled] { color: var(--sec); cursor: not-allowed; }
+.mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: 11px; }
+.mode-item .mode-name { font-size: 12px; }
+.mode-item .mode-note { font-size: 11px; color: var(--sec); }
+.mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }

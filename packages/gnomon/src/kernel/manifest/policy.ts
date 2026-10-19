@@ -277,6 +277,64 @@ export function realpathLoose(p: string): string {
   }
 }
 
+/** A path whose symlinks cannot be followed to an answer (a loop, too many hops, a component that cannot be lstat'd). */
+export class UnresolvablePath extends Error {}
+
+/**
+ * Aegis H1 (run modes): the path a WRITE to `p` actually lands on. Unlike realpathLoose, a DANGLING symlink is
+ * followed (readlink, textually, as the OS does when it creates the target), so `scripts/x -> ../.git/hooks/pre-commit`
+ * resolves to the hook, not to `scripts/x`. Components past the first missing one are appended as text. Throws
+ * UnresolvablePath on a loop (more than 40 hops) or on an lstat/readlink failure other than ENOENT/ENOTDIR — the
+ * caller treats that as denied/carded, never as a plain name.
+ */
+export function realpathFollow(p: string): string {
+  const abs = path.resolve(p);
+  const { root } = path.parse(abs);
+  const queue = abs.slice(root.length).split(path.sep).filter((x) => x !== '' && x !== '.');
+  let cur = root;
+  let hops = 0;
+  let missing = false;
+  while (queue.length) {
+    const seg = queue.shift()!;
+    if (seg === '..') {
+      cur = path.dirname(cur);
+      continue;
+    }
+    const next = path.join(cur, seg);
+    if (missing) {
+      cur = next;
+      continue;
+    }
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(next);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        missing = true;
+        cur = next;
+        continue;
+      }
+      throw new UnresolvablePath(`cannot lstat ${next}: ${code ?? 'error'}`);
+    }
+    if (!st.isSymbolicLink()) {
+      cur = next;
+      continue;
+    }
+    if (++hops > 40) throw new UnresolvablePath(`too many symlinks at ${next}`);
+    let target: string;
+    try {
+      target = fs.readlinkSync(next);
+    } catch (e) {
+      throw new UnresolvablePath(`cannot readlink ${next}: ${(e as NodeJS.ErrnoException).code ?? 'error'}`);
+    }
+    const t = path.parse(target);
+    if (t.root) cur = path.resolve(t.root);
+    queue.unshift(...target.slice(t.root.length).split(/[\\/]+/).filter((x) => x !== '' && x !== '.'));
+  }
+  return cur;
+}
+
 function uniq(list: PolicyPath[]): PolicyPath[] {
   const seen = new Map<string, PolicyPath>();
   for (const p of list) seen.set(`${p.match}\u0000${p.path}`, p);

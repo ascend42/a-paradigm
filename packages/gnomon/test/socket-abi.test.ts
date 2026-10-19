@@ -109,6 +109,7 @@ interface Rig {
   pin: ServerKeyPin;
   creds: Map<PrincipalKind, DeviceCredential>;
   now: { t: number };
+  kernel: SoftwareEd25519Signer;
 }
 
 /** One daemon, one device per constructible principal class (its own key file). */
@@ -130,7 +131,7 @@ async function rig(daemon: Partial<DaemonOptions> = {}): Promise<Rig> {
   const d = await startDaemon({ home: t.home, idleMs: 60_000, kernelSigner: kernel, rootAuthority: root, clock: () => now.t, ...daemon });
   cleanups.push(() => d.shutdown('signal'));
   const reg = readRegistry(t.home, new RootVerifier(root.publicKeyPem));
-  return { home: t.home, d, root, pin: { keyId: kernel.keyId, publicKeyPem: reg.kernelKeys.get(kernel.keyId)! }, creds, now };
+  return { home: t.home, d, root, pin: { keyId: kernel.keyId, publicKeyPem: reg.kernelKeys.get(kernel.keyId)! }, creds, now, kernel };
 }
 
 async function asDevice(r: Rig, kind: PrincipalKind): Promise<GnomonSession> {
@@ -750,7 +751,7 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
 /* ── G-SOCK-04 ────────────────────────────────────────────────────────────── */
 
 describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every class', () => {
-  it('every registered kernel-owned kind and an unknown kind are FORBIDDEN{kernel-owned} for human, agent, mod and voice — the human request.* exception too, until a connection can prove it is first-party; only voice request.voice.arm names Move 4; session and read token are FORBIDDEN by the matrix; nothing is appended', async () => {
+  it('every registered kernel-owned kind and an unknown kind are FORBIDDEN{kernel-owned} for human, agent, mod and voice — the human request.* exception too (but request.mode.set, served for the human device, P8-D86/D87), until a connection can prove it is first-party; only voice request.voice.arm names Move 4; session and read token are FORBIDDEN by the matrix; nothing is appended', async () => {
     const r = await rig();
     const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
     const kernelKinds = [...EVENT_KIND_NAMES.filter((k) => kindOwner(k) === 'kernel'), 'made.up.kind', 'socket.auth.ok', 'daemon.start'];
@@ -761,7 +762,10 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
       const s = await asDevice(r, cls);
       for (const kind of kernelKinds) {
         const e = errOf(await s.conn.call('log.append', { kind, payload: { x: 1 } }));
-        if (cls === 'human' && humanRequest.has(kind)) {
+        if (cls === 'human' && kind === 'request.mode.set') {
+          // P8-D86/D87: served for the human's own device (a first-party connection); a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && humanRequest.has(kind)) {
           expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
           expect((await s.conn.call('log.append', { kind })) as { error: { data: { data: Res } } }).toMatchObject({ error: { data: { data: { needs: 'first-party human-class connection' } } } });
         } else if (cls === 'voice' && kind === 'request.voice.arm') expect(e, kind).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'Move 4' });
@@ -776,6 +780,42 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     const appended = rows(r.home).slice(before);
     expect(appended.every((x) => x.kind.startsWith('socket.'))).toBe(true); // only the kernel's own auth rows
     expect(appended.some((x) => canonicalJson(x.env.payload ?? null) === canonicalJson({ x: 1 }))).toBe(false); // no client payload reached the chain
+  }, 60_000);
+
+  it('P8-D86/D87 request.mode.set: the human device tightens a repo with no presence (request row, then approval.mode.set), status.runModes shows it and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a mode', async () => {
+    const r = await rig();
+    const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
+    const before = r.d.log.head().seq;
+    const repoPath = path.join(r.home, 'some-repo');
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'manual' } })), cls).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
+    }
+    for (const s of [await asDevice(r, 'session'), await asToken(r, m.token)]) {
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'manual' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+    }
+    const h = await asDevice(r, 'human');
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'yolo' } }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+    const res = ok(await h.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'manual' } }));
+    expect(res).toMatchObject({ changed: true, applied: true, from: 'ask', to: 'manual', presence: 'none' });
+    await settle();
+    const added = rows(r.home).slice(before).filter((x) => !x.kind.startsWith('socket.'));
+    expect(added.map((x) => x.kind)).toEqual(['request.mode.set', 'approval.mode.set']);
+    expect(added[1]!.env.payload).toMatchObject({ from: 'ask', to: 'manual', presence: 'none', by: { via: 'cli' } });
+    const st = ok(await h.conn.call('status')) as { runModes?: { strictness: { built: boolean }; repos: Array<{ mode: string }> } };
+    expect(st.runModes).toMatchObject({ strictness: { built: false }, repos: [{ mode: 'manual' }] });
+    // only the human class sees status.runModes
+    const a = await asDevice(r, 'agent');
+    expect(Object.hasOwn(ok(await a.conn.call('status')), 'runModes')).toBe(false);
+    // a kernel restart folds the same kernel-signed rows: the repo keeps its mode
+    await h.conn.close();
+    await r.d.shutdown('signal');
+    const d2 = await startDaemon({ home: r.home, idleMs: 60_000, kernelSigner: r.kernel, rootAuthority: r.root, clock: () => r.now.t });
+    cleanups.push(() => d2.shutdown('signal'));
+    const h2 = await connectGnomon({ socketPath: d2.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.creds.get('human')! });
+    cleanups.push(() => h2.conn.close());
+    expect((ok(await h2.conn.call('status')) as { runModes: unknown }).runModes).toMatchObject({ repos: [{ mode: 'manual' }] });
+    expect(ok(await h2.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'manual' } }))).toMatchObject({ changed: false, mode: 'manual' });
   }, 60_000);
 
   it('userland kinds: ungranted for human/agent (grants are M1.3), a mod only its own modns (M1.11), voice only voice.* (Move 4); bad kinds are BAD_REQUEST', async () => {

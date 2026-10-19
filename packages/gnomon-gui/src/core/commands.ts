@@ -42,6 +42,13 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'pane.stack.toggle', title: 'Pane: show/hide decision stack' },
   { id: 'pane.shuttle.toggle', title: 'Pane: show/hide Shuttle view' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
+  // §11.4 run-mode commands (P8-D87): the focused session, or (mode.repo.*) its repo; a looser mode asks for Touch ID
+  { id: 'mode.manual', title: 'Mode: manual (this session) — writes and commands wait on a plan' },
+  { id: 'mode.ask', title: 'Mode: ask (this session) — every write and command asks' },
+  { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session) — edits in this folder pass', keys: '⇧Tab cycles' },
+  { id: 'mode.repo.manual', title: 'Mode: manual (this repo)' },
+  { id: 'mode.repo.ask', title: 'Mode: ask (this repo)' },
+  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this repo)' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
 ]);
@@ -49,11 +56,12 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
 /**
  * The commands a `kit.Button` inside a block (agent- or mod-authored data) may
  * name (Aegis M1.10 C6): presentation-only. `diag.send` (writes the human's
- * gui.log) and `gui.reconnect` (raises a presence prompt) are excluded, so a
- * block can never make a press look like a kernel or presence action.
+ * gui.log), `gui.reconnect` (raises a presence prompt) and every `mode.*`
+ * (changes a run mode, P8-D87) are excluded, so a block can never make a
+ * press look like a kernel or presence action.
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect'),
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.')),
 );
 
 export type Pane ='sessions' | 'transcript' | 'stack' | 'shuttle';

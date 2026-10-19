@@ -1756,11 +1756,52 @@ components:
       on a non-pending card is refused before presence with no
       approval.decide row; an unknown card is NOT_FOUND. Tests:
       test/broker-deny-safe.test.ts (every platform).
+      RUN MODES (P8-D86/D87, src/kernel/broker/run-mode.ts + supervisor/
+      auto-edits.ts): manual | ask (default) | auto-edits, per repo and per
+      session, folded from KERNEL-signed approval.mode.set and
+      session.open{runMode} rows (RunModeBook, catchUp over modeSourceOf; a
+      repo's mode persists across sessions and restarts). A session takes its
+      repo's mode unless set for it. Effective = stricter(chosen, ceiling);
+      ceiling L0/L1 auto-edits, L2 ask, L3 manual; strictness levels are NOT
+      built (no level source ⇒ ceiling auto-edits; status.runModes.strictness
+      .built false). RunModeControl.request serves log.append request.mode.set
+      from a human on a gui or device credential only (dispatch.ts
+      `requests`): BAD_REQUEST on an unknown mode/keys, NOT_FOUND on a dead
+      hsid, FORBIDDEN{gate strictness, strictness-mode} over the ceiling;
+      writes request.mode.set, then tightening ⇒ approval.mode.set{scope,
+      from, to, by, presence:'none'} at once; loosening ⇒ a strictness card
+      (allow fresh/hand-only, deny cached; decisions allow|deny so never
+      always; 2 min ⇒ deny) whose effect re-checks the ceiling and writes
+      approval.mode.set{presence:'fresh'}; one pending loosening card per
+      scope. session.open{runMode}: no looser than the repo ⇒ set by the open
+      row; looser ⇒ opened at the repo's mode + a loosening card
+      (result.runModeCard). Supervisor: manual denies Bash/PowerShell/Edit/
+      Write/MultiEdit/NotebookEdit, WebFetch and mcp__* (manualHolds) with no
+      card until a plan card in that session is approved (reset whenever
+      manual begins; RunModeControl onChange → supervisor.noteModeChange
+      records every applied change on each live session at once, Aegis L2);
+      auto-edits passes Edit/Write/MultiEdit/NotebookEdit whose path is
+      absolute with no `..` (M4), under a root that is not the user's home,
+      above it or / (M3, isHomeOrAbove; also refused at admitOpen and
+      request.mode.set), with NO symlink component below the root (every
+      component lstat'd, the final one too; H1), not gate-class (layers.ts
+      gateClassPathRule, incl. editor/toolchain dirs, lint/format configs,
+      task/build files, other agents' steering files, non-ASCII and win32
+      alias names; H2) and whose card has no hidden/bidi flags, after
+      broker.auto ⇒ approval.auto{hsid, tool, path (real), inputHash,
+      modeRef:'mode:auto-edits'} (a failed row falls through to the card);
+      everything else cards as in ask. Tightening a REPO pulls every live
+      session whose own mode is looser down to it with its own
+      approval.mode.set and withdraws a pending loosening card for it (M1).
+      permission.ts deniedWrite also tests policy.ts realpathFollow (where
+      a write lands, dangling links followed) and denies an unresolvable
+      path (H1).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]
     tests:
       - test/approval-broker.test.ts
+      - test/run-modes.test.ts
       - test/broker-deny-safe.test.ts
       - test/socket-abi.test.ts
       - test/manifest-loader.test.ts
@@ -2229,6 +2270,29 @@ components:
     tags: [gnomon, cli, approvals, paradigm-8, move-1]
     tests:
       - test/always-rules.test.ts
+    oracles: [G-BRK-05]
+
+  mode-cli:
+    description: >-
+      #mode-cli `gnomon mode [manual|ask|auto-edits] [--session <hsid>]
+      [--repo [<abs>]] [--home <abs>] [--json]` (src/cli/mode-cli.ts; spec
+      §3.4 run modes, P8-D86/D87). Connects to the RUNNING daemon exactly as
+      `gnomon rules revoke` does (hello key id pinned from the home via
+      kernelPinOf, an unpinned server gets nothing; auth as the home's human
+      device, humanDeviceOf). No mode: prints status.runModes (default,
+      strictness built or not, repos with a mode, every live session's
+      chosen/source/ceiling/effective and a pending loosening card). A mode:
+      log.append{kind:'request.mode.set', payload:{to, hsid | repo}} (repo =
+      --repo <abs>, default the cwd; the kernel turns a path into its repo
+      key). Tightening prints the applied change; loosening prints the
+      strictness card id to allow in Gnomon with Touch ID and does not wait.
+      An unknown mode is refused locally (BAD_REQUEST usage, exit 64);
+      kernel refusals print as they come.
+    path: src/cli/mode-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/run-modes.test.ts
     oracles: [G-BRK-05]
 
   rules-revoke:

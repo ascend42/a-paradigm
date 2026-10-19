@@ -5,18 +5,28 @@
  * session.send, session.stop) — what #socket's dispatcher calls for a HUMAN
  * principal in M1.7 slice 1 (agent/session principals stay not-implemented
  * until session principals and the broker decision for unattended work land).
- * Params are parsed strictly: a §5 param slice 1 does not serve (mode,
- * runMode, as, goal, contract, alias, derived, permitId on open, brief) is
- * refused BAD_REQUEST{reason:'bad-params'} rather than silently ignored.
+ * Params are parsed strictly: a §5 param slice 1 does not serve (mode, as,
+ * goal, contract, alias, derived, permitId on open, brief) is refused
+ * BAD_REQUEST{reason:'bad-params'} rather than silently ignored.
+ * `runMode` (P8-D86/D87) is served when the daemon passes the run-mode
+ * control: an unknown mode is BAD_REQUEST, a mode over the strictness ceiling
+ * FORBIDDEN{strictness-mode}; a mode no looser than the repo's is set by the
+ * open (session.open{runMode}); a looser one opens the session at the repo's
+ * mode and raises the loosening `strictness` card (fresh presence), whose id
+ * the result carries as `runModeCard`.
  */
 import { refuse, RefusedError } from '@a-company/gnomon-contracts';
 import type { SessionSupervisor } from './supervisor.js';
+import type { RunModeControl } from '../broker/run-mode.js';
 
 export interface SessionCallContext {
   principal: string;
   principalClass: string;
   /** the hello features this connection negotiated (§4.9); `session.resume` gates the resumed sessions */
   features?: readonly string[];
+  /** the calling connection and how it authenticated (run-mode loosening cards name the asker) */
+  connId?: string;
+  credential?: string;
 }
 
 /** The hello feature a client offers to address a session the kernel resumed after an upgrade (§2.4 rule 11, P8-D98). */
@@ -50,16 +60,17 @@ function objectParams(params: unknown, allowed: readonly string[], verb: string)
   return p;
 }
 
-export function createSessionPort(sup: SessionSupervisor): SessionPort {
+export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl): SessionPort {
   return {
     open: async (ctx, params) => {
-      const p = objectParams(params, ['backend', 'model', 'cwd', 'systemPrompt', 'attended'], 'session.open');
+      const p = objectParams(params, ['backend', 'model', 'cwd', 'systemPrompt', 'attended', ...(modes ? ['runMode'] : [])], 'session.open');
       if (p.backend !== undefined && p.backend !== 'claude-code' && p.backend !== 'local') throw bad('backend is claude-code or local');
       if (p.model !== undefined && typeof p.model !== 'string') throw bad('model must be a string');
       if (typeof p.cwd !== 'string') throw bad('cwd is required');
       if (typeof p.attended !== 'boolean') throw bad('attended is required');
       if (p.systemPrompt !== undefined && typeof p.systemPrompt !== 'string') throw bad('systemPrompt must be a string');
-      return sup.open({
+      const adm = modes ? modes.admitOpen(p.cwd, p.runMode) : { direct: null, loosen: null };
+      const opened = await sup.open({
         principal: ctx.principal,
         principalClass: ctx.principalClass,
         attended: p.attended,
@@ -67,7 +78,12 @@ export function createSessionPort(sup: SessionSupervisor): SessionPort {
         ...(p.backend ? { backend: p.backend as 'claude-code' | 'local' } : {}),
         ...(typeof p.model === 'string' ? { model: p.model } : {}),
         ...(typeof p.systemPrompt === 'string' ? { systemPrompt: p.systemPrompt } : {}),
+        ...(adm.direct ? { runMode: adm.direct } : {}),
       });
+      if (!adm.loosen || !modes || opened.backend !== 'claude-code') return opened;
+      // a looser runMode than the repo's: the session runs at the repo's mode until the human allows the step with Touch ID
+      const r = await modes.loosenOpened({ connId: ctx.connId ?? 'conn:unknown', principal: ctx.principal, principalClass: ctx.principalClass, credential: ctx.credential }, opened.hsid, adm.loosen).catch(() => null);
+      return { ...opened, ...(r && 'pending' in r ? { runModeCard: r.cardId } : { runModeCard: null }) };
     },
     send: async (ctx, params) => {
       const p = objectParams(params, ['hsid', 'content', 'permitId', 'steer'], 'session.send');

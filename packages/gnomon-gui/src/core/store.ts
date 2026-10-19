@@ -26,6 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
+import { MODE_ROW_KINDS } from './modes.js';
 
 export interface Row {
   seq: number;
@@ -215,6 +216,8 @@ export class GuiStore {
       this.kernelFeed.push(r);
       what.add('feed');
     }
+    // P8-D87: rows that change status.runModes — the page re-reads status on them (motion-on-events, no polling)
+    if (MODE_ROW_KINDS.has(r.kind)) what.add('modes');
     if (r.kind === 'daemon.start') {
       // a kernel (re)start: a session the old kernel neither exited nor drained into a resume is gone with it (a
       // Ctrl-C leaves no session.exited, and the sweep only logs the spawns it found). A resume in this boot logs its
@@ -348,7 +351,7 @@ export function turnEventSummary(line: string, type: string | null): string {
 /* ── chat transcript (dogfood 2026-10-19: the focused session showed 16 rows of hook noise, not the conversation) ── */
 
 /** How one transcript item reads: the user's message, the assistant's text, a tool call, a card, the turn result, a lifecycle note, an error, or a raw row. */
-export type ChatRole = 'user' | 'assistant' | 'tool' | 'card' | 'result' | 'system' | 'error' | 'raw';
+export type ChatRole = 'user' | 'assistant' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw';
 
 export interface ChatItem {
   /** Stable per row (and part): `seq` or `seq.part`. */
@@ -452,6 +455,16 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
       return { role: 'card', text: `decided · ${typeof p.decision === 'string' ? p.decision : '?'}` };
     case 'approval.expire':
       return { role: 'card', text: 'card expired' };
+    case 'approval.auto': {
+      // P8-D87: a request the kernel answered allow with NO card — show what went through
+      const where = typeof p.path === 'string' ? p.path : typeof p.tool === 'string' ? p.tool : '?';
+      const ref = typeof p.modeRef === 'string' ? p.modeRef : '';
+      return { role: 'auto', text: ref.startsWith('rule:') ? `auto-approved · ${typeof p.tool === 'string' ? p.tool : '?'} (always rule)` : `auto-approved edit · ${where}` };
+    }
+    case 'approval.mode.set': {
+      const sc = objOf(p.scope) ?? {};
+      return { role: 'system', text: `run mode ${String(p.from ?? '?')} → ${String(p.to ?? '?')}${typeof sc.hsid === 'string' ? '' : ' (repo)'}${p.presence === 'fresh' ? ' · Touch ID' : ''}` };
+    }
     case 'turn.event': {
       if (typeof p.line === 'string') return null; // handled by lineItems
       if (p.type === 'assistant' && typeof p.bytes === 'number') return { role: 'system', text: `a long assistant message (${p.bytes} bytes) is in the log by hash only` };
