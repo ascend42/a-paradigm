@@ -39,9 +39,15 @@
  * decisionSig v2 (P8-D98, slice A2): an `answer` decision signs the v2
  * message (signer decisionMessage) whose last line is the answer digest
  * (sha256 of the note, the noteHash approval.decide records), and the
- * presence binding carries the same answerDigest, so an answer rewritten on
- * the wire fails decisionSig (AUTH bad-signature) and never matches the
- * token. Every other decision keeps the v1 message.
+ * presence binding carries the same answerDigest. What that binds depends
+ * on who signs (Aegis M2): when the CLIENT supplies its own decisionSig, the
+ * digest is over the text the client signed, so an answer rewritten on the
+ * wire after signing fails decisionSig (AUTH bad-signature). On the
+ * helper-signs path (no client decisionSig) the KERNEL computes answerDigest
+ * from the note it received, so v2 binds "the text the kernel received",
+ * NOT "the text the human saw": a rewrite before the note reaches the
+ * kernel is not caught by the signature.
+ * Every other decision keeps the v1 message.
  *
  * Silence never allows (B6, G-BRK-01): `tool.permission` cards expire into
  * deny; `fallback` and `api-token` cards never expire; `decisionOf` of a

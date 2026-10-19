@@ -1636,8 +1636,11 @@ components:
       record, never authority; P8-D98 slice A2). decisionSig v2 (P8-D98
       slice A2): an `answer` signs the v2 message (signer decisionMessage,
       first line gnomon:decision:v2, last line answerDigest = the noteHash)
-      and its presence binding carries answerDigest, so an answer rewritten
-      on the wire fails AUTH bad-signature; an answer with no note is
+      and its presence binding carries answerDigest. With a client-supplied
+      decisionSig an answer rewritten on the wire after signing fails AUTH
+      bad-signature; on the helper-signs path the kernel computes
+      answerDigest from the note it received, so v2 binds the text the
+      kernel received, not the text the human saw (Aegis M2); an answer with no note is
       refused BAD_REQUEST; every other decision stays v1. Replay verifies
       both layouts given decisionKeys (replay.ts checkDecisionSigs) with a
       per-log cutover MARKER ROW: the first v2 answer or any 8.0:P8-D98 kind;
