@@ -244,11 +244,60 @@ func helperLine(key: KeyClass, messages: [Data]) -> String {
     return parts.joined(separator: "; ")
 }
 
+/// A connId as the prompt shows it: in full up to 48 characters, else a stable short hash (Aegis L4: never a
+/// silent truncation that two different ids could share).
+func displayConnId(_ c: String) -> String {
+    c.count <= 48 ? c : "id#" + digest12(Data(c.utf8))
+}
+
+/// A duration as the prompt shows it (Aegis L4: seconds under a minute are never shown as 0 min).
+func displayDuration(_ s: Int) -> String {
+    if s < 60 { return "\(s) s" }
+    return s % 60 == 0 ? "\(s / 60) min" : "\(s / 60) min \(s % 60) s"
+}
+
 /// The helper's own line for an ARM prompt (arm.open, §14.7): the pair the arm is bound to and its
 /// bounds, computed by the helper from the request it will enforce — the caller cannot hide them.
 func armLine(armId: String, humanConnId: String, voiceConnId: String, hardSeconds: Int, maxSignatures: Int) -> String {
-    "Gnomon Helper: voice arm \(armId) binds human \(humanConnId.prefix(48)) + voice \(voiceConnId.prefix(48)); "
-        + "up to \(hardSeconds / 60) min, \(maxSignatures) voice decisions; drops when the screen locks or the Mac sleeps"
+    "Gnomon Helper: voice arm \(armId) binds human \(displayConnId(humanConnId)) + voice \(displayConnId(voiceConnId)); "
+        + "up to \(displayDuration(hardSeconds)), \(maxSignatures) voice decisions; drops when the screen locks or the Mac sleeps"
+}
+
+/// The caller's part of an ARM prompt is capped (Aegis M3), and comes AFTER the helper's own line.
+let maxArmReasonChars = 120
+
+/// Aegis M3: for an arm the helper's line goes FIRST, so the binding is what the dialog leads with.
+func armPromptText(_ line: String, _ callerReason: String) -> String {
+    "\(line)\n\(String(promptSafe(callerReason).prefix(maxArmReasonChars)))"
+}
+
+/// The voice decision preimage (gnomon-contracts src/voice-decision.ts, FROZEN with helper 1.6.0; spec §14.7,
+/// A26-04): after the domain line, exactly 15 lines — the marker, then cardId, decision, cardContentHash,
+/// approverPrincipalId, armId, humanConnId, voiceConnId, turnId, utteranceHash, handleHash, challengeHash,
+/// readbackHash, confirmHash, answerDigest. nil when the message is not exactly that layout.
+struct VoiceDecision {
+    let armId: String
+    let humanConnId: String
+    let voiceConnId: String
+}
+
+func parseVoiceDecision(_ m: Data) -> VoiceDecision? {
+    let domain = Data("gnomon:approve-voice:v1\n".utf8)
+    guard m.starts(with: domain), let body = String(data: m.subdata(in: domain.count..<m.count), encoding: .utf8) else { return nil }
+    let f = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard f.count == 15, f[0] == "gnomon:voice-decision:v1" else { return nil }
+    func isHash(_ s: String) -> Bool {
+        s.count == 71 && s.hasPrefix("sha256:") && s.dropFirst(7).unicodeScalars.allSatisfy { ("0"..."9").contains($0) || ("a"..."f").contains($0) }
+    }
+    for (i, v) in f.enumerated().dropFirst() {
+        guard !v.isEmpty, v.count <= 256 else { return nil }
+        switch i {
+        case 3, 9: guard isHash(v) else { return nil }            // cardContentHash, utteranceHash
+        case 10...14: guard v == "-" || isHash(v) else { return nil } // handle, challenge, readback, confirm, answer
+        default: break
+        }
+    }
+    return VoiceDecision(armId: f[5], humanConnId: f[6], voiceConnId: f[7])
 }
 
 /// T-2026-10-18-028 M4 (defence in depth; the kernel strips them first, card.ts promptSafe): no format

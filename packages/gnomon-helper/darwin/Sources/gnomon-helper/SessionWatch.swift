@@ -37,6 +37,22 @@ enum SessionCause: String, CaseIterable {
     case userSwitch = "user-switch"
 }
 
+/// Is the console session usable for an arm right now? (Aegis M1: asked by arm.open and arm.sign.)
+protocol SessionProbe {
+    func usable() -> Bool
+}
+
+/// Production probe. FAIL CLOSED: no CGSession dictionary (no GUI session, or the call failed), a locked screen
+/// or a session off the console all answer false.
+struct CGSessionProbe: SessionProbe {
+    func usable() -> Bool {
+        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        if (d["CGSSessionScreenIsLocked"] as? Bool) == true { return false }
+        guard (d[kCGSessionOnConsoleKey as String] as? Bool) == true else { return false }
+        return true
+    }
+}
+
 /// Something that reports session events. `fire` may be called on any thread.
 protocol SessionEventSource: AnyObject {
     func start(_ fire: @escaping (SessionCause) -> Void)
@@ -130,9 +146,10 @@ final class SystemSessionEvents: SessionEventSource {
         tokens.append((center, tok))
     }
 
-    /// (screen locked, session not on the console) from the CGSession dictionary; (false, false) when there is none.
+    /// (screen locked, session not on the console) from the CGSession dictionary. Aegis M1: no dictionary
+    /// counts as locked (fail closed; the edge fires screen-lock).
     private static func sessionState() -> (Bool, Bool) {
-        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return (false, false) }
+        guard let d = CGSessionCopyCurrentDictionary() as? [String: Any] else { return (true, false) }
         let locked = (d["CGSSessionScreenIsLocked"] as? Bool) ?? false
         let onConsole = (d[kCGSessionOnConsoleKey as String] as? Bool) ?? true
         return (locked, !onConsole)

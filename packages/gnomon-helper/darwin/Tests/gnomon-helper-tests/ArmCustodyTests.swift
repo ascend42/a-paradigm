@@ -18,7 +18,11 @@ let arm1 = "arm:01HZZZZZZZZZZZZZZZZZZZZZZZ"
 let arm2 = "arm:01HZZZZZZZZZZZZZZZZZZZZZZY"
 func armIdN(_ n: Int) -> String { "arm:01H" + String(repeating: "Z", count: 21) + String(format: "%02d", n) }
 func b64(_ s: String) -> String { Data(s.utf8).base64EncodedString() }
-let voiceMsg = b64("gnomon:approve-voice:v1\ncard:x\nallow\nsha256:00\nhuman:me")
+let H64 = "sha256:" + String(repeating: "a", count: 64)
+func voicePreimage(arm: String = arm1, human: String = "conn:h", voice: String = "conn:v") -> String {
+    ["gnomon:approve-voice:v1", "gnomon:voice-decision:v1", "card:01HZZZZZZZZZZZZZZZZZZZZZZZ", "allow", H64, "p:abcdefgh/matt", arm, human, voice, "turn:1", H64, "-", "-", "-", "-", "-"].joined(separator: "\n")
+}
+let voiceMsg = b64(voicePreimage())
 let handMsg = b64("gnomon:approve:v1\ncard:x\nallow\nsha256:00\nhuman:me")
 
 func errorCode(_ body: () throws -> Any) -> String? {
@@ -27,7 +31,7 @@ func errorCode(_ body: () throws -> Any) -> String? {
 
 final class DomainTests: XCTestCase {
     func testVoiceDomainRefusedUnderConnIdUnlock() {
-        let s = Server()
+        let s = testServer()
         // cached (connId unlock) and fresh both refuse the voice domain before any key or unlock is touched
         XCTAssertEqual(errorCode { try s.handle(["op": "sign", "key": "approvals", "gen": "test0001", "mode": "cached", "connId": "conn:a", "messages": [voiceMsg]]) }, "domain-refused")
         XCTAssertEqual(errorCode { try s.handle(["op": "sign", "key": "approvals", "gen": "test0001", "mode": "fresh", "connId": "conn:a", "reason": "r", "messages": [voiceMsg]]) }, "domain-refused")
@@ -37,7 +41,7 @@ final class DomainTests: XCTestCase {
     }
 
     func testHandDomainRefusedUnderArm() {
-        let s = Server()
+        let s = testServer()
         let req: Json = ["op": "arm.sign", "armId": arm1, "gen": "test0001", "humanConnId": "conn:h", "voiceConnId": "conn:v"]
         var r = req
         r["messages"] = [handMsg]
@@ -50,8 +54,8 @@ final class DomainTests: XCTestCase {
     }
 
     func testArmOpenValidatesBeforePrompt() {
-        let s = Server()
-        let base: Json = ["op": "arm.open", "armId": arm1, "gen": "test0001", "humanConnId": "conn:h", "voiceConnId": "conn:v", "hardSeconds": 600, "reason": "r", "messages": [handMsg]]
+        let s = testServer()
+        let base: Json = ["op": "arm.open", "armId": arm1, "gen": "test0001", "humanConnId": "conn:h", "voiceConnId": "conn:v", "hardSeconds": 600, "maxSignatures": 5, "reason": "r", "messages": [handMsg]]
         var r = base; r["voiceConnId"] = "conn:h"
         XCTAssertEqual(errorCode { try s.handle(r) }, "bad-request") // same connection twice
         r = base; r["armId"] = "arm:nope"
@@ -108,7 +112,7 @@ final class ArmStoreTests: XCTestCase {
     }
 
     func testCloseAllAndConnClose() throws {
-        let s = Server()
+        let s = testServer()
         let c1 = SpyContext(), c2 = SpyContext(), c3 = SpyContext(), u = SpyContext()
         s.custody.sync {
             _ = s.custody.arms.put(armIdN(1), gen: "g001", humanConnId: "conn:h", voiceConnId: "conn:v", ctx: c1, hardSeconds: 600, idleSeconds: nil, maxSignatures: 5)
@@ -171,5 +175,112 @@ final class SessionWatchTests: XCTestCase {
     func testVersionAndProtocol() {
         XCTAssertEqual(gnomonHelperVersion, "1.6.0")
         XCTAssertEqual(helperProtocol, "gnomon-helper:v2")
+    }
+}
+
+// ── Aegis V5 review fixes (H1, M1, M2, M3, L1, L4) ─────────────────────────────
+
+final class FakeProbe: SessionProbe {
+    var ok: Bool
+    init(_ ok: Bool) { self.ok = ok }
+    func usable() -> Bool { ok }
+}
+
+/// A Server whose arm paths need no prompt and no Secure Enclave: presence returns a spy context, the signer a fake signature.
+func testServer(probe: SessionProbe = FakeProbe(true), custody: Custody = Custody(),
+                presence: ((String) throws -> LAContext)? = nil) -> Server {
+    Server(custody: custody, presence: presence ?? { _ in SpyContext() }, signer: { _, _, _, msgs in msgs.map { _ in "c2ln" } }, session: probe)
+}
+
+func liveArm(_ s: Server, _ id: String = arm1, human: String = "conn:h", voice: String = "conn:v") -> SpyContext {
+    let c = SpyContext()
+    _ = s.custody.sync { s.custody.arms.put(id, gen: "test0001", humanConnId: human, voiceConnId: voice, ctx: c, hardSeconds: 600, idleSeconds: nil, maxSignatures: 10) }
+    return c
+}
+
+func armSign(_ s: Server, _ msg: String, arm: String = arm1, human: String = "conn:h", voice: String = "conn:v") throws -> Json {
+    try s.handle(["op": "arm.sign", "armId": arm, "gen": "test0001", "humanConnId": human, "voiceConnId": voice, "messages": [msg]])
+}
+
+let openReq: Json = ["op": "arm.open", "armId": arm1, "gen": "test0001", "humanConnId": "conn:h", "voiceConnId": "conn:v",
+                     "hardSeconds": 600, "maxSignatures": 5, "reason": "Arm voice approvals", "messages": [handMsg]]
+
+final class AegisFixTests: XCTestCase {
+    func testH1PreimageMustNameThisArmAndPair() throws {
+        let s = testServer()
+        _ = liveArm(s)
+        XCTAssertEqual(try armSign(s, voiceMsg)["armId"] as? String, arm1) // a matching preimage signs
+        XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage(arm: arm2))) }, "preimage-refused") // a foreign armId
+        XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage(human: "conn:x"))) }, "preimage-refused") // a foreign human
+        XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage(voice: "conn:x"))) }, "preimage-refused") // a foreign voice
+        XCTAssertEqual(errorCode { try armSign(s, b64("gnomon:approve-voice:v1\ncard:x\nallow")) }, "preimage-refused") // malformed
+        XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage() + "\nextra")) }, "preimage-refused") // too many lines
+        let badHash = voicePreimage().replacingOccurrences(of: "\nturn:1\n" + H64, with: "\nturn:1\nsha256:zz")
+        XCTAssertEqual(errorCode { try armSign(s, b64(badHash)) }, "preimage-refused")
+        // the request's pair must ALSO be the arm's: a self-consistent preimage for another pair finds no arm
+        XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage(human: "conn:x")), human: "conn:x") }, "no-arm")
+    }
+
+    func testH1GoldenMatchesContracts() {
+        // the same vector as packages/gnomon-contracts/test/voice-decision.test.ts (frozen layout)
+        let golden = "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\n" + H64 + "\np:abcdefgh/matt\n" + arm1
+            + "\nconn:h\nconn:v\nturn:1\n" + H64 + "\n-\n-\n-\n-\n-"
+        let d = parseVoiceDecision(Data(("gnomon:approve-voice:v1\n" + golden).utf8))
+        XCTAssertEqual(d?.armId, arm1)
+        XCTAssertEqual(d?.humanConnId, "conn:h")
+        XCTAssertEqual(d?.voiceConnId, "conn:v")
+    }
+
+    func testM1FailClosedOnLockedOrUnknownSession() {
+        let s = testServer(probe: FakeProbe(false))
+        XCTAssertEqual(errorCode { try s.handle(openReq) }, "session-locked")
+        XCTAssertEqual(s.custody.sync { s.custody.arms.count }, 0)
+        let c = liveArm(s)
+        XCTAssertEqual(errorCode { try armSign(s, voiceMsg) }, "no-arm")
+        XCTAssertTrue(c.invalidated) // the arm was closed, not just skipped
+        XCTAssertEqual(s.custody.sync { s.custody.arms.count }, 0)
+    }
+
+    func testM2MaxSignaturesRequired() {
+        var r = openReq
+        r.removeValue(forKey: "maxSignatures")
+        XCTAssertEqual(errorCode { try testServer().handle(r) }, "bad-request")
+        r["maxSignatures"] = Bounds.armMaxSignatures + 1
+        XCTAssertEqual(errorCode { try testServer().handle(r) }, "bad-request")
+    }
+
+    func testM3HelperLineFirstAndReasonCapped() throws {
+        var shown = ""
+        let s = testServer(presence: { text in shown = text; return SpyContext() })
+        _ = try s.handle(openReq)
+        XCTAssertTrue(shown.hasPrefix("Gnomon Helper: voice arm \(arm1) binds human conn:h + voice conn:v"))
+        XCTAssertTrue(shown.hasSuffix("\nArm voice approvals"))
+        var r = openReq
+        r["armId"] = arm2
+        r["reason"] = String(repeating: "x", count: maxArmReasonChars + 1)
+        XCTAssertEqual(errorCode { try s.handle(r) }, "bad-request")
+    }
+
+    func testL1SessionEventDuringPromptDiscardsTheArm() {
+        let custody = Custody()
+        let ctx = SpyContext()
+        let s = testServer(custody: custody, presence: { _ in
+            custody.invalidateAll() // the screen locks while the Touch ID dialog is up
+            return ctx
+        })
+        XCTAssertEqual(errorCode { try s.handle(openReq) }, "arm-invalidated")
+        XCTAssertTrue(ctx.invalidated)
+        XCTAssertEqual(custody.sync { custody.arms.count }, 0)
+    }
+
+    func testL4Display() {
+        XCTAssertEqual(displayDuration(45), "45 s")
+        XCTAssertEqual(displayDuration(300), "5 min")
+        XCTAssertEqual(displayDuration(90), "1 min 30 s")
+        let long = "conn:" + String(repeating: "q", count: 60)
+        XCTAssertEqual(displayConnId("conn:h"), "conn:h")
+        XCTAssertTrue(displayConnId(long).hasPrefix("id#"))
+        XCTAssertNotEqual(displayConnId(long), displayConnId(long + "r")) // never a shared truncation
+        XCTAssertTrue(armLine(armId: arm1, humanConnId: "conn:h", voiceConnId: "conn:v", hardSeconds: 30, maxSignatures: 3).contains("up to 30 s, 3 voice decisions"))
     }
 }

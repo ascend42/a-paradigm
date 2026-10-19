@@ -41,8 +41,19 @@ final class Server {
     /// those, without presence — Aegis round 3: a pair, never a whole generation).
     var createdHere = Set<String>()
 
-    init(custody: Custody = Custody()) {
+    /// Seams for tests (the arm paths only; production: the real prompt, the Secure Enclave key, CGSession).
+    let presence: (String) throws -> LAContext
+    let signer: (KeyClass, String, LAContext, [Data]) throws -> [String]
+    let session: SessionProbe
+
+    init(custody: Custody = Custody(),
+         presence: @escaping (String) throws -> LAContext = evaluatePresence,
+         signer: @escaping (KeyClass, String, LAContext, [Data]) throws -> [String] = { k, g, ctx, msgs in try signAll(try loadPrivateKey(k, g, context: ctx), msgs) },
+         session: SessionProbe = CGSessionProbe()) {
         self.custody = custody
+        self.presence = presence
+        self.signer = signer
+        self.session = session
     }
 
     func handle(_ req: Json) throws -> Json {
@@ -157,17 +168,21 @@ final class Server {
             guard human != voice else { throw bad("an arm binds two different connections") }
             guard let hard = try optInt(req, "hardSeconds", max: Bounds.armMaxHardSeconds) else { throw bad("hardSeconds is required") }
             let idle = try optInt(req, "idleSeconds", max: hard)
-            let cap = try optInt(req, "maxSignatures", max: Bounds.armMaxSignatures) ?? Bounds.armMaxSignatures
+            // Aegis M2: the decision cap is REQUIRED (D64 `unlimited` is the kernel's to map; the helper ceiling is 1024)
+            guard let cap = try optInt(req, "maxSignatures", max: Bounds.armMaxSignatures) else { throw bad("maxSignatures is required (1..\(Bounds.armMaxSignatures))") }
             // the prompt's own messages (the voice-arm card decision, the presence challenge): fresh approvals domains only
             let msgs = try messages(req, for: .approvals, scope: .fresh)
             let why = try reason(req)
+            guard why.count <= maxArmReasonChars else { throw bad("an arm reason is at most \(maxArmReasonChars) characters") }
+            // Aegis M1: fail closed — no arm opens while the session is locked, off console or unknown
+            guard session.usable() else { throw HelperError("session-locked", "the session is locked, switched out or unknown; no arm opens") }
             try armRoom(custody.sync { custody.arms.canOpen(a) })
             let line = armLine(armId: a, humanConnId: human, voiceConnId: voice, hardSeconds: hard, maxSignatures: cap) + "; " + helperLine(key: .approvals, messages: msgs)
             let epoch0 = custody.epoch
-            let ctx = try evaluatePresence(promptText(why, line))
+            let ctx = try presence(armPromptText(line, why))
             let sigs: [String]
             do {
-                sigs = try signAll(try loadPrivateKey(.approvals, g, context: ctx), msgs)
+                sigs = try signer(.approvals, g, ctx, msgs)
             } catch {
                 ctx.invalidate()
                 throw error
@@ -195,12 +210,24 @@ final class Server {
             let voice = try requiredConnId(req, "voiceConnId")
             // G-BRK-06: under an arm only gnomon:approve-voice:v1 — checked before the arm is looked up
             let msgs = try messages(req, for: .approvals, scope: .arm)
+            // Aegis H1: each preimage must be the frozen voice-decision layout and name THIS arm and THIS pair
+            for m in msgs {
+                guard let d = parseVoiceDecision(m) else { throw HelperError("preimage-refused", "not a gnomon:voice-decision:v1 preimage") }
+                guard d.armId == a, d.humanConnId == human, d.voiceConnId == voice else {
+                    throw HelperError("preimage-refused", "the preimage names another arm or another pair")
+                }
+            }
+            // Aegis M1: a session that is locked, off console or unknown closes every arm instead of signing
+            guard session.usable() else {
+                custody.invalidateAll()
+                throw HelperError("no-arm", "the session is locked, switched out or unknown; every arm was closed")
+            }
             return try custody.sync {
                 guard let ctx = custody.arms.use(a, gen: g, humanConnId: human, voiceConnId: voice, signatures: msgs.count) else {
                     throw HelperError("no-arm", "no live arm with this id for this pair")
                 }
                 do {
-                    return ["sigs": try signAll(try loadPrivateKey(.approvals, g, context: ctx), msgs), "armId": a]
+                    return ["sigs": try signer(.approvals, g, ctx, msgs), "armId": a]
                 } catch {
                     custody.arms.close(a) // a context the system invalidated is gone for good
                     throw HelperError("no-arm", "the arm no longer signs")
