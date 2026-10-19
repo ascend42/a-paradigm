@@ -1759,8 +1759,11 @@ components:
       src/kernel/modhost/control.ts. §5 has no install/pause/start verb and
       adding one moves clientApiId, so the CLI and the kernel meet in the
       home: install/link run stageInstall in the CLI (snapshot + pending card
-      record, signs nothing, also from a kernel-spawned shell where the card
-      names GNOMON_HSID) and print the card lines from rederiveInstallDetail
+      record, signs nothing; staging from a session is NOT available yet: the
+      darwin session profile denies writes under the home, so it waits for the
+      gnomon-mods bridge; a GNOMON_HSID in the env is recorded only as a
+      claim, and the CLI's GNOMON_HSID refusals are advisory, the SBPL is the
+      boundary) and print the card lines from rederiveInstallDetail
       (the hardened install path: one line per entry, kernel-composed count
       line at index 2, COMMAND_UNSAFE linked-path refusal, linked-source
       re-hash); a url source is refused. The daemon's StagedCardPickup

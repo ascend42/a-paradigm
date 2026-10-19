@@ -28,6 +28,13 @@
  *     `manifest.uninstall{name, diff}` (+ `mod.unlinked` for a linked
  *     folder). Snapshots are kept (rollback). A request whose pin is no
  *     longer the effective one is dropped. `deny` drops the request.
+ *   - WHO MAY WRITE THESE FILES. Any process of the OS user (§15.1: the OS
+ *     user is the stage-1 boundary). A kernel-spawned session may NOT: the
+ *     `session` profile (SBPL on darwin) denies writes under the home, which
+ *     is the real boundary; the CLI's GNOMON_HSID refusal is advisory hygiene.
+ *     Nothing a file says is trusted: install cards are re-derived from the
+ *     pinned snapshot, and requestedBy / hsid / attended are shown on the card
+ *     as claims of the staged record.
  *   - START. `gnomon mod start <name>` removes the marker and writes
  *     `start.request`; the pickup consumes it and runs the operator start
  *     (which also lifts a restart-cap `down`). Starting never widens: what

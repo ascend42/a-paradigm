@@ -9,8 +9,11 @@
  *
  *   install <path>   stage a package: validate, snapshot, pending install card
  *   link <folder>    stage a linked folder (tier `local`)
- *       Both SIGN NOTHING (I3 staging exception, also from a kernel-spawned
- *       shell: the card then names the session's hsid). The card printed is
+ *       Both SIGN NOTHING. Staging from a session (the I3 staging exception)
+ *       is NOT available yet: on darwin the `session` profile denies writes
+ *       under the Gnomon home, so the snapshot copy fails there; it needs the
+ *       gnomon-mods bridge (a later lane). If GNOMON_HSID is set the record
+ *       carries it as a CLAIM (shown as such on the card). The card printed is
  *       the one the broker will show — re-derived from the pinned snapshot by
  *       the hardened install path (one line per entry, the kernel-composed
  *       count line, COMMAND_UNSAFE refusal of a linked path, the linked-source
@@ -20,11 +23,15 @@
  *   list             every mod with an effective install or a pending card
  *   status [<name>]  pin, source, tier, pause, pending cards, snapshots
  *   pause <name>     write the pause marker (narrows: allowed from a session)
- *   start <name>     clear it and request an operator start (refused from a
- *                    kernel-spawned shell, like every widening verb)
+ *   start <name>     clear it and request an operator start
  *   uninstall <name> stage an uninstall request; the kernel raises a root-class
  *                    card whose `allow` appends a root-signed grant.uninstall
- *                    (human-only: refused from a kernel-spawned shell)
+ *
+ * THE GNOMON_HSID CHECK IS ADVISORY (hygiene, §3.1 I3 "honest limit"):
+ * `start` and `uninstall` refuse when GNOMON_HSID is set, but `env -u` defeats
+ * that. The boundaries are the `session` sandbox profile (SBPL on darwin: a
+ * session cannot write the home at all, so it cannot write any marker or
+ * request) and, for uninstall, the root-key presence on the card.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -141,7 +148,7 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
   };
   const human = (what: string): boolean => {
     if (!hsid) return true;
-    refused(io.stderr, 'forbidden', 'kernel-spawned-shell', `gnomon mod ${what} is human-only; it is refused from a kernel-spawned shell (GNOMON_HSID set)`, ['ask the human to run it in their own terminal']);
+    refused(io.stderr, 'forbidden', 'kernel-spawned-shell', `gnomon mod ${what} is human-only; it is refused from a kernel-spawned shell (GNOMON_HSID set; advisory: the session sandbox is the boundary)`, ['ask the human to run it in their own terminal']);
     return false;
   };
 
