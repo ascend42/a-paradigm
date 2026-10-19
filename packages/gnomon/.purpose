@@ -659,6 +659,29 @@ components:
       - test/dev-launch.test.ts
       - test/dev-launch-session.test.ts
 
+  wrapper-channel:
+    description: >-
+      #wrapper-channel (spec §19.1 M1.13 row, Appendix A; G-GUI-12,
+      G-WEB-01..06, G-GUI-03) — the gnomon-wrapper-channel:v1 launch contract
+      between Gnomon.app (#gnomon-wrapper) and `gnomon up --wrapper` /
+      `gnomon dev up --wrapper`. The app spawns `node --disable-sigusr1
+      <gnomon.js> up --wrapper` with a clean env; the child writes NDJSON on
+      its stdout pipe (up, launch{port, launchToken, kernelPublicKey,
+      bundleHash, expiresAt}, launch-failed, refused{code, reason, message,
+      next}, down) and reads `launch` | `quit` on stdin (EOF = quit). The
+      token is on that pipe only. Child side: src/cli/launch-tty.ts
+      (serveWrapperChannel, wrapperChannelProblem, channelRefused,
+      WRAPPER_LAUNCH_CAP 8/min with one mint in flight, stopping re-checked
+      after each mint, WRAPPER_UNSAFE_ENV_NEXT). Wrapper side:
+      packages/gnomon-wrapper/src/contract.rs (parse_line, read_line_capped at
+      64 KiB, redacting Debug).
+    path: src/cli/launch-tty.ts
+    type: module
+    tags: [gnomon, wrapper, contract, M1.13]
+    related: ["#gnomon-up", "#dev-launch", "#gnomon-wrapper", "#web-endpoint"]
+    tests:
+      - test/wrapper-channel.test.ts
+
   gnomon-up:
     description: >-
       #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>] [--wrapper]`, the
