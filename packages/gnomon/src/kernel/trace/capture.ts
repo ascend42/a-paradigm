@@ -54,6 +54,7 @@
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { TRACE_REFUSALS, type TraceRefusalValue } from '@a-company/gnomon-contracts';
 import { currentUid } from '../lifecycle/home.js';
 
 /** The trace root inside the Gnomon home. */
@@ -81,8 +82,9 @@ const O_NONBLOCK: number = fs.constants.O_NONBLOCK ?? 0;
 const POSIX = process.platform !== 'win32';
 
 export type TraceDir = 'in' | 'out' | 'ctl';
-export const TRACE_REFUSALS = ['trace-unsafe', 'trace-unavailable'] as const;
-export type TraceRefusal = (typeof TRACE_REFUSALS)[number];
+/** The closed `session.sandbox{traceRefused}` values, published by gnomon-contracts (D98_CLOSED_VALUES). */
+export { TRACE_REFUSALS };
+export type TraceRefusal = TraceRefusalValue;
 
 export class TraceRefused extends Error {
   constructor(

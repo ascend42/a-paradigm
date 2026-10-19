@@ -247,7 +247,9 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // note (RESUME_NOTES) and drainedEventId.
   // (the phase field already exists; its new value is published in D98_CLOSED_VALUES, as are the exit reasons
   // a drained session's session.exited{reason} writes: DRAIN_EXIT_REASONS)
-  'session.sandbox': Object.freeze({ resumedFrom: D98, drainOutcome: D98, note: D98, drainedEventId: D98 }),
+  // P8-D98 (#trace-capture, TD-2026-10-19-057): the running row says traced:true when the human's per-folder trace
+  // mode recorded the session's raw stream, or traced:false with traceRefused (TRACE_REFUSALS) when it could not.
+  'session.sandbox': Object.freeze({ resumedFrom: D98, drainOutcome: D98, note: D98, drainedEventId: D98, traced: D98, traceRefused: D98 }),
   // P8-D98 (§2.4 rule 11, B2): every refusal of a resume names why (RESUME_REFUSALS); the row makes the refusal terminal.
   'session.refused': Object.freeze({ resume: D98 }),
   // P8-D98 (TD-2026-10-19-648 item 11, §7.4): the per-node claim generation; built in M2.2.
@@ -329,6 +331,10 @@ export const RESUME_NOTES = ['turn interrupted by update'] as const;
 /** `session.refused{resume}` (closed): why a drained session was not resumed. Any such kernel-signed row uses up the drain record. */
 export const RESUME_REFUSALS = ['cwd-gone', 'not-human', 'transcripts-withheld', 'layers-changed', 'git-changed', 'permit-missing', 'permit-unfit', 'billing-refused', 'spawn-failed'] as const;
 export type ResumeRefusal = (typeof RESUME_REFUSALS)[number];
+
+/** `session.sandbox{traceRefused}` (closed, #trace-capture): why a traced folder's session was not recorded. */
+export const TRACE_REFUSALS = ['trace-unsafe', 'trace-unavailable'] as const;
+export type TraceRefusalValue = (typeof TRACE_REFUSALS)[number];
 
 /** Always-rule match modes (TD-2026-10-19-528 F2): closed; only an exact match of (repoKey, tool, inputHash). */
 export const ALWAYS_RULE_MATCHES = ['exact'] as const;

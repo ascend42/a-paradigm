@@ -30,6 +30,7 @@ import {
   validateAlwaysRuleMatch,
   validateKindPayload,
   validateLogReadCursor,
+  TRACE_REFUSALS,
 } from '../src/index.js';
 
 const ULID = '01J00000000000000000000000';
@@ -103,10 +104,19 @@ describe('human-device verbs (gui.open, rules.revoke, daemon.stop)', () => {
   });
 });
 
+describe('#trace-capture wire (TD-2026-10-19-057; Aegis M5 G-HON)', () => {
+  it('session.sandbox{traced, traceRefused} are reserved under D98 and the refusal values are a published closed set', () => {
+    expect(RESERVED_PAYLOAD_FIELDS['session.sandbox']).toMatchObject({ traced: '8.0:P8-D98', traceRefused: '8.0:P8-D98' });
+    expect([...TRACE_REFUSALS]).toEqual(['trace-unsafe', 'trace-unavailable']);
+    expect(D98_CLOSED_VALUES).toMatchObject({ 'session.sandbox.traceRefused': ['trace-unsafe', 'trace-unavailable'] });
+    expect(CLIENT_API_DESCRIPTOR.closedValues).toMatchObject({ 'session.sandbox.traceRefused': ['trace-unsafe', 'trace-unavailable'] });
+  });
+});
+
 describe('drain-and-resume wire (§2.4 rule 11, T-2026-10-19-014 B1/B2; Aegis M1 G-HON)', () => {
   it('every B1/B2 wire field is reserved under D98 and every new value is a published closed set', () => {
     expect(RESERVED_PAYLOAD_FIELDS['session.open']).toMatchObject({ resume: '8.0:P8-D98', principalClass: '8.0:P8-D98' });
-    expect(RESERVED_PAYLOAD_FIELDS['session.sandbox']).toEqual({ resumedFrom: '8.0:P8-D98', drainOutcome: '8.0:P8-D98', note: '8.0:P8-D98', drainedEventId: '8.0:P8-D98' });
+    expect(RESERVED_PAYLOAD_FIELDS['session.sandbox']).toEqual({ resumedFrom: '8.0:P8-D98', drainOutcome: '8.0:P8-D98', note: '8.0:P8-D98', drainedEventId: '8.0:P8-D98', traced: '8.0:P8-D98', traceRefused: '8.0:P8-D98' });
     expect(RESERVED_PAYLOAD_FIELDS['session.inject']).toMatchObject({ deadlineMs: '8.0:P8-D98', deadlineSource: '8.0:P8-D98', failed: '8.0:P8-D98' });
     expect(D98_CLOSED_VALUES).toMatchObject({
       'session.open.resume.outcome': ['clean', 'interrupted'],
