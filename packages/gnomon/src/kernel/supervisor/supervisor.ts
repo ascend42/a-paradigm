@@ -332,7 +332,7 @@ export class SessionSupervisor {
         ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
-        memoryDirs: memoryChainOf(req.cwd, userHome).chain, // P8-D97 (Aegis M1): no session plants steering a later one loads
+        ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);

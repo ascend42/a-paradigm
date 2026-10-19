@@ -100,7 +100,16 @@ const q = (p: string): string => {
 
 const reEscape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
+/** One letter-case-insensitive SBPL regex fragment for an ASCII word (`claude` => `[Cc][Ll]…`). */
+const ci = (w: string): string => [...w].map((c) => (/[a-z]/i.test(c) ? `[${c.toUpperCase()}${c.toLowerCase()}]` : reEscape(c))).join('');
+
 function filter(p: PolicyPath): string {
+  if (p.match === 'steering') {
+    // P8-D97 R1: under the root, at any depth, any case: CLAUDE*.md files, and .claude dirs with everything in them
+    q(p.path); // refuse an inexpressible root before it reaches the regex
+    const r = reEscape(p.path);
+    return `(regex #"^${r}/(.+/)?${ci('claude')}[^/]*\\.${ci('md')}$") (regex #"^${r}/(.+/)?\\.${ci('claude')}(/.*)?$")`;
+  }
   return `(${p.match === 'subpath' ? 'subpath' : p.match === 'prefix' ? 'prefix' : 'literal'} ${q(p.path)})`;
 }
 

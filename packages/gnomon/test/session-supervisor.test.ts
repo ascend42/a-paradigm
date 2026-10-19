@@ -326,6 +326,20 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
     expect(writes).toEqual({ [path.join(topReal, 'CLAUDE.md')]: 'blocked', [path.join(subReal, 'CLAUDE.md')]: 'blocked', [path.join(topReal, '.claude', 'planted.md')]: 'blocked', [path.join(subReal, 'ok.txt')]: 'allowed' });
     expect(fs.readFileSync(path.join(w.cwd, 'CLAUDE.md'), 'utf8')).toBe('top token ZEBRA-top\n');
   }, 30_000);
+  it('R1: the profile denies CLAUDE*.md and .claude/** anywhere in the subtree, in any case; other claude* names stay writable', async () => {
+    const r = rig();
+    const top = fs.realpathSync.native(w.cwd);
+    for (const d of [['a', 'b'], ['node_modules', 'dep'], ['src', 'adapters', 'claude-code']]) fs.mkdirSync(path.join(top, ...d), { recursive: true });
+    const blocked = [['a', 'b', 'CLAUDE.md'], ['a', 'b', 'claude.md'], ['a', 'Claude-notes.MD'], ['a', '.Claude', 'settings.json'], ['a', 'b', '.claude', 'rules', 'r.md'], ['node_modules', 'dep', 'CLAUDE.md']].map((x) => path.join(top, ...x));
+    const allowed = [['a', 'b', 'notes.md'], ['src', 'adapters', 'claude-code', 'adapter.ts'], ['a', 'claude-adapter.test.ts']].map((x) => path.join(top, ...x));
+    setMode(w, { startWrites: [...blocked, ...allowed] });
+    const s = await open(r.sup);
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'start-write').length === blocked.length + allowed.length)).toBe(true);
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    const res = Object.fromEntries(trace(w).filter((t) => t.t === 'start-write').map((t) => [String(t.path), t.result]));
+    for (const b of blocked) expect(res[b], b).toBe('blocked');
+    for (const a of allowed) expect(res[a], a).toBe('allowed');
+  }, 30_000);
   it('an approved repo hook runs beside the staged context; mode user-only and none stage nothing; mode all loads the repo natively', async () => {
     const r = rig();
     seed();

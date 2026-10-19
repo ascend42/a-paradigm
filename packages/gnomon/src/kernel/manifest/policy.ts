@@ -65,7 +65,11 @@ export const SESSION_POLICY_SCHEMA = 'gnomon-session-policy:v1' as const;
 export const SESSION_DENY_CLASSES = ['unix-socket:tmux', 'unix-socket:screen', 'ipc:helper-service', 'ipc:process-table-service', 'automation:apple-events', 'service-manager', 'media:microphone', 'media:camera', 'launchers', 'process-info:others', 'loopback:endpoint-port'] as const;
 export type SessionDenyClass = (typeof SESSION_DENY_CLASSES)[number];
 
-export type PathMatch = 'subpath' | 'literal' | 'prefix';
+/**
+ * `steering` (P8-D97 R1): under `path`, at ANY depth and in ANY letter case, a `CLAUDE*.md` file or anything in a
+ * `.claude` dir — the memory and settings Claude Code may load from a subtree. Write-deny only.
+ */
+export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering';
 export interface PolicyPath {
   path: string;
   match: PathMatch;
@@ -144,6 +148,12 @@ export interface SessionPolicyInput {
    * session loads (`--add-dir` memory, or an ancestor's `.claude`).
    */
   memoryDirs?: readonly string[];
+  /**
+   * P8-D97 (Aegis R1): the memory subtree root (the git top-level, else the cwd). Every `CLAUDE*.md` and `.claude/**`
+   * below it, in any case, joins the settings write denies (`steering` match: an SBPL regex), because Claude Code
+   * loads a subdirectory's CLAUDE.md lazily.
+   */
+  memorySubtree?: string;
 }
 
 /** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
@@ -240,6 +250,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     P(inp.userClaudeJson ?? defaultClaudeJson(inp.userClaudeDir), 'literal', 'settings'),
     ...inp.managedSettingsPaths.map((m) => P(m, 'literal', 'settings')),
     ...[...roots, ...(inp.memoryDirs ?? [])].flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
+    ...(inp.memorySubtree ? [P(inp.memorySubtree, 'steering', 'settings')] : []),
   ];
   // T-2026-10-18-010: the WHOLE Gnomon home is read-denied (keys, the kernel log, other sessions, the device key,
   // the pin, generated plugins…); the session's own reads are carved back explicitly and checked here
@@ -307,6 +318,14 @@ export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEd
 export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] } } {
   const deny = new Set<string>();
   for (const d of p.denyRead) deny.add(rule('Read', d));
-  for (const d of p.denyWrite) deny.add(rule('Edit', d));
+  for (const d of p.denyWrite) {
+    if (d.match !== 'steering') {
+      deny.add(rule('Edit', d));
+      continue;
+    }
+    // R1: Claude's own rules for the subtree (its glob matching may be case-sensitive: both common spellings)
+    const base = rule('Edit', { ...d, match: 'literal' }).slice(0, -1);
+    for (const g of ['**/CLAUDE*.md', '**/claude*.md', '**/.claude/**', '**/.Claude/**']) deny.add(`${base}/${g})`);
+  }
   return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] } };
 }

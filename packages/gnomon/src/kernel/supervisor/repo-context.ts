@@ -230,49 +230,44 @@ export function importTargets(text: string, file: string, userHome: string): str
   return importAudit(text, file, userHome).targets;
 }
 
-/** The memory files of one dir (CLAUDE.md, .claude/CLAUDE.md, .claude/rules/**.md); a symlink anywhere on the way refuses. */
-function memoryFilesOf(dir: string): { ok: true; files: string[] } | { ok: false; why: string } {
+/** R1: the most directories one memory dir's subtree walk visits; past it the dir is refused (fail closed). */
+export const MAX_SUBTREE_DIRS = 200_000;
+
+/**
+ * R1 (Aegis): EVERY memory file in a memory dir's SUBTREE — Claude Code loads a subdirectory's CLAUDE.md lazily, when
+ * it reads files there. Collected in any letter case (APFS, NTFS): every `claude.md` at any depth (so
+ * `.claude/CLAUDE.md` too), and every `.md` under a `.claude/rules` dir. A symlink named `claude.md` or `.claude`, or
+ * anything symlinked inside `.claude/rules`, refuses; other symlinks are not followed. The VCS dir and `node_modules`
+ * dirs are skipped (dependency trees: 80% of a real repo's dirs; their CLAUDE.md is a residual, writes there stay
+ * denied by the `steering` match). An
+ * unreadable dir, or more than `maxDirs` dirs, refuses (fail closed).
+ */
+export function memoryFilesUnder(dir: string, maxDirs: number = MAX_SUBTREE_DIRS): { ok: true; files: string[]; dirs: number } | { ok: false; why: string } {
   const files: string[] = [];
-  const lst = (p: string): fs.Stats | null => {
-    try {
-      return fs.lstatSync(p);
-    } catch {
-      return null;
+  const rel = (p: string): string => path.relative(dir, p).split(path.sep).join('/') || '.';
+  const stack: Array<{ d: string; claude: boolean; rules: boolean }> = [{ d: dir, claude: false, rules: false }];
+  let dirs = 0;
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (++dirs > maxDirs) return { ok: false, why: `the memory subtree has more than ${maxDirs} dirs` };
+    const rd = readDir(cur.d);
+    if (!rd.ok) return { ok: false, why: `${rel(cur.d)}: ${rd.why}` };
+    for (const e of rd.ents) {
+      const lower = e.name.toLowerCase();
+      if (lower === VCS_DIR) continue;
+      if (lower === 'node_modules' && e.isDirectory()) continue; // dependency trees: not walked (write-denied by the steering match; residual)
+      const p = path.join(cur.d, e.name);
+      if (e.isSymbolicLink()) {
+        if (lower === 'claude.md' || lower === '.claude' || cur.rules || (cur.claude && lower === 'rules')) return { ok: false, why: `${rel(p)} is a symlink` };
+        continue; // not followed
+      }
+      if (e.isDirectory()) stack.push({ d: p, claude: lower === '.claude', rules: cur.rules || (cur.claude && lower === 'rules') });
+      else if (e.isFile() && (lower === 'claude.md' || (cur.rules && isMd(lower)))) files.push(p);
     }
-  };
-  for (const p of [path.join(dir, 'CLAUDE.md'), path.join(dir, '.claude')]) if (lst(p)?.isSymbolicLink()) return { ok: false, why: `${path.relative(dir, p)} is a symlink` };
-  const top = lst(path.join(dir, 'CLAUDE.md'));
-  if (top?.isFile()) files.push(path.join(dir, 'CLAUDE.md'));
-  const inner = lst(path.join(dir, '.claude', 'CLAUDE.md'));
-  if (inner?.isSymbolicLink()) return { ok: false, why: '.claude/CLAUDE.md is a symlink' };
-  if (inner?.isFile()) files.push(path.join(dir, '.claude', 'CLAUDE.md'));
-  const rules = path.join(dir, '.claude', 'rules');
-  const rs = lst(rules);
-  if (rs?.isSymbolicLink()) return { ok: false, why: '.claude/rules is a symlink' };
-  if (rs?.isDirectory()) {
-    const walk = (d: string, depth: number): string | null => {
-      if (depth > MAX_TREE_DEPTH) return `${path.relative(dir, d)} is nested too deep`;
-      let ents: fs.Dirent[];
-      try {
-        ents = fs.readdirSync(d, { withFileTypes: true });
-      } catch (err) {
-        return `${path.relative(dir, d)} is unreadable (${(err as NodeJS.ErrnoException).code ?? 'error'})`;
-      }
-      for (const e of ents) {
-        const p = path.join(d, e.name);
-        if (e.isSymbolicLink()) return `${path.relative(dir, p)} is a symlink`;
-        if (e.isDirectory()) {
-          const w = walk(p, depth + 1);
-          if (w) return w;
-        } else if (e.isFile() && e.name.endsWith('.md')) files.push(p);
-      }
-      return null;
-    };
-    const w = walk(rules, 0);
-    if (w) return { ok: false, why: w.split(path.sep).join('/') };
   }
-  return { ok: true, files };
+  return { ok: true, files: files.sort(), dirs };
 }
+const VCS_DIR = '.' + 'git';
 
 /**
  * H1 (Aegis): audit one memory dir in the KERNEL. Refused (the whole dir is not added) when any memory file is a
@@ -280,8 +275,8 @@ function memoryFilesOf(dir: string): { ok: true; files: string[] } | { ok: false
  * absolute and relative forms) names an existing path outside `top`, or a symlink. A target that does not exist is
  * nothing Claude can load and is ignored.
  */
-export function auditMemoryDir(dir: string, top: string, userHome: string): { ok: true } | { ok: false; why: string } {
-  const listed = memoryFilesOf(dir);
+export function auditMemoryDir(dir: string, top: string, userHome: string, maxDirs: number = MAX_SUBTREE_DIRS, walked?: { ok: true; files: string[] }): { ok: true } | { ok: false; why: string } {
+  const listed = walked ? { ok: true as const, files: walked.files.filter((f) => isUnder(dir, f)) } : memoryFilesUnder(dir, maxDirs);
   if (!listed.ok) return listed;
   const topReal = realpathLoose(top);
   const rel = (p: string): string => (isUnder(topReal, p) ? path.relative(topReal, p).split(path.sep).join('/') || '.' : p);
@@ -404,12 +399,16 @@ function realDir(p: string): boolean {
  * Build the session's repo context: the memory dirs and the generated plugin under `outDir` (wiped first).
  * Reads only `<cwd>/.claude/{skills,agents,commands}` and the memory files' presence; writes only under outDir.
  */
-export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string }): RepoContext {
+export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string; maxSubtreeDirs?: number }): RepoContext {
   const cwd = realpathLoose(i.cwd);
   const { chain, top } = memoryChainOf(cwd, i.userHome);
   const ctx: RepoContext = { pluginDir: null, memoryDirs: [], memoryRefused: [], skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
+  // the outermost memory dir is walked once; a nested dir reuses that walk when it succeeded (else walks its own)
+  let outer: { dir: string; walk: ReturnType<typeof memoryFilesUnder> } | null = null;
   for (const d of chain.filter(hasMemory).reverse()) {
-    const a = auditMemoryDir(d, top, i.userHome);
+    if (outer === null) outer = { dir: d, walk: memoryFilesUnder(d, i.maxSubtreeDirs) };
+    const reuse = outer.walk.ok && isUnder(outer.dir, d) ? outer.walk : undefined;
+    const a = d === outer.dir && !outer.walk.ok ? outer.walk : auditMemoryDir(d, top, i.userHome, i.maxSubtreeDirs, reuse);
     if (a.ok) ctx.memoryDirs.push(d);
     else ctx.memoryRefused.push({ dir: path.relative(top, d).split(path.sep).join('/') || '.', why: a.why });
   }

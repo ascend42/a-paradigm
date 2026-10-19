@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AGENT_KEYS, buildRepoContext, COMMAND_KEYS, hasShellPreprocessing, MAX_CONTEXT_BYTES, MAX_CONTEXT_FILE_BYTES, MAX_CONTEXT_FILES, importTargets, memoryChainOf, memoryDirsOf, REPO_CONTEXT_PLUGIN, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, sanitizeFrontmatter, SKILL_KEYS } from '../src/kernel/supervisor/repo-context.js';
 import { privateTmpRoot } from './daemon-helpers.js';
-import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
+import { buildSessionPolicy, claudePermissions } from '../src/kernel/manifest/policy.js';
 
 let root = '';
 afterEach(() => {
@@ -437,6 +437,81 @@ describe('H1 (Aegis): the kernel audits memory and its @ imports before --add-di
   it('importTargets follows Claude grammar: # cut, escaped spaces, ~/ = the user home, @@ and punctuation ignored', () => {
     const f = path.join(path.sep, 'r', 'CLAUDE.md');
     expect(importTargets('@a.md#frag x @~/k @my\\ file.md @@x @#y @/ @(z)', f, path.join(path.sep, 'h'))).toEqual([path.join(path.sep, 'r', 'a.md'), path.join(path.sep, 'h', 'k'), path.join(path.sep, 'r', 'my file.md')]);
+  });
+});
+
+describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAUDE.md lazily)', () => {
+  const ctxOf = (w: ReturnType<typeof world>, extra: { maxSubtreeDirs?: number } = {}) => buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out, ...extra });
+  it.each([
+    ['sub/CLAUDE.md', ['sub', 'CLAUDE.md']],
+    ['a lowercase deep claude.md', ['a', 'b', 'c', 'claude.md']],
+    ['a nested .claude/CLAUDE.md', ['pkg', '.claude', 'CLAUDE.md']],
+    ['a nested .Claude/Rules file', ['pkg', '.Claude', 'Rules', 'deep', 'r.MD']],
+  ])('%s with an out-of-repo import refuses the memory dir', (_n, parts) => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top, fine\n');
+    put(path.join(w.repo, ...parts), '@~/.ssh/id\n');
+    const c = ctxOf(w);
+    expect(c.memoryDirs).toEqual([]);
+    expect(c.memoryRefused[0]!.why).toMatch(new RegExp(`^${parts.join('/').replace(/\./g, '\\.')}: an @ import reaches outside the repo`));
+  });
+  it('a clean subtree passes; a nested file that only imports inside the repo passes', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'sub', 'CLAUDE.md'), '@../docs/x.md\n');
+    put(path.join(w.repo, 'docs', 'x.md'), 'ok\n');
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
+  });
+  it.skipIf(!canSymlink)('a symlinked nested claude.md or .claude dir refuses; other symlinks are not followed', () => {
+    let w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(root, 'outside', 'CLAUDE.md'), '@~/.ssh/id\n');
+    fs.mkdirSync(path.join(w.repo, 'sub'));
+    fs.symlinkSync(path.join(root, 'outside', 'CLAUDE.md'), path.join(w.repo, 'sub', 'claude.md'), 'file');
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/sub\/claude\.md is a symlink/);
+    fs.rmSync(root, { recursive: true, force: true });
+    w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    fs.mkdirSync(path.join(w.repo, 'pkg'));
+    fs.symlinkSync(path.join(root, 'outside'), path.join(w.repo, 'pkg', '.Claude'), 'dir');
+    expect(ctxOf(w).memoryRefused[0]!.why).toMatch(/pkg\/\.Claude is a symlink/);
+    fs.rmSync(root, { recursive: true, force: true });
+    w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(root, 'elsewhere', 'CLAUDE.md'), '@~/.ssh/id\n');
+    fs.symlinkSync(path.join(root, 'elsewhere'), path.join(w.repo, 'linked-dir'), 'dir');
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]); // a plain symlinked dir is not followed
+  });
+  it('over the subtree cap ⇒ the dir is refused (fail closed)', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    for (const d of ['a', 'b', 'c', 'd']) fs.mkdirSync(path.join(w.repo, d));
+    expect(ctxOf(w, { maxSubtreeDirs: 3 }).memoryRefused[0]!.why).toMatch(/more than 3 dirs/);
+    expect(ctxOf(w, { maxSubtreeDirs: 10 }).memoryDirs).toEqual([w.repo]);
+  });
+  it('node_modules is not walked (the documented residual; writes there stay denied by the steering match)', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'node_modules', 'dep', 'CLAUDE.md'), '@~/.ssh/id\n');
+    expect(ctxOf(w).memoryDirs).toEqual([w.repo]);
+  });
+  it('a nested memory dir reuses the outer walk and is audited on its own subtree', () => {
+    const w = world();
+    const pkg = path.join(w.repo, 'packages', 'p');
+    put(path.join(w.repo, 'CLAUDE.md'), 'top\n');
+    put(path.join(w.repo, 'other', 'CLAUDE.md'), '@~/.ssh/id\n'); // outside pkg's subtree
+    put(path.join(pkg, 'CLAUDE.md'), 'pkg\n');
+    const c = buildRepoContext({ cwd: pkg, userHome: w.home, outDir: w.out });
+    expect(c.memoryDirs).toEqual([pkg]);
+    expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/^other\/CLAUDE\.md: /) }]);
+  });
+  it('the policy carries a steering deny for the subtree and Claude Edit globs for it', () => {
+    const w = world();
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });
+    expect(pol.denyWrite).toContainEqual({ path: w.repo, match: 'steering', class: 'settings' });
+    const rules = claudePermissions(pol).permissions.deny.filter((r) => r.includes('**/'));
+    expect(rules.some((r) => r.endsWith('/**/CLAUDE*.md)'))).toBe(true);
+    expect(rules.some((r) => r.endsWith('/**/.claude/**)'))).toBe(true);
   });
 });
 

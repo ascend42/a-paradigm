@@ -1571,6 +1571,15 @@ components:
       (disableSkillShellExecution); every SKILL.md at any depth sanitized; M3
       continuation/control-character rules; memoryChainOf feeds the policy's
       memoryDirs write-denies (M1); dotfiles skipped, readdir failures refused.
+      ROUND 3 (Aegis): memoryFilesUnder audits each memory dir's whole
+      SUBTREE (claude.md any case/depth, .claude/rules/**; symlinked
+      claude.md/.claude refuse; VCS dir + node_modules not walked; cap
+      MAX_SUBTREE_DIRS; outer walk reused by nested dirs); the policy's
+      `steering` match (memorySubtree) write-denies CLAUDE*.md and .claude/**
+      below the git top-level in any case (SBPL regex + Edit globs); imports
+      leaving the repo refuse before lstat, % tokens and entity-encoded @
+      refuse, an import still pending at depth 5 refuses; every .md in a skill
+      tree (SKILL.md any case) is sanitized and written sanitized.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
