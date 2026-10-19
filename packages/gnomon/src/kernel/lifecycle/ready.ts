@@ -201,6 +201,8 @@ export function makeReadyFifo(parent: string = os.tmpdir()): { dir: string; fifo
  * inherited. O_NONBLOCK: a reader that is gone fails (ENXIO) instead of
  * blocking; O_NOFOLLOW and the FIFO/owner/mode checks (before and after the
  * open, same inode) refuse anything that is not the activator's private FIFO.
+ * Its PARENT dir must be ours and 0700 too (Aegis L2, assertPrivateDir-style):
+ * a FIFO in a dir others can write could be swapped between the checks.
  * Null on any doubt: the activator then decides by the exit or the deadline.
  */
 export function openReadyFifo(fifo: string): number | null {
@@ -208,6 +210,8 @@ export function openReadyFifo(fifo: string): number | null {
   try {
     if (!path.isAbsolute(fifo)) return null;
     const uid = process.getuid?.();
+    const dir = fs.lstatSync(path.dirname(fifo));
+    if (!dir.isDirectory() || (dir.mode & 0o077) !== 0 || (uid !== undefined && dir.uid !== uid)) return null;
     const before = fs.lstatSync(fifo);
     if (!before.isFIFO() || (before.mode & 0o077) !== 0 || (uid !== undefined && before.uid !== uid)) return null;
     fd = fs.openSync(fifo, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW);

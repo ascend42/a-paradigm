@@ -337,6 +337,11 @@ describe('§2.4 rule 2: the ready FIFO channel (T-2026-10-19-011: linux has no s
     chmodSync(open, 0o644);
     expect(openReadyFifo(open)).toBeNull(); // group/other bits
     expect(openReadyFifo('relative/ready')).toBeNull();
+    // Aegis L2: a good FIFO (with a reader) in a parent dir that is not 0700 is refused
+    chmodSync(made.dir, 0o755);
+    expect(openReadyFifo(made.fifo)).toBeNull();
+    expect(existsSync(made.fifo)).toBe(true); // refused before the open: not unlinked
+    chmodSync(made.dir, 0o700);
     const fd = openReadyFifo(made.fifo); // positive control
     expect(fd).not.toBeNull();
     closeSync(fd!);

@@ -2397,7 +2397,7 @@ flows:
       instead (T-2026-10-19-011): a private 0600 FIFO in a fresh 0700 mkdtemp
       dir, read end opened by the activator before the spawn, only its path
       passed (`--ready-fifo`), the kernel opens the write end O_CLOEXEC
-      (FIFO/owner/mode/inode checked, O_NOFOLLOW) and unlinks the name first
+      (FIFO/owner/mode/inode checked, its parent dir ours and 0700 (Aegis L2), O_NOFOLLOW) and unlinks the name first
       thing, the activator removes the dir at settle; mkfifo runs by
       absolute path (/usr/bin, then /bin, never PATH); a FIFO failure passes
       NO ready channel (never the unsealable fd, Aegis L1): the tail and the
