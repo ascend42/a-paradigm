@@ -1,0 +1,46 @@
+{
+  "name": "@a-company/gnomon-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "gnomon-voice: the Gnomon voice client core (spec §14; voice slice V2c, TD-2026-10-19-298). Silero VAD, Parakeet TDT STT, Kokoro TTS and speaker verification via sherpa-onnx-node, driving the kernel as the talk-only voice principal. Audio never touches disk (G-VOX-05).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "gnomon-voice": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "voice-models.manifest.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "optionalDependencies": {
+    "sherpa-onnx-node": "1.13.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-voice"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
