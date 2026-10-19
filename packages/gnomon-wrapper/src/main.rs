@@ -2,7 +2,7 @@
 //! it runs:
 //!   1. one window on the bundled status page ("starting the kernel");
 //!   2. the kernel child `node --disable-sigusr1 <dist>/cli/gnomon.js up --wrapper` (kernel.rs:
-//!      clean env, node from the local config pin or the build record), its
+//!      clean env, node + kernel tree re-hashed against the build-time pins), its
 //!      stderr appended to ~/Library/Logs/Gnomon/kernel.log (0600);
 //!   3. on the channel's `up`, a `launch` request; on the grant, the native
 //!      preflight (loopback.rs: bundle pin, the wrapper's own hello + serverSig,
