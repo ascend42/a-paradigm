@@ -125,3 +125,29 @@ describe('helper re-pin (no card; fail closed)', () => {
     expect(x.holder.pin.sha256).toBe(before);
   });
 });
+
+describe('the launcher (bare gnomon) on a stale kernel', () => {
+  const st = (n: string) => ({ schemaVersion: 'gnomon-build:v1' as const, version: '8.0.0', commit: n, distHash: `sha256:${n.repeat(64).slice(0, 64)}`, guiBundleHash: null });
+  it('kernel-build.json differing from the on-disk stamp is a mismatch; same / missing is not', async () => {
+    const { launcherSeesUpdate } = await import('../src/cli/bare-cli.js');
+    const home = tmp();
+    expect(launcherSeesUpdate(home, st('a'))).toBe(false);
+    writeKernelBuild(home, { stamp: st('a'), pid: 1, startedAt: 'x' });
+    expect(launcherSeesUpdate(home, st('a'))).toBe(false);
+    expect(launcherSeesUpdate(home, null)).toBe(false);
+    expect(launcherSeesUpdate(home, st('b'))).toBe(true);
+  });
+  it('0 live sessions ⇒ daemon.stop{reason:upgrade} (the upgrade card); live sessions ⇒ no card', async () => {
+    const { raiseUpgradeIfIdle } = await import('../src/cli/bare-cli.js');
+    const calls: Array<[string, unknown]> = [];
+    const call = (n: number) => async (verb: string, params: Record<string, unknown>) => {
+      calls.push([verb, params]);
+      return verb === 'status' ? { result: { sessions: { n } } } : { result: { cardId: 'card:1' } };
+    };
+    expect(await raiseUpgradeIfIdle(call(0))).toBe('raised');
+    expect(calls).toEqual([['status', {}], ['daemon.stop', { reason: 'upgrade' }]]);
+    calls.length = 0;
+    expect(await raiseUpgradeIfIdle(call(2))).toBe('busy');
+    expect(calls.map((c) => c[0])).toEqual(['status']);
+  });
+});

@@ -35,7 +35,8 @@ import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 import type { LaunchTtyIo } from './launch-tty.js';
-import { requestRunningLaunch, runUp, upOpener, UpRefusal, type UpDeps } from './up-cli.js';
+import { requestRunningLaunch, runUp, upOpener, UpRefusal, type KernelCall, type UpDeps } from './up-cli.js';
+import { defaultBuildStampPath, readBuildStamp, readKernelBuild, sameBuild, type BuildStamp } from '../kernel/lifecycle/build-stamp.js';
 import { presentUrl } from './open-browser.js';
 import { isDevHome } from './dev-home.js';
 import { runGuiSetup, runSetup, type GuiSetupDeps } from './setup-cli.js';
@@ -155,6 +156,35 @@ export function unprovisionedDefaultHome(userHome?: string): boolean {
   return !hasIdentityFile(home);
 }
 
+/**
+ * TD-2026-10-19-063: the kernel running on `home` loaded another build than the one on disk (kernel-build.json vs
+ * dist/build-id.json). No record, no stamp or the same build ⇒ false (never a claimed mismatch on doubt).
+ */
+export function launcherSeesUpdate(home: string, onDisk: BuildStamp | null = readBuildStamp(defaultBuildStampPath())): boolean {
+  const k = readKernelBuild(home);
+  return !!k?.stamp && !!onDisk && !sameBuild(k.stamp, onDisk);
+}
+
+/** Live sessions in a `status` result (sessions.n, else the list length); null when it cannot tell. */
+export function liveSessionsOf(status: unknown): number | null {
+  const s = (status as { sessions?: { n?: unknown; sessions?: unknown } } | null)?.sessions;
+  if (typeof s?.n === 'number') return s.n;
+  return Array.isArray(s?.sessions) ? s.sessions.length : null;
+}
+
+/**
+ * TD-2026-10-19-063: a stale kernel with 0 live sessions gets the upgrade card (daemon.stop{reason:'upgrade'}: the
+ * kernel's own card if #update-watch already raised it — one card, never a second prompt). Never stops anything
+ * by itself: the human accepts in the window with Touch ID. Any refusal only skips the card.
+ */
+export async function raiseUpgradeIfIdle(call: KernelCall): Promise<'raised' | 'busy' | 'skipped'> {
+  const st = await call('status', {}).catch(() => null);
+  if (!st || !('result' in st)) return 'skipped';
+  if (liveSessionsOf(st.result) !== 0) return 'busy';
+  const r = await call('daemon.stop', { reason: 'upgrade' }).catch(() => null);
+  return r && 'result' in r ? 'raised' : 'skipped';
+}
+
 export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, deps: BareDeps = {}): Promise<number> {
   // spec §2.4 rule 10: on a terminal the launch (and setup) URL opens in the default browser; --no-open prints it only
   const noOpen = argv.length === 1 && argv[0] === '--no-open';
@@ -197,7 +227,16 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
       let g;
       try {
         // the folder rides as cwdHint only when it fits the fragment (HINT_MAX_BYTES, the same cap gui.open applies)
-        g = await requestRunningLaunch(home, suffix !== null ? folder : undefined);
+        const stale = launcherSeesUpdate(home);
+        g = await requestRunningLaunch(home, suffix !== null ? folder : undefined, {
+          ...(stale
+            ? {
+                beforeOpen: async (call) => {
+                  if ((await raiseUpgradeIfIdle(call)) === 'raised') io.stdout.write('UPDATE    Gnomon was updated: approve "Restart now" in the window (one Touch ID); your sessions come back after the restart\n');
+                },
+              }
+            : {}),
+        });
       } catch (x) {
         if (x instanceof UpRefusal) return alreadyRunning(`, and it did not hand this terminal a launch URL (${sanitizeDisplayText(x.reason).text}: ${sanitizeDisplayText(x.message).text})`, x.next);
         throw x;
