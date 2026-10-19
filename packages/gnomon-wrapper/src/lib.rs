@@ -11,6 +11,7 @@
 pub mod bundle;
 pub mod contract;
 pub mod kernel;
+pub mod logfile;
 pub mod loopback;
 pub mod nav;
 pub mod surface;

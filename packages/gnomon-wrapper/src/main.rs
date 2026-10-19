@@ -18,9 +18,8 @@
 //! never logged: only `LaunchGrant::url()` holds it, and only `navigate` sees that.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::{BufReader, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -62,9 +61,7 @@ fn user_home() -> PathBuf {
 
 /// ~/Library/Logs/Gnomon/kernel.log (dir 0700, file 0600, append): the child's stderr + the wrapper's own lines.
 fn open_log() -> Option<fs::File> {
-    let dir = user_home().join("Library/Logs/Gnomon");
-    fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).ok()?;
-    OpenOptions::new().create(true).append(true).mode(0o600).open(dir.join("kernel.log")).ok()
+    gnomon_wrapper::logfile::open_log_in(&user_home()).ok()
 }
 
 /// Put the window on the status page with `state` (and `detail`); never renders anything else.
