@@ -394,7 +394,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         .filter((v) => accessOf_(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
         .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
       verbs: VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
-      humanDeviceVerbs: HUMAN_DEVICE_VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: cls === 'human' && (s.credential ?? 'device') === 'device' && o.humanVerbs?.[v.verb as keyof HumanDeviceVerbPorts] !== undefined, milestone: HUMAN_DEVICE_VERB_MILESTONES[v.verb] })),
+      humanDeviceVerbs: HUMAN_DEVICE_VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: cls === 'human' && s.credential === 'device' && o.humanVerbs?.[v.verb as keyof HumanDeviceVerbPorts] !== undefined, milestone: HUMAN_DEVICE_VERB_MILESTONES[v.verb] })),
       relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf_(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
       ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
       daemon: o.status.daemon(),
@@ -591,7 +591,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     // mod, voice, read token, peer). A human principal needs a DEVICE connection (a key that signed auth over
     // the verified hello); a GUI launch-token connection is refused. Then the port, or not-implemented.
     if (HUMAN_DEVICE_VERB_NAMES.includes(m)) {
-      if (cls !== 'human' || (s.credential ?? 'device') !== 'device' || !s.principal) {
+      // Aegis L3: the credential must SAY device — a connection whose credential was never set is not a verified device
+      if (cls !== 'human' || s.credential !== 'device' || !s.principal) {
         throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is callable only by a verified human device connection (§5)`, { verb: m, principalClass: cls });
       }
       const h = o.humanVerbs?.[m as keyof HumanDeviceVerbPorts];

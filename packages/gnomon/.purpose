@@ -2104,7 +2104,8 @@ components:
       src/kernel/socket/rules-revoke.ts: the rules.revoke{ruleId} handler the
       daemon wires into DispatcherOptions.humanVerbs['rules.revoke'] (one
       key per verb in daemon.ts `humanVerbs`). Reached only for a verified
-      human device connection (dispatch.ts refuses every other class); no
+      human device connection (dispatch.ts refuses every other class, and a
+      connection whose credential is not explicitly 'device', Aegis L3); no
       presence prompt (revoking only narrows). Params exactly {ruleId}
       (RULE_ID_PATTERN) else BAD_REQUEST; the rule must stand in the
       daemon's RuleBook (kernel-signed rows only, shared with the
