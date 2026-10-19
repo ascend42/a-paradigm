@@ -88,7 +88,18 @@ export interface PermissionContext {
   /** the session root (cwd, or worktree) — relative paths resolve against it */
   repo: string;
   denyWrite: readonly PolicyPath[];
+  /**
+   * ExitPlanMode with no `plan` in the request (claude 2.1.302 sends `input:{}`, p01b planMode): the plan text the
+   * session's own assistant message carried — the ExitPlanMode tool_use input.plan, else the latest plan-file Write
+   * (`.claude/plans/*.md`) tool_use content. Display only, labelled as not part of the request; pinned by planHash.
+   */
+  planText?: { text: string; source: 'tool_use' | 'plan-file' };
 }
+
+/** Plan text larger than this is not attached to a plan card (the card says so instead of growing past MAX_CARD_CHARS). */
+export const MAX_ATTACHED_PLAN_CHARS = 256 * 1024;
+/** A Write to Claude Code's plan file (plan mode writes the plan there, then calls ExitPlanMode with input:{}). */
+export const PLAN_FILE = /(^|[\\/])\.claude[\\/]plans[\\/][^\\/]+\.md$/;
 
 export type AutoDenyWhy = 'deny-write' | 'no-path' | 'bad-input' | 'sandbox-escape' | 'too-large';
 
@@ -166,7 +177,15 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
   if (tool === 'ExitPlanMode') {
     const plan = s(inp.plan);
     if (inp.plan !== undefined && plan === null) return deny('bad-input', 'ExitPlanMode plan must be text');
-    const lines = ['The session proposes a plan', `repo: ${ctx.repo}`, ...(plan !== null ? full('plan', plan) : ['(the plan text is not in the request)']), ...rest(inp, ['plan']), 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'];
+    const att = plan === null && ctx.planText && cps(ctx.planText.text) <= MAX_ATTACHED_PLAN_CHARS ? ctx.planText : null;
+    if (att) detail.planHash = `sha256:${createHash('sha256').update(att.text, 'utf8').digest('hex')}`;
+    const planLines =
+      plan !== null
+        ? full('plan', plan)
+        : att
+          ? [`(the plan text is not in the request; shown from the session's ${att.source === 'plan-file' ? 'plan-file write' : 'ExitPlanMode tool use'})`, ...full('plan', att.text)]
+          : ['(the plan text is not in the request)'];
+    const lines = ['The session proposes a plan', `repo: ${ctx.repo}`, ...planLines, ...rest(inp, ['plan']), 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'];
     if (size(lines) > MAX_CARD_CHARS) return deny('too-large', 'the plan is too large to show in full on a card');
     return card('plan', PLAN_DECISIONS, detail, h, lines);
   }

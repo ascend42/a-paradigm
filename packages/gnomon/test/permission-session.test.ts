@@ -20,7 +20,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
-import { ASK_USER_NO_ANSWER, composePermission, inputHash } from '../src/kernel/supervisor/permission.js';
+import { ASK_USER_NO_ANSWER, composePermission, inputHash, PLAN_FILE } from '../src/kernel/supervisor/permission.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
@@ -122,6 +122,24 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
     expect(texts.join('').replaceAll('  ↳ ', '')).toContain(command);
     expect(texts.some((t) => t.includes(tail))).toBe(true);
   });
+  it('item 3 (pure). ExitPlanMode with input:{} shows the session-carried plan text, labelled as not part of the request and pinned by planHash; a plan in the request wins', () => {
+    const ctx = { repo: '/r', denyWrite: [] };
+    const req = { requestId: 'pl', toolName: 'ExitPlanMode', toolUseId: 't', input: {} };
+    const none = composePermission(req, ctx);
+    expect(none.kind === 'card' && none.lines).toContain('(the plan text is not in the request)');
+    const att = composePermission(req, { ...ctx, planText: { text: '1. write plan.txt\n2. test', source: 'plan-file' } });
+    expect(att.kind === 'card' && att.lines).toEqual(expect.arrayContaining(["(the plan text is not in the request; shown from the session's plan-file write)", '1. write plan.txt', '2. test']));
+    expect(att.kind === 'card' && att.detail.planHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    // a different attached text ⇒ a different detail (the card's contentHash covers what is shown)
+    const other = composePermission(req, { ...ctx, planText: { text: '1. rm -rf /', source: 'plan-file' } });
+    expect(other.kind === 'card' && other.detail.planHash).not.toBe(att.kind === 'card' && att.detail.planHash);
+    const inReq = composePermission({ ...req, input: { plan: 'from request' } }, { ...ctx, planText: { text: 'ignored', source: 'tool_use' } });
+    expect(inReq.kind === 'card' && inReq.lines.join('\n')).not.toContain('ignored');
+    expect(inReq.kind === 'card' && inReq.detail.planHash).toBeUndefined();
+    expect(PLAN_FILE.test('/Users/x/.claude/plans/brave-otter.md')).toBe(true);
+    expect(PLAN_FILE.test('/Users/x/repo/plans/a.md')).toBe(false);
+  });
+
   it('9 (pure half). a permission card offers allow|deny|always; card text per tool', () => {
     const ctx = { repo: '/r', denyWrite: [] };
     const bash = composePermission({ requestId: 'a', toolName: 'Bash', toolUseId: 't', input: { command: 'rm -rf build\necho done' } }, ctx);

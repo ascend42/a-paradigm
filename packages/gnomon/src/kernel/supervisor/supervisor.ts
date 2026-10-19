@@ -93,7 +93,7 @@ import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
-import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_PENDING_PERMISSIONS, parseAskAnswer, type AskQuestion, type CardKindP } from './permission.js';
+import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
@@ -198,6 +198,9 @@ interface Session {
   /** Aegis detector: tool names by tool_use id (assistant messages) and the ids a can_use_tool request named — both bounded */
   toolNames: Map<string, string>;
   requested: Set<string>;
+  /** item 3: ExitPlanMode tool_use input.plan by tool_use id (bounded TOOL_ID_CAP) and the last plan-file Write content (display only) */
+  planUses: Map<string, string>;
+  lastPlanFile: string | null;
   policy: SessionPolicy;
 }
 
@@ -438,7 +441,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), policy,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -599,7 +602,14 @@ export class SessionSupervisor {
         if (ev.usage) await usage('turn.usage', s.meter.message(ev.usage.messageId, ev.usage.tokens));
         return;
       case 'message':
-        for (const t of ev.toolUses) if (t.id !== null) bounded(s.toolNames, t.id, t.name);
+        for (const t of ev.toolUses) {
+          if (t.id !== null) bounded(s.toolNames, t.id, t.name);
+          // item 3: plan text for an ExitPlanMode request that arrives with input:{} (2.1.302) — display only, bounded
+          const inp = t.input !== null && typeof t.input === 'object' && !Array.isArray(t.input) ? (t.input as Record<string, unknown>) : null;
+          if (!inp) continue;
+          if (t.name === 'ExitPlanMode' && t.id !== null && typeof inp.plan === 'string' && inp.plan.length <= MAX_ATTACHED_PLAN_CHARS) bounded(s.planUses, t.id, inp.plan);
+          if (t.name === 'Write' && typeof inp.file_path === 'string' && PLAN_FILE.test(inp.file_path) && typeof inp.content === 'string' && inp.content.length <= MAX_ATTACHED_PLAN_CHARS) s.lastPlanFile = inp.content;
+        }
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
@@ -670,7 +680,9 @@ export class SessionSupervisor {
       return;
     }
     const repo = s.worktree ?? s.cwd;
-    const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite });
+    const fromUse = ev.toolName === 'ExitPlanMode' && ev.toolUseId !== null ? s.planUses.get(ev.toolUseId) : undefined;
+    const planText = ev.toolName !== 'ExitPlanMode' ? undefined : fromUse !== undefined ? { text: fromUse, source: 'tool_use' as const } : s.lastPlanFile !== null ? { text: s.lastPlanFile, source: 'plan-file' as const } : undefined;
+    const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite, ...(planText ? { planText } : {}) });
     if (plan.kind === 'auto-deny') {
       if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny', why: plan.why }, { session: s.hsid });
       await this.#write(s, permissionDenyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });

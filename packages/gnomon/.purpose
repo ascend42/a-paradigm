@@ -1530,7 +1530,13 @@ components:
       (broker RaiseInput.checkNote, BAD_REQUEST bad-params); the allow is
       updatedInput = {...kernel-held input, answers}; approval.decide logs
       noteHash/noteBytes only (privateNote). Residual: the note is not in the
-      decisionSig preimage (would move clientApiId). updatedInput is the
+      decisionSig preimage (would move clientApiId). PLAN TEXT (item 3):
+      claude 2.1.302 sends ExitPlanMode with input:{} (p01b planMode, after
+      a plan-file Write the session policy denies); the supervisor keeps the
+      assistant tool_use ExitPlanMode input.plan (by tool_use id, bounded)
+      and the last `.claude/plans/*.md` Write content, and the plan card
+      shows it labelled "not in the request" with detail.planHash (so the
+      contentHash covers it); a plan in the request wins. updatedInput is the
       kernel-held input; never updatedPermissions. Deny on no broker, raise
       failure, expiry, cancel (control_cancel_request => expire
       'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
