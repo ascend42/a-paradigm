@@ -218,7 +218,9 @@ export class RpcConnection {
  * the call may or may not have taken effect. Distinct from `connection-closed`
  * (never sent, so certainly not delivered) and from any kernel answer. A
  * caller must re-read state before retrying a non-idempotent call. Client-local,
- * like connection-closed: it never crosses the wire.
+ * like connection-closed: it never crosses the wire. A call() TIMEOUT
+ * (ETIMEDOUT) is just as ambiguous (Reviewer B8): the frame may have been acted
+ * on, and buffered bytes keep flushing after the timer, so treat it the same.
  */
 export const DELIVERY_UNKNOWN = 'delivery-unknown' as const;
 

@@ -155,7 +155,15 @@ export const CHANGE_NOTE_REFUSAL_REASONS = ['note-missing'] as const;
  * client-local (client.ts synthesizes them, they never cross the wire) and are
  * NOT wire reasons — `connection-closed` = the call was provably never sent,
  * `delivery-unknown` = it was written and the connection dropped before the
- * reply (T-2026-10-19-009 item 6); the
+ * reply (T-2026-10-19-009 item 6). A client-side TIMEOUT is exactly as
+ * delivery-ambiguous as a dropped connection (Reviewer B8): the frame may have
+ * reached the kernel and been acted on, and bytes still buffered when the timer
+ * fires keep flushing afterwards, so Node's write callback cannot prove a
+ * timed-out call unsent. Clients report a timeout as a timeout (ETIMEDOUT /
+ * TIMEOUT{call-timeout}), never as a refusal; a caller treats it like
+ * delivery-unknown and re-reads state before retrying a non-idempotent verb
+ * (every write: approve, permit.reserve, session.*, log.append,
+ * contract.register, …). The
  * not-implemented placeholders are kept as future-stable reasons.
  */
 export const SOCKET_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({

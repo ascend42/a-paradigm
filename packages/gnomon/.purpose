@@ -147,6 +147,9 @@ components:
       low mark (no flapping). Delivery unknown: RpcConnection (client.ts)
       answers every pending (written, unanswered) call with ENGINE
       {reason:'delivery-unknown'} when the connection closes;
+      a call() timeout (ETIMEDOUT) is documented as equally
+      delivery-ambiguous (Reviewer B8: buffered bytes keep flushing after the
+      timer, so no timeout proves "unsent"; callers re-read state);
       connection-closed for any call provably never sent (closed, or the
       socket destroyed / not writable / ended — GUI: readyState !== OPEN —
       or a write rejected with ERR_STREAM_DESTROYED/WRITE_AFTER_END).

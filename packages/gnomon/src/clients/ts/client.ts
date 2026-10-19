@@ -296,6 +296,9 @@ export class GnomonClient {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         this.#pending.delete(id);
+        // delivery-AMBIGUOUS, like delivery-unknown (Reviewer B8): the frame may have reached the kernel and been
+        // acted on, and bytes still buffered keep flushing after this timer, so "not yet flushed" never proves
+        // "not sent". The caller re-reads state before retrying a non-idempotent verb.
         reject(Object.assign(new Error(`gnomon-client: ${method} timed out`), { code: 'ETIMEDOUT' }));
       }, this.#timeoutMs);
       this.#pending.set(id, (f) => {
