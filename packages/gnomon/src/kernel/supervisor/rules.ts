@@ -110,4 +110,30 @@ export class RuleBook {
   list(): AlwaysRule[] {
     return [...this.#rules.values()];
   }
+
+  /** Everything up to `seq` has been scanned (rule kind or not): the next read starts after it. */
+  advanceTo(seq: number): void {
+    if (seq > this.lastSeq) this.lastSeq = seq;
+  }
+}
+
+/** A chain reader for catchUp: the released head, and the RULE_KINDS rows in [fromSeq, toSeq]. */
+export interface RuleSource {
+  head(): number;
+  read(fromSeq: number, toSeq: number): Iterable<RuleRow>;
+}
+
+/**
+ * Aegis C2: fold the rows appended since the last catch-up and advance past
+ * EVERY row up to the head captured first — not only past rule kinds — so a
+ * chain of non-rule rows is scanned once, never on each request. Rows
+ * appended after the head was captured are read next time. Returns whether
+ * the source was read at all.
+ */
+export function catchUp(book: RuleBook, src: RuleSource): boolean {
+  const head = src.head();
+  if (head <= book.lastSeq) return false;
+  for (const r of src.read(book.lastSeq + 1, head)) book.fold(r);
+  book.advanceTo(head);
+  return true;
 }

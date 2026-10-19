@@ -13,7 +13,8 @@ import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
 import { KeyRing, SoftwareEd25519Signer, type KernelLog } from '../src/kernel/log/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
-import { MAX_RULES, RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
+import { catchUp, MAX_RULES, RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
+import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 import { runRulesCommand, rulesOfHome } from '../src/cli/rules-cli.js';
 import { tempHome } from './daemon-helpers.js';
 
@@ -75,6 +76,27 @@ describe('#always-rules: derived from kernel-signed rows only, exact match only'
     const plan = learnRows(card(9));
     plan[0] = { ...plan[0]!, payload: { ...(plan[0]!.payload as object), card: { cardId: card(9), kind: 'plan' } } };
     expect(book(plan).list()).toEqual([]);
+  });
+
+  it('Aegis C2: catchUp advances past EVERY scanned row to the head — 1000 non-rule rows are read once, never rescanned', () => {
+    const b = new RuleBook({ principal: K, isKernelKey: (k) => k === KEY });
+    let head = 1000; // 1000 non-rule rows: the RULE_KINDS read yields nothing for them
+    const reads: Array<[number, number]> = [];
+    const src = { head: () => head, read: (from: number, to: number) => (reads.push([from, to]), [] as RuleRow[]) };
+    expect(catchUp(b, src)).toBe(true);
+    expect(b.lastSeq).toBe(1000);
+    for (let i = 0; i < 5; i++) expect(catchUp(b, src)).toBe(false); // no new rows: no read at all
+    expect(reads).toEqual([[1, 1000]]);
+    head = 1003;
+    const rows = learnRows(card(1)).map((r, i) => ({ ...r, seq: 1001 + i }));
+    expect(catchUp(b, { head: () => head, read: (from, to) => (reads.push([from, to]), rows) })).toBe(true);
+    expect(reads.at(-1)).toEqual([1001, 1003]); // only the new rows
+    expect(b.list().map((r) => r.ruleId)).toEqual([card(1)]);
+  });
+
+  it('repoKeyOf is the one shared key (repo-hooks.ts): pinned value for /', () => {
+    expect(repoKeyOf(['/'])).toBe('sha256:8a5edab282632443219e051e4ade2d1d5bbc671c781051bf1437897cbdfea0f1');
+    expect(repoKeyOf(['/', '/'])).toBe(repoKeyOf(['/'])); // a worktree equal to cwd counts once
   });
 
   it('bounded: at most MAX_RULES rules (oldest dropped: the card is raised again, never an allow)', () => {
