@@ -25,6 +25,7 @@ export * from './refusal.js';
 export * from './change-note.js';
 export * from './review-finding.js';
 export * from './card.js';
+export * from './voice-allowlist.js';
 export * from './rpc.js';
 export * from './schemas.js';
 export * from './client-api.js';

@@ -1601,6 +1601,10 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
+      Voice (TD-2026-10-19-194): whether voice may take a decision is
+      gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
+      classes.ts; test/voice-golden.test.ts pins abiId and checks the list
+      against KIND_DECISIONS.
       src/kernel/broker/. T-2026-10-18-028: M2 — UnlockStore ends a cached
       unlock at UNLOCK_IDLE_MS idle, UNLOCK_ABSOLUTE_MS (60 min) after it
       opened, or after UNLOCK_MAX_SIGNATURES (64) uses (approval.unlock.
