@@ -1,0 +1,26 @@
+id: L-2026-10-19-builder-004151-001
+type: insight
+timestamp: '2026-10-19T00:41:51.816Z'
+author: builder
+title: 'Probe p10m-repo-context: how to load repo context while repo hooks stay off'
+summary: Real claude 2.1.303 under the generated session profile, pass. disableAllHooks in --settings also kills the kernel's own --settings hooks. --add-dir skills are not loaded while the project source is off. A --plugin-dir loads skills/agents/commands (namespaced project:x), and an UNSTRIPPED plugin skill's frontmatter hooks fire (PreToolUse, Stop). --add-dir <repo> plus CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 loads CLAUDE.md with @imports under --setting-sources user, without the add-dir's skills or hooks. A scratch CLAUDE_CONFIG_DIR has no login (keychain credentials are keyed by the config dir), so the model arms need the real user layer.
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+files_created:
+  - packages/gnomon/probes/p10m-repo-context/probe.mjs
+  - packages/gnomon/probes/results/p10m-repo-context.darwin.json
+commit: 775c1fd9
+learnings:
+  - stripping plugin frontmatter is load-bearing
+  - disableAllHooks is all-or-nothing
+  - additional-dir memory bypasses the project-source gate
+tags:
+  - gnomon
+  - p8-d97
+  - probe
+confidence: 0.9
+git_context:
+  ref: f13713a205ff38c5e05597b865fa4b553a5a95b5
+  branch: gnomon/repo-context
+  dirty: true

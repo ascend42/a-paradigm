@@ -1,0 +1,21 @@
+id: L-2026-10-19-builder-004200-001
+type: milestone
+timestamp: '2026-10-19T00:42:00.671Z'
+author: builder
+title: 'M1.7: audited sessions load repo CLAUDE.md, skills, agents and commands (G-SUB-08)'
+summary: 'P8-D97 built and probed: repo-context.ts plus adapter/supervisor wiring, G-SUB-08 falsifiers (fake claude runs any hook left in a plugin file; a mutation that allow-lists hooks fails all three), spec P8-D97 row + §3.3 + Appendix A, .purpose, a dogfood runbook note on re-probing after a claude repin.'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#session-runner'
+tags:
+  - gnomon
+  - p8-d97
+  - milestone
+  - m1.7
+linked_lore:
+  - L-2026-10-19-builder-004151-001
+git_context:
+  ref: f13713a205ff38c5e05597b865fa4b553a5a95b5
+  branch: gnomon/repo-context
+  dirty: true

@@ -121,7 +121,14 @@ endpoint starts, no token is minted, and you get `gui  not started` instead.
   in the dev home.
 - After Claude Code updates itself, opens are refused `claude_binary_changed`.
   Stop `dev up`, then run `gnomon session repin-claude --home ~/.gnomon-dev` in a
-  terminal and type the confirmation.
+  terminal and type the confirmation. The native installer's `~/.local/bin/claude`
+  is a symlink into `~/.local/share/claude/versions/`, so every auto-update moves
+  the hash; expect this after any update, even mid-session (2.1.302 became 2.1.303
+  on 2026-10-18). A running session keeps its private copy; only the next open is
+  refused. The repo-context loading (P8-D97: `--plugin-dir`, `--add-dir` and
+  `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`) was measured on 2.1.303. After
+  a repin to a newer version, re-run `node packages/gnomon/probes/run.mjs
+  p10m-repo-context` before trusting that repo hooks still stay off.
 - Remove Gnomon's state: stop `dev up`, then run `rm -rf ~/.gnomon-dev`. That removes
   everything **Gnomon** wrote: the keys, the log, the claude pin and its private
   copy under `bin/`. It does **not** remove what Claude Code itself writes.

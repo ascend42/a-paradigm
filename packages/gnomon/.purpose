@@ -1548,6 +1548,21 @@ components:
       approved hooks into the session's policy.json under
       --setting-sources user (hooks mode `audited`, the default; probe
       p10m-repo-surfaces). Pending cards bounded (MAX_PENDING_HOOK_CARDS).
+      P8-D97 / G-SUB-08 (founder ruling 2026-10-18; probe p10m-repo-context,
+      real claude 2.1.303, pass): repo-context.ts loads the repo's CONTEXT in
+      `audited` — memoryDirsOf (cwd up to the git top-level holding
+      CLAUDE.md / .claude/CLAUDE.md / .claude/rules, never the user home) ->
+      --add-dir + REPO_CONTEXT_ENV (CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1);
+      buildRepoContext copies .claude/{skills,agents,commands} into
+      <session dir>/context, a --plugin-dir named `project`, frontmatter
+      ALLOW-LISTED (sanitizeFrontmatter: hooks, allowed-tools, permissionMode,
+      mcpServers, unknown keys dropped; tabs/quoted/flow/merge/duplicate
+      keys or unterminated blocks refuse the file); symlinks refused; caps
+      MAX_CONTEXT_FILES / MAX_CONTEXT_BYTES / MAX_CONTEXT_FILE_BYTES.
+      Frontmatter hooks are stripped and listed, never approvable. The
+      repo's non-hook settings are NOT loaded: repoSettingsInfo /
+      repoSettingsLines put counts and key names (never values) on each
+      repo-hook card and on gate-class.detected{what:'repo-context'}.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
@@ -1595,7 +1610,8 @@ components:
     tests:
       - test/session-supervisor.test.ts
       - test/repo-hooks.test.ts
-    oracles: [G-RUN-03, G-SUB-05, G-SUB-07]
+      - test/repo-context.test.ts
+    oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
 
   local-runner:
     description: >-
@@ -1661,7 +1677,9 @@ components:
       --setting-sources; the mode is the root-signed config.sessions.hooks
       (budget/config.ts parseSessionsSection; default all; rollback/invalid
       after a signed config => none), wired by the daemon into #supervisor
-      and logged as session.sandbox.settingSources. The §3.3 argv with FORBIDDEN_FLAGS
+      and logged as session.sandbox.settingSources. P8-D97: pluginDirs
+      (--plugin-dir) and addDirs (--add-dir), deduped; repoContextFor(mode)
+      is true for audited only. The §3.3 argv with FORBIDDEN_FLAGS
       throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
       TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
       `malformed` — the falsifier); UsageMeter charges each message id once
