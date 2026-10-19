@@ -281,23 +281,36 @@ struct VoiceDecision {
     let voiceConnId: String
 }
 
-func parseVoiceDecision(_ m: Data) -> VoiceDecision? {
-    let domain = Data("gnomon:approve-voice:v1\n".utf8)
-    guard m.starts(with: domain), let body = String(data: m.subdata(in: domain.count..<m.count), encoding: .utf8) else { return nil }
-    let f = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    guard f.count == 15, f[0] == "gnomon:voice-decision:v1" else { return nil }
+/// The same rules as gnomon-contracts parseVoiceDecisionMessage (shared vectors: gnomon-contracts
+/// test/fixtures/voice-decision-vectors.json): split the BYTES on 0x0A; each field valid UTF-8, non-empty, ≤ 256
+/// UTF-16 code units (JS length), no C0 control (so no CR) and no DEL; `-` only in lines 10–14.
+func parseVoiceDecisionBody(_ body: Data) -> VoiceDecision? {
+    let lines = body.split(separator: 0x0A, omittingEmptySubsequences: false)
+    guard lines.count == 15 else { return nil }
+    var f: [String] = []
+    for raw in lines {
+        guard !raw.isEmpty, !raw.contains(where: { $0 < 0x20 || $0 == 0x7F }),
+              let s = String(data: Data(raw), encoding: .utf8), s.utf16.count <= 256 else { return nil }
+        f.append(s)
+    }
+    guard f[0] == "gnomon:voice-decision:v1" else { return nil }
     func isHash(_ s: String) -> Bool {
-        s.count == 71 && s.hasPrefix("sha256:") && s.dropFirst(7).unicodeScalars.allSatisfy { ("0"..."9").contains($0) || ("a"..."f").contains($0) }
+        s.utf8.count == 71 && s.hasPrefix("sha256:") && s.utf8.dropFirst(7).allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
     }
     for (i, v) in f.enumerated().dropFirst() {
-        guard !v.isEmpty, v.count <= 256 else { return nil }
         switch i {
-        case 3, 9: guard isHash(v) else { return nil }            // cardContentHash, utteranceHash
-        case 10...14: guard v == "-" || isHash(v) else { return nil } // handle, challenge, readback, confirm, answer
-        default: break
+        case 3, 9: guard isHash(v) else { return nil }                  // cardContentHash, utteranceHash
+        case 10...14: guard v == "-" || isHash(v) else { return nil }   // handle, challenge, readback, confirm, answer
+        default: guard v != "-" else { return nil }                     // absent is allowed nowhere else
         }
     }
     return VoiceDecision(armId: f[5], humanConnId: f[6], voiceConnId: f[7])
+}
+
+func parseVoiceDecision(_ m: Data) -> VoiceDecision? {
+    let domain = Data("gnomon:approve-voice:v1\n".utf8)
+    guard m.starts(with: domain) else { return nil }
+    return parseVoiceDecisionBody(m.subdata(in: domain.count..<m.count))
 }
 
 /// T-2026-10-18-028 M4 (defence in depth; the kernel strips them first, card.ts promptSafe): no format

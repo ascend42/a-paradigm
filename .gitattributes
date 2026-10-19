@@ -22,3 +22,5 @@ docs/specs/gnomon-client-api.md text eol=lf
 
 # First-party mods are pinned by packageHash (FIRST_PARTY_PACKAGE_HASHES): keep LF on every OS.
 packages/gnomon-mods/** text eol=lf
+# Voice decision preimage vectors, read by the TS and Swift suites (helper 1.6.0); keep LF on every OS.
+packages/gnomon-contracts/test/fixtures/*.json text eol=lf

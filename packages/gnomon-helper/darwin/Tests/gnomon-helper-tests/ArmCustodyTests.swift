@@ -221,14 +221,33 @@ final class AegisFixTests: XCTestCase {
         XCTAssertEqual(errorCode { try armSign(s, b64(voicePreimage(human: "conn:x")), human: "conn:x") }, "no-arm")
     }
 
-    func testH1GoldenMatchesContracts() {
-        // the same vector as packages/gnomon-contracts/test/voice-decision.test.ts (frozen layout)
-        let golden = "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\n" + H64 + "\np:abcdefgh/matt\n" + arm1
-            + "\nconn:h\nconn:v\nturn:1\n" + H64 + "\n-\n-\n-\n-\n-"
-        let d = parseVoiceDecision(Data(("gnomon:approve-voice:v1\n" + golden).utf8))
-        XCTAssertEqual(d?.armId, arm1)
-        XCTAssertEqual(d?.humanConnId, "conn:h")
-        XCTAssertEqual(d?.voiceConnId, "conn:v")
+    /// The ONE shared fixture, also read by packages/gnomon-contracts/test/voice-decision.test.ts.
+    func testH1SharedVectors() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("gnomon-contracts/test/fixtures/voice-decision-vectors.json")
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? Json)
+        let valid = try XCTUnwrap(doc["valid"] as? [Json])
+        let invalid = try XCTUnwrap(doc["invalid"] as? [Json])
+        XCTAssertGreaterThanOrEqual(valid.count, 4)
+        XCTAssertGreaterThanOrEqual(invalid.count, 20)
+        for v in valid {
+            let name = v["name"] as? String ?? "?"
+            let body = Data(try XCTUnwrap(v["message"] as? String).utf8)
+            let fields = try XCTUnwrap(v["fields"] as? [String: String])
+            let d = parseVoiceDecision(Data("gnomon:approve-voice:v1\n".utf8) + body)
+            XCTAssertNotNil(d, "valid vector refused: \(name)")
+            XCTAssertEqual(d?.armId, fields["armId"], name)
+            XCTAssertEqual(d?.humanConnId, fields["humanConnId"], name)
+            XCTAssertEqual(d?.voiceConnId, fields["voiceConnId"], name)
+        }
+        for v in invalid {
+            let name = v["name"] as? String ?? "?"
+            let body = Data(try XCTUnwrap(v["message"] as? String).utf8)
+            XCTAssertNil(parseVoiceDecision(Data("gnomon:approve-voice:v1\n".utf8) + body), "invalid vector accepted: \(name)")
+        }
+        // not valid UTF-8 at all (a case JSON cannot carry)
+        XCTAssertNil(parseVoiceDecision(Data("gnomon:approve-voice:v1\n".utf8) + Data(voicePreimage().utf8.dropFirst(24)) + Data([0xFF])))
     }
 
     func testM1FailClosedOnLockedOrUnknownSession() {
@@ -271,6 +290,16 @@ final class AegisFixTests: XCTestCase {
         XCTAssertEqual(errorCode { try s.handle(openReq) }, "arm-invalidated")
         XCTAssertTrue(ctx.invalidated)
         XCTAssertEqual(custody.sync { custody.arms.count }, 0)
+    }
+
+    func testSessionRecheckedBeforeTheArmIsKept() {
+        let probe = FakeProbe(true)
+        let ctx = SpyContext()
+        // no session event reaches the observer, but the session is unusable by the time the prompt returns
+        let s = testServer(probe: probe, presence: { _ in probe.ok = false; return ctx })
+        XCTAssertEqual(errorCode { try s.handle(openReq) }, "arm-invalidated")
+        XCTAssertTrue(ctx.invalidated)
+        XCTAssertEqual(s.custody.sync { s.custody.arms.count }, 0)
     }
 
     func testL4Display() {

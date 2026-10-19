@@ -22,10 +22,20 @@
  *   handleHash                  sha256:<hex64> | -   (gate and judgment cards)
  *   challengeHash               sha256:<hex64> | -   (gate and judgment cards)
  *   readbackHash                sha256:<hex64> | -
- *   confirmHash                 sha256:<hex64> | -   (two-step confirm)
+ *   confirmHash                 sha256:<hex64> | -   (two-step confirm: the hash of the NORMALIZED CONFIRM
+ *                                                     utterance, a second utterance; distinct from challengeHash,
+ *                                                     the hash of the kernel's secret challenge words)
  *   answerDigest                sha256:<hex64> | -   (ask-user answer text)
- * Exactly 15 lines joined by `\n`, no trailing newline; no field is empty, contains `\n`, or is longer than
- * VOICE_DECISION_FIELD_MAX characters.
+ * Exactly 15 lines joined by `\n` (0x0A), no trailing newline. No field is empty, contains a C0 control
+ * (U+0000–U+001F, so no `\n` and no `\r`) or DEL (U+007F), or is longer than VOICE_DECISION_FIELD_MAX UTF-16 code
+ * units (JS `length`; the helper measures the same way). `-` (absent) is accepted ONLY for handleHash,
+ * challengeHash, readbackHash, confirmHash and answerDigest (lines 10–14 after the marker); it is refused in every
+ * other field. Shared vectors: packages/gnomon-contracts/test/fixtures/voice-decision-vectors.json (read by this
+ * package's tests and the helper's Swift tests).
+ *
+ * V8a OBLIGATION: the kernel broker MUST build the message it asks the helper to sign with voiceDecisionMessage()
+ * and MUST verify a voice decision signature over a message re-parsed with parseVoiceDecisionMessage(); never a
+ * hand-joined string.
  */
 export const VOICE_DECISION_MARKER = 'gnomon:voice-decision:v1' as const;
 export const VOICE_DECISION_FIELD_MAX = 256;
@@ -51,11 +61,14 @@ const HASH = /^sha256:[0-9a-f]{64}$/;
 /** Fields that are a hash or `-` (absent); utteranceHash and cardContentHash must be a hash. */
 const OPTIONAL_HASHES = new Set(['handleHash', 'challengeHash', 'readbackHash', 'confirmHash', 'answerDigest']);
 
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
 function fieldOk(name: string, v: unknown): v is string {
-  if (typeof v !== 'string' || v.length === 0 || v.length > VOICE_DECISION_FIELD_MAX || v.includes('\n')) return false;
+  if (typeof v !== 'string' || v.length === 0 || v.length > VOICE_DECISION_FIELD_MAX || CONTROL.test(v)) return false;
   if (name === 'cardContentHash' || name === 'utteranceHash') return HASH.test(v);
   if (OPTIONAL_HASHES.has(name)) return v === '-' || HASH.test(v);
-  return true;
+  return v !== '-'; // absent is never allowed outside the optional hashes
 }
 
 /** Build the message (without the domain line). Throws TypeError on a malformed field. */

@@ -188,7 +188,8 @@ final class Server {
                 throw error
             }
             let put: Arms.Put? = custody.sync {
-                guard custody.epochIsCurrent(epoch0) else { return nil }
+                // Aegis belt-and-braces: the epoch AND a fresh session check, under the lock, before the arm is kept
+                guard custody.epochIsCurrent(epoch0), session.usable() else { return nil }
                 return custody.arms.put(a, gen: g, humanConnId: human, voiceConnId: voice, ctx: ctx,
                                         hardSeconds: TimeInterval(hard), idleSeconds: idle.map(TimeInterval.init), maxSignatures: cap)
             }
