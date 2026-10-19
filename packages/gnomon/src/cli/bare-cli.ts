@@ -32,6 +32,10 @@ import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
 import type { LaunchTtyIo } from './launch-tty.js';
 import { runUp, type UpDeps, type UpRefusal } from './up-cli.js';
+import { isDevHome } from './dev-home.js';
+import { runSetup, type SetupDeps } from './setup-cli.js';
+import { resolveGnomonHome } from '../kernel/lifecycle/index.js';
+import { hasIdentityFile } from '../kernel/identity/index.js';
 
 export const BARE_EXIT_ALREADY_RUNNING = 3;
 export const BARE_EXIT_USAGE = 64;
@@ -44,6 +48,8 @@ export const GNOMON_HELP = `gnomon ${GNOMON_VERSION} — supervise Claude Code s
 usage: gnomon [<command>] [options]     (every command takes --help)
 
   gnomon             in a repo: start the kernel and open the GUI with this folder suggested for a new session
+                     (the first time, on a terminal, it sets this Mac up first: same as \`gnomon setup\`)
+  setup              guided first run: checks, your name, two Touch ID prompts, then start
   up                 start the kernel on your provisioned home (~/.gnomon) and print the GUI launch URL
   identity           init | status: provision or inspect the hardware identity (Secure Enclave, Touch ID)
   session            repin-claude: re-pin the claude binary after Claude Code updates itself
@@ -55,7 +61,7 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   dev                init | up: the DEV ONLY unsigned launch path on a separate dev home
   help               this listing        --version  the version
 
-first run: gnomon identity init, then \`gnomon\` in a repo (or open Gnomon.app)
+first run: \`gnomon\` in a repo (it runs \`gnomon setup\` the first time); scripted: gnomon identity init
 `;
 
 /**
@@ -123,12 +129,35 @@ export function instanceOf(pid: number | undefined): string {
 export interface BareDeps extends UpDeps {
   /** The working directory (default process.cwd()). */
   cwd?: string;
+  /** #first-run test seams (helper path, fake helper, the TTY verdict). */
+  setup?: SetupDeps;
+}
+
+/** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json at all. */
+export function unprovisionedDefaultHome(userHome?: string): boolean {
+  const home = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(home);
+  } catch {
+    return true;
+  }
+  if (!st.isDirectory() || isDevHome(home)) return false; // a symlink, a file or a dev home: up's refusal names it
+  return !hasIdentityFile(home);
 }
 
 export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, deps: BareDeps = {}): Promise<number> {
   if (argv.length > 0) {
     io.stderr.write(`gnomon: unknown arguments (${argv.length}) for bare gnomon\n${GNOMON_HELP}`);
     return BARE_EXIT_USAGE;
+  }
+  // #first-run (spec §2.4 rule 9): on an interactive terminal, an unprovisioned default home is set up first,
+  // then this same process continues into up with the folder hint. Not a TTY: up's own refusal, unchanged.
+  const tty = deps.setup?.isTty ?? (io.stdin.isTTY === true && io.stdout.isTTY === true);
+  if (tty && unprovisionedDefaultHome(deps.userHome)) {
+    const s = await runSetup(io, { ...deps, ...deps.setup });
+    if (!s.provisioned) return s.code;
+    io.stdout.write('\nStarting Gnomon…\n');
   }
   const { folder, inGit } = folderOf(deps.cwd ?? process.cwd());
   const suffix = hintSuffix(folder);

@@ -63,7 +63,7 @@ export const UP_EXIT_USAGE = 64;
 
 export const UP_USAGE = `gnomon ${GNOMON_VERSION} up — run the kernel on your provisioned home and open the GUI
 usage: gnomon up [--home <abs>] [--wrapper]   (default ~/.gnomon; GNOMON_HOME is not read)
-  Needs \`gnomon identity init\` first. Refuses a dev home and a home whose kernel already runs.
+  Needs \`gnomon setup\` first (bare \`gnomon\` runs it for you). Refuses a dev home and a home whose kernel already runs.
   --wrapper: spawned by Gnomon.app (#gnomon-wrapper): the launch grant goes on the stdout pipe the app holds, never a terminal.
 `;
 
@@ -99,7 +99,10 @@ export interface UpKernel extends InProcessKernel {
   readonly deviceId: string;
 }
 
-const initHint = (home: string, dflt: boolean): string => `gnomon identity init${dflt ? '' : ` --home ${home}`}`;
+/** #first-run: the default home is set up by the guided `gnomon setup` (bare `gnomon` runs it on a terminal). */
+const initHint = (home: string, dflt: boolean): string => (dflt ? 'gnomon setup   (or just `gnomon` in a repo: it sets this Mac up first)' : `gnomon identity init --home ${home}`);
+/** Gnomon.app (MVP-a): the app has no setup screens yet, so it names the step without a command to paste. */
+export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet. In-app setup is coming; until then, run gnomon once in Terminal and it walks you through it';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
 export function resolveUpHome(given: string | undefined, userHome: string = os.homedir()): { home: string; isDefault: boolean } {
@@ -171,7 +174,7 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
     if (e instanceof IdentityError) throw new UpRefusal(`identity-${e.reason}`, `the hardware identity of ${home} cannot be opened: ${e.message}`);
     throw e;
   }
-  if (!hw) throw new UpRefusal('unprovisioned', `${home} has no hardware identity (keys/identity.json)`, ['gnomon identity init']);
+  if (!hw) throw new UpRefusal('unprovisioned', `${home} has no hardware identity (keys/identity.json)`, ['gnomon setup']);
   let handle: DaemonHandle;
   let device: ReturnType<typeof deviceOf>;
   try {
@@ -194,7 +197,7 @@ export async function startUpKernel(home: string, deps: UpDeps = {}): Promise<Up
 }
 
 function report(io: LaunchTtyIo, e: UpRefusal, wrapper = false, code = 'up'): number {
-  if (wrapper) channelRefused(io, code, e.reason, e.message, e.next);
+  if (wrapper) channelRefused(io, code, e.reason, e.message, e.reason === 'unprovisioned' ? [WRAPPER_SETUP_NEXT] : e.next);
   else refused(io.stderr, code, e.reason, e.message, e.next);
   return UP_EXIT_REFUSED;
 }

@@ -39,6 +39,7 @@ import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { PRINCIPAL_NAME_PATTERN } from '@a-company/gnomon-contracts';
 import { pidAlive } from '../lifecycle/pidfile.js';
 import { deviceKeyPath, loadDeviceKey, writeNewDeviceKey } from './device-key.js';
 import { HardwareRootAuthority, p256FromX963, p256KeyIdOfPem, pemOf } from './hardware.js';
@@ -245,6 +246,9 @@ export class Provisioner extends EventEmitter {
     const { mode, existing, name, host } = req;
     const home = this.#o.home;
     this.#budget = ROOT_PROMPT_BUDGET[mode];
+    // I12: the engine validates what any surface collected, on its own
+    if (!PRINCIPAL_NAME_PATTERN.test(name)) return this.#refuse('bad-name', 'the name must match [a-z0-9][a-z0-9._-]{0,63}');
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(host)) return this.#refuse('bad-host', 'the host must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}');
     const pin = this.#pin();
     if ('ok' in pin) return pin;
     let helper = this.#startHelper(pin);
@@ -415,12 +419,12 @@ export class Provisioner extends EventEmitter {
           if (!ok) leftover = gen;
         }
       }
-      const reason = e instanceof Interrupted ? 'interrupted' : 'provision-failed';
+      // a ProvisionStop (helper-line-mismatch, root-prompt-budget, provisioning-lock) names itself
+      const reason = e instanceof Interrupted ? 'interrupted' : e instanceof ProvisionStop ? e.reason : 'provision-failed';
       return this.#refuse(reason, e instanceof Error ? e.message : 'provisioning failed', {
         recordWritten,
         restored: !recordWritten && moved.length > 0,
         ...(leftover ? { leftoverGen: leftover, purge: `gnomon identity purge-keys --gen ${leftover}` } : { createdKeysDeleted: recordWritten ? [] : created }),
-        ...(e instanceof ProvisionStop ? { stop: e.reason } : {}),
       });
     } finally {
       release?.();

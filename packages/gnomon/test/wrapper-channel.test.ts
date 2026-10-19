@@ -147,13 +147,13 @@ describe('#gnomon-wrapper channel (in-process)', () => {
     await c.next('down');
   });
 
-  it('a refusal reaches the app on the channel: an unprovisioned home names `gnomon identity init`', async () => {
+  it('a refusal reaches the app on the channel: an unprovisioned home names the first run, not a command to paste (#first-run)', async () => {
     const w = world();
     const c = channel();
     expect(await runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: CLEAN })).toBe(1);
     const r = await c.next('refused');
     expect(r).toMatchObject({ code: 'up', reason: 'unprovisioned' });
-    expect((r.next as string[]).join(' ')).toContain('gnomon identity init');
+    expect((r.next as string[]).join(' ')).toContain('Gnomon is not set up on this Mac yet');
   });
 
   it('FALSIFIER: an unsafe runtime is refused on the channel too (the app shows why it did not start)', async () => {

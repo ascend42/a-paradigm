@@ -26,6 +26,8 @@ export interface FakeHelperOptions {
   touchesAllowed?: number;
   /** the helper process dies when it receives this op (e.g. 'key.create:approvals') */
   crashOn?: string;
+  /** the `shown` field of a sign reply: undefined = the real line, null = dropped, a string = replaced */
+  shown?: string | null;
 }
 
 export class FakeHelper implements HelperTransport {
@@ -163,7 +165,8 @@ export class FakeHelper implements HelperTransport {
           const s = cryptoSign('sha256', i === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: priv, dsaEncoding: 'der' });
           return s.toString('base64');
         });
-        return { ok: true, sigs, kept, shown: line };
+        // #first-run I1 falsifiers: a broken / impostor helper drops (null) or replaces its own prompt line
+        return { ok: true, sigs, kept, ...(this.opts.shown === undefined ? { shown: line } : this.opts.shown === null ? {} : { shown: this.opts.shown }) };
       }
       default:
         throw new HelperRefusal('bad-request', 'unknown op');

@@ -141,7 +141,7 @@ describe('#gnomon-up refusals (each guard falsified)', () => {
     const a = io();
     expect(await runUpCommand([], a, deps)).toBe(1); // default ~/.gnomon does not exist
     expect(a.e.join('')).toContain('REFUSED  UP  unprovisioned');
-    expect(a.e.join('')).toContain('next: gnomon identity init');
+    expect(a.e.join('')).toContain('next: gnomon setup');
     const empty = path.join(uh, 'empty');
     fs.mkdirSync(empty, { mode: 0o700 });
     const b = io();
