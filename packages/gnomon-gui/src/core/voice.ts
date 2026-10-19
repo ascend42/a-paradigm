@@ -6,9 +6,10 @@
  *   - Three states: Mic off, push-to-talk (`ptt`), ambient (`conversation` on the wire). The header pill is
  *     KERNEL-OWNED: its state comes only from `status.voice` (re-read when a voice.session.* row arrives), never
  *     from the voice client's own claims. `voiceStatusOf` is the one adapter over the status shape (V1:
- *     `{attached: {voiceSessionId, hsid, mode, turns} | null}`; V2a: `{attached: true, hsid, mode, ceiling, since,
- *     idleAt}` or the nested form with those fields). Unknown values fail toward the LOUDER indicator: an attached
- *     session whose mode is not `ptt` reads as ambient (the pill never under-reports a live mic).
+ *     `{attached: {voiceSessionId, hsid, mode, turns} | null}`; V2a: `{attached: boolean, hsid, ceiling: 'ptt' |
+ *     'conversation' | null, since, idleAt, voiceSessionId, turns: {n}, echoTailMs, ambientIdleMs}`, where
+ *     `ceiling` is what the attachment may hear now, i.e. its state). Unknown values fail toward the LOUDER
+ *     indicator: an attached session whose mode is not `ptt` reads as ambient (the pill never under-reports).
  *   - The human's gesture is `log.append voice.session.start{hsid, mode, continues?}` (attach or switch) or
  *     `voice.session.end{voiceSessionId?}` (Off). Ambient → push-to-talk and Off are free; widening to ambient takes
  *     a fresh Touch ID once per GUI login (the kernel answers `{pending, cardId}` and the page approves it in the
@@ -31,7 +32,7 @@ export interface VoiceView {
   state: VoiceState;
   hsid: string | null;
   voiceSessionId: string | null;
-  /** the loudest state the kernel allows here (`ambient` when it does not say) */
+  /** a hard cap on the loudest state, only when the kernel names one (`maxMode`); else ambient (the kernel decides) */
   ceiling: VoiceState;
   since: string | null;
   idleAt: string | null;
@@ -42,12 +43,14 @@ export interface VoiceView {
   hotkey: string;
   /** a live input level 0..1 when the kernel relays one */
   level: number | null;
+  /** the kernel's ambient idle auto-off (V2a ambientIdleMs), or null */
+  ambientIdleMs: number | null;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const stateOfMode = (m: unknown): VoiceState => (m === 'ptt' ? 'ptt' : 'ambient');
-const ceilingOf = (c: unknown): VoiceState => (c === 'off' || c === 'none' ? 'off' : c === 'ptt' ? 'ptt' : 'ambient');
+const capOf = (c: unknown): VoiceState => (c === 'off' || c === 'none' ? 'off' : c === 'ptt' ? 'ptt' : 'ambient');
 
 /** The voice view from a `status` result (the adapter: every status-shape assumption lives here). */
 export function voiceStatusOf(status: unknown): VoiceView {
@@ -68,16 +71,18 @@ export function voiceStatusOf(status: unknown): VoiceView {
   const level = a && typeof a.level === 'number' ? a.level : v && typeof v.level === 'number' ? v.level : null;
   return {
     known: v !== null,
-    state: attached ? stateOfMode(a!.mode) : 'off',
+    // V2a names the attachment's state `ceiling` (no `mode`); V1 names it `mode`
+    state: attached ? stateOfMode(a!.mode !== undefined ? a!.mode : a!.ceiling) : 'off',
     hsid: attached ? hsid : null,
     voiceSessionId: attached ? str(a!.voiceSessionId) : null,
-    ceiling: ceilingOf(a?.ceiling ?? v?.ceiling),
+    ceiling: capOf(a?.maxMode ?? v?.maxMode),
     since: attached ? str(a!.since) : null,
     idleAt: attached ? str(a!.idleAt) : null,
     clientConnected,
     ambientConfirmed: v?.ambientConfirmed === true || v?.presence === 'fresh' || obj(v?.presence)?.ambient === true,
     hotkey: str(v?.hotkey) ?? DEFAULT_PTT_HOTKEY,
     level: level === null ? null : Math.max(0, Math.min(1, level)),
+    ambientIdleMs: v && typeof v.ambientIdleMs === 'number' && v.ambientIdleMs > 0 ? v.ambientIdleMs : null,
   };
 }
 
@@ -180,11 +185,11 @@ export const VOICE_ACTIVITY_KINDS: ReadonlySet<string> = new Set(['voice.turn.us
 const IDLE_REASONS: ReadonlySet<string> = new Set(['idle', 'idle-timeout', 'idle-auto-off', 'ambient-idle']);
 
 /** The quiet note for a voice.session.end the kernel's idle auto-off wrote, or null for any other end. */
-export function idleNoteOf(kind: string, payload: unknown): string | null {
+export function idleNoteOf(kind: string, payload: unknown, defaultIdleMs: number | null = null): string | null {
   if (kind !== 'voice.session.end') return null;
   const p = obj(payload);
   if (!p || typeof p.reason !== 'string' || !IDLE_REASONS.has(p.reason)) return null;
-  const mins = typeof p.idleMinutes === 'number' ? p.idleMinutes : typeof p.idleMs === 'number' ? Math.round(p.idleMs / 60_000) : DEFAULT_IDLE_MINUTES;
+  const mins = typeof p.idleMinutes === 'number' ? p.idleMinutes : typeof p.idleMs === 'number' ? Math.round(p.idleMs / 60_000) : defaultIdleMs !== null ? Math.round(defaultIdleMs / 60_000) : DEFAULT_IDLE_MINUTES;
   return `Ambient turned off after ${Math.max(1, mins)} min idle`;
 }
 
@@ -195,4 +200,20 @@ export function speakerName(id: unknown): string {
   if (u) return `unknown speaker ${u[1]}`;
   const m = /^spk:[^/]*\/(.+)$/.exec(id);
   return m ? m[1]! : id.replace(/^spk:/, '') || 'voice';
+}
+
+/**
+ * A voice refusal as one plain line (V2a reasons): voice-off with data.cause aec | ceiling | presence, and the busy
+ * voice-playback (the kernel is still speaking). Null for any other refusal (the page shows it as given).
+ */
+export function voiceRefusalNote(reason: string | null, data: Record<string, unknown> | null): string | null {
+  const cause = data && typeof data.cause === 'string' ? data.cause : null;
+  if (reason === 'voice-off') {
+    if (cause === 'aec') return 'Ambient needs echo cancellation in the voice app (voice-off · aec)';
+    if (cause === 'ceiling') return 'this session\'s voice ceiling does not allow that (voice-off · ceiling)';
+    if (cause === 'presence') return 'Ambient needs Touch ID first (voice-off · presence)';
+    return 'voice is off for this session (voice-off)';
+  }
+  if (reason === 'voice-playback') return `the voice app is still speaking; try again when it finishes (voice-playback${data?.streaming === true ? ' · streaming' : ''})`;
+  return null;
 }

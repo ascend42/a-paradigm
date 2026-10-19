@@ -22,7 +22,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { canAttach, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -634,6 +634,7 @@ let voiceRowOpen = false;
 /** The pill is kernel-owned: its state is status.voice only (re-read on a voice.session.* row, store 'voice'). */
 function paintVoice(): void {
   const v = voiceStatusOf(status);
+  store.voiceIdleMs = v.ambientIdleMs;
   const p = pillOf(v);
   const btn = $('voice-pill');
   btn.className = p.className;
@@ -729,14 +730,16 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
         voicePresenceDone = true;
         notice(null);
       } catch (err) {
-        notice(err instanceof RpcError ? `voice stays ${VOICE_TITLE[v.state].toLowerCase()}: ${refusalText(err.refusal)}` : `voice stays ${VOICE_TITLE[v.state].toLowerCase()}`, true);
+        // the widen card (strictness, detail.op voice.widen) stays in the stack: focus it so the human can decide it there
+        focusCard(r.cardId);
+        notice(err instanceof RpcError ? `voice stays ${VOICE_TITLE[v.state].toLowerCase()}: ${voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)}` : `voice stays ${VOICE_TITLE[v.state].toLowerCase()}`, true);
       }
     } else {
       if (to === 'ambient') voicePresenceDone = true; // the kernel already held this login's presence
       notice(null);
     }
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'voice was not changed', true);
+    notice(err instanceof RpcError ? (voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)) : 'voice was not changed', true);
   } finally {
     voiceBusy = false;
     await refreshStatus();

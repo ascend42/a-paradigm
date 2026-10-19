@@ -125,6 +125,8 @@ export class GuiStore {
   logId: string | null = null;
   /** V2d: "Ambient turned off after N min idle" from the kernel's idle auto-off, until the next voice.session.start. */
   voiceNote: string | null = null;
+  /** V2d: the kernel's ambient idle auto-off (status.voice.ambientIdleMs), set by the page; names the note's minutes */
+  voiceIdleMs: number | null = null;
   /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
   position = 0;
   readonly #listeners = new Set<(what: Set<string>) => void>();
@@ -227,7 +229,7 @@ export class GuiStore {
     if (VOICE_ROW_KINDS.has(r.kind)) {
       what.add('voice');
       if (r.kind === 'voice.session.start') this.voiceNote = null;
-      else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload);
+      else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload, this.voiceIdleMs);
     }
     if (VOICE_ACTIVITY_KINDS.has(r.kind)) what.add('voice-activity');
     if (r.kind === 'daemon.start') {
@@ -465,6 +467,12 @@ function voiceReasonOf(p: Record<string, unknown>): string | null {
   if (o && typeof objOf(o.data)?.reason === 'string') return String(objOf(o.data)!.reason);
   return null;
 }
+/** The reason plus its V2a cause (`voice-off · aec`). */
+function reasonWithCause(p: Record<string, unknown>, reason: string): string {
+  const ref = objOf(p.refusal ?? p.refused);
+  const cause = objOf(ref?.data)?.cause ?? objOf(p.data)?.cause ?? p.cause;
+  return typeof cause === 'string' ? `${reason} · ${cause}` : reason;
+}
 
 /**
  * The chat item of a voice row (V2d): undefined = not a voice row (the kernel reducer decides), null = hidden noise.
@@ -473,7 +481,7 @@ function voiceReasonOf(p: Record<string, unknown>): string | null {
  */
 function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number> }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
-  if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${voiceReasonOf(p!) ?? String(p!.reason)}` };
+  if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
   if (r.kind === 'turn.sent') {
     if (p?.source !== 'voice') return undefined;
     if (typeof p.voiceTurnSeq === 'number' && ctx.shownVoiceSeqs.has(p.voiceTurnSeq)) return null;
@@ -491,7 +499,7 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
   switch (r.kind) {
     case 'voice.turn.user': {
       const why = voiceReasonOf(p);
-      if (why) return { role: 'voice-refused', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” not sent · ${why}` };
+      if (why) return { role: 'voice-refused', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” not sent · ${reasonWithCause(p, why)}` };
       if (p.intercepted === 'decision' || p.intercepted === 'control') return { role: 'voice-heard', text: `${speaker} · handled as a ${p.intercepted}: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker };
       if (p.forwarded === false) return text.trim() ? { role: 'voice-heard', text: `${speaker} · heard, not sent: ${cap(oneLine(text), TOOL_SUMMARY_MAX)}`, speaker } : null;
       return text.trim() ? { role: 'user', text: cap(text, CHAT_TEXT_MAX), speaker } : null;

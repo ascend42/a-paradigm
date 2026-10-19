@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, idleNoteOf, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
+import { canAttach, idleNoteOf, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -18,7 +18,8 @@ const VS = 'vs:01HZZZZZZZZZZZZZZZZZZZZZZV';
 const voiceClient = { connId: 'c2', principal: 'voice:app', principalKind: 'voice', surface: 'voice' };
 const human = (voice: unknown, extra: Record<string, unknown> = {}) => ({ principalKind: 'human', voice, clients: [{ connId: 'c1', principal: 'human:m', principalKind: 'human', surface: 'gui' }, voiceClient], ...extra });
 const v1Attached = (mode: string) => human({ attached: { voiceSessionId: VS, hsid: A, mode, turns: 2 }, echoTailMs: 750 });
-const v2aAttached = (mode: string, more: Record<string, unknown> = {}) => human({ attached: true, voiceSessionId: VS, hsid: A, mode, ceiling: 'conversation', since: '2026-10-19T10:00:00Z', idleAt: '2026-10-19T10:10:00Z', clientConnected: true, ...more });
+// V2a (feat/gnomon-voice-v2a @ f40a0abc): no `mode`; `ceiling` is what the attachment may hear now
+const v2aAttached = (ceiling: string, more: Record<string, unknown> = {}) => human({ attached: true, voiceSessionId: VS, hsid: A, ceiling, since: '2026-10-19T10:00:00Z', idleAt: '2026-10-19T10:10:00Z', turns: { n: 3 }, echoTailMs: 750, ambientIdleMs: 600_000, clientConnected: true, ...more });
 const off = (more: Record<string, unknown> = {}) => human({ attached: null, ...more });
 
 describe('voice pill: state is the kernel status only', () => {
@@ -28,9 +29,13 @@ describe('voice pill: state is the kernel status only', () => {
     expect(pillOf(voiceStatusOf(v1Attached('conversation')))).toMatchObject({ state: 'ambient', label: 'Listening', target: A.slice(-10), className: expect.stringContaining('voice-ambient') });
     expect(pillOf(voiceStatusOf(v1Attached('conversation'))).className).toContain('kernel-owned');
   });
-  it('reads both the V1 nested shape and the V2a flat shape (attached: true + hsid, ceiling, since, idleAt)', () => {
+  it('reads both the V1 nested shape and the V2a flat shape (attached: boolean, hsid, ceiling = the state, since, idleAt, ambientIdleMs)', () => {
     const v = voiceStatusOf(v2aAttached('ptt'));
-    expect(v).toMatchObject({ known: true, state: 'ptt', hsid: A, voiceSessionId: VS, ceiling: 'ambient', since: '2026-10-19T10:00:00Z', idleAt: '2026-10-19T10:10:00Z', clientConnected: true });
+    expect(v).toMatchObject({ known: true, state: 'ptt', hsid: A, voiceSessionId: VS, ceiling: 'ambient', since: '2026-10-19T10:00:00Z', idleAt: '2026-10-19T10:10:00Z', clientConnected: true, ambientIdleMs: 600_000 });
+    expect(voiceStatusOf(v2aAttached('conversation')).state).toBe('ambient');
+    expect(voiceStatusOf(human({ attached: false, hsid: null, ceiling: null })).state).toBe('off');
+    // the V2a ceiling is the attachment's state, never a cap: push-to-talk may still widen (with Touch ID)
+    expect(planVoice(voiceStatusOf(v2aAttached('ptt')), 'ambient', A, false)).toEqual({ kind: 'presence' });
     expect(voiceStatusOf(v1Attached('ptt'))).toMatchObject({ state: 'ptt', hsid: A, voiceSessionId: VS, clientConnected: true });
   });
   it('fails toward the louder indicator: an attached session with an unknown mode reads as ambient; no status reads as off', () => {
@@ -79,7 +84,7 @@ describe('voice: attach and switch send the right appends', () => {
     expect(voiceMenuEntries(ptt, A, true, false).find((e) => e.state === 'off')?.note).not.toContain('Touch ID');
   });
   it('a ceiling blocks a louder state with its reason; nothing focused blocks an attach', () => {
-    const capped = voiceStatusOf(v2aAttached('ptt', { ceiling: 'ptt' }));
+    const capped = voiceStatusOf(v2aAttached('ptt', { maxMode: 'ptt' }));
     expect(planVoice(capped, 'ambient', A, true)).toEqual({ kind: 'blocked', reason: 'voice ceiling push-to-talk' });
     expect(planVoice(voiceStatusOf(off()), 'ptt', null, false)).toEqual({ kind: 'blocked', reason: 'no session focused' });
   });
@@ -116,6 +121,13 @@ describe('voice: the kernel idle auto-off', () => {
     expect(idleNoteOf('voice.session.end', { reason: 'idle-timeout', idleMs: 300_000 })).toBe('Ambient turned off after 5 min idle');
     expect(idleNoteOf('voice.session.end', { voiceSessionId: VS })).toBeNull(); // a human Off is not an idle note
     expect(idleNoteOf('voice.session.start', { reason: 'idle' })).toBeNull();
+  });
+  it('the note names the kernel\'s own ambientIdleMs when the end row does not', () => {
+    expect(idleNoteOf('voice.session.end', { reason: 'idle' }, 15 * 60_000)).toBe('Ambient turned off after 15 min idle');
+    const s = new GuiStore();
+    s.voiceIdleMs = 20 * 60_000;
+    s.apply([{ seq: 1, view: 'full', event: { kind: 'voice.session.end', session: A, payload: { voiceSessionId: VS, reason: 'idle' } } }]);
+    expect(s.voiceNote).toBe('Ambient turned off after 20 min idle');
   });
   it('the store holds the note (and re-reads status) until the next attachment; the transcript shows it as a system line', () => {
     const s = new GuiStore();
@@ -160,6 +172,14 @@ describe('voice in the transcript', () => {
     // a non-voice refusal is still an error line
     expect(chatItems([{ seq: 3, kind: 'session.refused', session: A, view: 'full', payload: { reason: 'budget' } }]).items[0]?.role).toBe('error');
   });
+  it('a V2a voice-off refusal names its cause; the busy voice-playback says the kernel is still speaking', () => {
+    expect(chatItems([user(1, '1', 'go', { forwarded: false, refusal: { reason: 'voice-off', data: { cause: 'aec' } } })]).items[0]?.text).toContain('not sent · voice-off · aec');
+    expect(voiceRefusalNote('voice-off', { cause: 'aec' })).toContain('echo cancellation');
+    expect(voiceRefusalNote('voice-off', { cause: 'ceiling' })).toContain('ceiling');
+    expect(voiceRefusalNote('voice-off', { cause: 'presence' })).toContain('Touch ID');
+    expect(voiceRefusalNote('voice-playback', { clock: 'kernel', streaming: true })).toBe('the voice app is still speaking; try again when it finishes (voice-playback · streaming)');
+    expect(voiceRefusalNote('budget', null)).toBeNull();
+  });
   it('heard-but-not-sent and intercepted turns are subtle lines, never the user message', () => {
     expect(chatItems([user(1, '1', 'yes', { forwarded: false, intercepted: 'decision' })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt · handled as a decision: yes' });
     expect(chatItems([user(1, '1', 'hm', { forwarded: false })]).items[0]?.role).toBe('voice-heard');
@@ -189,6 +209,8 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(app).toMatch(/async function setVoice\(to: VoiceState, hsid: string \| null, trusted: boolean\): Promise<void> \{\s*if \(!trusted\) return;/);
     expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{\s*notice\(`Ambient[\s\S]{0,120}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
     expect(app).toContain('voicePresenceDone = false; // ambient\'s Touch ID is once per GUI login');
+    // an undecided widen card (strictness, detail.op voice.widen) is focused in the stack
+    expect(app).toMatch(/catch \(err\) \{\s*\/\/ the widen card[^\n]*\n\s*focusCard\(r\.cardId\);/);
   });
   it('the pill is repainted from status on a voice row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");

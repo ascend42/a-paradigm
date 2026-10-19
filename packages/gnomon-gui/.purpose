@@ -38,9 +38,14 @@ components:
       Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
       header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the
       one adapter over status.voice (V1 nested {attached: {voiceSessionId,
-      hsid, mode, turns} | null}; V2a flat {attached: true, hsid, mode,
-      ceiling, since, idleAt, clientConnected?, ambientConfirmed?, hotkey?,
-      level?}); an attached session whose mode is not ptt reads as ambient
+      hsid, mode, turns} | null}; V2a flat {attached: boolean, hsid,
+      ceiling: ptt | conversation | null (the attachment's state, not a
+      cap), since, idleAt, voiceSessionId, turns, echoTailMs,
+      ambientIdleMs}, optional clientConnected, hotkey, level, maxMode);
+      V2a refusals voice-off (cause aec | ceiling | presence) and
+      voice-playback read as plain lines (voiceRefusalNote); an undecided
+      widen card (strictness, op voice.widen) is focused in the stack; an
+      attached session whose mode is not ptt reads as ambient
       (the indicator never under-reports a live mic). Three states: Mic off
       (grey), push-to-talk (slate blue, "Hold <hotkey> to talk"), ambient
       (red edge, pulsing dot, "Listening", level meter); "Voice app not
