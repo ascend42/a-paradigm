@@ -153,6 +153,17 @@ components:
       rows carry seq only (no hash, prev, sig or log). kernel.call (mods,
       in-process) carries SERVER_FEATURES; connectGnomon offers
       DEFAULT_FEATURES. Tests: test/socket-log-read.test.ts (journal.cursor).
+      GUI READER (dogfood fix 2026-10-19): readerFor gives a human
+      connection whose credential is `gui` (a web-endpoint launch-token
+      session or its Reconnect; never settable by a hello field) the HUMAN
+      (full) projection, per §9.3 "the one first-party human surface is the
+      GUI session that consumed a launch token". A human device key stays
+      community-client (fullView.needs names the GUI or a
+      log.read:sensitive grant); read tokens, mods and peers are unchanged.
+      Tests: test/socket-log-read.test.ts (credential gui row) and the
+      darwin falsifier test/gui-session-e2e.test.ts (real dev kernel + the
+      GUI client and store: session listed, reply text shown, second send
+      reaches the kernel).
     planned-001-move: >-
       PLANNED, not built (TD-2026-10-19-648; spec §5, §7.4, §3.9). In the
       batched clientApiId move T-2026-10-19-001: the log.read cursor

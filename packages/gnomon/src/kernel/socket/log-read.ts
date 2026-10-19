@@ -5,15 +5,18 @@
  * #socket `log.read` (spec §5 verb 6, §4.9 subscription, §9.3; M1.4 slice 2).
  *
  * READER CLASS per authenticated principal (never over-share):
- *   - human → the COMMUNITY-CLIENT projection (full minus `sensitive` and
- *     `secret`; sensitive-column kinds as `{kind, hsid, at, hash}` stubs;
- *     registered sensitive FIELDS replaced by `{redacted: true}`; no row carries
- *     hash, sig or prev — redaction.ts). §9.3: a
- *     human-class connection gets the full row only on a first-party surface
- *     or a device key granted `log.read:sensitive`; neither can be proven on
- *     the socket yet (a self-declared `surface` is not proof; grants and the
- *     GUI launch token come later), so the result says `projection:
- *     'community-client'` and names what the full view needs.
+ *   - human GUI (`credential: 'gui'`, a connection that consumed a launch
+ *     token or Reconnected from one — #web-endpoint) → the HUMAN (full)
+ *     projection. §9.3: "the one first-party human surface is the GUI session
+ *     that consumed a launch token (§11.2 rule 2)"; the credential is set only
+ *     by the web endpoint's launch/Reconnect exchange, never by a hello field.
+ *   - human device key → the COMMUNITY-CLIENT projection (full minus
+ *     `sensitive` and `secret`; sensitive-column kinds as `{kind, hsid, at}`
+ *     stubs; registered sensitive FIELDS replaced by `{redacted: true}`; no
+ *     row carries hash, sig or prev — redaction.ts). A device key gets the
+ *     full row only with a `log.read:sensitive` grant, which does not exist
+ *     yet (a self-declared `surface` is not proof), so the result says
+ *     `projection: 'community-client'` and names what the full view needs.
  *   - mod → own `modns.<name>.*` + the kinds its grant lists (no grants exist
  *     yet ⇒ none), normal rows only, fields redacted.
  *   - agent → UNSUPPORTED{reader-unsupported, Move 2}; voice →
@@ -130,10 +133,12 @@ export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' |
   if (s.credential === 'read-token') return { reader: { class: 'read-token' }, projection: 'read-token' };
   switch (s.principalKind) {
     case 'human':
+      // §9.3: the GUI launch-token session is the first-party human surface — the full human row
+      if (s.credential === 'gui') return { reader: { class: 'human' }, projection: 'human' };
       return {
         reader: { class: 'community-client' },
         projection: 'community-client',
-        fullView: { needs: 'a first-party surface proof (GUI launch token / wrapper) or a log.read:sensitive device grant; neither exists on the socket yet' },
+        fullView: { needs: 'the GUI (a launch-token session) or a log.read:sensitive device grant; a device key has no grant yet' },
       };
     case 'mod': {
       const name = modNameOf(s.principal);
