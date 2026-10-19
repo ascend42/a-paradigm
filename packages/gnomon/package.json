@@ -27,7 +27,8 @@
     "test": "vitest run && npm run test:perf",
     "test:watch": "vitest",
     "probe": "node probes/run.mjs",
-    "test:perf": "node scripts/test-perf.mjs"
+    "test:perf": "node scripts/test-perf.mjs",
+    "repin:first-party": "node scripts/repin-first-party.mjs"
   },
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",

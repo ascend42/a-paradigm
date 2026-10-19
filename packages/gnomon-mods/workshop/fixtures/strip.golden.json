@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Workshop",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "title": "needs you 1 of 1",
+      "children": [
+        {
+          "type": "Text",
+          "text": "▲ permission",
+          "tone": "cap"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "title": "working 1 of 2",
+      "children": [
+        {
+          "type": "Text",
+          "text": "▲ builder filled bob",
+          "tone": "hue-2"
+        },
+        {
+          "type": "Text",
+          "text": "▲ builder outlined still",
+          "tone": "violet"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "title": "paused 1",
+      "children": [
+        {
+          "type": "Text",
+          "text": "⏸ mod hello paused (user)",
+          "tone": "paused"
+        }
+      ]
+    }
+  ]
+}

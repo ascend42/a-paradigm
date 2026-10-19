@@ -34,8 +34,16 @@ prerequisites below apply to both paths.
   process, so anything `NODE_OPTIONS` preloads would run inside the kernel.
   `dev up` and `up` therefore **refuse to start** (`unsafe-env`) when
   `NODE_OPTIONS` is set, or when `node` was started with any flag (`--inspect`,
-  `--require`, `--import` and so on). Run `unset NODE_OPTIONS` first, and start
-  the CLI as plain `node <path>/gnomon.js`.
+  `--require`, `--import` and so on) other than the one it **requires**,
+  `--disable-sigusr1`. Without that flag, any process running as you could
+  `kill -USR1` the kernel and open a debugger in it. Run `unset NODE_OPTIONS`
+  first, and start the CLI as `node --disable-sigusr1 <path>/gnomon.js`, or run
+  `<path>/gnomon.js` directly, since its shebang passes the flag. You need
+  Node 22.14 or later.
+- **What this check covers.** It catches an ambient unsafe runtime: an exported
+  `NODE_OPTIONS` or a stray flag. It does not stop a hostile preload that is
+  already running as you, because that code can scrub the env and `execArgv`
+  before the check reads them.
 
 ## From a fresh clone
 
@@ -47,7 +55,7 @@ npm ci
 npm run build:gnomon
 
 node packages/gnomon/dist/cli/gnomon.js dev init   # provisions ~/.gnomon-dev (once)
-node packages/gnomon/dist/cli/gnomon.js dev up     # runs the kernel in this terminal and prints the GUI URL
+node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js dev up     # runs the kernel in this terminal and prints the GUI URL
 ```
 
 The rest of this guide writes `gnomon` for `node <clone>/packages/gnomon/dist/cli/gnomon.js`.
@@ -177,8 +185,8 @@ available.
 The prerequisites in [Before you start](#before-you-start) still apply. Above
 all, `unset NODE_OPTIONS`. `gnomon up` also runs the kernel in your own Node
 process, and it **refuses** (`REFUSED  UP  unsafe-env`) when `NODE_OPTIONS` is
-set or `node` was started with any flag. It checks this before it reads the
-home or opens the helper.
+set, or when `node` was started with any flag other than `--disable-sigusr1`,
+which it requires. It checks this before it reads the home or opens the helper.
 
 ### Once: build the signed helper and provision the root
 
@@ -204,7 +212,7 @@ another one exists.
 ### Each time: run it
 
 ```sh
-node packages/gnomon/dist/cli/gnomon.js up
+node --disable-sigusr1 packages/gnomon/dist/cli/gnomon.js up
 ```
 
 There is no `DEV ONLY` banner. It prints:
@@ -263,7 +271,7 @@ separately running `gnomond`.
 
 | Message | Meaning | Next |
 |---|---|---|
-| `REFUSED  UP  unsafe-env` | `NODE_OPTIONS` is set, or `node` was started with flags (`--inspect*`, `--require`, `--import`, …) | `unset NODE_OPTIONS`; run plain `node <path>/gnomon.js up` |
+| `REFUSED  UP  unsafe-env` | `NODE_OPTIONS` is set, `node` was started with flags (`--inspect*`, `--require`, `--import`, …), or `--disable-sigusr1` is missing | `unset NODE_OPTIONS`; run `node --disable-sigusr1 <path>/gnomon.js up` (or the bin directly) |
 | `REFUSED  UP  unprovisioned` | No home, or no `keys/identity.json` | `gnomon identity init` |
 | `REFUSED  UP  dev-home` | The home carries the DEV-ONLY marker | `gnomon dev up --home <it>` |
 | `REFUSED  UP  daemon-running` | A kernel already runs on this home (`gnomond` or another `up`) | Stop it with Ctrl-C in its terminal, or let it exit on idle. `gnomon open` has no wire verb yet. |
@@ -289,3 +297,76 @@ Notes:
   and that drops every cached unlock.
 - With stdout not a terminal (a pipe or a file), no web endpoint starts and no
   launch token is minted. The line `gui  not started` says so.
+
+## Open in the app: Gnomon.app
+
+Gnomon.app (`#gnomon-wrapper`, M1.13) is the default daily surface. You
+double-click it and there is no terminal step. It runs the same hardened
+`gnomon up` path as the section above, as a child process with a clean
+environment. It verifies the kernel natively, then shows the GUI in its own
+window. Details are in `packages/gnomon-wrapper/README.md`.
+
+### Once: build, sign, notarize, install
+
+You need the identity from [Real identity](#real-identity-gnomon-up) to exist
+first: the signed helper plus `gnomon identity init`. Then, from the clone you
+want the app to run:
+
+```sh
+npm ci && npm run build:gnomon
+export PATH="$HOME/.cargo/bin:$PATH"
+node packages/gnomon-wrapper/scripts/build-darwin.mjs      # Developer ID signed, hardened runtime
+node packages/gnomon-wrapper/scripts/notarize-darwin.mjs   # notarytool (gnomon-notary) + staple; a few minutes
+open packages/gnomon-wrapper/target/release/bundle/macos   # drag Gnomon.app to /Applications
+```
+
+At build time the app pins, inside the signed binary:
+- the node it runs: `which node`, or `GNOMON_WRAPPER_NODE=<abs>`, plus the
+  sha256 of that node's real file;
+- a hash of this clone's `packages/gnomon/dist` and `package.json`.
+
+Before every launch it re-hashes both. `~/Library/Logs/Gnomon/kernel.log` names
+the node and kernel it used.
+
+Rebuild the app (`build-darwin.mjs`) after any of these. Until you do, the
+window says "Gnomon.app was built against a different node or kernel … Rebuild
+the app":
+- `brew upgrade node`;
+- `npm run build:gnomon`, a `git pull` that changes dist, or moving the clone;
+- a change to the GUI bundle. The app also refuses a GUI bundle other than its
+  pin.
+
+### Each time: open it
+
+Double-click Gnomon. The window says "starting the kernel", then "verifying the
+kernel", then shows the GUI. There is no extension-risk badge, because this
+surface has no extensions. `status.guiSessions[].surface` reads `wrapper`.
+
+- **Close the window** (red button or Cmd-W): the window hides and the kernel
+  and every session keep running. Click the Dock icon to bring it back.
+- **Quit** (Cmd-Q): the kernel stops. The app sends `quit`, waits up to 10 s,
+  then kills it.
+- **Open it again while it runs:** macOS focuses the running app.
+- **Reload inside the window:** the page loses its GUI token (D54) and shows
+  Reconnect. Quit and reopen to get a fresh launch.
+
+### What the app refuses (the window shows it, nothing else renders)
+
+| Window says | Meaning | Next |
+|---|---|---|
+| Gnomon is not set up on this Mac yet | No `~/.gnomon` identity | In Terminal: `node <clone>/packages/gnomon/dist/cli/gnomon.js identity init`, then open Gnomon again |
+| a Gnomon kernel is already running on this home | `gnomond` or a terminal `gnomon up` holds `~/.gnomon` | Stop that kernel (Ctrl-C in its terminal), then open Gnomon again |
+| Gnomon refused to open the page: … serverSig … | The listener on the port did not sign with the kernel key the child reported | Quit and reopen; if it repeats, check `kernel.log` |
+| Gnomon refused to open the page: … bundle … | The served GUI is not the bundle this app was built for | Rebuild the app from the same clone (`build-darwin.mjs`) |
+| Gnomon.app was built against a different node or kernel | node or `packages/gnomon/dist` changed since the build (brew upgrade, build:gnomon, git pull) | Rebuild the app (`build-darwin.mjs`) |
+| the kernel stopped / exited | The kernel child ended | Read `~/Library/Logs/Gnomon/kernel.log`; quit and reopen |
+
+Notes:
+
+- The kernel child is `node --disable-sigusr1 gnomon.js up --wrapper` (the flag first and only, no NODE_OPTIONS, as the hardened kernel requires). The launch token travels
+  only on the pipe between the app and that child: never on argv, in the
+  environment, in a file or in a log. `gnomon up --wrapper` refuses to start
+  (`REFUSED  UP  wrapper-channel`) when its stdout or stdin is a terminal or a
+  file, so you cannot run that mode by hand.
+- Sessions started from the app inherit the app's TCC grants, not your
+  terminal's.

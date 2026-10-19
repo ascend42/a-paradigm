@@ -659,10 +659,43 @@ components:
       - test/dev-launch.test.ts
       - test/dev-launch-session.test.ts
 
+  wrapper-channel:
+    description: >-
+      #wrapper-channel (spec §19.1 M1.13 row, Appendix A; G-GUI-12,
+      G-WEB-01..06, G-GUI-03) — the gnomon-wrapper-channel:v1 launch contract
+      between Gnomon.app (#gnomon-wrapper) and `gnomon up --wrapper` /
+      `gnomon dev up --wrapper`. The app spawns `node --disable-sigusr1
+      <gnomon.js> up --wrapper` with a clean env; the child writes NDJSON on
+      its stdout pipe (up, launch{port, launchToken, kernelPublicKey,
+      bundleHash, expiresAt}, launch-failed, refused{code, reason, message,
+      next}, down) and reads `launch` | `quit` on stdin (EOF = quit). The
+      token is on that pipe only. Child side: src/cli/launch-tty.ts
+      (serveWrapperChannel, wrapperChannelProblem, channelRefused,
+      WRAPPER_LAUNCH_CAP 8/min with one mint in flight, stopping re-checked
+      after each mint, WRAPPER_UNSAFE_ENV_NEXT). Wrapper side:
+      packages/gnomon-wrapper/src/contract.rs (parse_line, read_line_capped at
+      64 KiB, redacting Debug).
+    path: src/cli/launch-tty.ts
+    type: module
+    tags: [gnomon, wrapper, contract, M1.13]
+    related: ["#gnomon-up", "#dev-launch", "#gnomon-wrapper", "#web-endpoint"]
+    tests:
+      - test/wrapper-channel.test.ts
+
   gnomon-up:
     description: >-
-      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>]`, the
+      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>] [--wrapper]`, the
       production counterpart of `gnomon dev up`: the REAL-HOME GUI launcher.
+      M1.13 (#gnomon-wrapper): `--wrapper` (also on `gnomon dev up`) is the
+      mode Gnomon.app spawns: launch-tty.ts serveWrapperChannel speaks
+      gnomon-wrapper-channel:v1 NDJSON on stdout (up / launch{port,
+      launchToken, kernelPublicKey, bundleHash, expiresAt} / launch-failed /
+      refused{code,reason,message,next} / down) and reads `launch` | `quit`
+      on stdin (EOF = quit); human lines go to stderr; a stdout or stdin that
+      is a terminal or a regular file is refused `wrapper-channel` before any
+      kernel starts. The token is on that pipe only — never argv, env, a file
+      or a log (test/wrapper-channel.test.ts, P07-style ps argv+env sampler
+      with a positive control).
       src/cli/up-cli.ts; the in-process launcher and terminal loop are shared
       with #dev-launch in src/cli/launch-tty.ts (attachInProcess, printLaunch,
       serveInProcess: one copy of the launch rules). Runs startDaemon IN THE
@@ -681,9 +714,15 @@ components:
       and moves clientApiId. GUARDS on a home resolved once (lstat plain
       directory, then realpath), each with a falsifier in
       test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
-      NODE_OPTIONS or any node interpreter flag (process.execArgv) →
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) other
+      than exactly --disable-sigusr1, or that flag MISSING (T-2026-10-18-030:
+      the bin shebang `env -S node --disable-sigusr1` passes it) →
       unsafe-env — refused, not re-executed, so no second process holds
-      the helper; missing home / no identity.json → unprovisioned;
+      the helper (scope: an AMBIENT unsafe runtime, not a hostile preload
+      already running as the user); a stdout/stderr 'error' (EIO after
+      SIGHUP) is handled as a stop so the shutdown sweep runs; the device
+      key opens O_NONBLOCK (a swapped-in FIFO cannot hang it,
+      test/device-key-fifo.test.ts); missing home / no identity.json → unprovisioned;
       symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
       live pidfile holder or an answering socket → daemon-running (and the
       O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail
@@ -1216,7 +1255,32 @@ components:
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
-      src/kernel/broker/. P8-D96: RaiseInput.decisions limits a card's signed
+      src/kernel/broker/. T-2026-10-18-028: M2 — UnlockStore ends a cached
+      unlock at UNLOCK_IDLE_MS idle, UNLOCK_ABSOLUTE_MS (60 min) after it
+      opened, or after UNLOCK_MAX_SIGNATURES (64) uses (approval.unlock.
+      dropped{reason: idle|expired|exhausted}); M3 — unlock.drop goes to the
+      helper on every close and failure path (connectionClosed always, a
+      lost keep-sign reply, a close during the keep-sign, a failed cached
+      sign, an ended unlock), and HelperApprovalsKey.dropUnlock escalates a
+      drop the helper does not answer to unlock.drop-all, then recycles the
+      helper process (HelperTransport.running / recycle); helper floor
+      MIN_HELPER_VERSION 1.3.0 (test/unlock-bounds.test.ts).
+      M4 — the presence prompt (drawn by the OS, not a conformant client)
+      gets the card line through promptSafe (every Cf, Cc, Zl, Zp removed)
+      and the summary QUOTED with quote/backslash escaped (quoteSummary,
+      card.ts); the helper strips the same set from the caller text
+      (Protocol.swift promptSafe).
+      M5 (#session-runner, platform/darwin/session-sbpl.ts, profile v4): every
+      session profile ends with helperDenySbpl() — deny process-exec of
+      /GnomonHelper.app(/|$) and /gnomon-helper$, deny file-read* of the
+      bundle (no copy out), regexes on resolved paths; backstop: the helper
+      refuses serve/once under any sandbox (test/session-helper-deny.test.ts).
+      L2 — #freshPrompt: at most ONE outstanding fresh presence prompt per
+      connection (FORBIDDEN{presence, why: prompt-outstanding}), and
+      PROMPT_COOLDOWN_MS (3 s) after a prompt the human declined
+      (why: prompt-cooldown, retryAfterMs); an accepted prompt or an
+      unavailable helper starts no cooldown; PromptRateLimited passes the
+      presence error mapping unchanged (test/prompt-rate.test.ts). P8-D96: RaiseInput.decisions limits a card's signed
       actions (permission slice cards: allow|deny, no always); approve
       refuses any other decision bad-params; expire(cardId, why) logs
       approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect
@@ -1518,8 +1582,33 @@ components:
       composes the card (Bash full command; Edit path + old/new; Write path,
       bytes, excerpt, inputHash; other tools capped canonical JSON; detail
       {tool, toolUseId, requestId, inputHash, repo, path?}), auto-denies
-      writes under denyWrite and AskUserQuestion ("ask in your reply"), and
-      maps the outcome: only allow / approve-plan allow. updatedInput is the
+      writes under denyWrite and malformed AskUserQuestion input, and
+      maps the outcome: only allow / approve-plan / answer allow. ASK-USER
+      (gui-complete item 1): AskUserQuestion is an `ask-user` card (cached
+      class, decision `answer` only, 10 min timeout => deny "no answer");
+      the questions are validated (<= 8, <= 16 options, one-line bounded
+      text) and shown in a fixed line grammar (question N / option N.M) the
+      GUI picker reads; approve{decision:'answer', note} carries the plain
+      answer (one question) or JSON {answers:{question: answer}}, checked by
+      parseAskAnswer against the KERNEL-held questions before presence
+      (broker RaiseInput.checkNote, BAD_REQUEST bad-params); the allow is
+      updatedInput = {...kernel-held input, answers}; approval.decide logs
+      noteHash/noteBytes only (privateNote). ROUND 2 (Aegis C1/L1/L4): the
+      AskUserQuestion schema is closed (an extra key at any level is
+      bad-input); the questions are structured card detail (inside
+      contentHash) carried in one {type:'ask-user', detail} block node the
+      GUI verifies against contentHash; answers are null-prototype objects;
+      every multi-line field body is fenced by fieldLines (FIELD_BODY_PREFIX
+      + an end marker; model-chosen keys JSON-quoted), the shared helper
+      that replaces the hardening lane's T-032(2) copy. Accepted risk (spec
+      §3.4, Aegis C3, T-2026-10-19-001): the note is in neither the
+      decisionSig nor the presence binding. PLAN TEXT (item 3):
+      claude 2.1.302 sends ExitPlanMode with input:{} (p01b planMode, after
+      a plan-file Write the session policy denies); the supervisor keeps the
+      assistant tool_use ExitPlanMode input.plan (by tool_use id, bounded)
+      and the last `.claude/plans/*.md` Write content, and the plan card
+      shows it labelled "not in the request" with detail.planHash (so the
+      contentHash covers it); a plan in the request wins. updatedInput is the
       kernel-held input; never updatedPermissions. Deny on no broker, raise
       failure, expiry, cancel (control_cancel_request => expire
       'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
@@ -1627,8 +1716,52 @@ components:
     tests:
       - test/session-supervisor.test.ts
       - test/repo-hooks.test.ts
+      - test/permission-session.test.ts
       - test/repo-context.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
+
+  always-rules:
+    description: >-
+      #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in
+      src/kernel/supervisor/rules.ts. Permission cards offer allow | deny |
+      always; `always` is fresh presence EVERY time (classes.ts, G-BRK-05)
+      and needs the card's ruleScope {repoKey} (else bad-params). The broker
+      logs approval.rule.learned{cardId, tool, matchExact, presence,
+      repoKey}. RuleBook folds KERNEL-signed rows only (kernel principal +
+      kernel key): approval.request (permission card, tool, tool_input) +
+      approval.decide{always} + approval.rule.learned (presence != cached,
+      same tool) => a rule keyed (repoKey, tool, inputHash of the canonical
+      tool_input); forged rows of any kind are ignored. The supervisor answers
+      an EXACT match allow with no card after broker.auto =>
+      approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
+      different input, tool or repo raises the card. updatedInput is the
+      kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp (Aegis C2: lastSeq advances to the captured head, past every scanned row; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
+      incrementally from the chain (fromSeq). Not built: revoke (needs a new
+      event kind approval.rule.revoked, moves clientApiId) and the strictness
+      L1 suspension of rules (M2.10).
+    path: src/kernel/supervisor/rules.ts
+    type: module
+    tags: [gnomon, kernel, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/permission-session.test.ts
+    oracles: [G-BRK-05]
+
+  rules-cli:
+    description: >-
+      #rules-cli `gnomon rules list [<home>] [--json]` / `gnomon rules revoke
+      <id>` (src/cli/rules-cli.ts). list verifies the home's kernel log
+      read-only (verifyLog with the home's kernel pubs, like gnomon replay)
+      and folds the verified rows through #always-rules; an unverified log
+      is refused INTEGRITY_BROKEN. revoke is refused UNSUPPORTED (needs a new
+      kernel event kind).
+    path: src/cli/rules-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+    oracles: [G-BRK-05]
 
   local-runner:
     description: >-
@@ -1777,9 +1910,64 @@ components:
       the bridge drops a call's byte tally on the host's onCallEnd and prunes
       past idle seconds (never a wholesale clear); kernel-side refusals reach
       a mod as code + reason only (generic message, no wrapped data).
-      Slice 3: spend from the caller permit, dev-mode cards/re-pin,
-      gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
+      Slice 3: the gnomon mod CLI and its control surface (#mod-cli, below);
+      a <home>/mods/<name>/paused marker makes every start return
+      paused{why:user}. feed.ts: ModHost.feed (startDaemon queues committed
+      rows, bounded 4096, and feeds only rows at or below the log's released
+      head; turn.partial coalesced to one edge per hsid; ModChannel.notify
+      drops past 256 KiB unread stdin, counted in inspect
+      droppedNotifications) forwards a fixed projection of session.open/exited,
+      turn.partial/result, approval.request/decide/expire and warpline.knot
+      (kernel fields only; project = a hue index from sha256(cwd)) to running
+      mods requiring log.read - the #workshop-mod input. FIRST_PARTY_PACKAGE_HASHES
+      pins the Workshop. Still to come: spend from the caller permit,
+      dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
+
+  mod-cli:
+    description: >-
+      #mod-cli (spec §12.4, §12.5, §3.1 I3; §19.1 M1.11 slice 3) -
+      src/cli/mod-cli.ts `gnomon mod install|link|list|status|pause|start|
+      uninstall` over #manifest-loader, plus the kernel half in
+      src/kernel/modhost/control.ts. §5 has no install/pause/start verb and
+      adding one moves clientApiId, so the CLI and the kernel meet in the
+      home: install/link run stageInstall in the CLI (snapshot + pending card
+      record, signs nothing; staging from a session is NOT available yet: the
+      darwin session profile denies writes under the home, so it waits for the
+      gnomon-mods bridge; a GNOMON_HSID in the env is recorded only as a
+      claim, and the CLI's GNOMON_HSID refusals are advisory, the SBPL is the
+      boundary) and print the card lines from rederiveInstallDetail
+      (the hardened install path: one line per entry, kernel-composed count
+      line at index 2, COMMAND_UNSAFE linked-path refusal, linked-source
+      re-hash); a url source is refused. The daemon's StagedCardPickup
+      (scan every 2 s) raises every pending staged card through
+      #approval-broker raiseInstallCard (re-derived from the pinned snapshot;
+      install = fresh presence + root key, Touch ID via the M1.3 helper),
+      logs manifest.staged{via:cli} for cards the kernel did not stage
+      itself, starts the mod on mod.installed; bounded (MAX_PICKUP_CARDS 32
+      raised, 256 remembered refusals keyed by file stamp so a tampered
+      record is not retried until it changes; Aegis C5: files are listed by
+      readdir + lstat only (≤ 1024), raised / settled / refused-unchanged ids
+      are skipped before any read, ≤ 64 records READ per scan, 64 KiB per
+      record, manifest.refuse carries the ManifestRefusal code and is folded
+      8 per 10 s, and the grant table is read once per scan). pause writes the paused marker
+      (narrows; allowed from a session), the pickup stops a running paused
+      mod (mod.paused{reason:user}); start clears it and writes
+      start.request (operator start, lifts DOWN); uninstall writes
+      uninstall.request naming the pin, the pickup raises a root-class
+      `grant` card (allow|deny) whose allow appends a root-signed
+      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input;
+      pin rows are stamped max(now, newest pin plus one millisecond) and read back - the
+      reader rejects a non-newer pin as replay - and the uninstall effect
+      reports nothing unless it took effect; junk staged files are
+      remembered by stamp; manifest.staged logs by/hsid under claimed),
+      stops the mod and logs manifest.uninstall{diff} (+ mod.unlinked);
+      effectiveInstall = the last install/uninstall pin row naming the mod.
+      start and uninstall are refused from a kernel-spawned shell. list and
+      status read the grant table offline (trust from identity.json or a
+      DEV home's root).
+    tags: [cli, mods, M1.11]
+    oracles: [G-MOD-04, G-MOD-08]
 flows:
   daemon-lifecycle:
     description: >-
@@ -1832,6 +2020,15 @@ flows:
       inside 10 min. Not yet built: the session runner and mod host that
       call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object
       and owner-only DACL read-back (G-WIN-02, parity phase P8-D78).
+      T-2026-10-18-030 (1): the clean re-exec passes exactly one node flag,
+      --disable-sigusr1 (env.ts DISABLE_SIGUSR1 / reexecArgs), and
+      runForeground refuses to start without it in execArgv
+      ([sigusr1-enabled]) — a same-user kill -USR1 would otherwise open the
+      V8 inspector in the key-holding process; a JS SIGUSR1 listener never
+      counts. Both bins use `#!/usr/bin/env -S node --disable-sigusr1`.
+      Falsifier: a running gnomond receiving SIGUSR1 opens no inspector and
+      keeps running (test/daemon-lifecycle.test.ts, control arm proves the
+      detector). A SEA must bake the flag into sea-config execArgv.
     steps:
       - "#gnomon-kernel"
       - "#kernel-log"
@@ -1844,6 +2041,7 @@ flows:
       - test/idle-exit.test.ts
       - test/home-resolution.test.ts
       - test/reexec-env.test.ts
+      - test/sigusr1-guard.test.ts
       - test/daemon-children.test.ts
       - test/scheduler-daemon.test.ts
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]

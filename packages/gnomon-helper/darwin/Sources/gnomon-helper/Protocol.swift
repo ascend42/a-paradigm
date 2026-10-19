@@ -24,6 +24,10 @@ enum Bounds {
     static let maxConnIdChars = 128
     static let maxUnlocks = 32                 // per-connection unlocks held at once
     static let unlockIdleSeconds: TimeInterval = 15 * 60
+    // T-2026-10-18-028 M2: the idle timer slides on every use, so two HARD bounds end an unlock too,
+    // whatever the kernel says (the broker enforces the same pair on its side, broker/unlock.ts):
+    static let unlockAbsoluteSeconds: TimeInterval = 60 * 60   // from the presence that opened it
+    static let maxSignaturesPerUnlock = 64                      // signatures made under it
 }
 
 /// The key classes the helper holds (§3.1). Each may sign only preimages that
@@ -158,6 +162,18 @@ func helperLine(key: KeyClass, messages: [Data]) -> String {
     return parts.joined(separator: "; ")
 }
 
+/// T-2026-10-18-028 M4 (defence in depth; the kernel strips them first, card.ts promptSafe): no format
+/// character (Cf: bidi controls and marks, invisible operators) and no control but the one newline
+/// the helper adds itself reaches the OS prompt, whatever the caller sends.
+func promptSafe(_ s: String) -> String {
+    String(String.UnicodeScalarView(s.unicodeScalars.filter { u in
+        switch u.properties.generalCategory {
+        case .format, .control, .lineSeparator, .paragraphSeparator: return false
+        default: return true
+        }
+    }))
+}
+
 func promptText(_ callerReason: String, _ line: String) -> String {
-    "\(callerReason)\n\(line)"
+    "\(promptSafe(callerReason))\n\(line)"
 }

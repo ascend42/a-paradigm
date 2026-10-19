@@ -525,5 +525,5 @@ describe('M1.11 slice 3 (named, not built)', () => {
   it.todo('slice 3: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
   it.todo('slice 3 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
   it.todo('slice 3: mod.command relay from a GUI needs a provable user gesture (§11.5; M1.10)');
-  it.todo('slice 3: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01)');
+  it.todo('slice 4: host-filled Tier 0 persona templates (#workshop-mod and its feed: test/workshop-mod.test.ts)');
 });

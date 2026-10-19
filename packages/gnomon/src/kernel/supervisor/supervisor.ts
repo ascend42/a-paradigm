@@ -43,8 +43,17 @@
  *   failed raise, expiry, cancel, a duplicate requestId (both denied +
  *   approval.suspect), session exit — all deny or answer nothing. A response
  *   is written only while the session runs, after session.inject{origin:
- *   'kernel', hash, bytes}. AskUserQuestion is auto-denied ("ask in your
- *   reply") with its turn.ask-user row; ExitPlanMode is a `plan` card with its
+ *   'kernel', hash, bytes}. AskUserQuestion is an `ask-user` card (cached
+ *   class, decision `answer` only, 10 min timeout ⇒ deny "no answer") with
+ *   its turn.ask-user row: the note is checked against the KERNEL-held
+ *   questions before presence (parseAskAnswer), the allow carries
+ *   updatedInput = {...kernel-held input, answers}, and the answer text never
+ *   reaches a non-sensitive row (approval.decide: noteHash/noteBytes). The
+ *   answer is NOT inside the decisionSig preimage or the presence binding:
+ *   an ACCEPTED RISK (spec §3.4, Aegis C3, T-2026-10-19-001) — `answer` is
+ *   cached-class, and a party rewriting frames on an authenticated GUI
+ *   connection could already flip a cached deny; the GUI renderer and
+ *   transport are trusted for cached-class decisions. ExitPlanMode is a `plan` card with its
  *   turn.plan row; a write under denyWrite is denied with no card. An unknown
  *   control_request subtype gets an error response. The assistant tool_use
  *   path raises NO card (one card per request).
@@ -85,11 +94,11 @@ import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
-import { answerFor, composePermission, MAX_PENDING_PERMISSIONS } from './permission.js';
+import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
-import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
+import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
@@ -119,7 +128,7 @@ export interface SupervisorOptions {
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
-  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect'>>;
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect' | 'auto'>>;
   /** the Gnomon home (session dirs, the claude pin and its private copy) */
   home: string;
   /** the user's home (the ~/.claude layers); the child's HOME is forced to it */
@@ -139,6 +148,8 @@ export interface SupervisorOptions {
   hooksMode?: SessionHooksMode;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
+  /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string) => { ruleId: string } | null;
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
@@ -189,12 +200,17 @@ interface Session {
   /** Aegis detector: tool names by tool_use id (assistant messages) and the ids a can_use_tool request named — both bounded */
   toolNames: Map<string, string>;
   requested: Set<string>;
+  /** item 3: ExitPlanMode tool_use input.plan by tool_use id (bounded TOOL_ID_CAP) and the last plan-file Write content (display only) */
+  planUses: Map<string, string>;
+  lastPlanFile: string | null;
   policy: SessionPolicy;
 }
 
 interface PendingPermission {
   cardId: string | null;
-  cardKind: 'permission' | 'plan' | null;
+  cardKind: CardKindP | null;
+  /** ask-user: the validated questions the answer is checked against (kernel-held, from the request) */
+  questions?: AskQuestion[];
   input: Record<string, unknown>;
   inputHash: string;
   toolName: string;
@@ -434,7 +450,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), policy,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -595,7 +611,14 @@ export class SessionSupervisor {
         if (ev.usage) await usage('turn.usage', s.meter.message(ev.usage.messageId, ev.usage.tokens));
         return;
       case 'message':
-        for (const t of ev.toolUses) if (t.id !== null) bounded(s.toolNames, t.id, t.name);
+        for (const t of ev.toolUses) {
+          if (t.id !== null) bounded(s.toolNames, t.id, t.name);
+          // item 3: plan text for an ExitPlanMode request that arrives with input:{} (2.1.302) — display only, bounded
+          const inp = t.input !== null && typeof t.input === 'object' && !Array.isArray(t.input) ? (t.input as Record<string, unknown>) : null;
+          if (!inp) continue;
+          if (t.name === 'ExitPlanMode' && t.id !== null && typeof inp.plan === 'string' && inp.plan.length <= MAX_ATTACHED_PLAN_CHARS) bounded(s.planUses, t.id, inp.plan);
+          if (t.name === 'Write' && typeof inp.file_path === 'string' && PLAN_FILE.test(inp.file_path) && typeof inp.content === 'string' && inp.content.length <= MAX_ATTACHED_PLAN_CHARS) s.lastPlanFile = inp.content;
+        }
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
@@ -666,22 +689,62 @@ export class SessionSupervisor {
       return;
     }
     const repo = s.worktree ?? s.cwd;
-    const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite });
-    if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny' }, { session: s.hsid });
+    const fromUse = ev.toolName === 'ExitPlanMode' && ev.toolUseId !== null ? s.planUses.get(ev.toolUseId) : undefined;
+    const planText = ev.toolName !== 'ExitPlanMode' ? undefined : fromUse !== undefined ? { text: fromUse, source: 'tool_use' as const } : s.lastPlanFile !== null ? { text: s.lastPlanFile, source: 'plan-file' as const } : undefined;
+    const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite, ...(planText ? { planText } : {}) });
     if (plan.kind === 'auto-deny') {
+      if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny', why: plan.why }, { session: s.hsid });
       await this.#write(s, permissionDenyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });
       return;
     }
     const b = this.#o.broker;
+    const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
+    if (plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
+      // S-L1: an exact (repo, tool, inputHash) match of a kernel-derived `always` rule ⇒ allow with no card, approval.auto first
+      let rule: { ruleId: string } | null = null;
+      try {
+        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash) ?? null;
+      } catch {
+        rule = null; // an unreadable rule source never allows
+      }
+      if (rule) {
+        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
+        let logged = false;
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: `rule:${rule.ruleId}` });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+        if (logged) {
+          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
+          return;
+        }
+      }
+    }
     if (!b || typeof b.decisionOf !== 'function' || s.pending.size >= MAX_PENDING_PERMISSIONS) {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
     }
-    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
+    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
     s.pending.set(requestId, entry);
     let cardId: string;
+    // ask-user: the answer is checked against the KERNEL-held questions before presence and before approval.decide,
+    // and its text never reaches a non-sensitive row (approval.decide carries noteHash/noteBytes only)
+    const qs = plan.questions;
+    const ask = plan.cardKind === 'ask-user' && qs
+      ? {
+          timeoutMs: ASK_USER_TIMEOUT_MS,
+          privateNote: true,
+          checkNote: (decision: string, note: string | undefined): string | null => {
+            if (decision !== 'answer') return null;
+            const a = parseAskAnswer(qs, note);
+            return 'error' in a ? a.error : null;
+          },
+        }
+      : {};
     try {
-      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never });
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask, ...(plan.cardKind === 'permission' ? { ruleScope: { repoKey } } : {}) });
       cardId = card.cardId;
     } catch {
       await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny
@@ -693,7 +756,8 @@ export class SessionSupervisor {
       return;
     }
     entry.cardId = cardId;
-    if (plan.cardKind === 'plan') await this.#o.log('turn.plan', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId }, { session: s.hsid });
+    if (plan.cardKind === 'ask-user') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId, questions: qs?.length ?? 0 }, { session: s.hsid });
+    if (plan.cardKind === 'plan') await this.#o.log('turn.plan',{ hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId }, { session: s.hsid });
     void b.decisionOf(cardId).then(
       (d) => this.#respond(s, requestId, d, entry),
       () => this.#respond(s, requestId, 'deny', entry),
@@ -705,7 +769,17 @@ export class SessionSupervisor {
     const e = s.pending.get(requestId);
     if (!e || (expect && e !== expect)) return;
     s.pending.delete(requestId);
-    const a = e.cardKind ? answerFor(e.cardKind, decision, e.cardId ? this.#o.broker?.noteOf?.(e.cardId) : undefined) : { behavior: 'deny' as const, message: 'Denied.' };
+    const note = e.cardId ? this.#o.broker?.noteOf?.(e.cardId) : undefined;
+    if (e.cardKind === 'ask-user' && decision === 'answer' && e.questions) {
+      // updatedInput = the KERNEL-held input + the answers validated against the kernel-held questions (re-checked here)
+      const parsed = parseAskAnswer(e.questions, note);
+      if (!('error' in parsed)) {
+        const line = permissionAllowLine(requestId, { ...e.input, answers: parsed.answers });
+        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length });
+        return;
+      }
+    }
+    const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
     const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
     await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
   }

@@ -1,0 +1,25 @@
+id: L-2026-10-19-builder-011806-001
+type: milestone
+timestamp: '2026-10-19T01:18:06.955Z'
+author: builder
+title: 'M1.13 round 2: wrapper hardened per review and Aegis (sigusr1 spawn, trust-root pin, crafted IPC, channel node)'
+summary: 'Gnomon.app spawns node --disable-sigusr1 first and only; node and kernel tree pinned by hash at build and re-hashed before every spawn; local.signed.json dropped as a node source; crafted IPC refused under Tauri''s mock runtime; frame-src none falsified; 64 KiB read-time line cap; EOF without terminal line shows the exit; non-blocking Cmd-Q; O_NOFOLLOW log; #wrapper-channel added to Appendix A (53 nodes). Rebased onto 84bf270d; signed app rebuilt.'
+symbols_touched:
+  - '#gnomon-wrapper'
+  - '#wrapper-channel'
+  - '#gnomon-up'
+commit: eabffbfc
+learnings:
+  - Tauri's mock runtime (feature test
+  - 'dev-dependency only) gives a real ACL test: a keyless InvokeRequest is dropped and a keyed one is refused'
+  - 'a capped refusal written synchronously can land before a test counts lines: count before the write'
+tags:
+  - gnomon
+  - M1.13
+  - round-2
+  - security
+confidence: 0.85
+git_context:
+  ref: eabffbfcd08ccc6ad894e68e2c90ddec26c20f92
+  branch: gnomon/m113-wrapper
+  dirty: false

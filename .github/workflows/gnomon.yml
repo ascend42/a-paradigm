@@ -140,14 +140,31 @@ jobs:
           swift build
           .build/debug/gnomon-helper --version
 
-      # gnomon-wrapper has no Cargo.toml until probe P08 sets the Tauri pin
-      # (PR-2); build it only once the crate exists.
-      - name: Build gnomon-wrapper (Rust/Tauri)
-        if: runner.os == 'Windows' && hashFiles('packages/gnomon-wrapper/Cargo.toml') != ''
-        working-directory: packages/gnomon-wrapper
-        run: cargo build
+      # #gnomon-wrapper (M1.13 slice 1): macOS only. Unsigned, no notarization (identities never enter CI).
+      # The Windows wrapper (WebView2, named-pipe channel) is the parity phase (P8-D78), so it is not built there.
+      # The kernel dist is built FIRST: build.rs pins its tree hash and tests/live_kernel.rs runs against it
+      # (with CI=true it fails rather than skips when dist or node is missing).
+      - name: Setup Node.js (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
 
-      - name: gnomon-wrapper not yet scaffolded
-        if: runner.os == 'Windows' && hashFiles('packages/gnomon-wrapper/Cargo.toml') == ''
+      - name: Install dependencies (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/install-deps
+
+      - name: Build the kernel dist (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        run: npm run build:gnomon
+
+      - name: Test gnomon-wrapper (Rust/Tauri, macOS)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-wrapper
+        run: cargo test --locked
+
+      - name: gnomon-wrapper on Windows is the parity phase
+        if: runner.os == 'Windows'
         shell: bash
-        run: echo "packages/gnomon-wrapper/Cargo.toml absent; P08 (PR-2) adds the crate and the Tauri pin."
+        run: echo "gnomon-wrapper slice 1 is macOS; the WebView2 wrapper lands in the Windows parity phase (P8-D78)."

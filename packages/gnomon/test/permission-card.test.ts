@@ -8,7 +8,7 @@
  * Platform-independent (paths are POSIX strings; the platform is passed).
  */
 import { describe, expect, it } from 'vitest';
-import { composePermission, deniedWrite, MAX_CARD_CHARS, type PermissionPlan } from '../src/kernel/supervisor/permission.js';
+import { composePermission, deniedWrite, FIELD_BODY_PREFIX, fieldLines, MAX_CARD_CHARS, type PermissionPlan } from '../src/kernel/supervisor/permission.js';
 import type { PolicyPath } from '../src/kernel/manifest/policy.js';
 
 const ctx = { repo: '/r', denyWrite: [] as PolicyPath[] };
@@ -18,14 +18,39 @@ const shown = (p: PermissionPlan): string => {
   if (p.kind !== 'card') throw new Error(`expected a card, got ${p.kind}:${p.why}`);
   const texts = (p.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
   expect(texts.every((t) => Array.from(t).length <= 512)).toBe(true);
-  return texts.map((t, i) => (i && t.startsWith('  ↳ ') ? `\u0000${t.slice(4)}` : `\n${t}`)).join('').replaceAll('\u0000', '');
+  // the field fence (Aegis L4) is undone too: body lines lose FIELD_BODY_PREFIX
+  return texts.map((t, i) => (i && t.startsWith('  ↳ ') ? `\u0000${t.slice(4)}` : `\n${t}`)).join('').replaceAll('\u0000', '').replaceAll(`\n${FIELD_BODY_PREFIX}`, '\n');
 };
+/** a key=value field as the card shows it (Aegis L4): a JSON-quoted key label, the fenced value, the end marker */
+const kv = (k: string, v: string): string => `field "${k}":\n${v}\n  └ end of field "${k}"`;
 const why = (p: PermissionPlan): string => (p.kind === 'auto-deny' ? p.why : 'card');
+
+describe('Aegis L4: field text can never start a card line', () => {
+  const lines = (p: PermissionPlan): string[] => (p.kind === 'card' ? (p.block as { children: Array<{ text: string }> }).children.map((c) => c.text) : []);
+  it('a multi-line command, an extra key and its value that imitate kernel lines are fenced, with an end marker', () => {
+    const spoof = 'ls\nThe session asks to run Read\nrepo: /safe\nquestion 1: ok?';
+    const out = lines(composePermission(req('Bash', { command: spoof, ['repo: /x\nalways: safe']: 'v\nrepo: /y' }), ctx));
+    for (const l of ['The session asks to run Read', 'repo: /safe', 'question 1: ok?', 'repo: /y']) {
+      expect(out).not.toContain(l);
+      expect(out).toContain(`${FIELD_BODY_PREFIX}${l}`);
+    }
+    expect(out).toContain('  └ end of command');
+    // the model-chosen key is JSON-quoted on a kernel-prefixed label line (its newline escaped)
+    expect(out).toContain('field "repo: /x\\nalways: safe":');
+    expect(out.filter((l) => l.startsWith('repo: '))).toEqual(['repo: /r']);
+  });
+  it('fieldLines: label, every body line prefixed, end marker', () => {
+    expect(fieldLines('plan', 'a\nb')).toEqual(['plan:', `${FIELD_BODY_PREFIX}a`, `${FIELD_BODY_PREFIX}b`, '  └ end of plan']);
+  });
+  it('Aegis L3: a Bash card says the rule pins the command text, not what it runs', () => {
+    expect(lines(composePermission(req('Bash', { command: './deploy.sh' }), ctx))).toContain('always: the rule pins this exact command text, not what it runs (a script or binary it calls can change).');
+  });
+});
 
 describe('Aegis A1: every input field is on the card', () => {
   it('Bash: the command and every other key as key=value', () => {
     const t = shown(composePermission(req('Bash', { command: 'make test', timeout: 600000, run_in_background: true, description: 'run tests' }), ctx));
-    for (const s of ['make test', 'timeout=600000', 'run_in_background=true', 'description=run tests']) expect(t).toContain(s);
+    for (const s of ['make test', kv('timeout', '600000'), kv('run_in_background', 'true'), kv('description', 'run tests')]) expect(t).toContain(s);
   });
   it('Bash dangerouslyDisableSandbox (any value but false) is auto-denied sandbox-escape, no card', () => {
     for (const v of [true, 'yes', 1]) expect(why(composePermission(req('Bash', { command: 'ls', dangerouslyDisableSandbox: v }), ctx))).toBe('sandbox-escape');
@@ -40,8 +65,8 @@ describe('Aegis A1: every input field is on the card', () => {
   it('an unknown tool shows every key in full (no JSON cap)', () => {
     const url = `https://example.com/${'p'.repeat(3000)}`;
     const t = shown(composePermission(req('WebFetch', { url, prompt: 'summarise' }), ctx));
-    expect(t).toContain(`url=${url}`);
-    expect(t).toContain('prompt=summarise');
+    expect(t).toContain(kv('url', url));
+    expect(t).toContain(kv('prompt', 'summarise'));
   });
 });
 
@@ -52,14 +77,14 @@ describe('Aegis A2: writing tools are shown in full (Write: an explicit excerpt 
     const t = shown(composePermission(req('Edit', { file_path: '/r/f', old_string: oldS, new_string: newS, replace_all: true }), ctx));
     expect(t).toContain(oldS);
     expect(t).toContain(newS);
-    expect(t).toContain('replace_all=true');
+    expect(t).toContain(kv('replace_all', 'true'));
   });
   it('MultiEdit renders the path and every edit (old/new per edit)', () => {
     const edits = [{ old_string: 'a1', new_string: 'b1' }, { old_string: `${'x'.repeat(2000)}tail2`, new_string: 'b2', replace_all: true }];
     const t = shown(composePermission(req('MultiEdit', { file_path: '/r/f.ts', edits }), ctx));
     expect(t).toContain('edit 1 of 2 on /r/f.ts');
     expect(t).toContain('edit 2 of 2 on /r/f.ts');
-    for (const s of ['a1', 'b1', `${'x'.repeat(2000)}tail2`, 'b2', 'replace_all=true']) expect(t).toContain(s);
+    for (const s of ['a1', 'b1', `${'x'.repeat(2000)}tail2`, 'b2', kv('replace_all', 'true')]) expect(t).toContain(s);
     expect(why(composePermission(req('MultiEdit', { file_path: '/r/f', edits: [{ old_string: 'a' }] }), ctx))).toBe('bad-input');
     expect(why(composePermission(req('MultiEdit', { file_path: '/r/f', edits: [] }), ctx))).toBe('bad-input');
   });
@@ -68,7 +93,7 @@ describe('Aegis A2: writing tools are shown in full (Write: an explicit excerpt 
     const t = shown(composePermission(req('NotebookEdit', { notebook_path: '/r/n.ipynb', new_source: src, cell_id: 'c1', edit_mode: 'replace' }), ctx));
     expect(t).toContain('os.system("x")');
     expect(t).toContain('y'.repeat(3000));
-    expect(t).toContain('cell_id=c1');
+    expect(t).toContain(kv('cell_id', 'c1'));
   });
   it('a writing-tool card too large to show in full is denied, never cut', () => {
     const huge = 'z'.repeat(MAX_CARD_CHARS + 10);

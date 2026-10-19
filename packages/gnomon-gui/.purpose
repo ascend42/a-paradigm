@@ -18,7 +18,12 @@ components:
       before any other script, handing it to app.js once. core/launch.ts
       decides the key pin (localStorage holds only the kernel public key;
       a changed fragment key re-pins visibly; Reconnect verifies against the
-      pin; none ⇒ refuse). core/server-sig.ts verifies hello.serverSig with
+      pin; none ⇒ refuse); hostSurface() (T-2026-10-18-018 N1, M1.13) is
+      'wrapper' only for the frozen non-writable non-configurable
+      window.gnomonSurface the #gnomon-wrapper document-start script defines
+      (a plain browser cannot produce it under the kernel CSP), and then the
+      page sends hello surface wrapper and hides the extension-risk badge
+      (display only). core/server-sig.ts verifies hello.serverSig with
       WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; each
       hello carries a fresh clientNonce (getRandomValues, 32 bytes) that the
       result must echo (client-nonce-mismatch) and the signature must cover
@@ -46,7 +51,16 @@ components:
       presets and theme/motion resolution. ui/app.ts wires the page: launch,
       Reconnect, backlog paging + follow subscription, sessions sidebar with
       new session (session.open), composer (session.send), decision stack
-      (approve on trusted gestures; refusals shown verbatim until M1.3
+      (approve on trusted gestures; an ask-user card with a verified
+      `answer` key gets a picker built ONLY from askDetailOf: the card block's
+      one {type:'ask-user', detail} node whose detail recomputes (with kind,
+      requester, hsid, flags; cardContentHash) to the card's contentHash —
+      display text is never parsed; missing/malformed/mismatched => no
+      picker (Aegis C1); radio/checkbox per option plus a free-text field
+      (aria-label, maxlength = detail.maxAnswerChars), askNote (null-
+      prototype answers) builds the
+      approve note: plain text for one question, JSON {answers} for several;
+      refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
     path: src/

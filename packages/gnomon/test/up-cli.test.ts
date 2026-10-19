@@ -30,7 +30,7 @@ import { privateTmpRoot } from './daemon-helpers.js';
 
 const DEV = acceptUnsignedHelperForTests(DEV_TEST_HELPER_ACK);
 /** A clean runtime for the unsafe-env guard (vitest's own worker runs with interpreter flags). */
-const CLEAN = { env: {}, execArgv: [] as string[] };
+const CLEAN = { env: {}, execArgv: ['--disable-sigusr1'] as string[] };
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -107,6 +107,11 @@ describe('#gnomon-up refusals (each guard falsified)', () => {
       { env: {}, execArgv: ['--inspect-brk=0'] },
       { env: {}, execArgv: ['--require', '/tmp/evil.js'] },
       { env: {}, execArgv: ['--import', 'data:text/javascript,0'] },
+      // T-2026-10-18-030 (1): --disable-sigusr1 is the ONE flag allowed, and it is required
+      { env: {}, execArgv: [] },
+      { env: {}, execArgv: ['--disable-sigusr1', '--inspect'] },
+      { env: {}, execArgv: ['--disable-sigusr1', '--disable-sigusr1'] },
+      { env: { NODE_OPTIONS: '--require /tmp/evil.js' }, execArgv: ['--disable-sigusr1'] },
     ]) {
       const { deps, n } = upDeps(fake, uh, { runtime });
       const x = io();
@@ -116,7 +121,7 @@ describe('#gnomon-up refusals (each guard falsified)', () => {
       expect(n).toEqual({ helper: 0, kernel: 0, closed: 0 });
     }
     // an empty / whitespace NODE_OPTIONS is not a flag
-    const { deps } = upDeps(fake, uh, { runtime: { env: { NODE_OPTIONS: ' ' }, execArgv: [] }, start: async () => { throw new Error('reached start (test)'); } });
+    const { deps } = upDeps(fake, uh, { runtime: { env: { NODE_OPTIONS: ' ' }, execArgv: ['--disable-sigusr1'] }, start: async () => { throw new Error('reached start (test)'); } });
     await expect(runUpCommand(['--home', home], io(), deps)).rejects.toThrow('reached start (test)');
     // and the real vitest worker (it runs with interpreter flags) is refused by the default facts
     if (process.execArgv.length > 0) {
@@ -303,6 +308,30 @@ describe('#gnomon-up: signals', () => {
     expect(x.o.join('').split('STOPPING  kernel').length - 1).toBe(1);
     expect(x.o.join('')).toContain('DOWN  kernel (signal)');
     for (const s of STOP_SIGNALS) expect(process.listeners(s).includes(ours[s]![0]!), `${s} removed`).toBe(false);
+    expect(h).not.toBeNull();
+  });
+});
+
+describe('#gnomon-up: a dead terminal (T-2026-10-18-030 (4))', () => {
+  it('FALSIFIER: an EIO \'error\' on stdout after SIGHUP is handled and stops the kernel through the sweep (no throw)', async () => {
+    const { uh, home, fake } = await provisioned();
+    let h: DaemonHandle | null = null;
+    const { deps, n } = upDeps(fake, uh, { start: async (o) => (h = await startDaemon(o)) });
+    const x = io();
+    const listeners: Array<(e: Error) => void> = [];
+    const stdout = { ...x.stdout, on: (ev: 'error', l: (e: Error) => void) => (expect(ev).toBe('error'), listeners.push(l), stdout) };
+    const run = runUpCommand(['--home', home], { ...x, stdout }, deps);
+    const deadline = Date.now() + 15_000;
+    while (!x.o.join('').includes('gui ') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    expect(listeners.length).toBe(1); // mutation check: without the listener a real stream's EIO is an uncaught 'error'
+    const eio = Object.assign(new Error('write EIO'), { code: 'EIO' });
+    listeners[0]!(eio);
+    listeners[0]!(eio); // a repeat is one stop
+    expect(await run).toBe(0);
+    expect(x.o.join('').split('STOPPING  kernel').length - 1).toBe(1);
+    expect(x.o.join('')).toContain('DOWN  kernel (signal)');
+    expect(() => listeners[0]!(eio)).not.toThrow(); // after exit it only swallows
+    expect(n.closed).toBe(n.helper); // the helper closed: the sweep ran
     expect(h).not.toBeNull();
   });
 });

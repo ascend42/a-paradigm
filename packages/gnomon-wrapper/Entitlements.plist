@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- #gnomon-wrapper: hardened runtime with NO exceptions. No JIT, no unsigned
+     executable memory, no library-validation opt-out, no get-task-allow: the
+     WebView's JIT runs in Apple's own WebContent process, and the kernel child
+     (node) is a separate executable the app spawns, not code it loads. -->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>

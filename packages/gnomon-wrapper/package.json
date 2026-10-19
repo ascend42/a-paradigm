@@ -1,0 +1,24 @@
+{
+  "name": "@a-company/gnomon-wrapper",
+  "version": "8.0.0",
+  "private": true,
+  "description": "Gnomon.app (#gnomon-wrapper, spec §11.1, §16, §18; M1.13): the Tauri 2 desktop wrapper over WKWebView that is the GUI's default daily surface. Rust crate in this directory; macOS in slice 1, Windows in the parity phase.",
+  "files": [],
+  "scripts": {
+    "test:rust": "cargo test --locked",
+    "build:darwin": "node scripts/build-darwin.mjs",
+    "build:darwin:unsigned": "node scripts/build-darwin.mjs --unsigned",
+    "notarize:darwin": "node scripts/notarize-darwin.mjs",
+    "fixtures": "node scripts/gen-fixtures.mjs"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-wrapper"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

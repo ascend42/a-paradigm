@@ -44,14 +44,25 @@
  * LaunchServices launcher — the accepted residual of §A.2(i).
  * COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS is that version boundary (data,
  * read by tests; no kernel branch).
+ * T-2026-10-18-028 M5 — the signed helper, ALWAYS (not a policy class): the
+ * session can neither exec nor read GnomonHelper.app, the pinned bundle or any
+ * copy of it, nor exec any file named `gnomon-helper` (HELPER_EXEC_DENY /
+ * HELPER_READ_DENY, regexes on the RESOLVED path, so a symlink is no way round).
+ * Unreadable means it cannot be copied out; a copy that keeps the executable
+ * name is still denied; a bare copy of the executable alone is SIGKILLed by
+ * the OS (its signature needs the bundle; measured 2026-10-18). Backstop: the
+ * helper refuses `serve`/`once` under ANY sandbox (main.swift isSandboxed,
+ * fail closed if the check cannot be made), and a session's children inherit
+ * the profile. Residual: a copy renamed in BOTH bundle and executable needs an
+ * edited Info.plist, which breaks the signature.
  * Not realised here (reported by sessionDenyCoverage): the helper's XPC
- * service name (`ipc:helper-service` — the helper is M1.3; no name yet).
+ * service name (`ipc:helper-service` — no XPC service yet).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 3;
+export const SESSION_PROFILE_VERSION = 4; // 4: T-2026-10-18-028 M5 helper exec/read denies
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -81,6 +92,17 @@ export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/shortcuts',
   '/usr/bin/automator',
 ]);
+
+/** M5: exec of the helper bundle (pinned or a copy) and of any file named gnomon-helper (SBPL regex, resolved paths). */
+export const HELPER_EXEC_DENY = Object.freeze(['/GnomonHelper\\.app(/|$)', '/gnomon-helper$']);
+/** M5: the helper bundle is unreadable from a session, so it cannot be copied out. */
+export const HELPER_READ_DENY = Object.freeze(['/GnomonHelper\\.app(/|$)']);
+
+/** The M5 helper deny lines, appended to every session profile. */
+export function helperDenySbpl(): string[] {
+  const rx = (r: string): string => `(regex #"${r}")`;
+  return [`(deny process-exec ${HELPER_EXEC_DENY.map(rx).join(' ')})`, `(deny file-read* ${HELPER_READ_DENY.map(rx).join(' ')})`];
+}
 
 export interface DarwinSessionExtras {
   uid: number;
@@ -175,6 +197,8 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   if (classes.has('media:microphone')) lines.push('(deny device-microphone)');
   if (classes.has('media:camera')) lines.push('(deny device-camera)');
   if (policy.launchers === 'deny' || classes.has('launchers') || classes.has('service-manager')) lines.push(`(deny process-exec ${launchers.map((l) => `(literal ${q(l)})`).join(' ')})`);
+  // M5: last, so no later allow can re-open it
+  lines.push(...helperDenySbpl());
   lines.push('');
   return lines.join('\n');
 }

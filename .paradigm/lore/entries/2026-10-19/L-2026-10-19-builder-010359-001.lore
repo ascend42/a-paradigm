@@ -1,0 +1,29 @@
+id: L-2026-10-19-builder-010359-001
+type: insight
+timestamp: '2026-10-19T01:03:59.426Z'
+author: builder
+title: 'M1.11 slice 3 round 2: replayed pins, visible pauses, claims and bounded pickup'
+summary: 'Aegis C1-C5 + review fixes: pin rows not newer than the last for a mod are rejected as replay (deleting a line stays a residual, spec 15.1 row 30); a pause is listed in status from its marker, shown in the Workshop and refuses every call at once (row 31); staged requestedBy/hsid/attended are shown as claims and uninstall names its own minted card; a pickup scan reads at most 64 records of 64 KiB with folded, correctly coded refusals; the mod feed carries released rows only, coalesces turn.partial and drops notifications past 256 KiB unread.'
+symbols_touched:
+  - '#mod-cli'
+  - '#mod-host'
+  - '#manifest-loader'
+  - '#workshop-mod'
+tags:
+  - gnomon
+  - M1.11
+  - aegis
+linked_commits:
+  - 9bec0f19
+  - 8c06b1f3
+  - 994e40e1
+  - c51a62ea
+  - 3c0efdfe
+  - fd0a7bca
+  - 7484df83
+  - 1ac55405
+confidence: 0.8
+git_context:
+  ref: 1ac55405c6dacf0011268596c4fec562e0656b68
+  branch: gnomon/m111-slice3
+  dirty: false

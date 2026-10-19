@@ -1,0 +1,31 @@
+version: "2.0"
+description: >-
+  packages/gnomon-mods - the first-party Gnomon mods (spec §12.1). They run on
+  the same mod-abi:v1 and the same `mod` sandbox profile as any other mod;
+  first-party is a trust tier derived from the packageHash pinned in the
+  kernel's FIRST_PARTY_PACKAGE_HASHES (packages/gnomon/src/kernel/manifest/install.ts),
+  never a wider ABI. Files are LF-pinned (.gitattributes) so the hash is the
+  same on every OS.
+
+components:
+  workshop-mod:
+    description: >-
+      #workshop-mod (spec §11.6, G-WSP-01; §19.1 M1.11 slice 3) -
+      packages/gnomon-mods/workshop: one view `workshop.strip` (slot sidebar,
+      append) with two zones, needs you (one cap per pending card, labelled
+      by the card kind) and working (one cap per session: hat = work type,
+      filled = Claude, outlined = local, tone hue-<0..7> = project, violet
+      only for a KNOT; bob while turn.partial streams, still otherwise,
+      `working` text pose under reduced motion). model.mjs is a pure reducer
+      + render (sessions and cards bounded at 256 each); index.mjs speaks
+      mod-abi:v1 directly (no SDK import, so the pinned packageHash never
+      depends on an SDK build) and echoes MOD_ABI_ID. State comes ONLY from
+      the host's projected kernel-event feed (#mod-host feed.ts, granted by
+      the log.read capability); a host-initiated fixture render may replay
+      input.fixtureEvents, a relayed render never can. Declared effects:
+      none beyond idle read; tier first-party; installs with
+      `gnomon mod install packages/gnomon-mods/workshop` + the root-key card.
+      Fixtures strip.json / strip-reduced.json with golden renders
+      (test/workshop-mod.test.ts, every OS).
+    tags: [mods, first-party, M1.11]
+    oracles: [G-WSP-01]

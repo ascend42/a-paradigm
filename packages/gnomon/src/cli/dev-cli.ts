@@ -13,7 +13,7 @@ import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
 import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
-import { attachInProcess, serveInProcess, unsafeRuntime, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
+import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 
 export type DevCliIo = LaunchTtyIo;
 
@@ -27,7 +27,8 @@ export const DEV_BANNER =
 
 export const DEV_USAGE = `gnomon ${GNOMON_VERSION} dev — DEV ONLY, unsigned, until M1.3
 usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnomon-dev'})
-       gnomon dev up   [--home <abs>]   run the kernel on it and print a GUI launch URL
+       gnomon dev up   [--home <abs>] [--wrapper]   run the kernel on it and print a GUI launch URL
+                                    (--wrapper: the grant goes on the stdout pipe of the parent, #gnomon-wrapper)
   Never ~/.gnomon. A home holding another root's registry is refused.
 `;
 
@@ -35,17 +36,19 @@ export interface DevCliOptions extends DevHomeOptions {
   host?: string;
 }
 
-function parseHome(rest: readonly string[], opts: DevCliOptions): { home: string } | string {
+function parseHome(rest: readonly string[], opts: DevCliOptions, allowWrapper = false): { home: string; wrapper: boolean } | string {
   let home: string | undefined;
+  let wrapper = false;
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--home') {
+    if (a === '--wrapper' && allowWrapper) wrapper = true;
+    else if (a === '--home') {
       const v = rest[++i];
       if (!v || !path.isAbsolute(v)) return '--home needs an absolute path';
       home = path.resolve(v);
     } else return `unknown argument ${a}`;
   }
-  return { home: home ?? defaultDevHome(opts.userHome) };
+  return { home: home ?? defaultDevHome(opts.userHome), wrapper };
 }
 
 export function reportRefusal(io: DevCliIo, e: DevHomeRefusal): number {
@@ -106,30 +109,44 @@ export async function startDevKernel(home: string, opts: DevHomeOptions & DevUpD
 }
 
 export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
-  const parsed = parseHome(argv, opts);
+  const parsed = parseHome(argv, opts, true);
   if (typeof parsed === 'string') {
     io.stderr.write(`gnomon dev: ${parsed}\n${DEV_USAGE}`);
     return DEV_EXIT_USAGE;
   }
-  io.stdout.write(DEV_BANNER);
+  const wrapper = parsed.wrapper;
+  // #gnomon-wrapper: stdout is the channel, so every human line goes to stderr; the channel is checked first
+  (wrapper ? io.stderr : io.stdout).write(DEV_BANNER);
+  if (wrapper) {
+    const bad = wrapperChannelProblem(io);
+    if (bad) {
+      refused(io.stderr, 'dev', 'wrapper-channel', bad);
+      return DEV_EXIT_REFUSED;
+    }
+  }
+  const say = (reason: string, message: string, next: readonly string[] = []): void => (wrapper ? channelRefused(io, 'dev', reason, message, next) : refused(io.stderr, 'dev', reason, message, next));
   // Aegis C1 (the same rule as gnomon up): the kernel runs in THIS process, so the process must be clean
   const unsafe = unsafeRuntime(opts.runtime);
   if (unsafe) {
-    refused(io.stderr, 'dev', 'unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js dev up` with no node flags']);
+    say('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js dev up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js dev up`, with no other node flags']);
     return DEV_EXIT_REFUSED;
   }
   let k: DevKernel;
   try {
     k = await startDevKernel(parsed.home, opts);
   } catch (e) {
-    if (e instanceof DevHomeRefusal) return reportRefusal(io, e);
+    if (e instanceof DevHomeRefusal) {
+      if (!wrapper) return reportRefusal(io, e);
+      say(e.reason, e.message, e.next);
+      return DEV_EXIT_REFUSED;
+    }
     if (isLifecycleRefusal(e)) {
-      refused(io.stderr, 'dev', e.reason, e.message, e.reason === 'already-running' ? ['another kernel already runs on this home: stop it (Ctrl-C in its terminal) first'] : []);
+      say(e.reason, e.message, e.reason === 'already-running' ? ['another kernel already runs on this home: stop it (Ctrl-C in its terminal) first'] : []);
       return DEV_EXIT_REFUSED;
     }
     throw e;
   }
-  const code = await serveInProcess(k, io, {
+  const code = await (wrapper ? serveWrapperChannel : serveInProcess)(k, io, {
     code: 'dev',
     noun: 'dev kernel',
     rows: [

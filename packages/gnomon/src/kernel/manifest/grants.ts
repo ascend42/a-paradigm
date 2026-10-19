@@ -80,7 +80,17 @@ export interface GrantBindRow {
   manifestHash: string;
   kinds: string[];
 }
-export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow;
+/** M1.11 slice 3: a root-signed uninstall (decided on a root-class card); the effective pin is the LAST install/uninstall row naming the mod. */
+export interface GrantUninstallRow {
+  schemaVersion: typeof GRANT_ROW_SCHEMA;
+  kind: 'grant.uninstall';
+  createdAt: string;
+  name: string;
+  /** the pin it removes */
+  packageHash: string;
+  cardId: string;
+}
+export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow | GrantUninstallRow;
 /** What a writer passes: a grant row without schemaVersion (createdAt optional). */
 export type GrantRowInput = GrantRow extends infer R ? (R extends GrantRow ? Omit<R, 'schemaVersion' | 'createdAt'> & { createdAt?: string } : never) : never;
 
@@ -90,6 +100,8 @@ export interface ResolvedGrants {
   egress: Map<string, Set<string>>; // manifestHash → hosts
   binds: GrantBindRow[];
   installs: GrantInstallRow[]; // file order
+  /** grant.install and grant.uninstall rows in file order (effectiveInstall reads this) */
+  pins: Array<GrantInstallRow | GrantUninstallRow>;
   other: Array<{ line: number; kind: GrantRowKind }>;
   rejected: Array<{ line: number; reason: string }>;
 }
@@ -126,6 +138,11 @@ export function checkGrantRow(row: unknown): string | null {
       }
       return null;
     }
+    case 'grant.uninstall':
+      if (typeof row.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(row.name)) return 'name';
+      if (typeof row.packageHash !== 'string' || !SHA.test(row.packageHash)) return 'packageHash';
+      if (typeof row.cardId !== 'string' || !CARD_ID.test(row.cardId)) return 'cardId';
+      return null;
     case 'grant.trust':
       if (typeof row.manifestHash !== 'string' || !SHA.test(row.manifestHash)) return 'manifestHash';
       if (typeof row.tier !== 'string' || !TRUST_TIER_PATTERN.test(row.tier)) return 'tier';
@@ -155,8 +172,19 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
   } catch {
     text = '';
   }
-  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], other: [], rejected: [] };
+  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], pins: [], other: [], rejected: [] };
   const egressLines = new Map<string, number[]>();
+  // Aegis C1 (M1.11 slice 3): a pin row (install/uninstall) whose createdAt is not later than the newest pin
+  // row already seen for that name is a REPLAY (an old row re-appended) and never resolves. Rollback and
+  // re-pins sign a fresh createdAt, so they still apply. Deleting a line is the residual (§15.1 row 30).
+  const newestPin = new Map<string, number>();
+  const replayed = (r: { name: string; createdAt: string }): boolean => {
+    const t = Date.parse(r.createdAt);
+    const prev = newestPin.get(r.name);
+    if (!Number.isFinite(t) || (prev !== undefined && t <= prev)) return true;
+    newestPin.set(r.name, t);
+    return false;
+  };
   text.split('\n').forEach((raw, i) => {
     const line = i + 1;
     if (raw.trim() === '') return;
@@ -177,7 +205,13 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     const row = rec.row as unknown as GrantRow | { kind: GrantRowKind };
     switch (row.kind) {
       case 'grant.install':
+        if (replayed(row as GrantInstallRow)) return void out.rejected.push({ line, reason: 'replay' });
         out.installs.push(row as GrantInstallRow);
+        out.pins.push(row as GrantInstallRow);
+        break;
+      case 'grant.uninstall':
+        if (replayed(row as GrantUninstallRow)) return void out.rejected.push({ line, reason: 'replay' });
+        out.pins.push(row as GrantUninstallRow);
         break;
       case 'grant.capability': {
         const r = row as GrantCapabilityRow;
@@ -224,8 +258,29 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
  * egress host or a knowledge+egress pairing is refused before signing), then
  * signed by the authority — which refuses UNSUPPORTED until M1.3 in production.
  */
+/** The newest accepted pin row's createdAt (ms) for a mod, by the reader's own rule (accepted pins are strictly increasing). */
+export function newestPinMs(grants: ResolvedGrants, name: string): number | undefined {
+  let newest: number | undefined;
+  for (const r of grants.pins) {
+    if (r.name !== name) continue;
+    const t = Date.parse(r.createdAt);
+    if (newest === undefined || t > newest) newest = t;
+  }
+  return newest;
+}
+
+const isPin = (r: GrantRow): r is GrantInstallRow | GrantUninstallRow => r.kind === 'grant.install' || r.kind === 'grant.uninstall';
+
 export function appendGrantRow(home: string, authority: RootAuthority, input: GrantRowInput, now: Date = new Date()): GrantRow {
-  const row = { schemaVersion: GRANT_ROW_SCHEMA, createdAt: input.createdAt ?? now.toISOString(), ...input } as GrantRow;
+  const row = { schemaVersion: GRANT_ROW_SCHEMA, ...input, createdAt: input.createdAt ?? now.toISOString() } as GrantRow;
+  if (isPin(row)) {
+    // Aegis round 3: the reader rejects a pin row not newer than the last one for that mod (replay, C1). A clock step
+    // back or two rows in one millisecond must never turn a legitimate pin into a "replay": createdAt is
+    // max(now, newest + 1 ms) by the reader's exact rule, and the result is read back below.
+    const newest = newestPinMs(readGrants(home, authority), row.name);
+    const t = Date.parse(row.createdAt);
+    if (newest !== undefined && !(Number.isFinite(t) && t > newest)) row.createdAt = new Date(newest + 1).toISOString();
+  }
   const bad = checkGrantRow(row);
   if (bad) {
     throw new ManifestRefusal(bad.startsWith('egress') ? 'EGRESS' : 'GRANT', `refusing to sign an invalid ${String(row.kind)} row (${bad})`, { rowCheck: bad });
@@ -244,6 +299,13 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
+  }
+  if (isPin(row)) {
+    // the pin must be the effective one now, or the caller must not act as if it were
+    const last = readGrants(home, authority).pins.filter((r) => r.name === row.name).at(-1);
+    if (!last || last.kind !== row.kind || last.createdAt !== row.createdAt || last.cardId !== row.cardId || last.packageHash !== row.packageHash) {
+      throw new ManifestRefusal('GRANT', `the ${row.kind} row for ${row.name} did not take effect (the grant reader did not resolve it as the effective pin)`, { name: row.name });
+    }
   }
   return row;
 }
@@ -276,8 +338,12 @@ export function checkAgainstGrants(
   };
 }
 
-/** The effective install of a mod: the LAST grant.install row naming it (re-pins and rollbacks append). */
+/** The effective install of a mod: the LAST grant.install row naming it (re-pins and rollbacks append), unless a later grant.uninstall names it. */
 export function effectiveInstall(grants: ResolvedGrants, name: string): GrantInstallRow | undefined {
-  for (let i = grants.installs.length - 1; i >= 0; i--) if (grants.installs[i]!.name === name) return grants.installs[i];
+  const pins = grants.pins ?? grants.installs;
+  for (let i = pins.length - 1; i >= 0; i--) {
+    const r = pins[i]!;
+    if (r.name === name) return r.kind === 'grant.install' ? r : undefined;
+  }
   return undefined;
 }

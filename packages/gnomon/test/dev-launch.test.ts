@@ -23,7 +23,7 @@ import { vi } from 'vitest';
 import { activateDetached, runForeground } from '../src/cli/daemon-cli.js';
 
 /** A clean runtime for the unsafe-env guard (vitest's own worker runs with interpreter flags). */
-const CLEAN = { env: {}, execArgv: [] as string[] };
+const CLEAN = { env: {}, execArgv: ['--disable-sigusr1'] as string[] };
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T01:27:32.798Z'
+generated: '2026-10-19T01:32:23.257Z'
 structure: {}
 key_files:
   config:
@@ -262,6 +262,7 @@ symbols:
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
+  '#purpose-component-workshop-mod': packages/gnomon-mods/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
@@ -271,6 +272,7 @@ symbols:
   '#purpose-component-ref-resolver': packages/gnomon/
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-dev-launch': packages/gnomon/
+  '#purpose-component-wrapper-channel': packages/gnomon/
   '#purpose-component-gnomon-up': packages/gnomon/
   '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
@@ -281,9 +283,12 @@ symbols:
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
+  '#purpose-component-always-rules': packages/gnomon/
+  '#purpose-component-rules-cli': packages/gnomon/
   '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/
+  '#purpose-component-mod-cli': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/
@@ -1345,6 +1350,7 @@ symbols:
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
+  '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/

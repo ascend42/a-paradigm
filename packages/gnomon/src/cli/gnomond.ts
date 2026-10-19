@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-sigusr1
 /**
  * gnomond — the per-user kernel daemon ($daemon-lifecycle, spec §2.4).
  * `--foreground` runs in this process; otherwise it re-execs itself detached

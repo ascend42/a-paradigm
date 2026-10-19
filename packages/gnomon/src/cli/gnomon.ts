@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-sigusr1
 /**
  * gnomon — the CLI. PR-5 implements `gnomon daemon status|stop|--detach`
  * ($daemon-lifecycle, spec §2.4); T-2026-10-17-009(a) adds `gnomon log
@@ -12,8 +12,10 @@ import { gnomondEntryFrom, runDaemonCommand } from './daemon-cli.js';
 import { runDevCommand } from './dev-cli.js';
 import { runIdentityCommand } from './identity-cli.js';
 import { runLogCommand } from './log-cli.js';
+import { runModCommand } from './mod-cli.js';
 import { runPlaceholderBin } from './placeholder.js';
 import { runReplayCommand } from './replay-cli.js';
+import { runRulesCommand } from './rules-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runUpCommand } from './up-cli.js';
 
@@ -30,6 +32,17 @@ if (argv[0] === 'daemon') {
   );
 } else if (argv[0] === 'log') {
   runLogCommand(argv.slice(1), { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'rules') {
+  // gui-complete item 2: `gnomon rules list|revoke` (standing always-allow rules, rules-cli.ts)
+  runRulesCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },
@@ -74,6 +87,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'identity') {
   // M1.3 slice 1: `gnomon identity init | status` (#identity, identity-cli.ts) — provisions the hardware root
   runIdentityCommand(argv.slice(1), { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'mod') {
+  // M1.11 slice 3: `gnomon mod …` (#mod-cli, mod-cli.ts) — stages cards, never signs
+  runModCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

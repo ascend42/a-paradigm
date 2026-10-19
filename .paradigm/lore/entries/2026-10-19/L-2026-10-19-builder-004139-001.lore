@@ -1,0 +1,21 @@
+id: L-2026-10-19-builder-004139-001
+type: insight
+timestamp: '2026-10-19T00:41:39.265Z'
+author: builder
+title: 'M1.11 slice 3: gnomon mod CLI meets the kernel through the home, not a new verb'
+summary: No socket verb exists for install/pause/start/uninstall (adding one moves clientApiId), so the CLI stages files under the home mods dir and the daemon StagedCardPickup raises them through the real approval broker, which re-derives every card from the pinned snapshot. Uninstall is a root-class grant card appending a root-signed grant.uninstall row; GRANT_ROW_KINDS is not a clientApiId input.
+symbols_touched:
+  - '#mod-cli'
+  - '#mod-host'
+  - '#manifest-loader'
+  - '#approval-broker'
+commit: dd863b67
+tags:
+  - gnomon
+  - M1.11
+  - mods
+confidence: 0.8
+git_context:
+  ref: 40cbc7c921a81caccb43d2df61190c34ebabea10
+  branch: gnomon/m111-slice3
+  dirty: true

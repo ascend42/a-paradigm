@@ -19,3 +19,6 @@ packages/gnomon-contracts/src/** text eol=lf
 
 # The generated client-API doc is a byte-compared fixed point (G-HON-04 rule) on every OS
 docs/specs/gnomon-client-api.md text eol=lf
+
+# First-party mods are pinned by packageHash (FIRST_PARTY_PACKAGE_HASHES): keep LF on every OS.
+packages/gnomon-mods/** text eol=lf

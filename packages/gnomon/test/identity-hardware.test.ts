@@ -48,7 +48,7 @@ function rig(opts: ConstructorParameters<typeof FakeHelper>[1] = {}) {
     approvals,
   });
   approvals.onHelperExit(() => void broker.helperExited());
-  const permission = () => broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' } });
+  const permission = () => broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
   return { helper, approvals, broker, rows, permission };
 }
 
