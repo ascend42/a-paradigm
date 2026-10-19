@@ -108,6 +108,19 @@ describe('gnomon replay (G-KRN-01): verify, then a deterministic fold', () => {
     expect(JSON.stringify(changed.projection)).not.toBe(JSON.stringify(base.projection));
   });
 
+  it('Aegis M3: decide -> approval.effect.failed -> decide for one card folds with no divergence; the last decide stands', () => {
+    const C = 'card:01J0000000000000000000000A';
+    const out = foldReplay([
+      row(1, 'approval.request', { card: { cardId: C, kind: 'install' } }),
+      row(2, 'approval.decide', { cardId: C, decision: 'allow' }),
+      row(3, 'approval.effect.failed', { cardId: C, decision: 'allow', effect: 'install', reason: 'effect-threw' }),
+      row(4, 'approval.decide', { cardId: C, decision: 'deny' }),
+    ]);
+    expect(out.divergences).toEqual([]);
+    expect(out.projection.cards[C]).toEqual({ state: 'deny', seq: 4 });
+    expect(out.projection.kinds['approval.effect.failed']).toBe(1);
+  });
+
   it('Aegis C1: an inject carrying plaintext bytes is a divergence (inject-plaintext), and the append path still refuses it', async () => {
     const lying = foldReplay([row(1, 'session.inject', { hsid: HSID, origin: 'client', hash: sha256Tagged('abc'), bytes: 'abc' })]);
     expect(lying.divergences.map((d) => d.reason)).toEqual(['inject-plaintext']);

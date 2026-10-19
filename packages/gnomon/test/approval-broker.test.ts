@@ -686,3 +686,17 @@ describe('M1.6 slice 2 — broker residuals', () => {
     expect(await refusal(r.broker.approve(H(), { cardId: card.cardId, decision: 'allow', decisionSig: r.sig(card.cardId, 'allow', card.contentHash) }))).toMatchObject({ code: 'UNSUPPORTED', reason: 'presence' });
   });
 });
+
+describe('Aegis M3: a card never carries both a ruleScope and an effect', () => {
+  it('raise refuses ruleScope + effect (BAD_REQUEST) and logs no approval.request; either alone raises', async () => {
+    const r = rig();
+    const base = { kind: 'permission' as const, requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' } };
+    const x = await refusal(r.broker.raise({ ...base, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) }, effect: () => undefined }));
+    expect(x).toMatchObject({ code: 'BAD_REQUEST', reason: 'bad-params' });
+    expect(r.kinds()).not.toContain('approval.request');
+    await r.broker.raise({ ...base, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    await r.broker.raise({ ...base, detail: { tool: 'Bash', input: 'pwd' }, effect: () => undefined });
+    expect(r.kinds().filter((k) => k === 'approval.request')).toHaveLength(2);
+  });
+});
+

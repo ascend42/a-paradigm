@@ -1633,7 +1633,11 @@ components:
       failures are recorded as exactly one approval.effect.failed{cardId,
       decision, effect: the card kind, reason: a kebab-case code} and no
       approval.suspect row; the card stays pending (approval.decide is a
-      record, never authority; P8-D98 slice A2). decisionSig v2 (P8-D98
+      record, never authority; P8-D98 slice A2), so replay folds decide ->
+      approval.effect.failed -> decide for one card with no divergence (the
+      last decide stands). raise refuses a card carrying both a ruleScope and
+      an effect BAD_REQUEST (Aegis M3: a learned rule auto-allows without
+      running an effect). decisionSig v2 (P8-D98
       slice A2): an `answer` signs the v2 message (signer decisionMessage,
       first line gnomon:decision:v2, last line answerDigest = the noteHash)
       and its presence binding carries answerDigest. With a client-supplied

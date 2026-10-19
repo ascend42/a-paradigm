@@ -317,6 +317,9 @@ export class ApprovalBroker {
     const cardId = input.cardId ?? mintId('card');
     if (!ID_PATTERNS.card.test(cardId)) throw fail('BAD_REQUEST', 'bad-params', 'cardId must be card:<ULID>');
     if (this.#cards.has(cardId)) return this.#cards.get(cardId)!.card;
+    // Aegis M3 guard: a rule-scoped card (one an `always` can learn from) never carries an effect — a learned rule
+    // auto-allows later WITHOUT running that effect, so the two together would let a rule stand in for an effect
+    if (input.ruleScope && input.effect) throw fail('BAD_REQUEST', 'bad-params', 'a card carries a ruleScope or an effect, never both');
     if (input.decisions !== undefined) {
       const valid = validDecisions(input.kind);
       if (input.decisions.length === 0 || input.decisions.some((d) => !valid.includes(d))) throw fail('BAD_REQUEST', 'bad-params', `decisions must be a non-empty subset of ${valid.join(', ')}`);
