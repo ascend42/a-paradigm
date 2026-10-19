@@ -11,7 +11,7 @@ import { CARD_EXPIRY_WHYS, CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, 
 import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
 import { RISK_TIERS, AGENT_REVERT_HOWS, KERNEL_REVERT_HOWS } from './change-note.js';
 import { REFUSAL_GATES, REFUSAL_REASONS, refuse, type Refusal, type RefusalCode } from './refusal.js';
-import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS, DRAIN_OUTCOMES, DRAIN_EXIT_REASONS, DRAIN_INJECT_CHANNELS, DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES, RESUME_NOTES, RESUME_REFUSALS, TRACE_REFUSALS } from './event.js';
+import { VOICE_DISARM_REASONS, INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS, DRAIN_OUTCOMES, DRAIN_EXIT_REASONS, DRAIN_INJECT_CHANNELS, DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES, RESUME_NOTES, RESUME_REFUSALS, TRACE_REFUSALS } from './event.js';
 
 export const GNOMON_RPC_V1 = 'gnomon-rpc:v1' as const;
 export const CLIENT_API_PATTERN = /^gnomon-rpc:v([1-9][0-9]*)$/;
@@ -180,6 +180,9 @@ export const STATUS_RESERVED_FIELDS = deepFreeze({
   strictness: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
   review: { reserved: 'M1.1:P8-D86-D88', section: '§7.3' },
   unobservedRefWrites: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
+  // TD-2026-10-19-194 (voice V0, founder ruling): the live voice arms (empty after a drain) and the arm custody.
+  arms: { reserved: '8.0:TD-2026-10-19-194', section: '§14.7' },
+  armCustody: { reserved: '8.0:TD-2026-10-19-194', section: '§14.7' },
 });
 
 /** The client-callable surface: 12 kernel verbs + 3 human-device verbs + 2 relays (§5, P8-D98). */
@@ -227,6 +230,16 @@ export const D98_CLOSED_VALUES = deepFreeze({
   // #trace-capture (TD-2026-10-19-057): session.sandbox{traced:false, traceRefused}.
   'session.sandbox.traceRefused': [...TRACE_REFUSALS],
   'daemon.stop.reason': [...DAEMON_STOP_REASONS],
+});
+
+/**
+ * Closed voice value sets reserved by TD-2026-10-19-194 (founder ruling): the one deliberate clientApiId move for
+ * voice, before any client ships. Published so clientApiId covers them.
+ */
+export const VOICE_CLOSED_VALUES = deepFreeze({
+  'approval.voice.disarm.reason': [...VOICE_DISARM_REASONS],
+  // FORBIDDEN{voice-strictness} data.ceiling: which clamp refused (§14.7 No level, run modes).
+  'refusal.voice-strictness.ceiling': ['null-level', 'manual'],
 });
 
 /* ── the compatible-additive rule (§4.9, §12.8) ───────────────────────────── */

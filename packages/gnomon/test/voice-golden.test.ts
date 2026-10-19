@@ -12,8 +12,9 @@ import { CARD_KINDS, CLIENT_API_ID, VOICE_ALLOWLIST } from '@a-company/gnomon-co
 import { ABI_ID } from '../src/kernel/socket/dispatch.js';
 import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
 
+const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop'];
 const GOLDEN_ABI_ID = 'sha256:18357f4420e34c2959102ff01f8279736ba69f2d9f011421895fd1ce39cfa3fa';
-const GOLDEN_CLIENT_API_ID = 'sha256:f27ecb8b3ee5c1a4ad08d4c5eda427a63aebba8ba31963baed3c9d53e3e611a4';
+const GOLDEN_CLIENT_API_ID = 'sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1';
 
 describe('voice golden: abiId and clientApiId are unchanged by every voice slice', () => {
   it('ABI_ID and CLIENT_API_ID equal the pre-voice literals', () => {
@@ -29,7 +30,8 @@ describe('voice allowlist ⊆ broker decisions (§14.7, classes.ts)', () => {
       const row = VOICE_ALLOWLIST[kind];
       for (const d of [...Object.values(row.approve).flat(), ...row.deny]) expect(valid, `${kind}:${d}`).toContain(d);
       // D66: the deny row names the kind's deny-direction decision whenever the broker gives it one.
-      const brokerDenies = valid.filter((d) => d === 'deny' || d === 'reject');
+      // Founder ruling (TD-2026-10-19-194, Aegis M2): incident and daemon-stop are fully hand-only, deny included.
+      const brokerDenies = FULLY_HAND_ONLY.includes(kind) ? [] : valid.filter((d) => d === 'deny' || d === 'reject');
       expect([...row.deny].sort(), kind).toEqual(brokerDenies.sort());
     }
   });

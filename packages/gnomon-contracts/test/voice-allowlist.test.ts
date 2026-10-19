@@ -29,12 +29,12 @@ const EXPECTED: Record<string, Record<Cls, string[]>> = {
   'ask-user': { reversible: ['answer', 'withdraw'], gate: ['answer', 'withdraw'], judgment: ['answer', 'withdraw'] },
   plan: { reversible: ['approve-plan', 'reject', 'withdraw'], gate: ['approve-plan', 'reject', 'withdraw'], judgment: ['approve-plan', 'reject', 'withdraw'] },
   // toggle 2 (D58): gate-class, fallback-cloud, resume; deny under toggle 1 (D66)
-  'gate-class': { reversible: ['deny'], gate: ['allow', 'deny', 'withdraw'], judgment: ['allow', 'deny', 'withdraw'] },
-  fallback: { reversible: ['deny'], gate: ['fallback-cloud', 'deny', 'withdraw'], judgment: ['fallback-cloud', 'deny', 'withdraw'] },
-  budget: { reversible: ['deny'], gate: ['resume', 'deny', 'withdraw'], judgment: ['resume', 'deny', 'withdraw'] },
+  'gate-class': { reversible: ['deny', 'withdraw'], gate: ['allow', 'deny', 'withdraw'], judgment: ['allow', 'deny', 'withdraw'] },
+  fallback: { reversible: ['deny', 'withdraw'], gate: ['fallback-cloud', 'deny', 'withdraw'], judgment: ['fallback-cloud', 'deny', 'withdraw'] },
+  budget: { reversible: ['deny', 'withdraw'], gate: ['resume', 'deny', 'withdraw'], judgment: ['resume', 'deny', 'withdraw'] },
   // judgment (D61): KNOT resolve, verdict accept|reject
-  knot: { reversible: ['deny'], gate: ['deny'], judgment: ['resolve', 'deny', 'withdraw'] },
-  verdict: { reversible: ['reject'], gate: ['reject'], judgment: ['accept', 'reject', 'withdraw'] },
+  knot: { reversible: ['deny', 'withdraw'], gate: ['deny', 'withdraw'], judgment: ['resolve', 'deny', 'withdraw'] },
+  verdict: { reversible: ['reject', 'withdraw'], gate: ['reject', 'withdraw'], judgment: ['accept', 'reject', 'withdraw'] },
   // hand-only for approving; D66 deny-direction only
   tend: { reversible: ['reject'], gate: ['reject'], judgment: ['reject'] },
   'merge-conflict': { reversible: ['deny'], gate: ['deny'], judgment: ['deny'] },
@@ -48,8 +48,9 @@ const EXPECTED: Record<string, Record<Cls, string[]>> = {
   'peer-pair': { reversible: ['reject'], gate: ['reject'], judgment: ['reject'] },
   reconsider: { reversible: ['reject'], gate: ['reject'], judgment: ['reject'] },
   strictness: { reversible: ['deny'], gate: ['deny'], judgment: ['deny'] },
-  incident: { reversible: ['reject'], gate: ['reject'], judgment: ['reject'] },
-  'daemon-stop': { reversible: ['reject'], gate: ['reject'], judgment: ['reject'] },
+  // founder ruling (TD-2026-10-19-194): fully hand-only, deny included
+  incident: { reversible: [], gate: [], judgment: [] },
+  'daemon-stop': { reversible: [], gate: [], judgment: [] },
 };
 
 /** Approving decisions take the hold; deny-direction and withdraw do not (§14.7 Hold, echo, undo; D66). */
@@ -108,7 +109,7 @@ describe('voice allowlist — table: every CardKind × decision × class', () =>
           const want = EXPECTED[kind]![cls].includes(decision);
           const got = voiceDecisionCheck(cls, kind, decision, []);
           expect(got.ok, `${cls} ${kind} ${decision}`).toBe(want);
-          expect(voiceMayDecide(cls, kind, decision)).toBe(want);
+          expect(voiceMayDecide(cls, kind, decision, [])).toBe(want);
           if (got.ok) {
             expect(got.hold, `hold ${cls} ${kind} ${decision}`).toBe((HELD[kind] ?? []).includes(decision));
           } else {
@@ -123,11 +124,12 @@ describe('voice allowlist — table: every CardKind × decision × class', () =>
 });
 
 describe('voice allowlist — flags, unknowns, never-list (§14.7 Never by voice)', () => {
-  it('any flag (every CARD_FLAG and an unknown one) makes every decision on every kind voice-ineligible, deny included', () => {
+  it('any flag (every CARD_FLAG and an unknown one) makes every decision but withdraw voice-ineligible, deny included; withdraw is never blocked by flags', () => {
     for (const flag of [...CARD_FLAGS, 'some-future-flag']) {
       for (const kind of CARD_KINDS) {
         for (const cls of VOICE_CLASSES) {
-          for (const decision of DECISIONS) {
+          expect(voiceDecisionCheck(cls, kind, 'withdraw', [flag])).toEqual(voiceDecisionCheck(cls, kind, 'withdraw', []));
+          for (const decision of DECISIONS.filter((d) => d !== 'withdraw')) {
             expect(voiceDecisionCheck(cls, kind, decision, [flag])).toEqual({ ok: false, reason: 'voice-ineligible' });
           }
         }
@@ -137,13 +139,13 @@ describe('voice allowlist — flags, unknowns, never-list (§14.7 Never by voice
 
   it('an unknown class (no toggle, `none`, anything else) refuses voice-off', () => {
     for (const cls of ['none', '', 'admin', 'REVERSIBLE']) {
-      expect(voiceDecisionCheck(cls, 'permission', 'deny')).toEqual({ ok: false, reason: 'voice-off' });
+      expect(voiceDecisionCheck(cls, 'permission', 'deny', [])).toEqual({ ok: false, reason: 'voice-off' });
       expect(voiceApprovingDecisions(cls, 'permission')).toEqual([]);
     }
   });
 
   it('an unknown card kind is hand-only for every decision under every class (default deny)', () => {
-    for (const cls of VOICE_CLASSES) for (const d of DECISIONS) expect(voiceDecisionCheck(cls, 'future-kind', d)).toEqual({ ok: false, reason: 'voice-hand-only' });
+    for (const cls of VOICE_CLASSES) for (const d of DECISIONS) expect(voiceDecisionCheck(cls, 'future-kind', d, [])).toEqual({ ok: false, reason: 'voice-hand-only' });
   });
 
   it('never by voice, with every toggle on: always, install, use-api-token, voice-arm/grant/voice-share allow, strictness allow, reconsider extend|restart, incident accept, daemon-stop accept', () => {
@@ -163,12 +165,19 @@ describe('voice allowlist — flags, unknowns, never-list (§14.7 Never by voice
       ['merge-conflict', 'resolve'],
       ['tend', 'accept'],
     ];
-    for (const [k, d] of never) expect(voiceDecisionCheck('judgment', k, d), `${k}:${d}`).toEqual({ ok: false, reason: 'voice-hand-only' });
+    for (const [k, d] of never) expect(voiceDecisionCheck('judgment', k, d, []), `${k}:${d}`).toEqual({ ok: false, reason: 'voice-hand-only' });
+  });
+
+  it('founder ruling: incident and daemon-stop take no voice decision at all, deny/reject included', () => {
+    for (const kind of ['incident', 'daemon-stop'] as const) {
+      expect(VOICE_ALLOWLIST[kind].deny).toEqual([]);
+      for (const cls of VOICE_CLASSES) for (const d of DECISIONS) expect(voiceMayDecide(cls, kind, d, []), `${cls} ${kind} ${d}`).toBe(false);
+    }
   });
 
   it('D66: deny/reject on every kind is accepted under toggle 1 with no hold', () => {
     for (const kind of CARD_KINDS) {
-      for (const d of VOICE_ALLOWLIST[kind].deny) expect(voiceDecisionCheck('reversible', kind, d)).toEqual({ ok: true, hold: false, via: 'deny' });
+      for (const d of VOICE_ALLOWLIST[kind].deny) expect(voiceDecisionCheck('reversible', kind, d, [])).toEqual({ ok: true, hold: false, via: 'deny' });
     }
   });
 

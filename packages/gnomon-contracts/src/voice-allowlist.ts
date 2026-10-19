@@ -19,9 +19,14 @@
  *     are accepted on every card KIND, inside a reversible arm, with no hold.
  *   - §14.7 "Hold, echo, undo": `undo` during the hold is a `withdraw` on a held card; deny-direction skips the hold.
  *
- * Readings (reported with TD-2026-10-19-194): flags veto every decision, deny included — the D66 exception names
+ * Readings (reported with TD-2026-10-19-194): flags veto every approving and deny decision — the D66 exception names
  * card kinds, and a flagged card is voice-ineligible (§14.7 self-approval guards); `merge-conflict` `resolve` and
- * `tend` `accept` are not KNOT/verdict and stay hand-only; `withdraw` follows the approving rows of the class.
+ * `tend` `accept` are not KNOT/verdict and stay hand-only. Founder ruling: `incident` and `daemon-stop` take no
+ * voice decision at all, deny included.
+ *
+ * `withdraw` (`undo` during the hold, §14.7 Hold, echo, undo): undo is never narrower than the hold. It is ok for any
+ * known class on any kind that has an approving row at some class, and flags never block it. The CALLER must also
+ * check that the card's state is `held` and that it is held under the same `armId` (not knowable from these args).
  *
  * Not in this list (later slices): the strictness overlay and null-level ceiling, the `manual` run-mode deny-only
  * clamp, arm custody and every runtime broker check — callers pass the EFFECTIVE class.
@@ -46,7 +51,8 @@ const row = (approve: VoiceAllowRow['approve'], deny: readonly CardDecision[]): 
 /**
  * Every CardKind has a row (the Record type forces it at compile time; test/voice-allowlist.test.ts forces it at
  * run time). A kind with an empty `approve` is hand-only for every approving decision. The deny-direction decision
- * per kind is the one #approval-broker's KIND_DECISIONS gives that kind (`deny` or `reject`).
+ * per kind is the one #approval-broker's KIND_DECISIONS gives that kind (`deny` or `reject`), except the founder-ruled
+ * fully hand-only kinds `incident` and `daemon-stop` (empty deny rows).
  */
 export const VOICE_ALLOWLIST: Readonly<Record<CardKind, VoiceAllowRow>> = Object.freeze({
   // toggle 1 (D58, §14.7 Toggles)
@@ -73,8 +79,9 @@ export const VOICE_ALLOWLIST: Readonly<Record<CardKind, VoiceAllowRow>> = Object
   'peer-pair': row({}, ['reject']),
   reconsider: row({}, ['reject']), // restart|extend never by voice
   strictness: row({}, ['deny']), // every run-mode or level change is hand-only
-  incident: row({}, ['reject']),
-  'daemon-stop': row({}, ['reject']), // `daemon stop` is root-signed-class (§14.7 Never)
+  // FOUNDER RULING (TD-2026-10-19-194, Aegis M2): fully hand-only by voice, deny/reject included — the D66 exception.
+  incident: row({}, []),
+  'daemon-stop': row({}, []), // `daemon stop` is root-signed-class (§14.7 Never)
 });
 
 /** Refusal reasons this module can name (all reserved in refusal.ts VOICE_REFUSAL_REASONS). */
@@ -97,29 +104,34 @@ export function voiceApprovingDecisions(cls: string, kind: string): CardDecision
 
 /**
  * May voice, under the EFFECTIVE class `cls`, take `decision` on a card of `kind` carrying `flags`?
- * Order: unknown class ⇒ voice-off; any flag ⇒ voice-ineligible; approving row ⇒ ok with hold; D66 deny row ⇒ ok,
- * no hold; withdraw ⇒ ok iff the kind has an approving row at `cls`; a row at a higher class ⇒ voice-class;
+ * `flags` is required (Aegis M1): a caller must state the card's flags, never default them away.
+ * Order: unknown class ⇒ voice-off; withdraw ⇒ ok iff the kind has an approving row at ANY class (flags ignored;
+ * caller checks state `held` + same armId); any flag ⇒ voice-ineligible; D66 deny row ⇒ ok, no hold; approving row
+ * ⇒ ok with hold; a row at a higher class ⇒ voice-class;
  * else ⇒ voice-hand-only (default deny; also every unknown kind or decision).
  */
-export function voiceDecisionCheck(cls: string, kind: string, decision: string, flags: readonly string[] = []): VoiceAllowResult {
+export function voiceDecisionCheck(cls: string, kind: string, decision: string, flags: readonly string[]): VoiceAllowResult {
   if (!isVoiceClass(cls)) return { ok: false, reason: 'voice-off' };
-  if (flags.length > 0) return { ok: false, reason: 'voice-ineligible' };
   const r = (VOICE_ALLOWLIST as Record<string, VoiceAllowRow>)[kind];
+  if (decision === 'withdraw') {
+    return r && voiceApprovingDecisions('judgment', kind).length > 0 ? { ok: true, hold: false, via: 'withdraw' } : { ok: false, reason: 'voice-hand-only' };
+  }
+  if (flags.length > 0) return { ok: false, reason: 'voice-ineligible' };
   if (!r) return { ok: false, reason: 'voice-hand-only' };
   const approving = voiceApprovingDecisions(cls, kind) as string[];
   if (r.deny.includes(decision as CardDecision)) return { ok: true, hold: false, via: 'deny' };
-  if (approving.includes(decision)) return { ok: true, hold: true, via: highestClassOf(r, decision) ?? cls };
-  if (decision === 'withdraw') return approving.length > 0 ? { ok: true, hold: false, via: 'withdraw' } : { ok: false, reason: 'voice-hand-only' };
+  if (approving.includes(decision)) return { ok: true, hold: true, via: lowestClassAdmitting(r, decision) ?? cls };
   if (voiceApprovingDecisions('judgment', kind).includes(decision as CardDecision)) return { ok: false, reason: 'voice-class' };
   return { ok: false, reason: 'voice-hand-only' };
 }
 
-function highestClassOf(r: VoiceAllowRow, decision: string): VoiceClass | undefined {
+/** The lowest (first, D62 order) voice class whose row admits `decision`. */
+function lowestClassAdmitting(r: VoiceAllowRow, decision: string): VoiceClass | undefined {
   return VOICE_CLASSES.find((c) => (r.approve[c] as readonly string[] | undefined)?.includes(decision));
 }
 
 /** Boolean form of voiceDecisionCheck. */
-export function voiceMayDecide(cls: string, kind: string, decision: string, flags: readonly string[] = []): boolean {
+export function voiceMayDecide(cls: string, kind: string, decision: string, flags: readonly string[]): boolean {
   return voiceDecisionCheck(cls, kind, decision, flags).ok;
 }
 
