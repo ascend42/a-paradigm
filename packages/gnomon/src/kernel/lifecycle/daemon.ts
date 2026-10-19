@@ -98,12 +98,12 @@ import { WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
-import { acquireDaemonLock, pidPathOf, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
+import { acquireDaemonLock, pidPathOf, reclaimResiduePidfile, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
 import { helloProbe } from './ready.js';
 import { LifecycleRefusal } from './refusal.js';
 import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
-import { processControlFor } from './process-control.js';
+import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, RULE_KINDS } from '../supervisor/rules.js';
@@ -122,6 +122,8 @@ export type DaemonEvent =
   | { kind: 'daemon.start'; pid: number; socketPath: string; via: EndpointVia; idleMs: number }
   | { kind: 'daemon.exit'; reason: DaemonExitReason }
   | { kind: 'daemon.lock.refused'; reason: string; holderPid?: number }
+  /** T-2026-10-19-017: a silent holder whose process started after the pidfile was written (a recycled pid) was reclaimed. */
+  | { kind: 'daemon.lock.reclaimed'; holderPid: number; startedAt: string; holderStart: string }
   /** N3: a security-relevant mod row (mod.paused, mod.effect.refused) could not be written to the chain. */
   | { kind: 'daemon.mod.row.unrecorded'; rowKind: string; name: string | null; error: string }
   /** A read-token revocation could not be written to the chain twice; it stays pending and is retried on the token timer. */
@@ -135,6 +137,8 @@ export interface DaemonOptions {
   probeHolder?: (socketPath: string) => Promise<boolean>;
   /** How long a live-but-silent holder is given to start answering before `holder-silent` (default HOLDER_GRACE_MS). */
   holderGraceMs?: number;
+  /** Test seam: wall-clock start (epoch ms) of a silent holder's pid, null = can't tell (default process-control.ts processStartMs). */
+  holderStartMs?: (pid: number) => number | null;
   /** `gnomon mod` pickup scan period (default PICKUP_SCAN_MS); tests shorten it */
   modPickupMs?: number;
   home: string;
@@ -246,15 +250,49 @@ export interface DaemonSeams {
 export const HOLDER_GRACE_MS = 2000;
 
 /**
+ * How far a silent holder's process start may lie AFTER the pidfile's
+ * `startedAt` and still count as the pidfile's own writer. The true writer
+ * started before it wrote `startedAt`; `ps -o lstart=` truncates to the second
+ * (which only moves the witness earlier), so the allowance covers wall-clock
+ * steps (NTP slew) between the two readings. A configured bound, not a
+ * measurement.
+ */
+export const HOLDER_START_TOLERANCE_MS = 2000;
+
+/**
+ * T-2026-10-19-017: is a live, silent pidfile holder a recycled pid? `true`
+ * only when its process provably started more than HOLDER_START_TOLERANCE_MS
+ * after the pidfile's `startedAt` — the writer of that pidfile is then gone
+ * (after a crash, or a reboot: every process of a later boot started after
+ * the old `startedAt`). Can't tell (unparseable `startedAt`, no witness) is
+ * `false`: never reclaim on doubt.
+ */
+export function holderIsRecycled(startedAt: string, holderStart: number | null): boolean {
+  if (holderStart === null || !Number.isFinite(holderStart)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(startedAt)) return false;
+  const written = Date.parse(startedAt);
+  if (!Number.isFinite(written)) return false;
+  return holderStart > written + HOLDER_START_TOLERANCE_MS;
+}
+
+/**
  * Aegis L2: a same-user live pid in the pidfile is a running kernel only if a
  * kernel answers `hello` on OUR socket path (never the pidfile's own
- * socketPath: the pidfile is same-user writable). A spoofed or recycled pid
- * with a silent socket is `holder-silent` (transient, restartable), never
- * `already-running` (superseded, never restarted). The pidfile is NOT
- * reclaimed here: a silent holder may be a racer between its lock and its
- * listen, and stealing its lock would make two kernels.
+ * socketPath: the pidfile is same-user writable). A spoofed pid with a silent
+ * socket is `holder-silent` (transient, restartable), never `already-running`
+ * (superseded, never restarted). The pidfile is NOT reclaimed for silence
+ * alone: a silent holder may be a racer between its lock and its listen, and
+ * stealing its lock would make two kernels. It IS reclaimed (`'reclaim'`) when
+ * the holder's start-time witness proves it started after the pidfile was
+ * written (a recycled pid after a crash or reboot, T-2026-10-19-017) — a racer
+ * always starts before it writes its own `startedAt`.
  */
-async function judgeLiveHolder(refusal: LifecycleRefusal, home: string, socketPath: string, opts: DaemonOptions): Promise<LifecycleRefusal> {
+async function judgeLiveHolder(
+  refusal: LifecycleRefusal,
+  home: string,
+  socketPath: string,
+  opts: DaemonOptions,
+): Promise<LifecycleRefusal | { reclaim: true; pid: number; startedAt: string; holderStart: number }> {
   const probe = opts.probeHolder ?? ((p: string) => helloProbe(p));
   const deadline = Date.now() + (opts.holderGraceMs ?? HOLDER_GRACE_MS);
   for (;;) {
@@ -263,6 +301,11 @@ async function judgeLiveHolder(refusal: LifecycleRefusal, home: string, socketPa
     await new Promise((r) => setTimeout(r, 100));
   }
   const pid = refusal.detail.pid;
+  const startedAt = refusal.detail.startedAt;
+  if (typeof pid === 'number' && typeof startedAt === 'string') {
+    const holderStart = (opts.holderStartMs ?? ((p: number) => processStartMs(p)))(pid);
+    if (holderStart !== null && holderIsRecycled(startedAt, holderStart)) return { reclaim: true, pid, startedAt, holderStart };
+  }
   return new LifecycleRefusal(
     'holder-silent',
     `the pidfile names a live process (pid ${String(pid)}) but no kernel answers on ${socketPath}; if pid ${String(pid)} is not gnomond, remove ${pidPathOf(home)} and retry`,
@@ -292,17 +335,32 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     throw new LifecycleRefusal('no-safe-endpoint', choice.reason, { candidates: choice.candidates });
   }
 
-  let pidfile: DaemonPidfile;
-  try {
-    pidfile = acquireDaemonLock(home, process.pid, { socketPath: choice.path });
-  } catch (caught) {
-    let err = caught;
-    if (err instanceof LifecycleRefusal && err.reason === 'already-running') err = await judgeLiveHolder(err, home, choice.path, opts);
-    if (err instanceof LifecycleRefusal) {
-      const holderPid = typeof err.detail.pid === 'number' ? err.detail.pid : undefined;
-      emit({ kind: 'daemon.lock.refused', reason: err.reason, ...(holderPid !== undefined ? { holderPid } : {}) });
+  let pidfile: DaemonPidfile | undefined;
+  // At most one reclaim of a recycled-pid pidfile (T-2026-10-19-017); a second live holder is judged, never reclaimed again.
+  for (let reclaims = 0; pidfile === undefined; ) {
+    try {
+      pidfile = acquireDaemonLock(home, process.pid, { socketPath: choice.path });
+    } catch (caught) {
+      let err: unknown = caught;
+      if (err instanceof LifecycleRefusal && err.reason === 'already-running') {
+        const verdict = await judgeLiveHolder(err, home, choice.path, opts);
+        if (!(verdict instanceof LifecycleRefusal)) {
+          if (reclaims === 0 && reclaimResiduePidfile(home, verdict)) {
+            reclaims++;
+            emit({ kind: 'daemon.lock.reclaimed', holderPid: verdict.pid, startedAt: verdict.startedAt, holderStart: new Date(verdict.holderStart).toISOString() });
+            continue;
+          }
+          err = new LifecycleRefusal('holder-silent', `the pidfile names a live process (pid ${String(verdict.pid)}) but no kernel answers on ${choice.path}; if pid ${String(verdict.pid)} is not gnomond, remove ${pidPathOf(home)} and retry`, { pid: verdict.pid, startedAt: verdict.startedAt });
+        } else {
+          err = verdict;
+        }
+      }
+      if (err instanceof LifecycleRefusal) {
+        const holderPid = typeof err.detail.pid === 'number' ? err.detail.pid : undefined;
+        emit({ kind: 'daemon.lock.refused', reason: err.reason, ...(holderPid !== undefined ? { holderPid } : {}) });
+      }
+      throw err;
     }
-    throw err;
   }
 
   const kernelSigner = opts.kernelSigner ?? SoftwareEd25519Signer.generate('kernel');

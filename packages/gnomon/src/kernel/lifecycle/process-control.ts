@@ -94,6 +94,39 @@ export function parsePsTable(out: string): ProcRow[] {
   return rows;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Parse an `lstart` witness (`lstart:Mon Oct 19 12:34:56 2026`, or the bare
+ * `ps -o lstart=` text) taken with TZ=UTC into epoch ms; null when it is not
+ * that shape. Second resolution: the real start lies in [result, result+1 s).
+ */
+export function parseLstart(witness: string): number | null {
+  const m = /^(?:lstart:)?\s*[A-Z][a-z]{2}\s+([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})\s*$/.exec(witness);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[1]!);
+  if (month < 0) return null;
+  const ms = Date.UTC(Number(m[6]), month, Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5]));
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Wall-clock start of `pid` in epoch ms (POSIX `ps -o lstart= -p`, absolute
+ * path, TZ=UTC — the same witness the orphan sweep records), or null when it
+ * cannot be read or parsed (no ps, ps failed, Windows). Used by
+ * $daemon-lifecycle to tell a recycled pid from the pidfile's own holder
+ * (T-2026-10-19-017). Forks ps: never on a hot path.
+ */
+export function processStartMs(pid: number, platform: NodeJS.Platform = process.platform): number | null {
+  if (platform !== 'darwin' && platform !== 'linux') return null;
+  if (!Number.isInteger(pid) || pid <= 1) return null;
+  const ps = PS_PATHS.find((p) => existsSync(p));
+  if (!ps) return null;
+  const r = spawnSync(ps, ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { LC_ALL: 'C', TZ: 'UTC', PATH: '/usr/bin:/bin' }, timeout: 5_000 });
+  if (r.status !== 0 || typeof r.stdout !== 'string') return null;
+  return parseLstart(r.stdout.trim());
+}
+
 function posixSnapshot(): Promise<ProcRow[] | null> {
   const ps = PS_PATHS.find((p) => existsSync(p));
   if (!ps) return Promise.resolve(null);

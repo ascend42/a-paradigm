@@ -137,6 +137,21 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    planned-001-move: >-
+      PLANNED, not built (TD-2026-10-19-648; spec §5, §7.4, §3.9). In the
+      batched clientApiId move T-2026-10-19-001: the log.read cursor
+      becomes {logId, seq}, a cursor from another log is
+      BAD_REQUEST{reason:'cursor-epoch'}, limited views carry seq only (no
+      hash, no prev); reserved there too: hello features session.resume
+      and journal.cursor, the kind session.drained, claimGen on
+      contract.claimed and the CAS_LOST reasons stale-claim, claim-expired
+      and claim-superseded (built in M2.2, recorded in the kernel log).
+      Item 12 (a kernel-key signature over the link handshake hash,
+      verified against the ids pinned in peers.jsonl) is built in M2.8.
+      Item 10, `gnomon guide <topic>`: CLI-only, not a socket method;
+      topics compiled into the signed binary, pull-only, never injected; a
+      CI honesty check fails the build if a guide names a verb, flag or
+      reason the descriptors lack (T-2026-10-19-015, before Move 2).
     backpressure: >-
       T-2026-10-19-009 item 6 (spec §11.2 rule 12, Orca audit Adopt 6):
       high/low watermarks — server.ts pauses reading above writeHighWater
@@ -558,6 +573,17 @@ components:
     oracles: [G-ABI-02]
 
   identity:
+    approval-devices: >-
+      DEFERRED, not built (TD-2026-10-19-946; spec §22 items 23-24).
+      Approvals happen only on the Mac. Enrolled approval devices (phone
+      Face ID, the Watch) come well after the core loop is tested, after
+      the kernel-key-bound link handshake (TD-2026-10-19-648 item 12): a
+      non-exportable hardware key per device, enrolled from the Mac by a
+      root-signed registry row with root presence, revoked by a root-signed
+      row, a fresh biometric check on every decision, and its own signature
+      domain and presence value so it never verifies as a hand decision.
+      The bearer-token model (a phone token as approval authority with no
+      biometric) is REJECTED.
     description: >-
       #identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3,
       blocked on the founder's provisioning profile). root-authority.ts — the
@@ -2076,6 +2102,11 @@ components:
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
 
   claude-adapter:
+    backend-scope: >-
+      TD-2026-10-19-252 (spec §1, §2.2, §22 item 26): backends are Claude
+      and local models only. Other agents (opencode, grok, ...) get their
+      own driver later, each with its own law-7 billing ruling; there is no
+      generic ACP passthrough.
     description: >-
       #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
       src/adapters/claude-code/adapter.ts. P8-D96: argv --permission-prompts
@@ -2242,6 +2273,20 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    upgrade-drain: >-
+      PLANNED, not built (TD-2026-10-19-908, T-2026-10-19-014; spec §2.4
+      rule 11, before dogfood GA). A kernel update drains and resumes:
+      the old kernel rides `gnomon daemon stop` with reason upgrade (no new
+      verb), starts no new turn, drains each session to a turn boundary
+      (interrupt after a deadline), writes session.drained{uuid,
+      reason:'upgrade'} then session.exited, and exits. The new kernel
+      respawns each drained session with --resume <uuid> through the
+      respawn path (law-7 preflight, layersHash and permits re-run).
+      Cached unlocks and voice arms never carry over; permits are
+      re-attributed, never minted; pending cards are raised again. Rule 4
+      amended: a drained-and-exited session is not an orphan (G-DMN-04
+      covers both cases). Claude sessions first, gnomon-local second; live
+      handover is an unprobed idea after Move 2 (spec §22 item 25).
     description: >-
       $daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation —
       `gnomon daemon --detach` re-execs gnomond with the clean env and home in
@@ -2251,7 +2296,13 @@ flows:
       Aegis L2: an EPERM holder — another user's pid — is residue and
       reclaimed, and a same-user live holder is `already-running` only if a
       kernel answers hello on OUR socket within 2 s, else `holder-silent`,
-      transient, pidfile left alone — a silent holder may be a racer);
+      transient, pidfile left alone — a silent holder may be a racer —
+      UNLESS its `ps -o lstart=` start witness (TZ=UTC) lies more than a
+      2 s tolerance (HOLDER_START_TOLERANCE_MS, a configured bound) after
+      the pidfile's startedAt: a recycled pid after a crash or reboot, so
+      the pidfile is reclaimed (pid+startedAt+inode re-checked, at most once,
+      daemon.lock.reclaimed emitted; T-2026-10-19-017); no witness or an
+      unparseable startedAt stays holder-silent);
       (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or
       ephemeral in-memory software Ed25519 key, custody partial; keystore
       item is M1.3) and the root authority (default unprovisioned), #socket

@@ -220,6 +220,26 @@ export function acquireDaemonLock(home: string, pid: number, opts: AcquireOption
   throw new LifecycleRefusal('lock-race', 'could not acquire the pidfile (persistent race)');
 }
 
+/**
+ * Reclaim a pidfile judged residue by startDaemon (a recycled same-user pid,
+ * T-2026-10-19-017): removed only if it still names exactly `holder` (pid AND
+ * startedAt) and is still the inode we read, so a racer that already replaced
+ * it keeps its lock. Returns whether it was removed.
+ */
+export function reclaimResiduePidfile(home: string, holder: Pick<DaemonPidfile, 'pid' | 'startedAt'>): boolean {
+  const pp = pidPathOf(home);
+  let ino: number;
+  try {
+    ino = fs.lstatSync(pp).ino;
+  } catch {
+    return false;
+  }
+  const read = readPidPath(pp);
+  if (read.kind !== 'ok' || read.pidfile.pid !== holder.pid || read.pidfile.startedAt !== holder.startedAt) return false;
+  removeIfSameInode(pp, ino);
+  return !fs.existsSync(pp) || readPidfile(home)?.startedAt !== holder.startedAt;
+}
+
 /** Release the lock — unlinks the pidfile ONLY if it is ours. The socket is the server's (its close() removes only its own inode). */
 export function releaseDaemonLock(home: string, owner: Pick<DaemonPidfile, 'pid' | 'startedAt' | 'socketPath'>): boolean {
   const pf = readPidfile(home);

@@ -20,7 +20,11 @@ import {
   ensureGnomonHome,
   DAEMON_EXIT,
   exitCodeOfRefusal,
+  HOLDER_START_TOLERANCE_MS,
+  holderIsRecycled,
+  parseLstart,
   pidAlive,
+  processStartMs,
   pidPathOf,
   pidProbe,
   readPidfile,
@@ -176,6 +180,59 @@ describe('G-DMN-01 one daemon per user', () => {
     expect(readFileSync(pidPathOf(h), 'utf8')).toBe(row); // not stolen: a silent holder may be a racer mid-start
     // positive control: the same holder with a kernel answering is already-running
     await expect(startDaemon({ home: h, holderGraceMs: 150, probeHolder: async () => true })).rejects.toMatchObject({ reason: 'already-running' });
+  });
+
+  describe('T-2026-10-19-017: a recycled same-user pid after a crash or reboot', () => {
+    function squat(h: string, startedAt: string): { pid: number; row: string } {
+      ensureGnomonHome(h);
+      const squatter = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+      cleanups.push(() => void squatter.kill('SIGKILL'));
+      const row = JSON.stringify({ schemaVersion: DAEMON_PIDFILE_SCHEMA, pid: squatter.pid, startedAt, socketPath: '/attacker.sock' });
+      writeFileSync(pidPathOf(h), row);
+      return { pid: squatter.pid!, row };
+    }
+
+    it('FALSIFIER: a live silent holder that started after the pidfile was written is reclaimed (real ps witness)', async () => {
+      const h = home();
+      const { pid } = squat(h, new Date(Date.now() - 3_600_000).toISOString()); // written an hour before this process existed
+      const events: Array<{ kind: string }> = [];
+      const d = await startDaemon({ home: h, idleMs: 60_000, holderGraceMs: 150, probeHolder: async () => false, onEvent: (e) => events.push(e) });
+      cleanups.push(() => d.shutdown('signal'));
+      expect(readPidfile(h)!.pid).toBe(process.pid);
+      expect(events).toContainEqual(expect.objectContaining({ kind: 'daemon.lock.reclaimed', holderPid: pid }));
+      expect(pidAlive(pid)).toBe(true); // reclaimed the lock, never signalled the recycled process
+    });
+
+    it('a silent holder whose start time matches the pidfile stays holder-silent (a racer between lock and listen)', async () => {
+      const h = home();
+      const { row } = squat(h, new Date(Date.now() + 1_000).toISOString()); // written just after the holder started
+      const err = await startDaemon({ home: h, holderGraceMs: 150, probeHolder: async () => false }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ reason: 'holder-silent' });
+      expect(readFileSync(pidPathOf(h), 'utf8')).toBe(row);
+    });
+
+    it('witness unavailable (ps fails / unparseable) stays holder-silent, never reclaimed', async () => {
+      const h = home();
+      const { row } = squat(h, new Date(Date.now() - 3_600_000).toISOString());
+      const err = await startDaemon({ home: h, holderGraceMs: 150, probeHolder: async () => false, holderStartMs: () => null }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ reason: 'holder-silent' });
+      expect(readFileSync(pidPathOf(h), 'utf8')).toBe(row);
+    });
+
+    it('holderIsRecycled / parseLstart edges', () => {
+      const t = Date.parse('2026-10-19T12:00:00.000Z');
+      expect(holderIsRecycled('2026-10-19T12:00:00.000Z', t + HOLDER_START_TOLERANCE_MS + 1)).toBe(true);
+      expect(holderIsRecycled('2026-10-19T12:00:00.000Z', t + HOLDER_START_TOLERANCE_MS)).toBe(false);
+      expect(holderIsRecycled('2026-10-19T12:00:00.000Z', t - 60_000)).toBe(false);
+      expect(holderIsRecycled('x', t + 3_600_000)).toBe(false);
+      expect(holderIsRecycled('2026-10-19T12:00:00.000Z', null)).toBe(false);
+      expect(parseLstart('lstart:Mon Oct 19 12:34:56 2026')).toBe(Date.parse('2026-10-19T12:34:56Z'));
+      expect(parseLstart('Mon Oct  5 01:02:03 2026')).toBe(Date.parse('2026-10-05T01:02:03Z'));
+      expect(parseLstart('garbage')).toBeNull();
+      const own = processStartMs(process.pid);
+      expect(own).not.toBeNull();
+      expect(own!).toBeLessThanOrEqual(Date.now());
+    });
   });
 
   it('reclaims unreadable residue after the mid-write grace', () => {
