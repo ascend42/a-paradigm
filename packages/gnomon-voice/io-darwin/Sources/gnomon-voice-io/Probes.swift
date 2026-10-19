@@ -85,7 +85,7 @@ enum Selftest {
                 let ok = frames > 0 && samples > 8_000
                 printLine([
                     "selftest": ok ? "pass" : "fail",
-                    "seconds": round1(elapsed * 10) / 10,
+                    "seconds": round1(elapsed),
                     "frames": frames,
                     "samples": samples,
                     "sampleRate": 16_000,
