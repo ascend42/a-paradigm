@@ -134,6 +134,15 @@ describe('socket ownership (never "can\'t tell" ⇒ "dead")', () => {
     expect(existsSync(sock)).toBe(false);
   });
 
+  it('close unlinks before server.close: the dev+ino compare runs while our listener still pins the inode (swapping the two reopens inode reuse)', async () => {
+    const h = home();
+    const sock = path.join(h, 'g.sock');
+    const steps: string[] = [];
+    const a = await listenSocket({ socketPath: sock, handle: noop, traceClose: (s) => steps.push(s) });
+    await a.close();
+    expect(steps).toEqual(['unlink-public', 'server-close']);
+  });
+
   it('refuses a socket directory that is not 0700 (no bind-then-chmod window)', async () => {
     const h = home();
     const open = path.join(h, 'open');

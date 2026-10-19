@@ -42,7 +42,7 @@ import * as path from 'node:path';
 import { monotonicUlidFactory, mintId } from '@a-company/gnomon-contracts';
 import { currentUid } from '../lifecycle/home.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { encodeFrame, MAX_FRAME_BYTES, NdjsonDecoder } from './framing.js';
+import { type DecodedItem, encodeFrame, MAX_FRAME_BYTES, NdjsonDecoder } from './framing.js';
 import { errorFrame, notificationFrame, parseRequest, refusalWith, resultFrame, RpcRefusal, type RpcRequestFrame, type RpcResponseFrame } from './rpc.js';
 
 export const SOCKET_MODE = 0o600;
@@ -81,6 +81,14 @@ export const DEFAULT_MAX_IN_FLIGHT = 32;
 export const DEFAULT_WRITE_HIGH_WATER = 1024 * 1024;
 /** Resume reading / pumping once unsent bytes are back at or below this (high/low hysteresis). */
 export const DEFAULT_WRITE_LOW_WATER = 256 * 1024;
+/**
+ * Hard cap on one connection's unsent bytes (Aegis M1): a peer that stops reading while requests it already sent
+ * keep producing replies is destroyed once its buffer passes this, the way web-child.ts closes a WebSocket at
+ * maxSocketBuffer (8 MiB, 1008). No frame is sent: the buffer that would carry it is the problem.
+ */
+export const DEFAULT_MAX_WRITE_BUFFER = 8 * 1024 * 1024;
+/** Concurrent unix-socket connections (Aegis M1); excess connects are dropped by net.Server.maxConnections. */
+export const DEFAULT_MAX_CONNECTIONS = 64;
 
 export type RpcHandler = (frame: RpcRequestFrame, ctx: ConnectionContext) => unknown | Promise<unknown>;
 
@@ -104,16 +112,22 @@ export interface SocketServerOptions {
   writeHighWater?: number;
   /** Unsent bytes at or below which a paused connection resumes (default 256 KiB, clamped to writeHighWater). */
   writeLowWater?: number;
+  /** Unsent bytes past which the connection is destroyed (default 8 MiB). */
+  maxWriteBuffer?: number;
+  /** Concurrent connections accepted (default 64); further connects are dropped by the server. */
+  maxConnections?: number;
   onConnect?: (ctx: ConnectionContext) => void;
   onDisconnect?: (ctx: ConnectionContext) => void;
   onEvent?: (event: SocketEvent) => void;
+  /** Test seam: observes close()'s steps in order (pins "unlink the public name BEFORE server.close()"). */
+  traceClose?: (step: 'unlink-public' | 'server-close') => void;
 }
 
 export interface SocketServerHandle {
   readonly socketPath: string;
   connections(): number;
   /** Times any connection paused reading for backpressure (diagnostic/tests). */
-  stats(): { pauses: number; maxQueued: number };
+  stats(): { pauses: number; maxQueued: number; overflows: number };
   close(): Promise<void>;
 }
 
@@ -228,7 +242,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
   const preAuthMax = opts.preAuthMaxFrameBytes ?? PRE_AUTH_MAX_FRAME_BYTES;
   const writeHighWater = opts.writeHighWater ?? DEFAULT_WRITE_HIGH_WATER;
   const writeLowWater = Math.min(opts.writeLowWater ?? DEFAULT_WRITE_LOW_WATER, writeHighWater);
-  const stats = { pauses: 0, maxQueued: 0 };
+  const maxWriteBuffer = opts.maxWriteBuffer ?? DEFAULT_MAX_WRITE_BUFFER;
+  const stats = { pauses: 0, maxQueued: 0, overflows: 0 };
   const nextUlid = monotonicUlidFactory();
   const mintConnId = (): string => mintId('conn', nextUlid());
 
@@ -237,6 +252,22 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     let afterReply: Array<() => void> = [];
     let closing = false;
     let closed = false;
+    // ONE high mark for the context and for pressure(): never below the socket's own writableHighWaterMark, so a
+    // writer stopped above it has had a write return false and a 'drain' is guaranteed (T-2026-10-19-009 item 6).
+    const hw = Math.max(writeHighWater, conn.writableHighWaterMark);
+    // The low mark is ALSO kept at or above the socket's writableHighWaterMark (fix 5): a drain listener that finds
+    // writableLength above the low mark waits for the NEXT 'drain', and Node emits one only after a write returned
+    // false, i.e. only when writableLength ≥ writableHighWaterMark. With low ≥ that mark, "still above low" implies
+    // a further 'drain' is coming — the re-check can never stall.
+    const lw = Math.min(hw, Math.max(writeLowWater, conn.writableHighWaterMark));
+    /** Hard cap (Aegis M1): destroy a connection whose unsent bytes pass maxWriteBuffer. True if it did. */
+    const overflowed = (): boolean => {
+      if (conn.writableLength <= maxWriteBuffer) return false;
+      stats.overflows++;
+      closing = true;
+      conn.destroy();
+      return true;
+    };
     const ctx: ConnectionContext = {
       connId: mintConnId(), // event:v1 connId = conn:<ULID>
       close: () => conn.destroy(),
@@ -247,14 +278,14 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       notify: (method, params) => {
         if (closing || conn.destroyed || !conn.writable) return false;
         conn.write(encodeFrame(notificationFrame(method, params))); // throws over the outbound cap
-        return true;
+        return !overflowed();
       },
       get closed() {
         return closed;
       },
       writableLength: () => conn.writableLength,
-      writeHighWater: Math.max(writeHighWater, conn.writableHighWaterMark),
-      writeLowWater,
+      writeHighWater: hw,
+      writeLowWater: lw,
       onDrain: (fn) => {
         conn.once('drain', fn);
         return () => void conn.off('drain', fn);
@@ -267,13 +298,16 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     const decoder = new NdjsonDecoder(limit);
     let chain: Promise<void> = Promise.resolve();
     // Flow control: pause reading while too many requests are queued or too
-    // many reply bytes are unsent; resume once both drain. A single inbound
-    // chunk (≤ 64 KiB) may still queue past the cap — the bound is per chunk.
+    // many reply bytes are unsent; resume once both drain. The cap holds
+    // INSIDE a chunk too (Aegis M1): frames decoded past maxInFlight wait in
+    // `held` (at most one inbound chunk's worth, since reading is paused) and
+    // are admitted as earlier requests settle — never run, never answered BUSY.
     let queued = 0;
     let paused = false;
-    const pressure = (): boolean => queued >= maxInFlight || conn.writableLength > writeHighWater;
+    let held: DecodedItem[] = [];
+    const pressure = (): boolean => queued >= maxInFlight || conn.writableLength > hw;
     // resume below the LOW mark only (hysteresis): no pause/resume flapping around one threshold
-    const relieved = (): boolean => queued < maxInFlight && conn.writableLength <= writeLowWater;
+    const relieved = (): boolean => queued < maxInFlight && conn.writableLength <= lw;
     const maybePause = (): void => {
       if (!paused && pressure() && !conn.destroyed) {
         paused = true;
@@ -283,7 +317,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       if (queued > stats.maxQueued) stats.maxQueued = queued;
     };
     const maybeResume = (): void => {
-      if (paused && relieved() && !conn.destroyed) {
+      if (held.length > 0) admitHeld();
+      if (paused && held.length === 0 && relieved() && !conn.destroyed) {
         paused = false;
         conn.resume();
       }
@@ -307,6 +342,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
         bytes = encodeFrame(errorFrame(frame.id, refusalWith('ENGINE', 'response-too-large', 'response exceeds the frame limit')));
       }
       conn.write(bytes);
+      if (overflowed()) return;
       maybePause();
     };
     const refuse = (reason: string, message: string): void => {
@@ -315,53 +351,67 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       enqueue(() => send(frame));
     };
 
+    const admit = (item: DecodedItem): void => {
+      if (item.kind === 'oversize') {
+        refuse('frame-too-large', `frame of ${item.bytes} bytes exceeds ${limit}; discarded to its newline`);
+      } else if (item.kind === 'malformed') {
+        refuse(`malformed-${item.reason}`, 'unparseable frame (one JSON object per line)');
+      } else if (item.kind === 'frame') {
+        const parsed = parseRequest(item.value);
+        if (!parsed.ok) {
+          opts.onEvent?.({
+            kind: 'socket.frame.refused',
+            connId: ctx.connId,
+            code: errorFrame(parsed.id, parsed).error.code,
+            reason: String(parsed.refusal.data?.reason ?? ''),
+          });
+          const frame = errorFrame(parsed.id, parsed);
+          enqueue(() => send(frame));
+          return;
+        }
+        const req = parsed.frame;
+        const isNotification = !Object.hasOwn(req, 'id');
+        enqueue(async () => {
+          if (closing || closed) return; // never run a queued request for a connection that is gone
+          let resp: RpcResponseFrame;
+          let closeAfter = false;
+          try {
+            resp = resultFrame(req.id ?? null, await opts.handle(req, ctx));
+          } catch (err) {
+            if (err instanceof RpcRefusal) {
+              resp = errorFrame(req.id ?? null, { refusal: err.refusal, message: err.message });
+              closeAfter = err.closeAfter;
+            } else resp = errorFrame(req.id ?? null, refusalWith('ENGINE', 'internal', 'internal error'));
+          }
+          const after = afterReply;
+          afterReply = [];
+          if (closeAfter) {
+            closing = true;
+            send(resp); // answered even for a notification: the close needs its reason
+            conn.end();
+            return;
+          }
+          if (!isNotification) send(resp);
+          for (const fn of after) fn();
+        });
+      }
+    };
+    /** Admit held frames, in order, while there is room under maxInFlight. */
+    const admitHeld = (): void => {
+      let i = 0;
+      while (i < held.length && !closing && queued < maxInFlight) admit(held[i++]!);
+      held = closing ? [] : held.slice(i);
+    };
+
     conn.on('data', (chunk: Buffer) => {
       if (closing) return;
-      for (const item of decoder.push(chunk)) {
-        if (closing) break;
-        if (item.kind === 'oversize') {
-          refuse('frame-too-large', `frame of ${item.bytes} bytes exceeds ${limit}; discarded to its newline`);
-        } else if (item.kind === 'malformed') {
-          refuse(`malformed-${item.reason}`, 'unparseable frame (one JSON object per line)');
-        } else if (item.kind === 'frame') {
-          const parsed = parseRequest(item.value);
-          if (!parsed.ok) {
-            opts.onEvent?.({
-              kind: 'socket.frame.refused',
-              connId: ctx.connId,
-              code: errorFrame(parsed.id, parsed).error.code,
-              reason: String(parsed.refusal.data?.reason ?? ''),
-            });
-            const frame = errorFrame(parsed.id, parsed);
-            enqueue(() => send(frame));
-            continue;
-          }
-          const req = parsed.frame;
-          const isNotification = !Object.hasOwn(req, 'id');
-          enqueue(async () => {
-            if (closing || closed) return; // never run a queued request for a connection that is gone
-            let resp: RpcResponseFrame;
-            let closeAfter = false;
-            try {
-              resp = resultFrame(req.id ?? null, await opts.handle(req, ctx));
-            } catch (err) {
-              if (err instanceof RpcRefusal) {
-                resp = errorFrame(req.id ?? null, { refusal: err.refusal, message: err.message });
-                closeAfter = err.closeAfter;
-              } else resp = errorFrame(req.id ?? null, refusalWith('ENGINE', 'internal', 'internal error'));
-            }
-            const after = afterReply;
-            afterReply = [];
-            if (closeAfter) {
-              closing = true;
-              send(resp); // answered even for a notification: the close needs its reason
-              conn.end();
-              return;
-            }
-            if (!isNotification) send(resp);
-            for (const fn of after) fn();
-          });
-        }
+      const items = decoder.push(chunk);
+      held = held.length > 0 ? held.concat(items) : items;
+      admitHeld();
+      if (held.length > 0 && !paused && !conn.destroyed) {
+        paused = true; // the rest of this chunk waits; read nothing more until it is admitted
+        stats.pauses++;
+        conn.pause();
       }
     });
     conn.on('error', () => {
@@ -375,6 +425,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       opts.onDisconnect?.(ctx);
     });
   });
+
+  server.maxConnections = opts.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
 
   // A named pipe (Windows parity phase) has no directory, link or rename: bind it directly.
   const pipe = opts.socketPath.startsWith('\\\\.\\pipe\\') || opts.socketPath.startsWith('\\\\?\\pipe\\');
@@ -402,23 +454,34 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
   const close = (): Promise<void> =>
     new Promise<void>((resolve) => {
       for (const s of sockets) s.destroy();
+      // ORDER IS LOAD-BEARING (Aegis's condition for the dev+ino unlink): the compare-and-unlink below MUST run
+      // BEFORE server.close(). While our listener is still bound it pins the published inode, so the inode cannot
+      // be freed and recycled by a successor's socket; after server.close() the inode can be reused (Linux reuses
+      // inodes eagerly) and a successor's socket at socketPath could match our dev+ino and be wrongly unlinked.
+      // Pinned by test/socket-ownership.test.ts ("close unlinks before server.close").
       // libuv unlinks the BIND name on close; that is the private name, never socketPath. The public name is
       // removed only here, and only while it is still the inode our live listener pins (a successor's socket is a different inode).
       if (published && !pipe) {
         try {
           const st = fs.lstatSync(opts.socketPath);
-          if (st.dev === published.dev && st.ino === published.ino) fs.unlinkSync(opts.socketPath);
+          if (st.dev === published.dev && st.ino === published.ino) {
+            fs.unlinkSync(opts.socketPath);
+            opts.traceClose?.('unlink-public');
+          }
         } catch {
           /* already gone */
         }
       }
+      opts.traceClose?.('server-close');
       server.close(() => resolve());
     });
 
   try {
-    fs.chmodSync(bindPath, SOCKET_MODE);
-    verifySocketAcl(bindPath);
+    // A named pipe has no file mode, owner or inode: chmod/lstat on \\.\pipe\… would throw a plain Error
+    // (exit 70, restartable ⇒ a restart loop on Windows). Its ACL is the pipe's default DACL (owner + SYSTEM).
     if (!pipe) {
+      fs.chmodSync(bindPath, SOCKET_MODE);
+      verifySocketAcl(bindPath);
       await publishSocket(bindPath, opts.socketPath, opts.holderProbeMs ?? DEFAULT_HOLDER_PROBE_MS);
       const st = fs.lstatSync(opts.socketPath);
       published = { dev: st.dev, ino: st.ino };

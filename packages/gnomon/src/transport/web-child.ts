@@ -179,8 +179,12 @@ export function runWebChild(io: WebChildIo): void {
     // No Sec-WebSocket-Extensions and no Sec-WebSocket-Protocol: nothing is negotiated (§4.9).
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(p.key)}\r\n\r\n`);
     const c: WsConn = { socket, pressured: false, decoder: new FrameDecoder(config!.preAuthMaxFrameBytes), missed: 0, timer: null, reported: false, closing: false };
+    // The low mark is kept at or above the socket's own writableHighWaterMark: if this re-check finds the buffer
+    // still above it, the write that put it there returned false, so Node owes us ANOTHER 'drain' — the wait can
+    // never stall (Node emits 'drain' only after a write returned false).
+    const low = Math.max(Math.min(config!.writeLowWater ?? config!.writeHighWater, config!.writeHighWater), socket.writableHighWaterMark ?? 0);
     socket.on('drain', () => {
-      if (c.pressured && (socket.writableLength ?? 0) <= Math.min(config!.writeLowWater ?? config!.writeHighWater, config!.writeHighWater)) {
+      if (c.pressured && (socket.writableLength ?? 0) <= low) {
         c.pressured = false;
         emit({ t: 'drain', rid });
       }

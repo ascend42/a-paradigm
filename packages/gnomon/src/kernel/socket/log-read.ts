@@ -401,6 +401,8 @@ export class SubscriptionHub {
     s.offDrain = s.ctx.onDrain(() => {
       s.offDrain = undefined;
       // hysteresis (T-2026-10-19-009 item 6): a pump stopped at the high mark resumes only at or below the low mark
+      // re-waiting on 'drain' is safe only because #socket keeps writeLowWater ≥ the socket's writableHighWaterMark:
+      // still above it ⇒ the last write returned false ⇒ another 'drain' is owed (server.ts, fix 5)
       if (s.ctx.writableLength() > (s.ctx.writeLowWater ?? s.ctx.writeHighWater)) return this.#waitDrain(s);
       this.#schedule(s);
     });
