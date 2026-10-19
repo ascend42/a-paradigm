@@ -105,7 +105,7 @@ const initHint = (home: string, dflt: boolean): string => (dflt ? 'gnomon setup 
 export const WRAPPER_SETUP_NEXT = 'Gnomon is not set up on this Mac yet. In-app setup is coming; until then, run gnomon once in Terminal and it walks you through it';
 
 /** Resolve the home ONCE: `--home` or `~/.gnomon` (never GNOMON_HOME); a plain directory, never a symlink; realpath'd. */
-export function resolveUpHome(given: string | undefined, userHome: string = os.homedir()): { home: string; isDefault: boolean } {
+export function resolveUpHome(given: string | undefined, userHome: string = os.userInfo().homedir): { home: string; isDefault: boolean } {
   const raw = given ?? resolveGnomonHome({ env: {}, homedir: userHome });
   const isDefault = given === undefined;
   let st: fs.Stats;
@@ -156,7 +156,7 @@ function deviceOf(home: string, hw: OpenedIdentity): { kind: 'device'; deviceId:
   }
   const row = reg.devices.get(hw.record.deviceId);
   if (!row || row.principalKind !== 'human' || row.principalId !== hw.record.principalId || row.keyId !== cred.signer.keyId) {
-    throw new UpRefusal('device-unregistered', 'this device key has no matching human registry row signed by this root', [`re-provision: gnomon identity init --rotate (keeps the device key)`]);
+    throw new UpRefusal('device-unregistered', 'this device key has no matching human registry row signed by this root', [`gnomon setup   (it finishes an interrupted setup; otherwise re-provision: gnomon identity init --rotate)`]);
   }
   return { kind: 'device', deviceId: row.deviceId, principalId: row.principalId, privateKeyPem: cred.privateKeyPem };
 }

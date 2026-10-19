@@ -242,6 +242,32 @@ describe('gnomon setup (#first-run)', () => {
     expect(ops2.filter((x) => x.startsWith('key.create'))).toEqual([]);
   });
 
+  it('G-SET-05 (L4, L5, L6): a dead holder\'s lock is taken over; a lock taken over mid-run stops before any key; one lock path per home; the home is created 0700', async () => {
+    const u = tmp();
+    const home = homeOf(u);
+    expect(provisionLockPath(`${home}${path.sep}`)).toBe(provisionLockPath(home));
+    expect(provisionLockPath(path.join(u, '.', '.gnomon'))).toBe(provisionLockPath(home));
+    fs.writeFileSync(provisionLockPath(home), JSON.stringify({ pid: 2147483646 })); // a holder that is not alive
+    const fake = new FakeHelper(null);
+    expect((await runSetup(io(['']).io, deps(u, fake))).code).toBe(0);
+    expect((fs.statSync(home).mode & 0o777).toString(8)).toBe('700');
+
+    const u2 = tmp();
+    const home2 = homeOf(u2);
+    const fake2 = new FakeHelper(null);
+    const ops: string[] = [];
+    const start = view(fake2, ops, (r) => {
+      if (r.op === 'key.list' && fs.existsSync(provisionLockPath(home2))) {
+        fs.rmSync(provisionLockPath(home2)); // another run takes the lock over
+        fs.writeFileSync(provisionLockPath(home2), JSON.stringify({ pid: process.pid }));
+      }
+    });
+    const p = new Provisioner({ home: home2, helperPath: exe(tmp()), verifier: DEV, start, once: () => (q) => fake2.handle(q) });
+    expect(await p.provision({ mode: 'init', existing: null, name: 'matt', host: 'mac' })).toMatchObject({ ok: false, reason: 'provisioning-locked' });
+    expect(ops.filter((x) => x.startsWith('key.create'))).toEqual([]);
+    expect(fs.existsSync(provisionLockPath(home2))).toBe(true); // the other run's lock is not removed
+  });
+
   it('G-SET-06 (I9): a fault at every step before commit leaves no record, no registry row, no keys and no lock', async () => {
     for (const step of ['create-root', 'create-approvals', 'sign-approvals-binding', 'sign-device-row', 'commit']) {
       const u = tmp();

@@ -27,6 +27,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
@@ -135,7 +136,7 @@ export interface BareDeps extends UpDeps {
 
 /** ^unprovisioned-only: the default home is missing, or a plain non-dev directory with no identity.json at all. */
 export function unprovisionedDefaultHome(userHome?: string): boolean {
-  const home = resolveGnomonHome({ env: {}, ...(userHome ? { homedir: userHome } : {}) });
+  const home = resolveGnomonHome({ env: {}, homedir: userHome ?? os.userInfo().homedir });
   let st: fs.Stats;
   try {
     st = fs.lstatSync(home);
@@ -156,7 +157,7 @@ export async function runBareCommand(argv: readonly string[], io: LaunchTtyIo, d
   const tty = deps.setup?.isTty ?? (io.stdin.isTTY === true && io.stdout.isTTY === true);
   if (tty && unprovisionedDefaultHome(deps.userHome)) {
     const s = await runSetup(io, { ...deps, ...deps.setup });
-    if (!s.provisioned) return s.code;
+    if (s.code !== 0) return s.code; // "already set up" (another run won) also continues into up
     io.stdout.write('\nStarting Gnomon…\n');
   }
   const { folder, inGit } = folderOf(deps.cwd ?? process.cwd());
