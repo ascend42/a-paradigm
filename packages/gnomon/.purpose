@@ -2062,11 +2062,27 @@ components:
       loads; (c) the readers include the user's own unsandboxed Claude Code;
       (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can
       redirect a later write by the host's Claude Code outside projects.
-      Linux/Windows: data only, no backend.
+      Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063):
+      the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE
+      #approval-broker gate-class card per new sha (on an open refused
+      claude_binary_changed, and on a poll of the resolved source at
+      REPIN_POLL_MS cadence that never writes a pin); allow = fresh presence
+      (one prompt), card TTL 24 h, a deny suppresses the sha; the publisher
+      is checked on the private copy by src/platform/claude-verifier.ts
+      (codesign, team Q6L2SF6YDW) and anything else sets claim-mismatch; the
+      effect re-hashes the copy and writes the pin with signer + approval
+      {cardId, contentHash, decisionSig}; live sessions keep their copy.
+      Aegis fixes: the effect refuses unless the pin still equals the card's
+      `from` (no rollback) and expires every other pending re-pin card; the
+      card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a
+      denied sha's refusal says "re-pin denied; restart Gnomon to re-offer";
+      the offline CLI prints the codesign signer (loud on a mismatch).
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
     tests:
+      - test/claude-repin-card.test.ts
+      - test/claude-verifier-darwin.test.ts
       - test/session-preflight.test.ts
       - test/session-profile.test.ts
       - test/session-sandbox.test.ts

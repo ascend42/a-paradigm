@@ -34,6 +34,8 @@ import { PreflightRefusal } from './preflight.js';
 
 export const CLAUDE_PIN_SCHEMA = 'gnomon-claude-pin:v1' as const;
 export const REPIN_COMMAND = 'gnomon session repin-claude';
+/** TD-2026-10-19-063: the refusal's `next` while a daemon runs — the kernel pre-staged a re-pin card. */
+export const REPIN_NEXT = 'approve the re-pin card';
 
 export interface ClaudePin {
   schemaVersion: typeof CLAUDE_PIN_SCHEMA;
@@ -47,6 +49,10 @@ export interface ClaudePin {
   logged?: boolean;
   /** the private copy's identity (skip re-hashing when both match) */
   copy?: { path: string; size: number; mtimeMs: number };
+  /** TD-2026-10-19-063: the publisher team the pinned copy's signature named (null: unsigned / unverified) */
+  signer?: { team: string | null; verified: boolean };
+  /** TD-2026-10-19-063: the re-pin card whose approval wrote this pin (its approval.decide row carries the cardId) */
+  approval?: { cardId: string; contentHash: string; decisionSig?: string; rootSig?: { signer: string; sig: string } };
 }
 
 export const pinPath = (home: string): string => path.join(home, 'claude-pin.json');
@@ -67,11 +73,14 @@ export function writeClaudePin(home: string, pin: ClaudePin): void {
   fs.renameSync(tmp, pinPath(home));
 }
 
-/** The re-pin the CLI writes (attended human; logged by the supervisor at the next open). */
-export function repinClaudeBinary(home: string, sha256: string, source: string): ClaudePin {
+/**
+ * The re-pin the CLI (offline) or the approved re-pin card (TD-2026-10-19-063) writes; logged by the
+ * supervisor at the next open. `extra` carries the card's private copy, signer and approval record.
+ */
+export function repinClaudeBinary(home: string, sha256: string, source: string, extra: Pick<ClaudePin, 'copy' | 'signer' | 'approval'> = {}): ClaudePin {
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new TypeError('#session-runner: a pin is a sha256 hex digest');
   const prev = readClaudePin(home);
-  const pin: ClaudePin = { schemaVersion: CLAUDE_PIN_SCHEMA, sha256, source, pinnedAt: new Date().toISOString(), by: 'repin', from: prev?.sha256 ?? null, logged: false };
+  const pin: ClaudePin = { schemaVersion: CLAUDE_PIN_SCHEMA, sha256, source, pinnedAt: new Date().toISOString(), by: 'repin', from: prev?.sha256 ?? null, logged: false, ...extra };
   writeClaudePin(home, pin);
   return pin;
 }
@@ -105,8 +114,8 @@ export interface PreparedClaude {
   sha256: string;
   source: string;
   pin: 'first-use' | 'match' | 'repin';
-  /** a re-pin waiting for its log row */
-  repin?: { from: string | null; to: string };
+  /** a re-pin waiting for its log row (cardId: the re-pin card that approved it) */
+  repin?: { from: string | null; to: string; cardId?: string };
 }
 
 /**
@@ -114,10 +123,6 @@ export interface PreparedClaude {
  * Writes no pin: commitPin does, after the sandboxed preflight passed (N1).
  */
 export async function prepareClaude(home: string, sourceReal: string, opts: { allowScripts?: boolean } = {}): Promise<PreparedClaude> {
-  const kind = binaryKind(sourceReal);
-  if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
-    throw new PreflightRefusal('claude_binary_unsupported', `the claude at ${sourceReal} is not a self-contained native executable (${kind}); install the native build (an npm cli.js needs its package)`, { kind });
-  }
   const pin = readClaudePin(home);
   const dir = path.join(home, 'bin');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -125,22 +130,29 @@ export async function prepareClaude(home: string, sourceReal: string, opts: { al
   if (pin?.copy && fs.existsSync(pin.copy.path)) {
     const st = fs.statSync(pin.copy.path);
     if (st.size === pin.copy.size && st.mtimeMs === pin.copy.mtimeMs && (await sha256File(sourceReal)) === pin.sha256) {
-      return { exec: pin.copy.path, sha256: pin.sha256, source: sourceReal, pin: pin.by === 'repin' && !pin.logged ? 'repin' : 'match', ...(pin.by === 'repin' && !pin.logged ? { repin: { from: pin.from ?? null, to: pin.sha256 } } : {}) };
+      return { exec: pin.copy.path, sha256: pin.sha256, source: sourceReal, pin: pin.by === 'repin' && !pin.logged ? 'repin' : 'match', ...(pin.by === 'repin' && !pin.logged ? { repin: { from: pin.from ?? null, to: pin.sha256, ...(pin.approval ? { cardId: pin.approval.cardId } : {}) } } : {}) };
     }
   }
   const tmp = path.join(dir, `.claude-tmp-${process.pid}-${Date.now()}`);
   await fs.promises.copyFile(sourceReal, tmp, fs.constants.COPYFILE_EXCL);
   await fs.promises.chmod(tmp, 0o500);
+  // TD-2026-10-19-063 L1: the kind of the COPY (the bytes executed), never the source
+  const kind = binaryKind(tmp);
+  if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
+    await fs.promises.rm(tmp, { force: true });
+    throw new PreflightRefusal('claude_binary_unsupported', `the claude at ${sourceReal} is not a self-contained native executable (${kind}); install the native build (an npm cli.js needs its package)`, { kind });
+  }
   const digest = await sha256File(tmp); // the bytes hashed are the bytes executed
   if (pin && pin.sha256 !== digest) {
     await fs.promises.rm(tmp, { force: true });
-    throw new PreflightRefusal('claude_binary_changed', `the claude binary differs from the pinned sha256 — a human re-pins with \`${REPIN_COMMAND}\``, { expected: pin.sha256, found: digest, next: REPIN_COMMAND });
+    // TD-2026-10-19-063: the daemon pre-stages a re-pin card (the supervisor adds its cardId); offline the CLI is the raw form
+    throw new PreflightRefusal('claude_binary_changed', `the claude binary differs from the pinned sha256 — approve the re-pin card in the Gnomon window (offline: \`${REPIN_COMMAND}\`)`, { expected: pin.sha256, found: digest, next: REPIN_NEXT });
   }
   const exec = path.join(dir, `claude-${digest.slice(0, 32)}`);
   await fs.promises.rm(exec, { force: true });
   await fs.promises.rename(tmp, exec);
   const state: PreparedClaude['pin'] = !pin ? 'first-use' : pin.by === 'repin' && !pin.logged ? 'repin' : 'match';
-  return { exec, sha256: digest, source: sourceReal, pin: state, ...(state === 'repin' ? { repin: { from: pin!.from ?? null, to: digest } } : {}) };
+  return { exec, sha256: digest, source: sourceReal, pin: state, ...(state === 'repin' ? { repin: { from: pin!.from ?? null, to: digest, ...(pin!.approval ? { cardId: pin!.approval.cardId } : {}) } } : {}) };
 }
 
 /** After the sandboxed preflight passed: write the first-use pin / mark a re-pin logged; record the copy's identity. */

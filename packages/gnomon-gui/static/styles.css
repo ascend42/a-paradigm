@@ -220,6 +220,10 @@ html, body {
 .blk-button { font: inherit; font-size: 12px; color: var(--ink2); background: transparent; border: 1px dashed var(--key-edge); border-radius: 2px; padding: 0 6px; cursor: pointer; }
 .blk-button-inert { color: var(--sec); }
 .notice.repin { border-color: var(--warn-edge); }
+.notice .key { margin-left: 8px; }
+/* TD-2026-10-19-063: a claim-mismatch card's first line ("NOT signed by the expected publisher") is red */
+.card.claim-mismatch { border-color: var(--fail-edge); }
+.card.claim-mismatch .card-body > :first-child { color: var(--fail); font-weight: 600; }
 
 .card.arriving { animation: card-in var(--fly); }
 @keyframes card-in {

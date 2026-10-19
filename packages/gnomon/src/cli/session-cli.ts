@@ -7,7 +7,9 @@
  * `claude_binary_changed` until a human re-pins. Until presence lands (M1.3)
  * the human is proved like `gnomon log quarantine`: an interactive terminal
  * and a typed confirmation (the last 8 characters of the NEW sha256). There
- * is no --yes. Refused while the daemon runs (so no session is live). The
+ * is no --yes. Refused while the daemon runs (so no session is live): the
+ * daemon pre-stages a re-pin card instead (TD-2026-10-19-063), approved in the
+ * Gnomon window with one Touch ID; this verb stays the OFFLINE raw form. The
  * re-pin record carries {from, to, logged:false}; the supervisor writes the
  * kernel-signed `session.sandbox{phase:'binary-pin', by:'repin', from, to}`
  * row at the next open (the CLI holds no kernel key).
@@ -20,6 +22,8 @@ import { daemonState } from '../kernel/lifecycle/pidfile.js';
 import { readClaudePin, repinClaudeBinary, sha256File, binaryKind, REPIN_COMMAND } from '../kernel/runner/binary.js';
 import { resolveClaudeBinary, PreflightRefusal } from '../kernel/runner/preflight.js';
 import { claudeCodePlatform } from '../platform/claude-code.js';
+import { CLAUDE_EXPECTED_PUBLISHER, CLAUDE_EXPECTED_TEAM, claudeVerifierFor, type PlatformClaudeVerifier, type ClaudeSignature } from '../platform/claude-verifier.js';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 
 type Out = { write(s: string): unknown };
@@ -60,7 +64,7 @@ function ask(io: SessionCliIo, prompt: string): Promise<string> {
   });
 }
 
-export async function runSessionCommand(argv: readonly string[], io: SessionCliIo, opts: { platform?: string; userHome?: string } = {}): Promise<number> {
+export async function runSessionCommand(argv: readonly string[], io: SessionCliIo, opts: { platform?: string; userHome?: string; verifier?: PlatformClaudeVerifier } = {}): Promise<number> {
   const [sub, ...rest] = argv;
   if (sub !== 'repin-claude') {
     io.stdout.write(SESSION_USAGE);
@@ -86,7 +90,8 @@ export async function runSessionCommand(argv: readonly string[], io: SessionCliI
     return SESSION_EXIT_REFUSED;
   }
   if (daemonState(home).state === 'running') {
-    refused(io.stderr, 'the daemon is running (sessions may be live)', `gnomon daemon stop, then ${REPIN_COMMAND}`);
+    // TD-2026-10-19-063: with a daemon running the re-pin is the card it pre-staged (one Touch ID); this is the offline form
+    refused(io.stderr, 'the daemon is running: it pre-staged a re-pin card', 'approve the re-pin card in the Gnomon window');
     return SESSION_EXIT_REFUSED;
   }
   const row = claudeCodePlatform(opts.platform ?? process.platform);
@@ -101,9 +106,27 @@ export async function runSessionCommand(argv: readonly string[], io: SessionCliI
     refused(io.stderr, e instanceof PreflightRefusal ? e.message : String(e), `${REPIN_COMMAND} --claude <abs path>`);
     return SESSION_EXIT_REFUSED;
   }
-  const sha = await sha256File(real);
+  // TD-2026-10-19-063 L5: the same publisher check as the re-pin card, on a private copy (the bytes hashed are the bytes checked)
+  const verifier = opts.verifier ?? claudeVerifierFor(opts.platform ?? process.platform);
+  fs.mkdirSync(path.join(home, 'bin'), { recursive: true, mode: 0o700 });
+  const tmp = path.join(home, 'bin', `.claude-cli-${process.pid}-${Date.now()}`);
+  fs.copyFileSync(real, tmp, fs.constants.COPYFILE_EXCL);
+  let sha: string;
+  let kind: string;
+  let sig: ClaudeSignature;
+  try {
+    sha = await sha256File(tmp);
+    kind = binaryKind(tmp);
+    sig = verifier.check(tmp);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
   const prev = readClaudePin(home);
-  io.stdout.write(`re-pin claude\n  source  ${real}\n  kind    ${binaryKind(real)}\n  from    ${prev?.sha256 ?? '(none)'}\n  to      ${sha}\n  gate    interactive confirmation only — no proof of presence (M1.3)\n`);
+  const mismatch = !sig.verified || sig.team !== CLAUDE_EXPECTED_TEAM || (prev?.signer?.team != null && prev.signer.team !== sig.team);
+  const signer = mismatch
+    ? `NOT signed by the expected publisher (${CLAUDE_EXPECTED_PUBLISHER}, ${CLAUDE_EXPECTED_TEAM}): ${sig.team ? `team ${sig.team}${sig.verified ? '' : ', signature did not verify'}` : 'no signature that verifies'}`
+    : `${CLAUDE_EXPECTED_PUBLISHER} (${sig.team})`;
+  io.stdout.write(`re-pin claude\n  source  ${real}\n  kind    ${kind}\n  signer  ${signer}\n  from    ${prev?.sha256 ?? '(none)'}\n  to      ${sha}\n  gate    interactive confirmation only — no proof of presence (M1.3)\n`);
   if (prev?.sha256 === sha) {
     io.stdout.write('  already pinned: nothing to do\n');
     return SESSION_EXIT_OK;
@@ -113,7 +136,7 @@ export async function runSessionCommand(argv: readonly string[], io: SessionCliI
     refused(io.stderr, 'the confirmation did not match; nothing was pinned', `re-run ${REPIN_COMMAND} and type the last 8 characters shown after "to"`);
     return SESSION_EXIT_REFUSED;
   }
-  repinClaudeBinary(home, sha, real);
+  repinClaudeBinary(home, sha, real, { signer: { team: sig.team, verified: sig.verified } });
   io.stdout.write(`  pinned ${sha} (logged as session.sandbox{binary-pin, by:'repin'} at the next session open)\n`);
   return SESSION_EXIT_OK;
 }

@@ -156,7 +156,7 @@ export function approvalsKeyFrom(ring: KeyRing, keyIdOf: (principal: string) => 
 export type CliProvenance = { pid: number; ppid: number; pgid: number; tty: string | null };
 
 /** What happens when a card is decided (install: the grant rows; api-token: activation). Runs AFTER approval.decide is logged. */
-export type CardEffect = (decision: string, ctx: { token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; connId: string }) => Promise<void> | void;
+export type CardEffect = (decision: string, ctx: { token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; connId: string; decisionSig?: string }) => Promise<void> | void;
 
 export interface RaiseInput {
   kind: CardKind;
@@ -181,6 +181,8 @@ export interface RaiseInput {
   /** presence purpose/binding override (install: mod.install bound to {cardId, contentHash}) */
   presence?: { purpose: PresencePurpose; binding: (decision: string) => PresenceBinding; consumedByEffect: boolean };
   effect?: CardEffect;
+  /** voice never decides this card, deny included (§14.7); a gate-class card with detail.target 'claude-binary' is always hand-only (TD-2026-10-19-063 M3) */
+  handOnly?: boolean;
   /**
    * P8-D96: the decisions this card offers, a subset of its kind's (permission
    * slice cards: allow | deny, never `always`). Only these are signed as
@@ -219,6 +221,8 @@ export interface DecideContext {
 
 interface CardRecord {
   card: CardV1;
+  /** TD-2026-10-19-063 M3: voice-hand-only for every decision */
+  handOnly?: boolean;
   tool?: string;
   presence?: RaiseInput['presence'];
   effect?: CardEffect;
@@ -352,7 +356,7 @@ export class ApprovalBroker {
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
-    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
   }
 
@@ -550,12 +554,19 @@ export class ApprovalBroker {
 
   async #approve(ctx: DecideContext, params: unknown): Promise<CardV1> {
     // 1. principal (B4): voice first — every approve form refuses until an arm can exist (Move 4)
-    if (ctx.principalClass === 'voice') throw voiceApproveRefusal();
+    // TD-2026-10-19-063 M3: a hand-only card (the claude-binary re-pin) names its own refusal, whatever voice's state
+    const handOnly = (): boolean => {
+      const id = params !== null && typeof params === 'object' ? (params as { cardId?: unknown }).cardId : undefined;
+      return typeof id === 'string' && this.#cards.get(id)?.handOnly === true;
+    };
+    const voiceHandOnly = (): RefusedError => fail('FORBIDDEN', 'voice-hand-only', 'this card is decided by hand only, never by voice (§14.7: the claude-binary re-pin)', { gate: 'voice' });
+    if (ctx.principalClass === 'voice') throw handOnly() ? voiceHandOnly() : voiceApproveRefusal();
     if (ctx.principalClass !== 'human') throw fail('FORBIDDEN', 'matrix', `approve is human-only; a ${ctx.principalClass} principal never decides a card (B4)`);
     if (params === null || typeof params !== 'object' || Array.isArray(params)) throw fail('BAD_REQUEST', 'bad-params', 'approve takes {cardId, decision, note?, decisionSig}');
     const p = params as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !(APPROVE_KEYS as readonly string[]).includes(k));
     if (extra.length) throw fail('BAD_REQUEST', 'bad-params', `unknown approve params: ${extra.join(', ')}`);
+    if ((p.via === 'voice' || 'voice' in p) && handOnly()) throw voiceHandOnly();
     if (p.via === 'voice' || 'voice' in p) throw fail('FORBIDDEN', 'voice-off', 'the voice intent form is refused: voice approvals are off (§14.7)', { gate: 'voice' });
     if (p.via === 'link') throw fail('FORBIDDEN', 'peer-via', 'no decision ever arrives over a link (§3.9)', { gate: 'link' });
     if (p.via !== undefined) throw fail('BAD_REQUEST', 'bad-params', 'via is set by the kernel from the connection, not by the caller');
@@ -731,7 +742,7 @@ export class ApprovalBroker {
     }
     if (r.effect) {
       try {
-        await r.effect(decision, { token, rootSig, connId: ctx.connId });
+        await r.effect(decision, { token, rootSig, connId: ctx.connId, decisionSig });
       } catch (err) {
         // P8-D98 (slice A2): the honest kind, exactly one row, no suspect row; the card stays pending (approve's catch)
         await this.#o.log('approval.effect.failed', { cardId, decision, effect: effectNameOf(card), reason: effectFailureReason(err) }, { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) }).catch(() => undefined);
