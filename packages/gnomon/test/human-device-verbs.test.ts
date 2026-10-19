@@ -1,0 +1,99 @@
+/**
+ * #socket — P8-D98 (T-2026-10-19-001 A0): the human-device verbs `gui.open` and `rules.revoke`.
+ * Falsifiers: every non-human principal (agent, session, mod, voice, read token, peer) is refused by the
+ * registry tier; a human GUI launch-token connection is refused; a human device connection with no port
+ * gets ENGINE{not-implemented}; a wired port is reached with the connection-stamped context; and the kernel
+ * advertises no reserved hello feature (SERVER_FEATURES).
+ */
+import { describe, expect, it } from 'vitest';
+import { HUMAN_DEVICE_VERBS, RESERVED_HELLO_FEATURES } from '@a-company/gnomon-contracts';
+import { createKernelDispatcher, KERNEL_METHODS, RpcRefusal, SERVER_FEATURES, type HumanDeviceVerbPorts } from '../src/kernel/socket/index.js';
+
+type Who = { kind: 'human' | 'agent' | 'session' | 'mod' | 'voice' | 'peer' | 'kernel'; credential?: 'device' | 'gui' } | { kind: 'readToken' };
+
+function rig(humanVerbs?: HumanDeviceVerbPorts) {
+  const d = createKernelDispatcher({
+    authenticator: {
+      now: () => Date.now(),
+      checkToken: () => ({ ok: true }),
+      authenticate: (s: Record<string, unknown>, p: { who: Who }) => {
+        s.phase = 'authenticated';
+        s.principal = 'p:local/x';
+        if (p.who.kind === 'readToken') {
+          Object.assign(s, { credential: 'read-token', tokenId: 'rtk:T', tokenExpiresAtMs: Date.now() + 60_000 });
+          return { ok: true, credential: 'read-token', principal: 'p:local/x', tokenId: 'rtk:T', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+        }
+        Object.assign(s, { principalKind: p.who.kind, credential: p.who.credential ?? 'device', deviceId: 'dev:local/mac' });
+        if (p.who.credential === 'gui') return { ok: true, credential: 'gui', principal: 'p:local/x', deviceId: 'dev:local/mac', via: 'launch', guiToken: 'g', commit: () => undefined, abort: () => undefined };
+        return { ok: true, credential: 'device', principal: 'p:local/x', principalKind: p.who.kind, deviceId: 'dev:local/mac', keyId: 'k' };
+      },
+    } as never,
+    status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: null }) },
+    log: async () => undefined,
+    ...(humanVerbs ? { humanVerbs } : {}),
+  });
+  let n = 0;
+  const connect = async (who: Who) => {
+    const ctx = { connId: `conn:test-${++n}`, closed: false, close() {}, authenticated() {}, notify: () => true, writableLength: () => 0, writeHighWater: 1 << 16 };
+    d.onConnect(ctx as never);
+    await d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'auth', params: { who } }, ctx as never);
+    return (method: string, params: unknown = {}) => d.handle({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 2, method, params }, ctx as never);
+  };
+  return { d, connect };
+}
+
+async function refusal(p: unknown): Promise<{ code: string; reason: unknown }> {
+  try {
+    await p;
+  } catch (e) {
+    if (e instanceof RpcRefusal) return { code: e.refusal.code, reason: e.refusal.data?.reason };
+    throw e;
+  }
+  throw new Error('expected a refusal');
+}
+
+const VERB_NAMES = HUMAN_DEVICE_VERBS.map((v) => v.verb);
+
+describe('human-device verbs (P8-D98)', () => {
+  it('are registered with a human tier only (deny by default for every other class)', () => {
+    for (const v of VERB_NAMES) {
+      expect(KERNEL_METHODS.has(v)).toBe(true);
+      expect(KERNEL_METHODS.tier(v, 'human')).toBe('verified human device');
+      for (const c of ['agent', 'session', 'mod', 'voice', 'readToken', 'peer']) expect(KERNEL_METHODS.tier(v, c)).toBe(false);
+    }
+  });
+  it('refuse agent, session, mod, voice, read token and peer principals (FORBIDDEN matrix), port or not', async () => {
+    const called: string[] = [];
+    const { connect } = rig({ 'gui.open': async () => called.push('gui.open'), 'rules.revoke': async () => called.push('rules.revoke') });
+    for (const who of [{ kind: 'agent' }, { kind: 'session' }, { kind: 'mod' }, { kind: 'voice' }, { kind: 'readToken' }, { kind: 'peer' }, { kind: 'kernel' }] as Who[]) {
+      const call = await connect(who);
+      for (const v of VERB_NAMES) expect(await refusal(call(v, { ruleId: 'card:x' })), `${who.kind} ${v}`).toEqual({ code: 'FORBIDDEN', reason: 'matrix' });
+    }
+    expect(called).toEqual([]);
+  });
+  it('refuse a human GUI launch-token connection (not a verified device)', async () => {
+    const { connect } = rig({ 'gui.open': async () => 'x', 'rules.revoke': async () => 'x' });
+    const call = await connect({ kind: 'human', credential: 'gui' });
+    for (const v of VERB_NAMES) expect(await refusal(call(v))).toEqual({ code: 'FORBIDDEN', reason: 'matrix' });
+  });
+  it('a human device connection with no port gets ENGINE{not-implemented}', async () => {
+    const { connect } = rig();
+    const call = await connect({ kind: 'human' });
+    for (const v of VERB_NAMES) expect(await refusal(call(v))).toEqual({ code: 'ENGINE', reason: 'not-implemented' });
+  });
+  it('a wired port is reached with the connection-stamped context', async () => {
+    const seen: unknown[] = [];
+    const { connect } = rig({ 'rules.revoke': async (ctx, p) => (seen.push({ principal: ctx.principal, deviceId: ctx.deviceId, p }), { revoked: true }) });
+    const call = await connect({ kind: 'human' });
+    expect(await call('rules.revoke', { ruleId: 'card:1' })).toEqual({ revoked: true });
+    expect(seen).toEqual([{ principal: 'p:local/x', deviceId: 'dev:local/mac', p: { ruleId: 'card:1' } }]);
+    expect(await refusal(call('gui.open'))).toEqual({ code: 'ENGINE', reason: 'not-implemented' });
+  });
+});
+
+describe('reserved hello features are not advertised', () => {
+  it('SERVER_FEATURES names none of journal.cursor, session.resume', () => {
+    for (const f of RESERVED_HELLO_FEATURES) expect(SERVER_FEATURES).not.toContain(f);
+    expect(SERVER_FEATURES).toEqual([]);
+  });
+});

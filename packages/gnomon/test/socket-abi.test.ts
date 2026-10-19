@@ -38,6 +38,7 @@ import {
   type HelloResult,
   type PrincipalKind,
 } from '@a-company/gnomon-contracts';
+import { HUMAN_DEVICE_VERBS } from '@a-company/gnomon-contracts';
 import {
   DEV_TEST_ROOT_ACK,
   DevTestRootAuthority,
@@ -481,7 +482,8 @@ describe('G-ABI-01 ≤ 12: twelve kernel verbs + two relays is the whole client-
   it('the frozen list is 12 verbs (n = 1..12) + 2 relays, status lists exactly those, and no other name is a verb (incl. no token/daemon verbs)', async () => {
     expect(VERBS.map((v) => v.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(CLIENT_RELAYS.map((x) => x.relay)).toEqual(['mod.view', 'mod.command']);
-    expect(CLIENT_METHODS).toHaveLength(14);
+    expect(CLIENT_METHODS).toHaveLength(16); // + the two P8-D98 human-device verbs, not kernel verbs (law 3)
+    expect(HUMAN_DEVICE_VERBS.map((v) => v.verb)).toEqual(['gui.open', 'rules.revoke']);
     const r = await rig();
     const s = await asDevice(r, 'human');
     const st = ok(await s.conn.call('status', {}));
@@ -563,7 +565,7 @@ describe('G-ABI-02 matrix total: every principal class × every verb and both re
     for (const [cls, s] of sessions) {
       table[cls] = {};
       for (const meth of CLIENT_METHODS) {
-        const verb = VERBS.find((v) => v.verb === meth);
+        const verb = [...VERBS, ...HUMAN_DEVICE_VERBS].find((v) => v.verb === meth);
         const access = verb ? verb.access[cls as keyof (typeof verb)['access']] : cls === 'readToken' ? false : 'caller principal';
         const e = errOf(await s.conn.call(meth, meth === 'ref.resolve' ? { ref: 'sym:#socket' } : {}));
         const got = e ? `${e.c}:${e.reason}${e.milestone ? `@${e.milestone}` : ''}` : 'served';

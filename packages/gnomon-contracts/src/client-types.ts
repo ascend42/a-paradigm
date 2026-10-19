@@ -11,7 +11,6 @@
 import type { CardV1 } from './card.js';
 import type { ChangeNoteV1 } from './change-note.js';
 import type { EventV1 } from './event.js';
-import type { LogReadCursor } from './rpc.js';
 
 type Open = Record<string, unknown>;
 
@@ -89,8 +88,8 @@ export interface LogAppendResult extends Open {
 }
 
 export interface LogReadParams {
-  /** A bare seq today; the `{logId, seq}` cursor (P8-D98, §5) once `journal.cursor` is negotiated. */
-  since?: number | LogReadCursor;
+  /** A bare seq today; the `{logId, seq}` cursor (LogReadCursor, P8-D98, §5) replaces it when `journal.cursor` is built. */
+  since?: number;
   until?: number;
   kinds?: string[];
   scope?: Open;
