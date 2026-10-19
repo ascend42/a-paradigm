@@ -33,6 +33,9 @@
  *     worktree `.claude/**` and `CLAUDE*.md` (prefix), and the same pair for
  *     every memory-chain dir (P8-D97, `memoryDirs`); every input layersHash
  *     reads is covered (test-proved);
+ *     (#trace-capture keeps its captures in `<home>/trace/` (TD-2026-10-19-057),
+ *     covered by the gnomon-home read and write denies above: no rule of its own,
+ *     and nothing in the project tree is denied for it);
  *   - transcripts (write ALLOW, TD-2026-10-19-814 item 1, probe p-resume
  *     darwin): `<userClaudeDir>/projects/**` is carved back out of the
  *     `~/.claude` write deny for a Claude session (`claudeTranscripts`), so

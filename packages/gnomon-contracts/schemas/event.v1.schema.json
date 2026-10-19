@@ -331,7 +331,9 @@
       "resumedFrom": "8.0:P8-D98",
       "drainOutcome": "8.0:P8-D98",
       "note": "8.0:P8-D98",
-      "drainedEventId": "8.0:P8-D98"
+      "drainedEventId": "8.0:P8-D98",
+      "traced": "8.0:P8-D98",
+      "traceRefused": "8.0:P8-D98"
     },
     "session.refused": {
       "resume": "8.0:P8-D98"

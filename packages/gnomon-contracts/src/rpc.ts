@@ -11,7 +11,7 @@ import { CARD_EXPIRY_WHYS, CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, 
 import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
 import { RISK_TIERS, AGENT_REVERT_HOWS, KERNEL_REVERT_HOWS } from './change-note.js';
 import { REFUSAL_GATES, REFUSAL_REASONS, refuse, type Refusal, type RefusalCode } from './refusal.js';
-import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS, DRAIN_OUTCOMES, DRAIN_EXIT_REASONS, DRAIN_INJECT_CHANNELS, DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES, RESUME_NOTES, RESUME_REFUSALS } from './event.js';
+import { INJECT_ORIGINS, ALWAYS_RULE_MATCHES, DRAIN_REASONS, DRAIN_OUTCOMES, DRAIN_EXIT_REASONS, DRAIN_INJECT_CHANNELS, DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES, RESUME_NOTES, RESUME_REFUSALS, TRACE_REFUSALS } from './event.js';
 
 export const GNOMON_RPC_V1 = 'gnomon-rpc:v1' as const;
 export const CLIENT_API_PATTERN = /^gnomon-rpc:v([1-9][0-9]*)$/;
@@ -224,6 +224,8 @@ export const D98_CLOSED_VALUES = deepFreeze({
   'session.inject.channel.drain': [...DRAIN_INJECT_CHANNELS],
   'session.inject.deadlineSource': [...DRAIN_DEADLINE_SOURCES],
   'session.refused.resume': [...RESUME_REFUSALS],
+  // #trace-capture (TD-2026-10-19-057): session.sandbox{traced:false, traceRefused}.
+  'session.sandbox.traceRefused': [...TRACE_REFUSALS],
   'daemon.stop.reason': [...DAEMON_STOP_REASONS],
 });
 

@@ -2158,6 +2158,47 @@ components:
       - test/permission-session.test.ts
     oracles: [G-BRK-05]
 
+  trace-capture:
+    description: >-
+      #trace-capture (src/kernel/trace/): a CORE per-project audit mode, on
+      every home and build (TD-2026-10-19-057, amends TD-2026-10-19-139). The
+      human switches it on per project folder (mode.ts; CLI `gnomon trace
+      on|off|status|path`); state lives ONLY in <home>/trace-folders.json
+      (0600, keyed by realpath). The supervisor reads the mode at every
+      session.open and resume for the session cwd and, when on, tees every
+      stdin and stdout line plus kernel ctl notes to
+      <home>/trace/<project key>/<hsid with ':' as '-'>.jsonl, one {t, dir,
+      line} per LF line. Project key = slug of the folder name + '-' + 12 hex
+      of sha256(realpath); project.json in the key dir records the realpath
+      (a mismatch refuses trace-unsafe). NOTHING is written into the project
+      tree. The session profile's gnomon-home deny covers <home>/trace,
+      renames included; no project-tree deny exists for the trace (Aegis L7).
+      Dirs 0700, files 0600, lstat + O_NOFOLLOW|O_NONBLOCK (+O_EXCL to create):
+      a link, FIFO or device refuses trace-unsafe without hanging (Aegis M3).
+      Refusals (TRACE_REFUSALS, published in gnomon-contracts
+      D98_CLOSED_VALUES) are reported on session.sandbox{traced:false,
+      traceRefused}; traced:true otherwise (both reserved under P8-D98). Never
+      blocks a session: bounded queue, out dropped first, in/ctl evict queued
+      out and have a reserve, drops counted in ctl notes. Aegis M1: per-record
+      bound 64 KiB (truncated copy + hash + bytes); past the 50 MiB file bound
+      a capped note, then in/ctl in full and out as skeletons; past 4x out is
+      only counted. Aegis M2/L4: span redaction on the decoded value
+      ([redacted:<kind>]: PEM, grt:v1:, sk-ant-, ghp_, github_pat_, AKIA,
+      xox[bp]-, secret env values). Aegis L3: prior-close-unclean note on a
+      resume after an unclean close; a drain flushes with a 2 s deadline.
+      Residuals: prompt and tool text in the clear, readable by the user's own
+      account outside Gnomon; exact-folder match only (a session in
+      /proj/sub is untraced when /proj is traced, follow-up); in/ctl past the
+      hard bound are unbounded; win32 has no POSIX modes (sessions refuse
+      sandbox-unavailable). Zero deps: no logger; visibility is the kernel
+      log row.
+    path: src/kernel/trace/
+    type: module
+    tags: [gnomon, kernel, audit, paradigm-8]
+    tests:
+      - test/trace-capture.test.ts
+      - test/trace-session.test.ts
+
   rules-cli:
     description: >-
       #rules-cli `gnomon rules list [<home>] [--json]` / `gnomon rules revoke
@@ -2232,6 +2273,50 @@ components:
     tests:
       - test/guide-cli.test.ts
       - test/honesty.test.ts
+
+  gnomon-trace:
+    description: >-
+      #gnomon-trace `gnomon trace [--home <abs>] [--last | --session <hsid> |
+      --since <ISO>] [--json] [--full]` (src/cli/trace-cli.ts) — a CLI-only,
+      READ-ONLY audit timeline of a session for dogfood audits by the founder
+      and by Claude. Not a socket method: abiId and clientApiId do not move.
+      Joins per hsid (a) the kernel-log rows of the session (envelope session
+      or payload hsid, approval rows of its cards by cardId, the daemon.start
+      before and daemon.exit after), read from the segment files with a
+      write-free open (immutable=1 when no -wal exists; readOnly beside a live
+      -wal) and a hash-chain check (envelope hash + prev link; signatures are
+      left to gnomon replay and the output says so); (b) the Claude Code
+      transcript <claude dir>/projects/<realpath cwd, non-alphanumerics to
+      '-'>/<uuid>.jsonl (prompts, replies, tool_use, tool_result); (c) the raw
+      capture traceDirOf(home, <realpath cwd>)/traceFileName(hsid) — that is
+      <home>/trace/<project key>/<hsid with ':' as '-'>.jsonl (TD-2026-10-19-057)
+      — when present and a regular file (unparsable lines skipped; span
+      redactions read [redacted:<kind>]; a legacy {redacted, hash, bytes}
+      record is shown as [redacted], never reconstructed). The header shows whether
+      the session was traced, from its session.sandbox row (traced /
+      traceRefused). src/kernel/trace/capture.ts mirrors the capture
+      builder's traceFileName/traceDirOf. Ordered by time, stable per source. Each turn.sent
+      contentHash is checked against the transcript prompt with the
+      supervisor's own turnContentHash: "✓ matches log" / "✗ hash mismatch";
+      a prompt the log never sent is "not in log". Human output uses the
+      readout helpers and sanitizeDisplayText on every shown string,
+      truncated unless --full; --json is one
+      {session:{hsid,uuid,cwd,principal}, log, transcript, capture, turns,
+      usage, events:[{t, source: log|transcript|capture, kind, ...}]} per
+      session per line. The output contains prompt text (help says so).
+      `gnomon trace path [--home] [--folder]` prints where the folder's
+      captures live and writes nothing; `on` says they live in the home and
+      hold prompt and tool text in the clear (Aegis L8).
+      Subcommands `gnomon trace on | off | status [--home] [--folder]` keep
+      per-project trace mode in <home>/trace-folders.json (0600, keyed by
+      realpath) via src/kernel/trace/mode.ts (setTraceMode, traceModeOf,
+      tracedFolders — a minimal copy reconciled at merge with the capture
+      builder's module); they are the only writes, and only to that file.
+    path: src/cli/trace-cli.ts
+    type: module
+    tags: [gnomon, cli, audit, read-only, paradigm-8, dogfood]
+    tests:
+      - test/trace-cli.test.ts
 
   local-runner:
     description: >-
