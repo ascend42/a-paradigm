@@ -19,7 +19,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
-import { ASK_USER_DENY, composePermission, inputHash } from '../src/kernel/supervisor/permission.js';
+import { ASK_USER_NO_ANSWER, composePermission, inputHash } from '../src/kernel/supervisor/permission.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
@@ -330,13 +330,71 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(rej.message).toContain('split step 1 first');
   });
 
-  it('12. (moved from the assistant path) AskUserQuestion: turn.ask-user on the request path, denied "ask in your reply", no card', async () => {
+  const P01B_ASK = { questions: [{ question: 'Which colour do you prefer?', header: 'Colour', options: [{ label: 'Red', description: 'Choose red' }, { label: 'Blue', description: 'Choose blue' }], multiSelect: false }] };
+
+  it('12. AskUserQuestion is an ask-user card; a plain-text answer ⇒ allow with updatedInput = {...input, answers}; the answer text is in no row', async () => {
     const r = rig();
-    const s = await r.open([{ request: { id: 'q-1', tool: 'AskUserQuestion', toolUseId: 'toolu_q', input: { questions: [{ question: 'Which?', options: [{ label: 'a' }] }] } } }]);
+    const s = await r.open([{ request: { id: 'q-1', tool: 'AskUserQuestion', toolUseId: 'toolu_q', input: P01B_ASK } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    expect(c.kind).toBe('ask-user');
+    expect((c.actions as Array<{ decision: string }>).map((a) => a.decision)).toEqual(['answer']);
+    expect(c.timeoutAt).toBeDefined();
+    const texts = (c.block as { children: Array<{ text: string }> }).children.map((x) => x.text);
+    expect(texts).toEqual(expect.arrayContaining(['question 1: Which colour do you prefer?', 'option 1.1: Red', 'about 1.2: Choose blue']));
+    expect(r.kinds('turn.ask-user')[0]!.payload).toMatchObject({ hsid: s.hsid, toolUseId: 'toolu_q', cardId: c.cardId, questions: 1 });
+    await r.approve(c.cardId, 'answer', { note: 'Blue, but teal-ish' });
     expect(await waitFor(() => r.answers().some((a) => a.id === 'q-1'))).toBe(true);
-    expect(r.answers()[0]).toMatchObject({ behavior: 'deny', message: ASK_USER_DENY });
-    expect(r.kinds('turn.ask-user')[0]!.payload).toMatchObject({ hsid: s.hsid, toolUseId: 'toolu_q', cardId: null });
-    expect(r.broker.cards()).toEqual([]);
+    const a = r.answers()[0]!;
+    expect(a.behavior).toBe('allow');
+    expect(a.updatedInput).toEqual({ ...P01B_ASK, answers: { 'Which colour do you prefer?': 'Blue, but teal-ish' } });
+    // never logged in text: approval.decide carries noteHash/noteBytes only
+    const dec = r.kinds('approval.decide')[0]!.payload;
+    expect(dec.note).toBeUndefined();
+    expect(dec.noteHash).toMatch(/^sha256:/);
+    for (const row of r.rows) if (row.kind !== 'approval.request') expect(JSON.stringify(row.payload)).not.toContain('teal-ish');
+  });
+
+  it('12b. several questions: JSON {answers} naming exactly the held questions; wrong / missing / extra keys, plain text and no note are refused before presence', async () => {
+    const r = rig();
+    const two = { questions: [{ question: 'Colour?', options: [{ label: 'Red' }] }, { question: 'Size?', options: [{ label: 'S' }, { label: 'L' }] }] };
+    await r.open([{ request: { id: 'q-2', tool: 'AskUserQuestion', input: two } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    const bad = [
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Weight?': 'x' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Size?': 'L', 'Extra?': 'y' } }) },
+      { note: JSON.stringify({ answers: { 'Colour?': 'Red', 'Size?': '' } }) },
+      { note: 'Red' },
+      {},
+    ];
+    for (const extra of bad) {
+      const e = (await r.approve(c.cardId, 'answer', extra).then(() => null, (x: unknown) => x)) as RefusedError;
+      expect(e).toBeInstanceOf(RefusedError);
+      expect(e.refusal.code).toBe('BAD_REQUEST');
+      expect(e.refusal.data).toMatchObject({ reason: 'bad-params' });
+    }
+    expect(r.prompts).toEqual([]); // refused before any presence prompt
+    expect(r.kinds('approval.decide')).toEqual([]);
+    expect(r.pending()).toHaveLength(1);
+    await r.approve(c.cardId, 'answer', { note: JSON.stringify({ answers: { 'Size?': 'L', 'Colour?': 'Red' } }) });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'q-2'))).toBe(true);
+    expect(r.answers()[0]!.updatedInput).toEqual({ ...two, answers: { 'Colour?': 'Red', 'Size?': 'L' } });
+  });
+
+  it('12c. an unanswered ask-user card expires after 10 min into deny "no answer"; a malformed AskUserQuestion is denied with no card', async () => {
+    const now = { t: Date.now() };
+    const r = rig({ now });
+    await r.open([{ request: { id: 'q-3', tool: 'AskUserQuestion', input: P01B_ASK } }, { request: { id: 'q-4', tool: 'AskUserQuestion', input: { questions: [{ question: 'a\nb' }] } } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1 && r.answers().some((a) => a.id === 'q-4'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'q-4')).toMatchObject({ behavior: 'deny' });
+    now.t += 9 * 60_000;
+    expect(await r.broker.expireDue()).toEqual([]);
+    now.t += 2 * 60_000;
+    expect(await r.broker.expireDue()).toHaveLength(1);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'q-3'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'q-3')).toMatchObject({ behavior: 'deny', message: ASK_USER_NO_ANSWER });
   });
 
   it('Aegis detector: a gated tool that runs with no can_use_tool request ⇒ approval.suspect{ungated-tool-use}; a requested one and an ungated Read do not', async () => {

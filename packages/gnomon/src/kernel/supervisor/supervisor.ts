@@ -43,8 +43,16 @@
  *   failed raise, expiry, cancel, a duplicate requestId (both denied +
  *   approval.suspect), session exit — all deny or answer nothing. A response
  *   is written only while the session runs, after session.inject{origin:
- *   'kernel', hash, bytes}. AskUserQuestion is auto-denied ("ask in your
- *   reply") with its turn.ask-user row; ExitPlanMode is a `plan` card with its
+ *   'kernel', hash, bytes}. AskUserQuestion is an `ask-user` card (cached
+ *   class, decision `answer` only, 10 min timeout ⇒ deny "no answer") with
+ *   its turn.ask-user row: the note is checked against the KERNEL-held
+ *   questions before presence (parseAskAnswer), the allow carries
+ *   updatedInput = {...kernel-held input, answers}, and the answer text never
+ *   reaches a non-sensitive row (approval.decide: noteHash/noteBytes). The
+ *   answer is NOT inside the decisionSig preimage (approveMessage is
+ *   cardId|decision|contentHash|approver; changing it moves clientApiId) —
+ *   residual: a party able to rewrite the note in flight on an authenticated
+ *   GUI connection could swap the answer. ExitPlanMode is a `plan` card with its
  *   turn.plan row; a write under denyWrite is denied with no card. An unknown
  *   control_request subtype gets an error response. The assistant tool_use
  *   path raises NO card (one card per request).
@@ -85,7 +93,7 @@ import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
-import { answerFor, composePermission, MAX_PENDING_PERMISSIONS } from './permission.js';
+import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_PENDING_PERMISSIONS, parseAskAnswer, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
@@ -193,7 +201,9 @@ interface Session {
 
 interface PendingPermission {
   cardId: string | null;
-  cardKind: 'permission' | 'plan' | null;
+  cardKind: CardKindP | null;
+  /** ask-user: the validated questions the answer is checked against (kernel-held, from the request) */
+  questions?: AskQuestion[];
   input: Record<string, unknown>;
   inputHash: string;
   toolName: string;
@@ -659,8 +669,8 @@ export class SessionSupervisor {
     }
     const repo = s.worktree ?? s.cwd;
     const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite });
-    if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny' }, { session: s.hsid });
     if (plan.kind === 'auto-deny') {
+      if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny', why: plan.why }, { session: s.hsid });
       await this.#write(s, permissionDenyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });
       return;
     }
@@ -669,11 +679,25 @@ export class SessionSupervisor {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
     }
-    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
+    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
     s.pending.set(requestId, entry);
     let cardId: string;
+    // ask-user: the answer is checked against the KERNEL-held questions before presence and before approval.decide,
+    // and its text never reaches a non-sensitive row (approval.decide carries noteHash/noteBytes only)
+    const qs = plan.questions;
+    const ask = plan.cardKind === 'ask-user' && qs
+      ? {
+          timeoutMs: ASK_USER_TIMEOUT_MS,
+          privateNote: true,
+          checkNote: (decision: string, note: string | undefined): string | null => {
+            if (decision !== 'answer') return null;
+            const a = parseAskAnswer(qs, note);
+            return 'error' in a ? a.error : null;
+          },
+        }
+      : {};
     try {
-      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never });
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask });
       cardId = card.cardId;
     } catch {
       await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny
@@ -685,7 +709,8 @@ export class SessionSupervisor {
       return;
     }
     entry.cardId = cardId;
-    if (plan.cardKind === 'plan') await this.#o.log('turn.plan', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId }, { session: s.hsid });
+    if (plan.cardKind === 'ask-user') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId, questions: qs?.length ?? 0 }, { session: s.hsid });
+    if (plan.cardKind === 'plan') await this.#o.log('turn.plan',{ hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId }, { session: s.hsid });
     void b.decisionOf(cardId).then(
       (d) => this.#respond(s, requestId, d, entry),
       () => this.#respond(s, requestId, 'deny', entry),
@@ -697,7 +722,17 @@ export class SessionSupervisor {
     const e = s.pending.get(requestId);
     if (!e || (expect && e !== expect)) return;
     s.pending.delete(requestId);
-    const a = e.cardKind ? answerFor(e.cardKind, decision, e.cardId ? this.#o.broker?.noteOf?.(e.cardId) : undefined) : { behavior: 'deny' as const, message: 'Denied.' };
+    const note = e.cardId ? this.#o.broker?.noteOf?.(e.cardId) : undefined;
+    if (e.cardKind === 'ask-user' && decision === 'answer' && e.questions) {
+      // updatedInput = the KERNEL-held input + the answers validated against the kernel-held questions (re-checked here)
+      const parsed = parseAskAnswer(e.questions, note);
+      if (!('error' in parsed)) {
+        const line = permissionAllowLine(requestId, { ...e.input, answers: parsed.answers });
+        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length });
+        return;
+      }
+    }
+    const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
     const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
     await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
   }

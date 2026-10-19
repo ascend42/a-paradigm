@@ -58,8 +58,8 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
-const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type)$/;
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
 export function h(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, ...children: Array<MiniEl | string | null | undefined | false>): MiniEl {
@@ -179,16 +179,96 @@ export function cardFlags(card: Record<string, unknown>, kernelFlags: readonly s
   return [...s].sort();
 }
 
+/** One question of an ask-user card, read back from the kernel's fixed line grammar (display only: the kernel validates the answer). */
+export interface AskCardQuestion {
+  n: number;
+  /** the RAW question text (the answer key the kernel matches exactly; shown only through the sanitizer) */
+  question: string;
+  header: string | null;
+  multiSelect: boolean;
+  options: string[];
+}
+
+/** Parse an ask-user card block: `question N: …`, `header N: …`, `multi-select N: yes`, `option N.M: …`. */
+export function parseAskCard(block: unknown): AskCardQuestion[] {
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? ((block as { children: unknown[] }).children) : [];
+  const out = new Map<number, AskCardQuestion>();
+  for (const k of kids) {
+    const t = k && typeof k === 'object' && typeof (k as { text?: unknown }).text === 'string' ? (k as { text: string }).text : null;
+    if (t === null) continue;
+    let m = /^question (\d+): (.*)$/s.exec(t);
+    if (m) {
+      out.set(Number(m[1]), { n: Number(m[1]), question: m[2]!, header: null, multiSelect: false, options: [] });
+      continue;
+    }
+    m = /^header (\d+): (.*)$/s.exec(t);
+    if (m && out.has(Number(m[1]))) out.get(Number(m[1]))!.header = m[2]!;
+    m = /^multi-select (\d+): yes$/.exec(t);
+    if (m && out.has(Number(m[1]))) out.get(Number(m[1]))!.multiSelect = true;
+    m = /^option (\d+)\.(\d+): (.*)$/s.exec(t);
+    if (m && out.has(Number(m[1]))) out.get(Number(m[1]))!.options.push(m[3]!);
+  }
+  return [...out.values()].sort((a, b) => a.n - b.n);
+}
+
+/** A picker's choices per question: the chosen option indexes and the free text (free text wins when non-empty). */
+export interface AskPick {
+  chosen: number[];
+  free: string;
+}
+
+/**
+ * The approve note for an ask-user card: the plain answer text for one
+ * question, JSON `{answers:{question: answer}}` for several; null when a
+ * question is left unanswered (no key is sent then).
+ */
+export function askNote(qs: readonly AskCardQuestion[], picks: ReadonlyMap<number, AskPick>): string | null {
+  const answers: Record<string, string> = {};
+  for (const q of qs) {
+    const p = picks.get(q.n);
+    const free = p?.free.trim() ?? '';
+    const labels = (p?.chosen ?? []).map((i) => q.options[i]).filter((x): x is string => typeof x === 'string');
+    const a = free !== '' ? free : labels.join(', ');
+    if (a === '') return null;
+    answers[q.question] = a;
+  }
+  if (!qs.length) return null;
+  return qs.length === 1 ? answers[qs[0]!.question]! : JSON.stringify({ answers });
+}
+
+function askPicker(ctx: RenderCtx, cardId: string, qs: readonly AskCardQuestion[]): MiniEl {
+  const { doc } = ctx;
+  return h(
+    doc,
+    'div',
+    { class: 'ask-picker', 'data-ask-card': cardId },
+    ...qs.map((q) =>
+      h(
+        doc,
+        'fieldset',
+        { class: 'ask-q', 'data-ask-q': String(q.n) },
+        h(doc, 'legend', null, q.header ? `${q.header}: ${q.question}` : q.question),
+        ...q.options.map((o, j) =>
+          h(doc, 'label', { class: 'ask-opt' }, h(doc, 'input', { type: q.multiSelect ? 'checkbox' : 'radio', name: `ask-${cardId}-${q.n}`, value: String(j), 'data-ask-q': String(q.n), 'data-ask-opt': String(j) }), ` ${o}`),
+        ),
+        h(doc, 'input', { type: 'text', class: 'ask-free', maxlength: '1000', placeholder: q.options.length ? 'or type your own answer' : 'type your answer', 'data-ask-q': String(q.n), 'data-ask-free': '1' }),
+      ),
+    ),
+  );
+}
+
 /** The kernel-owned card region. Decision keys only for verified actions on a decidable card. */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
   const keys = v.decidable && v.decisions.length ? v.decisions : [];
+  const ask = v.kind === 'ask-user' && keys.includes('answer') ? parseAskCard(block) : [];
   return h(
     doc,
     'section',
     { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
     h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
+    ask.length ? askPicker(ctx, v.cardId, ask) : null,
     h(
       doc,
       'div',

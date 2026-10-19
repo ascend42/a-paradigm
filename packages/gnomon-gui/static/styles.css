@@ -229,3 +229,9 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ask-user picker (kernel card, #gui) */
+.ask-picker { display: grid; gap: 0.5rem; margin: 0.5rem 0; }
+.ask-q { border: 1px solid currentColor; border-radius: 4px; padding: 0.4rem 0.6rem; }
+.ask-opt { display: block; }
+.ask-free { width: 100%; margin-top: 0.3rem; }

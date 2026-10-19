@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
-import { cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { askNote, cardFlags, flagsOf, parseAskCard, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
@@ -109,6 +109,29 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     expect(el.all().some((e) => e.className.includes('flag-bidi'))).toBe(true);
     const none = renderCard({ doc: fdoc }, { ...v, state: 'mystery', decidable: false }, block) as FEl;
     expect(none.all().filter((e) => e.attrs.has('data-decision'))).toHaveLength(0);
+  });
+  it('ask-user card: the picker reads the kernel line grammar, shows options + free text, and builds the answer note', () => {
+    const t = (text: string) => ({ type: 'Text', text });
+    const block = { type: 'Box', children: [t('The session asks you 2 questions'), t('repo: /r'), t('question 1: Colour?'), t('header 1: Pick'), t('option 1.1: Red'), t('about 1.1: warm'), t('option 1.2: Blue'), t('question 2: Toppings?'), t('multi-select 2: yes'), t('option 2.1: Ham'), t('option 2.2: Egg'), t('answer: pick an option or type your own answer for each question.')] };
+    const qs = parseAskCard(block);
+    expect(qs).toEqual([
+      { n: 1, question: 'Colour?', header: 'Pick', multiSelect: false, options: ['Red', 'Blue'] },
+      { n: 2, question: 'Toppings?', header: null, multiSelect: true, options: ['Ham', 'Egg'] },
+    ]);
+    const v = { cardId: 'card:01J', kind: 'ask-user', requestedBy: 'p:x/s-1', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [], decisions: ['answer'], decidable: true };
+    const el = renderCard({ doc: fdoc }, v, block) as FEl;
+    const inputs = el.all().filter((e) => e.tag === 'input');
+    expect(inputs.filter((e) => e.attrs.get('type') === 'radio')).toHaveLength(2);
+    expect(inputs.filter((e) => e.attrs.get('type') === 'checkbox')).toHaveLength(2);
+    expect(inputs.filter((e) => e.attrs.get('data-ask-free'))).toHaveLength(2);
+    expect(el.all().filter((e) => e.attrs.has('data-decision')).map((e) => e.attrs.get('data-decision'))).toEqual(['answer']);
+    // no verified answer key ⇒ no picker
+    expect((renderCard({ doc: fdoc }, { ...v, decisions: [] }, block) as FEl).all().some((e) => e.tag === 'input')).toBe(false);
+    const picks = new Map([[1, { chosen: [1], free: '' }], [2, { chosen: [0, 1], free: '' }]]);
+    expect(JSON.parse(askNote(qs, picks)!)).toEqual({ answers: { 'Colour?': 'Blue', 'Toppings?': 'Ham, Egg' } });
+    expect(JSON.parse(askNote(qs, new Map([[1, { chosen: [0], free: 'teal' }], [2, { chosen: [0], free: '' }]]))!)).toEqual({ answers: { 'Colour?': 'teal', 'Toppings?': 'Ham' } });
+    expect(askNote(qs, new Map([[1, { chosen: [0], free: '' }]]))).toBeNull(); // an unanswered question sends nothing
+    expect(askNote([qs[0]!], new Map([[1, { chosen: [0], free: '' }]]))).toBe('Red'); // one question: plain text
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];
