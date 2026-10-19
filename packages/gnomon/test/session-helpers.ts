@@ -49,8 +49,8 @@ export function trace(w: SessionWorld): Array<Record<string, unknown>> {
   }
 }
 
-export function worldPolicy(w: SessionWorld, endpointPort: number | null = null, extraDenyWrite: readonly PolicyPath[] = [], homeReadable: ReadonlyArray<{ path: string; match: 'literal' | 'subpath' }> = []): SessionPolicy {
-  return buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [w.linked], endpointPort, extraDenyWrite, homeReadable });
+export function worldPolicy(w: SessionWorld, endpointPort: number | null = null, extraDenyWrite: readonly PolicyPath[] = [], homeReadable: ReadonlyArray<{ path: string; match: 'literal' | 'subpath' }> = [], opts: { claudeTranscripts?: boolean; userClaudeDir?: string } = {}): SessionPolicy {
+  return buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: opts.userClaudeDir ?? path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [w.linked], endpointPort, extraDenyWrite, homeReadable, ...(opts.claudeTranscripts ? { claudeTranscripts: true } : {}) });
 }
 
 export async function waitFor(cond: () => boolean, ms = 5_000, step = 20): Promise<boolean> {

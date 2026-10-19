@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T07:29:57.522Z'
+generated: '2026-10-19T16:27:31.798Z'
 structure: {}
 key_files:
   config:
@@ -291,6 +291,8 @@ symbols:
   '#purpose-component-supervisor': packages/gnomon/
   '#purpose-component-always-rules': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
+  '#purpose-component-rules-revoke': packages/gnomon/
+  '#purpose-component-gnomon-guide': packages/gnomon/
   '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/
@@ -942,8 +944,8 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
-  ^purpose-gate-setup-token: packages/gnomon/
-  ^purpose-gate-unprovisioned-only: packages/gnomon/
+  ^gate-setup-token: ./
+  ^gate-unprovisioned-only: ./
   ^purpose-gate-subscription-only: packages/gnomon/
   ^gate-api-authenticated: ./
   ^gate-gate-check: ./
@@ -1369,6 +1371,7 @@ symbols:
   $purpose-ref-flow-flow: packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
+  '#purpose-ref-component-rules-revoke.': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/

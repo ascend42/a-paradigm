@@ -15,7 +15,14 @@
  *   - `file-write*` deny on
  *     policy.denyWrite + the T-008 git denies (a `.git` POINTER FILE literal,
  *     `<gitDir>/config.worktree`, `<commonDir>/modules/**​/{hooks,config,info}`
- *     by regex);
+ *     by regex), then `allow file-write*` on policy.allowWrite (only
+ *     `~/.claude/projects`, TD-2026-10-19-814) and `file-write*` deny again on
+ *     policy.denyWriteAlways (the projects dir itself as a literal, so it can
+ *     be neither removed, renamed nor swapped for a link; the denies inside
+ *     it; the steering regex re-rooted at it). A hardlink planted into it
+ *     needs `link(2)`, which the sandbox checks against the SOURCE path's
+ *     write rule: a write-denied file cannot be linked in (measured macOS 15,
+ *     test/session-sandbox.test.ts);
  *   - `network-outbound (remote ip "localhost:<port>")` per endpoint port;
  *   - `process-info*` denied except self, `kern.proc` sysctl, and the
  *     `com.apple.sysmond` mach-lookup (without it pgrep reads every argv);
@@ -62,7 +69,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 4; // 4: T-2026-10-18-028 M5 helper exec/read denies
+export const SESSION_PROFILE_VERSION = 6; // 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back; 6: its root literal-denied (Aegis M1) and the steering regex re-rooted inside it (Aegis L3)
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -193,6 +200,16 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   if (policy.allowReadMetadata.length) lines.push(`(allow file-read-metadata ${policy.allowReadMetadata.map(filter).join(' ')})`);
   if (policy.denyReadAlways.length) lines.push(`(deny file-read* ${policy.denyReadAlways.map(filter).join(' ')})`);
   lines.push(`(deny file-write* ${[...policy.denyWrite.map(filter), ...git.filters].join(' ')})`);
+  // TD-2026-10-19-814 item 1 (probe p-resume): the transcript carve-back AFTER the ~/.claude deny (last match wins),
+  // then its root (literal), every deny inside it and the re-rooted steering regex again (and the T-008 git denies,
+  // whose regexes cannot be judged by path: harmless repeats); no later rule in this profile allows file-write*
+  // a policy object without the fields (built before TD-2026-10-19-814) renders no carve-back: fail closed
+  const allowWrite = policy.allowWrite ?? [];
+  if (allowWrite.length) {
+    lines.push(`(allow file-write* ${allowWrite.map(filter).join(' ')})`);
+    const again = [...(policy.denyWriteAlways ?? []).map(filter), ...git.filters];
+    if (again.length) lines.push(`(deny file-write* ${again.join(' ')})`);
+  }
   for (const port of policy.denyLoopbackPorts) lines.push(`(deny network-outbound (remote ip "localhost:${port}"))`);
   if (policy.processInfo === 'deny-others') {
     lines.push('(deny process-info*)', '(allow process-info* (target self))', '(deny sysctl-read (sysctl-name-prefix "kern.proc"))', '(deny mach-lookup (global-name "com.apple.sysmond"))');
