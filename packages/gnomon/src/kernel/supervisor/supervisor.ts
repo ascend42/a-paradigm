@@ -333,6 +333,12 @@ export class SessionSupervisor {
       const userClaudeJson = defaultClaudeJson(userClaudeDir);
       const managed = managedFiles(row);
       const generated = verifiedGenerated(req.cwd, { home: this.#o.home });
+      // P8-D97: the repo's context is staged BEFORE the policy (F3: its import targets are write-denied); the repo's CLAUDE.md dirs and a kernel-staged plugin of its skills/agents/commands (hooks stripped)
+      let repoCtx: RepoContext | null = null;
+      if (repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS)) {
+        repoCtx = buildRepoContext({ cwd: req.cwd, userHome, outDir: path.join(dir, 'context') });
+        await this.#o.log('gate-class.detected', repoContextRow(hsid, repoCtx, repoSettingsInfo([req.cwd, ...(req.worktree ? [req.worktree] : [])])), { session: hsid });
+      }
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,
@@ -349,6 +355,7 @@ export class SessionSupervisor {
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
+        memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
@@ -365,12 +372,6 @@ export class SessionSupervisor {
       const policyPath = path.join(dir, 'policy.json');
       const mcpConfigPath = path.join(dir, 'mcp.json');
       const hooksMode = this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS;
-      // P8-D97: the repo's CLAUDE.md dirs and a kernel-staged plugin of its skills/agents/commands (hooks stripped)
-      let repoCtx: RepoContext | null = null;
-      if (repoContextFor(hooksMode)) {
-        repoCtx = buildRepoContext({ cwd: req.cwd, userHome, outDir: path.join(dir, 'context') });
-        await this.#o.log('gate-class.detected', repoContextRow(hsid, repoCtx, repoSettingsInfo([req.cwd, ...(req.worktree ? [req.worktree] : [])])), { session: hsid });
-      }
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;

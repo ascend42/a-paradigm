@@ -136,6 +136,8 @@ export interface RepoContext {
   pluginDir: string | null;
   /** `--add-dir` targets for memory (outermost first), each passed by auditMemoryDir */
   memoryDirs: string[];
+  /** F3: every in-repo `@` import target of the added memory dirs (existing or not): write-denied as literals */
+  importTargets: string[];
   /** H1: memory dirs NOT added (relative to the git top-level), with why: a symlink, or an @ import leaving the repo */
   memoryRefused: Array<{ dir: string; why: string }>;
   skills: string[];
@@ -288,12 +290,16 @@ const VCS_DIR = '.' + 'git';
  * absolute and relative forms) names an existing path outside `top`, or a symlink. A target that does not exist is
  * nothing Claude can load and is ignored.
  */
-export function auditMemoryDir(dir: string, top: string, userHome: string, maxDirs: number = MAX_SUBTREE_DIRS, walked?: { ok: true; files: string[] }): { ok: true } | { ok: false; why: string } {
+/** F3: the most distinct in-repo import targets one memory dir may name (each becomes a write-deny literal). */
+export const MAX_IMPORT_TARGETS = 4096;
+
+export function auditMemoryDir(dir: string, top: string, userHome: string, maxDirs: number = MAX_SUBTREE_DIRS, walked?: { ok: true; files: string[] }): { ok: true; imports: string[] } | { ok: false; why: string } {
   const listed = walked ? { ok: true as const, files: walked.files.filter((f) => isUnder(dir, f)) } : memoryFilesUnder(dir, maxDirs, top);
   if (!listed.ok) return listed;
   const topReal = realpathLoose(top);
   const rel = (p: string): string => (isUnder(topReal, p) ? path.relative(topReal, p).split(path.sep).join('/') || '.' : p);
   const seen = new Set<string>();
+  const imports = new Set<string>(); // F3: every in-repo target, existing or not
   const visit = (file: string, depth: number): string | null => {
     if (seen.has(file)) return null;
     seen.add(file);
@@ -307,6 +313,8 @@ export function auditMemoryDir(dir: string, top: string, userHome: string, maxDi
       const outside = (x: string): string => `${rel(file)}: an @ import reaches outside the repo (${x.length > 120 ? `${x.slice(0, 120)}…` : x})`;
       // R2 (Aegis): the lexical check runs BEFORE lstat, so an out-of-repo import refuses whether or not it exists
       if (!isUnder(topReal, path.resolve(t))) return outside(t);
+      imports.add(path.resolve(t));
+      if (imports.size > MAX_IMPORT_TARGETS) return `${rel(file)}: more than ${MAX_IMPORT_TARGETS} @ import targets`;
       let st: fs.Stats;
       try {
         st = fs.lstatSync(t);
@@ -326,7 +334,7 @@ export function auditMemoryDir(dir: string, top: string, userHome: string, maxDi
     const w = visit(f, 0);
     if (w) return { ok: false, why: w };
   }
-  return { ok: true };
+  return { ok: true, imports: [...imports].sort() };
 }
 
 interface Budget {
@@ -415,14 +423,17 @@ function realDir(p: string): boolean {
 export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string; maxSubtreeDirs?: number }): RepoContext {
   const cwd = realpathLoose(i.cwd);
   const { chain, top } = memoryChainOf(cwd, i.userHome);
-  const ctx: RepoContext = { pluginDir: null, memoryDirs: [], memoryRefused: [], skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
+  const ctx: RepoContext = { pluginDir: null, memoryDirs: [], importTargets: [], memoryRefused: [], skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
   // the outermost memory dir is walked once; a nested dir reuses that walk when it succeeded (else walks its own)
   let outer: { dir: string; walk: ReturnType<typeof memoryFilesUnder> } | null = null;
   for (const d of chain.filter(hasMemory).reverse()) {
     if (outer === null) outer = { dir: d, walk: memoryFilesUnder(d, i.maxSubtreeDirs, top) };
     const reuse = outer.walk.ok && isUnder(outer.dir, d) ? outer.walk : undefined;
     const a = d === outer.dir && !outer.walk.ok ? outer.walk : auditMemoryDir(d, top, i.userHome, i.maxSubtreeDirs, reuse);
-    if (a.ok) ctx.memoryDirs.push(d);
+    if (a.ok) {
+      ctx.memoryDirs.push(d);
+      for (const t of a.imports) if (!ctx.importTargets.includes(t)) ctx.importTargets.push(t);
+    }
     else ctx.memoryRefused.push({ dir: path.relative(top, d).split(path.sep).join('/') || '.', why: a.why });
   }
   fs.rmSync(i.outDir, { recursive: true, force: true });

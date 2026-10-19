@@ -1669,6 +1669,13 @@ components:
       leaving the repo refuse before lstat, % tokens and entity-encoded @
       refuse, an import still pending at depth 5 refuses; every .md in a skill
       tree (SKILL.md any case) is sanitized and written sanitized.
+      FOLLOW-UPS (Aegis F1-F3): symlinked dirs in the subtree are realpath'd
+      (outside the git top or into node_modules refuses); `dep-steering`
+      read-denies CLAUDE*.md and .claude/** under any node_modules (SBPL
+      regex + Read rules); every in-repo import target (existing or not) is a
+      write-deny literal (memoryImports, MAX_IMPORT_TARGETS) and the repo
+      context is staged before the policy; permission.ts deniedWrite matches
+      `steering`, so those writes are auto-denied with no card.
       M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the

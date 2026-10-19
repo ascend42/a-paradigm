@@ -158,6 +158,11 @@ export interface SessionPolicyInput {
    * loads a subdirectory's CLAUDE.md lazily.
    */
   memorySubtree?: string;
+  /**
+   * P8-D97 (Aegis F3): every in-repo `@` import target the memory audit resolved, existing or not. Each is a
+   * settings-class write-deny literal, so a session cannot plant or rewrite what an approved memory file imports.
+   */
+  memoryImports?: readonly string[];
 }
 
 /** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
@@ -255,6 +260,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     ...inp.managedSettingsPaths.map((m) => P(m, 'literal', 'settings')),
     ...[...roots, ...(inp.memoryDirs ?? [])].flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
     ...(inp.memorySubtree ? [P(inp.memorySubtree, 'steering', 'settings')] : []),
+    ...(inp.memoryImports ?? []).map((t) => P(t, 'literal', 'settings')),
   ];
   // T-2026-10-18-010: the WHOLE Gnomon home is read-denied (keys, the kernel log, other sessions, the device key,
   // the pin, generated plugins…); the session's own reads are carved back explicitly and checked here

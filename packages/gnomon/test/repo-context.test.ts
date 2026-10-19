@@ -520,6 +520,19 @@ describe('R1 (Aegis): the whole memory subtree is audited (Claude loads sub/CLAU
     expect(c.memoryDirs).toEqual([pkg]);
     expect(c.memoryRefused).toEqual([{ dir: '.', why: expect.stringMatching(/^other\/CLAUDE\.md: /) }]);
   });
+  it('F3: every in-repo import target (existing or not) is collected and becomes a write-deny literal', () => {
+    const w = world();
+    put(path.join(w.repo, 'CLAUDE.md'), '@docs/a.md @docs/missing.md\n');
+    put(path.join(w.repo, 'docs', 'a.md'), '@../b.md\n');
+    const c = buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out });
+    const want = [path.join(w.repo, 'b.md'), path.join(w.repo, 'docs', 'a.md'), path.join(w.repo, 'docs', 'missing.md')];
+    expect([...c.importTargets].sort()).toEqual(want);
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memoryImports: c.importTargets });
+    for (const t of want) expect(pol.denyWrite).toContainEqual({ path: t, match: 'literal', class: 'settings' });
+    // a refused dir contributes no targets
+    put(path.join(w.repo, 'CLAUDE.md'), '@docs/a.md @~/.ssh/x\n');
+    expect(buildRepoContext({ cwd: w.repo, userHome: w.home, outDir: w.out }).importTargets).toEqual([]);
+  });
   it('F2: the policy read-denies dependency-shipped memory (dep-steering) and mirrors it as Claude Read rules', () => {
     const w = world();
     const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: w.repo, userClaudeDir: path.join(w.home, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: w.repo });
