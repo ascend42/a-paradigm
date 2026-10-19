@@ -267,8 +267,9 @@ function fdSink(fd: number): TraceSink {
 /* ── secrets: span redaction on the decoded value ─────────────────────────── */
 
 const SECRET_SHAPES: ReadonlyArray<{ kind: string; re: RegExp }> = [
-  { kind: 'private-key', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g },
-  { kind: 'gnomon-read-token', re: /grt:v1:[A-Za-z0-9][^\s"'`<>]*/g },
+  // bodies are bounded to their own alphabets (Aegis N1): a bogus header or prefix redacts itself, never the command tail after it
+  { kind: 'private-key', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[A-Za-z0-9+/=\s]{0,16384}(?:-----END [A-Z0-9 ]*PRIVATE KEY-----)?/g },
+  { kind: 'gnomon-read-token', re: /grt:v1:[0-9A-Za-z]{1,26}(?:\.[A-Za-z0-9_-]{1,43})?/g },
   { kind: 'anthropic-key', re: /sk-ant-[A-Za-z0-9_-]{8,}/g },
   { kind: 'github-token', re: /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g },
   { kind: 'aws-key', re: /\bAKIA[0-9A-Z]{16}\b/g },
