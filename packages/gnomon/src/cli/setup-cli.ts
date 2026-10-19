@@ -50,7 +50,6 @@ import {
 } from '../kernel/identity/index.js';
 import { runPreflight, type PreflightCheck } from '../kernel/setup/preflight.js';
 import { SetupEndpoint, type SetupEndpointOptions, type SetupGrant } from '../kernel/setup/setup-endpoint.js';
-import { readIdentity } from '../kernel/identity/provision.js';
 import { channelLine, channelRefused } from './launch-tty.js';
 
 export const SETUP_EXIT_OK = 0;
