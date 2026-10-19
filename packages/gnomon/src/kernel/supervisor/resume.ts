@@ -9,16 +9,18 @@
  * signed rows (principal in kernelPrincipals AND a kernel key — the same trust the fuse restore uses):
  *   - a session whose `session.drained{uuid, reason:'upgrade'}` is followed by its `session.exited{reason:
  *     drain-clean | drain-interrupted}`, with no later `session.open` or `permit.reattributed` for it, is a
- *     resume candidate. Its exit closed its spawn, so the sweep never sees it (G-DMN-04 amended); the sweep
+ *     resume candidate (a kernel-signed `session.refused{resume}` for it also uses the record up: a refused
+ *     resume is TERMINAL, never re-planned on a later boot — Aegis L1). Its exit closed its spawn, so the sweep never sees it (G-DMN-04 amended); the sweep
  *     is also told the candidates' hsids (children.ts `resuming`) so a spawn of this boot is never swept.
  *   - a `session.drained` with no matching exit is NOT a candidate: the drain did not finish and its open
  *     spawn is swept as an orphan, never resumed.
  *   - every `approval.request` with no later `approval.decide` / `approval.expire` is a card an earlier kernel
  *     left pending. This broker never held it, so a decision against its id is refused NOT_FOUND{not-found}.
- * resumeAfterUpgrade() then, per candidate, runs SessionSupervisor.resume() — the ordinary spawn path with
- * `--resume <uuid>`, re-running law 7, layersHash, gitHash and the permit (re-attributed, never minted); a
- * failure leaves the session stopped with its session.refused row — and RETIRES every old pending card with
- * `approval.expire{why:'cancelled'}` (deny), so no GUI keeps a stale card id and no decision against one lands.
+ * resumeAfterUpgrade() first RETIRES every old pending card with `approval.expire{why:'cancelled'}` (deny;
+ * TD-2026-10-19-476 — retired BEFORE any session resumes, Aegis L6), so no GUI keeps a stale card id and no
+ * decision against one lands; then, per candidate, it runs SessionSupervisor.resume() — the ordinary spawn path
+ * with `--resume <uuid>`, re-running law 7, layersHash, gitHash and the permit (re-attributed with a fresh window
+ * if it was live at the drain, never minted); a failure leaves the session stopped with its session.refused row.
  * No kind is rebuilt from the log, because none is safe to rebuild there: the chain's approval.request row
  * carries the card, never the detail its effect needs (a `fallback` card's cwd and request live only in the
  * old process); a session-bound card's request died with its session; a `daemon-stop` card would stop a kernel
@@ -38,6 +40,8 @@ export interface ResumeRow {
   principal: string;
   keyId?: string;
   session?: string;
+  /** the row's chain time (`at`): the session.drained time decides the permit carry-over */
+  at?: string;
   payload: unknown;
 }
 
@@ -67,9 +71,9 @@ export interface ResumePlan {
 
 
 interface Track {
-  open?: { by: string; cwd: string; worktree?: string; model?: string; uuid: string };
+  open?: { by: string; principalClass: string; cwd: string; worktree?: string; model?: string; uuid: string };
   sandbox?: { layersHash: string; gitHash: string | null; permitId: string };
-  drained?: { id: string; uuid: string };
+  drained?: { id: string; uuid: string; at: string };
   exitReason?: string;
 }
 
@@ -102,7 +106,7 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
       case 'session.open':
         if (hsid && p.backend === 'claude-code' && typeof p.uuid === 'string' && typeof p.cwd === 'string' && typeof p.by === 'string') {
           // a later open of the same hsid is a resume (or a re-run): the drained record before it is consumed
-          by.set(hsid, { open: { by: p.by, cwd: p.cwd, uuid: p.uuid, ...(typeof p.worktree === 'string' ? { worktree: p.worktree } : {}), ...(typeof p.model === 'string' ? { model: p.model } : {}) } });
+          by.set(hsid, { open: { by: p.by, principalClass: typeof p.principalClass === 'string' ? p.principalClass : '', cwd: p.cwd, uuid: p.uuid, ...(typeof p.worktree === 'string' ? { worktree: p.worktree } : {}), ...(typeof p.model === 'string' ? { model: p.model } : {}) } });
         }
         break;
       case 'session.sandbox':
@@ -111,7 +115,7 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
       case 'session.drained':
         if (hsid && typeof p.uuid === 'string' && p.reason === 'upgrade') {
           const x = t(hsid);
-          x.drained = { id: r.id, uuid: p.uuid };
+          x.drained = { id: r.id, uuid: p.uuid, at: typeof r.at === 'string' ? r.at : '' };
           delete x.exitReason;
         }
         break;
@@ -120,6 +124,9 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
         break;
       case 'permit.reattributed':
         if (hsid) delete t(hsid).drained; // already resumed once: never twice
+        break;
+      case 'session.refused':
+        if (hsid && typeof p.resume === 'string') delete t(hsid).drained; // Aegis L1: a refused resume is terminal
         break;
       case 'approval.request': {
         const card = obj(p.card);
@@ -148,7 +155,7 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
     if (!x.open || x.open.uuid !== x.drained.uuid || !x.sandbox) continue; // nothing to resume from: left stopped
     const permit = grants.get(x.sandbox.permitId) ?? null;
     resume.push({
-      hsid, uuid: x.drained.uuid, drainedEventId: x.drained.id, outcome, principal: x.open.by, cwd: x.open.cwd,
+      hsid, uuid: x.drained.uuid, drainedEventId: x.drained.id, drainedAt: x.drained.at, outcome, principal: x.open.by, principalClass: x.open.principalClass, cwd: x.open.cwd,
       ...(x.open.worktree ? { worktree: x.open.worktree } : {}), ...(x.open.model ? { model: x.open.model } : {}),
       layersHash: x.sandbox.layersHash, gitHash: x.sandbox.gitHash, permit, ...(permit ? {} : { permitMissing: true }),
     });
@@ -170,22 +177,24 @@ export interface ResumeDeps {
 /** Resume every candidate and settle every card an earlier kernel left pending (never throws per item). */
 export async function resumeAfterUpgrade(plan: ResumePlan, deps: ResumeDeps): Promise<ResumeReport> {
   const out: ResumeReport = { resumed: [], refused: [], retired: [] };
+  // Aegis L6: the old kernel's cards are retired FIRST, so none is still pending while a session resumes
+  const broker = deps.broker;
+  if (broker) {
+    for (const card of plan.cards) {
+      try {
+        await broker.retireForeign(card, 'cancelled');
+        out.retired.push({ cardId: card.cardId, kind: card.kind });
+      } catch {
+        /* a card that cannot be settled stays as it was: this broker never holds it, so no decision lands on it */
+      }
+    }
+  }
   for (const c of plan.resume) {
     try {
       await deps.supervisor.resume(c);
       out.resumed.push({ hsid: c.hsid, uuid: c.uuid, outcome: c.outcome });
     } catch (err) {
       out.refused.push({ hsid: c.hsid, uuid: c.uuid, reason: (err as Error).message });
-    }
-  }
-  const broker = deps.broker;
-  if (!broker) return out;
-  for (const card of plan.cards) {
-    try {
-      await broker.retireForeign(card, 'cancelled');
-      out.retired.push({ cardId: card.cardId, kind: card.kind });
-    } catch {
-      /* a card that cannot be settled stays as it was: this broker never holds it, so no decision lands on it */
     }
   }
   return out;

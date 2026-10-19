@@ -38,10 +38,11 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig() {
+function rig(o: { failDrainInject?: boolean } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown>; session?: string }> = [];
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
+    if (o.failDrainInject && kind === 'session.inject' && payload.channel === 'drain' && payload.failed !== true) throw new Error('write failed');
     rows.push({ kind, payload, ...(ids.session ? { session: ids.session } : {}) });
   };
   const kernel = SoftwareEd25519Signer.generate('kernel');
@@ -122,6 +123,17 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: drain (T-2026-10-19-014 B1)', () =>
 
     // idempotent: a second drain is the first one
     expect(await r.sup.drain()).toBe(report);
+  });
+
+  it('Aegis L5: a failed drain interrupt write is logged session.inject{channel:drain, failed:true}, not swallowed', async () => {
+    const r = rig({ failDrainInject: true });
+    const busy = await r.open(holdWrite('req-busy'));
+    await r.sup.send(HUMAN, { hsid: busy.hsid, text: 'go' });
+    expect(await waitFor(() => r.broker.cards().some((c) => c.hsid === busy.hsid && c.state === 'pending'))).toBe(true);
+    const report = await r.sup.drain({ deadlineMs: 300 });
+    expect(report.sessions.map((s) => s.hsid)).toContain(busy.hsid);
+    const failed = r.rowsOf('session.inject', busy.hsid).filter((x) => x.payload.channel === 'drain');
+    expect(failed.map((x) => x.payload)).toEqual([{ hsid: busy.hsid, origin: 'kernel', channel: 'drain', deadlineMs: 300, deadlineSource: 'caller', failed: true }]);
   });
 
   it('a turn that reaches its boundary inside the deadline is recorded clean (no interrupt)', async () => {

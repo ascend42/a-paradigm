@@ -10,7 +10,10 @@
  *   - drained then exited ⇒ resumed (same hsid, `--resume <same uuid>`); drained with no exit ⇒ swept, never
  *     resumed (the planner + sweep half is test/resume-plan.test.ts, every platform);
  *   - the layers changed between drain and resume ⇒ stopped with session.refused{resume:'layers-changed'};
- *   - the permit no longer checks out (expired) ⇒ stopped with the refusal, nothing minted;
+ *   - carry-over ruling: a permit LIVE AT THE DRAIN but past its TTL at resume is re-attributed with a fresh window
+ *     (permit.reattributed{renewedByDrain:true, expiresAt}); one that expired BEFORE the drain is refused, and the
+ *     refusal is terminal (a later boot never re-plans it); nothing is minted either way;
+ *   - the old kernel's cards are retired BEFORE any session resumes (Aegis L6);
  *   - the permit is re-attributed (permit.reattributed citing the drained row), never minted (no permit.reserve /
  *     permit.grant for the session in the new kernel: the permit.* rows are counted);
  *   - no cached unlock survives (the new broker holds none);
@@ -54,7 +57,7 @@ type Row = ResumeRow & { payload: Record<string, unknown> };
 /** One kernel (supervisor + broker + fuse + children) writing into the shared, kernel-signed `rows`. */
 function kernel(rows: Row[], opts: { clock?: () => number } = {}) {
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
-    rows.push({ id: mintId('ev'), kind, principal: KERNEL, keyId: 'key:kernel', payload, ...(ids.session ? { session: ids.session } : {}) });
+    rows.push({ id: mintId('ev'), kind, principal: KERNEL, keyId: 'key:kernel', at: new Date((opts.clock ?? Date.now)()).toISOString(), payload, ...(ids.session ? { session: ids.session } : {}) });
   };
   const signer = SoftwareEd25519Signer.generate('kernel');
   const fuse = new BudgetFuse({ kernel: signer, logId: LOG_ID, log, billing: { env: () => ({}), layers: () => [] }, ...(opts.clock ? { clock: opts.clock } : {}) });
@@ -127,7 +130,13 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: resume after an upgrade (T-2026-10-
       // the permit: re-attributed once, citing the drained row; never reserved or granted again (count permit.*)
       const permitRows = r.rows.slice(boot).filter((x) => x.kind.startsWith('permit.') && (x.session === s.hsid || x.payload.hsid === s.hsid));
       expect(permitRows.map((x) => x.kind)).toEqual(['permit.reattributed']);
-      expect(permitRows[0]!.payload).toEqual({ permitId: r.of('session.sandbox', s.hsid).find((x) => typeof x.payload.permitId === 'string')!.payload.permitId, hsid: s.hsid, drainedEventId: r.of('session.drained', s.hsid)[0]!.id });
+      expect(permitRows[0]!.payload).toEqual({ permitId: r.of('session.sandbox', s.hsid).find((x) => typeof x.payload.permitId === 'string')!.payload.permitId, hsid: s.hsid, drainedEventId: r.of('session.drained', s.hsid)[0]!.id, renewedByDrain: true, expiresAt: expect.any(String) });
+      // L4: the class comes from the drained session's open row, recorded on the resumed open
+      expect(r.of('session.open', s.hsid, boot)[0]!.payload).toMatchObject({ principalClass: 'human' });
+      // L6: the old card was retired before this session resumed
+      const retiredAt = r.rows.findIndex((x, i) => i >= boot && x.kind === 'approval.expire' && x.payload.cardId === loose.cardId);
+      expect(retiredAt).toBeGreaterThanOrEqual(boot);
+      expect(retiredAt).toBeLessThan(r.rows.indexOf(permitRows[0]!));
       expect(r.rows.slice(boot).some((x) => x.kind === 'permit.reserve' || x.kind === 'permit.grant')).toBe(false);
       // --resume <the same uuid>
       expect(r.of('session.open', s.hsid, boot)[0]!.payload).toMatchObject({ uuid: uuidOf(s.hsid), resume: { drainedEventId: r.of('session.drained', s.hsid)[0]!.id } });
@@ -186,16 +195,36 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: resume after an upgrade (T-2026-10-
     expect(trace(w).some((t) => t.t === 'resume')).toBe(false);
   });
 
-  it('the permit no longer checks out (expired) ⇒ stopped with the refusal; nothing minted', async () => {
+  it('carry-over: a permit live at the drain but past its TTL at resume is re-attributed with a fresh window; nothing minted', async () => {
     const r = world();
     const { idle } = await drained(r);
     const boot = r.rows.length;
-    const fresh = kernel(r.rows, { clock: () => Date.now() + 2 * 60 * 60_000 });
+    const later = Date.now() + 2 * 60 * 60_000;
+    const fresh = kernel(r.rows, { clock: () => later });
     const report = await resumeAfterUpgrade(planResume(r.rows, TRUST), { supervisor: fresh.sup });
-    expect(report.resumed).toEqual([]);
+    expect(report.refused).toEqual([]);
+    expect(report.resumed.map((x) => x.hsid)).toContain(idle.hsid);
+    const permitRows = r.rows.slice(boot).filter((x) => x.kind.startsWith('permit.') && (x.session === idle.hsid || x.payload.hsid === idle.hsid));
+    expect(permitRows.map((x) => x.kind)).toEqual(['permit.reattributed']);
+    expect(permitRows[0]!.payload).toMatchObject({ renewedByDrain: true });
+    expect(Date.parse(permitRows[0]!.payload.expiresAt as string)).toBeGreaterThan(later);
+  });
+
+  it('a permit that expired BEFORE the drain is refused; the refusal is terminal; nothing minted', async () => {
+    const r = world();
+    const { idle } = await drained(r);
+    // the drain happened after the permit's expiry (the drained row's chain time moved past it)
+    const grant = r.rows.find((x) => x.kind === 'permit.grant' && (x.payload.permit as { hsid?: string }).hsid === idle.hsid)!;
+    const exp = Date.parse((grant.payload.permit as { expiresAt: string }).expiresAt);
+    r.of('session.drained', idle.hsid)[0]!.at = new Date(exp + 1000).toISOString();
+    const boot = r.rows.length;
+    const fresh = kernel(r.rows);
+    const report = await resumeAfterUpgrade(planResume(r.rows, TRUST), { supervisor: fresh.sup });
+    expect(report.resumed.map((x) => x.hsid)).not.toContain(idle.hsid);
     expect(report.refused.map((x) => x.hsid)).toContain(idle.hsid);
-    expect(r.of('session.refused', idle.hsid, boot)[0]!.payload).toMatchObject({ code: 'spawn_failed', refusal: 'PERMIT_REQUIRED' });
-    expect(r.rows.slice(boot).filter((x) => x.kind.startsWith('permit.'))).toEqual([]);
-    expect(trace(w).some((t) => t.t === 'resume')).toBe(false);
+    expect(r.of('session.refused', idle.hsid, boot)[0]!.payload).toMatchObject({ code: 'spawn_failed', refusal: 'PERMIT_REQUIRED', resume: 'permit-unfit' });
+    expect(r.rows.slice(boot).filter((x) => x.kind.startsWith('permit.') && (x.session === idle.hsid || x.payload.hsid === idle.hsid))).toEqual([]);
+    // L1: a later boot never re-plans the refused resume
+    expect(planResume(r.rows, TRUST).resume.map((c) => c.hsid)).not.toContain(idle.hsid);
   });
 });

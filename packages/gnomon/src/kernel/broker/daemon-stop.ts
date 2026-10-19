@@ -61,6 +61,8 @@ export class DaemonStopCards {
   readonly #onAccept: (reason: DaemonStopReason) => void;
   readonly #timeoutMs: number;
   #pending: string | null = null;
+  /** The reason of the pending (or raising) card: a request for a DIFFERENT reason never gets it (Aegis L2). */
+  #pendingReason: DaemonStopReason | null = null;
   /** The in-flight raise (Aegis L5): concurrent requests share it, so two at once still raise ONE card. */
   #raising: Promise<CardV1> | null = null;
 
@@ -77,8 +79,15 @@ export class DaemonStopCards {
     }
     if (!DAEMON_STOP_REASONS.includes(reason)) throw fail('BAD_REQUEST', 'bad-params', `reason must be one of ${DAEMON_STOP_REASONS.join(', ')}`);
     const open = this.#pending ? this.#broker.card(this.#pending) : undefined;
+    const inFlight = (open && open.state === 'pending') || this.#raising !== null;
+    // Aegis L2: one card at a time, and it answers ONE question — a request for another reason is refused, never
+    // handed a card that would do something else (a `stop` asker must not approve an upgrade, nor the reverse)
+    if (inFlight && this.#pendingReason !== reason) {
+      throw fail('BAD_REQUEST', 'bad-params', `a daemon-stop card for reason '${this.#pendingReason}' is already pending; decide it first`, { pendingReason: this.#pendingReason, ...(open && open.state === 'pending' ? { cardId: open.cardId } : {}) });
+    }
     if (open && open.state === 'pending') return open;
     if (this.#raising) return this.#raising;
+    this.#pendingReason = reason;
     const raising = this.#broker.raise({
       kind: 'daemon-stop',
       requestedBy: asker.principal,

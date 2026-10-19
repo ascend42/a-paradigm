@@ -892,8 +892,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // (drained + exited ⇒ resume; drained without an exit ⇒ the sweep's) and the cards the old kernel left pending
   const resumePlan = planResume(
     (function* (): Generator<ResumeRow> {
-      for (const v of log.read({ reader: { class: 'human' }, kinds: ['permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'approval.request', 'approval.decide', 'approval.expire'] })) {
-        if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), payload: v.event.payload };
+      for (const v of log.read({ reader: { class: 'human' }, kinds: ['permit.grant', 'permit.reattributed', 'session.open', 'session.sandbox', 'session.drained', 'session.exited', 'session.refused', 'approval.request', 'approval.decide', 'approval.expire'] })) {
+        if (v.view === 'full') yield { id: v.event.id, kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.session ? { session: v.event.session } : {}), at: v.event.at, payload: v.event.payload };
       }
     })(),
     { principals: kernelPrincipals, isKernelKey: (k) => log.isKernelKey(k) },

@@ -2538,6 +2538,19 @@ flows:
       refused FORBIDDEN{matrix, needs:'session.resume'}. The daemon exposes
       the run as handle.resume. Falsifiers: test/session-resume.test.ts
       (darwin), test/resume-plan.test.ts (every platform).
+      Aegis fixes (T-2026-10-19-014 B1+B2 review): M2 founder carry-over
+      ruling — BudgetFuse.reattribute() takes drainedAt + principal; a permit
+      live at the drain (drainedAt <= expiresAt) is re-signed under the same
+      permitId with a fresh window and permit.reattributed{..., renewedByDrain:
+      true, expiresAt}; expired-before-drain refuses; nothing minted
+      (test/budget-fuse.test.ts). L1 a kernel-signed session.refused{resume}
+      (RESUME_REFUSALS) is terminal in planResume. L2 DaemonStopCards
+      refuses a request whose reason differs from the pending card's
+      BAD_REQUEST{bad-params, pendingReason, cardId}. L3 principal checked in
+      reattribute (assertClaudePermit does not). L4 principalClass carried
+      from session.open (resume refuses non-human 'not-human'). L5 a failed
+      drain interrupt write logs session.inject{channel:'drain', failed:true}.
+      L6 resumeAfterUpgrade retires old cards BEFORE resuming.
       Original plan: A kernel update drains and resumes:
       the old kernel rides `gnomon daemon stop` with reason upgrade (no new
       verb), starts no new turn, drains each session to a turn boundary

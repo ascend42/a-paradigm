@@ -79,7 +79,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode } from '@a-company/gnomon-contracts';
+import { hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -136,7 +136,7 @@ export const DRAIN_INTERRUPT_GRACE_MS = 1_000;
  * IDLE with a visible "turn interrupted by update" note and never continues it (TD-2026-10-19-814 item 2;
  * probes/results/p-resume.darwin.json: a turn killed mid-tool re-issues the tool call on resume + continue).
  */
-export const DRAIN_EXIT_REASONS = Object.freeze({ clean: 'drain-clean', interrupted: 'drain-interrupted' } as const);
+export const DRAIN_EXIT_REASONS = Object.freeze({ clean: 'drain-clean', interrupted: 'drain-interrupted' } as const satisfies Record<string, DrainExitReason>);
 export type DrainOutcome = keyof typeof DRAIN_EXIT_REASONS;
 
 export interface DrainOptions {
@@ -169,8 +169,12 @@ export interface ResumeInput {
   hsid: string;
   uuid: string;
   drainedEventId: string;
+  /** the session.drained row's chain time: the carry-over ruling resumes a permit only if it was live then */
+  drainedAt: string;
   outcome: DrainOutcome;
   principal: string;
+  /** the opener's class from the drained session's session.open row (Aegis L4: never assumed) */
+  principalClass: string;
   cwd: string;
   worktree?: string;
   model?: string;
@@ -432,9 +436,11 @@ export class SessionSupervisor {
     if (typeof r.cwd !== 'string' || !path.isAbsolute(r.cwd) || !fs.existsSync(r.cwd) || !fs.statSync(r.cwd).isDirectory()) {
       return this.#refuse(r.hsid, 'spawn_failed', 'the drained session\'s cwd is gone', { resume: 'cwd-gone' });
     }
+    // Aegis L4: the class is carried from the session.open row; open() admits human-started sessions only, so must a resume
+    if (r.principalClass !== 'human') return this.#refuse(r.hsid, 'spawn_failed', 'only a human-started session is resumed', { resume: 'not-human', principalClass: r.principalClass });
     this.#opening++;
     try {
-      return await this.#spawnClaude({ principal: r.principal, principalClass: 'human', attended: true, cwd: r.cwd, ...(r.worktree ? { worktree: r.worktree } : {}), ...(r.model ? { model: r.model } : {}) }, r);
+      return await this.#spawnClaude({ principal: r.principal, principalClass: r.principalClass, attended: true, cwd: r.cwd, ...(r.worktree ? { worktree: r.worktree } : {}), ...(r.model ? { model: r.model } : {}) }, r);
     } finally {
       this.#opening--;
       this.#wake();
@@ -451,7 +457,7 @@ export class SessionSupervisor {
     const principalId = this.#principalFor(hsid);
     const uuid = r?.uuid ?? randomUUID();
     const userHome = this.#o.userHome ?? os.homedir();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid, ...(r ? { resume: { drainedEventId: r.drainedEventId, outcome: r.outcome } } : {}) }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid, principalClass: req.principalClass, ...(r ? { resume: { drainedEventId: r.drainedEventId, outcome: r.outcome } } : {}) }, { session: hsid });
     const row = claudeCodePlatform(this.#platform);
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
@@ -632,14 +638,16 @@ export class SessionSupervisor {
         if (permit) await this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
         fs.rmSync(dir, { recursive: true, force: true });
       }
-      if (err instanceof PreflightRefusal) return this.#refuse(hsid, err.code, err.message, err.data);
-      if (err instanceof LifecycleRefusal) return this.#refuse(hsid, 'spawn_failed', err.message, { sandbox: 'unavailable', ...err.detail });
-      if (err instanceof ManifestRefusal || err instanceof TypeError) return this.#refuse(hsid, 'spawn_failed', err.message);
+      // Aegis L1: every refusal of a resume names why (RESUME_REFUSALS); planResume reads the row as terminal
+      const rz = (cause: ResumeRefusal): Record<string, unknown> => (r ? { resume: cause } : {});
+      if (err instanceof PreflightRefusal) return this.#refuse(hsid, err.code, err.message, { ...rz(err.code === 'api_billing_refused' ? 'billing-refused' : 'spawn-failed'), ...err.data });
+      if (err instanceof LifecycleRefusal) return this.#refuse(hsid, 'spawn_failed', err.message, { sandbox: 'unavailable', ...rz('spawn-failed'), ...err.detail });
+      if (err instanceof ManifestRefusal || err instanceof TypeError) return this.#refuse(hsid, 'spawn_failed', err.message, rz('spawn-failed'));
       if (err instanceof RefusedError) {
-        await this.#o.log('session.refused', { hsid, code: 'spawn_failed', refusal: err.refusal.code }, { session: hsid }).catch(() => undefined);
+        await this.#o.log('session.refused', { hsid, code: 'spawn_failed', refusal: err.refusal.code, ...rz(err.refusal.code === 'PERMIT_REQUIRED' ? 'permit-unfit' : err.refusal.code === 'BILLING_REFUSED' ? 'billing-refused' : 'spawn-failed') }, { session: hsid }).catch(() => undefined);
         throw err;
       }
-      return this.#refuse(hsid, 'spawn_failed', (err as Error).message);
+      return this.#refuse(hsid, 'spawn_failed', (err as Error).message, rz('spawn-failed'));
     }
   }
 
@@ -1049,7 +1057,7 @@ export class SessionSupervisor {
   async #reattribute(r: ResumeInput): Promise<PermitV1> {
     if (!r.permit) throw new PreflightRefusal('spawn_failed', 'the drained session\'s permit is not on the chain', { resume: 'permit-missing' });
     if (!this.#o.fuse.reattribute) throw new PreflightRefusal('spawn_failed', 'this fuse cannot re-attribute a permit', { resume: 'permit-missing' });
-    return this.#o.fuse.reattribute(r.permit, { hsid: r.hsid, drainedEventId: r.drainedEventId });
+    return this.#o.fuse.reattribute(r.permit, { hsid: r.hsid, principal: r.principal, drainedEventId: r.drainedEventId, drainedAt: r.drainedAt });
   }
 
   #refuseIfDraining(verb: string): void {
@@ -1116,7 +1124,10 @@ export class SessionSupervisor {
 
   async #drainSession(s: Session, outcome: DrainOutcome, deadlineMs: number, deadlineSource: DrainReport['deadlineSource']): Promise<DrainRecord | null> {
     if (outcome === 'interrupted') {
-      await this.#write(s, controlInterruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() => undefined);
+      // Aegis L5: a failed interrupt write is recorded, never swallowed (the drain still proceeds: the stop below ends the turn)
+      await this.#write(s, controlInterruptLine(), { channel: 'drain', deadlineMs, deadlineSource }).catch(() =>
+        this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'drain', deadlineMs, deadlineSource, failed: true }, { session: s.hsid }).catch(() => undefined),
+      );
       await this.#until(() => s.state !== 'running' || s.turnPermits.length === 0, DRAIN_INTERRUPT_GRACE_MS);
     }
     if (s.state === 'exited') return null; // it ended by itself: its exit row is already written, there is nothing to resume

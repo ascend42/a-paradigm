@@ -54,7 +54,7 @@
  * Malformed, over-permit and grant-less rows count nothing. Permits are not
  * restored: a permit is live for its holder's connection; a restart ends it.
  */
-import { canonicalJson, mintId, refuse, RefusedError, type RefusalCode } from '@a-company/gnomon-contracts';
+import { canonicalJson, mintId, refuse, RefusedError, validateKindPayload, type RefusalCode } from '@a-company/gnomon-contracts';
 import type { Signer } from '../log/signer.js';
 import type { ApiTokenBilling } from '../broker/api-token.js';
 import { scanApiBilling, type BillingScanSource } from './billing.js';
@@ -314,21 +314,28 @@ export class BudgetFuse {
   }
 
   /**
-   * §2.4 rule 11 (TD-2026-10-19-908; T-2026-10-19-014 B2): re-attribute a drained session's spawn permit to its
-   * resumed session — NEVER a fresh mint (no permit.reserve, no permit.grant). The caller hands the permit object
-   * read back from the old kernel's KERNEL-signed permit.grant row. The checks of a spawn re-run: a claude-code
-   * session.spawn permit for exactly this hsid, subscription billing, not expired, this log, and law 7 (the
-   * billing scan, as reserve runs it). Any failure refuses PERMIT_REQUIRED / BILLING_REFUSED and nothing is held.
-   * On success the permit is live again under its own id and `permit.reattributed{permitId, hsid, drainedEventId}`
-   * is written (the row cites the session.drained row it rests on; chain write before the permit is usable).
+   * §2.4 rule 11 (TD-2026-10-19-908; T-2026-10-19-014 B2; founder carry-over ruling): re-attribute a drained
+   * session's spawn permit to its resumed session — NEVER a fresh mint (no permit.reserve, no permit.grant, the
+   * permitId is the old one). The caller hands the permit object read back from the old kernel's KERNEL-signed
+   * permit.grant row and the session.drained row's chain time. The checks of a spawn re-run: a claude-code
+   * session.spawn permit for exactly this hsid AND this principal (Aegis L3: assertClaudePermit does not check
+   * the principal), subscription billing, this log, and law 7 (the billing scan, as reserve runs it).
+   * Carry-over: the permit must have been LIVE AT THE DRAIN (drainedAt ≤ expiresAt); one that expired before the
+   * drain is refused. A carried-over permit gets a fresh expiry window (now + the permit TTL), re-signed by the
+   * kernel under the same permitId, and `permit.reattributed{permitId, hsid, drainedEventId, renewedByDrain:true,
+   * expiresAt}` records it (chain write before the permit is usable). Any failure refuses PERMIT_REQUIRED /
+   * BILLING_REFUSED and nothing is held.
    */
-  async reattribute(permit: PermitV1, p: { hsid: string; drainedEventId: string }): Promise<PermitV1> {
+  async reattribute(permit: PermitV1, p: { hsid: string; principal: string; drainedEventId: string; drainedAt: string }): Promise<PermitV1> {
     const unfit = (cause: string): RefusedError => fuseFail('PERMIT_REQUIRED', `the drained session's permit cannot be re-attributed: ${cause}`, { cause });
     if (!permit || permit.schemaVersion !== 'permit:v1' || typeof permit.permitId !== 'string') throw unfit('not-a-permit');
     if (permit.kind !== 'session.spawn' || permit.backend !== 'claude-code' || permit.hsid !== p.hsid || permit.scope?.session !== p.hsid) throw unfit('not-this-session');
+    if (permit.principal !== p.principal || permit.scope?.user !== p.principal) throw unfit('not-this-principal');
     if (permit.billing !== 'subscription') throw unfit('not-subscription');
     if (permit.log !== this.#o.logId) throw unfit('other-log');
-    if (!(Date.parse(permit.expiresAt) > this.#clock())) throw unfit('expired');
+    const drainedAt = Date.parse(p.drainedAt);
+    const expiresAt = Date.parse(permit.expiresAt);
+    if (!Number.isFinite(drainedAt) || !Number.isFinite(expiresAt) || !(drainedAt <= expiresAt)) throw unfit('expired-before-drain');
     const live = this.#permits.get(permit.permitId);
     if (live && !live.released) throw unfit('already-live');
     const hits = scanApiBilling(this.#o.billing);
@@ -336,16 +343,23 @@ export class BudgetFuse {
       await this.#o.log('billing.api.refused', { where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }).catch(() => undefined);
       throw fuseFail('BILLING_REFUSED', 'resume refused: an API-billing path would bill credits (law 7)', { dimension: 'api-billing-path', hits: hits.map((h) => ({ where: h.where, key: h.key })) });
     }
-    const held: Held = { permit, released: false, used: live?.used ?? { tokens: 0, usd: 0 }, over: live?.over ?? false };
-    this.#permits.set(permit.permitId, held);
+    // the fresh window: same permitId, re-signed by the kernel (not a mint — no grant row, no new id)
+    const { sig: _old, ...rest } = permit;
+    const unsigned: Omit<PermitV1, 'sig'> = { ...rest, expiresAt: new Date(this.#clock() + (this.#o.permitTtlMs ?? 60 * 60_000)).toISOString() };
+    const renewed: PermitV1 = { ...unsigned, sig: Buffer.from(this.#o.kernel.sign('permit', canonicalJson(unsigned))).toString('base64') };
+    const payload = { permitId: renewed.permitId, hsid: p.hsid, drainedEventId: p.drainedEventId, renewedByDrain: true as const, expiresAt: renewed.expiresAt };
+    const errors = validateKindPayload('permit.reattributed', payload);
+    if (errors.length) throw unfit('bad-row');
+    const held: Held = { permit: renewed, released: false, used: live?.used ?? { tokens: 0, usd: 0 }, over: live?.over ?? false };
+    this.#permits.set(renewed.permitId, held);
     try {
-      await this.#o.log('permit.reattributed', { permitId: permit.permitId, hsid: p.hsid, drainedEventId: p.drainedEventId }, { session: p.hsid });
+      await this.#o.log('permit.reattributed', payload, { session: p.hsid });
     } catch (err) {
-      if (live) this.#permits.set(permit.permitId, live);
-      else this.#permits.delete(permit.permitId); // never a live permit without its row
+      if (live) this.#permits.set(renewed.permitId, live);
+      else this.#permits.delete(renewed.permitId); // never a live permit without its row
       throw err;
     }
-    return permit;
+    return renewed;
   }
 
   permit(permitId: string): PermitV1 | undefined {

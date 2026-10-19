@@ -49,4 +49,22 @@ describe('§2.4 rule 4 amended (G-DMN-04): drained-without-exit is swept, never 
     expect(orphaned.map((o) => o.hsid)).toEqual([hsidA]);
     expect(res.orphans).toBe(1);
   });
+
+  it('Aegis L1: a kernel-signed session.refused{resume} uses the record up (terminal); L4: the open row\'s class is carried', () => {
+    const rows: Row[] = [
+      k('session.open', { hsid: hsidB, by: HUMAN, principalClass: 'human', cwd: '/x', backend: 'claude-code', uuid }, hsidB),
+      k('permit.grant', { permit: { ...permit, hsid: hsidB } }),
+      k('session.sandbox', { hsid: hsidB, layersHash: 'sha256:aa', gitHash: 'sha256:bb', permitId: permit.permitId }, hsidB),
+      { ...k('session.drained', { uuid, reason: 'upgrade' }, hsidB), at: '2026-10-19T10:00:00.000Z' },
+      k('session.exited', { hsid: hsidB, reason: 'drain-clean' }),
+    ];
+    const [c] = planResume(rows, TRUST).resume;
+    expect(c).toMatchObject({ hsid: hsidB, principalClass: 'human', drainedAt: '2026-10-19T10:00:00.000Z' });
+    // a forged refusal (not kernel-signed) changes nothing; the kernel's own does
+    expect(planResume([...rows, { ...k('session.refused', { hsid: hsidB, code: 'spawn_failed', resume: 'cwd-gone' }, hsidB), keyId: 'key:other' }], TRUST).resume).toHaveLength(1);
+    expect(planResume([...rows, k('session.refused', { hsid: hsidB, code: 'spawn_failed', resume: 'layers-changed' }, hsidB)], TRUST).resume).toEqual([]);
+    // an open row without a class plans with '' (the resume then refuses not-human: never assumed 'human')
+    const noClass = rows.map((x) => (x.kind === 'session.open' ? { ...x, payload: { ...x.payload, principalClass: undefined } } : x));
+    expect(planResume(noClass, TRUST).resume[0]!.principalClass).toBe('');
+  });
 });
