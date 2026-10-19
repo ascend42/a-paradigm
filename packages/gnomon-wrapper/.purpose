@@ -24,7 +24,7 @@ components:
       window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the
       GUI reads to declare hello surface wrapper and drop the extension-risk
       badge (display only). Hardened runtime with an EMPTY entitlements set.
-      Double-click flow (src/main.rs): the app spawns `node <dist>/cli/gnomon.js
+      Double-click flow (src/main.rs): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js
       up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR
       SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*). Trust root (Aegis
       C1, src/tree.rs shared with build.rs): the build records the node path

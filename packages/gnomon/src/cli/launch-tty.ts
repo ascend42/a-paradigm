@@ -200,6 +200,13 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
  */
 export const WRAPPER_CHANNEL = 'gnomon-wrapper-channel:v1';
 
+/**
+ * The next step for an `unsafe-env` refusal in --wrapper mode: the APP spawned
+ * this process (it passes `--disable-sigusr1` first and only, with no
+ * NODE_OPTIONS), so the fix is the app's, not a command line the user types.
+ */
+export const WRAPPER_UNSAFE_ENV_NEXT = 'Gnomon.app spawns its kernel as `node --disable-sigusr1 <gnomon.js> up --wrapper` with a clean env; this app predates that or was modified: rebuild it (node packages/gnomon-wrapper/scripts/build-darwin.mjs) and reopen';
+
 /** What an fd-backed stream is (a stream with no fd is in-memory: only tests build one; the CLI passes process stdio). */
 export function channelKind(s: { fd?: unknown; isTTY?: boolean }): 'pipe' | 'socket' | 'tty' | 'file' | 'other' | 'in-memory' {
   if (s.isTTY === true) return 'tty';

@@ -1,5 +1,5 @@
 //! #gnomon-wrapper kernel child (spec §2.4 rule 7 `gnomon up`, §11.2 rule 2; M1.13).
-//! Gnomon.app runs `node <pkg>/dist/cli/gnomon.js up --wrapper` as a supervised
+//! Gnomon.app runs `node --disable-sigusr1 <pkg>/dist/cli/gnomon.js up --wrapper` as a supervised
 //! child: the same hardened in-process path as `gnomon up` in a terminal
 //! (openHardwareIdentity, the unsafe-env refusal), with
 //!   - a CLEAN environment: env_clear, then only HOME USER LOGNAME LANG TMPDIR
@@ -84,9 +84,15 @@ pub fn child_env(from: &[(String, String)], node: &Path) -> Vec<(String, String)
     env
 }
 
-/// The argv after node: `<gnomon.js> up --wrapper` (or `dev up --home <h> --wrapper` for the dev rig).
+/// The node flags, FIRST and ONLY (T-2026-10-18-030): the kernel's unsafeRuntime REQUIRES
+/// `--disable-sigusr1` (a same-user SIGUSR1 would otherwise open the V8 inspector in the
+/// process that holds the keys) and refuses every other flag. Never optional for --wrapper.
+pub const NODE_FLAGS: [&str; 1] = ["--disable-sigusr1"];
+
+/// The argv after node: `--disable-sigusr1 <gnomon.js> up --wrapper` (or `… dev up --home <h> --wrapper` for the dev rig).
 pub fn child_args(gnomon_js: &Path, dev_home: Option<&Path>) -> Vec<String> {
-    let mut a = vec![gnomon_js.display().to_string()];
+    let mut a: Vec<String> = NODE_FLAGS.iter().map(|s| s.to_string()).collect();
+    a.push(gnomon_js.display().to_string());
     match dev_home {
         Some(h) => a.extend(["dev".into(), "up".into(), "--home".into(), h.display().to_string(), "--wrapper".into()]),
         None => a.extend(["up".into(), "--wrapper".into()]),
@@ -125,9 +131,15 @@ mod tests {
     #[test]
     fn falsifier_argv_carries_no_secret_and_names_the_wrapper_mode() {
         let a = child_args(Path::new("/r/packages/gnomon/dist/cli/gnomon.js"), None);
-        assert_eq!(a, vec!["/r/packages/gnomon/dist/cli/gnomon.js", "up", "--wrapper"]);
+        assert_eq!(a, vec!["--disable-sigusr1", "/r/packages/gnomon/dist/cli/gnomon.js", "up", "--wrapper"]);
         let c = child_command(Path::new("/usr/bin/true"), Path::new("/g.js"), None, &env(), Stdio::null());
         let args: Vec<String> = c.get_args().map(|s| s.to_string_lossy().to_string()).collect();
+        // the spawn's args START with --disable-sigusr1, and it is the only node flag (everything before the script)
+        assert_eq!(args.first().map(String::as_str), Some("--disable-sigusr1"));
+        let script = args.iter().position(|x| x == "/g.js").unwrap();
+        assert_eq!(&args[..script], &["--disable-sigusr1".to_string()]);
+        let dev = child_args(Path::new("/g.js"), Some(Path::new("/h")));
+        assert_eq!(dev, vec!["--disable-sigusr1", "/g.js", "dev", "up", "--home", "/h", "--wrapper"]);
         assert!(args.iter().all(|x| !x.contains("launch") && !x.contains("token")));
         let envs: Vec<String> = c.get_envs().map(|(k, _)| k.to_string_lossy().to_string()).collect();
         assert!(!envs.iter().any(|k| k == "NODE_OPTIONS" || k.starts_with("GNOMON_") || k.starts_with("DYLD_")), "{envs:?}");

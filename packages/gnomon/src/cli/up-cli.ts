@@ -42,7 +42,7 @@ import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
 import { isDevHome } from './dev-home.js';
-import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
+import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 import { canConnectSocket, daemonState, isLifecycleRefusal, resolveGnomonHome, selectSocketPath, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
 import {
   IdentityError,
@@ -232,7 +232,7 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
     }
   }
   const unsafe = unsafeRuntime(deps.runtime);
-  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper);
+  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js up`, with no other node flags']), wrapper);
   let k: UpKernel;
   try {
     const { home, isDefault } = resolveUpHome(given, deps.userHome);

@@ -1,7 +1,7 @@
 //! #gnomon-wrapper app: Gnomon.app (spec §11.1; M1.13, P8-D56). Double-click and
 //! it runs:
 //!   1. one window on the bundled status page ("starting the kernel");
-//!   2. the kernel child `node <dist>/cli/gnomon.js up --wrapper` (kernel.rs:
+//!   2. the kernel child `node --disable-sigusr1 <dist>/cli/gnomon.js up --wrapper` (kernel.rs:
 //!      clean env, node from the local config pin or the build record), its
 //!      stderr appended to ~/Library/Logs/Gnomon/kernel.log (0600);
 //!   3. on the channel's `up`, a `launch` request; on the grant, the native

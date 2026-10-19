@@ -13,7 +13,7 @@ import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
 import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
-import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
+import { attachInProcess, channelRefused, serveInProcess, serveWrapperChannel, unsafeRuntime, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 
 export type DevCliIo = LaunchTtyIo;
 
@@ -128,7 +128,7 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
   // Aegis C1 (the same rule as gnomon up): the kernel runs in THIS process, so the process must be clean
   const unsafe = unsafeRuntime(opts.runtime);
   if (unsafe) {
-    say('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js dev up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js dev up`, with no other node flags']);
+    say('unsafe-env', unsafe, wrapper ? [WRAPPER_UNSAFE_ENV_NEXT] : ['unset NODE_OPTIONS, and run `<clone>/packages/gnomon/dist/cli/gnomon.js dev up` (its shebang passes --disable-sigusr1) or `node --disable-sigusr1 <clone>/packages/gnomon/dist/cli/gnomon.js dev up`, with no other node flags']);
     return DEV_EXIT_REFUSED;
   }
   let k: DevKernel;

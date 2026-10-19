@@ -73,7 +73,19 @@ fn native_preflight_against_a_live_dev_kernel() {
             assert!(t != "refused" && t != "launch-failed", "kernel refused: {p:?}");
         }
     };
+    // `up` arrives only after the kernel's unsafeRuntime guard passed: the app's spawn
+    // (--disable-sigusr1 first and only, no NODE_OPTIONS) is what the hardened kernel requires
     next("up");
+    // FALSIFIER: the same spawn WITHOUT the flag is refused unsafe-env on the channel
+    let bare = Command::new(node).arg(js).args(["dev", "up", "--home"]).arg(&dev_home).arg("--wrapper").env_clear().env("HOME", &d).env("PATH", "/usr/bin:/bin").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).output().unwrap();
+    let first = String::from_utf8_lossy(&bare.stdout).lines().next().unwrap_or("").to_string();
+    match parse_line(&first) {
+        Ok(ChannelLine::Refused { reason, next, .. }) => {
+            assert_eq!(reason, "unsafe-env");
+            assert!(next.iter().any(|n| n.contains("rebuild it")), "{next:?}");
+        }
+        other => panic!("a spawn without --disable-sigusr1 must be refused, got {other:?}"),
+    }
     stdin.write_all(b"launch\n").unwrap();
     let ChannelLine::Launch(g) = next("launch") else { unreachable!() };
 

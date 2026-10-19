@@ -356,7 +356,7 @@ surface has no extensions. `status.guiSessions[].surface` reads `wrapper`.
 
 Notes:
 
-- The kernel child is `node gnomon.js up --wrapper`. The launch token travels
+- The kernel child is `node --disable-sigusr1 gnomon.js up --wrapper` (the flag first and only, no NODE_OPTIONS, as the hardened kernel requires). The launch token travels
   only on the pipe between the app and that child: never on argv, in the
   environment, in a file or in a log. `gnomon up --wrapper` refuses to start
   (`REFUSED  UP  wrapper-channel`) when its stdout or stdin is a terminal or a

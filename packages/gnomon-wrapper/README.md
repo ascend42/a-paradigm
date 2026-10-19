@@ -9,7 +9,7 @@ is macOS (WKWebView). Windows (WebView2) comes in the parity phase.
 Double-click Gnomon.app and:
 
 1. A window opens on the app's bundled status page ("starting the kernel").
-2. The app runs `node <checkout>/packages/gnomon/dist/cli/gnomon.js up --wrapper`
+2. The app runs `node --disable-sigusr1 <checkout>/packages/gnomon/dist/cli/gnomon.js up --wrapper`
    as a supervised child. This is the same hardened in-process path as
    `gnomon up` in a terminal: the hardware identity via the signed helper, and
    a refusal of `NODE_OPTIONS` or any node flag. The child gets a clean

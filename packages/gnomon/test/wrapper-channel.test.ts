@@ -25,14 +25,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { channelKind, wrapperChannelProblem } from '../src/cli/launch-tty.js';
+import { channelKind, WRAPPER_UNSAFE_ENV_NEXT, wrapperChannelProblem } from '../src/cli/launch-tty.js';
 import { runDevCommand } from '../src/cli/dev-cli.js';
 import { runUpCommand } from '../src/cli/up-cli.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { privateTmpRoot } from './daemon-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 
-const CLEAN = { env: {}, execArgv: [] as string[] };
+const CLEAN = { env: {}, execArgv: ['--disable-sigusr1'] as string[] };
 const TOKEN_RE = /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -132,8 +132,9 @@ describe('#gnomon-wrapper channel (in-process)', () => {
   it('FALSIFIER: an unsafe runtime is refused on the channel too (the app shows why it did not start)', async () => {
     const w = world();
     const c = channel();
-    expect(await runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: { env: { NODE_OPTIONS: '--require x' }, execArgv: [] } })).toBe(1);
-    expect(await c.next('refused')).toMatchObject({ reason: 'unsafe-env' });
+    expect(await runUpCommand(['--wrapper'], c, { userHome: w.userHome, runtime: { env: { NODE_OPTIONS: '--require x' }, execArgv: ['--disable-sigusr1'] } })).toBe(1);
+    const r = await c.next('refused');
+    expect(r).toMatchObject({ reason: 'unsafe-env', next: [WRAPPER_UNSAFE_ENV_NEXT] }); // the fix is the app's, not a command line
   });
 });
 
@@ -157,6 +158,8 @@ describe('#gnomon-wrapper channel kinds', () => {
 const CLI = path.join(PKG_ROOT, 'dist', 'cli', 'gnomon.js');
 /** The env the app gives its kernel child (gnomon-wrapper src/kernel.rs child_env): an allowlist, no NODE_OPTIONS. */
 const APP_ENV = (home: string): Record<string, string> => ({ HOME: home, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8' });
+/** The node flags the app passes (gnomon-wrapper src/kernel.rs NODE_FLAGS): `--disable-sigusr1`, first and only. */
+const APP_NODE_FLAGS = ['--disable-sigusr1'];
 
 /** Every process's argv + env, as one string (ps -E on macOS, ps e on Linux; own-user processes show env). */
 function psAll(): string {
@@ -207,7 +210,7 @@ describe('#gnomon-wrapper channel (real process, no token on any argv or env)', 
     expect(seen, 'control on argv').toContain(ctlArgv);
     if (process.platform === 'darwin' || process.platform === 'linux') expect(seen, 'control in env').toContain(ctlEnv);
 
-    const child = spawn(process.execPath, [CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [...APP_NODE_FLAGS, CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', 'pipe', 'pipe'] });
     cleanups.push(() => child.kill('SIGKILL'));
     let err = '';
     child.stderr!.setEncoding('utf8').on('data', (s: string) => (err += s));
@@ -228,13 +231,23 @@ describe('#gnomon-wrapper channel (real process, no token on any argv or env)', 
     expect(code).toBe(0);
   }, 60_000);
 
+  it('FALSIFIER (T-2026-10-18-030): spawned WITHOUT --disable-sigusr1 the child refuses unsafe-env on the channel, naming the app rebuild', async () => {
+    expect(fs.existsSync(CLI)).toBe(true);
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    const r = spawnSync(process.execPath, [CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', 'pipe', 'pipe'], input: '', encoding: 'utf8', timeout: 20_000 });
+    expect(r.status).toBe(1);
+    const lines = r.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines).toEqual([{ v: 1, t: 'refused', code: 'dev', reason: 'unsafe-env', message: expect.stringContaining('--disable-sigusr1'), next: [WRAPPER_UNSAFE_ENV_NEXT] }]);
+  }, 30_000);
+
   it('FALSIFIER: stdout redirected to a file is refused wrapper-channel; no kernel starts and the file holds no token', async () => {
     expect(fs.existsSync(CLI)).toBe(true);
     const w = world();
     expect(await runDevCommand(['init', '--home', w.devHome], quiet(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
     const file = path.join(w.userHome, 'leak.txt');
     const fd = fs.openSync(file, 'w', 0o600);
-    const r = spawnSync(process.execPath, [CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', fd, 'pipe'], input: 'launch\n', encoding: 'utf8', timeout: 20_000 });
+    const r = spawnSync(process.execPath, [...APP_NODE_FLAGS, CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', fd, 'pipe'], input: 'launch\n', encoding: 'utf8', timeout: 20_000 });
     fs.closeSync(fd);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('wrapper-channel');
