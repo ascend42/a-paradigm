@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider } from '../src/kernel/broker/index.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
-import { effectiveInstall, linkedFolders, readGrants, removeTree } from '../src/kernel/manifest/index.js';
+import { appendGrantRow, effectiveInstall, linkedFolders, readGrants, removeTree } from '../src/kernel/manifest/index.js';
 import { isUserPaused, MAX_PICKUP_CARDS, MAX_PICKUP_READS, MAX_STAGED_BYTES, pendingStaged, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { runModCommand } from '../src/cli/mod-cli.js';
@@ -159,7 +159,8 @@ describe('the pickup raises staged cards through the real broker', () => {
     const card = b.broker.card(cardId)!;
     expect(card.kind).toBe('install');
     expect(card.state).toBe('pending');
-    expect(rows.find((r) => r.kind === 'manifest.staged')?.payload).toMatchObject({ name: 'hello', cardId, via: 'cli' });
+    expect(rows.find((r) => r.kind === 'manifest.staged')?.payload).toMatchObject({ name: 'hello', cardId, via: 'cli', claimed: { by: `p:${t.auth.ns}/cli` } });
+    expect(rows.find((r) => r.kind === 'manifest.staged')?.payload.by).toBeUndefined(); // never logged as a fact
     await p.scan(); // never raised twice
     expect(b.rows.filter((r) => r.kind === 'approval.request')).toHaveLength(1);
     await b.broker.approve(H, { cardId, decision: 'install', decisionSig: b.sig(cardId, 'install', card.contentHash) });
@@ -336,6 +337,48 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const g = readGrants(t.home, t.auth);
     expect(effectiveInstall(g, 'hello')).toBeUndefined();
     expect(g.rejected.map((r) => r.reason)).toContain('replay');
+  });
+
+  it('Aegis round 3: a backwards clock step between install and uninstall still applies the uninstall; two pins with the same now both apply', () => {
+    const t = setup();
+    const at = new Date(Date.UTC(2026, 9, 19, 12));
+    const pin = (packageHash: string, now: Date, kind: 'grant.install' | 'grant.uninstall' = 'grant.install') =>
+      kind === 'grant.install'
+        ? appendGrantRow(t.home, t.auth, { kind, name: 'hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package' }, now)
+        : appendGrantRow(t.home, t.auth, { kind, name: 'hello', packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZB' }, now);
+    const A = `sha256:${'a'.repeat(64)}`;
+    const B = `sha256:${'b'.repeat(64)}`;
+    pin(A, at);
+    pin(B, at); // same millisecond
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')?.packageHash).toBe(B);
+    pin(B, new Date(at.getTime() - 3_600_000), 'grant.uninstall'); // the clock stepped back an hour
+    const g = readGrants(t.home, t.auth);
+    expect(effectiveInstall(g, 'hello')).toBeUndefined();
+    expect(g.rejected).toEqual([]);
+  });
+
+  it('Aegis round 3 falsifier: a pin row the reader would not resolve is refused after the write, so no caller reports it applied', () => {
+    const t = setup();
+    expect(() => appendGrantRow(t.home, t.auth, { kind: 'grant.install', name: 'hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'a'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package', createdAt: 'not-a-date' })).toThrow(/did not take effect/);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
+  });
+
+  it('Aegis round 3: junk staged files are remembered by stamp, so 64 of them cannot starve a real card', async () => {
+    const t = setup();
+    // MAX_PICKUP_READS junk files spread over mods listed before `hello` (at most MAX_PICKUP_CARDS listed per mod)
+    for (let i = 0; i < MAX_PICKUP_READS; i++) {
+      const d = path.join(t.home, 'mods', `aa${Math.floor(i / MAX_PICKUP_CARDS)}`, 'staged');
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, `card-01H${'Z'.repeat(21)}${String(i).padStart(2, '0')}.json`), i % 2 ? 'not json' : '{"schemaVersion":"other"}');
+    }
+    await t.run(['install', t.copy()]);
+    const real = pendingStaged(t.home).find((p) => p.name === 'hello')!;
+    const b = brokerRig(t.auth);
+    const p = new StagedCardPickup({ home: t.home, broker: b.broker, authority: t.auth, host: fakeHost() });
+    await p.scan(); // the budget goes on the junk once
+    expect(b.broker.card(real.cardId)).toBeUndefined(); // the falsifier has teeth: the first scan read only junk
+    await p.scan(); // junk is skipped on its stamp; the real card is read and raised
+    expect(b.broker.card(real.cardId)?.state).toBe('pending');
   });
 
   it('falsifier: an uninstall card denied leaves the install; a stale request (the pin moved) is dropped without a card', async () => {

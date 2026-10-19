@@ -217,10 +217,14 @@ export interface PendingStaged extends StagedEntry {
   record: StagedRecord;
 }
 
-/** Every still-pending staged install card (the CLI's list/status view; at most MAX_PICKUP_READS records read). */
-export function pendingStaged(home: string): PendingStaged[] {
+/**
+ * Every still-pending staged install card: the CLI's one-shot list/status view
+ * (reads up to every listed file, MAX_LISTED x MAX_STAGED_BYTES; the KERNEL's
+ * periodic scan never calls this and keeps its per-scan MAX_PICKUP_READS budget).
+ */
+export function pendingStaged(home: string, maxReads = MAX_LISTED): PendingStaged[] {
   const out: PendingStaged[] = [];
-  for (const e of listStaged(home).slice(0, MAX_PICKUP_READS)) {
+  for (const e of listStaged(home).slice(0, maxReads)) {
     const record = readStagedEntry(e);
     if (record) out.push({ ...e, record });
   }
@@ -326,7 +330,9 @@ export class StagedCardPickup {
             if (decision !== 'allow') return;
             const now = effectiveInstall(readGrants(home, authority), name);
             if (!now || now.packageHash !== row.packageHash) return; // re-pinned meanwhile: nothing to remove
+            // throws unless the row is the effective pin (grants.ts read-back): then the card stays pending, nothing is reported
             appendGrantRow(home, authority, { kind: 'grant.uninstall', name, packageHash: row.packageHash, cardId });
+            if (effectiveInstall(readGrants(home, authority), name)) throw new ManifestRefusal('GRANT', `the uninstall of ${name} did not take effect`, { name });
             await host.stop(name, 'uninstalled').catch(() => undefined);
             emit('manifest.uninstall', { name, diff: { removed: [row.packageHash] }, manifestHash: row.manifestHash });
             if (source.startsWith('linked:')) emit('mod.unlinked', { name });
@@ -371,7 +377,12 @@ export class StagedCardPickup {
       if (this.#raised.size >= MAX_PICKUP_CARDS || reads >= MAX_PICKUP_READS) break;
       reads++;
       const record = readStagedEntry(e);
-      if (!record) continue;
+      if (!record) {
+        // Aegis round 3: junk (unreadable, unparsable, not a pending record) is remembered by stamp, so it cannot eat the read budget again
+        if (this.#refused.size >= MAX_PICKUP_REFUSED) this.#refused.delete(this.#refused.keys().next().value!);
+        this.#refused.set(e.cardId, e.stamp);
+        continue;
+      }
       const p = { ...e, record };
       try {
         await raiseInstallCard(this.#o.broker, {
@@ -391,7 +402,8 @@ export class StagedCardPickup {
         this.#raised.add(p.cardId);
         if (!this.#o.alreadyLogged?.(p.cardId)) {
           const d = p.record.detail;
-          emit('manifest.staged', { name: d.name, cardId: p.cardId, manifestHash: d.manifestHash, packageHash: d.packageHash, source: d.source, by: d.stagedBy, ...(d.hsid ? { hsid: d.hsid } : {}), via: 'cli' });
+          // by / hsid come from the writable staged file: logged as claims (Aegis round 3)
+          emit('manifest.staged', { name: d.name, cardId: p.cardId, manifestHash: d.manifestHash, packageHash: d.packageHash, source: d.source, claimed: { by: d.stagedBy, ...(d.hsid ? { hsid: d.hsid } : {}) }, via: 'cli' });
         }
       } catch (err) {
         if (this.#refused.size >= MAX_PICKUP_REFUSED) this.#refused.delete(this.#refused.keys().next().value!);

@@ -258,8 +258,29 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
  * egress host or a knowledge+egress pairing is refused before signing), then
  * signed by the authority — which refuses UNSUPPORTED until M1.3 in production.
  */
+/** The newest accepted pin row's createdAt (ms) for a mod, by the reader's own rule (accepted pins are strictly increasing). */
+export function newestPinMs(grants: ResolvedGrants, name: string): number | undefined {
+  let newest: number | undefined;
+  for (const r of grants.pins) {
+    if (r.name !== name) continue;
+    const t = Date.parse(r.createdAt);
+    if (newest === undefined || t > newest) newest = t;
+  }
+  return newest;
+}
+
+const isPin = (r: GrantRow): r is GrantInstallRow | GrantUninstallRow => r.kind === 'grant.install' || r.kind === 'grant.uninstall';
+
 export function appendGrantRow(home: string, authority: RootAuthority, input: GrantRowInput, now: Date = new Date()): GrantRow {
-  const row = { schemaVersion: GRANT_ROW_SCHEMA, createdAt: input.createdAt ?? now.toISOString(), ...input } as GrantRow;
+  const row = { schemaVersion: GRANT_ROW_SCHEMA, ...input, createdAt: input.createdAt ?? now.toISOString() } as GrantRow;
+  if (isPin(row)) {
+    // Aegis round 3: the reader rejects a pin row not newer than the last one for that mod (replay, C1). A clock step
+    // back or two rows in one millisecond must never turn a legitimate pin into a "replay": createdAt is
+    // max(now, newest + 1 ms) by the reader's exact rule, and the result is read back below.
+    const newest = newestPinMs(readGrants(home, authority), row.name);
+    const t = Date.parse(row.createdAt);
+    if (newest !== undefined && !(Number.isFinite(t) && t > newest)) row.createdAt = new Date(newest + 1).toISOString();
+  }
   const bad = checkGrantRow(row);
   if (bad) {
     throw new ManifestRefusal(bad.startsWith('egress') ? 'EGRESS' : 'GRANT', `refusing to sign an invalid ${String(row.kind)} row (${bad})`, { rowCheck: bad });
@@ -278,6 +299,13 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
+  }
+  if (isPin(row)) {
+    // the pin must be the effective one now, or the caller must not act as if it were
+    const last = readGrants(home, authority).pins.filter((r) => r.name === row.name).at(-1);
+    if (!last || last.kind !== row.kind || last.createdAt !== row.createdAt || last.cardId !== row.cardId || last.packageHash !== row.packageHash) {
+      throw new ManifestRefusal('GRANT', `the ${row.kind} row for ${row.name} did not take effect (the grant reader did not resolve it as the effective pin)`, { name: row.name });
+    }
   }
   return row;
 }

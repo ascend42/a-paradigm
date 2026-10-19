@@ -1786,7 +1786,11 @@ components:
       start.request (operator start, lifts DOWN); uninstall writes
       uninstall.request naming the pin, the pickup raises a root-class
       `grant` card (allow|deny) whose allow appends a root-signed
-      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input),
+      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input;
+      pin rows are stamped max(now, newest pin plus one millisecond) and read back - the
+      reader rejects a non-newer pin as replay - and the uninstall effect
+      reports nothing unless it took effect; junk staged files are
+      remembered by stamp; manifest.staged logs by/hsid under claimed),
       stops the mod and logs manifest.uninstall{diff} (+ mod.unlinked);
       effectiveInstall = the last install/uninstall pin row naming the mod.
       start and uninstall are refused from a kernel-spawned shell. list and
