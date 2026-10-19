@@ -19,7 +19,7 @@
  */
 import { CLIENT_API_ID, type HelloResult } from '@a-company/gnomon-contracts';
 import { newClientNonce, verifyServerSig, type SigVerdict } from './server-sig.js';
-import type { GuiStore, Row } from './store.js';
+import type { GuiStore } from './store.js';
 
 export const RPC = 'gnomon-rpc:v1' as const;
 export const GUI_CLIENT = Object.freeze({ name: 'gnomon-gui', version: '8.0.0-m1.10.1' });
@@ -255,7 +255,7 @@ export async function followLog(c: Pick<GnomonClient, 'call'>, store: GuiStore):
     try {
       for (;;) {
         const since = store.cursor();
-        const page = await c.call<{ rows: Row[]; next: number; caughtUp: boolean; logId: string }>('log.read', { ...(since ? { since } : {}), limit: 1000 });
+        const page = await c.call<{ rows: unknown[]; next: number; caughtUp: boolean; logId: string }>('log.read', { ...(since ? { since } : {}), limit: 1000 });
         store.adopt(page.logId);
         store.apply(page.rows);
         store.advance(page.next);

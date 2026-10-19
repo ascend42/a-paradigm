@@ -331,7 +331,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
   c.onNotification((method, params) => {
     if (method !== 'event') return;
-    const p = (params ?? {}) as { row?: Row; end?: { since?: number } };
+    const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
     if (p.row) store.apply([p.row]);
     else if (p.end) void followLog(c, store).catch(() => undefined);
   });
@@ -360,7 +360,10 @@ function showReconnect(why: string): void {
 
 /* ── composer / new session ─────────────────────────────────────── */
 async function send(textValue: string): Promise<void> {
-  if (!client || !focused || !textValue.trim()) return;
+  if (!textValue.trim()) return;
+  // never swallow a message silently: say why nothing was sent (dogfood: Enter on the kernel feed "did nothing")
+  if (!client) return notice('not connected: nothing was sent', true);
+  if (!focused) return notice('no session focused: pick a session on the left or open a new one; nothing was sent', true);
   local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: focused, payload: textValue, at: new Date().toISOString() });
   schedule(new Set([`transcript:${focused}`]));
   try {

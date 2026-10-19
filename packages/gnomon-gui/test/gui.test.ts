@@ -16,7 +16,7 @@ import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, palette
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
-import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
+import { GuiStore, rowOf, rowSummary, turnEventSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -288,6 +288,37 @@ describe('store: sessions, transcript, decision stack (G-GUI-09)', () => {
     expect(s.groups()).toMatchObject([{ repo: 'repo:a', sessions: [{ hsid: 'hsid:v1:A', backend: 'local', pending: 1 }] }]);
     expect(s.transcript('hsid:v1:A').map((r) => r.kind)).toEqual(['session.open', 'approval.request', 'turn.event']);
     expect(rowSummary(s.transcript('hsid:v1:A')[2]!)).toContain('withheld');
+  });
+  it('wire rows (contracts LogRow {seq, view, event | stub}) are flattened: the session is listed and its transcript filled', () => {
+    // dogfood 2026-10-19: the kernel's nested rows read flat had no kind and no session ⇒ "sessions 0 live · 0 seen"
+    const H = 'hsid:v1:01M5ATH1BQBCRNY5REDJ20RA7D';
+    const s = new GuiStore();
+    s.apply([
+      { seq: 1, view: 'full', event: { seq: 1, kind: 'daemon.start', at: 'x', principal: 'p:k', payload: { pid: 1 } } },
+      { seq: 2, view: 'full', event: { seq: 2, kind: 'session.open', at: 'x', principal: 'p:h', session: H, scope: { repo: 'repo:a' }, payload: { hsid: H, backend: 'claude-code', state: 'running' } } },
+      { seq: 3, view: 'stub', stub: { kind: 'session.inject', hsid: H, at: 'x' } },
+      { seq: 4, view: 'full', event: { seq: 4, kind: 'turn.event', at: 'x', principal: 'p:k', session: H, payload: { hsid: H, type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } }) } } },
+      { seq: 5, view: 'oversize', kind: 'turn.event', bytes: 2_000_000 },
+      { seq: 6, view: 'full', event: { seq: 6, kind: 'turn.result', at: 'x', principal: 'p:k', session: H, payload: { hsid: H, isError: false } } },
+    ]);
+    expect(s.groups()).toMatchObject([{ repo: 'repo:a', sessions: [{ hsid: H, state: 'idle', backend: 'claude-code' }] }]);
+    expect(s.transcript(H).map((r) => [r.kind, r.view])).toEqual([['session.open', 'full'], ['session.inject', 'stub'], ['turn.event', 'full'], ['turn.result', 'full']]);
+    expect(s.transcript(H).map(rowSummary)).toContain('assistant · hi');
+    expect(rowSummary(s.transcript(H)[1]!)).toContain('withheld');
+    expect(s.kernelFeed.map((r) => [r.kind, r.view])).toEqual([['daemon.start', 'full'], ['turn.event', 'oversize']]);
+    // junk never throws and never lands as a session; an unknown view stays opaque
+    expect(rowOf(null)).toBeNull();
+    expect(rowOf({ view: 'full' })).toBeNull();
+    expect(rowOf({ seq: 9, view: 'later', x: 1 })).toEqual({ seq: 9, kind: 'unknown', view: 'later' });
+    expect(rowOf({ seq: 9, view: 'full', event: 'nope' })).toEqual({ seq: 9, kind: 'unknown', view: 'full' });
+  });
+  it('turn.event lines read as the assistant text, its tools and the result; anything else is its type', () => {
+    const a = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'secret-ish' }, { type: 'text', text: 'hello' }, { type: 'tool_use', name: 'Bash' }] } });
+    expect(turnEventSummary(a, 'assistant')).toBe('assistant · hello · tool Bash');
+    expect(turnEventSummary(JSON.stringify({ type: 'result', subtype: 'success' }), 'result')).toBe('result · success');
+    expect(turnEventSummary(JSON.stringify({ type: 'stream_event', event: {} }), 'stream_event.content_block_delta')).toBe('turn.event · stream_event.content_block_delta');
+    expect(turnEventSummary('{not json', null)).toBe('turn.event · line');
+    expect(turnEventSummary(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'x'.repeat(5000) }] } }), null).length).toBeLessThanOrEqual(4000 + 'assistant · '.length);
   });
 });
 
