@@ -47,8 +47,13 @@ components:
       Reconnect, backlog paging + follow subscription, sessions sidebar with
       new session (session.open), composer (session.send), decision stack
       (approve on trusted gestures; an ask-user card with a verified
-      `answer` key gets a picker: parseAskCard reads the kernel line grammar,
-      radio/checkbox per option plus a free-text field, askNote builds the
+      `answer` key gets a picker built ONLY from askDetailOf: the card block's
+      one {type:'ask-user', detail} node whose detail recomputes (with kind,
+      requester, hsid, flags; cardContentHash) to the card's contentHash —
+      display text is never parsed; missing/malformed/mismatched => no
+      picker (Aegis C1); radio/checkbox per option plus a free-text field
+      (aria-label, maxlength = detail.maxAnswerChars), askNote (null-
+      prototype answers) builds the
       approve note: plain text for one question, JSON {answers} for several;
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,

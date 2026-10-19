@@ -49,10 +49,11 @@
  *   questions before presence (parseAskAnswer), the allow carries
  *   updatedInput = {...kernel-held input, answers}, and the answer text never
  *   reaches a non-sensitive row (approval.decide: noteHash/noteBytes). The
- *   answer is NOT inside the decisionSig preimage (approveMessage is
- *   cardId|decision|contentHash|approver; changing it moves clientApiId) —
- *   residual: a party able to rewrite the note in flight on an authenticated
- *   GUI connection could swap the answer. ExitPlanMode is a `plan` card with its
+ *   answer is NOT inside the decisionSig preimage or the presence binding:
+ *   an ACCEPTED RISK (spec §3.4, Aegis C3, T-2026-10-19-001) — `answer` is
+ *   cached-class, and a party rewriting frames on an authenticated GUI
+ *   connection could already flip a cached deny; the GUI renderer and
+ *   transport are trusted for cached-class decisions. ExitPlanMode is a `plan` card with its
  *   turn.plan row; a write under denyWrite is denied with no card. An unknown
  *   control_request subtype gets an error response. The assistant tool_use
  *   path raises NO card (one card per request).
@@ -699,9 +700,18 @@ export class SessionSupervisor {
         rule = null; // an unreadable rule source never allows
       }
       if (rule) {
-        await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: `rule:${rule.ruleId}` });
-        await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
-        return;
+        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
+        let logged = false;
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: `rule:${rule.ruleId}` });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+        if (logged) {
+          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'rule', modeRef: `rule:${rule.ruleId}` });
+          return;
+        }
       }
     }
     if (!b || typeof b.decisionOf !== 'function' || s.pending.size >= MAX_PENDING_PERMISSIONS) {

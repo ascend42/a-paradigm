@@ -14,7 +14,7 @@ import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contract
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { decidePin, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { askNote, cardFlags, h, parseAskCard, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
+import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -181,6 +181,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         flags: cardFlags(c.card, c.flags),
         decisions: verified.get(verifiedKey(c.cardId, String(c.card.contentHash ?? ''))) ?? [],
         decidable: isCardDecidable(c.card as never),
+        ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -204,7 +205,9 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
 function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
   const c = store.cards.get(cardId);
   if (!c) return null;
-  const qs = parseAskCard(c.card.block);
+  const ask = askDetailOf(c.card);
+  if (!ask) return null;
+  const qs = ask.questions;
   const picks = new Map<number, AskPick>();
   for (const q of qs) picks.set(q.n, { chosen: [], free: '' });
   for (const el of Array.from(cardEl.querySelectorAll<HTMLInputElement>('input[data-ask-q]'))) {

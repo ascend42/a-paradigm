@@ -60,6 +60,10 @@ export const ASK_MAX_QUESTION_CHARS = 400;
 export const ASK_MAX_LABEL_CHARS = 150;
 export const ASK_MAX_TEXT_CHARS = 400;
 export const ASK_MAX_ANSWER_CHARS = 1000;
+/** The closed AskUserQuestion schema (p01b, claude 2.1.302): any other key is refused (Aegis C1). */
+export const ASK_INPUT_KEYS = Object.freeze(['questions']);
+export const ASK_QUESTION_KEYS = Object.freeze(['question', 'header', 'options', 'multiSelect']);
+export const ASK_OPTION_KEYS = Object.freeze(['label', 'description']);
 /** A question as the kernel holds it (validated, from the request input). */
 export interface AskQuestion {
   question: string;
@@ -125,7 +129,18 @@ const cap = (t: string, n: number): { text: string; cut: boolean } => {
   return cps.length > n ? { text: cps.slice(0, n).join(''), cut: true } : { text: t, cut: false };
 };
 /** A text field in FULL: a label line, then its lines (wrapped by the block, never cut). */
-const full = (label: string, t: string): string[] => [`${label}:`, ...t.split(/\r?\n/)];
+/** The prefix of every line of a field body: field text never begins a card line (Aegis L4). */
+export const FIELD_BODY_PREFIX = '  │ ';
+/**
+ * Aegis L4 (shared helper; supersedes the hardening lane's T-032(2) copy): a
+ * multi-line field as a kernel-owned label line, every body line fenced with
+ * FIELD_BODY_PREFIX, and an end marker. Text inside a field can therefore
+ * never start a card line, nor look like the line after the field.
+ */
+export function fieldLines(label: string, text: string): string[] {
+  return [`${label}:`, ...text.split(/\r?\n/).map((l) => `${FIELD_BODY_PREFIX}${l}`), `  └ end of ${label}`];
+}
+const full = fieldLines;
 const valueText = (v: unknown): string => {
   if (typeof v === 'string') return v;
   try {
@@ -134,9 +149,12 @@ const valueText = (v: unknown): string => {
     return JSON.stringify(v) ?? String(v);
   }
 };
-/** Aegis A1: every input key the tool-specific rendering did not already show, as `key=value` (sanitized + wrapped by the block). */
+/**
+ * Aegis A1: every input key the tool-specific rendering did not already show (sanitized + wrapped by the block).
+ * Aegis L4: the key is model-chosen, so it is shown JSON-quoted on a kernel-prefixed label line and its value fenced.
+ */
 const rest = (input: Record<string, unknown>, shown: readonly string[]): string[] =>
-  Object.keys(input).sort().filter((k) => !shown.includes(k)).flatMap((k) => `${k}=${valueText(input[k])}`.split(/\r?\n/));
+  Object.keys(input).sort().filter((k) => !shown.includes(k)).flatMap((k) => fieldLines(`field ${JSON.stringify(k)}`, valueText(input[k])));
 
 /** Fold case where the default filesystem is case-insensitive (darwin APFS/HFS+, win32 NTFS): a deny must match `.CLAUDE/Settings.json` too. */
 export function foldsCase(platform: string = process.platform): boolean {
@@ -170,9 +188,15 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
   if (tool === 'AskUserQuestion') {
     const qs = askQuestions(inp);
     if (typeof qs === 'string') return deny('bad-input', `AskUserQuestion: ${qs}`);
-    const lines = [`The session asks you ${qs.length === 1 ? 'a question' : `${qs.length} questions`}`, `repo: ${ctx.repo}`, ...askLines(qs), ...rest(inp, ['questions']), 'answer: pick an option or type your own answer for each question.'];
+    // Aegis C1: the questions are STRUCTURED card detail (inside contentHash); the GUI builds its picker from the
+    // `ask-user` block node carrying this exact detail, verified against contentHash — never from display text
+    detail.questions = qs;
+    detail.maxAnswerChars = ASK_MAX_ANSWER_CHARS;
+    const lines = [`The session asks you ${qs.length === 1 ? 'a question' : `${qs.length} questions`}`, `repo: ${ctx.repo}`, ...askLines(qs), 'answer: pick an option or type your own answer for each question.'];
     if (size(lines) > MAX_CARD_CHARS) return deny('too-large', 'the questions are too large to show in full on a card');
-    return { ...card('ask-user', ASK_USER_DECISIONS, detail, h, lines), questions: qs } as PermissionPlan;
+    const c = card('ask-user', ASK_USER_DECISIONS, detail, h, lines) as Extract<PermissionPlan, { kind: 'card' }>;
+    const children = [...((c.block.children as unknown[]) ?? []), { type: 'ask-user', detail: structuredClone(detail) }];
+    return { ...c, block: { ...c.block, children }, questions: qs };
   }
   if (tool === 'ExitPlanMode') {
     const plan = s(inp.plan);
@@ -183,7 +207,7 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
       plan !== null
         ? full('plan', plan)
         : att
-          ? [`(the plan text is not in the request; shown from the session's ${att.source === 'plan-file' ? 'plan-file write' : 'ExitPlanMode tool use'})`, ...full('plan', att.text)]
+          ? [`(the plan text is not in the request; shown ${att.source === 'plan-file' ? 'from a Write the session requested (it may not have run)' : "from the session's ExitPlanMode tool use"})`, ...full('plan', att.text)]
           : ['(the plan text is not in the request)'];
     const lines = ['The session proposes a plan', `repo: ${ctx.repo}`, ...planLines, ...rest(inp, ['plan']), 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'];
     if (size(lines) > MAX_CARD_CHARS) return deny('too-large', 'the plan is too large to show in full on a card');
@@ -205,7 +229,7 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
     if (typeof inp.command !== 'string') return deny('bad-input', 'Bash command must be text');
     // Aegis A1: a request to run outside the session sandbox is never a card
     if (inp.dangerouslyDisableSandbox !== undefined && inp.dangerouslyDisableSandbox !== false) return deny('sandbox-escape', 'Gnomon sessions never run commands outside the sandbox');
-    body = [...full('command', inp.command), ...rest(inp, ['command'])];
+    body = [...full('command', inp.command), ...rest(inp, ['command']), 'always: the rule pins this exact command text, not what it runs (a script or binary it calls can change).'];
   } else if (tool === 'Edit') {
     if (typeof inp.old_string !== 'string' || typeof inp.new_string !== 'string') return deny('bad-input', 'Edit old_string and new_string must be text');
     body = [`path: ${shownPath}`, ...full('old', inp.old_string), ...full('new', inp.new_string), ...rest(inp, ['file_path', 'old_string', 'new_string'])];
@@ -230,7 +254,7 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
       `path: ${shownPath}`,
       `${Buffer.byteLength(content, 'utf8')} bytes · inputHash ${h}`,
       ex.cut ? `Only an excerpt is shown: the first ${WRITE_EXCERPT_CHARS} characters. The full content is pinned by the inputHash.` : 'Only an excerpt is shown when the content is long; this content is shown in full, pinned by the inputHash.',
-      ...ex.text.split(/\r?\n/),
+      ...fieldLines('excerpt', ex.text),
       ...rest(inp, ['file_path', 'content']),
     ];
   } else {
@@ -268,6 +292,9 @@ const cps = (t: string): number => Array.from(t).length;
 
 /** Validate AskUserQuestion input.questions: the questions the kernel holds, or why not (fail closed: never cut). */
 export function askQuestions(input: Record<string, unknown>): AskQuestion[] | string {
+  // Aegis C1: a closed schema — any other key (at any level) is refused, never rendered
+  const extra = (o: Record<string, unknown>, keys: readonly string[]): string | null => Object.keys(o).find((k) => !keys.includes(k)) ?? null;
+  if (extra(input, ASK_INPUT_KEYS) !== null) return 'unknown input key (only questions)';
   const q = input.questions;
   if (!Array.isArray(q) || q.length === 0) return 'questions must be a non-empty list';
   if (q.length > ASK_MAX_QUESTIONS) return `at most ${ASK_MAX_QUESTIONS} questions`;
@@ -276,6 +303,7 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
   for (const [i, raw] of q.entries()) {
     const o = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
     if (!o || typeof o.question !== 'string' || o.question.trim() === '') return `question ${i + 1} needs text`;
+    if (extra(o, ASK_QUESTION_KEYS) !== null) return `question ${i + 1} has an unknown key`;
     if (!oneLine(o.question) || cps(o.question) > ASK_MAX_QUESTION_CHARS) return `question ${i + 1} must be one line of at most ${ASK_MAX_QUESTION_CHARS} characters`;
     if (seen.has(o.question)) return `question ${i + 1} repeats an earlier question`;
     seen.add(o.question);
@@ -286,6 +314,7 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
     const options: AskQuestion['options'] = [];
     for (const [j, op] of opts.entries()) {
       const p = op !== null && typeof op === 'object' && !Array.isArray(op) ? (op as Record<string, unknown>) : null;
+      if (p && extra(p, ASK_OPTION_KEYS) !== null) return `question ${i + 1} option ${j + 1} has an unknown key`;
       if (!p || typeof p.label !== 'string' || p.label.trim() === '' || !oneLine(p.label) || cps(p.label) > ASK_MAX_LABEL_CHARS) return `question ${i + 1} option ${j + 1} needs a one-line label of at most ${ASK_MAX_LABEL_CHARS} characters`;
       if (p.description !== undefined && (typeof p.description !== 'string' || !oneLine(p.description) || cps(p.description) > ASK_MAX_TEXT_CHARS)) return `question ${i + 1} option ${j + 1} description must be one line of at most ${ASK_MAX_TEXT_CHARS} characters`;
       options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null });
@@ -340,14 +369,15 @@ export function parseAskAnswer(qs: readonly AskQuestion[], note: unknown): { ans
   }
   if (obj === null) {
     if (qs.length !== 1) return { error: `this card asks ${qs.length} questions: answer with JSON {answers:{question: answer}}` };
-    obj = { [qs[0]!.question]: note };
+    obj = Object.create(null) as Record<string, unknown>;
+    obj[qs[0]!.question] = note; // null prototype: a question named __proto__ is an ordinary key (Aegis L1)
   }
   const want = new Set(qs.map((q) => q.question));
   const keys = Object.keys(obj);
   const extra = keys.filter((k) => !want.has(k));
   const missing = [...want].filter((k) => !Object.hasOwn(obj!, k));
   if (extra.length || missing.length) return { error: `the answer keys must be exactly the card's questions (${extra.length} unknown, ${missing.length} missing)` };
-  const answers: Record<string, string> = {};
+  const answers = Object.create(null) as Record<string, string>;
   for (const q of qs) {
     const a = obj[q.question];
     if (typeof a !== 'string' || a.trim() === '' || cps(a) > ASK_MAX_ANSWER_CHARS) return { error: `each answer must be non-empty text of at most ${ASK_MAX_ANSWER_CHARS} characters` };
