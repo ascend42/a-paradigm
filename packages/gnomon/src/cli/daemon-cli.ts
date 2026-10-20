@@ -91,6 +91,8 @@ export interface DaemonArgs {
   kernelKeyStdin?: boolean;
   /** Aegis H: the predecessor's web listening socket is inherited at this fd */
   webListenFd?: number;
+  /** #gui-relaunch: the activator does not open the GUI after the start (GNOMON_NO_OPEN=1 does the same). Never passed to gnomond. */
+  noOpen?: boolean;
 }
 
 export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
@@ -116,6 +118,7 @@ export function parseDaemonArgs(argv: readonly string[]): DaemonArgs | string {
       if (!v || !path.isAbsolute(v)) return '--ready-fifo needs an absolute path';
       out.readyFifo = v;
     } else if (a === '--kernel-key-stdin') out.kernelKeyStdin = true;
+    else if (a === '--no-open') out.noOpen = true;
     else if (a === '--web-listen-fd') {
       const v = Number(argv[++i]);
       if (v !== WEB_LISTEN_FD) return `--web-listen-fd is ${WEB_LISTEN_FD}`;
@@ -251,6 +254,8 @@ export async function activateDetached(
   gnomondEntry: string,
   resolveHome: (a: { home?: string }) => string = homeOf,
   launch: typeof launchDaemon = launchDaemon,
+  /** #gui-relaunch (T-2026-10-20-001): open the GUI once a FRESH kernel is ready (cli/relaunch.ts); never after attach. */
+  openGui: ((home: string, out: { write(s: string): unknown }) => Promise<boolean>) | null = null,
 ): Promise<number> {
   const home = resolveHome(args);
   if (refuseDevHome(home)) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
@@ -274,6 +279,8 @@ export async function activateDetached(
   switch (outcome.kind) {
     case 'ready':
       process.stdout.write(`gnomond started at ${outcome.identity.socketPath} (pid ${outcome.identity.pid})\n`);
+      // a start outside the terminal launch loop still opens the GUI (the URL goes to the browser opener only)
+      if (openGui && args.noOpen !== true) await openGui(home, process.stdout).catch(() => false);
       break;
     case 'attached':
       process.stdout.write(`gnomond already running at ${outcome.socketPath}\n`);
@@ -292,12 +299,12 @@ export async function activateDetached(
 }
 
 /** `gnomon daemon status|stop|--detach`. */
-export async function runDaemonCommand(argv: readonly string[], gnomondEntry: string): Promise<number> {
+export async function runDaemonCommand(argv: readonly string[], gnomondEntry: string, openGui: Parameters<typeof activateDetached>[4] = null): Promise<number> {
   const [sub, ...rest] = argv;
   if (sub === '--detach' || sub === 'start') {
     const parsed = parseDaemonArgs(rest);
     if (typeof parsed === 'string') return usage(parsed);
-    return activateDetached(parsed, gnomondEntry);
+    return activateDetached(parsed, gnomondEntry, homeOf, launchDaemon, openGui);
   }
   if (sub !== 'status' && sub !== 'stop') return usage(`unknown daemon subcommand ${sub ?? '(none)'}`);
   const parsed = parseDaemonArgs(rest);
@@ -444,7 +451,7 @@ export function kernelPinOf(home: string, keyId: string): { pin: ServerKeyPin; s
 
 function usage(msg: string): number {
   process.stderr.write(
-    `gnomon ${GNOMON_VERSION}: ${msg}\nusage: gnomond [--foreground] [--home <abs>] [--idle-ms <n>]\n       gnomon daemon status|stop|--detach [--home <abs>]\n`,
+    `gnomon ${GNOMON_VERSION}: ${msg}\nusage: gnomond [--foreground] [--home <abs>] [--idle-ms <n>] [--no-open]\n       gnomon daemon status|stop|--detach [--home <abs>] [--no-open]\n`,
   );
   return EXIT_USAGE;
 }

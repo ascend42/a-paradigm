@@ -17,6 +17,7 @@ import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contract
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
+import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
@@ -478,7 +479,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   try {
     t = await webSocketTransport(endpointPath);
   } catch {
-    return showReconnect('the endpoint is not reachable: run `gnomon` (or `gnomon up`) in a terminal');
+    return showReconnect(staleView('down').text); // #gui-relaunch: never a terminal as the only way back
   }
   const c = new GnomonClient(t);
   const out = await c.connect({ surface: SURFACE, endpointPath, verifyKey: pin.verifyWith, auth, subtle: globalThis.crypto?.subtle });
@@ -514,6 +515,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     void gnomonPost(fetch, '/diag', out.session.guiToken, `protocol error ${r.code} ${r.reason ?? ''} ${r.message}`).catch(() => undefined);
   });
   $('reconnect').hidden = true;
+  staleStop = true;
+  staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
   c.onNotification((method, params) => {
@@ -531,6 +534,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     session = null;
     if (restarting(sessionStorage)) return void awaitRestart();
     showReconnect('the connection ended; the GUI session ended with it (D54)');
+    void goStale();
   });
   try {
     status = await c.call<Record<string, unknown>>('status');
@@ -547,6 +551,41 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   }
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   syncDictationContext();
+}
+
+/* ── #gui-relaunch (T-2026-10-20-001, core/stale.ts): a stale tab after a stop-then-start ── */
+let staleStop = false;
+const reconnectBtn = (): HTMLElement => document.getElementById('reconnect-btn')!;
+let staleCh: BroadcastChannel | null | undefined;
+function staleChannel(): BroadcastChannel | null {
+  if (staleCh === undefined) {
+    staleCh = typeof BroadcastChannel === 'function' ? new BroadcastChannel(STALE_CHANNEL) : null;
+    staleCh?.addEventListener('message', (e) => {
+      const m = parseStaleMsg(e.data);
+      if (m?.t === 'who' && client) staleCh?.postMessage({ t: 'attached' });
+      else if (m?.t === 'attached' && !client && !staleStop) paintStale('reopened');
+    });
+  }
+  return staleCh;
+}
+function paintStale(st: StaleState): void {
+  const v = staleView(st);
+  if (st === 'reopened') staleStop = true;
+  showReconnect(v.text);
+  let close = document.getElementById('reconnect-close');
+  if (!close) {
+    close = h(doc, 'button', { id: 'reconnect-close', class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    // a user click only; window.close() is allowed for a tab with one history entry, else the text says to continue there
+    close.addEventListener('click', (e) => void (e.isTrusted && window.close()));
+    reconnectBtn().after(close);
+  }
+  close.hidden = v.action !== 'close';
+  reconnectBtn().hidden = v.action === 'close';
+}
+async function goStale(): Promise<void> {
+  staleStop = false;
+  staleChannel()?.postMessage({ t: 'who' });
+  await watchStale({ fetchFn: (u) => fetch(u, { cache: 'no-store' }), origin: location.origin, onState: (st) => paintStale(st), stopped: () => staleStop || !!client });
 }
 
 function showReconnect(why: string): void {

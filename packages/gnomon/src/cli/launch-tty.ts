@@ -9,9 +9,11 @@
  *
  * ONE copy of the launch rules:
  *   - the launch URL (it carries a single-use, 60 s token) is printed ONLY
- *     to an interactive terminal: never to a pipe, a file or a log — and the
- *     TTY is checked BEFORE minting, so without one no endpoint starts and
- *     no token exists;
+ *     to an interactive terminal: never to a pipe, a file or a log. Without
+ *     a TTY (#gui-relaunch, T-2026-10-20-001) it goes to the browser opener
+ *     only (osascript's stdin) and is never printed; with neither a TTY nor
+ *     an opener (checked BEFORE minting) no endpoint starts and no token
+ *     exists;
  *   - the stop path is armed before anything else can throw or wait;
  *     SIGINT / SIGTERM / SIGHUP / `q` stop, and the handlers stay installed
  *     while stopping (a repeat is ignored, never the default kill); any
@@ -29,7 +31,7 @@ import { LAUNCH_GRANT_CAP } from '../kernel/web/launch-cap.js';
 import { GnomonClient, type ClientCredential, type KernelKeyPin } from '../clients/ts/index.js';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
-import { presentUrl, type BrowserOpener } from './open-browser.js';
+import { presentUrl, type BrowserOpener, type OpenResult } from './open-browser.js';
 
 type Out = { write(s: string): unknown; isTTY?: boolean; on?(ev: 'error', l: (e: Error) => void): unknown };
 export interface LaunchTtyIo {
@@ -109,10 +111,25 @@ export async function attachInProcess(handle: DaemonHandle, o: { home: string; c
  * osascript's STDIN (never argv or env), and stays printed below `opened in your browser` as the fallback.
  */
 export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string, urlSuffix = '', opener: BrowserOpener | null = null): Promise<boolean> {
-  // checked BEFORE minting: with nothing to show it on, no endpoint is started and no token exists
   if (io.stdout.isTTY !== true) {
-    io.stdout.write('  gui     not started: the launch URL is printed only to an interactive terminal (it carries a single-use token)\n');
-    return false;
+    // checked BEFORE minting: with no terminal and no browser opener there is nothing to hand the URL to, so no
+    // endpoint is started and no token exists
+    if (!opener) {
+      io.stdout.write(`  gui     ${NO_TTY_NO_OPEN}\n`);
+      return false;
+    }
+    // T-2026-10-20-001 #gui-relaunch: a start without a terminal (nohup, a script, a detached kernel) still opens the
+    // GUI. The URL goes ONLY to the opener (osascript's STDIN, open-browser.ts): it is never written to this stdout,
+    // which may be a pipe, a file or a log
+    const g = await k.launch();
+    let r: OpenResult;
+    try {
+      r = await opener(`${g.url}${urlSuffix}`);
+    } catch (e) {
+      r = { ok: false, reason: e instanceof Error ? e.message : String(e) };
+    }
+    io.stdout.write(r.ok ? `  gui     ${NO_TTY_OPENED}\n` : `  gui     ${noTtyOpenFailed(r.reason)}\n`);
+    return r.ok;
   }
   const g = await k.launch();
   // #bare-entry: urlSuffix is a fragment-only hint (`&cwd=<base64url>`, built by bare-cli.ts): it rides after the
@@ -120,6 +137,13 @@ export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: Launch
   await presentUrl(io.stdout, `${g.url}${urlSuffix}`, opener, 'open this in your browser within 60 s (single use)');
   io.stdout.write(`\n  ${keysHint}\n`);
   return true;
+}
+
+/** #gui-relaunch: the no-terminal lines (no URL in any of them: stdout may be a pipe, a file or a log). */
+export const NO_TTY_OPENED = 'opened in your default browser (no terminal here, so the single-use launch URL is not printed)';
+export const NO_TTY_NO_OPEN = 'not opened: auto-open is off (--no-open or GNOMON_NO_OPEN) and the launch URL is printed only to an interactive terminal (it carries a single-use token). Open Gnomon.app, or run `gnomon` in a terminal';
+export function noTtyOpenFailed(reason: string): string {
+  return `not opened: could not open your browser (${reason}). Open Gnomon.app, or run \`gnomon\` in a terminal (the launch URL is printed only there)`;
 }
 
 /** The signals that stop an in-process kernel (SIGHUP: the terminal went away). */

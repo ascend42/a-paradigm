@@ -273,7 +273,7 @@ describe('#gnomon-up runs on the hardware identity', () => {
     await h!.shutdown('signal');
     expect(await run).toBe(0);
     const all = x.o.join('') + x.e.join('');
-    expect(all).toContain('gui     not started');
+    expect(all).toContain('gui     not opened'); // #gui-relaunch: no TTY + auto-open off (the test env) ⇒ no token minted
     expect(all).toContain('UP  kernel (in this process)');
     expect(all).toContain('DOWN  kernel');
     expect(all).toMatch(/root\s+hardware /);
