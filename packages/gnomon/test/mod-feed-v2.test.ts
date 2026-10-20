@@ -61,6 +61,14 @@ describe('#mod-host feed projection v2 (numbers only)', () => {
     expect(FEED_KINDS).not.toContain('turn.event');
   });
 
+  it('Aegis L2: usageSplit floors and clamps at the source; the logged split equals its projection', () => {
+    const ev = parseStreamLine(JSON.stringify({ type: 'result', usage: { input_tokens: 10.9, output_tokens: -3, cache_read_input_tokens: 1e300, cache_creation_input_tokens: 'x' } }));
+    const split = (ev as { split: Record<string, number> }).split;
+    expect(split).toEqual({ in: 10, out: 0, cacheRead: Number.MAX_SAFE_INTEGER, cacheWrite: 0 });
+    const p = projectFeedEvent({ kind: 'turn.result', payload: { hsid: H, usage: { tokens: 1 }, split } }, U)!.payload;
+    expect([p.tokensIn, p.tokensOut, p.cacheRead, p.cacheWrite]).toEqual([split.in, split.out, split.cacheRead, split.cacheWrite]);
+  });
+
   it('Aegis M1: without log.read:usage a mod gets no usage kind and turn.result is {hsid} only', () => {
     const row = { kind: 'turn.result', payload: { hsid: H, usage: { tokens: 142 }, cost: 0.42, split: { in: 1, out: 2, cacheRead: 3, cacheWrite: 4 } } };
     expect(projectFeedEvent(row)!.payload).toEqual({ hsid: H });

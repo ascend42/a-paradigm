@@ -316,7 +316,9 @@ export interface UsageSplit {
 export function usageSplit(u: unknown): UsageSplit | null {
   const o = obj(u);
   if (!o) return null;
-  return { in: num(o.input_tokens), out: num(o.output_tokens), cacheRead: num(o.cache_read_input_tokens), cacheWrite: num(o.cache_creation_input_tokens) };
+  // Aegis L2: floored and clamped at the source, so the logged row is exactly what the feed projects
+  const int = (v: unknown): number => Math.min(Math.floor(num(v)), Number.MAX_SAFE_INTEGER);
+  return { in: int(o.input_tokens), out: int(o.output_tokens), cacheRead: int(o.cache_read_input_tokens), cacheWrite: int(o.cache_creation_input_tokens) };
 }
 
 /** input + output + cache creation + cache read; null when no usage object. */

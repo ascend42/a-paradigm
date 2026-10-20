@@ -2843,7 +2843,8 @@ components:
     usage-split: >-
       #ledger-mod (K2 feed v2): parseStreamLine's result event also carries
       split {in, out, cacheRead, cacheWrite} = usageSplit(result.usage)
-      (numbers only, same num() clamp as usageTokens); the total and the
+      (numbers only; Aegis L2: each floored and clamped to a safe integer at
+      the source, so the logged row equals the feed projection); the total and the
       UsageMeter charging are unchanged.
     backend-scope: >-
       TD-2026-10-19-252 (spec §1, §2.2, §22 item 26): backends are Claude
