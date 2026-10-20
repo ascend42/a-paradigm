@@ -136,6 +136,9 @@ import { UpdateWatch } from './update-watch.js';
 import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
 import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
+import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
+import { defaultVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
+import { spawn as spawnChild } from 'node:child_process';
 
 /**
  * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
@@ -207,7 +210,14 @@ export interface DaemonOptions {
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
   web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number; /** Aegis H: the predecessor's inherited listening socket fd */ inheritFd?: number };
   /** #gnomon-voice V2a config: voice.ambientIdleMs — a conversation ceiling's idle auto-off (clamped, never unbounded) */
-  voice?: { ambientIdleMs?: number };
+  voice?: {
+    ambientIdleMs?: number;
+    /**
+     * V2e: the kernel-spawned voice client. `entry` = gnomon-voice dist/cli.js (null ⇒ unavailable; default resolved
+     * from the workspace on darwin only). `prepare`/`spawn` are seams (tests: a fake voice-io + stub engines).
+     */
+    client?: { entry?: string | null; prepare?: VoiceChildOptions['prepare']; spawn?: VoiceChildOptions['spawn']; devUnsigned?: boolean; backoffMinMs?: number };
+  };
   /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
   automations?: readonly unknown[];
   /** #scheduler clock seam (default Date.now). */
@@ -574,6 +584,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           modPickup.stop();
         } catch {
           /* shutdown before the pickup existed */
+        }
+        try {
+          await voiceChild.close(); // V2e: the voice child dies with the kernel and never carries over (TD-908)
+        } catch {
+          /* shutdown before the voice child existed */
         }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
@@ -960,8 +975,13 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       return { seq: r.seq, hash: r.hash, id: r.event.id };
     },
     enrolled: () => readEnrolled(home, authority),
-    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under
-    onAttachmentChange: () => void hub.endReaderClass('voice'),
+    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under; V2e: attaching
+    // (or re-attaching at a wider ceiling) auto-starts the kernel-spawned voice client when it is not running
+    onAttachmentChange: () => {
+      void hub.endReaderClass('voice');
+      if (voice.attachedHsid() !== null && !voiceChild.status().clientConnected) void voiceChild.start();
+    },
+    clientStatus: () => voiceChild.status(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
@@ -986,8 +1006,30 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // Aegis V2a M2: a failed idle end is counted in status.voice.idleEndFailures{n} and the timer re-armed (no new log
     // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
+  // V2e (#gnomon-voice): the voice client is the kernel's own supervised child, linked over an inherited socketpair
+  const voiceEntry = opts.voice?.client?.entry !== undefined ? { entry: opts.voice.client.entry } : resolveVoiceClientEntry();
+  const voiceChild: VoiceChildSupervisor = new VoiceChildSupervisor({
+    home,
+    clientEntry: voiceEntry.entry,
+    ...('reason' in voiceEntry && voiceEntry.reason ? { unavailableReason: voiceEntry.reason } : {}),
+    spawn: opts.voice?.client?.spawn ?? ((cmd, args, o) => spawnChild(cmd, args, o)),
+    prepare: opts.voice?.client?.prepare ?? ((report) => defaultVoicePrepare({ home, entry: voiceEntry.entry!, devUnsigned: opts.voice?.client?.devUnsigned === true, report })),
+    ...(opts.voice?.client?.backoffMinMs !== undefined ? { backoffMinMs: opts.voice.client.backoffMinMs } : {}),
+    attach: async (sock) => {
+      if (!server) throw new Error('the kernel socket is not up yet');
+      if (authority.ns === null) throw new Error('this home has no root identity yet (gnomon setup)');
+      const ctx = server.adopt(sock);
+      await dispatcher.adoptPreauthenticated(ctx, { principal: `p:${authority.ns}/voice`, client: { name: '@a-company/gnomon-voice', version: 'spawned' } });
+      return ctx.connId;
+    },
+  });
   const dispatcherCommon = {
     voice,
+    voiceClient: {
+      start: () => voiceChild.start(),
+      stop: () => voiceChild.stop(),
+      connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
+    },
     mods: createModRelayPort(mods),
     sessions,
     approvals,

@@ -130,6 +130,12 @@ export interface SocketServerHandle {
   connections(): number;
   /** Times any connection paused reading for backpressure (diagnostic/tests). */
   stats(): { pauses: number; maxQueued: number; overflows: number };
+  /**
+   * V2e (#gnomon-voice): serve an ALREADY-CONNECTED stream that never touched the listener — the kernel's end of
+   * a socketpair it handed to a child it spawned (the voice client's inherited fd 3). Same framing, caps and
+   * callbacks as an accepted connection; the caller authenticates it (dispatcher.adoptPreauthenticated).
+   */
+  adopt(conn: net.Socket): ConnectionContext;
   close(): Promise<void>;
 }
 
@@ -259,7 +265,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
   const nextUlid = monotonicUlidFactory();
   const mintConnId = (): string => mintId('conn', nextUlid());
 
-  const server = net.createServer((conn) => {
+  /** Serves one connected stream; `adopted` streams (an inherited socketpair end) bypass the listener. Returns its context. */
+  const serveConn = (conn: net.Socket): ConnectionContext => {
     let limit = Math.min(preAuthMax, maxFrameBytes);
     let afterReply: Array<() => void> = [];
     let closing = false;
@@ -436,7 +443,10 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       opts.onEvent?.({ kind: 'socket.disconnect', connId: ctx.connId });
       opts.onDisconnect?.(ctx);
     });
-  });
+    return ctx;
+  };
+  const server = net.createServer((conn) => void serveConn(conn));
+  let closedServer = false;
 
   server.maxConnections = opts.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
 
@@ -515,6 +525,16 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     socketPath: opts.socketPath,
     connections: () => sockets.size,
     stats: () => ({ ...stats }),
-    close,
+    adopt: (conn) => {
+      if (closedServer) {
+        conn.destroy();
+        throw new LifecycleRefusal('endpoint-busy', 'the socket server is closed', { socketPath: opts.socketPath });
+      }
+      return serveConn(conn);
+    },
+    close: () => {
+      closedServer = true;
+      return close();
+    },
   };
 }

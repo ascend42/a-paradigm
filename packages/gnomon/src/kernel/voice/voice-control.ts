@@ -155,6 +155,8 @@ export interface VoiceAppendRow {
 }
 
 export interface VoiceControlOptions {
+  /** V2e: the kernel-spawned voice client's status (status.voice.clientConnected, status.voice.client). */
+  clientStatus?: () => { clientConnected: boolean } & Record<string, unknown>;
   sessions: VoiceSessionsPort;
   /** Write one row (as: userland); resolves with what log.append returns. */
   append(row: VoiceAppendRow): Promise<{ seq: number; hash: string; id?: string }>;
@@ -323,6 +325,9 @@ export class VoiceControl {
       echoTailMs: this.echoTailMs,
       ambientIdleMs: this.ambientIdleMs,
       idleEndFailures: { n: this.#idleEndFailures },
+      // V2e: an explicit boolean (never absent) plus the supervised child's phase for the GUI pill
+      clientConnected: this.#o.clientStatus?.().clientConnected === true,
+      ...(this.#o.clientStatus ? { client: this.#o.clientStatus() } : {}),
     };
   }
 
