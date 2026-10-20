@@ -252,6 +252,8 @@ function drig() {
       stop: async () => (calls.push('stop'), { phase: 'stopped' }),
       connectionClosed: (id) => void calls.push(`closed:${id}`),
       enrol: async (asker, p) => (calls.push(`enrol:${asker.principal}:${JSON.stringify(p)}`), { cardId: 'card:x' }),
+      forget: async (p) => (calls.push(`forget:${p.name}`), { forgotten: true }),
+      report: (p) => (calls.push(`report:${JSON.stringify(p)}`), { ok: true }),
     },
   });
   let n = 0;
@@ -347,6 +349,25 @@ describe('#gnomon-voice V2e: request.voice.client is human only', () => {
       for (const op of ['start', 'stop']) await expect(call('log.append', { kind: 'request.voice.client', payload: { op } }), `${who.kind} ${op}`).rejects.toBeInstanceOf(RpcRefusal);
     }
     expect(r.calls).toEqual([]);
+  });
+
+  it('request.voice.enrol / forget are human only; request.voice.report is voice only; replies are the port results', async () => {
+    const r = drig();
+    const human = await r.connect({ kind: 'human', credential: 'gui' });
+    expect(await human('log.append', { kind: 'request.voice.enrol', payload: { name: 'founder', consent: 'yes' } })).toEqual({ cardId: 'card:x' });
+    expect(await human('log.append', { kind: 'request.voice.forget', payload: { name: 'founder' } })).toEqual({ forgotten: true });
+    expect(await refusal(human('log.append', { kind: 'request.voice.enrol', payload: { name: 'founder' } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(human('log.append', { kind: 'request.voice.forget', payload: { name: 'a', x: 1 } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(human('log.append', { kind: 'request.voice.report', payload: { notice: { text: 'x' } } })).rejects.toBeInstanceOf(RpcRefusal);
+    for (const who of [{ kind: 'agent' }, { kind: 'session' }, { kind: 'mod' }, { kind: 'voice' }, { kind: 'readToken' }, { kind: 'peer' }] as Who[]) {
+      const call = await r.connect(who);
+      await expect(call('log.append', { kind: 'request.voice.enrol', payload: { name: 'founder', consent: 'yes' } }), who.kind).rejects.toBeInstanceOf(RpcRefusal);
+      await expect(call('log.append', { kind: 'request.voice.forget', payload: { name: 'founder' } }), who.kind).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    const voice = await r.connect({ kind: 'voice' });
+    expect(await voice('log.append', { kind: 'request.voice.report', payload: { notice: { text: 'x' } } })).toEqual({ ok: true });
+    expect(r.calls.filter((c) => c.startsWith('enrol') || c.startsWith('forget') || c.startsWith('report'))).toEqual([`enrol:p:abcdefgh/x:{"name":"founder","consent":"yes"}`, 'forget:founder', 'report:{"notice":{"text":"x"}}']);
+    expect(r.logged.filter((x) => x.kind.startsWith('request.'))).toEqual([]);
   });
 
   it('a closed connection is reported to the supervisor', async () => {

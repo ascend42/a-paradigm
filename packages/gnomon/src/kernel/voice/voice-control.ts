@@ -157,6 +157,8 @@ export interface VoiceAppendRow {
 export interface VoiceControlOptions {
   /** V2e: the kernel-spawned voice client's status (status.voice.clientConnected, status.voice.client). */
   clientStatus?: () => { clientConnected: boolean };
+  /** V2e: status.voice.enrolment / status.voice.notice, relayed from the client (VoiceReports.status). */
+  reportStatus?: () => Record<string, unknown>;
   sessions: VoiceSessionsPort;
   /** Write one row (as: userland); resolves with what log.append returns. */
   append(row: VoiceAppendRow): Promise<{ seq: number; hash: string; id?: string }>;
@@ -328,6 +330,10 @@ export class VoiceControl {
       // V2e: an explicit boolean (never absent) plus the supervised child's phase for the GUI pill
       clientConnected: this.#o.clientStatus?.().clientConnected === true,
       ...(this.#o.clientStatus ? { client: this.#o.clientStatus() } : {}),
+      // V2e (GUI alignment A1): the enrolled speaker NAMES, read from the root-signed consented registry
+      enrolled: [...this.#o.enrolled()].map((id) => id.slice(id.indexOf('/') + 1)).sort(),
+      // V2e (A3/A5): the client's relayed enrolment progress and last notice (request.voice.report; no log kind)
+      ...(this.#o.reportStatus ? this.#o.reportStatus() : {}),
     };
   }
 

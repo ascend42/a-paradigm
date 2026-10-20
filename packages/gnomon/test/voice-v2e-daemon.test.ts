@@ -83,10 +83,18 @@ describe('#gnomon-voice V2e: the kernel-spawned voice client', () => {
     // the child really speaks over the inherited fd, as the voice principal, with no hello and no key
     await until(() => kids[0]!.out.join('').includes('\n'));
     const reply = JSON.parse(kids[0]!.out.join('').split('\n')[0]!) as { result?: { voice?: { clientConnected?: boolean; client?: { phase?: string } } } };
-    expect(reply.result?.voice).toMatchObject({ clientConnected: true, client: { phase: 'running' } });
+    expect(reply.result?.voice).toMatchObject({ clientConnected: true, client: { phase: 'running' }, principal: `p:${ns}/voice`, enrolled: [] });
     const auth = [...d.log.read({ reader: { class: 'human' }, kinds: ['socket.auth.ok'] })].map((v) => (v.view === 'full' ? v.event.payload : null));
     expect(auth).toContainEqual(expect.objectContaining({ principal: `p:${ns}/voice`, via: 'spawn' }));
     expect(d.status()).toBeDefined();
+  });
+
+  it('the kernel may write its speakable row (voice.turn.agent, kernel principal, userland-attested) and it reads back as one', async () => {
+    const { d } = await boot();
+    const hsid = 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA';
+    const r = await d.log.append({ kind: 'voice.turn.agent', principal: d.kernelPrincipal, payload: { source: 'kernel-speakable', turnSeq: 3, items: [{ kind: 'reply', text: 'ok' }] }, session: hsid, as: 'userland' });
+    const views = [...d.log.read({ reader: { class: 'voice', hsid }, kinds: ['voice.turn.agent'] })];
+    expect(views.find((v) => v.seq === r.seq)).toMatchObject({ view: 'full', event: { payload: { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'ok' }] } } });
   });
 
   it('a crashed child is restarted (backoff) and re-authenticated on a fresh connection', async () => {

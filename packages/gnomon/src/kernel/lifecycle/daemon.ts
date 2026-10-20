@@ -138,6 +138,8 @@ import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
 import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
 import { defaultVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
+import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
+import { KernelSpeakable } from '../voice/speakable.js';
 import { spawn as spawnChild } from 'node:child_process';
 
 /**
@@ -961,6 +963,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         return { seq: r.seq };
       },
   });
+  const voiceReports = new VoiceReports();
   // voice slice V1 (#gnomon-voice, talk-only): attachment by human gesture, forwarding guards, voice.* shape checks.
   // Voice rows are userland (voice.* is the voice principal's grant, A23-2): appended `as: 'userland'` under the
   // appending principal, kernel-key attested like modns rows. Enrolment is read from the root-signed file each check.
@@ -984,6 +987,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       if (voice.attachedHsid() !== null && !voiceChild.status().clientConnected) void voiceChild.start();
     },
     clientStatus: () => voiceChild.status(),
+    reportStatus: () => voiceReports.status(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
@@ -1025,12 +1029,25 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       return ctx.connId;
     },
   });
+  // V2e item 4 + GUI alignment: GUI enrolment (fresh-presence card → the root-signed row), forget (no card)
+  const voiceEnrol = new VoiceEnrolCards({ home, root: authority, broker: broker as never, onEnrolled: (name) => voiceReports.requested(name) });
+  // V2e item 3: the kernel's speakable reply row — watch the ATTACHED session's turn rows, append
+  // voice.turn.agent{source:'kernel-speakable'} as the kernel principal (userland kind, kernel-attested)
+  const speakable = new KernelSpeakable(() => voice.attachedHsid());
+  log.onCommit((e) => {
+    const row = speakable.observe(e);
+    if (!row) return;
+    setImmediate(() => void log.append({ kind: row.kind, principal: kernelPrincipal, payload: { ...row.payload }, session: row.session, as: 'userland' }).catch(() => undefined));
+  });
   const dispatcherCommon = {
     voice,
     voiceClient: {
       start: () => voiceChild.start(),
       stop: () => voiceChild.stop(),
       connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
+      enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
+      forget: (p: { name: string }) => voiceEnrol.forget(p),
+      report: (p: unknown) => voiceReports.report(p),
     },
     mods: createModRelayPort(mods),
     sessions,

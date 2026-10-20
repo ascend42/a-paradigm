@@ -332,10 +332,16 @@ export interface VoiceClientPort {
    * the root-signed enrolment row. Resolves with the card. Absent ⇒ the request is refused like any unserved kind.
    */
   enrol?(asker: { connId: string; principal: string }, payload: { name: string; consent: string }): Promise<unknown>;
+  /** V2e: request.voice.forget{name} (human only, no card: a forget narrows). */
+  forget?(payload: { name: string }): Promise<unknown>;
+  /** V2e: request.voice.report{enrolment?, notice?} (voice principal only; relayed in status.voice, never logged). */
+  report?(payload: unknown): unknown;
 }
 
 /** V2e: the human's GUI enrolment request (dispatcher-only like request.voice.client; never written as a row). */
 export const VOICE_ENROL_REQUEST = 'request.voice.enrol' as const;
+export const VOICE_FORGET_REQUEST = 'request.voice.forget' as const;
+export const VOICE_REPORT_REQUEST = 'request.voice.report' as const;
 
 /**
  * V2e: the human's start/stop of the voice app rides the §5 `request.*` append exception like request.mode.set. It
@@ -464,7 +470,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
-      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: o.voice.status() } : {}),
+      // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
+      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...o.voice.status(), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -644,6 +651,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           const grant = readerFor(s, voiceScope()); // explicit per-class policy: never the generic 'full' view
           const params = parseLogReadParams(frame.params, { features: s.features ?? [], logId: reads.log.logId });
           if (params.follow && !Object.hasOwn(frame, 'id')) throw new RpcRefusal('BAD_REQUEST', 'follow-needs-id', 'a subscription is opened by a request with an id (its reply names the subscription)');
+          // V2e: a voice follow with no `since` starts at the released head (voice speaks live rows only; never a
+          // backlog-too-large replay from seq 0). A cursor `since` still resumes as for every class.
+          const fp = frame.params as Record<string, unknown> | null;
+          if (params.follow && cls === 'voice' && (fp === null || typeof fp !== 'object' || fp.since === undefined)) params.since = reads.log.releasedHead();
           return params.follow ? reads.hub.subscribe(ctx, grant, params) : readOnePage(reads.log, grant, params);
         }
         const r = resolveRef(frame.params, reads.log, () => readerFor(s, voiceScope()).reader);
@@ -760,7 +771,30 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const shape = `log.append{kind:'${VOICE_ENROL_REQUEST}', payload:{name, consent}}`;
         if (extra.length || !ep || typeof ep !== 'object' || Object.keys(ep).some((k) => k !== 'name' && k !== 'consent') || typeof ep.name !== 'string' || typeof ep.consent !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', shape);
         try {
-          return { card: await o.voiceClient.enrol({ connId: s.connId, principal: s.principal }, { name: ep.name, consent: ep.consent }) };
+          return await o.voiceClient.enrol({ connId: s.connId, principal: s.principal }, { name: ep.name, consent: ep.consent }); // {pending, cardId}
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
+      // V2e: forget narrows ⇒ human only, no card (spec D62); the root-signed forget row is written at once
+      if (pa?.kind === VOICE_FORGET_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.forget) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        const fp = pa.payload as { name?: unknown } | null | undefined;
+        if (extra.length || !fp || typeof fp !== 'object' || Object.keys(fp).some((k) => k !== 'name') || typeof fp.name !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_FORGET_REQUEST}', payload:{name}}`);
+        try {
+          return await o.voiceClient.forget({ name: fp.name });
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
+      // V2e: the voice client's enrolment progress and notices, relayed in status.voice (never a row)
+      if (pa?.kind === VOICE_REPORT_REQUEST && cls === 'voice' && s.credential !== 'read-token' && o.voiceClient?.report) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?}}`);
+        try {
+          return o.voiceClient.report(pa.payload);
         } catch (err) {
           if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
           throw asRpcRefusal(err);
