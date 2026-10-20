@@ -305,9 +305,9 @@ describe('Aegis S2/S3 review fixes', () => {
       expect(css).toContain(`.pink.h${i} {`);
     }
   });
-  it('the Layout menu runs only presets and the three pane toggles (never a kernel-owned region)', () => {
+  it('the Layout menu runs only presets, the three pane toggles and the Workshop placements (never a kernel-owned region)', () => {
     const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
     const runs = [...menu.matchAll(/item\('([^']+)'|item\(`([^`]+)`/g)].map((m) => m[1] ?? m[2]);
-    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.shuttle.toggle']);
+    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.${p}']);
   });
 });

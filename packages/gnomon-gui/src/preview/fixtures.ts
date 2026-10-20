@@ -307,6 +307,9 @@ function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean } = {}
 const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, enrolled: [{ name: 'matt' }], maxMode: 'conversation', ambientIdleMs: 600_000 };
 const attached = (since: string): Record<string, unknown> => ({ attached: true, hsid: BILLING, ceiling: 'conversation', since, idleAt: null, voiceSessionId: `vs:${ulid('voice session')}`, turns: 2, echoTailMs: 400, ambientIdleMs: 600_000, maxMode: 'conversation', ambientConfirmed: true, enrolled: [{ name: 'matt' }] });
 
+/** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
+const WORKSHOP_VIEW = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
+
 function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false): Fixture {
   return { name, title, rows: c.rows(), status, focus, workshop };
 }
@@ -324,7 +327,9 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-armed': fixture('voice-armed', 'Ambient voice attached to billing, hearing', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, level: 0.62, dictation: { activity: 'speaking', holdToggles: 0, at: T('14:08:05') } }), BILLING),
   'voice-crashed': fixture('voice-crashed', 'Ambient attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
-  workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
+  workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
+  'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'workshop', why: 'user', cardId: null }] } }, BILLING, true),
+  'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
 });
 
 export const FIXTURE_NAMES: readonly string[] = Object.freeze(Object.keys(FIXTURES));

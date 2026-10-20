@@ -8,11 +8,10 @@
  * the way #mod-host's feed projects them (modhost/feed.ts: session.open
  * {hsid, backend, project = projectHue(cwd), the ONE hue function, 0..5}, turn.partial, approval.request
  * {cardId, kind, hsid}, …), and draws its display-block:v1 output with the
- * GUI's own kit renderer (core/render.ts renderBlock) under each Box title,
- * at the foot of the sessions pane (the manifest's `sidebar`/`append` slot).
+ * GUI's own kit renderer through the fake kernel's `mod.view` (S5: the real
+ * app mounts it in the Workshop region the Layout places; no preview-only drawing).
  */
 import { projectHue, type LogRow } from '@a-company/gnomon-contracts';
-import { h, renderBlock, type MiniDoc, type MiniEl } from '../core/render.js';
 // @ts-ignore -- the mod is plain ESM with no types (its packageHash is pinned: no .d.ts may be added beside it)
 import * as model from '../../../gnomon-mods/workshop/model.mjs';
 
@@ -57,28 +56,4 @@ export function workshopBlock(rows: readonly LogRow[], prefs: { motion: 'full' |
     if (ev) workshop.apply(state, ev);
   }
   return workshop.render(state, prefs);
-}
-
-/** Draw the block: a title per zone, each cap line through the kit renderer with its hue as a swatch (hues are fills only). */
-export function drawWorkshop(doc: MiniDoc, block: Record<string, unknown>): MiniEl {
-  const zones = Array.isArray(block.children) ? (block.children as Array<Record<string, unknown>>) : [];
-  return h(
-    doc,
-    'section',
-    { class: 'pane-workshop', 'aria-label': 'Workshop (mod)' },
-    h(doc, 'div', { class: 'group-head' }, String(block.title ?? 'Workshop'), ' · mod'),
-    ...zones.map((z) =>
-      h(
-        doc,
-        'div',
-        { class: 'workshop-zone' },
-        h(doc, 'div', { class: 'meta' }, String(z.title ?? '')),
-        ...(Array.isArray(z.children) ? (z.children as Array<Record<string, unknown>>) : []).map((cap) => {
-          const tone = String(cap.tone ?? '');
-          const hue = /^hue-(\d)$/.exec(tone);
-          return h(doc, 'div', { class: `workshop-cap tone-${tone.replace(/[^a-z0-9-]/g, '')}` }, hue ? h(doc, 'span', { class: `swatch h${Number(hue[1]) % 6}` }) : null, renderBlock({ doc }, cap));
-        }),
-      ),
-    ),
-  );
 }
