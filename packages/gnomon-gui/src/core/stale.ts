@@ -9,19 +9,23 @@
  * a new ephemeral key, and a page learns a new key only from a launch
  * fragment (core/launch.ts decidePin) or from the verified predecessor
  * (#gui-resume). So the reopen is a FRESH launch window, which the restarted
- * kernel opens by itself (gnomon cli/relaunch.ts, printLaunch without a TTY),
- * at the same origin (kernel/web/last-port.ts). This tab:
- *   - says so in plain words, never a terminal as the only way back;
- *   - polls its own origin (cheap GET /, no credential) to tell "down" from "back";
- *   - listens on a same-origin BroadcastChannel for a window that ATTACHED
- *     (it posts `{t:'attached'}`; a stale tab asks `{t:'who'}`) and then
- *     offers one click: close this tab and continue there.
+ * kernel opens by itself (gnomon cli/relaunch.ts, printLaunch without a TTY)
+ * on a NEW, OS-chosen port (Aegis H1: no remembered port, so nothing that
+ * squats this tab's old port while Gnomon is down ever receives a launch).
+ * This tab:
+ *   - says so in plain words, never a terminal as the only way back, and
+ *     never suggests a reload (a reload would load whatever now serves here);
+ *   - polls its own origin (cheap GET /, no credential) and treats an answer
+ *     as NOT proof of Gnomon (Aegis L3: a squatter can answer 200 here);
+ *   - says "Gnomon restarted in a new window" ONLY on a same-origin
+ *     BroadcastChannel `{t:'attached'}` (another tab of this origin that
+ *     authenticated; it asks `{t:'who'}`), and then offers one click: close.
  * The channel carries those two fixed shapes only: no token, key, connId or
  * principal; anything else is ignored.
  */
 export const STALE_CHANNEL = 'gnomon.gui.v1';
 export type StaleMsg = { t: 'attached' } | { t: 'who' };
-export type StaleState = 'down' | 'back' | 'reopened';
+export type StaleState = 'down' | 'answering' | 'reopened';
 
 /** Only the two fixed messages, with no other field. */
 export function parseStaleMsg(d: unknown): StaleMsg | null {
@@ -31,12 +35,12 @@ export function parseStaleMsg(d: unknown): StaleMsg | null {
   return o.t === 'attached' ? { t: 'attached' } : o.t === 'who' ? { t: 'who' } : null;
 }
 
-/** The text and the one action of each stale state (no state names a terminal as the only path). */
+/** The text and the one action of each stale state (none names a terminal as the only path, none suggests a reload). */
 export function staleView(s: StaleState): { text: string; action: 'reconnect' | 'close' } {
-  if (s === 'reopened') return { text: 'Gnomon reopened in a new window. Continue there; this tab is no longer connected.', action: 'close' };
-  if (s === 'back')
+  if (s === 'reopened') return { text: 'Gnomon restarted in a new window. Continue there; this tab is no longer connected.', action: 'close' };
+  if (s === 'answering')
     return {
-      text: 'Gnomon is running again, but this tab cannot rejoin it: a restarted Gnomon has a new key, which only a fresh window receives. Open Gnomon.app (or run `gnomon` in a terminal) to get one.',
+      text: 'Something is answering at this address, but this tab cannot tell whether it is Gnomon, so it sends it nothing. Use the window Gnomon opened when it started (or open Gnomon.app; `gnomon` in a terminal also works). Do not reload this tab.',
       action: 'reconnect',
     };
   return { text: 'Gnomon stopped. When it starts again (Gnomon.app, `gnomon daemon start`, or `gnomon` in a terminal) it opens a new window by itself.', action: 'reconnect' };
@@ -56,7 +60,7 @@ export interface StaleWatchDeps {
   stopped: () => boolean;
 }
 
-/** Poll the origin until stopped; reports 'down' / 'back' on each change. Never throws. */
+/** Poll the origin until stopped; reports 'down' / 'answering' on each change (an answer is not proof of Gnomon). Never throws. */
 export async function watchStale(d: StaleWatchDeps): Promise<void> {
   const between = d.between ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   let last: StaleState | null = null;
@@ -68,7 +72,7 @@ export async function watchStale(d: StaleWatchDeps): Promise<void> {
       up = false;
     }
     if (d.stopped()) return;
-    const s: StaleState = up ? 'back' : 'down';
+    const s: StaleState = up ? 'answering' : 'down';
     if (s !== last) d.onState((last = s));
     await between(i < 30 ? STALE_POLL_FAST_MS : STALE_POLL_SLOW_MS);
   }

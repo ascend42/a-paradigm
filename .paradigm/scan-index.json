@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-a4b4474b9e5a244ed",
-    "generatedAt": "2026-10-20T07:37:39.066Z",
+    "generatedAt": "2026-10-20T07:45:51.842Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -2814,9 +2814,11 @@
       "symbol": "#gui-relaunch",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-a4b4474b9e5a244ed/packages/gnomon/.purpose",
-      "description": "#gui-relaunch (T-2026-10-20-001) — a kernel restarted outside the self-update path (stop, then start) reopens the GUI with no terminal. (1) A start without a TTY opens it: printLaunch with no TTY hands the launch URL to the browser opener ONLY (osascript stdin; never printed), and `gnomon daemon start | --detach` / `gnomond` (activator) open it after a FRESH ready through cli/relaunch.ts openGuiAfterStart — the same gui.open path bare `gnomon` uses (home pin verifies the hello before the device signs; one shared launch-grant cap; single use, 60 s). `--no-open` / GNOMON_NO_OPEN=1 turn it off. (2) kernel/web/last-port.ts remembers the bound web port (`web-port.json`, a port number only, strict shape, 1024..65535) and a plain start tries it first, silently falling back, so the reopened window shares the stale tab's origin; never used by the upgrade successor (preferPort / inherited fd rules unchanged). The stale tab cannot rejoin in place (each start has a new ephemeral key that only a launch fragment delivers); see gnomon-gui core/stale.ts.",
+      "description": "#gui-relaunch (T-2026-10-20-001) — a kernel restarted outside the self-update path (stop, then start) reopens the GUI with no terminal. (1) A start without a TTY opens it: printLaunch with no TTY hands the launch URL to the browser opener ONLY (osascript stdin; never printed), and `gnomon daemon start | --detach` / `gnomond` (activator) open it after a FRESH ready through cli/relaunch.ts openGuiAfterStart — the same gui.open path bare `gnomon` uses (home pin verifies the hello before the device signs; one shared launch-grant cap; single use, 60 s). `--no-open` / GNOMON_NO_OPEN=1 turn it off; `gnomond --foreground --no-open` is a usage refusal (the foreground kernel never opens anything). (2) NO remembered web port (Aegis H1, withdrawn from 945349a3): a port reused across stop/start lets a local squatter serve the old origin while Gnomon is down, so a reloaded stale tab could plant a service worker that the next auto-opened `#launch=` would load into. Every plain start binds an OS-chosen port and deletes any leftover `web-port.json` without reading it; the upgrade successor keeps its inherited fd. The stale tab cannot rejoin in place (each start has a new ephemeral key that only a launch fragment delivers); see gnomon-gui core/stale.ts.",
       "visualTags": [],
-      "related": []
+      "related": [
+        "#launch"
+      ]
     },
     "gui-stop-speaking": {
       "id": "gui-stop-speaking",

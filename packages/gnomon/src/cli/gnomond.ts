@@ -18,6 +18,8 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const parsed = parseDaemonArgs(argv);
   if (typeof parsed === 'string') return daemonUsage(parsed);
+  // M1 (Aegis): --no-open is the activator's; the foreground kernel never opens anything, so it is refused, not ignored
+  if (parsed.foreground && parsed.noOpen) return daemonUsage('--no-open applies to the activator (gnomond without --foreground, gnomon daemon start); gnomond --foreground never opens the GUI');
   // #gui-relaunch: the activator opens the GUI after a fresh start (GNOMON_NO_OPEN / --no-open turn it off)
   return parsed.foreground ? runForeground(parsed) : activateDetached(parsed, process.argv[1] ?? process.execPath, daemonHomeOf, launchDaemon, openGuiAfterStart()); // gnomond never reads GNOMON_HOME
 }

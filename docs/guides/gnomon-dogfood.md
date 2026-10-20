@@ -256,6 +256,20 @@ environment. `--no-open` (on `gnomon`, `gnomon up` and `gnomon setup`) or
 `GNOMON_NO_OPEN=1` prints the URL only; Gnomon.app (`up --wrapper`) never opens
 a browser. `gnomon dev up` still only prints.
 
+**Starting without a terminal also opens the GUI** (T-2026-10-20-001). When
+`gnomon up` or bare `gnomon` runs with no interactive terminal (under `nohup`,
+from a script), and after `gnomon daemon start` (or `--detach`, or `gnomond`
+without `--foreground`) starts a fresh kernel, Gnomon opens a new GUI window in
+your default browser by itself. The launch URL goes only to osascript's
+standard input and is **never printed** there, because that output may be a
+pipe, a file or a log. To turn this off, pass `--no-open` (on `gnomon`,
+`gnomon up` and `gnomon daemon start`) or set `GNOMON_NO_OPEN=1`.
+`gnomond --foreground --no-open` is refused with a usage line, because the
+foreground kernel never opens anything. A tab left open from before the restart
+cannot rejoin, because each start uses a new kernel key and a new port. That
+tab says so, and when it sees the new window attach it offers **Close this
+tab**. Do not reload it.
+
 `--home /absolute/path` runs a different provisioned home. `gnomon up` never
 reads `GNOMON_HOME`. If you ran `identity init` with `GNOMON_HOME` set, pass that
 path with `--home`.

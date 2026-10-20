@@ -1,47 +1,25 @@
 /**
- * T-2026-10-20-001 #gui-relaunch: the remembered web port is a strict, secret-free preference, and a start without
+ * T-2026-10-20-001 #gui-relaunch: no web port is remembered across a restart (Aegis H1), and a start without
  * a terminal opens the GUI through gui.open + the browser opener without ever printing the URL.
  */
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { LAST_PORT_FILE, readLastPort, writeLastPort } from '../src/kernel/web/last-port.js';
 import { openGuiAfterStart, RELAUNCH_OPENED } from '../src/cli/relaunch.js';
 import { UpRefusal } from '../src/cli/up-cli.js';
 
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-relaunch-'));
+const PKG = fileURLToPath(new URL('..', import.meta.url));
 const URL1 = 'http://127.0.0.1:51234/#launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&k=KEY';
 
-describe('last-port', () => {
-  it('round-trips a port and holds nothing else', () => {
-    const d = tmp();
-    expect(readLastPort(d)).toBeNull();
-    expect(writeLastPort(d, 51234)).toBe(true);
-    expect(readLastPort(d)).toBe(51234);
-    const raw = JSON.parse(fs.readFileSync(path.join(d, LAST_PORT_FILE), 'utf8'));
-    expect(Object.keys(raw).sort()).toEqual(['port', 'schemaVersion']);
-  });
-
-  it('falsifier: a planted or malformed file is never a preference', () => {
-    const d = tmp();
-    const f = path.join(d, LAST_PORT_FILE);
-    const bodies = [
-      '{',
-      '[]',
-      '{"schemaVersion":"gnomon-web-port:v1","port":80}',
-      '{"schemaVersion":"gnomon-web-port:v1","port":70000}',
-      '{"schemaVersion":"gnomon-web-port:v1","port":"5000"}',
-      '{"schemaVersion":"x","port":5000}',
-      '{"schemaVersion":"gnomon-web-port:v1","port":5000,"resume":"t"}',
-      ' '.repeat(300),
-    ];
-    for (const body of bodies) {
-      fs.writeFileSync(f, body);
-      expect(readLastPort(d)).toBeNull();
-    }
-    expect(writeLastPort(d, 80)).toBe(false);
-    expect(writeLastPort(d, 1.5)).toBe(false);
+describe('no remembered port (Aegis H1)', () => {
+  it('FALSIFIER: no code reads or writes a web-port file, and the daemon deletes a leftover one at start', () => {
+    const src = (f: string): string => fs.readFileSync(path.join(PKG, 'src', f), 'utf8');
+    expect(fs.existsSync(path.join(PKG, 'src', 'kernel', 'web', 'last-port.ts'))).toBe(false);
+    expect(src('kernel/web/endpoint.ts')).not.toMatch(/web-port|rememberPort|LastPort/);
+    const d = src('kernel/lifecycle/daemon.ts');
+    expect(d).toMatch(/rmSync\(path\.join\(home, 'web-port\.json'\), \{ force: true \}\)/);
+    expect(d).not.toMatch(/readFileSync\([^)]*web-port/);
   });
 });
 

@@ -86,6 +86,7 @@ import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
 import { loadFuseConfig } from '../budget/config.js';
 import { fileLayers } from '../budget/billing.js';
+import { rmSync } from 'node:fs';
 import * as path from 'node:path';
 import { completePendingQuarantine, readBootSession, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
@@ -455,6 +456,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
 
   const kernelSigner = opts.kernelSigner ?? SoftwareEd25519Signer.generate('kernel');
+  // T-2026-10-20-001 (Aegis H1): a remembered web port is NOT kept. A port reused across a stop/start lets a local
+  // process squat it while the kernel is down, so a reloaded stale tab would load ITS page (and service worker) at the
+  // origin the next launch URL opens into. Every plain start binds an OS-chosen port; a web-port.json left by the
+  // withdrawn 945349a3 build is deleted, never read. (The upgrade successor keeps its inherited fd, TD-2026-10-19-063.)
+  try {
+    rmSync(path.join(home, 'web-port.json'), { force: true });
+  } catch {
+    /* best effort: the file is never read */
+  }
   const kernelKeySource = opts.kernelSigner ? 'supplied-software' : 'ephemeral-software';
   const authority = opts.rootAuthority ?? new UnprovisionedRootAuthority();
   const kernelPrincipal = kernelPrincipalOf(authority);
@@ -1108,8 +1118,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ...(opts.web?.preferPort !== undefined ? { preferPort: opts.web.preferPort } : {}),
       ...(opts.web?.inheritFd !== undefined ? { inheritFd: opts.web.inheritFd } : {}),
       resume: resumeGate,
-      // T-2026-10-20-001 #gui-relaunch: a stop-then-start serves the GUI at the origin the open tab already has
-      rememberPort: true,
       kernelPublicKeyPem: pem,
       log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
       // §2.4 rule 3 / §11.2: an open GUI WebSocket is a subscriber; a closed one counts for nothing

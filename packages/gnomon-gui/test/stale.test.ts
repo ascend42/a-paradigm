@@ -17,18 +17,22 @@ describe('stale-tab channel', () => {
 
 describe('staleView', () => {
   it('every state names a non-terminal way back first; reopened offers the one click (close this tab)', () => {
-    for (const s of ['down', 'back', 'reopened'] as const) {
+    for (const s of ['down', 'answering', 'reopened'] as const) {
       const v = staleView(s);
       expect(v.text).not.toMatch(/^run `gnomon`/);
+      expect(v.text).not.toMatch(/running again/i); // Aegis L3: a poll answer is never proof of Gnomon
+      if (s !== 'answering') expect(v.text).not.toMatch(/reload/i);
       if (s !== 'reopened') expect(v.text).toMatch(/Gnomon\.app|by itself/);
     }
     expect(staleView('reopened').action).toBe('close');
     expect(staleView('down').action).toBe('reconnect');
+    expect(staleView('answering').text).toMatch(/Do not reload/);
+    expect(staleView('answering').text).toMatch(/cannot tell whether it is Gnomon/);
   });
 });
 
 describe('watchStale', () => {
-  it('reports down, then back, once each, and stops when told', async () => {
+  it('reports down, then answering, once each, and stops when told', async () => {
     const seen: StaleState[] = [];
     const answers = [false, false, true, true];
     let i = 0;
@@ -45,7 +49,7 @@ describe('watchStale', () => {
       onState: (s) => seen.push(s),
       stopped: () => stop,
     });
-    expect(seen).toEqual(['down', 'back']);
+    expect(seen).toEqual(['down', 'answering']);
   });
   it('a fetch that throws is down', async () => {
     const seen: StaleState[] = [];

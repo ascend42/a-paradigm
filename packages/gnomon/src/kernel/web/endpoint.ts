@@ -88,7 +88,6 @@ import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
 import type { ResumeGate } from './resume.js';
 import { LaunchGrantCap, type LaunchAsker } from './launch-cap.js';
-import { readLastPort, writeLastPort } from './last-port.js';
 import {
   CHANNEL_MAX_RECORD_BYTES,
   encodeRecord,
@@ -163,12 +162,6 @@ export interface WebEndpointOptions {
   inheritFd?: number;
   /** TD-2026-10-19-063 #gui-resume: the successor's single-use `{resumeToken}` gate (none: the form is refused unknown-token). */
   resume?: ResumeGate;
-  /**
-   * T-2026-10-20-001 #gui-relaunch: remember the bound port in `<stateDir ?? home>/web-port.json` and, when neither
-   * `preferPort` nor `inheritFd` is given, try it first (silently: taken or malformed ⇒ an OS-chosen port, no
-   * `portFallback`), so a stop-then-start serves the GUI at the origin the open tab already has (last-port.ts).
-   */
-  rememberPort?: boolean;
 }
 
 /** What the test seam may substitute: the launcher and the pinned bundle. */
@@ -478,14 +471,6 @@ export class WebEndpoint {
       );
       if (!bound) this.#portFallback = want;
     }
-    // #gui-relaunch: a plain start (no successor hand-over) tries the port the last kernel used, as a preference only
-    const last = this.#o.rememberPort && want === undefined && fd === undefined ? readLastPort(this.#o.stateDir ?? this.#o.home) : null;
-    if (!bound && last !== null) {
-      bound = await listenOn(last).then(
-        () => true,
-        () => false,
-      );
-    }
     // Aegis H: on ANY port other than the predecessor's, the GUI resume record is dropped (no resume via a new port)
     if (this.#portFallback !== null || (!bound && (want !== undefined || fd !== undefined))) this.#o.resume?.drop();
     if (!bound)
@@ -498,7 +483,6 @@ export class WebEndpoint {
       throw new LifecycleRefusal('web-transport-failed', 'the web listener is not bound to 127.0.0.1');
     }
     this.#listener = server;
-    if (this.#o.rememberPort) writeLastPort(this.#o.stateDir ?? this.#o.home, a.port);
     return a.port;
   }
 

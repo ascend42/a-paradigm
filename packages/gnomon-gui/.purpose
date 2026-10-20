@@ -308,14 +308,16 @@ components:
     description: >-
       #gui-relaunch page side (T-2026-10-20-001, core/stale.ts). A tab whose
       connection ended outside the self-update path never points to a
-      terminal as the only way back. It polls its own origin (GET /, no
-      credential; 2 s for a minute, then 10 s, ~1 h cap) to say "stopped" vs
-      "running again", and listens on the same-origin BroadcastChannel
+      terminal as the only way back and never suggests a reload. It polls its
+      own origin (GET /, no credential; 2 s for a minute, then 10 s, ~1 h cap):
+      an answer is NOT proof of Gnomon (Aegis L3, a squatter can answer), so it
+      says only "something is answering; use the window Gnomon opened", and listens on the same-origin BroadcastChannel
       `gnomon.gui.v1` for a window that attached (`{t:'attached'}`; it asks
       `{t:'who'}`). Exactly those two shapes, no token/key/connId. On
-      'attached' it offers one trusted click: Close this tab (the restarted
-      kernel already opened the fresh window at the same origin, gnomon
-      #gui-relaunch). It never rejoins in place: a restarted kernel has a new
+      'attached' it says "Gnomon restarted in a new window" and offers one
+      trusted click: Close this tab. The restarted kernel opens its fresh
+      window on a NEW OS-chosen port (Aegis H1: no remembered port), so
+      across a restart 'attached' arrives only from same-origin tabs. It never rejoins in place: a restarted kernel has a new
       ephemeral key that only a launch fragment delivers (decidePin).
     tags: [gnomon, gui]
     tests:
