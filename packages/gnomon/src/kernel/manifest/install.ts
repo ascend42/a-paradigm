@@ -100,7 +100,7 @@ export function deriveTier(packageHash: string, signature?: { keyId: string; sig
 export type InstallSource = 'package' | `linked:${string}` | `git:${string}`;
 
 /** S0b §3: how the bytes compare with the approved history of this mod id (the card's index-3 line). */
-export type VersionClass = 'first' | 'update' | 'downgrade' | 'same-version-new-bytes' | 'format-only';
+export type VersionClass = 'first' | 'update' | 'downgrade' | 'revert' | 'same-version-new-bytes' | 'format-only';
 
 /** What the install card shows (§12.5), and what its contentHash covers. */
 export interface InstallCardDetail {
@@ -285,13 +285,16 @@ export function checkServerCollision(home: string, manifest: ManifestV2, grants:
 
 /** S0b §3: the version class of staged bytes against the approved history of this id. */
 function classify(grants: ResolvedGrants, id: string, current: GrantInstallRow | undefined, prev: ReadManifestResult | null, next: ReadManifestResult, packageHash: string): VersionClass {
-  if (!current || !prev) return 'first';
-  const c = compareVersions(next.manifest.version, prev.manifest.version);
-  // a packageHash approved before under a lower version than the current pin is a downgrade too
-  const earlier = grants.installs.find((r) => r.name === id && r.packageHash === packageHash);
+  // only a mod with no effective pin is a first install; a pin whose manifest cannot be re-read is never `first`
+  if (!current) return 'first';
+  const c = prev ? compareVersions(next.manifest.version, prev.manifest.version) : null;
   if (c !== null && c < 0) return 'downgrade';
+  // Aegis S0b M3: bytes approved EARLIER that are not the current pin are a revert (e.g. after a rollback, or
+  // re-approving an old snapshot under a bumped version), shown with the prominent DOWNGRADE line
+  const earlier = grants.installs.some((r) => r.name === id && r.packageHash === packageHash && r.packageHash !== current.packageHash);
+  if (earlier) return 'revert';
   if (c !== null && c > 0) return 'update';
-  void earlier;
+  if (!prev) return 'same-version-new-bytes';
   return prev.format !== next.format ? 'format-only' : 'same-version-new-bytes';
 }
 
@@ -304,6 +307,8 @@ function versionLine(d: InstallCardDetail): string {
       return `version: update ${d.prevVersion} → ${d.version}`;
     case 'downgrade':
       return `DOWNGRADE: ${d.prevVersion} → ${d.version} (older version; check why)`;
+    case 'revert':
+      return `DOWNGRADE: revert to previously approved bytes, ${d.prevVersion ?? 'unknown'} → ${d.version} (check why)`;
     case 'format-only':
       return `version: ${d.version} unchanged, manifest format ${d.format === 1 ? 1 : 2} (format-only change)`;
     default:
@@ -360,7 +365,7 @@ function midTrunc(s: string, max: number): string {
  * wraps and the kernel-composed count line stays at index 2.
  */
 function headerLine(d: InstallCardDetail): string {
-  const verb = !d.replaces ? 'Install' : d.versionClass === 'update' ? 'Update' : d.versionClass === 'downgrade' ? 'Downgrade' : 'Re-approve';
+  const verb = !d.replaces ? 'Install' : d.versionClass === 'update' ? 'Update' : d.versionClass === 'downgrade' || d.versionClass === 'revert' ? 'Downgrade' : 'Re-approve';
   const compose = (src: string) => `${verb} mod ${d.name} ${midTrunc(d.version, 64)} (${d.kind}) by ${d.publisherDisplay} from ${src}, tier ${d.tier}`;
   const budget = Math.max(16, MAX_LINE - Array.from(compose('')).length);
   return compose(midTrunc(d.source, budget));

@@ -987,3 +987,52 @@ describe('#manifest-loader emits only §9.1 registry kinds', () => {
     expect([...kinds].filter((k) => !EVENT_KIND_NAMES.includes(k))).toEqual([]);
   });
 });
+
+/* ── Aegis S0b review fixes ───────────────────────────────────────────────── */
+
+describe('Aegis S0b M3: version class by packageHash history', () => {
+  it('re-staging earlier approved bytes that are not the current pin is a revert with the DOWNGRADE line, never first or update', () => {
+    const home = tmp();
+    const auth = root();
+    const v1 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.0.0' }));
+    const v2 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.1.0' }));
+    const stage = (src: string) => {
+      const st = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
+      if (st.state !== 'staged') throw new Error('staged');
+      return st;
+    };
+    const s1 = stage(v1);
+    expect(s1.record.detail.versionClass).toBe('first');
+    decideInstallCard(home, 'acme.diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s1.cardId), authority: auth });
+    const s2 = stage(v2);
+    expect(s2.record.detail.versionClass).toBe('update');
+    decideInstallCard(home, 'acme.diff-lens', s2.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s2.cardId), authority: auth });
+    // a plain downgrade by semver
+    const back = stage(v1);
+    expect(back.record.detail.versionClass).toBe('downgrade');
+    // roll back to 1.0.0, then re-stage the 1.1.0 bytes: approved before, not the current pin → revert
+    rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: rbBound('acme.diff-lens', undefined), authority: auth });
+    const again = stage(v2);
+    expect(again.record.detail.versionClass).toBe('revert');
+    const texts = (again.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+    expect(texts[0]).toMatch(/^Downgrade mod acme\.diff-lens/);
+    expect(texts[3]).toMatch(/^DOWNGRADE: revert to previously approved bytes, 1\.0\.0 → 1\.1\.0/);
+  });
+
+  it('a current pin whose manifest cannot be re-read is never classified first', () => {
+    const home = tmp();
+    const auth = root();
+    const v1 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.0.0' }));
+    const s1 = stageInstall({ home, source: v1, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (s1.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s1.cardId), authority: auth });
+    const pinMf = path.join(pinnedDir(home, 'acme.diff-lens', s1.record.detail.packageHash), MANIFEST_FILE);
+    fs.chmodSync(path.dirname(pinMf), 0o700);
+    fs.chmodSync(pinMf, 0o600);
+    fs.writeFileSync(pinMf, 'not json');
+    const v2 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.1.0' }));
+    const s2 = stageInstall({ home, source: v2, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (s2.state !== 'staged') throw new Error('staged');
+    expect(s2.record.detail.versionClass).not.toBe('first');
+  });
+});
