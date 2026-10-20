@@ -1596,6 +1596,12 @@ export class SessionSupervisor {
     return { hsid: s.hsid, repoKey: repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]), cwd: s.cwd };
   }
 
+  /** Aegis M1 (#paradigm-context-mod K3): the session principal of a LIVE session, or null. */
+  principalOf(hsid: string): string | null {
+    const s = this.#sessions.get(hsid);
+    return s && s.state !== 'exited' ? s.principalId : null;
+  }
+
   /** P8-D87: every live Claude session's mode scope (status.runModes). */
   liveScopes(): Array<{ hsid: string; repoKey: string; cwd: string }> {
     return [...this.#sessions.keys()].map((h) => this.scopeOf(h)).filter((x): x is { hsid: string; repoKey: string; cwd: string } => x !== null);

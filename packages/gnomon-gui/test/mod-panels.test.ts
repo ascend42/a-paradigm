@@ -87,9 +87,10 @@ describe('#gui mod panels: slots', () => {
     expect(modPanelsOf({ mods: { running: { n: 1 } } })).toEqual([]); // the non-human status has counts only
   });
 
-  it('the mod.view params carry only the focused hsid as display context', () => {
+  it('the mod.view params carry only the focused hsid as {focus:{hsid}} (K3)', () => {
     const [sheet] = modPanelsOf(status);
-    expect(modViewParams(sheet!, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA')).toEqual({ name: 'ledger', viewId: 'ledger.sheet', input: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } });
+    // K3: {focus:{hsid}} only; the HOST joins it to the live session's repo, the GUI never names a repo or path
+    expect(modViewParams(sheet!, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA')).toEqual({ name: 'ledger', viewId: 'ledger.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } } });
     expect(modViewParams(sheet!, null)).toEqual({ name: 'ledger', viewId: 'ledger.sheet', input: {} });
   });
 
@@ -161,6 +162,33 @@ describe('#gui mod panels: the scheduler', () => {
     expect(n).toBe(0);
     expect(t.pending.size).toBe(0);
     expect(isFeedRow('budget.usage')).toBe(true);
+  });
+
+  it('K3: a focus change renders now (no debounce); the same focus, or the mount focus, does not', async () => {
+    const t = new FakeTimers();
+    let n = 0;
+    const s = new ModPanelScheduler(async () => void n++, t);
+    expect(s.focus('hsid:v1:A')).toBe(false); // the mount render uses it
+    expect(s.focus('hsid:v1:A')).toBe(false);
+    expect(s.focus('hsid:v1:B')).toBe(true);
+    await flush();
+    expect(n).toBe(1);
+    expect(s.focus(null)).toBe(true);
+    await flush();
+    expect(n).toBe(2);
+    // a focus change DURING a render: the follow-up runs at once (no 250 ms debounce)
+    let release!: () => void;
+    let m = 0;
+    const slow = new ModPanelScheduler(() => (m++, m === 1 ? new Promise<void>((r) => (release = r)) : Promise.resolve()), t);
+    slow.focus('hsid:v1:A');
+    slow.now();
+    expect(slow.focus('hsid:v1:B')).toBe(true);
+    release();
+    await flush();
+    expect(m).toBe(2);
+    expect(t.pending.size).toBe(0);
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/function focus\(hsid: string \| null\): void \{[\s\S]*?modPanelsFocus\(hsid\);[\s\S]*?\n\}/);
   });
 
   it('debounces 250 ms: a burst of feed rows is one render', async () => {

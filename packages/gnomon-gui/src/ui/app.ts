@@ -35,7 +35,7 @@ import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMod
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
-import { mountModPanels } from './mod-panels-mount.js';
+import { modPanelsFocus, mountModPanels } from './mod-panels-mount.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
@@ -994,6 +994,7 @@ function focusCard(cardId: string | null): void {
 function focus(hsid: string | null): void {
   if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
+  modPanelsFocus(hsid); // K3: the mod panels re-render for the new focus (the host joins it to the repo); first, so a later paint error never skips it
   if (hsid) feedView = false;
   closeDrawers();
   closeModeMenu();

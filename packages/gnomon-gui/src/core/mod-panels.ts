@@ -15,7 +15,9 @@
  *   - A view renders through `mod.view` (the relay stamps relayedFor) and the
  *     kit renderer (core/render.ts, text nodes only) inside a fence labelled
  *     `mod:<name>`, with a `dev` badge for a dev-linked (tier local) mod. The
- *     input is display context only: {hsid} of the focused session.
+ *     input is display context only: {focus:{hsid}} of the focused session
+ *     (K3); the HOST joins that hsid to the live session repo server-side,
+ *     the GUI never names a repo or a path. A focus change re-renders.
  *   - Aegis M2: the right-pane (panel) region carries a `mods` heading rule
  *     outside the decision stack's scroll area, and a block holding any
  *     kit.Button is refused there (shown as a refusal in its fence).
@@ -134,9 +136,9 @@ export function isFeedRow(kind: unknown): boolean {
   return typeof kind === 'string' && MOD_FEED_KINDS.includes(kind);
 }
 
-/** The `mod.view` params for a panel: the focused session is display context only. */
-export function modViewParams(v: ModPanelView, focused: string | null): { name: string; viewId: string; input: { hsid?: string } } {
-  return { name: v.name, viewId: v.viewId, input: focused ? { hsid: focused } : {} };
+/** The `mod.view` params for a panel: the focused session as {focus:{hsid}} (K3: the host joins it; never a repo or path). */
+export function modViewParams(v: ModPanelView, focused: string | null): { name: string; viewId: string; input: { focus?: { hsid: string } } } {
+  return { name: v.name, viewId: v.viewId, input: focused ? { focus: { hsid: focused } } : {} };
 }
 
 /** Whether a block tree holds a kit.Button anywhere (bounded depth). */
@@ -202,12 +204,27 @@ export class ModPanelScheduler {
     return true;
   }
 
+  #focus: string | null | undefined = undefined;
+
+  /** K3 (closes T-2026-10-20-008 (4)): the focused session changed ⇒ a render now. Returns true when it rendered. */
+  focus(hsid: string | null): boolean {
+    const first = this.#focus === undefined;
+    const changed = this.#focus !== hsid;
+    this.#focus = hsid;
+    if (first || !changed) return false; // the mount render already used this focus
+    this.now();
+    return true;
+  }
+
   /** A render now (mount / status change), still single-flight. */
   now(): void {
     if (this.#timer !== null) this.#t.clearTimeout(this.#timer);
     this.#timer = null;
+    if (this.#inFlight) this.#againNow = true; // a focus change during a render: the follow-up runs at once, not debounced
     void this.#run();
   }
+
+  #againNow = false;
 
   #arm(): void {
     if (this.#timer !== null) this.#t.clearTimeout(this.#timer);
@@ -230,7 +247,11 @@ export class ModPanelScheduler {
       /* a failed render shows in its fence; the scheduler keeps going */
     } finally {
       this.#inFlight = false;
-      if (this.#again) {
+      if (this.#againNow) {
+        this.#againNow = false;
+        this.#again = false;
+        void this.#run();
+      } else if (this.#again) {
         this.#again = false;
         this.#arm();
       }

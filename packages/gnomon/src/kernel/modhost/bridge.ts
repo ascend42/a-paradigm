@@ -136,8 +136,8 @@ export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => n
 
 /** What the dispatcher needs from the mod host (socket/dispatch.ts ModRelayPort). */
 export interface ModRelays {
-  view(relayedFor: { principal: string; connId: string }, req: { name: string; viewId: string; input: unknown }): Promise<RenderResult>;
-  command(relayedFor: { principal: string; connId: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<RenderResult>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only for every other caller (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -147,7 +147,7 @@ export function createModRelayPort(host: ModHost): ModRelays {
   return {
     view: async (rf, req) => {
       await ensure(req.name);
-      return host.relayView({ name: req.name, viewId: req.viewId, input: req.input, principal: rf.principal, connId: rf.connId });
+      return host.relayView({ name: req.name, viewId: req.viewId, input: req.input, principal: rf.principal, connId: rf.connId, principalClass: rf.principalClass });
     },
     command: async (rf, req) => {
       await ensure(req.name);

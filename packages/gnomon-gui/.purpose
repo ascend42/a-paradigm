@@ -119,7 +119,11 @@ components:
       in the fence. ModPanelScheduler: re-render only on a LIVE store row of
       a MOD_FEED_KINDS kind (held equal to the kernel FEED_KINDS by test),
       debounced by MOD_PANEL_DEBOUNCE_MS, one render in flight (rows during it queue exactly
-      one more), never on a timer. ui/mod-panels-mount.ts is the browser
+      one more), never on a timer. K3 (#paradigm-context-mod): mod.view input
+      is {focus:{hsid}} only (the HOST joins it to the live session repo;
+      the GUI never names a repo or path) and a focus change re-renders now
+      (ModPanelScheduler.focus, app.ts focus() -> modPanelsFocus; closes
+      T-2026-10-20-008 (4) for the Ledger). ui/mod-panels-mount.ts is the browser
       glue (creates the slot containers next to their panes, no index.html
       change, calls mod.view with input {hsid: focused} as display context);
       app.ts only calls mountModPanels after each attach's status read and
@@ -638,6 +642,11 @@ components:
       scripts/preview-shots.mjs writes <fixture>-<theme>.png at 1440x900 with
       Playwright or Puppeteer when one is already installed (none is added),
       or an installed Chrome with --chrome; otherwise it skips.
+      Fixture paradigm-context (#paradigm-context-mod): status.mods.views
+      lists the sidebar sheet; the fake kernel answers mod.view like the
+      host (the GUI {focus:{hsid}} joined to a fixture K1 slice by hsid,
+      other keys ignored) through the REAL mod model
+      (src/preview/paradigm-context.ts), drawn by the real mod-panel path.
     path: src/preview/
     type: module
     tags: [gnomon, gui, dev-tool, preview]

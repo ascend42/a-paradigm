@@ -388,6 +388,11 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   if (caps.includes('log.read:usage') && opts.tier === 'local' && egress !== undefined && egress !== 'none' && Array.isArray(egress) && egress.length > 0) {
     fail('EGRESS', 'a local-tier mod with log.read:usage cannot list egress', { capability: 'log.read:usage', tier: opts.tier });
   }
+  // K1 (#paradigm-context-mod): repo task/decision/lore titles plus a network path is an exfiltration shape;
+  // a mod holding paradigm.read:summary may list no egress, at ANY tier
+  if (caps.includes('paradigm.read:summary') && Array.isArray(egress) && egress.length > 0) {
+    fail('EGRESS', 'a mod with paradigm.read:summary cannot list egress', { capability: 'paradigm.read:summary', tier: opts.tier });
+  }
   return value as ManifestV1;
 }
 

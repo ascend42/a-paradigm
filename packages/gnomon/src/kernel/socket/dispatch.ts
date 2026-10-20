@@ -388,8 +388,9 @@ export const HUMAN_DEVICE_VERB_MILESTONES: Readonly<Record<string, string>> = Ob
 
 /** The mod host's side of the client relays (modhost/bridge.ts createModRelayPort). */
 export interface ModRelayPort {
-  view(relayedFor: { principal: string; connId: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
-  command(relayedFor: { principal: string; connId: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  /** relayedFor.principalClass (Aegis M1): the caller's §5 class, for the host's K3 focus join; never forwarded to the mod */
+  view(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string; principalClass: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
   /** full for the human class; counts only otherwise (F4) */
   status(full: boolean): Record<string, unknown>;
 }
@@ -742,7 +743,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         throw new RpcRefusal('ENGINE', 'not-implemented', 'mod.command from a GUI needs a user gesture (§11.5); the gesture proof lands with the GUI (M1.10)', { verb: m, milestone: 'M1.10' });
       }
       const q = p as Record<string, unknown>;
-      const relayedFor = { principal: s.principal!, connId: s.connId };
+      // Aegis M1: the class rides with the principal, so the host joins a focus only for a caller entitled to it
+      const relayedFor = { principal: s.principal!, connId: s.connId, principalClass: cls };
       try {
         return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args: q.args ?? null }));
       } catch (err) {

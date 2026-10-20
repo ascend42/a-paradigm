@@ -3084,8 +3084,48 @@ components:
       (feedCount), strings only ids or enum tokens (test/mod-feed-v2.test.ts
       property test); seq/at validated. status() lists views of running mods
       ({name, viewId, slot, placement, dev}) for the #gui mod panels.
-      FIRST_PARTY_PACKAGE_HASHES pins the Workshop and the Ledger. Still to come: spend from the caller permit,
+      FIRST_PARTY_PACKAGE_HASHES pins the Workshop, the Ledger and Paradigm Context. Still to come: spend from the caller permit,
       dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
+      K1 (#paradigm-context-mod): paradigm-slice.ts, the paradigm-slice:v1
+      kernel projection of a LIVE session's repo (.paradigm/tasks/entries,
+      decisions/TD-*.yaml, lore/entries/**): open/high task counts, top 5
+      tasks, last 5 decisions {id,title,date}, last 5 lore {id,title,type},
+      symbols touched; zero-dep strict YAML subset (malformed files skipped
+      and counted), symlinks and realpath escapes refused, files capped,
+      titles §4.5-sanitised, path-redacted, ≤120 chars; sensitivity secret
+      dropped; no absolute path in the slice (hue + basename only). Granted
+      by paradigm.read:summary (CAPABILITY_FORMS; not an id input; a
+      manifest holding it may list no egress, any tier).
+      Aegis review (H1/M2/M3/L1/L3): no super-linear regex over file text
+      (key lines split by indexOf, trailing comments found by a linear scan,
+      scalars and titles capped at SCALAR_MAX 4 KiB before any regex); the
+      root walk runs in realpath space (cwd and home realpath'ed, case-folded
+      on darwin/win32, never at or above the home); bounded opendir
+      iteration (MAX_ENTRIES), MAX_TASK_PARSED 512, SLICE_BYTE_BUDGET 3 MiB;
+      the cache is keyed by the .paradigm realpath (hue per cwd, sync read =
+      single-flight; a worker is a follow-up); files: dev+ino match, nlink>1
+      refused, re-realpath + stat(realpath) vs fstat after open; realpath(cwd)
+      and realpath(home) scrubbed.
+      K3: a RELAYED render's input is host-composed (host.ts
+      composeRelayedInput, HOST_INPUT_KEYS focus/hsid/paradigm): the client
+      names only {focus:{hsid}} (or the K0 {hsid}); the host joins that hsid
+      SERVER-SIDE to the live session cwd (ModHostOptions.focusCwd; daemon:
+      supervisor.scopeOf) and gives a paradigm.read:summary mod exactly
+      {hsid?, paradigm: slice | unfocused}; a forged repo/path/cwd/paradigm is
+      ignored (test/mod-focus.test.ts). Other mods get their non-host keys +
+      {hsid}. Local-lane sessions are not joined yet (unfocused).
+      Aegis M1: the join checks the CALLER. The dispatcher stamps
+      relayedFor{principal, connId, principalClass}; the host keeps the class
+      host-side (the mod's relayedFor stays {principal, connId}). Human: any
+      live hsid. Agent/session: only its OWN session (ModHostOptions.
+      focusPrincipal; daemon: supervisor.principalOf(hsid) === caller).
+      Voice, mod, unknown: unfocused (peer/read-token never reach mod.view:
+      RELAY_TIERS false). Falsifier: test/mod-focus.test.ts (agent naming
+      another session's hsid).
+      HOST-LEVEL FALSIFIERS (test/mod-capability-falsifier.test.ts, real stub
+      children; mutation-checked): log.read-only mods get no usage kind and
+      turn.result exactly {hsid}; a mod without paradigm.read:summary never
+      receives the slice (relayed, forged, or via the feed).
     tags: [kernel, mods, sandbox, M1.11]
 
   mod-cli:

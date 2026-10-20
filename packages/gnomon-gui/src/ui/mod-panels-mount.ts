@@ -66,7 +66,12 @@ const clear = (el: HTMLElement): void => {
   while (el.firstChild) el.removeChild(el.firstChild);
 };
 
-let current: { scheduler: ModPanelScheduler; dispose(): void } | null = null;
+let current: { scheduler: ModPanelScheduler; views: number; dispose(): void } | null = null;
+
+/** K3: the focused session changed (app.ts focus()) ⇒ the mod panels re-render now with the new {focus:{hsid}}. */
+export function modPanelsFocus(hsid: string | null): void {
+  if (current && current.views > 0) current.scheduler.focus(hsid);
+}
 
 /** Mount (or re-mount) the mod panels for this connection. Returns the live-row hook. */
 export function mountModPanels(o: { client: GnomonClient; status: unknown; focused: () => string | null }): (row: { kind?: unknown } | null) => void {
@@ -106,10 +111,12 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
   const scheduler = new ModPanelScheduler(render, { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (t) => window.clearTimeout(t as number) });
   current = {
     scheduler,
+    views: views.length,
     dispose: () => {
       live = false;
     },
   };
+  scheduler.focus(o.focused()); // K3: the mount render uses the current focus
   if (views.length) scheduler.now();
   else {
     for (const region of Object.keys(REGION_HOST) as ModRegion[]) {

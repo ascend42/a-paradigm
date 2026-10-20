@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-0"
+        },
+        {
+          "type": "Text",
+          "text": "ledgerette"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "stale · last entry 2026-08-30 (51 days ago)",
+      "tone": "warn"
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Text",
+          "text": "tasks · 1 of 1 open",
+          "tone": "head"
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-08-12-002",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Typecheck packages/ledger after the Cents migration”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Text",
+          "text": "decisions · 1 of 3",
+          "tone": "head"
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-08-30-118 2026-08-30",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Money is integer cents end to end”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Text",
+          "text": "lore · 1 of 4",
+          "tone": "head"
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore milestone",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-08-29-matt-101500-001",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Ledger import lands”",
+              "tone": "quiet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "children": [
+        {
+          "type": "Text",
+          "text": "symbols · 2",
+          "tone": "head"
+        },
+        {
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "#ledger-post",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "$import-flow",
+              "tone": "chip"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "skipped · 1 refused · 2 secret",
+      "tone": "quiet"
+    }
+  ]
+}
