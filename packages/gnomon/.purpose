@@ -1897,6 +1897,13 @@ components:
       on a non-pending card is refused before presence with no
       approval.decide row; an unknown card is NOT_FOUND. Tests:
       test/broker-deny-safe.test.ts (every platform).
+      F3 (TD-2026-10-20-086): RunModeControl configDefault = the
+      root-signed config `runModes.default` (budget/config.ts
+      parseRunModesSection; any fallback ⇒ null): a repo with no mode of its
+      own takes it (view source 'config') when its folder is known and not
+      home / above home / `/` (else ask; a repo key with no live session ⇒
+      ask, fail safe); the ceiling still applies; status.runModes
+      .configDefault (test/run-mode-default.test.ts).
       RUN MODES (P8-D86/D87, src/kernel/broker/run-mode.ts + supervisor/
       auto-edits.ts): manual | ask (default) | auto-edits, per repo and per
       session, folded from KERNEL-signed approval.mode.set and

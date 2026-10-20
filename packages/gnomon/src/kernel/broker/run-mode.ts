@@ -33,7 +33,11 @@
  *
  * SCOPE: a session takes its repo's mode unless one is set for it
  * (`session.open{runMode}` or `request.mode.set{hsid}`); a repo with no mode
- * set is `ask`. The modes are FOLDED from kernel-signed rows only
+ * set takes the ROOT-SIGNED config default `runModes.default`
+ * (TD-2026-10-20-086 F3, `configDefault`; source 'config') when its folder
+ * is known and is not the user's home, an ancestor of it or `/` (M3: those
+ * are refused the default, and a repo named only by its key with no live
+ * session takes none: fail safe), else `ask`. The ceiling still applies. The modes are FOLDED from kernel-signed rows only
  * (`approval.mode.set`, `session.open{runMode}`) — RunModeBook, like
  * #always-rules' RuleBook — so a repo's mode persists across sessions and
  * kernel restarts, and `gnomon replay` sees the same chain.
@@ -211,7 +215,7 @@ export function modeSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): Rul
 export interface RunModeView {
   /** the mode set for the session, else its repo's, else the default */
   chosen: RunMode;
-  source: 'session' | 'repo' | 'default';
+  source: 'session' | 'repo' | 'config' | 'default';
   /** the repo's mode (or the default) — what the session falls back to */
   repoMode: RunMode;
   level: StrictnessLevel | null;
@@ -251,6 +255,8 @@ export interface RunModeDeps {
   userHome?: string;
   /** Aegis L2: told after every applied mode change (the supervisor records each live session's transition at once) */
   onChange?: () => void;
+  /** TD-2026-10-20-086 F3: the root-signed config's runModes.default (null/absent: none, the built-in ask) */
+  configDefault?: () => RunMode | null;
 }
 
 export type ModeSetResult =
@@ -280,8 +286,34 @@ export class RunModeControl {
     }
   }
 
-  repoView(repoKey: string): { mode: RunMode; level: StrictnessLevel | null; ceiling: RunMode; effective: RunMode } {
-    const mode = this.#d.book().repoMode(repoKey) ?? DEFAULT_RUN_MODE;
+  /**
+   * F3: the mode a repo with no mode of its own takes — the root-signed config default when its folder `cwd` is
+   * known and is not home / above home / `/`; else DEFAULT_RUN_MODE. An unreadable config answers the built-in.
+   */
+  #defaultFor(repoKey: string, cwd: string | null): { mode: RunMode; source: 'config' | 'default' } {
+    let cfg: RunMode | null = null;
+    try {
+      cfg = this.#d.configDefault?.() ?? null;
+    } catch {
+      cfg = null;
+    }
+    if (!cfg || cfg === DEFAULT_RUN_MODE) return { mode: DEFAULT_RUN_MODE, source: 'default' };
+    // a STRICTER config default needs no folder check; a looser one needs a known folder that is not home-ish
+    if (MODE_RANK[cfg] > MODE_RANK[DEFAULT_RUN_MODE]) {
+      const dir = cwd ?? this.#d.sessions.live().find((s) => s.repoKey === repoKey)?.cwd ?? null;
+      if (!dir || isHomeOrAbove(dir, this.#d.userHome ?? os.homedir())) return { mode: DEFAULT_RUN_MODE, source: 'default' };
+    }
+    return { mode: cfg, source: 'config' };
+  }
+
+  /** The repo's own mode, else its default (F3). */
+  #repoMode(repoKey: string, cwd: string | null): { mode: RunMode; source: 'repo' | 'config' | 'default' } {
+    const own = this.#d.book().repoMode(repoKey);
+    return own ? { mode: own, source: 'repo' } : this.#defaultFor(repoKey, cwd);
+  }
+
+  repoView(repoKey: string, cwd: string | null = null): { mode: RunMode; level: StrictnessLevel | null; ceiling: RunMode; effective: RunMode } {
+    const mode = this.#repoMode(repoKey, cwd).mode;
     const level = this.#level(repoKey);
     const ceiling = ceilingOf(level);
     return { mode, level, ceiling, effective: stricterMode(mode, ceiling) };
@@ -289,12 +321,13 @@ export class RunModeControl {
 
   view(hsid: string, repoKey: string): RunModeView {
     const book = this.#d.book();
-    const repoMode = book.repoMode(repoKey) ?? DEFAULT_RUN_MODE;
+    const rm = this.#repoMode(repoKey, this.#d.sessions.scope(hsid)?.cwd ?? null);
+    const repoMode = rm.mode;
     const own = book.sessionMode(hsid);
     const level = this.#level(repoKey);
     const ceiling = ceilingOf(level);
     const chosen = own ?? repoMode;
-    return { chosen, source: own ? 'session' : book.repoMode(repoKey) ? 'repo' : 'default', repoMode, level, ceiling, effective: stricterMode(chosen, ceiling) };
+    return { chosen, source: own ? 'session' : rm.source, repoMode, level, ceiling, effective: stricterMode(chosen, ceiling) };
   }
 
   /**
@@ -307,7 +340,7 @@ export class RunModeControl {
     if (runMode === undefined) return { direct: null, loosen: null };
     if (!isRunMode(runMode)) throw fail('BAD_REQUEST', 'bad-params', `runMode is one of ${RUN_MODES.join(', ')}`);
     if (runMode === 'auto-edits') this.#refuseHomeRoot(cwd);
-    const r = this.repoView(this.#d.repoKeyOfPath(cwd));
+    const r = this.repoView(this.#d.repoKeyOfPath(cwd), cwd);
     if (MODE_RANK[runMode] > MODE_RANK[r.ceiling]) throw this.#overCeiling(runMode, r.ceiling, r.level);
     return MODE_RANK[runMode] <= MODE_RANK[r.mode] ? { direct: runMode, loosen: null } : { direct: null, loosen: runMode };
   }
@@ -364,7 +397,7 @@ export class RunModeControl {
 
     const level = this.#level(repo);
     const ceiling = ceilingOf(level);
-    const from = hsid ? this.view(hsid, repo).chosen : (this.#d.book().repoMode(repo) ?? DEFAULT_RUN_MODE);
+    const from = hsid ? this.view(hsid, repo).chosen : this.#repoMode(repo, typeof p.repo === 'string' && path.isAbsolute(p.repo) ? p.repo : null).mode;
     const scope = { repo, hsid };
     if (MODE_RANK[to] > MODE_RANK[ceiling]) throw this.#overCeiling(to, ceiling, level);
     if (to === 'auto-edits') {
@@ -448,7 +481,7 @@ export class RunModeControl {
         const level = this.#level(scope.repo);
         const ceiling = ceilingOf(level);
         if (MODE_RANK[to] > MODE_RANK[ceiling]) throw this.#overCeiling(to, ceiling, level); // the level rose while the card waited
-        const cur = scope.hsid ? this.view(scope.hsid, scope.repo).chosen : (this.#d.book().repoMode(scope.repo) ?? DEFAULT_RUN_MODE);
+        const cur = scope.hsid ? this.view(scope.hsid, scope.repo).chosen : this.#repoMode(scope.repo, null).mode;
         await this.#d.broker.modeSet({ scope, from: cur, to, by: { principal: asker.principal!, connId: ctx.connId }, presence: 'fresh' }, { connId: ctx.connId, ...(scope.hsid ? { session: scope.hsid } : {}) });
         this.#d.book().apply(scope, to);
         this.#changed();
@@ -459,8 +492,16 @@ export class RunModeControl {
   /** status.runModes (human class): the default, whether strictness is built, every set repo and every live session. */
   status(): Record<string, unknown> {
     const live = this.#d.sessions.live();
+    let configDefault: RunMode | null = null;
+    try {
+      configDefault = this.#d.configDefault?.() ?? null;
+    } catch {
+      configDefault = null;
+    }
     return {
       default: DEFAULT_RUN_MODE,
+      // F3: the root-signed default for repos with no mode of their own (never home, above it or /)
+      configDefault,
       modes: [...RUN_MODES],
       strictness: { built: this.#d.level === undefined ? false : true, note: this.#d.level === undefined ? 'strictness levels are not built (M2.10): the ceiling permits every mode' : 'level per repo' },
       repos: this.#d.book().repos().map((r) => ({ repo: r.repo, ...this.repoView(r.repo) })),

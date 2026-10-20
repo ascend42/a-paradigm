@@ -94,7 +94,9 @@ export function planChange(v: Pick<SessionModeView, 'chosen' | 'ceiling' | 'leve
 export function modeLabel(v: SessionModeView | null): string {
   if (!v) return 'mode: —';
   const clamp = v.effective !== v.chosen ? ` → ${v.effective} (ceiling)` : '';
-  return `mode: ${v.chosen}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
+  // F3 (TD-2026-10-20-086): the folder runs the root-signed default because no mode was chosen for it
+  const dflt = v.source === 'config' ? ' (default)' : '';
+  return `mode: ${v.chosen}${dflt}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
 }
 
 /** One line per mode for the menu: what it does, and why it is disabled when it is. */

@@ -57,6 +57,8 @@ describe('run modes: the ⇧Tab cycle and what a choice does', () => {
     expect(modeLabel(view({ chosen: 'auto-edits', effective: 'ask', ceiling: 'ask' }))).toBe('mode: auto-edits → ask (ceiling) ▾');
     expect(modeLabel(view({ pendingCardId: 'card:x' }))).toBe('mode: ask · Touch ID pending ▾');
     expect(modeLabel(null)).toBe('mode: —');
+    // F3 (TD-2026-10-20-086): the folder runs the root-signed default
+    expect(modeLabel(view({ chosen: 'auto-edits', effective: 'auto-edits', source: 'config' }))).toBe('mode: auto-edits (default) ▾');
   });
 
   it('the request is log.append{kind: request.mode.set} for the session, or its repo', () => {

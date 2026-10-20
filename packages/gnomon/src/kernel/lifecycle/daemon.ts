@@ -856,6 +856,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
     // Aegis L2: every applied change reaches the live sessions at once (manual re-entered ⇒ the plan is dropped)
     onChange: () => supervisor.noteModeChange(),
+    // TD-2026-10-20-086 F3: the root-signed config's runModes.default (null on any fallback: fail closed)
+    configDefault: () => fuseCfg.runModes.default,
   });
   // TD-2026-10-20-086 F6 (#standing-grant): the daily standing grant, folded from KERNEL-signed grant.standing* rows
   // only; the broker asks it before any presence prompt and writes its notify row after approval.decide.
