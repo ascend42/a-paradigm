@@ -1825,6 +1825,7 @@ function wire(): void {
 export function main(raw?: string): void {
   const take = (globalThis as { gnomonTakeLaunch?: () => string }).gnomonTakeLaunch;
   const frag = parseLaunchFragment(raw ?? (take ? take() : ''));
+  layout = parseLayout(localStorage.getItem(LAYOUT_KEY) ?? '') ?? layout; // S5.2: the saved Layout (read at start, not at import)
   applyLook();
   applyLayout();
   wire();

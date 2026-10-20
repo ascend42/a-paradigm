@@ -377,8 +377,8 @@ html, body {
 .workshop { display: flex; align-items: flex-end; gap: 16px; min-height: 64px; padding: 6px 16px 8px; border-top: 1px solid var(--rule); }
 .workshop[hidden] { display: none; }
 .workshop.slim { min-height: 0; padding: 3px 16px; }
-.workshop-host { flex: 1 1 auto; min-width: 0; }
-.status-line { margin-left: auto; align-self: center; font: inherit; font-size: 10.5px; color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; display: flex; gap: 12px; }
+.workshop-host { flex: 0 0 auto; max-width: 75%; overflow: hidden; }
+.status-line { flex: 1 1 0; min-width: 0; overflow: hidden; justify-content: flex-end; margin-left: auto; align-self: center; font: inherit; font-size: 10.5px; color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; display: flex; gap: 12px; }
 .status-line .v { color: var(--ink2); }
 .status-line:hover, .status-line:focus-visible { text-decoration: underline; }
 .desk.ws-left { padding-left: 76px; }
@@ -403,6 +403,11 @@ html, body {
 .workshop-col .mod-region-workshop .mod-fence-body > .blk-box > .blk-box:first-of-type { padding: 0 0 14px; border-right: 0; border-bottom: 1px dashed var(--rule); }
 .workshop-col .mod-region-workshop .blk-title { font-size: 9px; text-align: center; line-height: 1.3; white-space: normal; align-self: center; padding-top: 0; }
 .workshop-col .mod-region-workshop .blk-text { text-align: center; font-size: 9.5px; }
+.workshop-col { overflow-x: hidden; }
+.workshop-col .mod-label { font-size: 9px; overflow-wrap: anywhere; text-align: center; }
+.workshop-col .mod-region-workshop, .workshop-col .mod-region-workshop .mod-fence-body, .workshop-col .mod-region-workshop .blk-box { width: 100%; }
+.workshop-col .mod-region-workshop .blk-title { overflow-wrap: anywhere; }
+.workshop-col .cap .q { max-width: 62px; }
 .workshop-col .workshop-absent { display: block; font-size: 9.5px; text-align: center; overflow-wrap: anywhere; }
 
 /* a cap: drawn by core/render.ts renderCap from the five checked fields; fill and stroke are classes only.
