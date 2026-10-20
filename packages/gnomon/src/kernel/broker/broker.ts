@@ -378,11 +378,14 @@ export class ApprovalBroker {
   }
   /** F5: the last connection that opened or used each unlock key (named on its approval.unlock.dropped row) */
   readonly #lastConn = new Map<string, string>();
+  /** Aegis M1: per device unlock key, the connections already reported joined (and the opener) */
+  readonly #joined = new Map<string, Set<string>>();
 
   /** approval.unlock.dropped for an unlock key: the payload names the last connection (and scope device for a device key). */
   async #droppedRow(key: string, reason: string, extra: Record<string, unknown> = {}): Promise<void> {
     const conn = this.#lastConn.get(key) ?? key;
     this.#lastConn.delete(key);
+    this.#joined.delete(key);
     await this.#o.log('approval.unlock.dropped', { connId: conn, reason, ...extra, ...(key.startsWith('udev:') ? { scope: 'device' } : {}) }, CONN_ID.test(conn) ? { connId: conn } : {});
   }
 
@@ -887,7 +890,17 @@ export class ApprovalBroker {
   /** Use the unlock under `key` (F5: the GUI device's); an ended one (idle | expired | exhausted, M2) is dropped on both sides and logged approval.unlock.dropped{reason}. */
   async #useUnlock(key: string, connId: string): Promise<UnlockUse> {
     const u = this.unlocks.use(key);
-    if (u === 'ok') this.#lastConn.set(key, connId);
+    if (u === 'ok') {
+      // Aegis M1: a NEW connection of the device joins its unlock — a kernel row, shown in the GUI notify feed
+      const last = this.#lastConn.get(key);
+      if (key.startsWith('udev:') && last !== undefined && last !== connId && !this.#joined.get(key)?.has(connId)) {
+        let set = this.#joined.get(key);
+        if (!set) this.#joined.set(key, (set = new Set()));
+        set.add(connId);
+        await this.#o.log('approval.unlock.joined', { connId, scope: 'device' }, CONN_ID.test(connId) ? { connId } : {});
+      }
+      this.#lastConn.set(key, connId);
+    }
     if (u !== 'ok' && u !== 'none') {
       await this.#dropHelperUnlock(key); // M3: an unlock that ended here ends in the helper too
       await this.#droppedRow(key, u);

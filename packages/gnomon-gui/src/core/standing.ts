@@ -61,7 +61,7 @@ export function standingStatusOf(status: unknown): StandingView {
 
 export interface FeedItem {
   seq: number;
-  kind: 'minted' | 'used' | 'revoked';
+  kind: 'minted' | 'used' | 'revoked' | 'joined';
   grantId: string;
   text: string;
   /** a use is a toast too */
@@ -70,10 +70,16 @@ export interface FeedItem {
 
 const short = (s: string): string => (s.length > 16 ? `…${s.slice(-8)}` : s);
 
-/** A feed line for a standing row, or null. */
-export function feedItemOf(row: { seq?: unknown; kind?: unknown; payload?: unknown }): FeedItem | null {
+/** The kernel principal shape (as store.ts checks kernel-speakable rows): only kernel rows feed the standing feed. */
+export const KERNEL_PRINCIPAL = /^p:[0-9a-z]{8}\/kernel$/;
+
+/** A feed line for a standing or unlock row WRITTEN BY THE KERNEL, or null (Aegis #12: any other principal is ignored). */
+export function feedItemOf(row: { seq?: unknown; kind?: unknown; payload?: unknown; principal?: unknown }): FeedItem | null {
   if (typeof row.seq !== 'number' || typeof row.kind !== 'string' || !row.payload || typeof row.payload !== 'object') return null;
+  if (typeof row.principal !== 'string' || !KERNEL_PRINCIPAL.test(row.principal)) return null;
   const p = row.payload as Record<string, unknown>;
+  // Aegis M1: a new window of this device joined the cached unlock
+  if (row.kind === 'approval.unlock.joined') return { seq: row.seq, kind: 'joined', grantId: '', text: `Another Gnomon window joined your unlock${typeof p.connId === 'string' ? ` (${short(p.connId)})` : ''}`, toast: true };
   if (typeof p.grantId !== 'string') return null;
   if (row.kind === 'grant.standing.used') {
     const what = (STANDING_TUPLE_TEXT as Record<string, string>)[String(p.tuple)] ?? `decided ${String(p.decision ?? '?')}`;
@@ -85,7 +91,7 @@ export function feedItemOf(row: { seq?: unknown; kind?: unknown; payload?: unkno
 }
 
 /** Rows whose arrival changes status.standing (the page re-reads status on them). */
-export const STANDING_ROW_KINDS: ReadonlySet<string> = new Set(['grant.standing', 'grant.standing.used', 'grant.standing.revoked']);
+export const STANDING_ROW_KINDS: ReadonlySet<string> = new Set(['grant.standing', 'grant.standing.used', 'grant.standing.revoked', 'approval.unlock.joined']);
 
 /** The local calendar day of `now` (the "today" of the offer). */
 export function dayKey(now: Date): string {

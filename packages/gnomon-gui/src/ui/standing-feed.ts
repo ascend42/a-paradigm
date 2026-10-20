@@ -29,7 +29,7 @@ export interface StandingFeedDeps {
 }
 
 export interface StandingFeed {
-  row(r: { seq?: unknown; kind?: unknown; payload?: unknown }): void;
+  row(r: { seq?: unknown; kind?: unknown; payload?: unknown; principal?: unknown }): void;
   repaint(): void;
 }
 

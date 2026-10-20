@@ -111,6 +111,10 @@ describe('F5: the unlock belongs to the GUI device, not the connection', () => {
     expect((await r.decide(gui(B))).presence).toBe('cached');
     expect(r.helper.prompts.length).toBe(1);
     expect(r.rows.find((x) => x.kind === 'approval.unlock')!.payload).toMatchObject({ connId: A, scope: 'device' });
+    // Aegis M1: the new connection's first use is a kernel row, once
+    expect(r.rows.filter((x) => x.kind === 'approval.unlock.joined').map((x) => x.payload)).toEqual([{ connId: B, scope: 'device' }]);
+    await r.decide(gui(B));
+    expect(r.rows.filter((x) => x.kind === 'approval.unlock.joined')).toHaveLength(1);
   });
 
   it('FALSIFIER: the unlock dies on screen lock (the helper push), and the next decision prompts', async () => {

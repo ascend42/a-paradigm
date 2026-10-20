@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { dayKey, feedItemOf, grantRequest, revokeRequest, shouldOffer, STANDING_TUPLES, standingStatusOf } from '../src/core/standing.js';
+import { dayKey, feedItemOf, KERNEL_PRINCIPAL, grantRequest, revokeRequest, shouldOffer, STANDING_TUPLES, standingStatusOf } from '../src/core/standing.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const G = 'card:01HZZZZZZZZZZZZZZZZZZZZZZG';
@@ -19,9 +19,20 @@ describe('standing feed: status and rows', () => {
     expect(standingStatusOf({})).toEqual({ built: false, active: [], pendingCardId: null });
     expect(standingStatusOf({ standing: { built: true, active: [{ grantId: 1 }] } }).active).toEqual([]);
   });
+  it('only KERNEL rows feed it (Aegis #12): a row from any other principal, or none, is ignored', () => {
+    const used = { seq: 5, kind: 'grant.standing.used', payload: { grantId: G, tuple: 'permission:always' } };
+    expect(feedItemOf({ ...used, principal: 'p:abcdefgh/kernel' })).not.toBeNull();
+    expect(feedItemOf({ ...used, principal: 'p:abcdefgh/s-01hzzzzz' })).toBeNull();
+    expect(feedItemOf({ ...used, principal: 'p:abcdefgh/kernelx' })).toBeNull();
+    expect(feedItemOf(used)).toBeNull();
+    expect(KERNEL_PRINCIPAL.test('p:abcdefgh/kernel')).toBe(true);
+  });
+  it('Aegis M1: a joined row is a toast: "another Gnomon window joined your unlock"', () => {
+    expect(feedItemOf({ seq: 9, kind: 'approval.unlock.joined', principal: 'p:abcdefgh/kernel', payload: { connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZB', scope: 'device' } })).toMatchObject({ kind: 'joined', toast: true, text: expect.stringContaining('Another Gnomon window joined your unlock') });
+  });
   it('a use row is a toast and a feed line naming what was done; minted and revoked rows are feed lines', () => {
-    expect(feedItemOf({ seq: 5, kind: 'grant.standing.used', payload: { grantId: G, tuple: 'mode.loosen:auto-edits', decision: 'allow', repo: REPO, hsid: null } })).toMatchObject({ kind: 'used', toast: true, text: expect.stringContaining('switched a folder to auto-edits') });
-    expect(feedItemOf({ seq: 6, kind: 'grant.standing.revoked', payload: { grantId: G, reason: 'screen-lock' } })).toMatchObject({ kind: 'revoked', toast: false, text: expect.stringContaining('screen-lock') });
+    expect(feedItemOf({ principal: 'p:abcdefgh/kernel', seq: 5, kind: 'grant.standing.used', payload: { grantId: G, tuple: 'mode.loosen:auto-edits', decision: 'allow', repo: REPO, hsid: null } })).toMatchObject({ kind: 'used', toast: true, text: expect.stringContaining('switched a folder to auto-edits') });
+    expect(feedItemOf({ principal: 'p:abcdefgh/kernel', seq: 6, kind: 'grant.standing.revoked', payload: { grantId: G, reason: 'screen-lock' } })).toMatchObject({ kind: 'revoked', toast: false, text: expect.stringContaining('screen-lock') });
     expect(feedItemOf({ seq: 7, kind: 'approval.decide', payload: { grantId: G } })).toBeNull();
   });
 });

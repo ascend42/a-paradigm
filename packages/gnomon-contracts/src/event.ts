@@ -126,6 +126,9 @@ const TABLE: Row[] = [
   // T-2026-10-20-007: approval.auto.miss{hsid, tool, why, inputHash, modeRef} — the supervisor's read-only pass refused
   // under auto-edits/ask, written before the card (a sensitive kind: why and inputHash are sensitive fields).
   ['approval', 'kernel', 'auto.miss', STANDING],
+  // Aegis M1 (TD-2026-10-20-086 F5): approval.unlock.joined{connId, scope:'device'} — a new connection of the same GUI
+  // device first used the device's cached unlock (the GUI feed says "another Gnomon window joined your unlock").
+  ['approval', 'kernel', 'unlock.joined', STANDING],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -318,6 +321,7 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'request.grant.standing': ['tuples', 'repos'],
   'request.grant.standing.revoke': ['grantId'],
   'approval.auto.miss': ['hsid', 'tool', 'why', 'inputHash', 'modeRef'],
+  'approval.unlock.joined': ['connId', 'scope'],
 });
 
 /**

@@ -21,6 +21,7 @@
     "approval.suspect",
     "approval.unlock",
     "approval.unlock.dropped",
+    "approval.unlock.joined",
     "approval.voice.arm",
     "approval.voice.disarm",
     "approval.voice.handle.rotated",
@@ -251,6 +252,7 @@
     "approval.strictness.lowered": "M1.1:P8-D86-D88",
     "approval.strictness.proposed": "M1.1:P8-D86-D88",
     "approval.strictness.raised": "M1.1:P8-D86-D88",
+    "approval.unlock.joined": "8.0:TD-2026-10-20-086",
     "approval.voice.arm": "M1.1:P8-D58",
     "approval.voice.disarm": "M1.1:P8-D58",
     "approval.voice.handle.rotated": "M1.1:P8-D58",
@@ -515,6 +517,10 @@
       "why",
       "inputHash",
       "modeRef"
+    ],
+    "approval.unlock.joined": [
+      "connId",
+      "scope"
     ]
   },
   "x-gnomon-kind-payloads": {
