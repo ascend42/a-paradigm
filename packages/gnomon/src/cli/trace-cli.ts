@@ -265,11 +265,16 @@ interface TranscriptLine {
 }
 
 /** The prompt text of a transcript user message as the supervisor sent it (string content, or the text blocks joined). */
-function promptText(content: unknown): string | null {
+/**
+ * The human's prompt text of a transcript user message: the FIRST text block only. The kernel's contentHash is the
+ * hash of the human's text alone; a second text block is the table-talk `<gnomon-voice>` guidance (TD-2026-10-20-294),
+ * which is never part of the turn's content and is not checked against the log.
+ */
+export function promptText(content: unknown): string | null {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return null;
-  const texts = content.filter((b) => obj(b).type === 'text').map((b) => String(obj(b).text ?? ''));
-  return texts.length ? texts.join('') : null;
+  const first = content.find((b) => obj(b).type === 'text');
+  return first === undefined ? null : String(obj(first).text ?? '');
 }
 
 function resultText(content: unknown): string {

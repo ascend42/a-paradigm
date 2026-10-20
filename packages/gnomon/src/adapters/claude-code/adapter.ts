@@ -243,8 +243,13 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
 
 /* ── stdin lines ─────────────────────────────────────────────────────────── */
 
-export function userMessageLine(text: string): string {
-  return `${JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } })}\n`;
+/**
+ * The user message for one turn. `guidance` (#gnomon-voice table talk, TD-2026-10-20-294) rides as a SECOND text
+ * block after the human's text; the first block is always the human's text alone (its bytes are the contentHash).
+ */
+export function userMessageLine(text: string, guidance?: string | null): string {
+  const content = [{ type: 'text', text }, ...(typeof guidance === 'string' && guidance.length > 0 ? [{ type: 'text', text: guidance }] : [])];
+  return `${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`;
 }
 
 export function controlInterruptLine(requestId: string = randomUUID()): string {
