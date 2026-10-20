@@ -187,6 +187,9 @@ export class VoiceClient {
       this.#notice('info', 'Voice is not attached to a session. Attach it from Gnomon to talk.');
       return;
     }
+    // the human's choice in Gnomon (the attachment's mode) is the mode in force for a new attachment; the
+    // ⌃⌥A hotkey can still narrow it locally afterwards (founder dogfood 2026-10-19: ambient sat in ptt)
+    this.#requested = ceilingOf(next);
     this.#notice('info', `Attached to ${next.hsid} (up to ${ceilingOf(next) === 'ambient' ? 'ambient' : 'push-to-talk'}). Mode: ${this.mode}.`);
     try {
       this.#unfollow = await this.#o.link.follow(next.hsid, (r) => this.#onRow(r.kind, r.payload), (reason) => {
