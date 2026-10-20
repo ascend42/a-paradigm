@@ -60,3 +60,6 @@
 {"timestamp":"2026-10-19T23:23:07Z","type":"eligible","source":"prompt-gate","matched":"Build "}
 {"timestamp":"2026-10-19T23:42:00Z","type":"eligible","source":"prompt-gate","matched":"integrate"}
 {"timestamp":"2026-10-20T00:01:25Z","type":"eligible","source":"prompt-gate","matched":"Build "}
+{"timestamp":"2026-10-20T03:21:23Z","type":"eligible","source":"prompt-gate","matched":"build "}
+{"timestamp":"2026-10-20T03:31:34Z","type":"edit-advisory","source":"team-gate","file":"Audio.swift"}
+{"timestamp":"2026-10-20T04:42:32Z","type":"eligible","source":"prompt-gate","matched":"build "}

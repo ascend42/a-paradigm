@@ -1,0 +1,24 @@
+id: TD-2026-10-20-262
+timestamp: '2026-10-20T04:38:27.000Z'
+title: 'Voice dictation: speech goes to the composer and auto-sends after a countdown'
+decision: >-
+  Transcribed speech goes into the GUI composer, with consecutive utterances appended. After X s of silence (default 5
+  s; quick picks 3/5/8/15 s/off in the mic pill menu plus a setting, remembered per machine), a visual countdown runs,
+  then it sends. Hold is toggled by a hotkey (global, via voice-io) plus a [Hold] button; [Send] or ⌘Enter sends.
+  Editing the composer switches to hold automatically.
+rationale: >-
+  Founder dogfood: speech going straight into chat with no review or batching is not how they want to talk to a session.
+  Dictation with an interruptible countdown keeps hands-free flow and gives a moment to review.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+symbols_affected:
+  - '#gnomon-voice'
+  - '#gui'
+  - $voice-turn
+status: active
+tags:
+  - gnomon
+  - voice
+  - ux
