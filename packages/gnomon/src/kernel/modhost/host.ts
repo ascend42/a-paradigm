@@ -102,7 +102,7 @@ import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
 import { isUserPaused, modNames } from './control.js';
-import { FEED_CAPABILITY, projectFeedEvent } from './feed.js';
+import { feedAccessOf, feedReaches, projectFeedEvent } from './feed.js';
 
 const isLink = (p: string): boolean => {
   try {
@@ -290,6 +290,11 @@ export class ModHost {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
       paused: this.#pausedView(),
+      // #gui mod panels: the declared views of RUNNING mods (manifest ids/slots only; the GUI maps slot → region)
+      views: [...this.#running.values()]
+        .filter((r) => !r.stopping)
+        .flatMap((r) => (r.manifest.provides?.views ?? []).map((v) => ({ name: r.name, viewId: v.id, slot: v.slot, placement: v.placement ?? 'append', dev: r.dev })))
+        .sort((a, b) => (a.name === b.name ? a.viewId.localeCompare(b.viewId) : a.name.localeCompare(b.name))),
     };
   }
 
@@ -762,8 +767,10 @@ export class ModHost {
    * fixed feed kinds; nothing else. Returns how many mods it reached.
    */
   feed(event: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }): number {
-    const projected = projectFeedEvent(event);
+    // Aegis M1: two projections — v1 (log.read) and v1 + the usage rows/fields (log.read:usage)
+    const projected = projectFeedEvent(event, { usage: true });
     if (!projected) return 0;
+    const base = projectFeedEvent(event);
     // review: turn.partial is coalesced to ONE edge per hsid (streaming started); turn.result / session.exited end it
     const hsid = typeof projected.payload.hsid === 'string' ? projected.payload.hsid : null;
     if (hsid && projected.kind === 'turn.partial') {
@@ -773,8 +780,11 @@ export class ModHost {
     } else if (hsid && (projected.kind === 'turn.result' || projected.kind === 'session.exited')) this.#streaming.delete(hsid);
     let n = 0;
     for (const r of this.#running.values()) {
-      if (r.stopping || !r.manifest.requires?.capabilities?.includes(FEED_CAPABILITY)) continue;
-      if (r.channel.notify('event', { event: projected })) n++;
+      if (r.stopping) continue;
+      const access = feedAccessOf(r.manifest.requires?.capabilities);
+      if (!feedReaches(access, projected.kind)) continue;
+      const ev = access.usage ? projected : base;
+      if (ev && r.channel.notify('event', { event: ev })) n++;
     }
     return n;
   }

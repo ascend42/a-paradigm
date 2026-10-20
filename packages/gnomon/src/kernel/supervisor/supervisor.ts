@@ -865,7 +865,7 @@ export class SessionSupervisor {
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       case 'result': {
-        await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError });
+        await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}) });
         const head = s.turnPermits.shift(); // reviewer 7: FIFO — this result closes the oldest turn only
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);

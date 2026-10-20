@@ -407,3 +407,29 @@ html, body {
   .dictation-ring svg { display: none; }
   .dictation-ring .ring-secs { display: inline; }
 }
+
+/* ── K0 mod panels (core/mod-panels.ts, ui/mod-panels-mount.ts): a mod view sits in a labelled fence, apart from
+   kernel-owned regions; tones are tokens (.tone-*), the project hue only ever colours a cap glyph. ── */
+.mod-slot { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; }
+.mod-slot[hidden] { display: none; }
+/* Aegis M2: the right-pane mod region is ruled off from the decision stack (outside its scroll), headed `mods` */
+.mod-slot-right { flex: none; max-height: 40%; overflow-y: auto; border-top: 2px solid var(--rule); margin-top: 6px; }
+.mod-slot-head { color: var(--sec); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.mod-fence { border: 1px dashed var(--rule); border-radius: 4px; padding: 4px 8px; background: var(--sheet); }
+.mod-fence-head { display: flex; gap: 6px; align-items: center; }
+.mod-label { color: var(--sec); font-size: 11px; }
+.mod-dev { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); }
+.mod-fence .blk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mod-fence .blk-progress { display: inline-flex; gap: 6px; align-items: center; }
+.mod-fence progress { transition: none; }
+.tone-quiet { color: var(--sec); }
+.tone-warn { color: var(--warn-ink); }
+.tone-deny { color: var(--fail); font-weight: 600; }
+/* the cap: a project hue is a FILL (G-GUI-10), the glyph itself stays in ink */
+.blk-text[class*="tone-hue-"] { display: inline-block; min-width: 1.2em; text-align: center; border: 1px dotted var(--rule); border-radius: 50%; }
+.tone-hue-0, .tone-hue-6 { background: var(--p-terracotta-fill); }
+.tone-hue-1, .tone-hue-7 { background: var(--p-sage-fill); }
+.tone-hue-2 { background: var(--p-slate-fill); }
+.tone-hue-3 { background: var(--p-ochre-fill); }
+.tone-hue-4 { background: var(--p-rose-clay-fill); }
+.tone-hue-5 { background: var(--p-sea-grey-fill); }

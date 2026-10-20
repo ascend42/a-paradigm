@@ -29,3 +29,32 @@ components:
       (test/workshop-mod.test.ts, every OS).
     tags: [mods, first-party, M1.11]
     oracles: [G-WSP-01]
+
+  ledger-mod:
+    description: >-
+      #ledger-mod - packages/gnomon-mods/ledger, the context and budget
+      meter (mod #1 of the mods arc). Two views: `ledger.strip` (slot
+      composer.footer, append) - one line for the focused session (relay
+      input {hsid}, display only) or all sessions, `182k in · 9k out · 71%
+      cache · $0.42 · ⇣ 2 compactions (190k → 41k)` (in = fresh + cache
+      reads + cache writes; cache = the share read from cache; a local
+      session shows its token total), the budget meter (the over-permit row
+      `n of m`, else the highest budget.ladder rung `n of 100%`) and the
+      alarms (breaker open, permit denied); `ledger.sheet` (slot sidebar,
+      append) - a Table row per session plus the total, meter and alarms.
+      Tones: quiet; warn (amber) at a rung >= 75% or an over-permit row;
+      deny (vermilion) on a breaker or a denied permit; hue-<0..7> ONLY on
+      the cap glyph, never as text. Reduced motion renders the meter as Text
+      (no Progress fill at all). kit:v1 blocks only (Box, Text, Table,
+      Progress). model.mjs is a pure reducer + render (MAX_SESSIONS 256,
+      MAX_DIMENSIONS 32, every number re-clamped by count(), unknown kinds
+      ignored); index.mjs is the #workshop-mod stdio loop verbatim but for
+      the two views (no SDK import, echoes MOD_ABI_ID). State comes ONLY from
+      the #mod-host feed projection v2 (numbers only, granted by log.read);
+      a relayed render never replays fixtureEvents. requires log.read and
+      log.read:usage (Aegis M1: the usage rows reach only that grant),
+      egress none, no tools or commands; tier first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES). Fixtures strip, strip-reduced,
+      over-budget, breaker, compacted with golden renders
+      (test/ledger-mod.test.ts, light and dark); goldens regenerate with
+      `npm run repin:first-party` in packages/gnomon.
+    tags: [mods, first-party]
