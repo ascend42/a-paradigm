@@ -31,8 +31,11 @@ components:
       Dictation (TD-2026-10-20-262): delivery 'composer' (default; the
       kernel-spawned run) never calls session.send and appends
       voice.turn.user forwarded:false (the kernel stamps forwardable; the
-      GUI composer sends after a countdown); --delivery direct keeps the old
-      forward for headless use. Activity edges only, as
+      GUI composer sends a push-to-talk draft after a countdown, an ambient
+      draft only on a key press); --delivery direct keeps the old forward for
+      headless use, for PUSH-TO-TALK turns only. TD-2026-10-20-125: ambient
+      speech never sends itself (dictated under either delivery; the kernel
+      refuses a direct non-ptt send voice-off{cause: composer}). Activity edges only, as
       request.voice.report{dictation: {activity speaking|transcribing|idle,
       holdToggles}}; the Ctrl-Alt-H hold-toggle hotkey increments
       holdToggles.
@@ -107,6 +110,21 @@ components:
       tar --no-same-owner, refuses symlinks, non-regular and unpinned
       members, and every model file is re-hashed against the manifest
       before it is loaded. Prints are embeddings only, stored in voice/prints/<name>/.
+      Speaker front end (founder regression 2026-10-20): every CAM++
+      embedding passes the speech gate speechOnly (speech-gate:v1: frames
+      of GATE_FRAME_MS, quiet below max(GATE_FLOOR_DBFS, peak -
+      GATE_REL_DB); edge quiet and inner pauses of GATE_PAUSE_MS or longer
+      cut), so the quiet around speech never moves it. A print records its
+      frontEnd; prints from another front end are never compared and are
+      reported as request.voice.report{prints:{stale}} (status.voice.prints;
+      the GUI nudges "Re-teach Gnomon your voice") with ONE notice per run.
+      Fail closed: VERIFY_THRESHOLD 0.65 and no verify under
+      MIN_VERIFY_SPEECH_MS of gated speech (MIN_PROVISIONAL_SPEECH_MS for
+      live words, MIN_ENROL_SPEECH_MS per enrolment phrase). SherpaStt
+      decode priority: a partial not started while a final waits returns []
+      undecoded. SherpaVad.reset() restarts its sample counter (t0 skew
+      fix). Verification is a convenience filter, not authentication (spec
+      14.4.2).
       Audio is never written to disk (G-VOX-05).
     path: src/
     type: module

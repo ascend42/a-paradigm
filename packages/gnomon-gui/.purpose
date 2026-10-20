@@ -180,7 +180,9 @@ components:
       voice], "Setting up voice…", "Downloading voice models · N of M MB" with
       a progress bar, "Starting…", "Voice crashed" [Restart], "Voice
       unavailable · <why>", or (running, no enrolled voice) "Teach Gnomon your
-      voice first" [Teach]. Attached (T-2026-10-20-002), the live mic keeps
+      voice first" [Teach], or (every enrolled name has only a stale print,
+      status.voice.prints.stale; enrolNudgeOf) "Re-teach Gnomon your voice
+      (the voice check was upgraded)" [Re-teach]. Attached (T-2026-10-20-002), the live mic keeps
       its V2d class, label and meter and clientPillOf returns a `tail` that is
       appended (first match): crashed / backoff "· voice crashed: <lastError>"
       (one line, capped at 60 chars; title capped at 400) [Restart], the
@@ -529,6 +531,12 @@ components:
       exact words only when sanitizing changed nothing); the holdToggles
       baseline resets per voice connection (connEpoch, else
       client.restarts); edited drafts echo as typed messages.
+      TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A
+      part whose turn's mode is not exactly 'ptt' (missing included) marks
+      the draft ambient (ambientDraft); an ambient draft never arms the ring
+      and only [Send]/Enter/⌘Enter sends it (note "draft · Enter sends
+      (ambient never auto-sends)"). PTT drafts keep the countdown; the delay
+      picks say push-to-talk.
     path: src/core/dictation.ts
     type: module
     tags: [gnomon, gui, voice, dictation]
