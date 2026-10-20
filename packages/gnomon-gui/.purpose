@@ -37,7 +37,11 @@ components:
       feeds live rows to its hook. render.ts: Text tone -> class tone-<token>
       (closed token regex), Box direction row -> blk-row; styles.css: fence,
       tone-quiet/warn/deny text tokens, project hue as a FILL on the cap only
-      (G-GUI-10). test/mod-panels.test.ts.
+      (G-GUI-10), drawn as a dotted --rule chip (never a key border). Aegis M2:
+      the right-pane region is a sibling after #stack (outside its scroll),
+      ruled off by a 2px --rule top border and headed `mods`; a block holding
+      any kit.Button is refused in the panel slot (PANEL_BUTTON_REFUSAL shown
+      in the fence). test/mod-panels.test.ts.
     self-update: >-
       TD-2026-10-19-063 restart (core/restart.ts, PURE but injected storage
       and fetch): a pending daemon-stop{reason:'upgrade'} card shows the

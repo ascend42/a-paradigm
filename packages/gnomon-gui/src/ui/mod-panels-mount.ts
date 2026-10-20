@@ -11,7 +11,7 @@
  */
 import type { GnomonClient } from '../core/client.js';
 import { RpcError } from '../core/client.js';
-import { ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
 import type { MiniDoc } from '../core/render.js';
 
 const REGION_HOST: Record<ModRegion, { id: string; parent: string; after?: string }> = {
@@ -29,6 +29,7 @@ function regionEl(region: ModRegion): HTMLElement | null {
   const el = document.createElement('div');
   el.id = r.id;
   el.className = `mod-slot mod-slot-${region}`;
+  if (region === 'right') el.setAttribute('aria-label', PANEL_HEADING);
   const after = r.after ? document.getElementById(r.after) : null;
   if (after && after.parentNode === parent) parent.insertBefore(el, after.nextSibling);
   else parent.appendChild(el);
@@ -64,6 +65,13 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
       if (!el) continue;
       clear(el);
       el.hidden = mine.length === 0;
+      // Aegis M2: the panel region is headed by a `mods` rule (the region sits after #stack, outside its scroll)
+      if (region === 'right' && mine.length) {
+        const head = document.createElement('div');
+        head.className = 'mod-slot-head';
+        head.textContent = PANEL_HEADING;
+        el.appendChild(head);
+      }
       for (const { v, r, why } of results) if (v.region === region) el.appendChild(renderModFence({ doc }, v, r, why) as unknown as Node);
     }
   };

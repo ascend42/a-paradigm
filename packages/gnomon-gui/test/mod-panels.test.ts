@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { fenceLabel, isFeedRow, MOD_FEED_KINDS, MOD_PANEL_DEBOUNCE_MS, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, SLOT_REGIONS } from '../src/core/mod-panels.js';
+import { fenceLabel, holdsButton, PANEL_BUTTON_REFUSAL, PANEL_HEADING, isFeedRow, MOD_FEED_KINDS, MOD_PANEL_DEBOUNCE_MS, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, SLOT_REGIONS } from '../src/core/mod-panels.js';
 import { renderBlock, type MiniDoc, type MiniEl } from '../src/core/render.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -120,6 +120,28 @@ describe('#gui mod panels: the fence', () => {
     expect((renderModFence({ doc: fdoc }, strip!, { block, dev: true }) as FEl).all().some((e) => e.className.includes('mod-dev'))).toBe(true);
     // a refusal shows in the fence, verbatim, never as a mod block
     expect((renderModFence({ doc: fdoc }, strip!, null, 'PAUSED') as FEl).text).toContain('ledger.strip unavailable: PAUSED');
+  });
+
+  it('Aegis M2: a block holding a kit.Button anywhere is refused in the panel slot (beside the decision keys), allowed elsewhere', () => {
+    const [sheet, strip, panel] = modPanelsOf(status);
+    const nested = { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'ok' }, { type: 'List', items: [{ type: 'Button', label: 'Allow', command: 'theme.night' }] }] };
+    expect(holdsButton(nested)).toBe(true);
+    expect(holdsButton({ type: 'Box', children: [{ type: 'Text', text: 'Button' }] })).toBe(false);
+    const el = renderModFence({ doc: fdoc }, panel!, { block: nested }) as FEl;
+    expect(el.text).toContain(PANEL_BUTTON_REFUSAL);
+    expect(el.all().some((e) => e.tag === 'button' || e.className.includes('blk-button'))).toBe(false);
+    for (const v of [sheet!, strip!]) expect((renderModFence({ doc: fdoc }, v, { block: nested }) as FEl).text).not.toContain(PANEL_BUTTON_REFUSAL);
+    expect(PANEL_HEADING).toBe('mods');
+  });
+
+  it('Aegis M2: the panel region is ruled and headed outside the stack scroll; hue chips have a non-key border', () => {
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(css).toMatch(/\.mod-slot-right \{[^}]*border-top: 2px solid var\(--rule\)/);
+    const chip = /\.blk-text\[class\*="tone-hue-"\] \{([^}]*)\}/.exec(css)![1]!;
+    expect(chip).not.toContain('--key-edge');
+    const mount = readFileSync(path.join(ROOT, 'src', 'ui', 'mod-panels-mount.ts'), 'utf8');
+    expect(mount).toContain("right: { id: 'mod-slot-panel', parent: 'pane-stack' }"); // a sibling of #stack, never inside it
+    expect(mount).toContain('PANEL_HEADING');
   });
 
   it('a tone that is not a token is dropped (no class injection)', () => {

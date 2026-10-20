@@ -16,6 +16,9 @@
  *     kit renderer (core/render.ts, text nodes only) inside a fence labelled
  *     `mod:<name>`, with a `dev` badge for a dev-linked (tier local) mod. The
  *     input is display context only: {hsid} of the focused session.
+ *   - Aegis M2: the right-pane (panel) region carries a `mods` heading rule
+ *     outside the decision stack's scroll area, and a block holding any
+ *     kit.Button is refused there (shown as a refusal in its fence).
  *   - Re-render only on a live store row whose kind is a #mod-host FEED kind,
  *     debounced 250 ms, one render in flight (a row during a render queues
  *     exactly one more), never on a timer.
@@ -100,10 +103,27 @@ export function modViewParams(v: ModPanelView, focused: string | null): { name: 
   return { name: v.name, viewId: v.viewId, input: focused ? { hsid: focused } : {} };
 }
 
+/** Whether a block tree holds a kit.Button anywhere (bounded depth). */
+export function holdsButton(node: unknown, depth = 0): boolean {
+  if (depth > 64 || !node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some((n) => holdsButton(n, depth + 1));
+  const n = node as Record<string, unknown>;
+  const t = typeof n.type === 'string' ? n.type : typeof n.block === 'string' ? n.block : '';
+  if (t === 'Button' || t === 'kit.Button') return true;
+  return holdsButton(n.children, depth + 1) || holdsButton(n.items, depth + 1) || holdsButton(n.data, depth + 1);
+}
+
+/** Aegis M2: the panel slot sits beside the kernel's decision keys, so a mod block there may carry no button at all. */
+export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel slot (it sits beside the decision keys)';
+
+/** The heading the right-pane mod region always shows, outside the stack's scroll area (Aegis M2). */
+export const PANEL_HEADING = 'mods';
+
 /** One fenced mod view: the label and dev badge are the GUI's; the body is the kit renderer over the mod's block. */
 export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?: unknown; dev?: unknown } | null, refusal: string | null = null): MiniEl {
   const { doc } = ctx;
   const dev = v.dev || result?.dev === true;
+  if (refusal === null && v.region === 'right' && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
   return h(
     doc,
     'section',
