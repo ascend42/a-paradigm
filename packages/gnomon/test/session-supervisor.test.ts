@@ -403,6 +403,8 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
     const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
     expect(pol.permissions.deny.length).toBeGreaterThan(5);
+    // F7 (TD-2026-10-20-086): Claude returns to the project dir after each Bash command (matches the K1 anchor)
+    expect(pol.env).toEqual({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
   });
   it('T-2026-10-18-010 L4: the hooks switch reaches the argv — default audited ⇒ user; all ⇒ user,project,local; user-only ⇒ user; none ⇒ empty; logged on session.sandbox', async () => {
     for (const [mode, want] of [[undefined, 'user'], ['all', 'user,project,local'], ['user-only', 'user'], ['none', '']] as const) {

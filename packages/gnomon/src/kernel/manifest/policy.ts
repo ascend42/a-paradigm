@@ -461,7 +461,14 @@ function rule(tool: 'Read' | 'Edit', p: PolicyPath): string {
 export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'PowerShell']);
 
 /** The `policy.json` permissions block: the sandbox deny mirror (§6.1 step 6) and the always-ask tools (P8-D96). */
-export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] } } {
+/**
+ * F7 (TD-2026-10-20-086): settings env for every Claude session. CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 makes
+ * Claude Code return to the project dir after each Bash command, so its idea of the cwd matches the anchored
+ * read-only pass (#shell-readonly K1, which stays the proof: it cds into the root itself).
+ */
+export const CLAUDE_SESSION_ENV: Readonly<Record<string, string>> = Object.freeze({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
+
+export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] }; env: Record<string, string> } {
   const deny = new Set<string>();
   for (const d of p.denyRead) {
     if (d.match !== 'dep-steering') {
@@ -481,5 +488,5 @@ export function claudePermissions(p: SessionPolicy): { permissions: { deny: stri
     const base = rule('Edit', { ...d, match: 'literal' }).slice(0, -1);
     for (const g of ['**/CLAUDE*.md', '**/claude*.md', '**/.claude/**', '**/.Claude/**']) deny.add(`${base}/${g})`);
   }
-  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] } };
+  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] }, env: { ...CLAUDE_SESSION_ENV } };
 }
