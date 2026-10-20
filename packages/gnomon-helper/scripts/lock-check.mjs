@@ -284,7 +284,7 @@ async function main() {
 
   const info = await call('info');
   result.info = info;
-  if (!info.ok || info.protocol !== 'gnomon-helper:v2' || info.version !== '1.6.0') {
+  if (!info.ok || info.protocol !== 'gnomon-helper:v2' || !['1.6.0', '1.7.0'].includes(info.version)) {
     fail(`The helper is not 1.6.0 / v2 (it reports ${info.version} / ${info.protocol}). Rebuild it: node packages/gnomon-helper/scripts/build-darwin.mjs`);
   }
   const signed = info.signing?.identifier === 'gnomon.helper' && info.signing?.team;

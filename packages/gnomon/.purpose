@@ -1750,11 +1750,19 @@ components:
       #manifest-loader's install-card wrapping); the presence summary takes
       the first line's first 120 code points, never splitting a surrogate
       pair. install-card.ts passes the install card's pre-sanitized lines
-      together with their sanitizer flags. unlock.ts — per-connection cached unlock keyed by
-      connId, created only by a fresh presence on that connection, never for a
-      CLI connection, dropped on close (approval.unlock.dropped{reason:closed})
-      or after 15 min idle (reason idle), never usable from another
-      connection. broker.ts — ApprovalBroker: raise (approval.request before
+      together with their sanitizer flags. unlock.ts — the cached unlock
+      (TD-2026-10-20-086 F4/F5, superseding S25-H1 and the M2 60 min / 64):
+      created only by a fresh presence on a GUI connection, never for a CLI
+      connection; KEYED BY THE GUI DEVICE (broker unlockKeyOf: `udev:` + 40
+      hex of sha256 over the launch-token deviceId; a gui context without a
+      deviceId keeps its connId) so it survives a reconnect and is shared by
+      the device's GUI sessions; ends at screen lock / sleep / user switch
+      (helper push), helper exit, 12 h (UNLOCK_ABSOLUTE_MS = UNLOCK_IDLE_MS)
+      or 512 signatures, each bound LOWERED to the helper's: helper 1.7.0
+      reports `bounds` on a kept sign (helperBoundsOf), 1.6.0 reports none and
+      is held to LEGACY_HELPER_BOUNDS (15 min idle, 60 min, 64). Dropped rows
+      name the last connection and scope:'device'
+      (test/unlock-device.test.ts). broker.ts — ApprovalBroker: raise (approval.request before
       the card exists; permission cards time out into deny, fallback and
       api-token never expire), approve (human only, B4; voice FORBIDDEN gate
       voice `voice-off` for every form, G-ABI-02 voice row; via link refused

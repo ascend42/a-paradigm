@@ -63,6 +63,8 @@ export interface FakeHelperOptions {
   crashOn?: string;
   /** the `shown` field of a sign reply: undefined = the real line, null = dropped, a string = replaced */
   shown?: string | null;
+  /** F4: helper 1.7.0 reports its unlock bounds on a kept fresh sign; undefined = a 1.6.0 helper (none) */
+  bounds?: { idleSeconds: number; absoluteSeconds: number; maxSignatures: number };
 }
 
 export class FakeHelper implements HelperTransport {
@@ -255,7 +257,7 @@ export class FakeHelper implements HelperTransport {
           return s.toString('base64');
         });
         // #first-run I1 falsifiers: a broken / impostor helper drops (null) or replaces its own prompt line
-        return { ok: true, sigs, kept, ...(this.opts.shown === undefined ? { shown: line } : this.opts.shown === null ? {} : { shown: this.opts.shown }) };
+        return { ok: true, sigs, kept, ...(kept && req.mode === 'fresh' && this.opts.bounds ? { bounds: this.opts.bounds } : {}), ...(this.opts.shown === undefined ? { shown: line } : this.opts.shown === null ? {} : { shown: this.opts.shown }) };
       }
       default:
         throw new HelperRefusal('bad-request', 'unknown op');

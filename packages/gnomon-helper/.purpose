@@ -17,10 +17,13 @@ components:
       stdin/stdout (`serve` NDJSON loop, `once` for one request) speaking
       gnomon-helper:v1 — info, key.create/public/delete, sign (root: fresh
       presence per signature; approvals: fresh, or a per-connection cached
-      unlock held here keyed by connId, bounded to 32, dropped after 15 idle
-      minutes, 60 minutes after it opened or 64 signatures under it
-      (T-2026-10-18-028 M2, helper 1.3.0: hard bounds the idle timer cannot
-      slide; the broker enforces the same pair), on unlock.drop and on exit),
+      unlock held here keyed by the request's connId string, bounded to 32,
+      dropped 12 h after it opened or after 512 signatures under it, with no
+      separate idle limit (TD-2026-10-20-086 F4, helper 1.7.0; 1.6.0 was
+      15 idle min / 60 min / 64; a kept fresh sign reports `bounds` so the
+      broker opens the same caps, else it keeps the 1.6.0 ones; F5: the
+      kernel sends the GUI device's `udev:` key there so the unlock survives
+      a reconnect; UnlockBoundsTests.swift), on unlock.drop and on exit),
       unlock.drop(-all). Every fresh sign (root and approvals) returns
       `shown`, the helper's own prompt line, which the provisioner checks names
       the digest it displayed (helper 1.5.0; 1.4.0 omitted it for root, so

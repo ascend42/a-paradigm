@@ -716,7 +716,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     web: () => {
       const st = (web?.status() ?? { listening: false }) as Record<string, unknown> & { guiSessions?: { n: number; sessions: Array<Record<string, unknown> & { connId: string }> } };
       if (!st.guiSessions) return st;
-      return { ...st, guiSessions: { ...st.guiSessions, sessions: st.guiSessions.sessions.map((g) => ({ ...g, unlock: approvals.unlockOf(g.connId) })) } };
+      return { ...st, guiSessions: { ...st.guiSessions, sessions: st.guiSessions.sessions.map((g) => ({ ...g, unlock: approvals.unlockOf(g.connId, web?.access.session(g.connId)?.deviceId) })) } };
     },
   };
   // #approval-broker + #budget-fuse (M1.6). Production: no presence prompt, no approvals key and no keystore

@@ -230,6 +230,11 @@ function rootError(e: unknown): Error {
 
 export interface DecisionSignRequest {
   connId: string;
+  /**
+   * F5 (TD-2026-10-20-086): the key the helper holds the cached unlock under (the GUI device's `udev:` key, broker
+   * unlockKeyOf); absent = connId. The presence challenge stays bound to the real connId.
+   */
+  unlockKey?: string;
   approver: string;
   /** approveMessage(cardId, decision, contentHash, approver) */
   message: string;
@@ -246,6 +251,8 @@ export interface DecisionSignResult {
   decisionSig: string;
   token: PresenceToken | null;
   kept: boolean;
+  /** F4: helper 1.7.0's unlock bounds on a kept sign ({idleSeconds, absoluteSeconds, maxSignatures}); absent from 1.6.0 */
+  bounds?: unknown;
 }
 
 /** Thrown by signDecision when the human declined (FORBIDDEN presence). */
@@ -302,7 +309,7 @@ export class HelperApprovalsKey {
           key: 'approvals',
           gen: this.gen,
           mode: req.mode,
-          connId: req.connId,
+          connId: req.unlockKey ?? req.connId,
           ...(req.mode === 'fresh' ? { reason: withCheck(req.prompt ?? 'Gnomon: approve a decision', messages), keep: req.keepUnlock === true } : {}),
           messages,
         },
@@ -326,7 +333,7 @@ export class HelperApprovalsKey {
       if (!PresenceToken.is(t)) throw new HardwarePresenceDenied(`presence attestation ${t}`);
       token = t;
     }
-    return { decisionSig, token, kept: reply.kept === true };
+    return { decisionSig, token, kept: reply.kept === true, ...(reply.kept === true && reply.bounds !== undefined ? { bounds: reply.bounds } : {}) };
   }
 
   /**

@@ -20,8 +20,8 @@ export interface ApprovalPort {
   authTheft(t: AuthTheft): Promise<void>;
   /** status.cards for a caller class */
   cards(principalClass: string): Record<string, unknown>;
-  /** status.guiSessions[].unlock */
-  unlockOf(connId: string): Record<string, unknown> | null;
+  /** status.guiSessions[].unlock (F5: the session's device unlock when its deviceId is given) */
+  unlockOf(connId: string, deviceId?: string): Record<string, unknown> | null;
   status(): Record<string, unknown>;
 }
 
@@ -45,7 +45,7 @@ export function createApprovalPort(p: { broker: ApprovalBroker; fuse: BudgetFuse
     connectionClosed: (connId) => void p.broker.connectionClosed(connId),
     authTheft: async (t) => void (await raiseTheftCard(p.broker, p.kernelPrincipal, t, theftCards)),
     cards: (cls) => p.broker.status(cls === 'human'),
-    unlockOf: (connId) => p.broker.unlocks.state(connId),
+    unlockOf: (connId, deviceId) => p.broker.unlockStateFor(connId, deviceId),
     status: () => ({ budget: p.fuse.status(), ...(p.extraStatus?.() ?? {}) }),
   };
 }
