@@ -401,7 +401,11 @@ class Lexer {
 
 const RESERVED = new Set(['if', 'then', 'else', 'elif', 'fi', 'while', 'until', 'case', 'esac', 'function', 'select', '{', '}', '[[', ']]', 'do', 'done', 'in', 'time', 'coproc']);
 /** zsh/bash parameters with a lowercase name that change the shell's behaviour when assigned (zsh/parameter included). */
-export const LOOP_VAR_DENY: ReadonlySet<string> = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'fignore', 'psvar', 'watch', 'prompt', 'histchars', 'argv', 'status', 'pipestatus', 'signals', 'commands', 'functions', 'aliases', 'options', 'parameters', 'dirstack', 'history', 'historywords', 'jobstates', 'jobtexts', 'jobdirs', 'modules', 'nameddirs', 'userdirs', 'reswords', 'builtins', 'termcap', 'terminfo', 'widgets', 'funcstack', 'funcfiletrace', 'funcsourcetrace', 'functrace', 'saliases', 'galiases', 'dis_aliases', 'dis_functions', 'dis_builtins', 'dis_reswords', 'dis_galiases', 'dis_saliases', 'dis_patchars', 'patchars', 'zsh_eval_context', 'zsh_scheduled_events', 'match', 'mbegin', 'mend', 'reply', 'keymaps', 'sysparams', 'errnos']);
+export const LOOP_VAR_DENY: ReadonlySet<string> = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'fignore', 'psvar', 'watch', 'prompt', 'histchars', 'argv', 'status', 'pipestatus', 'signals', 'commands', 'functions', 'aliases', 'options', 'parameters', 'dirstack', 'history', 'historywords', 'jobstates', 'jobtexts', 'jobdirs', 'modules', 'nameddirs', 'userdirs', 'reswords', 'builtins', 'termcap', 'terminfo', 'widgets', 'funcstack', 'funcfiletrace', 'funcsourcetrace', 'functrace', 'saliases', 'galiases', 'dis_aliases', 'dis_functions', 'dis_builtins', 'dis_reswords', 'dis_galiases', 'dis_saliases', 'dis_patchars', 'patchars', 'zsh_eval_context', 'zsh_scheduled_events', 'match', 'mbegin', 'mend', 'reply', 'keymaps', 'sysparams', 'errnos',
+  // Aegis L2: zsh/mapfile (assigning writes a file) and the lowercase proxy variables curl/git/wget honour
+  'mapfile', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'ftp_proxy']);
+/** Aegis L2: a name denied as a loop variable or tainted local — LOOP_VAR_DENY, or any zsh hook array `*_functions`. */
+export const deniedVarName = (n: string): boolean => LOOP_VAR_DENY.has(n) || n.endsWith('_functions');
 /** A brace-list item: a safe literal token (see #brace). */
 const BRACE_ITEM = /^[A-Za-z0-9._+:@%/-]+$/;
 const SEPS = new Set([';', '&', '&&', '||', '\n']);
@@ -480,7 +484,7 @@ class Parser {
     this.lx.take();
     const n = this.lx.take();
     // a lowercase name that is no special parameter of bash or zsh (zsh ties `path` to PATH: `for path in x` would steer lookup)
-    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || LOOP_VAR_DENY.has(n.plain)) parseFail('for: a plain lowercase variable name');
+    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || deniedVarName(n.plain)) parseFail('for: a plain lowercase variable name');
     this.#skipNewlines();
     this.#expectWord('in'); // `for x; do` iterates "$@": refused
     const items: Word[] = [];
@@ -778,8 +782,8 @@ const isCd = (c: Cmd): boolean => c.t === 'simple' && c.words.length > 0 && word
 function assignName(w: Word): string | null {
   const p0 = w.parts[0];
   if (!p0 || p0.t !== 'lit' || p0.quoted) return null;
-  const m = /^([a-z][a-z0-9_]{0,15})=/.exec(p0.v);
-  return m && !LOOP_VAR_DENY.has(m[1]!) ? m[1]! : null;
+  const m = /^([a-z][a-z0-9_]{0,31})=/.exec(p0.v);
+  return m && !deniedVarName(m[1]!) ? m[1]! : null;
 }
 
 /**

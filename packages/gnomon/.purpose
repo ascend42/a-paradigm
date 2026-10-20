@@ -2408,7 +2408,8 @@ components:
       $NAME; case WORD in pat) list ;; esac (patterns literal + glob chars
       only, bodies walked, the subject is text); a local assignment name=$(...)
       or name=lit with no command word (lowercase, not LOOP_VAR_DENY, not a
-      loop variable) makes name TAINTED text for the later items of its list
+      zsh hook array *_functions, not mapfile or a lowercase proxy variable
+      (Aegis L2; deniedVarName, also for loop names), not a loop variable) makes name TAINTED text for the later items of its list
       when it ran unconditionally (first or after ; / newline): "$name" only
       where a substitution may be (echo/printf args, <<<), unquoted only as
       the case subject; X=1 cmd and uppercase/special names stay refused. classifyReadOnly proves read-only:
