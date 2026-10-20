@@ -195,6 +195,25 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: resume after an upgrade (T-2026-10-
     expect(trace(w).some((t) => t.t === 'resume')).toBe(false);
   });
 
+  it('8.0:model-switch (Aegis M2): a resumed session\'s context is unknown, so a 200k target is refused context-too-large until its first main-chain message', async () => {
+    const r = world();
+    const { idle } = await drained(r);
+    setMode(w, {});
+    const fresh = kernel(r.rows);
+    const report = await resumeAfterUpgrade(planResume(r.rows, TRUST), { supervisor: fresh.sup, broker: fresh.broker });
+    expect(report.resumed.map((x) => x.hsid)).toContain(idle.hsid);
+    const boot = r.rows.length;
+    const e = await refusal(fresh.sup.switchModel(HUMAN, { hsid: idle.hsid, model: 'sonnet' }, 'human'));
+    expect(e.refusal.code).toBe('UNSUPPORTED');
+    expect(e.refusal.data).toMatchObject({ reason: 'context-too-large', contextTokens: null });
+    expect(e.message).toMatch(/send one message first/);
+    expect(r.rows.slice(boot).filter((x) => x.kind === 'request.session.model')).toEqual([]);
+    // one main-chain message makes it known; the switch then runs
+    await fresh.sup.send(HUMAN, { hsid: idle.hsid, text: 'hi' });
+    expect(await waitFor(() => r.of('turn.result', idle.hsid, boot).length > 0)).toBe(true);
+    await expect(fresh.sup.switchModel(HUMAN, { hsid: idle.hsid, model: 'sonnet' }, 'human')).resolves.toMatchObject({ outcome: 'switched' });
+  });
+
   it('carry-over: a permit live at the drain but past its TTL at resume is re-attributed with a fresh window; nothing minted', async () => {
     const r = world();
     const { idle } = await drained(r);

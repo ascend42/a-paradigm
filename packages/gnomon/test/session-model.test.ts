@@ -159,26 +159,65 @@ describe.skipIf(!SANDBOX_OK)('model switch: request.session.model', () => {
     expect(e.refusal.code).toBe('ENGINE');
     expect(e.refusal.data).toMatchObject({ reason: 'model-switch-timeout', uncertain: true });
     const fresh = r.spawnGrants()[1]!;
-    expect(r.released()).toContain(fresh.permitId);
-    expect(r.kinds('session.model').map((x) => x.payload.outcome)).toEqual(['timeout']);
+    // Aegis M1: the fresh permit is HELD while the switch is unconfirmed (claude may already run sonnet)
+    expect(r.released()).not.toContain(fresh.permitId);
+    expect(r.released()).not.toContain(old.permitId);
+    expect(r.kinds('session.model').map((x) => x.payload)).toEqual([{ hsid: o.hsid, from: 'haiku', to: 'sonnet', permitId: fresh.permitId, outcome: 'timeout' }]);
     expect(r.sup.modelOf(o.hsid)).toBe('haiku'); // the old model stays on record
     expect(r.sup.status().find((x) => x.hsid === o.hsid)).toMatchObject({ model: 'haiku', modelUncertain: true, modelTarget: 'sonnet' });
     await turn(r, o.hsid, 2);
     expect(await waitFor(() => r.kinds('session.model').length === 2)).toBe(true);
-    expect(r.kinds('session.model')[1]!.payload).toEqual({ hsid: o.hsid, from: 'haiku', to: 'sonnet', permitId: old.permitId, outcome: 'reconciled' });
+    // reconcile-to-new: swapped in exactly like success, the row cites the held permit, the old one released
+    expect(r.kinds('session.model')[1]!.payload).toEqual({ hsid: o.hsid, from: 'haiku', to: 'sonnet', permitId: fresh.permitId, outcome: 'reconciled' });
     expect(r.sup.modelOf(o.hsid)).toBe('sonnet');
     expect(r.sup.status().find((x) => x.hsid === o.hsid)).not.toHaveProperty('modelUncertain');
+    expect(r.sup.status().find((x) => x.hsid === o.hsid)).toMatchObject({ model: 'sonnet', permitId: fresh.permitId });
+    expect(await waitFor(() => r.released().includes(old.permitId))).toBe(true);
+    expect(r.released()).not.toContain(fresh.permitId);
   });
   it('timeout where the switch never took -> reconciled back to the old model', async () => {
     const r = switchRig();
     setMode(w, { setModel: 'silent-keep' });
     const o = await open(r.sup);
     await turn(r, o.hsid, 1);
+    const old = r.spawnGrants()[0]!;
     await refusal(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'opus' }, 'human'));
+    const fresh = r.spawnGrants()[1]!;
+    expect(r.released()).not.toContain(fresh.permitId); // held until ground truth says
     await turn(r, o.hsid, 2);
     expect(await waitFor(() => r.kinds('session.model').length === 2)).toBe(true);
-    expect(r.kinds('session.model')[1]!.payload).toMatchObject({ from: 'claude', to: 'claude', outcome: 'reconciled' });
+    // reconcile-to-old: the held permit is released, the session stays on its spawn permit
+    expect(r.kinds('session.model')[1]!.payload).toMatchObject({ from: 'claude', to: 'claude', outcome: 'reconciled', permitId: old.permitId });
     expect(r.sup.modelOf(o.hsid)).toBe('claude');
+    expect(await waitFor(() => r.released().includes(fresh.permitId))).toBe(true);
+    expect(r.released()).not.toContain(old.permitId);
+    expect(r.sup.status().find((x) => x.hsid === o.hsid)).toMatchObject({ permitId: old.permitId });
+  });
+  it('the session exiting while a timed-out switch is unconfirmed releases the held permit (Aegis M1)', async () => {
+    const r = switchRig();
+    setMode(w, { setModel: 'silent' });
+    const o = await open(r.sup, { model: 'haiku' });
+    await turn(r, o.hsid, 1);
+    await refusal(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'sonnet' }, 'human'));
+    const [old, fresh] = r.spawnGrants();
+    expect(r.released()).not.toContain(fresh!.permitId);
+    await r.sup.stop(HUMAN, { hsid: o.hsid });
+    expect(await waitFor(() => r.released().includes(fresh!.permitId) && r.released().includes(old!.permitId))).toBe(true);
+  });
+  it('a failed permit release is logged through the injected logger, never swallowed (Aegis L4)', async () => {
+    const warns: Array<{ id: string; msg: string; data?: Record<string, unknown> }> = [];
+    const logger = { component: (id: string) => ({ warn: (msg: string, data?: Record<string, unknown>) => void warns.push({ id, msg, ...(data ? { data } : {}) }) }) };
+    const r = switchRig({ logger });
+    setMode(w, {});
+    const o = await open(r.sup, { model: 'haiku' });
+    const old = r.spawnGrants()[0]!;
+    const spy = vi.spyOn(r.fuse, 'release').mockRejectedValueOnce(new Error('fuse down'));
+    try {
+      await expect(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'sonnet' }, 'human')).resolves.toMatchObject({ outcome: 'switched' });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(warns).toEqual([{ id: '#session-runner', msg: 'permit release failed', data: { hsid: o.hsid, permitId: old.permitId, why: 'switched', error: 'fuse down' } }]);
   });
   it('send is refused model-switching while a switch is in flight', async () => {
     const r = switchRig({ modelSwitchTimeoutMs: 2_000 });
@@ -204,6 +243,16 @@ describe.skipIf(!SANDBOX_OK)('model switch: request.session.model', () => {
     expect(r.kinds('request.session.model')).toEqual([]);
     expect(r.spawnGrants()).toHaveLength(1);
     await expect(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'sonnet[1m]' }, 'human')).resolves.toMatchObject({ outcome: 'switched' });
+  });
+  it('context guard applies whatever the source model: a non-[1m] session above 160k is refused toward a 200k model (Aegis M2)', async () => {
+    const r = switchRig();
+    setMode(w, { contextTokens: 170_000 });
+    const o = await open(r.sup, { model: 'opus' }); // 'opus' may itself run 1M by default
+    await turn(r, o.hsid, 1);
+    const e = await refusal(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'haiku' }, 'human'));
+    expect(e.refusal.data).toMatchObject({ reason: 'context-too-large', contextTokens: 170_000 });
+    expect(r.kinds('request.session.model')).toEqual([]);
+    await expect(r.sup.switchModel(HUMAN, { hsid: o.hsid, model: 'opus[1m]' }, 'human')).resolves.toMatchObject({ outcome: 'switched' });
   });
   it('context guard counts the main chain only: a big subagent message does not trip it', async () => {
     const r = switchRig();
