@@ -1,0 +1,20 @@
+{
+  "offer": {
+    "mod": "neurons-brain",
+    "kind": "capture-a-decision",
+    "question": "Want me to save this decision and its reasons to the brain?"
+  },
+  "body": "So we go with SQLite over Postgres for the local store: one file, no daemon, and the write volume fits.",
+  "shown": {
+    "mod": "neurons-brain",
+    "kind": "capture-a-decision",
+    "phase": "commit",
+    "title": "Save this decision to the brain",
+    "contextIn": [
+      "recent-messages",
+      "session-summary"
+    ],
+    "question": "Want me to save this decision and its reasons to the brain?",
+    "handoffTool": "neuron_write"
+  }
+}

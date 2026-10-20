@@ -90,3 +90,47 @@ components:
       regenerate with `npm run repin:first-party`; tier first-party once
       pinned in FIRST_PARTY_PACKAGE_HASHES (sha256:be0cce01…, repinned after Aegis L2).
     tags: [mods, first-party]
+  neurons-mod:
+    description: >-
+      #neurons-mod - packages/gnomon-mods/neurons-brain (the Desk, TD-2026-10-20-812
+      slice S2), mod name `neurons-brain`, because `neurons` is a kernel
+      namespace token (the §9.1 `neurons.event` kind) and the validator refuses
+      it as a mod name. View-less, with no process of its own (no index.mjs; the
+      validator needs none). It declares one provides.mcp server `gnomon-neurons-brain`
+      (generic default `neurons mcp`, a placeholder that is not absolute, so it
+      fails closed until the user sets an absolute command through the
+      per-user override; config {command, args, env [NEURONS_VAULT], the
+      upstream server's own variable}; no personal path is committed), three
+      offers (search-the-brain diverge → neuron_search, capture-a-learning
+      synthesize → source_note, capture-a-decision commit → neuron_write; each
+      offer's contextIn comes from CONTEXT_SOURCES, and the two capture
+      restraints, like the playbook, require showing the exact text and waiting
+      for the human to confirm or edit it, flagging fetched, tool-output or
+      unverified content), and one skill, skills/neurons-desk/SKILL.md, a
+      playbook that falls back to plain suggestions outside Gnomon. Every
+      ```offer example in it resolves to a declared offer (tested). requires egress none,
+      no capability. Fixtures are model replies with one ```offer block, and
+      their goldens come from scripts/offer-golden.mjs (offerBlockOf plus the
+      manifest's offer-spec), with one undeclared-kind negative. Tier
+      first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES); tested
+      in test/neurons-mod.test.ts.
+    tags: [mods, first-party, desk]
+  constellation-mod:
+    description: >-
+      #constellation-mod - packages/gnomon-mods/constellation (the Desk,
+      TD-2026-10-20-812 slice S2). View-less, with no process of its own. It
+      declares one provides.mcp server `gnomon-constellation` (placeholder
+      default `constellation-mcp`, never launched: it is not absolute, so it
+      fails closed until the user sets an absolute node and
+      `<checkout>/mcp/server.ts` through the per-user override; config
+      {command, args, env [CONSTELLATION_NO_AUTOSTART]}), two offers
+      (map-the-idea diverge → apply, contextIn [recent-messages];
+      summarize-the-session synthesize → summarize; the automation offer is
+      deferred to O2 behind a confirmation and a disabled save, Aegis H1), and
+      one skill, skills/constellation-desk/SKILL.md, a playbook that falls back
+      to plain suggestions outside Gnomon. requires egress none, no capability.
+      The L3 "sky" world is not declared yet, because manifest:v1 has no world
+      field. Offer fixtures plus goldens include a two-blocks negative. Tier
+      first-party (packageHash pinned); tested in
+      test/constellation-mod.test.ts.
+    tags: [mods, first-party, desk]

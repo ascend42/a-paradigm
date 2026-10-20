@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T21:48:55.240Z'
+generated: '2026-10-20T21:50:14.667Z'
 structure: {}
 key_files:
   config:
@@ -277,6 +277,8 @@ symbols:
   '#purpose-component-workshop-mod': packages/gnomon-mods/
   '#purpose-component-ledger-mod': packages/gnomon-mods/
   '#purpose-component-paradigm-context-mod': packages/gnomon-mods/
+  '#purpose-component-neurons-mod': packages/gnomon-mods/
+  '#purpose-component-constellation-mod': packages/gnomon-mods/
   '#purpose-component-gnomon-voice': packages/gnomon/
   '#purpose-component-gnomon-voice-io': packages/gnomon-voice/
   '#purpose-component-gnomon-voice-io-build': packages/gnomon-voice/

@@ -197,7 +197,7 @@ export const RESERVED_MOD_NAMES: ReadonlySet<string> = new Set([
   'admin', 'root', 'human', 'user', 'local', 'first-party',
 ]);
 /** Names of the first-party mods (bundled or planned): accepted only from the first-party tier (Aegis L5). */
-export const FIRST_PARTY_MOD_NAMES: ReadonlySet<string> = new Set(['workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation']);
+export const FIRST_PARTY_MOD_NAMES: ReadonlySet<string> = new Set(['workshop', 'ledger', 'paradigm-context', 'neurons', 'neurons-brain', 'constellation']);
 /** Name prefixes reserved for the first-party tier (Aegis L5). */
 export const FIRST_PARTY_NAME_PREFIXES = Object.freeze(['gnomon-', 'paradigm-', 'claude-', 'anthropic-']);
 
