@@ -16,6 +16,28 @@ description: >-
 
 components:
   gui:
+    fidelity-2: >-
+      Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
+      Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, ONE title
+      line, "raised HH:MM · waiting Nm", the keys, a quiet single-line contentHash (full hash in title=),
+      then a `details` disclosure (details/summary allowlisted in h()) with the full requester + session,
+      the kernel-composed body, and a requester's own words labelled as theirs. Always VISIBLE: the short
+      requester (shortRequester: a local p:<ns>/<name> shows its name, a foreign or odd principal shows
+      whole), the contentHash line, keys and flags, a held countdown, the ask picker, a claim-mismatch
+      card's whole body. A permission title ("Allow Bash <command>") is composed by permissionTitleOf ONLY
+      from the approval.request row's structured tool/tool_input (store StackCard.tool/toolInput),
+      cross-checked against the kernel's line 1 and, when present, the contentHash-verified detail's
+      inputHash (toolInputHash). Buried pile details are inert like buried keys. A stateless card's edge
+      is its project's ink (pe-hN). Rail: one line per session, no project heading rows; voice attaches
+      from the header pill menu only. Header: the connection readout is a quiet chip ("connected"; the
+      identity in its title= and Settings → About), glyph-only theme switch, night keys without [ ] caps
+      except + New session. Chat header: meta line kept whole, run mode as a compact kernel-owned chip
+      (modes.ts modeChip), counts and raw toggle in a ⋯ menu. Transcript: session.open (not resumed) and
+      voice.session.start are raw-only. Composer: one row, ⌘↵ hint, small send, the target/mode in title=.
+      Stack head: "Stack · N · hover to fan" + a small filter key. Footer: an "Install Workshop" key,
+      DISABLED with the CLI command in its tooltip because install has no GUI request kind
+      (mod-panels.ts WORKSHOP_INSTALL_KEY; modhost/control.ts), and ONE quiet status line (detail in
+      title=). Preview clock pinned to 14:07:10 (src/preview/env.ts PREVIEW_NOW).
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
       SVG caps. core/render.ts renderCap draws a Text node's `cap` only after
