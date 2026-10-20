@@ -271,6 +271,25 @@ export const D98_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gat
 export const CAS_LOST_REASONS = ['stale-claim', 'claim-expired', 'claim-superseded'] as const;
 export const D98_REFUSAL_REASONS = Object.freeze(Object.keys(D98_REASON_ROUTES)) as readonly string[];
 
+/**
+ * Model-switch refusal reasons (8.0:model-switch), on request.session.model:
+ *   - `turn-running`: a turn is streaming; switch at a turn boundary.
+ *   - `model-switching`: another switch of this session is in flight (also refuses session.send meanwhile).
+ *   - `local-session`: a gnomon-local session has no Claude model to switch.
+ *   - `context-too-large`: a 1M session is above MODEL_SWITCH_CONTEXT_GUARD.maxTokens and the target is a 200k model.
+ *   - `model-switch-failed`: claude refused the model (set_model error); nothing changed.
+ *   - `model-switch-timeout`: claude did not answer set_model in time; the kernel keeps the old model on record.
+ */
+export const MODEL_SWITCH_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({
+  'turn-running': { code: 'UNSUPPORTED', gate: 'usage' },
+  'model-switching': { code: 'UNSUPPORTED', gate: 'usage' },
+  'local-session': { code: 'UNSUPPORTED', gate: 'usage' },
+  'context-too-large': { code: 'UNSUPPORTED', gate: 'usage' },
+  'model-switch-failed': { code: 'MODEL_UNAVAILABLE', gate: 'usage' },
+  'model-switch-timeout': { code: 'ENGINE', gate: 'transport' },
+});
+export const MODEL_SWITCH_REFUSAL_REASONS = Object.freeze(Object.keys(MODEL_SWITCH_REASON_ROUTES)) as readonly string[];
+
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;
 /** Additive: a client renders an unknown reason opaquely. */
@@ -284,6 +303,7 @@ export const REFUSAL_REASONS = [
   ...CLIENT_LOCAL_REFUSAL_REASONS,
   ...(SOCKET_REFUSAL_REASONS as readonly string[]),
   ...D98_REFUSAL_REASONS,
+  ...MODEL_SWITCH_REFUSAL_REASONS,
 ] as readonly string[];
 
 /** Which gate (and code) each reserved P8-D86–D88 reason rides on (§4.11). */

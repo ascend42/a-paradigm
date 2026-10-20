@@ -14,7 +14,7 @@ import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
 
 const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop'];
 const GOLDEN_ABI_ID = 'sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35';
-const GOLDEN_CLIENT_API_ID = 'sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f';
+const GOLDEN_CLIENT_API_ID = 'sha256:d31e32842c61b7af2e69ae4d31602099ae7eea638ca8cd6219351c7018e75a6b';
 
 describe('voice golden: abiId and clientApiId are unchanged by every voice slice', () => {
   it('ABI_ID and CLIENT_API_ID equal the pre-voice literals', () => {

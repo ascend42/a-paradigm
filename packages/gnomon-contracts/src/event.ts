@@ -16,6 +16,7 @@ import { Checker, ISO_DATE_TIME, SHA256_TAGGED, type ValidateOptions } from './i
 import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT_ID_PATTERN, TURN_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
+import { isClaudeModel } from './claude-model.js';
 
 export const EVENT_V1 = 'event:v1' as const;
 
@@ -47,7 +48,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -72,6 +73,8 @@ const D98 = '8.0:P8-D98' as const;
 const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
 /** TD-2026-10-20-086 F6 (the daily standing grant) + T-2026-10-20-007 (approval.auto.miss, anchoredInputHash): one clientApiId move. */
 const STANDING = '8.0:TD-2026-10-20-086' as const;
+/** The mid-session Claude model switch (founder ask 2026-10-20; probe p-set-model): one clientApiId move. */
+const MODEL_SWITCH = '8.0:model-switch' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -129,6 +132,10 @@ const TABLE: Row[] = [
   // Aegis M1 (TD-2026-10-20-086 F5): approval.unlock.joined{connId, scope:'device'} — a new connection of the same GUI
   // device first used the device's cached unlock (the GUI feed says "another Gnomon window joined your unlock").
   ['approval', 'kernel', 'unlock.joined', STANDING],
+  // model switch (probe p-set-model): request.session.model{hsid, model} — the human's ask, written by the kernel on a
+  // first-party human connection; session.model{hsid, from, to, permitId, outcome} — what the switch did (closed).
+  ['request', 'kernel', 'session.model', MODEL_SWITCH],
+  ['session', 'kernel', 'model', MODEL_SWITCH],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -361,7 +368,28 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId', 'renewedByDrain', 'expiresAt']),
   'approval.rule.revoked': Object.freeze(['ruleId', 'repoKey', 'tool', 'connId']),
   'approval.effect.failed': Object.freeze(['cardId', 'decision', 'effect', 'reason']),
+  // model switch (8.0:model-switch): the human's ask and its closing row (validateKindPayload)
+  'request.session.model': Object.freeze(['hsid', 'model']),
+  'session.model': Object.freeze(['hsid', 'from', 'to', 'permitId', 'outcome']),
 });
+
+/**
+ * `session.model{outcome}` (CLOSED, 8.0:model-switch): what one request.session.model came to.
+ *   switched         claude answered set_model success; the session runs `to` under the new spawn permit `permitId`
+ *   backend-refused  claude answered an error (e.g. an unknown model); nothing changed, the new permit was released
+ *   timeout          claude did not answer within the kernel's wait; the kernel keeps `from` on record and released the new permit
+ *   permit-refused   the fuse or law 7 refused the new spawn permit; nothing was sent (permitId null)
+ */
+export const SESSION_MODEL_OUTCOMES = ['switched', 'backend-refused', 'timeout', 'permit-refused'] as const;
+export type SessionModelOutcome = (typeof SESSION_MODEL_OUTCOMES)[number];
+/**
+ * The context guard of a switch (8.0:model-switch): a session on a 1M-context model (`[1m]` suffix) is not switched to a
+ * 200k model while more than this many tokens of context are in use (the last assistant message's usage). Refused
+ * UNSUPPORTED{context-too-large}; checkpoint + compact first is the context-meter build's.
+ */
+export const MODEL_SWITCH_CONTEXT_GUARD = Object.freeze({ fromSuffix: '[1m]', maxTokens: 160_000 });
+/** The `from` of a session that runs Claude Code's own default model (session.open{model} absent). */
+export const CLAUDE_DEFAULT_MODEL = 'claude' as const;
 
 /** session.drained reasons (§2.4 rule 11): closed. An upgrade is the only drain in 8.0. */
 export const DRAIN_REASONS = ['upgrade'] as const;
@@ -504,6 +532,19 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
       if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
       if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      break;
+    case 'request.session.model':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('model' in v && !isClaudeModel(v.model)) c.fail('model', 'must be a Claude model alias or a strict claude-… id');
+      break;
+    case 'session.model':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('from' in v && v.from !== CLAUDE_DEFAULT_MODEL && !isClaudeModel(v.from)) c.fail('from', "must be 'claude' or a Claude model");
+      if ('to' in v && !isClaudeModel(v.to)) c.fail('to', 'must be a Claude model alias or a strict claude-… id');
+      if ('permitId' in v && v.permitId !== null) c.str('permitId', v.permitId, ID_PATTERNS.permit, 'permit:v1:<ULID> or null');
+      if ('outcome' in v) c.closedEnum('outcome', v.outcome, SESSION_MODEL_OUTCOMES);
+      if (v.outcome === 'permit-refused' && v.permitId !== null) c.fail('permitId', 'is null when the permit was refused');
+      if (v.outcome !== 'permit-refused' && v.permitId === null) c.fail('permitId', 'names the new spawn permit');
       break;
     case 'approval.effect.failed':
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');

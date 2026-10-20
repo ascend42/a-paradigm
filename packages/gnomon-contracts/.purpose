@@ -22,6 +22,18 @@ description: >-
 
 components:
   gnomon-contracts:
+    model-switch-contract: >-
+      8.0:model-switch (one deliberate clientApiId move,
+      sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f ->
+      sha256:d31e32842c61b7af2e69ae4d31602099ae7eea638ca8cd6219351c7018e75a6b):
+      kernel-owned kinds request.session.model{hsid, model} and
+      session.model{hsid, from, to, permitId, outcome} (KIND_PAYLOADS, closed
+      checks in validateKindPayload), SESSION_MODEL_OUTCOMES (switched,
+      backend-refused, timeout, permit-refused), MODEL_SWITCH_CONTEXT_GUARD
+      ([1m] -> 200k above 160k tokens refused), MODEL_SWITCH_REASON_ROUTES
+      (turn-running, model-switching, local-session, context-too-large,
+      model-switch-failed, model-switch-timeout) in REFUSAL_REASONS; descriptor
+      field modelSwitch.
     claude-model: >-
       src/claude-model.ts (model picker, 2026-10-20): CLAUDE_MODEL_ALIASES
       (default, opus, sonnet, haiku, fable, opusplan, opus[1m], sonnet[1m];
