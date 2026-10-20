@@ -223,11 +223,12 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
       for (const n of readdirSync(d)) {
         const p = path.join(d, n);
         if (statSync(p).isDirectory()) walk(p);
-        else files.push(p);
+        else if (/\.(ts|js|html|css|svg)$/.test(n)) files.push(p); // code only: the fonts are binary, the OFL texts carry upstream URLs (test/fonts.test.ts)
       }
     };
     walk(path.join(ROOT, 'src'));
     walk(path.join(ROOT, 'static'));
+    expect(files.some((f) => f.endsWith('styles.css'))).toBe(true);
     for (const f of files) {
       const s = readFileSync(f, 'utf8').replace(/^\s*(\*|\/\/).*$/gm, '');
       expect(s, f).not.toMatch(/\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function|setAttribute\(\s*['"]on/);

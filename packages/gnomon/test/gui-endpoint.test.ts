@@ -97,6 +97,21 @@ describe('#gui client ⇄ #web-endpoint (M1.10 slice 1)', () => {
     expect(r.body.equals(guiBundleFiles().get('boot.js')!)).toBe(true);
   });
 
+  it('S1: bundled fonts are served byte-exact from a sub-directory as font/woff2 under the rule-6 CSP (font-src self)', async () => {
+    const { ep } = await rig();
+    await ep.requestLaunch(HUMAN);
+    const fonts = [...guiBundleFiles().keys()].filter((k) => k.endsWith('.woff2'));
+    expect(fonts.length).toBeGreaterThanOrEqual(4);
+    for (const f of fonts) {
+      const r = await rawHttp(ep.port, 'GET', `/${f}`, { Host: `127.0.0.1:${ep.port}` });
+      expect(r.status, f).toBe(200);
+      expect(r.headers['content-type'], f).toBe('font/woff2');
+      expect(r.headers['content-security-policy'], f).toContain("font-src 'self'");
+      expect(r.body.subarray(0, 4).toString('latin1'), f).toBe('wOF2');
+      expect(r.body.equals(guiBundleFiles().get(f)!), f).toBe(true);
+    }
+  });
+
   it('launch: hello → WebCrypto serverSig verified with the fragment key → auth{launchToken} → status + log.read', async () => {
     const { ep } = await rig();
     const grant = await ep.requestLaunch(HUMAN);

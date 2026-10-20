@@ -1,8 +1,15 @@
 /* #gui themes (spec §11.3, .atelier/design-system.yaml gnomon.*): papercraft by day, phosphor by night, auto.
    Tokens are the G-GUI-10 fixtures verbatim (docs/specs/gnomon-fixtures/contrast.json; test/theme.test.ts checks
    them). `color:` only ever takes a TEXT token; project hues are fills only (--p-*-fill), never text.
-   Fonts: JetBrains Mono spine, Fraunces for day titles only. Slice 1 names the families and falls back to the
-   system mono/serif; the bundled font files (law 6, no CDN) are M1.10 slice 2. */
+   Fonts: JetBrains Mono spine, Fraunces for day titles only. S1 (critique 2026-10-20) bundles them as self-hosted
+   latin woff2 under fonts/ (law 6, font-src 'self', no CDN), each family with its OFL 1.1 licence beside it
+   (fonts/OFL-*.txt; Fontsource 5.3.0 latin subsets, no Reserved Font Name declared upstream). */
+
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); }
+/* one variable cut (opsz 9-144 and the wght axis) covers the comp's 460 and 600 */
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/Fraunces-opsz-wght.woff2") format("woff2"); }
 
 :root,
 [data-theme="day"] {
@@ -30,7 +37,8 @@
   --p-sea-grey-fill: #8FB0AE;
   --shadow: 2px 3px 0 rgba(22, 21, 15, 0.18);
   --glow: none;
-  --title-font: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --title-font: "Fraunces", Georgia, serif;
+  --display-wght: 600;
   --title-transform: none;
   --title-spacing: 0;
 }
@@ -61,6 +69,7 @@
   --shadow: none;
   --glow: 0 0 6px rgba(232, 244, 240, 0.18);
   --title-font: var(--mono);
+  --display-wght: 500;
   --title-transform: uppercase;
   --title-spacing: 0.08em;
 }
@@ -99,7 +108,7 @@ html, body {
 .wordmark { font-family: var(--title-font); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); font-size: 18px; color: var(--ink); }
 .spacer { flex: 1; }
 .readout, .meta { font-size: 11.5px; color: var(--sec); }
-.title { font-family: var(--title-font); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
+.title { font-family: var(--title-font); font-weight: var(--display-wght); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
 
 .badge {
   display: inline-block; padding: 0 6px;

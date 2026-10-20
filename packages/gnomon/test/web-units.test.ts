@@ -18,6 +18,7 @@ import {
   routeHttp,
   securityHeaders,
   sniffRaster,
+  staticContentType,
   treeHashOf,
 } from '../src/kernel/web/index.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/index.js';
@@ -233,12 +234,26 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:7cfe3c1b4125fccb8f38abbe9f5f69b8fb6d10f3f95f1c6e1476e6aa58b65913');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:c9a70ef25bb6175a1ac477f932f8bf94dd30b8548b218cf753823961bea9df7e');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
     expect(treeHashOf(f)).not.toBe(GUI_BUNDLE_HASH);
-    expect([...guiBundleFiles().keys()].sort()).toEqual(['app.js', 'boot.js', 'index.html', 'styles.css']);
+    expect([...guiBundleFiles().keys()].sort()).toEqual([
+      'app.js', 'boot.js',
+      'fonts/Fraunces-opsz-wght.woff2', 'fonts/JetBrainsMono-Medium.woff2', 'fonts/JetBrainsMono-Regular.woff2', 'fonts/JetBrainsMono-SemiBold.woff2',
+      'fonts/OFL-Fraunces.txt', 'fonts/OFL-JetBrainsMono.txt',
+      'index.html', 'styles.css',
+    ]);
+  });
+  it('S1: binary bundle files survive the base64 embed raw (woff2 magic + the kernel serves them as font/woff2)', () => {
+    const fonts = [...guiBundleFiles()].filter(([n]) => n.endsWith('.woff2'));
+    expect(fonts.length).toBe(4);
+    for (const [n, b] of fonts) {
+      expect(b.subarray(0, 4).toString('latin1'), n).toBe('wOF2');
+      expect(b.includes(Buffer.from([0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd])), `${n} looks utf8-mangled`).toBe(false);
+      expect(staticContentType(n)).toBe('font/woff2');
+    }
   });
   it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
     const files = guiBundleFiles();
@@ -246,8 +261,14 @@ describe('G-WEB-08 bundle pin', () => {
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
     expect(html).not.toMatch(/<style|\sstyle=|\son[a-z]+=/i);
     expect(html.indexOf('/boot.js')).toBeLessThan(html.indexOf('/app.js')); // fragment read-and-clear runs first
+    const binary = (n: string): boolean => /\.(woff2?|ttf|png|jpe?g|webp|wasm)$/.test(n); // opaque bytes: not code, never scanned as text
     for (const [n, v] of files) {
+      if (binary(n)) continue;
       const s = v.toString();
+      if (n.endsWith('.txt')) { // the OFL licences: inert text, but no data: URL
+        expect(s, n).not.toMatch(/data:[a-z]+\//);
+        continue;
+      }
       expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }

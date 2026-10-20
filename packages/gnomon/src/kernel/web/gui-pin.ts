@@ -25,6 +25,12 @@ export function materializeGuiBundle(home: string): string {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(path.join(home, 'gui'), 0o700);
   chmodSync(dir, 0o700);
-  for (const [name, bytes] of guiBundleFiles()) writeFileSync(path.join(dir, name), bytes, { mode: 0o600 });
+  for (const [name, bytes] of guiBundleFiles()) {
+    // names are relative POSIX paths (e.g. fonts/JetBrainsMono-Regular.woff2, S1); the tree hash's SAFE_PATH already
+    // refuses `..`, so a sub-directory stays under dir. The 0700 mode is best-effort (ignored on Windows, never relied on).
+    const file = path.join(dir, ...name.split('/'));
+    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    writeFileSync(file, bytes, { mode: 0o600 });
+  }
   return dir;
 }

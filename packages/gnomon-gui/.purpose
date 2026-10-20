@@ -183,6 +183,20 @@ components:
       so an old kernel's card id is never clickable (the new kernel refuses it
       NOT_FOUND and retires it with approval.expire). Tests: test/gui.test.ts
       (#gui store after an upgrade); bundle pin in gnomon test/web-units.test.ts.
+    materials-s1: >-
+      S1 papercraft/phosphor materials (critique 2026-10-20 §2 S1, Luna).
+      Self-hosted fonts in static/fonts/: JetBrains Mono 400/500/600 and one
+      Fraunces variable cut (opsz + wght, covers 460 and 600), Fontsource
+      5.3.0 latin subsets copied unmodified, each family with its OFL 1.1
+      licence beside it (OFL-JetBrainsMono.txt, OFL-Fraunces.txt; no
+      Reserved Font Name upstream); @font-face font-display swap, font-src
+      'self', no CDN, no data: URL. scripts/build.mjs walks static/
+      recursively: .html/.css/.js/.svg/.txt get LF, everything else (woff2)
+      is read raw; *.woff2 is binary in .gitattributes. Bundle files may sit
+      in sub-directories (fonts/...); the kernel materializes them under
+      <home>/gui/bundle/ and serves woff2 as font/woff2. Tests:
+      test/fonts.test.ts (pinned sha256, embed byte-exact, licences, CSS
+      sources), ../gnomon/test/gui-endpoint.test.ts (served byte-exact).
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a
@@ -298,6 +312,7 @@ components:
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts
+      - test/fonts.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:
