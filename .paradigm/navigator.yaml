@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T08:45:20.403Z'
+generated: '2026-10-20T18:53:10.482Z'
 structure: {}
 key_files:
   config:
@@ -250,6 +250,7 @@ symbols:
   '#purpose-component-atrium-textview': packages/conductor/
   '#purpose-component-gnomon-contracts': packages/gnomon-contracts/
   '#purpose-component-contract-event-v1': packages/gnomon-contracts/
+  '#purpose-component-contract-project-hue': packages/gnomon-contracts/
   '#purpose-component-contract-ids': packages/gnomon-contracts/
   '#purpose-component-contract-principal': packages/gnomon-contracts/
   '#purpose-component-contract-ref-v1': packages/gnomon-contracts/
