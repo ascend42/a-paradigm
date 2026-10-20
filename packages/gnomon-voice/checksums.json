@@ -1,0 +1,18 @@
+{
+  "schema": "gnomon-voice-checksums:v1",
+  "note": "sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel pins the voice binary by the manifest of spec §14.7 (TD-2026-10-19-194 item 5), not by this file. A timestamped signature changes the sha on every build.",
+  "binaries": {
+    "bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io": {
+      "sha256": "eab93b0cc46eef185e19d56972b39d7fe2703fa52d33bc43dbb536f00376a5f1",
+      "version": "0.1.0",
+      "signed": true,
+      "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
+      "team": "SW4BMQ8PNL",
+      "identifier": "gnomon.voice-io",
+      "entitlements": [
+        "com.apple.security.device.audio-input"
+      ],
+      "runtime": true
+    }
+  }
+}
