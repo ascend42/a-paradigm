@@ -212,6 +212,8 @@ export interface VoiceControlOptions {
   now?: () => number;
   /** The attachment started, ended or was replaced (daemon: end every voice log.read follow subscription, Aegis M3). */
   onAttachmentChange?: () => void;
+  /** Aegis M1 (T-2026-10-20-005): the kernel accepted a voice turn (not refused, not intercepted) or a direct send on this voice connection (VoiceReports.accepted). */
+  onAccepted?: (connId: string, kind: 'turn' | 'send') => void;
   /** V2a: raise the fresh-presence card for widening to conversation; resolves with its cardId. Absent ⇒ widening refused. */
   presence?: (req: VoicePresenceRequest) => Promise<{ cardId: string }>;
   /** V2a: idle auto-off for a conversation ceiling (clamped by ambientIdleMsOf; default 10 min) */
@@ -623,6 +625,7 @@ export class VoiceControl {
           this.#userTurns.set(t.turnId, turn);
           this.#latestByConn.set(c.connId, t.turnId);
           if (a) a.turns++;
+          if (!turn.refused && !turn.intercepted) this.#o.onAccepted?.(c.connId, 'turn');
         });
         break;
       }
@@ -739,7 +742,9 @@ export class VoiceControl {
     this.#forwarded.add(turn.turnId);
     a.lastForwardAt = now;
     this.#armIdle();
-    return this.#o.sessions.send(a.owner, { hsid: a.hsid, text, source: 'voice', voice: { voiceSessionId: a.voiceSessionId, turnId: turn.turnId, turnSeq: turn.seq } });
+    const sent = await this.#o.sessions.send(a.owner, { hsid: a.hsid, text, source: 'voice', voice: { voiceSessionId: a.voiceSessionId, turnId: turn.turnId, turnSeq: turn.seq } });
+    this.#o.onAccepted?.(c.connId, 'send');
+    return sent;
   }
 
   /**

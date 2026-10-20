@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
+import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -170,11 +170,12 @@ describe('voice in the transcript', () => {
     expect(items[0]).toMatchObject({ role: 'user', speaker: 'voice' });
     expect(chatItems([{ seq: 6, kind: 'turn.sent', session: A, view: 'full', payload: { source: 'client' } }]).items).toEqual([]);
   });
-  it('a partial shows grey only while it is the latest word on its turn', () => {
+  it('T-2026-10-20-005: no partial-text row ever renders (voice.turn.partial is not a kind; live words never ride the log)', () => {
     const p1: Row = { seq: 1, kind: 'voice.turn.partial', session: A, view: 'full', payload: { turnId: '7', text: 'run the', speakerId: 'spk:home/matt' } };
     const p2: Row = { seq: 2, kind: 'voice.turn.user', session: A, view: 'full', payload: { turnId: '7', partial: true, text: 'run the tes', speakerId: 'spk:home/matt' } };
-    expect(chatItems([p1, p2]).items.map((i) => [i.role, i.text])).toEqual([['voice-partial', 'run the tes']]);
-    expect(chatItems([p1, p2, user(3, '7', 'run the tests'), sent(4, 3)]).items.map((i) => i.role)).toEqual(['user']);
+    expect(chatItems([p1, p2]).items).toEqual([]);
+    expect(chatItems([p1, p2, user(3, '7', 'run the tests'), sent(4, 3)]).items.map((i) => [i.role, i.text])).toEqual([['user', 'run the tests']]);
+    expect(VOICE_ACTIVITY_KINDS.has('voice.turn.partial')).toBe(false);
   });
   it('a reply the voice app spoke gets a 🔊 marker (in part when it stopped early)', () => {
     const agent = (spoken: string): Row => ({ seq: 9, kind: 'voice.turn.agent', session: A, view: 'full', payload: { turnId: '1', t0: 1, t1: 2, textPlanned: 'all tests pass', textSpoken: spoken } });

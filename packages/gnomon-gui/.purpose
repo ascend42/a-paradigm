@@ -418,6 +418,37 @@ components:
     tags: [gnomon, gui, dev-tool, preview]
     tests:
       - test/preview.test.ts
+  gui-voice-capture:
+    description: >-
+      #gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live
+      capture feedback. core/capture.ts is PURE: captureStatusOf is the one
+      adapter over status.voice.capture{state, segId, reason?, level?, at}
+      (the voice app's per-segment state, relayed by the kernel with a 5 s
+      TTL); captureStep/captureDisplayOf give the pill words: idle keeps
+      "Listening" / "Hold … to talk" (meter still), hearing "Hearing you…"
+      (pulsing, the meter is the REAL level), transcribing "Catching that…",
+      captured "Got it" (1.2 s flash), dropped the reason only for 2.5 s
+      (no words, no count). capturePollMs is the V3 cadence (no push relay):
+      ~1 s at rest, 175 ms while hearing or transcribing, null when off,
+      detached, the voice app gone or disconnected; app.ts syncClientPoll
+      runs the one attached poll at that cadence (single flight,
+      pollStatusOnce) and stopStatusPolls clears every status poll and the
+      flash timer on disconnect (Aegis L2 of 862ef85a). The composer ghost
+      line "…" is its own element (#composer-ghost, never the textarea); the
+      polite caption (#voice-caption) changes on a state change only. The
+      decorative meter animation and row kick are gone, and the dead
+      voice.turn.partial path is removed. Phase B's live words will read a
+      capture.text the kernel projects to the gui credential only.
+      Aegis follow-ups: a capture from a status received more than
+      CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
+      a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
+      confirmed", never "Got it".
+    path: src/core/capture.ts
+    type: module
+    tags: [gnomon, gui, voice, capture]
+    flows: [$voice-turn]
+    tests:
+      - test/capture.test.ts
   gui-table-talk:
     description: >-
       #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block

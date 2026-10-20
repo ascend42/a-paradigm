@@ -160,12 +160,13 @@ describe('attached: the live state stands and the real voice-app condition is ap
     expect(want(human({ attached: null }))).toBe(false); // an older kernel
     expect(want(voiceConn({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', client: { phase: 'running' } }))).toBe(false);
     expect(CLIENT_POLL_MS).toBeGreaterThanOrEqual(1000);
-    expect(APP).toMatch(/function syncClientPoll\(\)[\s\S]{0,200}clientPollWanted\([\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), CLIENT_POLL_MS\)[\s\S]{0,120}clearInterval\(clientPoll\)/);
+    // T-2026-10-20-005 V3: the same poll runs at the capture cadence while attached with the app connected (re-armed on a change)
+    expect(APP).toMatch(/function syncClientPoll\(\)[\s\S]{0,200}clientPollWanted\([\s\S]{0,300}capturePollMs\([\s\S]{0,200}\?\? CLIENT_POLL_MS\) : null;[\s\S]{0,120}clearInterval\(clientPoll\)[\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), ms\)/);
   });
   it('the page appends the tail to the live pill and shows the tail\'s action', () => {
     const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
     expect(css).toMatch(/\.voice-pill\.voice-ambient:is\(\.voice-noclient, \.voice-setup, \.voice-crashed, \.voice-unavailable, \.voice-nudge\) \{ color: var\(--warn-ink\); background: var\(--warn-bg\);/);
-    const fn = APP.slice(APP.indexOf('function paintVoice('), APP.indexOf('function kickMeter('));
+    const fn = APP.slice(APP.indexOf('function paintVoice('), APP.indexOf('function paintCapture('));
     expect(fn).toContain('const p = pillOf(v, cp.tail);');
     expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('pillOf(v, cp.tail)'));
     expect(fn).toContain('act.hidden = cp.action === null;');

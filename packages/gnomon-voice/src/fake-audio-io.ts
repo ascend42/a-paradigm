@@ -120,6 +120,10 @@ export class FakeAudioIO implements AudioIO {
   hotkey(down: boolean): void {
     this.#ev.emit('hotkey', down, this.clock);
   }
+  /** The binary's input level event (dBFS). */
+  emitLevel(db: number): void {
+    if (this.micOn) this.#ev.emit('level', db);
+  }
   emitClosed(reason: string): void {
     this.#ev.emit('closed', reason);
   }
