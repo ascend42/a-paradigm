@@ -19,7 +19,64 @@
  * consumes the row).
  */
 
-export type SpeakItem = { kind: 'reply' | 'ask' | 'edits'; text: string };
+/**
+ * TABLE TALK (TD-2026-10-20-294): `from` says where a reply's words came from: 'block' = the model's own ```speak
+ * block, 'heuristic' = the gnome line / first paragraph fallback. 'kernel' marks words the KERNEL wrote (the
+ * ask-waiting line, "Edited N files"): the voice client says those in the system voice after an earcon; model
+ * text never gets that voice. An ask item from a model ask-user call has no `from` (model text). Opaque payload.
+ */
+export type SpeakFrom = 'block' | 'heuristic' | 'kernel';
+export type SpeakItem = { kind: 'reply' | 'ask' | 'edits'; text: string; from?: SpeakFrom };
+
+/** A speak block's spoken text is capped here (at a sentence boundary). */
+export const SPEAK_BLOCK_MAX = 300;
+
+/**
+ * The first ```speak block of a reply, as the words to say: markdown stripped, URLs and long digit / hex runs
+ * removed, capped at SPEAK_BLOCK_MAX at a sentence boundary. An UNCLOSED speak fence runs to its first blank line
+ * (or the end). Null when there is no block or it has nothing speakable. The block's text is only ever words:
+ * "approved" or "system:" inside it are read out as the model's words, never acted on.
+ */
+export function speakBlock(text: string): string | null {
+  const open = /(?:^|\n)[ \t]*```speak[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!open) return null;
+  const rest = text.slice(open.index + open[0].length);
+  const close = /(?:^|\n)[ \t]*```/.exec(rest);
+  // unclosed: the fence would run to the end, so keep only its first paragraph
+  const body = close ? rest.slice(0, close.index) : rest.split(/\n\s*\n/)[0]!;
+  const said = capSentence(scrubSpoken(body), SPEAK_BLOCK_MAX);
+  return said && /[A-Za-z]/.test(said) ? said : null;
+}
+
+/**
+ * The spoken-text scrub (Aegis L2: every model-written item, block, heuristic and ask alike): markdown stripped,
+ * URLs removed, 12+ hex runs (with a digit) and digit runs of 5+ digits removed, whitespace tidied.
+ */
+export function scrubSpoken(s: string): string {
+  return stripMarkdown(s.replace(/\bhttps?:\/\/\S+/gi, '').replace(/\bwww\.\S+/gi, ''))
+    .replace(/\b[0-9a-f]*\d[0-9a-f]*\b/gi, (w) => (w.length >= 12 && /^[0-9a-f]+$/i.test(w) ? '' : w))
+    .replace(/\d[\d,._:-]*\d/g, (w) => (w.replace(/\D/g, '').length >= 5 ? '' : w))
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function capSentence(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '), /[.?!]$/.test(cut) ? cut.length - 1 : -1);
+  if (end > 0) return cut.slice(0, end + 1);
+  const sp = cut.lastIndexOf(' ', max - 1);
+  return `${(sp > 0 ? cut.slice(0, sp) : cut.slice(0, max - 1)).trimEnd()}…`;
+}
+
+/** The reply item for one assistant message: its speak block (from:'block'), else the heuristic summary. */
+export function replyItem(text: string): SpeakItem | null {
+  const block = speakBlock(text);
+  if (block !== null) return { kind: 'reply', text: block, from: 'block' };
+  const summary = speakableSummary(text);
+  return summary ? { kind: 'reply', text: summary, from: 'heuristic' } : null;
+}
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch', 'str_replace_based_edit_tool']);
 const ASK_TOOLS = new Set(['AskUserQuestion', 'ask_user', 'AskUser']);
@@ -46,12 +103,15 @@ function looksLikeDiffOrOutput(line: string): boolean {
 /** The speakable summary of one reply's text: the gnome line, else the first prose paragraph. '' when none. */
 export function speakableSummary(text: string): string {
   const gnome = /^\s*gnome:\s*(.+)$/im.exec(text);
-  if (gnome) return clip(stripMarkdown(gnome[1]!));
+  if (gnome) {
+    const g = scrubSpoken(gnome[1]!);
+    if (g && /[A-Za-z]/.test(g)) return clip(g);
+  }
   // drop fenced blocks entirely (code, diffs, tool output)
   const noFences = text.replace(/```[\s\S]*?(```|$)/g, '\n\n').replace(/~~~[\s\S]*?(~~~|$)/g, '\n\n');
   for (const para of noFences.split(/\n\s*\n/)) {
     const lines = para.split('\n').filter((l) => l.trim() && !looksLikeDiffOrOutput(l) && !/^\s*[|>]/.test(l));
-    const prose = stripMarkdown(lines.join(' '));
+    const prose = scrubSpoken(lines.join(' '));
     if (prose && /[A-Za-z]/.test(prose)) return clip(prose);
   }
   return '';
@@ -98,7 +158,7 @@ export class SpeakableProjector {
     if (kind === 'turn.ask-user') {
       const id = typeof payload.toolUseId === 'string' ? payload.toolUseId : null;
       if (id !== null && this.#asked.has(id)) return [];
-      return [{ kind: 'ask', text: ASK_WAITING }];
+      return [{ kind: 'ask', text: ASK_WAITING, from: 'kernel' }];
     }
     if (kind !== 'turn.event' || typeof payload.line !== 'string') return [];
     let msg: { type?: string; message?: { content?: unknown } };
@@ -122,8 +182,8 @@ export class SpeakableProjector {
         for (const q of askQuestions(b.input)) out.push({ kind: 'ask', text: q });
       }
     }
-    const summary = speakableSummary(texts.join('\n\n'));
-    if (summary) out.unshift({ kind: 'reply', text: summary });
+    const reply = replyItem(texts.join('\n\n'));
+    if (reply) out.unshift(reply);
     return out;
   }
 
@@ -132,7 +192,7 @@ export class SpeakableProjector {
     this.#editedFiles.clear();
     this.#editsNoPath = 0;
     if (this.#asked.size > 256) this.#asked.clear();
-    return n > 0 ? [{ kind: 'edits', text: editsLine(n) }] : [];
+    return n > 0 ? [{ kind: 'edits', text: editsLine(n), from: 'kernel' }] : [];
   }
 }
 
@@ -146,7 +206,8 @@ export function askQuestions(input: Record<string, unknown> | undefined): string
     if (!text) continue;
     const opts = Array.isArray(q.options) ? q.options.map((o) => (typeof o === 'string' ? o : typeof (o as { label?: unknown })?.label === 'string' ? (o as { label: string }).label : '')).filter(Boolean) : [];
     const said = stripMarkdown(text);
-    out.push(opts.length ? `${said} Options: ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(", ")}, or ${opts.at(-1)}`}.` : said);
+    const line = scrubSpoken(opts.length ? `${said} Options: ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(", ")}, or ${opts.at(-1)}`}.` : said);
+    if (line && /[A-Za-z]/.test(line)) out.push(line);
   }
   return out;
 }

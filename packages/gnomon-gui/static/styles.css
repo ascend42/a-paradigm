@@ -183,6 +183,10 @@ html, body {
 .trow .who { display: flex; gap: 8px; align-items: baseline; font-size: 11px; color: var(--sec); }
 .trow.role-user .body { color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; }
 .trow.role-assistant .body { color: var(--ink); }
+.trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--slate); border-radius: 3px; padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
+.trow.role-assistant .said .said-tag { color: var(--sec); font-size: 11px; font-weight: 400; }
+.trow.role-assistant .body .chip { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; margin: 3px 0; }
+.trow.role-assistant .body .chip-label { margin-right: 4px; }
 .trow.role-tool { color: var(--ink2); font-size: 12px; padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow.role-tool::before { content: "↳ "; color: var(--sec); }
 .trow.role-result, .trow.role-system { color: var(--sec); font-size: 11px; padding-top: 2px; padding-bottom: 4px; }

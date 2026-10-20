@@ -104,7 +104,8 @@ export interface SttEngine {
 
 export interface TtsEngine {
   readonly voice: string;
-  synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }>;
+  /** `voice: 'system'` = the kernel's own words (table talk S4): a different speaker than model replies */
+  synthesize(sentence: string, o?: { voice?: 'model' | 'system' }): Promise<{ samples: Float32Array; sampleRate: number }>;
   /** one silent synthesis at client start so the first spoken reply does not pay the cold start (optional) */
   warmUp?(): Promise<void>;
 }
@@ -139,6 +140,8 @@ export interface KernelRow {
   seq: number;
   kind: string;
   session?: string;
+  /** the row's principal (Aegis L1: a kernel-speakable row is spoken only when it is p:<ns>/kernel) */
+  principal?: string;
   payload: Record<string, unknown>;
 }
 

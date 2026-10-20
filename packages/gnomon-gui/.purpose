@@ -347,3 +347,23 @@ components:
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+  gui-table-talk:
+    description: >-
+      #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
+      (store.ts splitSpeak, mirroring the kernel projector) shows as a
+      highlighted "said aloud" line at the top of the reply and is removed
+      from the body; a reply without one (heuristic) gets no highlight. Lines
+      that start with a bold label, in whatever scheme the agent chose
+      (letters, numbers, short names), render as subtle chips (replyParts).
+      Aegis L3: when the kernel's speakable row (principal p:<ns>/kernel) for
+      that reply exists, the line is its text (from block, "said aloud";
+      heuristic shows none); otherwise the GUI's own parse ("spoken part").
+      Aegis M1: a replayed user message always keeps content[0]; a later text
+      block is hidden only when its sha256 is the kernel guidance hash
+      (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
+      guidanceHash; a human-typed <gnomon-voice> stays visible.
+    path: src/core/store.ts
+    type: module
+    tags: [gnomon, gui, voice, table-talk]
+    tests:
+      - test/table-talk.test.ts

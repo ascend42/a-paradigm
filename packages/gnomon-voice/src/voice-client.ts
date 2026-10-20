@@ -39,6 +39,7 @@
  */
 import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
+import { withEarcon } from './earcon.js';
 import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
@@ -73,6 +74,14 @@ export interface SpeechLatency {
 }
 
 type Audio = { samples: Float32Array; sampleRate: number };
+/** Who speaks a queued sentence (table talk S4): the model's words, or the kernel's own in the system voice. */
+type SpeakVoice = 'model' | 'system';
+interface SpeakItem {
+  sentence: string;
+  voice: SpeakVoice;
+  /** play the system earcon right before this sentence (the first sentence of a system item) */
+  earcon: boolean;
+}
 interface SynthJob {
   sentence: string;
   audio: Promise<Audio>;
@@ -175,7 +184,7 @@ export class VoiceClient {
   #windows: Array<{ t0: number; t1: number }> = [];
   #speechRunMs = 0;
   #bargedIn = false;
-  #speakQueue: string[] = [];
+  #speakQueue: SpeakItem[] = [];
   #speaking: Promise<void> = Promise.resolve();
   /** bumped by every stop: a synthesis or prefetch of an older generation is dropped, never played */
   #speechGen = 0;
@@ -344,7 +353,7 @@ export class VoiceClient {
     this.#following = true;
     try {
       let off: (() => void) | undefined;
-      off = await this.#o.link.follow(a.hsid, (r) => this.#onRow(r.kind, r.payload), (reason) => {
+      off = await this.#o.link.follow(a.hsid, (r) => this.#onRow(r.kind, r.payload, r.principal), (reason) => {
         this.#log.info('follow ended', { reason });
         if (off === undefined || this.#unfollow === off) this.#unfollow = undefined;
         off = undefined;
@@ -614,8 +623,8 @@ export class VoiceClient {
 
   // ---- speaking ------------------------------------------------------------------------------------------------
 
-  #onRow(kind: string, payload: Record<string, unknown>): void {
-    const items = kernelSpeakable(kind, payload);
+  #onRow(kind: string, payload: Record<string, unknown>, principal?: string): void {
+    const items = kernelSpeakable(kind, payload, principal, this.#o.ns);
     if (!items.length) return;
     // a kernel-speakable row is said once per turnSeq (a re-follow after an attachment change replays rows)
     const key = typeof payload.turnSeq === 'number' || typeof payload.turnSeq === 'string' ? String(payload.turnSeq) : undefined;
@@ -625,14 +634,17 @@ export class VoiceClient {
       if (this.#spokenTurns.size > 256) this.#spokenTurns.delete(this.#spokenTurns.values().next().value!);
     }
     const at = hr();
-    for (const it of items) this.say(it.text, at);
+    for (const it of items) this.say(it.text, it.voice, at);
   }
 
-  /** Queue text to speak, one sentence per TTS chunk (pipelined: the next is synthesized while one plays). */
-  say(text: string, receivedAt = hr()): void {
+  /**
+   * Queue text to speak, one sentence per TTS chunk (pipelined: the next is synthesized while one plays).
+   * table talk S4: system speech starts with the earcon and uses the system speaker; model text never does.
+   */
+  say(text: string, voice: SpeakVoice = 'model', receivedAt = hr()): void {
     const parts = sentences(text);
     if (!parts.length) return;
-    for (const s of parts) this.#speakQueue.push(s);
+    parts.forEach((sentence, i) => this.#speakQueue.push({ sentence, voice, earcon: voice === 'system' && i === 0 }));
     this.#setSpeech(true);
     this.#speaking = this.#speaking
       .then(() => this.#drain(receivedAt))
@@ -649,14 +661,16 @@ export class VoiceClient {
     return p;
   }
 
-  #synth(sentence: string): SynthJob {
+  /** Synthesize one queued sentence in its voice; a system item's audio is prefixed with the earcon (same play call). */
+  #synth(item: SpeakItem): SynthJob {
+    const { sentence } = item;
     const job: SynthJob = { sentence, audio: Promise.resolve({ samples: new Float32Array(0), sampleRate: 16_000 }), t0: hr() };
     job.audio = this.#serialTts(() => {
       job.t0 = hr();
-      return this.#o.engines.tts.synthesize(sentence);
+      return this.#o.engines.tts.synthesize(sentence, item.voice === 'system' ? { voice: 'system' } : undefined);
     }).then((a) => {
       job.t1 = hr();
-      return a;
+      return withEarcon(a, item.earcon);
     });
     job.audio.catch(() => undefined); // a dropped prefetch never surfaces as an unhandled rejection
     return job;

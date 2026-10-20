@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:08:27.039Z'
+generated: '2026-10-20T06:14:20.930Z'
 structure: {}
 key_files:
   config:
@@ -130,6 +130,7 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
+  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -262,6 +263,7 @@ symbols:
   '#purpose-component-gui-setup': packages/gnomon-gui/
   '#purpose-component-gui-stop-speaking': packages/gnomon-gui/
   '#purpose-component-gui-dictation': packages/gnomon-gui/
+  '#purpose-component-gui-table-talk': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/

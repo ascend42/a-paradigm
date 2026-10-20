@@ -21,15 +21,15 @@ describe('#gnomon-voice V2e: KernelSpeakable', () => {
     expect(k.observe(ev(5, 'turn.event', { line: line([{ type: 'text', text: 'Here is the plan.\n\nSecond para.' }]) }))).toEqual({
       kind: 'voice.turn.agent',
       session: HSID,
-      payload: { source: 'kernel-speakable', turnSeq: 5, items: [{ kind: 'reply', text: 'Here is the plan.' }] },
+      payload: { source: 'kernel-speakable', turnSeq: 5, items: [{ kind: 'reply', text: 'Here is the plan.', from: 'heuristic' }] },
     });
-    expect(k.observe(ev(6, 'turn.event', { line: line([{ type: 'text', text: 'Long words.\ngnome: All tests pass.' }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'All tests pass.' }]);
-    expect(k.observe(ev(7, 'turn.event', { line: line([{ type: 'text', text: diff }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }, { type: 'tool_use', name: 'Write', input: { file_path: '/b' } }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'Done.' }]);
+    expect(k.observe(ev(6, 'turn.event', { line: line([{ type: 'text', text: 'Long words.\ngnome: All tests pass.' }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'All tests pass.', from: 'heuristic' }]);
+    expect(k.observe(ev(7, 'turn.event', { line: line([{ type: 'text', text: diff }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }, { type: 'tool_use', name: 'Write', input: { file_path: '/b' } }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'Done.', from: 'heuristic' }]);
     expect(k.observe(ev(8, 'turn.event', { line: line([{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions: [{ question: 'Ship it?', options: [{ label: 'yes' }, { label: 'no' }] }] } }]) }))?.payload.items).toEqual([{ kind: 'ask', text: 'Ship it? Options: yes, or no.' }]);
     // the turn.ask-user row for the same tool use is not said twice; an unseen one says a question is waiting
     expect(k.observe(ev(9, 'turn.ask-user', { toolUseId: 'tu1' }))).toBeNull();
-    expect(k.observe(ev(10, 'turn.ask-user', { toolUseId: 'tu9' }))?.payload.items).toEqual([{ kind: 'ask', text: ASK_WAITING }]);
-    expect(k.observe(ev(11, 'turn.result', { tokens: 1 }))?.payload).toEqual({ source: 'kernel-speakable', turnSeq: 11, items: [{ kind: 'edits', text: 'Edited 2 files.' }] });
+    expect(k.observe(ev(10, 'turn.ask-user', { toolUseId: 'tu9' }))?.payload.items).toEqual([{ kind: 'ask', text: ASK_WAITING, from: 'kernel' }]);
+    expect(k.observe(ev(11, 'turn.result', { tokens: 1 }))?.payload).toEqual({ source: 'kernel-speakable', turnSeq: 11, items: [{ kind: 'edits', text: 'Edited 2 files.', from: 'kernel' }] });
     // never: another session, a hashed line, tool output, an unrelated kind, nothing attached
     expect(k.observe(ev(12, 'turn.event', { line: line([{ type: 'text', text: 'hi' }]) }, 'hs:other'))).toBeNull();
     expect(k.observe(ev(13, 'turn.event', { lineHash: 'sha256:x', bytes: 99999 }))).toBeNull();

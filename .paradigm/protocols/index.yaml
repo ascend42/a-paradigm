@@ -519,8 +519,24 @@ protocols:
       - dogfood
       - qa
       - battle-test
+  - id: P-gnomon-table-talk-voice-replies
+    name: Gnomon table talk (reply to a listening human)
+    status: current
+    last_verified: '2026-10-20T06:00:00Z'
+    trigger:
+      - table talk
+      - voice attached
+      - gnomon voice reply
+      - speak block
+      - spoken reply
+      - reply out loud
+    tags:
+      - gnomon
+      - voice
+      - table-talk
+      - conversation
 health:
-  total: 39
-  current: 20
+  total: 40
+  current: 21
   stale: 15
   broken: 4

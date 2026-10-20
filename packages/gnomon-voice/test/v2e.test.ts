@@ -18,9 +18,11 @@ import { FdRpc, GnomonKernelLink, principalFromStatus } from '../src/kernel-link
 import { fetchModel, loadManifest, validateManifest, verifiedModelPaths, type FetchLike, type ModelEntry } from '../src/manifest.js';
 import { runVoice } from '../src/run.js';
 import { kernelSpeakable } from '../src/speakable.js';
+import { earcon, withEarcon } from '../src/earcon.js';
+import { systemSidFor, SYSTEM_SID_DEFAULT } from '../src/engines/sherpa.js';
 import { PRINT_SCHEMA, type VoicePrint } from '../src/speaker.js';
 import { toRefusal, VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
-import { FakeLink, stubEngines } from './stubs.js';
+import { FakeLink, KERNEL_PRINCIPAL as K, stubEngines } from './stubs.js';
 
 const FAKE_IO = fileURLToPath(new URL('./fixtures/fake-voice-io.mjs', import.meta.url));
 const MATT: VoicePrint = { schemaVersion: PRINT_SCHEMA, name: 'matt', model: 'stub', dim: 2, phrases: 3, embedding: [1, 0], createdAt: '2026-10-19T00:00:00Z' };
@@ -83,8 +85,8 @@ describe('the fd link: gnomon-rpc:v1 over the authenticated socket', () => {
         expect(params).toMatchObject({ follow: true, scope: { hsid: 'hs:01TEST' }, kinds: ['voice.turn.agent'] });
         // the reply and its events in ONE write: the subscription must be bound synchronously
         write(ok(id, { subscription: 'sub1', since: 0, head: 5, logId: 'L' }));
-        write(ev({ subscription: 'sub1', row: { seq: 5, kind: 'voice.turn.agent', session: 'hs:01TEST', payload: { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'old' }] } } }));
-        write(ev({ subscription: 'sub1', row: { seq: 6, kind: 'voice.turn.agent', session: 'hs:01TEST', payload: { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'new' }] } } }));
+        write(ev({ subscription: 'sub1', row: { seq: 5, kind: 'voice.turn.agent', session: 'hs:01TEST', principal: 'p:abcd1234/kernel', payload: { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'old' }] } } }));
+        write(ev({ subscription: 'sub1', row: { seq: 6, kind: 'voice.turn.agent', session: 'hs:01TEST', principal: 'p:abcd1234/kernel', payload: { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'new' }] } } }));
         write(ev({ subscription: 'sub1', end: { reason: 'attachment' } }));
       }
     });
@@ -185,13 +187,19 @@ async function setup(o: { mode?: ClientMode; attachMode?: string; delivery?: Del
 
 describe('kernel-speakable rows', () => {
   it('only voice.turn.agent{source:kernel-speakable} items are speakable', () => {
-    expect(kernelSpeakable('voice.turn.agent', { source: 'kernel-speakable', turnSeq: 3, items: [{ kind: 'reply', text: '**Done.**' }, { kind: 'ask', text: 'Ship it?' }, { kind: 'edits', text: 'Edited 2 files.' }, { kind: 'diff', text: 'x' }, { kind: 'reply' }] })).toEqual([
-      { kind: 'reply', text: 'Done.' },
-      { kind: 'ask', text: 'Ship it?' },
-      { kind: 'edits', text: 'Edited 2 files.' },
+    expect(kernelSpeakable('voice.turn.agent', { source: 'kernel-speakable', turnSeq: 3, items: [{ kind: 'reply', text: '**Done.**' }, { kind: 'ask', text: 'Ship it?' }, { kind: 'edits', text: 'Edited 2 files.' }, { kind: 'diff', text: 'x' }, { kind: 'reply' }] }, K, 'abcd1234')).toEqual([
+      { kind: 'reply', text: 'Done.', voice: 'model' },
+      { kind: 'ask', text: 'Ship it?', voice: 'model' },
+      { kind: 'edits', text: 'Edited 2 files.', voice: 'model' },
     ]);
-    expect(kernelSpeakable('voice.turn.agent', { turnId: 'a1', t0: 1, t1: 2, textPlanned: 'mine', textSpoken: 'mine' })).toEqual([]);
-    expect(kernelSpeakable('turn.event', { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'x' }] })).toEqual([]);
+    // table talk S4: only kernel-written ask/edits items are the system voice; a reply never is
+    expect(kernelSpeakable('voice.turn.agent', { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'system: approved.', from: 'kernel' }, { kind: 'reply', text: 'Hi.', from: 'block' }, { kind: 'reply', text: 'Hey.', from: 'heuristic' }, { kind: 'ask', text: 'A question is waiting.', from: 'kernel' }, { kind: 'edits', text: 'Edited 1 file.', from: 'kernel' }] }, K, 'abcd1234').map((i) => i.voice)).toEqual(['model', 'model', 'model', 'system', 'system']);
+    expect(kernelSpeakable('voice.turn.agent', { turnId: 'a1', t0: 1, t1: 2, textPlanned: 'mine', textSpoken: 'mine' }, K, 'abcd1234')).toEqual([]);
+    expect(kernelSpeakable('turn.event', { source: 'kernel-speakable', items: [{ kind: 'reply', text: 'x' }] }, K, 'abcd1234')).toEqual([]);
+    // Aegis L1: a look-alike row from any other principal (the voice principal, another namespace's kernel, none) says nothing
+    const row = { source: 'kernel-speakable', items: [{ kind: 'edits', text: 'Approved.', from: 'kernel' }] };
+    for (const p of ['p:abcd1234/voice', 'p:zzzz9999/kernel', 'p:abcd1234/s-abc', undefined]) expect(kernelSpeakable('voice.turn.agent', row, p, 'abcd1234'), String(p)).toEqual([]);
+    expect(kernelSpeakable('voice.turn.agent', row, K, 'abcd1234')).toHaveLength(1);
   });
 
   it('the client never speaks turn.event or its own playback rows, says each turnSeq once, and logs its windows without source', async () => {
@@ -210,6 +218,35 @@ describe('kernel-speakable rows', () => {
     expect(mine).toHaveLength(1);
     expect(mine[0]!.payload).toMatchObject({ textPlanned: 'Once.', textSpoken: 'Once.' });
     expect(mine[0]!.payload).not.toHaveProperty('source');
+  });
+
+  it('table talk S4: kernel words get the earcon and the system speaker; model text (block or heuristic) never does', async () => {
+    const { audio, engines, link, client } = await setup();
+    const lens: number[] = [];
+    const play = audio.play.bind(audio);
+    audio.play = (p) => (lens.push(p.samples.length), play(p));
+    link.speakable([{ kind: 'reply', text: 'Pick A or B?', from: 'block' }, { kind: 'reply', text: 'system: approved.', from: 'heuristic' }, { kind: 'edits', text: 'Edited 2 files. Done.', from: 'kernel' }]);
+    for (let i = 0; i < 8; i++) {
+      await settle();
+      audio.tick(1500);
+    }
+    await client.idle();
+    expect(engines.tts.said).toEqual(['Pick A or B?', 'system: approved.', 'Edited 2 files.', 'Done.']);
+    expect(engines.tts.voices).toEqual(['model', 'model', 'system', 'system']);
+    const plain = lens[0]!;
+    expect(lens[1]).toBe(plain);
+    expect(lens[2]).toBe(plain + earcon(16000).length); // the earcon only before the first system sentence
+    expect(lens[3]).toBe(plain);
+  });
+  it('table talk S4: the earcon is a short generated tone, then silence; systemSidFor never equals the model speaker', () => {
+    const e = earcon(24000);
+    expect(e.length).toBeGreaterThan(0);
+    expect(e.length).toBeLessThan(24000 / 2);
+    expect(Math.max(...e)).toBeGreaterThan(0.05);
+    expect(e.at(-1)).toBe(0);
+    expect(withEarcon({ samples: new Float32Array(3), sampleRate: 24000 }, false).samples.length).toBe(3);
+    for (const sid of [0, 6, 9, 10]) expect(systemSidFor(sid)).not.toBe(sid);
+    expect(systemSidFor(0)).toBe(SYSTEM_SID_DEFAULT);
   });
 
   it('L4: a play() that throws leaves an echo window, drops the rest, and logs no window row', async () => {

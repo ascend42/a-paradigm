@@ -158,6 +158,40 @@ describe('stop speaking', () => {
     expect(link.playback).toEqual([true, false]);
   });
 
+  it('a stop drops queued items of both voices: no earcon and no system speech plays after it (table talk x playback)', async () => {
+    const { audio, engines, link, client } = await setup();
+    engines.tts.msPerSentence = 3000;
+    link.speakable([{ kind: 'reply', text: 'Model words.', from: 'block' }, { kind: 'edits', text: 'Edited 2 files. Done.', from: 'kernel' }]);
+    await settle();
+    expect(audio.isPlaying).toBe(true);
+    audio.control('stop-speaking');
+    audio.tick(10_000);
+    for (let i = 0; i < 4; i++) {
+      await settle();
+      audio.tick(5000);
+    }
+    await client.idle();
+    expect(audio.played).toHaveLength(1);
+    expect(audio.played[0]!.completed).toBe(false);
+    expect(client.speaking).toBe(false);
+  });
+
+  it('pipelined system speech: the earcon rides the first system sentence only, in the system speaker', async () => {
+    const { audio, engines, link, client } = await setup();
+    const lens: number[] = [];
+    const play = audio.play.bind(audio);
+    audio.play = (p) => (lens.push(p.samples.length), play(p));
+    link.speakable([{ kind: 'edits', text: 'Edited 2 files. Done.', from: 'kernel' }]);
+    for (let i = 0; i < 8; i++) {
+      await settle();
+      audio.tick(1500);
+    }
+    await client.idle();
+    expect(engines.tts.voices).toEqual(['system', 'system']);
+    expect(lens).toHaveLength(2);
+    expect(lens[0]! - lens[1]!).toBeGreaterThan(0); // first carries the earcon prefix
+  });
+
   it('the GUI ⏹ / Esc: a changed status.voice.stopSpeakingSeq on the next re-read stops speech (the first read is the baseline)', async () => {
     const { audio, link, client } = await setup();
     link.stopSeq = 4; // presses before this client started never stop anything

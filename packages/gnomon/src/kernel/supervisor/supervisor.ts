@@ -110,6 +110,7 @@ import { autoEditPass } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
+import { guidanceHashOf } from '../voice/table-talk.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -394,6 +395,14 @@ export class SessionSupervisor {
   #opening = 0;
   /** woken at every turn boundary (a result line), session exit and settled open */
   readonly #boundaryWaiters = new Set<() => void>();
+
+  /** #gnomon-voice table talk (TD-2026-10-20-294): the per-turn guidance for an hsid (voice-control.guidanceFor), late-bound */
+  #voiceGuidance: (hsid: string) => string | null = () => null;
+
+  /** Wire the voice guidance source (the daemon builds VoiceControl after the supervisor). */
+  setVoiceGuidance(f: (hsid: string) => string | null): void {
+    this.#voiceGuidance = f;
+  }
 
   constructor(o: SupervisorOptions) {
     this.#o = o;
@@ -1141,8 +1150,11 @@ export class SessionSupervisor {
     const n = ++s.turns;
     const contentHash = turnContentHash(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p) }, { session: s.hsid });
-    this.#stdin(s, userMessageLine(p.text));
+    // table talk: while voice is attached to this session, EVERY turn carries the guidance as a second text block;
+    // contentHash stays the human's text alone (replay binds to it), turn.sent names the guidance by an opaque hash
+    const guidance = this.#voiceGuidance(s.hsid);
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
+    this.#stdin(s, userMessageLine(p.text, guidance));
     return { turn: turnId(s.hsid, n) };
   }
 

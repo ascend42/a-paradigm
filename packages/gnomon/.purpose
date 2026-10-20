@@ -1934,6 +1934,19 @@ components:
       voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
       session; the voice reader is narrowed to voice.* rows. speakerEnrolled is
       the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged.
+      TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item
+      prefers the first speak fenced block (markdown, URLs and long digit/hex runs
+      stripped, 300-char sentence cap, unclosed fence = its first paragraph)
+      as from:'block', else the gnome line / first paragraph as from:'heuristic';
+      kernel-written ask-waiting and edits items carry from:'kernel'.
+      table-talk.ts holds the frozen guidance (at most 160 words, pinned hash);
+      VoiceControl.guidanceFor(hsid) returns it only while voice is attached
+      to that session, and the #supervisor writes it as a second
+      <gnomon-voice> text block on every send (turn.sent guidanceHash;
+      contentHash stays the human text, replay unchanged). The spoken scrub
+      (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon
+      trace allows one extra prompt block only when turn.sent names its
+      guidanceHash and the hash matches (Aegis M2).
     path: src/kernel/voice/
     type: module
     tags: [gnomon, kernel, voice, paradigm-8, move-4]
@@ -1944,6 +1957,8 @@ components:
       - test/voice-v2e-daemon.test.ts
       - test/voice-v2e-enrol.test.ts
       - test/voice-v2e-speak.test.ts
+      - test/table-talk.test.ts
+      - test/table-talk-session.test.ts
       - test/voice-enrolment.test.ts
       - test/voice-golden.test.ts
       - test/socket-abi.test.ts

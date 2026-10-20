@@ -18,10 +18,10 @@ import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
+import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
-import { chatItems, GuiStore, isLiveState, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
+import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
 import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
@@ -138,12 +138,18 @@ function resetTranscript(): void {
 }
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
+/** table talk: an assistant body whose lines start with a bold label (the agent's own A/B/C, 1/2/3 or names) shows those lines as chips. */
+function replyBody(it: ChatItem): MiniEl {
+  const parts = it.role === 'assistant' ? replyParts(it.text) : [];
+  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body' }, it.text);
+  return h(doc, 'div', { class: 'body' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', x.text) : h(doc, 'div', { class: 'plain' }, x.text))));
+}
 function itemEl(it: ChatItem): HTMLElement {
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), h(doc, 'div', { class: 'body' }, it.text)]
+    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
