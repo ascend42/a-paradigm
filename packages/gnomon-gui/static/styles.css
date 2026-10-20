@@ -35,8 +35,23 @@
   --p-ochre-fill: #D2B074;
   --p-rose-clay-fill: #C9949A;
   --p-sea-grey-fill: #8FB0AE;
+  --p-terracotta-ink: #8E4E38;
+  --p-sage-ink: #56663F;
+  --p-slate-ink: #44577C;
+  --p-ochre-ink: #7A5A1C;
+  --p-rose-clay-ink: #874B54;
+  --p-sea-grey-ink: #3F6664;
+  --on-ink: #F8F5EE;
   --shadow: 2px 3px 0 rgba(22, 21, 15, 0.18);
-  --glow: none;
+  --key-shadow: 2px 2px 0 var(--key-edge);
+  --sheet-shadow: 0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14);
+  --edge-w: 4px;
+  --grain: url("grain.svg");
+  --grain-opacity: .3;
+  --wm-glow: none;
+  --cap-shadow: rgba(40, 30, 15, .22);
+  --cap-glow: none;
+  --stamp: #3F6664;
   --title-font: "Fraunces", Georgia, serif;
   --display-wght: 600;
   --title-transform: none;
@@ -66,8 +81,23 @@
   --p-ochre-fill: #E8C88C;
   --p-rose-clay-fill: #E4AEB4;
   --p-sea-grey-fill: #A8CFCB;
+  --p-terracotta-ink: #E6A88F;
+  --p-sage-ink: #B7CCA3;
+  --p-slate-ink: #A9B9DB;
+  --p-ochre-ink: #E8C88C;
+  --p-rose-clay-ink: #E4AEB4;
+  --p-sea-grey-ink: #A8CFCB;
+  --on-ink: #171A21;
   --shadow: none;
-  --glow: 0 0 6px rgba(232, 244, 240, 0.18);
+  --key-shadow: none;
+  --sheet-shadow: none;
+  --edge-w: 3px;
+  --grain: none;
+  --grain-opacity: 0;
+  --wm-glow: 0 0 6px rgba(200, 255, 235, .35);
+  --cap-shadow: transparent;
+  --cap-glow: 0 0 8px 1px rgba(160, 255, 220, .22);
+  --stamp: #A8CFCB;
   --title-font: var(--mono);
   --display-wght: 500;
   --title-transform: uppercase;
@@ -78,6 +108,13 @@
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --fly: 550ms cubic-bezier(.3, .7, .3, 1);
   --reflow: 220ms;
+  --radius: 3px;
+  --t-stamp: 400ms cubic-bezier(.3, 1.4, .5, 1);
+  --t-flyout: 450ms ease-in;
+  --t-droop: 500ms ease-out;
+  --t-walk: 900ms ease-in-out;
+  --t-bob: 1.1s ease-in-out;
+  --t-hold: 3s linear;
 }
 
 * { box-sizing: border-box; }
@@ -95,17 +132,24 @@ html, body {
 
 /* the app fills the viewport: header, notices, the desk (grows), the status line; only panes scroll inside (the
    page itself does not: the shell is exactly the viewport; the first-run setup screens still scroll the body) */
-.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; position: relative; isolation: isolate; background: var(--ground); }
+/* S1 grain (papercraft day only): a bundled grain.svg (img-src 'self'; the comp's data: URL is CSP-blocked) tiled under
+   the content. isolation keeps it inside the shell's stacking context at z-index -1, so it sits above the ground and
+   below every pane, card and menu (never over text; no z-index juggling for the header menus). Night: --grain none. */
+.shell::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: multiply; }
 .shell > .chrome, .shell > .notice, .shell > .shuttle { flex: 0 0 auto; }
 .shell > .desk { flex: 1 1 auto; }
 
 .chrome {
   display: flex; align-items: center; gap: 12px;
-  padding: 6px 14px;
-  background: var(--sheet);
+  padding: 0 14px;
+  min-height: 44px;
+  background: transparent;
   border-bottom: 1px solid var(--rule);
 }
-.wordmark { font-family: var(--title-font); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); font-size: 18px; color: var(--ink); }
+.wordmark { font-family: var(--title-font); font-weight: var(--display-wght); font-size: 17px; letter-spacing: -.01em; color: var(--ink); }
+/* night: mono caps, and the one glow besides the caps (--wm-glow; S1.2: no card or sheet glows) */
+[data-theme="night"] .wordmark { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; text-shadow: var(--wm-glow); }
 .spacer { flex: 1; }
 .readout, .meta { font-size: 11.5px; color: var(--sec); }
 .title { font-family: var(--title-font); font-weight: var(--display-wght); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
@@ -180,7 +224,7 @@ html, body {
 .session-row.gone .glyph { color: var(--sec); }
 .glyph { color: var(--ink2); }
 
-.transcript { background: var(--ground); }
+.transcript { background: transparent; }
 .feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
@@ -219,7 +263,7 @@ html, body {
   background: var(--sheet);
   border: 1px solid var(--key-edge);
   border-radius: 3px;
-  box-shadow: var(--shadow), var(--glow);
+  box-shadow: var(--shadow);
   transition: top var(--reflow);
 }
 .card.kind-knot { border-color: var(--knot-edge); }
@@ -257,7 +301,7 @@ html, body {
 .shuttle .v { color: var(--ink2); }
 
 .overlay { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; background: rgba(15, 17, 22, 0.35); }
-.sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: 4px; box-shadow: var(--shadow), var(--glow); display: flex; flex-direction: column; gap: 8px; }
+.sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
 .palette-card .list { max-height: 50vh; }
 .pal-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 6px; color: var(--ink2); cursor: pointer; }
 .pal-row.sel { background: var(--fold); color: var(--ink); }
@@ -302,7 +346,7 @@ html, body {
   .chrome { flex-wrap: wrap; row-gap: 4px; }
   .desk, .desk.no-sessions, .desk.no-stack, .desk.no-sessions.no-stack, .desk.stack-wide, .desk.stack-wide.no-sessions { grid-template-columns: minmax(0, 1fr); }
   .desk > .transcript { grid-column: 1; grid-row: 1; border-right: 0; }
-  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow), var(--glow); }
+  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow); }
   .desk > .sessions { left: 0; }
   .desk > .stack { right: 0; }
   .desk.open-sessions > .sessions, .desk.open-stack > .stack { display: flex; }

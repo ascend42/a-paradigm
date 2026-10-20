@@ -234,7 +234,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:c9a70ef25bb6175a1ac477f932f8bf94dd30b8548b218cf753823961bea9df7e');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:a9c2accc2dbc758d5b1dff1096903c8eb85f87dcac44143ac8ea44e3cb861968');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
@@ -243,7 +243,7 @@ describe('G-WEB-08 bundle pin', () => {
       'app.js', 'boot.js',
       'fonts/Fraunces-opsz-wght.woff2', 'fonts/JetBrainsMono-Medium.woff2', 'fonts/JetBrainsMono-Regular.woff2', 'fonts/JetBrainsMono-SemiBold.woff2',
       'fonts/OFL-Fraunces.txt', 'fonts/OFL-JetBrainsMono.txt',
-      'index.html', 'styles.css',
+      'grain.svg', 'index.html', 'styles.css',
     ]);
   });
   it('S1: binary bundle files survive the base64 embed raw (woff2 magic + the kernel serves them as font/woff2)', () => {
@@ -254,6 +254,7 @@ describe('G-WEB-08 bundle pin', () => {
       expect(b.includes(Buffer.from([0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd])), `${n} looks utf8-mangled`).toBe(false);
       expect(staticContentType(n)).toBe('font/woff2');
     }
+    expect(staticContentType('grain.svg')).toBe('image/svg+xml'); // the bundle's own grain (static only; /blob refuses SVG)
   });
   it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
     const files = guiBundleFiles();

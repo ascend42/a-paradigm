@@ -110,6 +110,10 @@ describe('#gui client ⇄ #web-endpoint (M1.10 slice 1)', () => {
       expect(r.body.subarray(0, 4).toString('latin1'), f).toBe('wOF2');
       expect(r.body.equals(guiBundleFiles().get(f)!), f).toBe(true);
     }
+    const g = await rawHttp(ep.port, 'GET', '/grain.svg', { Host: `127.0.0.1:${ep.port}` });
+    expect([g.status, g.headers['content-type']]).toEqual([200, 'image/svg+xml']);
+    expect(g.headers['content-security-policy']).toContain("img-src 'self' blob:");
+    expect(g.body.equals(guiBundleFiles().get('grain.svg')!)).toBe(true);
   });
 
   it('launch: hello → WebCrypto serverSig verified with the fragment key → auth{launchToken} → status + log.read', async () => {

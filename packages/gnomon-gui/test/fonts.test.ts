@@ -59,3 +59,21 @@ describe('#gui bundled fonts (S1)', () => {
     expect([...emb.keys()].filter((k) => k.startsWith('fonts/')).sort()).toEqual(readdirSync(FONTS).map((n) => `fonts/${n}`).sort());
   });
 });
+
+describe('#gui grain (S1): a bundled SVG file, never a data: URL', () => {
+  const svg = readFileSync(path.join(ROOT, 'static', 'grain.svg'), 'utf8');
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  it('grain.svg is the comp noise: feTurbulence .9 / 2 octaves, the warm matrix, nothing executable or remote', () => {
+    expect(svg).toMatch(/<feTurbulence type="fractalNoise" baseFrequency="\.9" numOctaves="2"\/>/);
+    expect(svg).toContain('values="0 0 0 0 .45  0 0 0 0 .4  0 0 0 0 .32  0 0 0 .22 0"');
+    expect(svg).not.toMatch(/<script|foreignObject|\son[a-z]+=|href|<image|@import|url\((?!#n\))/i);
+    expect(svg.replace('xmlns="http://www.w3.org/2000/svg"', '')).not.toMatch(/https?:/);
+  });
+  it('day draws it under the content from --grain; night has none; the kernel embed carries it', () => {
+    expect(css).toMatch(/--grain: url\("grain\.svg"\);/);
+    expect(css).toMatch(/--grain: none;/);
+    expect(css).toMatch(/\.shell::before \{[^}]*z-index: -1;[^}]*background: var\(--grain\);[^}]*opacity: var\(--grain-opacity\);[^}]*mix-blend-mode: multiply;/);
+    expect(css).toMatch(/\.shell \{[^}]*isolation: isolate;/);
+    expect(embedded().get('grain.svg')?.toString('utf8')).toBe(svg.replace(/\r\n/g, '\n'));
+  });
+});
