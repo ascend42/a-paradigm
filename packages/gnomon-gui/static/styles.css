@@ -371,41 +371,40 @@ html, body {
 .mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: 11px; }
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
-/* V2d voice pill (kernel-owned; TD-2026-10-19-298). Text tokens only from the G-GUI-10 fixture: Mic off = --sec on
-   --sheet; push-to-talk = --slate (a text token) with a slate dot; ambient = the fixture's voice-armed pair
-   (--warn-ink on --warn-bg) inside a vermilion --fail-edge (nonText, >= 3:1) with a pulsing red dot. The pulse and the
-   meter are motion: [data-motion="reduced"] and prefers-reduced-motion stop them (the edge and dot stay, so the
-   state never depends on motion). */
+/* V2d voice pill (kernel-owned; TD-2026-10-19-298), restyled in S1 (critique 2026-10-20 §2 S1.5; same states, same
+   logic). Text tokens only from the G-GUI-10 fixture. Mic off = --sec, dashed --key-edge; push-to-talk = neutral
+   --ink2 with a filled --ink2 dot (slate is a project hue, never a state); ambient (the live mic, "armed") = the
+   fixture's voice-armed pair (--warn-ink on --warn-bg) inside a 1px amber --warn-edge (3.24:1 on its fill, a fixture
+   pair) with a 7px amber dot, STATIC: amber = armed, vermilion = failure only, nothing idles. Only the level meter
+   moves, and only on an audio event (.kick, one beat); crashed keeps vermilion (a failure). */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.voice-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; font: inherit; font-size: 11.5px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; box-shadow: var(--shadow); }
+.voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; border-radius: var(--radius); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
-.voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
+.voice-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
 .voice-pill.voice-off .voice-dot { border-style: dashed; }
-.voice-pill.voice-ptt { color: var(--slate); border-color: var(--slate); }
-.voice-pill.voice-ptt .voice-dot { background: var(--p-slate-fill); border-color: var(--slate); }
-.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 2px solid var(--fail-edge); font-weight: 600; animation: voice-ring 1.4s ease-in-out infinite; }
-.voice-pill.voice-ambient .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); animation: voice-pulse 1.4s ease-in-out infinite; }
+.voice-pill.voice-ptt { color: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.voice-ptt .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); font-weight: 600; }
+.voice-pill.voice-ambient .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
 .voice-pill.voice-noclient { color: var(--sec); border-style: dashed; }
 .voice-target { font-weight: 400; }
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0.5; }
 .voice-meter[hidden] { display: none; }
-.voice-meter i { display: block; width: 2px; background: var(--fail-edge); height: calc(20% + 60% * var(--level)); animation: voice-meter 0.9s ease-in-out infinite; }
-.voice-meter i:nth-child(2) { animation-delay: 0.15s; }
-.voice-meter i:nth-child(3) { animation-delay: 0.3s; }
-.voice-meter i:nth-child(4) { animation-delay: 0.45s; }
-.voice-meter.kick i { height: 100%; }
+.voice-meter i { display: block; width: 2px; background: var(--warn-edge); height: calc(20% + 60% * var(--level)); }
+.voice-meter.kick i { height: 100%; animation: voice-meter 0.45s ease-out 1; }
+.voice-meter.kick i:nth-child(2) { animation-delay: 0.05s; }
+.voice-meter.kick i:nth-child(3) { animation-delay: 0.1s; }
+.voice-meter.kick i:nth-child(4) { animation-delay: 0.15s; }
 .voice-note { font-style: italic; }
 .voice-menu { left: 0; right: auto; }
 .voice-keys { padding: 4px 8px 2px; border-top: 1px solid var(--rule); }
-.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--fail); }
-.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--slate); }
+.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--warn-ink); }
+.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--ink2); }
 .voice-item.voice-off .mode-name::before { content: "○ "; color: var(--sec); }
 .voice-attach { display: flex; gap: 4px; padding: 2px 10px 4px 24px; flex-wrap: wrap; }
-.voice-row-btn.voice-ambient { color: var(--fail); }
-.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--slate); }
+.voice-row-btn.voice-ambient { color: var(--warn-ink); }
+.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--ink2); }
 .voice-choice.current { border-width: 2px; }
-@keyframes voice-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(1.35); } }
-@keyframes voice-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(180, 56, 42, 0.35); } 50% { box-shadow: 0 0 0 4px rgba(180, 56, 42, 0); } }
 @keyframes voice-meter { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
 /* the transcript's voice turns */
 .trow.voice .who { color: var(--slate); }
@@ -419,12 +418,12 @@ html, body {
 .voice-pill.voice-setup { border-style: solid; }
 .voice-pill.voice-crashed { color: var(--fail); border-color: var(--fail-edge); border-style: solid; }
 .voice-pill.voice-unavailable { color: var(--sec); }
-.voice-pill.voice-nudge { color: var(--slate); border-color: var(--slate); border-style: dashed; }
+.voice-pill.voice-nudge { color: var(--ink2); border-color: var(--key-edge); border-style: dashed; }
 /* T-2026-10-20-002, Aegis M (V2d): an attached ambient mic keeps its loud colours when a voice-app condition is appended (dashed edge = the app's trouble) */
-.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 2px dashed var(--fail-edge); }
+.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 1px dashed var(--warn-edge); }
 .voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
 .voice-progress[hidden] { display: none; }
-.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--slate); }
+.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
 .voice-action { font-size: 11.5px; padding: 1px 8px; }
 .voice-stop { color: var(--fail); border-color: var(--fail-edge); }
 .voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
@@ -436,8 +435,8 @@ html, body {
 .enrol-phrase { font-size: 17px; line-height: 1.4; padding: 10px 4px; font-weight: 600; }
 .enrol-rec { display: inline-flex; align-items: center; gap: 6px; color: var(--sec); font-size: 12px; }
 .enrol-rec .voice-dot { border-style: dashed; }
-.enrol-rec.recording { color: var(--fail); font-weight: 600; }
-.enrol-rec.recording .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); border-style: solid; animation: voice-pulse 1.4s ease-in-out infinite; }
+.enrol-rec.recording { color: var(--warn-ink); font-weight: 600; }
+.enrol-rec.recording .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); border-style: solid; }
 .enrol-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the

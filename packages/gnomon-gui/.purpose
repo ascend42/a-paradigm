@@ -59,8 +59,8 @@ components:
       widen card (strictness, op voice.widen) is focused in the stack; an
       attached session whose mode is not ptt reads as ambient
       (the indicator never under-reports a live mic). Three states: Mic off
-      (grey), push-to-talk (slate blue, "Hold <hotkey> to talk"), ambient
-      (red edge, pulsing dot, "Listening", level meter). clientConnected is
+      (grey), push-to-talk (neutral ink2 since S1, never slate, "Hold <hotkey> to talk"), ambient
+      (S1: amber warn-edge, static amber dot, "Listening", level meter that moves only on an audio event; vermilion only when crashed). clientConnected is
       only an explicit kernel field (null when unsure; no client-name
       guesses); attached with the app not connected keeps the attached
       state's class, label and meter plus "· voice app not connected"
