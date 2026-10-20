@@ -73,10 +73,25 @@ const short = (s: string): string => (s.length > 16 ? `…${s.slice(-8)}` : s);
 /** The kernel principal shape (as store.ts checks kernel-speakable rows): only kernel rows feed the standing feed. */
 export const KERNEL_PRINCIPAL = /^p:[0-9a-z]{8}\/kernel$/;
 
+/** Aegis L1 (#gui-settings): the kernel principal of the home this page connected to (`p:<ns>/kernel` of its own principal's ns), or null. */
+export function kernelPrincipalOf(principal: string | null | undefined): string | null {
+  const m = typeof principal === 'string' ? /^p:([0-9a-z]{8})\//.exec(principal) : null;
+  return m ? `p:${m[1]}/kernel` : null;
+}
+
+/**
+ * A row principal is the kernel's: the pattern, AND (Aegis L1) exactly the kernel of the connected home when the page
+ * knows it (`kernel` a string); `null` (not connected) accepts none; omitted checks the pattern only (pure tests).
+ */
+export function isKernelPrincipal(principal: unknown, kernel?: string | null): boolean {
+  if (typeof principal !== 'string' || !KERNEL_PRINCIPAL.test(principal)) return false;
+  return kernel === undefined ? true : kernel !== null && principal === kernel;
+}
+
 /** A feed line for a standing or unlock row WRITTEN BY THE KERNEL, or null (Aegis #12: any other principal is ignored). */
-export function feedItemOf(row: { seq?: unknown; kind?: unknown; payload?: unknown; principal?: unknown }): FeedItem | null {
+export function feedItemOf(row: { seq?: unknown; kind?: unknown; payload?: unknown; principal?: unknown }, kernel?: string | null): FeedItem | null {
   if (typeof row.seq !== 'number' || typeof row.kind !== 'string' || !row.payload || typeof row.payload !== 'object') return null;
-  if (typeof row.principal !== 'string' || !KERNEL_PRINCIPAL.test(row.principal)) return null;
+  if (!isKernelPrincipal(row.principal, kernel)) return null;
   const p = row.payload as Record<string, unknown>;
   // Aegis M1: a new window of this device joined the cached unlock
   if (row.kind === 'approval.unlock.joined') return { seq: row.seq, kind: 'joined', grantId: '', text: `Another Gnomon window joined your unlock${typeof p.connId === 'string' ? ` (${short(p.connId)})` : ''}`, toast: true };

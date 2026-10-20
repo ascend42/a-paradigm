@@ -11,9 +11,10 @@
  *     extension-risk badge, the connection/identity readout) is not a pane:
  *     no preset can name, move or hide it.
  *   - Theme: day (papercraft) | night (phosphor) | auto (OS
- *     prefers-color-scheme). Slice 1 keeps the choice in page memory: the
- *     spec stores it per device through the kernel (`config.prefs`, signed by
- *     the device key) and never in the browser — that round-trip is slice 2.
+ *     prefers-color-scheme). #gui-settings keeps the choice (and the in-app
+ *     motion override) per browser, like the Layout (core/settings.ts
+ *     THEME_KEY); the spec's per-device kernel round-trip (`config.prefs`,
+ *     signed by the device key) is still slice 2.
  */
 
 export interface Command {
@@ -30,6 +31,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'palette.open', title: 'Command palette', keys: '⌘K / Ctrl+K' },
   { id: 'session.new', title: 'New session', keys: '⌘N / Ctrl+N' },
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
+  // #gui-settings: the sheet that gathers every setting (also the header ⚙ key)
+  { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: day (papercraft)' },
   { id: 'theme.night', title: 'Theme: night (phosphor)' },
@@ -84,7 +87,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.')),
+  // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';

@@ -443,6 +443,7 @@ components:
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts
+      - test/choices.test.ts
       - test/fonts.test.ts
       - test/desk.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
@@ -556,7 +557,8 @@ components:
       Card actions are signed with the same key, so the real GUI verifies
       and renders the decision keys. Fixtures (src/preview/fixtures.ts:
       contracts LogRow chains of registered kinds plus the status result;
-      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop) are
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop, spoken,
+      choices) are
       chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
       src/preview/env.ts stubs only the colour-scheme and reduced-motion
       media queries and the wrapper surface marker. The workshop fixture runs
@@ -625,8 +627,74 @@ components:
       block is hidden only when its sha256 is the kernel guidance hash
       (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
       guidanceHash; a human-typed <gnomon-voice> stays visible.
+      One spoken-aloud marker per reply (founder bug 2026-10-20): pipelined
+      TTS logs one playback voice.turn.agent per sentence; chatItems
+      (spokenFold/spokenText) opens ONE 🔊 marker at the kernel's speakable
+      row (or the first playback row on an older kernel) and folds every
+      later playback row and voice.bargein into it until the next assistant
+      reply: "🔊 spoken aloud · 5s", "· stopped" when any chunk was cut off
+      (interrupted, shorter than planned, or a barge-in); a barge-in with no
+      marker stays the lone "🔊 interrupted". app.ts paintTranscript
+      repaints a mounted row whose text changed in place. Preview fixture
+      `spoken`.
+      Clickable reply options (core/choices.ts, PURE): replyChoices finds
+      2..6 option lines keyed A..F or 1..6 in order (separator space ) . :,
+      optional bold) at the END of a reply that asks a question (in the text
+      above or the said-aloud line); labels go through the contracts
+      sanitizer and are at most 120 chars, else no chips. liveChoiceKey: only
+      the last assistant item of the focused session, while the human has
+      not written after it; older replies render the chips disabled. Chips
+      are dashed buttons (.choice, ink keycap by day, [A] at night) with
+      data-choice / data-choice-item, never the key class or data-decision.
+      pickChoice: trusted gesture only; the sent text is rebuilt from the
+      parsed reply (`A — <label>`), put into the composer and sent via the
+      composer form's requestSubmit (the typed-message path); a draft
+      (typed or dictated) is kept and the option appended, nothing sent.
+      Keys: letter/number pick inside the live group when the composer is
+      empty, arrows move, Enter activates. Voice picking is out of scope.
+      Preview fixture `choices`. Tests: test/choices.test.ts.
+      Aegis review folded in: M1 a letter/number key only moves focus to its
+      chip (Enter/Space confirms); a label over 60 chars, with a backtick or
+      shell-like text needs a confirming second click/Enter (.choice.armed,
+      "again to send"). M2 any option the contracts sanitizer flags ⇒ no
+      chips. L1 night chips show a plain underlined letter, no [ ] brackets.
+      L2 send() returns whether the kernel took the message; a chip is marked
+      picked only then, and the composer clears only when the message went
+      out (never on an early return). L3 onChoice recomputes liveness from
+      currentItems(). L4 more than two combining marks on a base ⇒ no chips.
     path: src/core/store.ts
     type: module
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+  gui-settings:
+    description: >-
+      #gui-settings (founder UI-first rule) - the header Day / Night / Auto
+      theme switch and the Settings sheet (header gear key, Cmd-comma, the
+      palette's "Settings..."). core/settings.ts is PURE: parseTheme /
+      parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout),
+      themeSwitchEntries, unlockSeenOf (the cached unlock folded from
+      kernel-principal approval.unlock / .dropped rows; daemon.start clears)
+      and settingsModel (Appearance, Layout, Voice, Permissions, About). Every
+      control names an existing GUI command in SETTINGS_RUNS (theme, motion,
+      layout presets, pane toggles, workshop placement, mode.repo.*, voice app
+      start/stop, enrol, dictation delay) or the standing Revoke
+      (core/standing.ts revokeRequest); no new kernel verb. Kernel-owned values
+      (mode ceiling, unlock and bounds, connection, bundle pin, voice hotkeys,
+      the always-shown regions) are read-only rows with a how-to-change line,
+      never a terminal-only path. ui/settings-sheet.ts paints with render.ts
+      h() (text nodes, no inline style) and acts on trusted clicks only
+      (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are
+      pinned to the connected home's kernel principal (standing.ts
+      kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an
+      unseen unlock says only "no unlock seen since this page connected";
+      run(id, trusted) carries the gesture's isTrusted from every path and the
+      header switch checks it; the standing feed sits under overlays (hidden
+      while a dialog is open), its offer is not an ink key, and the stack pile
+      reserves bottom room so it never covers a card key.
+    path: src/core/settings.ts
+    type: module
+    tags: [gnomon, gui, settings, theme]
+    tests:
+      - test/settings.test.ts
+      - test/voice-client.test.ts
