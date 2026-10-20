@@ -710,7 +710,7 @@ export class ApprovalBroker {
       presence = 'cached';
     } else {
       const hadUnlock = this.unlocks.has(ctx.connId);
-      token = await this.#prove(r, decision, ctx, cls, hadUnlock, digest);
+      token = await this.#prove(r, decision, ctx, cls, hadUnlock, digest, prefix);
       presence = isCli ? 'cli' : 'fresh';
       if (!r.presence?.consumedByEffect) {
         const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
@@ -835,16 +835,9 @@ export class ApprovalBroker {
     return fail('UNSUPPORTED', 'presence', `the signed helper could not sign the decision (${err instanceof Error ? err.message.slice(0, 160) : 'helper error'}); there is no software fallback`, { cardId });
   }
 
-  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean, digest: BindingExtra | undefined): Promise<PresenceToken> {
-    const reason =
-      decision === 'always'
-        ? 'fresh presence: always is a standing rule'
-        : cls === 'root'
-          ? 'fresh presence and the root key'
-          : cls === 'cached'
-            ? 'presence unlocks this connection for 15 min'
-            : `fresh presence: ${String(r.card.kind)}`;
-    const prompt = composePresencePrompt(this.#o.kernel, r.card, { decision, connId: ctx.connId, guiSessions: this.#o.guiSessions?.() ?? 0, reason });
+  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean, digest: BindingExtra | undefined, prefix: readonly string[] | null = null): Promise<PresenceToken> {
+    // Aegis M1: the same prompt as the helper path, so a prefix always shows its words quoted and escaped
+    const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
     const purpose = r.presence?.purpose ?? 'approval.decide';
     const binding = this.#binding(r, decision, digest);
     let token: PresenceToken;
