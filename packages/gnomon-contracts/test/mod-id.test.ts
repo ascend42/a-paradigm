@@ -141,6 +141,12 @@ describe('git sources (S0b §3)', () => {
     for (const bad of ['http://github.com/a/b', 'https://u@github.com/a/b', 'https://github.com:443/a/b', 'https://github.com/a/b?x=1', 'https://github.com/a/b#x', 'https://github.com/a%2fb/c', 'https://github.com/a/../b', 'https://github.com/a/./b', 'https://github.com/a', 'https://github.com//a/b', 'git@github.com:a/b']) {
       expect(canonicalGitUrl(bad)).toBeNull();
     }
+    // Aegis S0b M5: GitHub look-alike hosts, IP literals and single-label hosts are refused
+    for (const bad of ['https://gist.github.com/a/b', 'https://www.github.com/a/b', 'https://raw.githubusercontent.com/a/b', 'https://githubusercontent.com/a/b', 'https://127.0.0.1/a/b', 'https://10.0.0.7/a/b', 'https://localhost/a/b', 'https://gitserver/a/b', 'https://host.123/a/b']) {
+      expect(canonicalGitUrl(bad), bad).toBeNull();
+    }
+    expect(canonicalGitUrl('https://github.com/a/b')?.host).toBe('github.com');
+    expect(canonicalGitUrl('https://git.example.org/a/b')?.host).toBe('git.example.org');
     expect(gitOwnerOf('https://github.com/Ascend42/x')).toBe('ascend42');
     expect(gitOwnerOf('https://gitlab.com/ascend42/x')).toBeNull();
   });

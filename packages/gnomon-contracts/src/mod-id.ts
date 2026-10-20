@@ -208,6 +208,10 @@ export function canonicalGitUrl(raw: unknown): GitSource | null {
   if (slash <= 0) return null;
   const host = rest.slice(0, slash).toLowerCase();
   if (host.includes(':') || !HOST.test(host) || host.length > 253) return null;
+  // Aegis S0b M5: single-label hosts and IP literals are refused (no TOFU identity worth binding), and every
+  // GitHub-owned look-alike other than exactly github.com (gist.github.com, raw.githubusercontent.com, …) is refused
+  if (!host.includes('.') || /^[0-9.]+$/.test(host) || /^[0-9]+$/.test(host.slice(host.lastIndexOf('.') + 1))) return null;
+  if (host !== 'github.com' && (host.endsWith('.github.com') || host === 'githubusercontent.com' || host.endsWith('.githubusercontent.com'))) return null;
   let p = rest.slice(slash + 1);
   if (p.endsWith('/')) p = p.slice(0, -1);
   if (p.endsWith('.git')) p = p.slice(0, -4);
