@@ -129,10 +129,16 @@ export class FakeLink implements KernelLink {
   readonly playback: boolean[] = [];
   /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */
   readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
+  /** request.voice.report{capture} reports (T-2026-10-20-005 A1), kept apart from the log rows */
+  readonly capture: Array<{ state: string; segId: string; reason?: string; level?: number }> = [];
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     if (this.appendError) throw this.appendError;
     if (kind === 'request.voice.report' && payload.playback) {
       this.playback.push((payload.playback as { playing: boolean }).playing);
+      return { seq: 0 };
+    }
+    if (kind === 'request.voice.report' && payload.capture) {
+      this.capture.push(payload.capture as { state: string; segId: string; reason?: string; level?: number });
       return { seq: 0 };
     }
     if (kind === 'request.voice.report' && payload.dictation) {

@@ -19,6 +19,13 @@
  *                                       as status.voice.dictation{activity, holdToggles, at}. In memory only.
  *   request.voice.report{playback}      T-2026-10-19-026: the client's spoken-reply edges {playing: boolean}, relayed
  *                                       as status.voice.playback{playing, at} (the GUI's ⏹ Stop speaking). In memory.
+ *   request.voice.report{capture}       T-2026-10-20-005 A1 (TD-2026-10-20-086): the client's per-segment capture state
+ *                                       {state: idle | hearing | transcribing | captured | dropped, segId, reason?
+ *                                       (dropped only, closed CAPTURE_DROP_REASONS), level? (hearing only, 0..1)},
+ *                                       relayed as status.voice.capture{…, at} with the SHORT VOICE_CAPTURE_TTL_MS so a
+ *                                       crashed client never leaves "hearing" lit. In memory only, no text (A1).
+ *                                       V2 seam: the later partial text (B) is projected to the gui credential only
+ *                                       by voiceStatusFor (dispatch.ts status), never to device, voice or any other.
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
@@ -44,6 +51,38 @@ export interface DictationReport {
 export interface PlaybackReport {
   playing: boolean;
   at: string;
+}
+
+/** T-2026-10-20-005 A1: the client's per-segment capture states and drop reasons (closed; mirrors gnomon-voice). */
+export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
+export type CaptureState = (typeof CAPTURE_STATES)[number];
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
+export interface CaptureReport {
+  state: CaptureState;
+  /** the client's opaque segment id */
+  segId: string;
+  /** dropped only */
+  reason?: CaptureDropReason;
+  /** hearing only: the measured mic level, 0..1 (A2) */
+  level?: number;
+  at: string;
+}
+/** status.voice.capture goes stale this fast: a crashed client never leaves "hearing" lit (the client re-reports ≤ 1 s) */
+export const VOICE_CAPTURE_TTL_MS = 5_000;
+const SEG_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const CAPTURE_KEYS = ['state', 'segId', 'reason', 'level'];
+
+/**
+ * The status.voice view for one connection. V2 (TD-2026-10-20-086) seam: when B adds partial words to the capture
+ * (`capture.text`), they are kept for the `gui` credential only; every other credential (device, voice, read
+ * token) gets the capture without them. A1 carries no text, so today this only enforces the field allow-list.
+ */
+export function voiceStatusFor(voice: Record<string, unknown>, credential: string | undefined): Record<string, unknown> {
+  const c = voice.capture as Record<string, unknown> | null | undefined;
+  if (!c || typeof c !== 'object') return voice;
+  const allowed = credential === 'gui' ? [...CAPTURE_KEYS, 'at', 'text'] : [...CAPTURE_KEYS, 'at'];
+  return { ...voice, capture: Object.fromEntries(Object.entries(c).filter(([k]) => allowed.includes(k))) };
 }
 
 export const ENROL_PHASES = ['ready', 'recording', 'recorded', 'done', 'failed', 'cancelled'] as const;
@@ -78,6 +117,7 @@ export class VoiceReports {
   #notice: { text: string; code?: string; at: string } | null = null;
   #dictation: DictationReport | null = null;
   #playback: PlaybackReport | null = null;
+  #capture: CaptureReport | null = null;
   /** the human's ⏹ Stop speaking presses (request.voice.client{op:'stop-speaking'}); the client acts on a change */
   #stopSpeakingSeq = 0;
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
@@ -90,10 +130,11 @@ export class VoiceReports {
 
   /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
   report(p: unknown, connId?: string): { ok: true } {
-    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?}`;
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?}`;
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice' && k !== 'dictation' && k !== 'playback') || (o.enrolment === undefined && o.notice === undefined && o.dictation === undefined && o.playback === undefined)) throw bad(shape);
+    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture'];
+    if (Object.keys(o).some((k) => !keys.includes(k)) || keys.every((k) => o[k] === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
     if (o.enrolment !== undefined) {
@@ -128,6 +169,17 @@ export class VoiceReports {
       if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => k !== 'playing') || typeof b.playing !== 'boolean') throw bad('playback is {playing: boolean}');
       playback = { playing: b.playing, at };
     }
+    let capture: CaptureReport | undefined;
+    if (o.capture !== undefined) {
+      const c = o.capture as Record<string, unknown> | null;
+      if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).some((k) => !CAPTURE_KEYS.includes(k))) throw bad('capture is {state, segId, reason?, level?}');
+      if (!(CAPTURE_STATES as readonly unknown[]).includes(c.state)) throw bad(`capture.state is ${CAPTURE_STATES.join(' | ')}`);
+      if (typeof c.segId !== 'string' || !SEG_ID.test(c.segId)) throw bad('capture.segId is ≤ 32 of [a-z0-9-]');
+      if (c.state === 'dropped' ? !(CAPTURE_DROP_REASONS as readonly unknown[]).includes(c.reason) : c.reason !== undefined) throw bad(`capture.reason is ${CAPTURE_DROP_REASONS.join(' | ')}, on dropped only`);
+      if (c.level !== undefined && (c.state !== 'hearing' || typeof c.level !== 'number' || !Number.isFinite(c.level) || c.level < 0 || c.level > 1)) throw bad('capture.level is 0..1, on hearing only');
+      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), at };
+    }
+    if (capture) this.#capture = capture;
     if (playback) this.#playback = playback;
     if (enrolment) this.#enrolment = enrolment;
     if (notice) this.#notice = notice;
@@ -150,9 +202,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; stopSpeakingSeq: number } {
-    const fresh = <T extends { at: string }>(x: T | null): T | null => (x && this.#now() - Date.parse(x.at) <= VOICE_REPORT_TTL_MS ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), stopSpeakingSeq: this.#stopSpeakingSeq };
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; stopSpeakingSeq: number } {
+    const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), stopSpeakingSeq: this.#stopSpeakingSeq };
   }
 }
 

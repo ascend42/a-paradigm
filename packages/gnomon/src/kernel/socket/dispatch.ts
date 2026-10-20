@@ -128,6 +128,7 @@ import type { VoiceControl } from '../voice/voice-control.js';
 
 const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
 import { voiceApproveRefusal } from '../broker/broker.js';
+import { voiceStatusFor } from '../voice/voice-requests.js';
 import type { ApprovalPort } from '../broker/port.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
@@ -336,7 +337,7 @@ export interface VoiceClientPort {
   forget?(payload: { name: string }): Promise<unknown>;
   /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
   stopSpeaking?(): unknown;
-  /** V2e: request.voice.report{enrolment?, notice?, dictation?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
+  /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
   report?(payload: unknown, connId?: string): unknown;
 }
 
@@ -473,7 +474,9 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
-      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...o.voice.status(), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
+      // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 seam (partial words, when B
+      // adds them, reach the gui credential only)
+      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor(o.voice.status(), s.credential), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -797,7 +800,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // V2e: the voice client's enrolment progress and notices, relayed in status.voice (never a row)
       if (pa?.kind === VOICE_REPORT_REQUEST && cls === 'voice' && s.credential !== 'read-token' && o.voiceClient?.report) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
-        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?}}`);
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?, dictation?, playback?, capture?}}`);
         try {
           return o.voiceClient.report(pa.payload, s.connId);
         } catch (err) {
