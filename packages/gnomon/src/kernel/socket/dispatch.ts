@@ -334,6 +334,8 @@ export interface VoiceClientPort {
   enrol?(asker: { connId: string; principal: string }, payload: { name: string; consent: string }): Promise<unknown>;
   /** V2e: request.voice.forget{name} (human only, no card: a forget narrows). */
   forget?(payload: { name: string }): Promise<unknown>;
+  /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
+  stopSpeaking?(): unknown;
   /** V2e: request.voice.report{enrolment?, notice?, dictation?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
   report?(payload: unknown, connId?: string): unknown;
 }
@@ -762,7 +764,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (pa?.kind === VOICE_CLIENT_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         const op = (pa.payload as { op?: unknown } | null | undefined)?.op;
-        if (extra.length || (op !== 'start' && op !== 'stop') || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'}}`);
+        const stopSpeaking = o.voiceClient.stopSpeaking;
+        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'}}`);
+        // T-2026-10-19-026: ⏹ Stop speaking narrows (silences the voice app) ⇒ no card, no presence
+        if (op === 'stop-speaking') return { voiceClient: stopSpeaking!.call(o.voiceClient) };
         return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };
       }
       if (pa?.kind === VOICE_ENROL_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.enrol && s.principal) {

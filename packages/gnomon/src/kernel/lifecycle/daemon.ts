@@ -1058,6 +1058,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
       forget: (p: { name: string }) => voiceEnrol.forget(p),
       report: (p: unknown, connId?: string) => voiceReports.report(p, connId),
+      stopSpeaking: () => voiceReports.stopSpeaking(),
     },
     mods: createModRelayPort(mods),
     sessions,

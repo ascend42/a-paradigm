@@ -297,9 +297,10 @@ export class SpawnedAudioIO implements AudioIO {
         if (this.#micOn && typeof m.rmsDBFS === 'number') this.#ev.emit('level', m.rmsDBFS);
         break;
       case 'hotkey':
-        // talk → push-to-talk; mic-toggle (⌃⌥M) / mode-toggle (⌃⌥A) / hold-toggle (⌃⌥H, dictation) → local controls, on key down only
+        // talk → push-to-talk; mic-toggle (⌃⌥M) / mode-toggle (⌃⌥A) / hold-toggle (⌃⌥H, dictation) / stop-speaking (⌃⌥.)
+        // → local controls, on key down only
         if (m.action === 'talk') this.#ev.emit('hotkey', m.phase === 'down', at);
-        else if ((m.action === 'mic-toggle' || m.action === 'mode-toggle' || m.action === 'hold-toggle') && m.phase === 'down') this.#ev.emit('control', m.action, at);
+        else if ((m.action === 'mic-toggle' || m.action === 'mode-toggle' || m.action === 'hold-toggle' || m.action === 'stop-speaking') && m.phase === 'down') this.#ev.emit('control', m.action, at);
         break;
       case 'playback.start':
         if (this.#pending && this.#pending.t0 === undefined) this.#pending.t0 = typeof m.audibleAtUs === 'number' ? this.#wall(m.audibleAtUs) : at;

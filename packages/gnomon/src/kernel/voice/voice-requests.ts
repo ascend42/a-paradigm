@@ -17,6 +17,10 @@
  *   request.voice.report{dictation}     TD-2026-10-20-262: the client's dictation edges {activity: speaking |
  *                                       transcribing | idle, holdToggles (monotone per voice connection)}, relayed
  *                                       as status.voice.dictation{activity, holdToggles, at}. In memory only.
+ *   request.voice.report{playback}      T-2026-10-19-026: the client's spoken-reply edges {playing: boolean}, relayed
+ *                                       as status.voice.playback{playing, at} (the GUI's ⏹ Stop speaking). In memory.
+ *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
+ *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
@@ -33,6 +37,12 @@ export interface DictationReport {
   activity: DictationActivity;
   /** the hold-toggle hotkey presses this client made (monotone; the GUI holds or releases its send countdown on a change) */
   holdToggles: number;
+  at: string;
+}
+
+/** T-2026-10-19-026: the client's spoken-reply state (status.voice.playback) */
+export interface PlaybackReport {
+  playing: boolean;
   at: string;
 }
 
@@ -67,6 +77,9 @@ export class VoiceReports {
   #enrolment: EnrolmentReport | null = null;
   #notice: { text: string; code?: string; at: string } | null = null;
   #dictation: DictationReport | null = null;
+  #playback: PlaybackReport | null = null;
+  /** the human's ⏹ Stop speaking presses (request.voice.client{op:'stop-speaking'}); the client acts on a change */
+  #stopSpeakingSeq = 0;
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
   #dictationConn: string | undefined;
   readonly #now: () => number;
@@ -77,10 +90,10 @@ export class VoiceReports {
 
   /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
   report(p: unknown, connId?: string): { ok: true } {
-    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?}`;
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?}`;
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice' && k !== 'dictation') || (o.enrolment === undefined && o.notice === undefined && o.dictation === undefined)) throw bad(shape);
+    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice' && k !== 'dictation' && k !== 'playback') || (o.enrolment === undefined && o.notice === undefined && o.dictation === undefined && o.playback === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
     if (o.enrolment !== undefined) {
@@ -109,6 +122,13 @@ export class VoiceReports {
       if (this.#dictation && sameConn && d.holdToggles < this.#dictation.holdToggles) throw bad(`dictation.holdToggles is monotone (was ${this.#dictation.holdToggles})`);
       dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, at };
     }
+    let playback: PlaybackReport | undefined;
+    if (o.playback !== undefined) {
+      const b = o.playback as Record<string, unknown> | null;
+      if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => k !== 'playing') || typeof b.playing !== 'boolean') throw bad('playback is {playing: boolean}');
+      playback = { playing: b.playing, at };
+    }
+    if (playback) this.#playback = playback;
     if (enrolment) this.#enrolment = enrolment;
     if (notice) this.#notice = notice;
     if (dictation) {
@@ -118,15 +138,21 @@ export class VoiceReports {
     return { ok: true };
   }
 
+  /** request.voice.client{op:'stop-speaking'} (human only): one more stop for the client to act on. */
+  stopSpeaking(): { stopSpeakingSeq: number } {
+    this.#stopSpeakingSeq++;
+    return { stopSpeakingSeq: this.#stopSpeakingSeq };
+  }
+
   /** The kernel's own: an allowed GUI enrolment asks the client to record (status.voice.enrolment{name, phase:'requested'}). */
   requested(name: string): void {
     this.#enrolment = { name, phase: 'requested', at: new Date(this.#now()).toISOString() };
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; stopSpeakingSeq: number } {
     const fresh = <T extends { at: string }>(x: T | null): T | null => (x && this.#now() - Date.parse(x.at) <= VOICE_REPORT_TTL_MS ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation) };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), stopSpeakingSeq: this.#stopSpeakingSeq };
   }
 }
 

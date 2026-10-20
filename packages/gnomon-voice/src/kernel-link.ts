@@ -217,6 +217,12 @@ export function nsOf(principalId: string): string {
   return m[1]!;
 }
 
+/** status.voice.stopSpeakingSeq (T-2026-10-19-026: the human's ⏹ Stop speaking count), or null when absent. */
+export function stopSpeakingSeqFromStatus(status: unknown): number | null {
+  const n = (status as { voice?: { stopSpeakingSeq?: unknown } } | undefined)?.voice?.stopSpeakingSeq;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : null;
+}
+
 /** The principal this connection is authenticated as: `status.voice.principal` (V2e; the kernel reports it to the voice connection only). */
 export function principalFromStatus(status: unknown): string | undefined {
   const p = (status as { voice?: { principal?: unknown } } | undefined)?.voice?.principal;
@@ -257,8 +263,14 @@ export class GnomonKernelLink implements KernelLink {
   status(): Promise<unknown> {
     return this.client.call('status', {});
   }
+  #stopSpeakingSeq: number | null = null;
   async attachment(): Promise<VoiceAttachment | null> {
-    return attachmentFromStatus(await this.status());
+    const st = await this.status();
+    this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
+    return attachmentFromStatus(st);
+  }
+  stopSpeakingSeq(): number | null {
+    return this.#stopSpeakingSeq;
   }
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     return (await this.client.call('log.append', { kind, payload })) as { seq: number };

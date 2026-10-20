@@ -110,13 +110,26 @@ export class FakeLink implements KernelLink {
   #seq = 0;
   #turnSeq = 0;
   readonly #kernel = new SpeakableProjector();
+  /** status.voice.stopSpeakingSeq (null ⇒ the kernel does not report it) */
+  stopSeq: number | null = null;
+  attachmentError: unknown;
   async attachment(): Promise<VoiceAttachment | null> {
+    if (this.attachmentError) throw this.attachmentError;
     return this.att;
   }
+  stopSpeakingSeq(): number | null {
+    return this.stopSeq;
+  }
+  /** request.voice.report{playback} edges */
+  readonly playback: boolean[] = [];
   /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */
   readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     if (this.appendError) throw this.appendError;
+    if (kind === 'request.voice.report' && payload.playback) {
+      this.playback.push((payload.playback as { playing: boolean }).playing);
+      return { seq: 0 };
+    }
     if (kind === 'request.voice.report' && payload.dictation) {
       this.dictation.push(payload.dictation as { activity: string; holdToggles: number });
       return { seq: 0 };
