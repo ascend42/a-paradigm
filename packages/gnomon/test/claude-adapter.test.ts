@@ -16,7 +16,7 @@ const base = { uuid: '11111111-1111-4111-8111-111111111111', policyPath: '/s/pol
 
 describe('G-RUN-01 argv and forbidden flags', () => {
   it('builds the §3.3 argv with an explicit --setting-sources and strict MCP', () => {
-    const a = buildClaudeArgv({ ...base, appendSystemPrompt: 'x', model: 'm' });
+    const a = buildClaudeArgv({ ...base, appendSystemPrompt: 'x', model: 'opus' });
     expect(a.slice(0, 1)).toEqual(['-p']);
     for (const f of ['--input-format', '--output-format', '--verbose', '--replay-user-messages', '--include-partial-messages', '--strict-mcp-config']) expect(a).toContain(f);
     expect(a[a.indexOf('--permission-mode') + 1]).toBe('default');
@@ -88,7 +88,7 @@ describe('Q6 (Aegis): extra is an allow-list; every kernel-owned flag appears on
     expect(() => buildClaudeArgv({ ...base, extra })).toThrow(TypeError);
   });
   it('assertArgv: a duplicated, missing or =-form duplicate kernel flag throws; the built argv passes', () => {
-    const a = buildClaudeArgv({ ...base, pluginDirs: ['/c'], addDirs: ['/r'], appendSystemPrompt: '--settings /evil.json', model: 'm' });
+    const a = buildClaudeArgv({ ...base, pluginDirs: ['/c'], addDirs: ['/r'], appendSystemPrompt: '--settings /evil.json', model: 'opus' });
     expect(() => assertArgv(a)).not.toThrow();
     const counts = assertArgv(a);
     expect(counts.get('--settings')).toBe(1); // the system prompt VALUE is not counted as a flag

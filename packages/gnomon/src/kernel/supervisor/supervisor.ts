@@ -83,7 +83,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal } from '@a-company/gnomon-contracts';
+import { claudeModelProblem, hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -304,6 +304,8 @@ interface Session {
   /** P8-D87 manual: the effective mode seen at the last permission request, and whether a plan was approved since manual began */
   lastMode: RunMode | null;
   planApproved: boolean;
+  /** model picker: the Claude model this session runs now ('claude' = Claude Code's default); a switch updates it */
+  model: string;
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -466,6 +468,11 @@ export class SessionSupervisor {
     }
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
+    }
+    // model picker (Aegis): a Claude model is an allow-listed alias or a strict id; refused before any row or spawn
+    if (req.model !== undefined && req.model !== 'claude' && req.model !== 'any') {
+      const why = claudeModelProblem(req.model);
+      if (why !== null) throw refused('BAD_REQUEST', `session.open: ${why}`, { reason: 'bad-params', field: 'model' });
     }
     return this.#spawnClaude(req);
   }
@@ -634,7 +641,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -671,7 +678,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -1319,7 +1326,7 @@ export class SessionSupervisor {
   /** status.sessions: live sessions + a bounded history of exited ones */
   status(): Array<Record<string, unknown>> {
     return [
-      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) })),
+      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, model: s.model, ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) })),
       ...this.#history,
       ...this.#local.status(),
     ];
@@ -1365,6 +1372,11 @@ export class SessionSupervisor {
   /** P8-D87: every live Claude session's mode scope (status.runModes). */
   liveScopes(): Array<{ hsid: string; repoKey: string; cwd: string }> {
     return [...this.#sessions.keys()].map((h) => this.scopeOf(h)).filter((x): x is { hsid: string; repoKey: string; cwd: string } => x !== null);
+  }
+
+  /** model picker: the Claude model a live Claude session runs now ('claude' = Claude Code's default), or null. */
+  modelOf(hsid: string): string | null {
+    return this.#sessions.get(hsid)?.model ?? null;
   }
 
   /** One session's state (tests, status): running | stopping | exited | null. */

@@ -22,6 +22,14 @@ description: >-
 
 components:
   gnomon-contracts:
+    claude-model: >-
+      src/claude-model.ts (model picker, 2026-10-20): CLAUDE_MODEL_ALIASES
+      (default, opus, sonnet, haiku, fable, opusplan, opus[1m], sonnet[1m];
+      claude --help 2.1.304 names the alias form), CLAUDE_MODEL_ID (strict
+      claude-[a-z0-9]+([.-][a-z0-9]+)*([1m])?, max 64), isClaudeModel and
+      claudeModelProblem (never echoes the value). Shared by the kernel
+      (session.open, request.session.model), the adapter (argv guard) and the
+      GUI picker. Pure functions: not an input of clientApiId.
     description: >-
       Package entry (src/index.ts, re-exports every module) plus schemas/.
       probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...},

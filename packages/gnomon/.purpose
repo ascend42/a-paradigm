@@ -2176,6 +2176,16 @@ components:
     oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]
 
   session-runner:
+    model-picker: >-
+      Founder ask 2026-10-20 ("is there no way to change the model?").
+      session.open{model}: anything other than the routing values
+      claude/local/any must pass contracts claudeModelProblem (an alias in
+      CLAUDE_MODEL_ALIASES or a strict claude-... id, never a value starting
+      with "-"), refused BAD_REQUEST{field:model} BEFORE any row, permit or
+      process; `default` opens with no --model. The live session keeps its
+      model (Session.model, status.sessions[].model, modelOf(hsid)); the
+      session.open row and the spawn permit carry it (the fuse's model
+      axis). Tests: test/model-picker.test.ts, test/session-model.test.ts.
     description: >-
       #session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16;
       M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by
@@ -2904,6 +2914,12 @@ components:
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
 
   claude-adapter:
+    model-guard: >-
+      Model picker (Aegis): buildClaudeArgv refuses a model that fails
+      contracts claudeModelProblem with a TypeError, because `--model` takes
+      the NEXT argv token whatever it is (a value like --verbose or
+      --dangerously-skip-permissions would be eaten as the model or reach
+      claude's parser). Defence in depth behind the supervisor's own check.
     usage-split: >-
       #ledger-mod (K2 feed v2): parseStreamLine's result event also carries
       split {in, out, cacheRead, cacheWrite} = usageSplit(result.usage)

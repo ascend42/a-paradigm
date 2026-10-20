@@ -12,7 +12,9 @@
  *     request, and `none` wins over `stdio`; any other value or a second copy
  *     throws), `--session-id|--resume <uuid>`,
  *     `--settings <policy.json>`, an EXPLICIT `--setting-sources`, `--mcp-config
- *     <mcp.json> --strict-mcp-config`, optional system prompt and model.
+ *     <mcp.json> --strict-mcp-config`, optional system prompt and model (the model
+ *     must pass claudeModelProblem: an alias or a strict `claude-…` id, never a
+ *     value starting with `-`).
  *     FORBIDDEN_FLAGS throw (`agents.ts:40,456`), checked on the final argv
  *     including caller-supplied extras (G-RUN-01).
  *   parseStreamLine — one stdout line → one typed AdapterEvent. TOLERANT
@@ -41,6 +43,7 @@
  *     are never read: every rule lives in the kernel log.
  */
 import { randomUUID } from 'node:crypto';
+import { claudeModelProblem } from '@a-company/gnomon-contracts';
 
 export const FORBIDDEN_FLAGS = Object.freeze(['--dangerously-skip-permissions', '--allowedTools', '--allowed-tools', '--bare']);
 export const SETTING_SOURCES = Object.freeze(['user', 'project', 'local'] as const);
@@ -214,6 +217,12 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
   assertArgv(i.extra ?? [], Object.fromEntries(Object.entries(EXTRA_FLAGS).map(([k, a]) => [k, { arity: a, min: 0, max: 1 }])), false);
   for (const d of [...(i.pluginDirs ?? []), ...(i.addDirs ?? [])]) if (typeof d !== 'string' || !(d.startsWith('/') || /^[A-Za-z]:[\\/]/.test(d) || d.startsWith('\\\\'))) throw new TypeError(`#claude-adapter: a context dir must be absolute, got ${JSON.stringify(String(d).slice(0, 64))}`);
   for (const s of i.settingSources) if (!(SETTING_SOURCES as readonly string[]).includes(s)) throw new TypeError(`#claude-adapter: unknown setting source ${String(s)}`);
+  // model picker (Aegis): `--model` takes the NEXT token whatever it is, so a value like `--verbose` would be eaten as
+  // the model and a flag-looking value could reach claude's parser. Only an allow-listed alias or a strict id passes.
+  if (i.model !== undefined) {
+    const why = claudeModelProblem(i.model);
+    if (why !== null) throw new TypeError(`#claude-adapter: --model refused: ${why}`);
+  }
   const argv = [
     '-p',
     '--input-format', 'stream-json',

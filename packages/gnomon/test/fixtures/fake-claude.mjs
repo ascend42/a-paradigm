@@ -125,6 +125,12 @@ process.stdin.on('data', (c) => {
     try { m = JSON.parse(line); } catch { trace({ t: 'bad-stdin', line }); continue; }
     trace({ t: 'stdin', m });
     if (m.type === 'control_request') {
+      // set_model (claude 2.1.304 shape, probe p-set-model): mode.setModel = 'error' | 'silent' | absent (success)
+      if (m.request?.subtype === 'set_model') {
+        trace({ t: 'set-model', model: m.request.model });
+        if (mode.setModel === 'silent') continue;
+        if (mode.setModel === 'error') { out({ type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: `Model '${m.request.model}' not found`, error_code: 'catalog_unknown' } }); continue; }
+      }
       out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id } });
       continue;
     }
