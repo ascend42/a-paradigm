@@ -20,6 +20,8 @@
 <span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
 <span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false" aria-live="polite" data-state="off" title="Voice (kernel-owned: shows what the kernel says, never the voice app's claim)"><span class="voice-dot" aria-hidden="true"></span><span id="voice-label">Mic off</span><span id="voice-meter" class="voice-meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></span><span id="voice-target" class="voice-target"></span><span id="voice-progress" class="voice-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden><i></i></span></button><button id="voice-stop" class="key quiet voice-action voice-stop kernel-owned" type="button" title="Stop speaking (Esc, ⌃⌥.)" aria-label="Stop speaking" hidden>⏹ Stop speaking</button><button id="voice-action" class="key quiet voice-action kernel-owned" type="button" hidden></button><span id="voice-menu" class="mode-menu voice-menu" role="menu" hidden></span><span id="voice-note" class="meta voice-note" role="status" hidden></span><span id="voice-caption" class="sr-only" aria-live="polite"></span></span>
 <span class="layout-wrap"><button id="layout-btn" class="key quiet layout-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Layout presets and panes">⊞ Layout</button><span id="layout-menu" class="mode-menu layout-menu" role="menu" hidden></span></span>
+<span id="theme-switch" class="seg theme-switch" role="radiogroup" aria-label="Theme"><button class="key quiet seg-key theme-key" type="button" role="radio" aria-checked="false" data-run="theme.day" title="Day: papercraft, whatever the Mac is set to">☀<span class="theme-word"> Day</span></button><button class="key quiet seg-key theme-key" type="button" role="radio" aria-checked="false" data-run="theme.night" title="Night: phosphor, whatever the Mac is set to">☾<span class="theme-word"> Night</span></button><button class="key quiet seg-key theme-key" type="button" role="radio" aria-checked="true" data-run="theme.auto" title="Auto: follow the Mac's appearance">◐<span class="theme-word"> Auto</span></button></span>
+<button id="settings-btn" class="key quiet settings-btn" type="button" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false" title="Settings (⌘,)" aria-label="Settings">⚙</button>
 <button id="toggle-stack" class="key pane-toggle" type="button" aria-controls="pane-stack" aria-expanded="false" title="Decisions">decisions</button>
 </header>
 <div id="repin" class="notice repin kernel-owned" role="alert" hidden><span id="repin-text"></span> <button id="repin-ack" class="key" type="button">understood</button></div>
@@ -50,9 +52,10 @@
 <div class="pane-head pilehead"><span class="title">Stack</span><span id="inbox" class="meta" title="global inbox: all projects">0 pending</span><span id="stack-hint" class="meta"></span><button id="stack-scope" class="key" type="button">all projects</button></div>
 <div id="stack" class="pile"></div>
 </aside>
+<aside id="workshop-col" class="workshop-col" aria-label="Workshop column" hidden></aside>
 <div id="scrim" class="scrim" hidden></div>
 </main>
-<footer id="pane-shuttle" class="shuttle" aria-label="Shuttle view"></footer>
+<footer id="pane-workshop" class="workshop" aria-label="Workshop"><div id="workshop-host" class="workshop-host"></div><button id="status-line" class="status-line" type="button" title="Open the kernel feed (view.kernel-feed)"></button></footer>
 <div id="reconnect" class="overlay" hidden>
 <div class="sheet-card">
 <p id="reconnect-why" class="meta">This page has no GUI session.</p>
@@ -73,6 +76,12 @@
 <label class="meta">model <select id="ns-model" class="field"><option value="claude">claude</option><option value="local">local</option><option value="any">any</option></select></label>
 <div class="composer-foot"><button id="ns-cancel" class="key" type="button">cancel</button><button class="key" type="submit">open</button></div>
 </form>
+</div>
+<div id="settings" class="overlay" hidden>
+<div class="sheet-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+<div class="settings-head"><p id="settings-title" class="title">Settings</p><span class="meta">kept in this browser unless it says the kernel owns it</span><button id="settings-close" class="key quiet" type="button" title="Close (Esc)">close</button></div>
+<div id="settings-body" class="settings-body"></div>
+</div>
 </div>
 <div id="enrol-dialog" class="overlay" hidden>
 <form id="enrol-form" class="sheet-card enrol-card" autocomplete="off" aria-label="Teach Gnomon your voice">

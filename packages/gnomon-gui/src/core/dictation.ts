@@ -23,6 +23,10 @@
  *   - Send: unedited ⇒ one content part per turn in order, source voice (the kernel attributes them: 🎙); edited ⇒ the
  *     composer text as ONE part, source voice as a hint only, which matches no pending turn, so the kernel attributes
  *     nothing and it reads as a typed message (Aegis L1).
+ *   - Ambient never auto-sends (TD-2026-10-20-125, founder ruling): a part whose turn is not a push-to-talk claim
+ *     (`mode` other than exactly 'ptt', missing included: fail closed) marks the draft AMBIENT. An ambient draft never
+ *     arms the ring; only [Send] / Enter / ⌘Enter (a human key press) sends it. A misidentified voice can only fill
+ *     the box, never act. PTT drafts keep the ring (the key hold was the human's gesture).
  *   - Never send words not shown (Aegis M3): an edit made while a send is in flight keeps hold and the edited text,
  *     and turns heard in flight append to it.
  */
@@ -41,6 +45,8 @@ export interface DraftPart {
   /** the exact words the voice app sent, when they are safe to send as-is (the kernel hash-matches them for 🎙); else the shown text */
   send?: string;
   text: string;
+  /** TD-2026-10-20-125: the turn was not a push-to-talk claim (ambient): the draft never auto-sends */
+  ambient?: true;
 }
 
 export interface DictationState {
@@ -105,9 +111,15 @@ const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === '
 
 export const hasDraft = (s: DictationState): boolean => s.text.trim().length > 0;
 
-/** The ring may run now (a draft, no hold, a delay, idle, not streaming, focused here, not sending). */
+/** TD-2026-10-20-125: the draft holds ambient speech (never auto-sent; a key press sends it). */
+export const ambientDraft = (s: DictationState): boolean => s.parts.some((p) => p.ambient === true);
+
+/** A voice.turn.user payload is a push-to-talk claim (exactly 'ptt'); anything else is ambient (fail closed). */
+export const pttTurn = (payload: unknown): boolean => obj(payload)?.mode === 'ptt';
+
+/** The ring may run now (a PTT-only draft, no hold, a delay, idle, not streaming, focused here, not sending). */
 export function armed(s: DictationState): boolean {
-  return hasDraft(s) && s.parts.length > 0 && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
+  return hasDraft(s) && s.parts.length > 0 && !ambientDraft(s) && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
 }
 
 /** Re-derive the ring after an event: `reset` restarts it at the full delay when armed. */
@@ -175,7 +187,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       if (tt === null || !e.hsid || e.hsid !== s.attached) return n0;
       const t = tt.shown;
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}) }], text: append(s.text, t), lastActivityAt: e.now };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -246,12 +258,16 @@ export function sendRequest(s: DictationState): SendRequest | null {
   return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length ? { source: 'voice' as const } : {}) };
 }
 
+/** TD-2026-10-20-125: an ambient draft waits for the human's key press. */
+export const AMBIENT_DRAFT_NOTE = 'draft · Enter sends (ambient never auto-sends)';
+
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold && s.holdBy === 'detached') return 'draft held · voice detached';
   if (s.hold) return 'draft held';
+  if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE;
   if (s.delayMs === null) return 'draft · auto-send off';
   return null;
 }

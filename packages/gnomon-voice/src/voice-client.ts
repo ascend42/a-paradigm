@@ -12,7 +12,10 @@
  *   DICTATION (TD-2026-10-20-262, the default `delivery: 'composer'`): the client NEVER calls session.send. It appends
  *   voice.turn.user{forwarded: false}; the kernel stamps `forwardable` and the GUI puts the text into its composer and
  *   sends it after a countdown (the human's send, attributed by the kernel). `delivery: 'direct'` keeps the old
- *   forward for headless use (`gnomon-voice run --delivery direct`). Activity edges go to the kernel as
+ *   forward for headless use (`gnomon-voice run --delivery direct`) for PUSH-TO-TALK turns only: TD-2026-10-20-125
+ *   (founder ruling), ambient speech NEVER sends itself, so an ambient turn is dictated (composer) under either
+ *   delivery, the GUI never auto-sends it (a key press does), and the kernel refuses a direct send of a non-ptt
+ *   turn voice-off{cause: 'composer'}. Activity edges go to the kernel as
  *   `request.voice.report{dictation: {activity: speaking | transcribing | idle, holdToggles}}` (edges only); the
  *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
  *   CAPTURE (T-2026-10-20-005 A1, TD-2026-10-20-086): every segment runs `idle → hearing → transcribing → captured |
@@ -46,6 +49,7 @@
 import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
+import { capPartial, LiveAgreement, PARTIAL_ANCHOR_MARGIN_MS, PARTIAL_FULL_WINDOW_MS, PARTIAL_GATE_MS, PARTIAL_MAX_SEGMENT_MS, PARTIAL_MAX_WINDOW_MS, PARTIAL_PREROLL_MS, PARTIAL_TAIL_WINDOW_MS, PARTIAL_TICK_MS, type PartialText } from './partials.js';
 import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
@@ -65,6 +69,36 @@ export interface CaptureReport {
   reason?: CaptureDropReason;
   /** mic level 0..1, hearing reports only (A2) */
   level?: number;
+  /**
+   * B1 live words: hearing / transcribing reports only, and only after a provisional speaker match (V1). Display
+   * only: the kernel keeps it in memory for the gui credential; it is never a row, a turn or a send.
+   */
+  text?: PartialText;
+}
+
+/** B1 counters (tests and the bench): decodes run, ticks skipped because a decode was in flight, gate verdicts. */
+export interface PartialStats {
+  decodes: number;
+  skipped: number;
+  gatedIn: number;
+  gatedOut: number;
+}
+
+/** The open segment's audio for live words (memory only, G-VOX-05) and its agreement state. */
+interface LiveSeg {
+  segId: string;
+  buf: Float32Array;
+  n: number;
+  sr: number;
+  sinceTickMs: number;
+  /** V1: no words until a provisional speaker match; 'reject' ⇒ no words for the whole segment */
+  gate: 'pending' | 'match' | 'reject';
+  agree: LiveAgreement;
+  /** the window head (a sample index into buf), moved only to a committed word boundary */
+  anchor: number;
+  text: PartialText | null;
+  /** the segment left hearing: no more decodes; a decode still in flight is discarded */
+  closed: boolean;
 }
 /** non-terminal capture reports are sent at most this often (≤ 5 Hz); terminal ones always */
 export const CAPTURE_REPORT_MIN_MS = 200;
@@ -167,7 +201,14 @@ export interface VoiceClientOptions {
   verifyThreshold?: number;
   /** TD-2026-10-20-262: default 'composer' (never session.send); 'direct' forwards each enrolled turn itself */
   delivery?: Delivery;
+  /** B1 live words (default on when the STT engine has transcribeWords) */
+  partials?: boolean;
 }
+
+/** The one notice for a print from an older speaker front end (it is ignored until the speaker enrols again). */
+export const STALE_PRINT_NOTICE = 'Re-teach Gnomon your voice (the voice check was upgraded)';
+/** The drop notice when the speaker went unrecognised while a stale print exists (distinct from the plain "not enrolled"). */
+export const STALE_DROP_NOTICE = 'Nothing was sent: your voice print is from the older voice check. Re-teach Gnomon your voice.';
 
 export function toRefusal(err: unknown): KernelRefusal {
   const e = err as { code?: unknown; reason?: unknown; message?: unknown; refusal?: { code?: unknown; data?: { reason?: unknown } }; data?: { reason?: unknown } };
@@ -238,6 +279,9 @@ export class VoiceClient {
   readonly #delivery: Delivery;
   #activity: DictationActivity = 'idle';
   #holdToggles = 0;
+  /** the stale-print names last reported (JSON; null before the first report) */
+  #staleReported: string | null = null;
+  #staleNoticed = false;
   #pending = 0;
   #vadSpeaking = false;
   #vadLastSpeech = 0;
@@ -252,6 +296,15 @@ export class VoiceClient {
   #capTimer: ReturnType<typeof setTimeout> | undefined;
   /** Aegis L4: capture reports waiting on the #reports chain; a waiting non-terminal one is replaced, never queued behind */
   #capQueue: CaptureReport[] = [];
+  // B1 live words (T-2026-10-20-005): pre-roll ring, the open segment, ONE decode in flight (a busy tick is skipped)
+  #preroll: PcmFrame[] = [];
+  #prerollMs = 0;
+  #live: LiveSeg | null = null;
+  #partialBusy = false;
+  #partialJob: Promise<void> = Promise.resolve();
+  /** final transcriptions running: a partial tick never competes with one */
+  #sttBusy = 0;
+  #partialStats: PartialStats = { decodes: 0, skipped: 0, gatedIn: 0, gatedOut: 0 };
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -303,6 +356,7 @@ export class VoiceClient {
     if (this.#cap?.state === 'hearing') return this.#cap.segId;
     const segId = `s${++this.#capN}`;
     this.#cap = { segId, state: 'hearing' };
+    this.#openLive(segId);
     this.#capture({ state: 'hearing', segId });
     return segId;
   }
@@ -311,12 +365,14 @@ export class VoiceClient {
   #takeLive(): string {
     const live = this.#cap?.state === 'hearing' ? this.#cap.segId : `s${++this.#capN}`;
     this.#cap = null;
+    if (this.#live) this.#live.closed = true; // no more partial decodes; its last words ride the transcribing report
     return live;
   }
 
   /** End a segment: dropped{reason}, captured, or idle (abandoned by a mode change or pause). Always sent. */
   #endCapture(segId: string, state: 'captured' | 'dropped' | 'idle', reason?: CaptureDropReason): void {
     if (this.#cap?.segId === segId) this.#cap = null;
+    if (this.#live?.segId === segId) this.#live = null; // the segment's audio and words go with it
     if (state === 'dropped') this.#flow.info('capture dropped', { segId, reason });
     this.#capture({ state, segId, ...(state === 'dropped' && reason ? { reason } : {}) });
   }
@@ -364,7 +420,9 @@ export class VoiceClient {
   /** request.voice.report{capture}, on the serialized #reports chain. A hearing report carries the latest level. */
   #sendCapture(r: CaptureReport): void {
     this.#capLastSent = this.#now();
-    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level } : r;
+    // B1: the live words ride hearing / transcribing reports only, and only once the speaker provisionally matched (V1)
+    const text = r.state === 'hearing' || r.state === 'transcribing' ? this.#textFor(r.segId) : null;
+    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level, ...(text ? { text } : {}) } : r.state === 'transcribing' ? { state: r.state, segId: r.segId, ...(text ? { text } : {}) } : { state: r.state, segId: r.segId, ...(r.reason ? { reason: r.reason } : {}) };
     this.#lastCapture = capture;
     // Aegis L4: a slow kernel never builds a backlog: the newest report replaces a waiting one of the same segment and
     // state (a level update or keepalive). A state change is queued, so every edge, and every terminal state, still
@@ -392,6 +450,116 @@ export class VoiceClient {
     this.#level = levelOf(db);
     const live = this.#cap;
     if (live?.state === 'hearing' && !this.#paused && this.mode !== 'off') this.#capture({ state: 'hearing', segId: live.segId });
+  }
+
+  // ---- B1 live words (T-2026-10-20-005; V1–V5 in TD-2026-10-20-086; partials.ts) ---------------------------------
+
+  /** decodes run, busy ticks skipped, gate verdicts */
+  get partialStats(): PartialStats {
+    return { ...this.#partialStats };
+  }
+
+  #partialsOn(): boolean {
+    return this.#o.partials !== false && typeof this.#o.engines.stt.transcribeWords === 'function';
+  }
+
+  /** A segment opened: its buffer starts with the pre-roll ring (the VAD's start latency). */
+  #openLive(segId: string): void {
+    this.#live = null;
+    if (!this.#partialsOn()) return;
+    const sr = this.#preroll[0]?.sampleRate ?? this.#o.audio.captureSampleRate;
+    const pre = this.#preroll.filter((f) => f.sampleRate === sr);
+    const n = pre.reduce((s, f) => s + f.samples.length, 0);
+    const buf = new Float32Array(Math.max(n, sr * 4));
+    let off = 0;
+    for (const f of pre) (buf.set(f.samples, off), (off += f.samples.length));
+    this.#live = { segId, buf, n, sr, sinceTickMs: 0, gate: 'pending', agree: new LiveAgreement(), anchor: 0, text: null, closed: false };
+  }
+
+  /** Keep the last PARTIAL_PREROLL_MS of frames (memory only). */
+  #keepPreroll(f: PcmFrame): void {
+    if (!this.#partialsOn()) return;
+    this.#preroll.push(f);
+    this.#prerollMs += (f.samples.length / f.sampleRate) * 1000;
+    while (this.#preroll.length > 1 && this.#prerollMs - (this.#preroll[0]!.samples.length / this.#preroll[0]!.sampleRate) * 1000 >= PARTIAL_PREROLL_MS) {
+      const old = this.#preroll.shift()!;
+      this.#prerollMs -= (old.samples.length / old.sampleRate) * 1000;
+    }
+  }
+
+  /** A frame of the open segment: buffer it; every PARTIAL_TICK_MS of heard audio, one tick. */
+  #feedLive(f: PcmFrame): void {
+    const p = this.#live;
+    if (!p || p.closed || this.#cap?.segId !== p.segId || this.#cap.state !== 'hearing') return;
+    if (f.sampleRate !== p.sr || p.n + f.samples.length > (p.sr * PARTIAL_MAX_SEGMENT_MS) / 1000) {
+      p.closed = true; // a route change or a very long segment: no more live words (the final decode is unaffected)
+      return;
+    }
+    if (p.n + f.samples.length > p.buf.length) {
+      const grown = new Float32Array(Math.max(p.buf.length * 2, p.n + f.samples.length));
+      grown.set(p.buf.subarray(0, p.n));
+      p.buf = grown;
+    }
+    p.buf.set(f.samples, p.n);
+    p.n += f.samples.length;
+    p.sinceTickMs += (f.samples.length / f.sampleRate) * 1000;
+    if (p.sinceTickMs < PARTIAL_TICK_MS) return;
+    p.sinceTickMs -= PARTIAL_TICK_MS;
+    this.#partialTick(p);
+  }
+
+  /** ONE decode in flight: a tick that finds one running (or a final transcription) is skipped, never queued. */
+  #partialTick(p: LiveSeg): void {
+    if (p.gate === 'reject') return;
+    if (this.#partialBusy || this.#sttBusy > 0) {
+      this.#partialStats.skipped++;
+      return;
+    }
+    this.#partialBusy = true;
+    this.#partialJob = this.#runPartial(p)
+      .catch((err) => this.#log.warn('live words failed', { error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => {
+        this.#partialBusy = false;
+      });
+  }
+
+  async #runPartial(p: LiveSeg): Promise<void> {
+    const stt = this.#o.engines.stt;
+    if (!stt.transcribeWords) return;
+    const ms = (x: number): number => Math.round((p.sr * x) / 1000);
+    if (p.gate === 'pending') {
+      if (p.n < ms(PARTIAL_GATE_MS)) return;
+      // V1: a provisional CAM++ match on the first 1.5 s; a non-match means no words for this whole segment (PTT too)
+      const ok = await this.#verifier.provisional(p.buf.slice(0, ms(PARTIAL_GATE_MS)), p.sr);
+      if (this.#live !== p) return;
+      p.gate = ok ? 'match' : 'reject';
+      this.#partialStats[ok ? 'gatedIn' : 'gatedOut']++;
+      this.#flow.info('live words gate', { segId: p.segId, match: ok });
+      if (!ok || p.closed) return;
+    }
+    const total = p.n;
+    if (!(p.anchor === 0 && total <= ms(PARTIAL_FULL_WINDOW_MS)) && total - p.anchor > ms(PARTIAL_TAIL_WINDOW_MS)) {
+      // move the head to a committed word boundary: the smallest that leaves ≤ the tail window, else the latest one
+      const cands = p.agree.boundaries().map((b) => ({ b, at: Math.max(p.anchor, p.anchor + Math.floor(b.start * p.sr) - ms(PARTIAL_ANCHOR_MARGIN_MS)) }));
+      const pick = cands.find((c) => total - c.at <= ms(PARTIAL_TAIL_WINDOW_MS)) ?? cands[cands.length - 1];
+      if (pick && pick.at > p.anchor) {
+        p.agree.reanchor(pick.b);
+        p.anchor = pick.at;
+      }
+    }
+    if (total - p.anchor > ms(PARTIAL_MAX_WINDOW_MS)) return; // no boundary to anchor at: the line stays as it is
+    this.#partialStats.decodes++;
+    const words = await stt.transcribeWords(p.buf.slice(p.anchor, total), p.sr);
+    if (this.#live !== p || p.closed) return; // the segment ended under us: discarded
+    p.text = capPartial(p.agree.push(words));
+    if (this.#cap?.segId === p.segId && this.#cap.state === 'hearing') this.#capture({ state: 'hearing', segId: p.segId });
+  }
+
+  /** V1/V4: the words for a report of `segId` — only for the open segment, only after a provisional match. */
+  #textFor(segId: string): PartialText | null {
+    const p = this.#live;
+    if (!p || p.segId !== segId || p.gate !== 'match' || !p.text || (!p.text.committed && !p.text.tail)) return null;
+    return { committed: p.text.committed, tail: p.text.tail };
   }
 
   /** request.voice.report{dictation}, serialized so holdToggles reaches the kernel in order (monotone). */
@@ -442,6 +610,7 @@ export class VoiceClient {
       a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
+    await this.#reportPrints();
     // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
     const tts = this.#o.engines.tts;
     if (tts.warmUp) {
@@ -599,10 +768,43 @@ export class VoiceClient {
     }
   }
 
+  /**
+   * Stale prints (founder regression 2026-10-20): a print made before the speech gate (no or another frontEnd) is never
+   * compared, so its speaker counts as NOT enrolled until they enrol again. The names go to the kernel as
+   * `request.voice.report{prints: {stale}}` when the list changes (status.voice.prints; the GUI nudges "Re-teach Gnomon
+   * your voice"), and ONE notice says so per run. Returns the current stale names.
+   */
+  async #reportPrints(): Promise<string[]> {
+    let stale: string[];
+    try {
+      stale = this.#verifier.stalePrints();
+    } catch {
+      return [];
+    }
+    const key = JSON.stringify(stale);
+    if (key !== this.#staleReported) {
+      this.#staleReported = key;
+      try {
+        await this.#o.link.append('request.voice.report', { prints: { stale } });
+      } catch (err) {
+        // not retried until the list changes (an older kernel refuses the key; the notice below still shows)
+        this.#log.warn('prints report not relayed', { reason: toRefusal(err).reason });
+      }
+    }
+    if (stale.length && !this.#staleNoticed) {
+      this.#staleNoticed = true;
+      this.#log.info('stale voice prints', { names: stale.length });
+      this.#notice('warn', STALE_PRINT_NOTICE);
+      await this.relayNotice(STALE_PRINT_NOTICE, 'voice.print-stale');
+    }
+    return stale;
+  }
+
   /** V2e: pause the voice loop (an enrolment is recording: its phrases are never turns). */
   pause(on: boolean): void {
     this.#paused = on;
     if (on) this.#abandonLive();
+    else void this.#reportPrints(); // an enrolment just ended: a fresh print may replace a stale one
     this.#pttHeld = false;
     this.#pttFrames = [];
     this.#o.engines.vad.reset();
@@ -616,11 +818,13 @@ export class VoiceClient {
     let w: Promise<void> | undefined;
     let s: Promise<void> | undefined;
     let r: Promise<void> | undefined;
-    while (w !== this.#work || s !== this.#speaking || r !== this.#reports) {
+    let p: Promise<void> | undefined;
+    while (w !== this.#work || s !== this.#speaking || r !== this.#reports || p !== this.#partialJob) {
       w = this.#work;
       s = this.#speaking;
       r = this.#reports;
-      await Promise.all([w, s, r]);
+      p = this.#partialJob;
+      await Promise.all([w, s, r, p]);
     }
   }
 
@@ -679,6 +883,9 @@ export class VoiceClient {
     const mode = this.mode;
     if (mode === 'off' || this.#paused) return;
     if (mode === 'ptt' && this.#pttHeld) this.#pttFrames.push(f);
+    // B1: the pre-roll ring, then the open segment's buffer (a segment opened by THIS frame already has it in its pre-roll)
+    this.#keepPreroll(f);
+    this.#feedLive(f);
     // keep a long live segment fresh in the kernel (its capture TTL is short)
     const live = this.#cap;
     if (live?.state === 'hearing' && this.#now() - this.#capLastSent >= CAPTURE_KEEPALIVE_MS) this.#capture({ state: 'hearing', segId: live.segId });
@@ -757,9 +964,18 @@ export class VoiceClient {
   }
 
   async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason) => void): Promise<void> {
-    const text = (await this.#o.engines.stt.transcribe(seg.samples, seg.sampleRate)).trim();
+    // the final transcript is always the FULL-segment decode (never the live words)
+    this.#sttBusy++;
+    let text: string;
+    try {
+      text = (await this.#o.engines.stt.transcribe(seg.samples, seg.sampleRate)).trim();
+    } finally {
+      this.#sttBusy--;
+    }
     if (!text) return end('dropped', 'no-words');
     const who = await this.#verifier.identify(seg.samples, seg.sampleRate);
+    // the stale list is re-read after every identify (reported only when it changed)
+    const stale = await this.#reportPrints();
     // the samples are not kept past this point (G-VOX-05)
     if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return end('dropped', 'not-attached'); // attachment moved under us
     const enrolled = who.name !== undefined;
@@ -770,8 +986,9 @@ export class VoiceClient {
     const ri = this.#o.audio.routeInfo();
     // the aec claim from the binary's route/mic event (kind when known), plus its transport (V2b Aegis duty 4)
     const aec = ri.aecKind ?? ri.aec;
-    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262)
-    const direct = this.#delivery === 'direct';
+    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262). TD-2026-10-20-125:
+    // an ambient turn is never sent by the client, whatever the delivery (it fills the composer; a human sends it)
+    const direct = this.#delivery === 'direct' && mode === 'ptt';
     const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
     try {
       await this.#o.link.append('voice.turn.user', payload);
@@ -781,7 +998,7 @@ export class VoiceClient {
     }
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
     if (!enrolled) {
-      this.#notice('info', 'I heard someone who is not enrolled; nothing was sent.');
+      this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');
     }
     if (!direct) {

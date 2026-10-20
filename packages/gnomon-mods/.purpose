@@ -14,9 +14,14 @@ components:
       packages/gnomon-mods/workshop: one view `workshop.strip` (slot sidebar,
       append) with two zones, needs you (one cap per pending card, labelled
       by the card kind) and working (one cap per session: hat = work type,
-      filled = Claude, outlined = local, tone hue-<0..7> = project, violet
-      only for a KNOT; bob while turn.partial streams, still otherwise,
-      `working` text pose under reduced motion). model.mjs is a pure reducer
+      filled = Claude, outlined = local, tone hue-<0..5> = project
+      (HUES = 6, the feed's projectHue), violet only for a KNOT; bob while
+      turn.partial streams, still otherwise, `working` text pose under
+      reduced motion). S5: every cap is a Text whose `text` is the accessible
+      form and whose `cap` is the closed contracts shape {shape tall|wide|
+      floppy, hue, filled, state needs|working|idle|knot, label} (needs caps
+      carry their session's hue and a `◆ / ✕ / ! / ?` + kind label); the GUI
+      draws the hat and the Layout places the strip. model.mjs is a pure reducer
       + render (sessions and cards bounded at 256 each); index.mjs speaks
       mod-abi:v1 directly (no SDK import, so the pinned packageHash never
       depends on an SDK build) and echoes MOD_ABI_ID. State comes ONLY from

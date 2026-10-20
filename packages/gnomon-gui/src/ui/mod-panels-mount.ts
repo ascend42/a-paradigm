@@ -11,14 +11,29 @@
  */
 import type { GnomonClient } from '../core/client.js';
 import { RpcError } from '../core/client.js';
-import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
 import type { MiniDoc } from '../core/render.js';
 
 const REGION_HOST: Record<ModRegion, { id: string; parent: string; after?: string }> = {
   'desk-footer': { id: 'mod-slot-composer-footer', parent: 'pane-transcript', after: 'composer' },
   'left-bottom': { id: 'mod-slot-sidebar', parent: 'pane-sessions' },
   right: { id: 'mod-slot-panel', parent: 'pane-stack' },
+  // S5: the Workshop region lives in #workshop-host, which app.ts places (footer, left or right column) per Layout
+  workshop: { id: 'mod-slot-workshop', parent: 'workshop-host' },
 };
+
+/** S5.1: the Workshop region with no running Workshop: one quiet line, in --sec. */
+function paintWorkshopAbsence(line: string | null): void {
+  if (line === null) return;
+  const el = regionEl('workshop');
+  if (!el) return;
+  clear(el);
+  el.hidden = false;
+  const p = document.createElement('small');
+  p.className = 'meta workshop-absent';
+  p.textContent = line;
+  el.appendChild(p);
+}
 
 function regionEl(region: ModRegion): HTMLElement | null {
   const r = REGION_HOST[region];
@@ -52,6 +67,7 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
   current?.dispose();
   const doc = document as unknown as MiniDoc;
   const views: ModPanelView[] = modPanelsOf(o.status);
+  const absent = workshopAbsence(o.status, views);
   let live = true;
   const render = async (): Promise<void> => {
     const results = await Promise.all(
@@ -79,6 +95,7 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
       }
       for (const { v, r, why } of results) if (v.region === region) el.appendChild(renderModFence({ doc }, v, r, why) as unknown as Node);
     }
+    paintWorkshopAbsence(absent);
   };
   const scheduler = new ModPanelScheduler(render, { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (t) => window.clearTimeout(t as number) });
   current = {
@@ -90,12 +107,15 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
   };
   scheduler.focus(o.focused()); // K3: the mount render uses the current focus
   if (views.length) scheduler.now();
-  else for (const region of Object.keys(REGION_HOST) as ModRegion[]) {
-    const el = document.getElementById(REGION_HOST[region].id);
-    if (el) {
-      clear(el);
-      el.hidden = true;
+  else {
+    for (const region of Object.keys(REGION_HOST) as ModRegion[]) {
+      const el = document.getElementById(REGION_HOST[region].id);
+      if (el) {
+        clear(el);
+        el.hidden = true;
+      }
     }
+    paintWorkshopAbsence(absent);
   }
   return (row) => {
     if (live && views.length) scheduler.row(row?.kind);

@@ -15,7 +15,58 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-model-picker:
+    description: >-
+      Founder ask 2026-10-20 ("is there no way to change the model of what
+      claude is in the tool?"). core/model-picker.ts (PURE): MODEL_CHOICES
+      (contracts CLAUDE_MODEL_ALIASES + custom), openModelOf (route claude
+      sends the alias/id or 'claude' for default; local/any unchanged),
+      pickerProblem (contracts claudeModelProblem), the per-folder memory
+      (localStorage gnomon.model.byFolder <= 64 folders + gnomon.model.last;
+      a stored value failing the check is never restored), sessionModelOf
+      (kernel rows only: the last session.model{outcome:switched}.to, else
+      session.open.model), switchRequest = log.append{kind:
+      request.session.model, payload:{hsid, model}}, switchConfirmText (the
+      conversation continues, the prompt cache restarts, a larger model uses
+      the plan faster; never says context is lost). ui/model-picker.ts (DOM,
+      mounted once by app.ts): the "claude model" select + custom id field
+      injected after #ns-model (hidden for the local route), the header chip
+      (model + ▾ menu) after the backend in #chead-meta, the confirm sheet
+      #model-switch-dialog that sends only once armed by a trusted click on
+      its Switch key or a trusted Enter in its id field, recorded before the
+      submit (Aegis L1; never the submit event's isTrusted), and the
+      read-only Settings slot [data-gnomon-slot="session-model"]. Tests:
+      test/model-picker.test.ts.
+      8.0:model-switch wiring: sessionModelOf also folds
+      session.model{reconciled} (model = to) and {timeout} (uncertain = to,
+      kept until reconciled, never after the session ended: a timeout before
+      or after session.exited is not shown unconfirmed, Aegis L2); modelChipText shows "model: switching…
+      (unconfirmed)" and disables the ▾ meanwhile; sessionModelText feeds the
+      Settings Permissions row `session-model` (readonly, slot
+      session-model, settings.ts SettingsInput.sessionModel); store.ts
+      sessionModelLine writes one transcript line per outcome. Preview
+      fixture `model-switch` (preview/fixtures.ts).
+    tags: [gui, model]
   gui:
+    workshop-caps: >-
+      S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
+      SVG caps. core/render.ts renderCap draws a Text node's `cap` only after
+      contracts checkCap passes (else the text form shows): svg > path built
+      with createElementNS (allowlisted tags svg/path, attrs viewBox/d/
+      aria-hidden/focusable), path d from the GUI constant CAP_PATHS (tall/
+      wide/floppy), colour by classes only (.hN fill + --key-edge ring,
+      .outlined uses the hue ink, .knot violet), .bob only for state
+      working, reduced motion prints `working`; the label shows above a
+      needs/knot cap and the text is the aria-label. Text tones are the
+      closed TONES set. Mod fences render Box titles. core/mod-panels.ts
+      routes the workshop/workshop.strip sidebar view to its own `workshop`
+      region (#workshop-host); app.ts applyLayout places it in the footer
+      (#pane-workshop, default), the 76 px #workshop-col left or right, or
+      hidden (Layout.workshop, persisted via serializeLayout in
+      localStorage; always the footer under 900 px). workshopAbsence shows
+      one quiet line when the Workshop is not running. The old shuttle
+      readout is #status-line at the footer's right end (opens
+      view.kernel-feed). Tests: test/workshop.test.ts.
     mod-panels: >-
       K0 mod panels (#ledger-mod host slice). core/mod-panels.ts (PURE):
       modPanelsOf(status) reads status.mods.views (the #mod-host declared
@@ -75,7 +126,27 @@ components:
       mode.* commands are excluded from BLOCK_SAFE_COMMANDS. The transcript
       shows approval.auto as a subtle `auto-approved edit · <path>` line
       (`auto-approved · <tool> (always rule)` for a rule) and
-      approval.mode.set as a system line. Tests: test/modes.test.ts.
+      approval.mode.set as a system line. F2 (TD-2026-10-20-086): the
+      switch, ⇧Tab and the menu default to FOLDER scope (the repo,
+      labelled "this folder"; defaultScope/planFor/scopeEntries/SCOPE_LABEL,
+      status repoMode) so a new session in the same folder starts in the
+      chosen mode; "this session only" is the secondary entry (palette
+      mode.*); a session that already has its own mode keeps session scope.
+      F3: a folder on the root-signed default (status source 'config')
+      is labelled `mode: auto-edits (default) ▾`. Tests: test/modes.test.ts.
+    standing-feed: >-
+      TD-2026-10-20-086 F6 (#standing-grant's GUI): core/standing.ts (PURE)
+      reads status.standing fail-safe, turns grant.standing / .used /
+      .revoked rows into feed lines (a use is also a toast naming what
+      Gnomon did), decides the once-a-day offer (shouldOffer: a pending
+      strictness/permission/voice-arm/daemon-stop card, no live
+      grant, not offered today) and builds request.grant.standing{tuples,
+      repos} / request.grant.standing.revoke{grantId}. ui/standing-feed.ts
+      (its own module; app.ts only mounts it and forwards live rows and
+      status reads) shows toasts, today's list with Revoke (a tighten, no
+      presence) and "Let Gnomon handle these today", which sends the request
+      and approves its grant card `allow` in the same trusted gesture (one
+      password). Tests: test/standing.test.ts.
     voice-controls: >-
       Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
       header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the
@@ -145,7 +216,9 @@ components:
       voice], "Setting up voice…", "Downloading voice models · N of M MB" with
       a progress bar, "Starting…", "Voice crashed" [Restart], "Voice
       unavailable · <why>", or (running, no enrolled voice) "Teach Gnomon your
-      voice first" [Teach]. Attached (T-2026-10-20-002), the live mic keeps
+      voice first" [Teach], or (every enrolled name has only a stale print,
+      status.voice.prints.stale; enrolNudgeOf) "Re-teach Gnomon your voice
+      (the voice check was upgraded)" [Re-teach]. Attached (T-2026-10-20-002), the live mic keeps
       its V2d class, label and meter and clientPillOf returns a `tail` that is
       appended (first match): crashed / backoff "· voice crashed: <lastError>"
       (one line, capped at 60 chars; title capped at 400) [Restart], the
@@ -406,6 +479,7 @@ components:
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts
+      - test/choices.test.ts
       - test/fonts.test.ts
       - test/desk.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
@@ -494,6 +568,12 @@ components:
       exact words only when sanitizing changed nothing); the holdToggles
       baseline resets per voice connection (connEpoch, else
       client.restarts); edited drafts echo as typed messages.
+      TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A
+      part whose turn's mode is not exactly 'ptt' (missing included) marks
+      the draft ambient (ambientDraft); an ambient draft never arms the ring
+      and only [Send]/Enter/⌘Enter sends it (note "draft · Enter sends
+      (ambient never auto-sends)"). PTT drafts keep the countdown; the delay
+      picks say push-to-talk.
     path: src/core/dictation.ts
     type: module
     tags: [gnomon, gui, voice, dictation]
@@ -513,7 +593,8 @@ components:
       Card actions are signed with the same key, so the real GUI verifies
       and renders the decision keys. Fixtures (src/preview/fixtures.ts:
       contracts LogRow chains of registered kinds plus the status result;
-      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop) are
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop, spoken,
+      choices) are
       chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
       src/preview/env.ts stubs only the colour-scheme and reduced-motion
       media queries and the wrapper surface marker. The workshop fixture runs
@@ -552,8 +633,16 @@ components:
       line "…" is its own element (#composer-ghost, never the textarea); the
       polite caption (#voice-caption) changes on a state change only. The
       decorative meter animation and row kick are gone, and the dead
-      voice.turn.partial path is removed. Phase B's live words will read a
-      capture.text the kernel projects to the gui credential only.
+      voice.turn.partial path is removed. B1 live words (T-2026-10-20-005,
+      V1/V2): captureStatusOf reads capture.text{committed, tail} (hearing /
+      transcribing only; ghostTextOf: strings only, whitespace collapsed,
+      capped at GHOST_TEXT_MAX keeping the newest words), which the kernel
+      projects to the human gui credential only; app.ts paintGhost puts the
+      committed words solid (.ghost-committed) and the tail dim
+      (.ghost-tail) as text nodes into #composer-ghost (never the textarea,
+      so a send can never carry non-final words), "…" with no words, and
+      clears on captured / dropped / idle. Reduced motion: the global rule
+      makes the tail fade instant.
       Aegis follow-ups: a capture from a status received more than
       CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
       a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
@@ -579,8 +668,74 @@ components:
       block is hidden only when its sha256 is the kernel guidance hash
       (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
       guidanceHash; a human-typed <gnomon-voice> stays visible.
+      One spoken-aloud marker per reply (founder bug 2026-10-20): pipelined
+      TTS logs one playback voice.turn.agent per sentence; chatItems
+      (spokenFold/spokenText) opens ONE 🔊 marker at the kernel's speakable
+      row (or the first playback row on an older kernel) and folds every
+      later playback row and voice.bargein into it until the next assistant
+      reply: "🔊 spoken aloud · 5s", "· stopped" when any chunk was cut off
+      (interrupted, shorter than planned, or a barge-in); a barge-in with no
+      marker stays the lone "🔊 interrupted". app.ts paintTranscript
+      repaints a mounted row whose text changed in place. Preview fixture
+      `spoken`.
+      Clickable reply options (core/choices.ts, PURE): replyChoices finds
+      2..6 option lines keyed A..F or 1..6 in order (separator space ) . :,
+      optional bold) at the END of a reply that asks a question (in the text
+      above or the said-aloud line); labels go through the contracts
+      sanitizer and are at most 120 chars, else no chips. liveChoiceKey: only
+      the last assistant item of the focused session, while the human has
+      not written after it; older replies render the chips disabled. Chips
+      are dashed buttons (.choice, ink keycap by day, [A] at night) with
+      data-choice / data-choice-item, never the key class or data-decision.
+      pickChoice: trusted gesture only; the sent text is rebuilt from the
+      parsed reply (`A — <label>`), put into the composer and sent via the
+      composer form's requestSubmit (the typed-message path); a draft
+      (typed or dictated) is kept and the option appended, nothing sent.
+      Keys: letter/number pick inside the live group when the composer is
+      empty, arrows move, Enter activates. Voice picking is out of scope.
+      Preview fixture `choices`. Tests: test/choices.test.ts.
+      Aegis review folded in: M1 a letter/number key only moves focus to its
+      chip (Enter/Space confirms); a label over 60 chars, with a backtick or
+      shell-like text needs a confirming second click/Enter (.choice.armed,
+      "again to send"). M2 any option the contracts sanitizer flags ⇒ no
+      chips. L1 night chips show a plain underlined letter, no [ ] brackets.
+      L2 send() returns whether the kernel took the message; a chip is marked
+      picked only then, and the composer clears only when the message went
+      out (never on an early return). L3 onChoice recomputes liveness from
+      currentItems(). L4 more than two combining marks on a base ⇒ no chips.
     path: src/core/store.ts
     type: module
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+  gui-settings:
+    description: >-
+      #gui-settings (founder UI-first rule) - the header Day / Night / Auto
+      theme switch and the Settings sheet (header gear key, Cmd-comma, the
+      palette's "Settings..."). core/settings.ts is PURE: parseTheme /
+      parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout),
+      themeSwitchEntries, unlockSeenOf (the cached unlock folded from
+      kernel-principal approval.unlock / .dropped rows; daemon.start clears)
+      and settingsModel (Appearance, Layout, Voice, Permissions, About). Every
+      control names an existing GUI command in SETTINGS_RUNS (theme, motion,
+      layout presets, pane toggles, workshop placement, mode.repo.*, voice app
+      start/stop, enrol, dictation delay) or the standing Revoke
+      (core/standing.ts revokeRequest); no new kernel verb. Kernel-owned values
+      (mode ceiling, unlock and bounds, connection, bundle pin, voice hotkeys,
+      the always-shown regions) are read-only rows with a how-to-change line,
+      never a terminal-only path. ui/settings-sheet.ts paints with render.ts
+      h() (text nodes, no inline style) and acts on trusted clicks only
+      (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are
+      pinned to the connected home's kernel principal (standing.ts
+      kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an
+      unseen unlock says only "no unlock seen since this page connected";
+      run(id, trusted) carries the gesture's isTrusted from every path and the
+      header switch checks it; the standing feed sits under overlays (hidden
+      while a dialog is open), its offer is not an ink key, and the stack pile
+      reserves bottom room so it never covers a card key.
+    path: src/core/settings.ts
+    type: module
+    tags: [gnomon, gui, settings, theme]
+    tests:
+      - test/settings.test.ts
+      - test/voice-client.test.ts

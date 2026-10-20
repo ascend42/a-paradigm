@@ -22,7 +22,11 @@ import Foundation
 /// The helper's version (`--version`, `info`): the kernel's floor is MIN_HELPER_VERSION (identity/helper.ts).
 /// 1.6.0: protocol v2 — voice arms (own store and caps), the approve-voice domain under an arm only, the
 /// session observer and its push, conn.close.
-let gnomonHelperVersion = "1.6.0"
+/// 1.7.0 (TD-2026-10-20-086 F4/F5): a cached unlock lasts until screen lock, sleep or user switch (SessionWatch),
+/// capped at 12 h and 512 signatures, and a kept fresh sign reports those bounds (`bounds`) so the kernel can stop
+/// applying the 1.6.0 bounds. The unlock key is still the request's `connId` string; the kernel now sends the GUI
+/// device's `udev:` key there, so the unlock survives a reconnect. Same protocol (additive reply field).
+let gnomonHelperVersion = "1.7.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
@@ -33,11 +37,16 @@ enum Bounds {
     static let maxReasonChars = 512            // the caller's part of the presence prompt (the helper appends its own line)
     static let maxConnIdChars = 128
     static let maxUnlocks = 32                 // per-connection unlocks held at once
-    static let unlockIdleSeconds: TimeInterval = 15 * 60
-    // T-2026-10-18-028 M2: the idle timer slides on every use, so two HARD bounds end an unlock too,
-    // whatever the kernel says (the broker enforces the same pair on its side, broker/unlock.ts):
-    static let unlockAbsoluteSeconds: TimeInterval = 60 * 60   // from the presence that opened it
-    static let maxSignaturesPerUnlock = 64                      // signatures made under it
+    // TD-2026-10-20-086 F4 (1.7.0): no separate idle limit — the session observer ends the unlock at screen lock,
+    // screensaver, display or system sleep and user switch; the two HARD bounds below end it too, whatever the
+    // kernel says (the broker enforces the same pair, broker/unlock.ts; 1.6.0 was 15 min idle / 60 min / 64):
+    static let unlockAbsoluteSeconds: TimeInterval = 12 * 60 * 60   // from the presence that opened it
+    static let unlockIdleSeconds: TimeInterval = unlockAbsoluteSeconds
+    static let maxSignaturesPerUnlock = 512                          // signatures made under it
+    /// What a kept fresh sign reports (`bounds`), so the kernel opens its record with the same caps.
+    static var unlockBoundsReply: Json {
+        ["idleSeconds": Int(unlockIdleSeconds), "absoluteSeconds": Int(unlockAbsoluteSeconds), "maxSignatures": maxSignaturesPerUnlock]
+    }
     // Voice arms (§14.7, S29-K5): their OWN store and their OWN caps, never shared with the
     // per-connId unlocks above (an arm never counts against maxUnlocks, nor an unlock against maxArms).
     static let maxArms = 8                                      // arms held at once

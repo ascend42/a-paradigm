@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webcrypto } from 'node:crypto';
 import { build } from 'esbuild';
-import { HSID_PATTERN, isKnownKind, validateCardV1, type LogRow } from '@a-company/gnomon-contracts';
+import { checkCap, HSID_PATTERN, isKnownKind, validateCardV1, type LogRow } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, type Transport } from '../src/core/client.js';
 import { verifiedDecisions } from '../src/core/server-sig.js';
@@ -38,8 +38,8 @@ async function connected(name: string): Promise<{ client: GnomonClient; store: G
 }
 
 describe('#gui-preview fixtures', () => {
-  it('names the seven fixtures the harness promises', () => {
-    expect([...FIXTURE_NAMES].sort()).toEqual(['desk', 'empty', 'paradigm-context', 'stack-heavy', 'voice-armed', 'voice-crashed', 'workshop']);
+  it('names the fixtures the harness promises', () => {
+    expect([...FIXTURE_NAMES].sort()).toEqual(['choices', 'desk', 'empty', 'model-switch', 'model-unconfirmed', 'paradigm-context', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'voice-armed', 'voice-crashed', 'workshop', 'workshop-absent', 'workshop-paused']);
   });
 
   it.each(FIXTURE_NAMES)('%s parses as kernel rows: JSON-clean, seq 1..n, registered kinds, valid hsids and card:v1 cards', (name) => {
@@ -107,7 +107,7 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
     expect(s).not.toMatch(/Button/);
     // a forged repo never picks the slice; no focus ⇒ unfocused
     expect(JSON.stringify((await client.call<{ block: unknown }>('mod.view', { name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { repo: 'billing', path: '/Users/matt/code/billing' } })).block)).toContain('focus a live session');
-    await expect(client.call('mod.view', { name: 'ledger', viewId: 'ledger.sheet', input: {} })).rejects.toThrow(/no mod ledger/);
+    await expect(client.call('mod.view', { name: 'ledger', viewId: 'ledger.sheet', input: {} })).rejects.toThrow(/mod ledger is not running/);
   });
 
   it('the workshop strip comes from the real mod model over the feed projection', () => {
@@ -115,8 +115,19 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
     expect(rows.map(feedEventOf).filter(Boolean).length).toBeGreaterThan(10);
     const block = workshopBlock(rows, { motion: 'full', theme: 'day' });
     const titles = (block.children as Array<{ title: string }>).map((z) => z.title);
-    expect(titles[0]).toMatch(/^needs you \d+ of \d+$/);
+    expect(titles[0]).toMatch(/^needs you \d+$/);
     expect(titles[1]).toBe('working 1 of 4');
+  });
+
+  it('S5: mod.view answers the Workshop from the real model, every cap passing checkCap; absent when not running', async () => {
+    const { client } = await connected('workshop');
+    const r = await client.call<{ label: string; block: { children: Array<{ children: Array<{ cap?: unknown }> }> } }>('mod.view', { name: 'workshop', viewId: 'workshop.strip', input: {} });
+    expect(r.label).toBe('mod:workshop');
+    const caps = r.block.children.flatMap((z) => z.children).map((c) => c.cap).filter(Boolean);
+    expect(caps.length).toBeGreaterThan(4);
+    for (const c of caps) expect(checkCap(c).ok).toBe(true);
+    const { client: c2 } = await connected('workshop-absent');
+    await expect(c2.call('mod.view', { name: 'workshop', viewId: 'workshop.strip', input: {} })).rejects.toThrow(/not running/);
   });
 });
 

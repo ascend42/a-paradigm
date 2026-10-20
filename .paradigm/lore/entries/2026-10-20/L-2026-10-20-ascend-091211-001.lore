@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-091211-001
+type: milestone
+timestamp: '2026-10-20T09:12:11.216Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Live words while speaking merged (T-2026-10-20-005 done): capture states, real level, verified-speaker ghost line'
+summary: |-
+  4e36335b merges B1 plus the Aegis L1–L3 follow-ups:
+  - an STT decode watchdog that rebuilds the recognizer;
+  - tag, variation and filler chars stripped;
+  - the V1 liveness limit documented.
+  Then 1a906c2f re-embeds the GUI bundle: check:bundle had caught the stale embed after the B1 GUI changes merged on top of S5. The web-units test alone didn't catch it, because it pins the literal against the embedded bytes, not a fresh build. The repin was done safely this time, reading the hash from gui-bundle.ts with an empty-guard.
+  Suites: voice 124, gui 343, gnomon 2445. The founder's request ("show me visual feedback that my words are being captured AND … what im saying as well as im saying it") is complete on feat/gnomon, pending their restart onto the new build.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - $voice-turn
+learnings:
+  - 'After any merge touching gnomon-gui, run `npm run check:bundle`: the gnomon web-units pin test passes on a stale embed.'
+verification:
+  status: pass
+  details:
+    voice: 124
+    gui: 343
+    gnomon: 2445
+tags:
+  - gnomon
+  - voice
+  - merge
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-005
+linked_commits:
+  - fe5fbecb
+  - 4e36335b
+  - 1a906c2f
+git_context:
+  ref: 1a906c2f9d3e22abc8d7ed82eea18af3eb21e833
+  branch: feat/gnomon
+  dirty: true

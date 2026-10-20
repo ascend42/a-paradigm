@@ -760,14 +760,26 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
     const kernelKinds = [...EVENT_KIND_NAMES.filter((k) => kindOwner(k) === 'kernel'), 'made.up.kind', 'socket.auth.ok', 'daemon.start'];
     expect(kernelKinds.length).toBeGreaterThan(100);
+    // Aegis #12 (TD-2026-10-20-086 F6): the standing-grant and unlock-joined rows are kernel-written only — every
+    // log.append of them from human, agent, mod or voice is FORBIDDEN{kernel-owned} below
+    for (const k of ['grant.standing', 'grant.standing.used', 'grant.standing.revoked', 'approval.unlock.joined']) expect(kernelKinds).toContain(k);
     const before = r.d.log.head().seq;
     const humanRequest = new Set(['request.grant', 'request.voice.narrow', 'request.brief.send', 'request.cowork.allow', 'request.link.revoke', 'request.strictness.set', 'request.mode.set', 'request.incident', 'request.voice.arm']);
     for (const cls of ['human', 'agent', 'mod', 'voice'] as const) {
       const s = await asDevice(r, cls);
       for (const kind of kernelKinds) {
         const e = errOf(await s.conn.call('log.append', { kind, payload: { x: 1 } }));
-        if (cls === 'human' && kind === 'request.mode.set') {
+        if (cls === 'human' && kind === 'request.session.model') {
+          // 8.0:model-switch: served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && kind === 'request.mode.set') {
           // P8-D86/D87: served for the human's own device (a first-party connection); a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && kind === 'request.grant.standing') {
+          // TD-2026-10-20-086 F6: a standing grant is minted only on the GUI; the human's CLI device is refused by the grant itself
+          expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+        } else if (cls === 'human' && kind === 'request.grant.standing.revoke') {
+          // F6: Revoke is served for the human device too (a tighten); a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
         } else if (cls === 'human' && humanRequest.has(kind)) {
           expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
@@ -784,6 +796,27 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     const appended = rows(r.home).slice(before);
     expect(appended.every((x) => x.kind.startsWith('socket.'))).toBe(true); // only the kernel's own auth rows
     expect(appended.some((x) => canonicalJson(x.env.payload ?? null) === canonicalJson({ x: 1 }))).toBe(false); // no client payload reached the chain
+  }, 60_000);
+
+  it('8.0:model-switch request.session.model: the human device reaches the session port (an unknown hsid is NOT_FOUND); agent, mod and voice are FORBIDDEN{kernel-owned}; session and read token by the matrix; nothing is appended', async () => {
+    const r = await rig();
+    const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
+    const before = r.d.log.head().seq;
+    const payload = { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ', model: 'sonnet' };
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.session.model', payload })), cls).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
+      await s.conn.close();
+    }
+    for (const s of [await asDevice(r, 'session'), await asToken(r, m.token)]) {
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.session.model', payload }))).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+    }
+    const h = await asDevice(r, 'human');
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.session.model', payload }))).toMatchObject({ c: 'NOT_FOUND' });
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.session.model', payload, extra: 1 }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+    await h.conn.close();
+    await settle();
+    expect(rows(r.home).slice(before).every((x) => x.kind.startsWith('socket.'))).toBe(true);
   }, 60_000);
 
   it('P8-D86/D87 request.mode.set: the human device tightens a repo with no presence (request row, then approval.mode.set), status.runModes shows it and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a mode', async () => {

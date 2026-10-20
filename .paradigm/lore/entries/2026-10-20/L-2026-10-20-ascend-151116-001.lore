@@ -1,0 +1,68 @@
+id: L-2026-10-20-ascend-151116-001
+type: milestone
+timestamp: '2026-10-20T15:11:16.810Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Marathon 2026-10-20 wrap: state of Gnomon at push'
+summary: |-
+  feat/gnomon pushed with ~90 commits from the overnight marathon. Everything merged was Aegis-reviewed and approved, several pieces after a BLOCK.
+  MERGED (live after the founder restarts onto this build):
+  (1) Read-only parity. The anchored cwd proof, grammar coverage, git read-only subcommands, the read-only pass in ask mode, the MAINTAIN env, "always" matching on the command, and miss logging. The C1 heredoc bypass and H1 git-config exec were found by Aegis, reproduced, and fixed.
+  (2) Notify-not-ask F2–F6:
+    - folder-scope modes;
+    - a device-bound unlock of up to 12 h (the helper is held at 1.6.0 limits until 1.7.0 is signed);
+    - a one-prompt daily standing grant with a notify feed and Revoke;
+    - an unlock-joined toast;
+    - the F3 default (needs a root-signed config).
+    clientApiId moved once, to 795b3425….
+  (3) Voice: capture states, the real level, and live words (a verified-speaker ghost line, never logged); decodeAsync with a watchdog. T-2026-10-20-005 done.
+  (4) The Atelier GUI, all five slices: materials, desk, cards and pile, motion, Workshop caps. Plus the fixture preview harness.
+  (5) Mods: K0 panels, the K2 usage feed behind log.read:usage, and the Ledger mod.
+  (6) The stale-tab relaunch on a new port (the H1 port squat was fixed).
+  IN FLIGHT: the Paradigm Context mod in worktree agent-a55d2eac28b152613. K1 projector, K3 focus, falsifiers and the mod package are committed; the GUI fixture is uncommitted; no Aegis review yet.
+  FOUNDER-ONLY: re-sign and notarize helper 1.7.0; root-sign runModes.default; release the plugin from main (maxTurns 100: builders hit the 50-turn cap ~15 times). Tasks T-2026-10-20-006…009.
+  KNOWN GAPS: no kernel source for the voice countdown; knot/incident titles stay quoted (raiser-composed); Ledger cost may be cumulative; the Workshop region is bound by name.
+  HOUSEKEEPING: free disk was down to 1.7 GB. Removed 71 merged, clean worktrees (~28 GB; the only uncommitted files were hook logs) → 32 GB free. Branches kept.
+symbols_touched:
+  - '#shell-readonly'
+  - '#approval-broker'
+  - '#standing-grant'
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - '#gui'
+  - '#ledger-mod'
+  - '#mod-host'
+  - '#gui-relaunch'
+  - '#paradigm-context-mod'
+decisions:
+  - id: TD-2026-10-20-086
+    decision: F1–F7 and V1–V5 implemented and merged
+    rationale: 'Founder: Gnomon must never be more cumbersome than Claude Code; notify, don''t ask'
+learnings:
+  - Isolated worktrees accumulate (~650 MB each with node_modules); prune merged ones after each merge wave.
+  - Overnight multi-agent work held quality because every merge went through an Aegis gate and lore was written at each step.
+verification:
+  status: pass
+  details:
+    gnomon: 2445
+    gui: 343
+    voice: 124
+    contracts: 459
+tags:
+  - gnomon
+  - marathon-2026-10-20
+  - arc:paradigm-8
+linked_tasks:
+  - T-2026-10-20-001
+  - T-2026-10-20-002
+  - T-2026-10-20-005
+  - T-2026-10-20-006
+  - T-2026-10-20-007
+  - T-2026-10-20-008
+  - T-2026-10-20-009
+git_context:
+  ref: 1a906c2f9d3e22abc8d7ed82eea18af3eb21e833
+  branch: feat/gnomon
+  dirty: true

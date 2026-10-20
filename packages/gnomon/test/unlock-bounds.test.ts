@@ -10,7 +10,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
-import { ApprovalBroker, UNLOCK_ABSOLUTE_MS, UNLOCK_IDLE_MS, UNLOCK_MAX_SIGNATURES, UnlockStore } from '../src/kernel/broker/index.js';
+import { ApprovalBroker, LEGACY_HELPER_BOUNDS, UNLOCK_ABSOLUTE_MS, UNLOCK_IDLE_MS, UNLOCK_MAX_SIGNATURES, UnlockStore } from '../src/kernel/broker/index.js';
+
+// TD-2026-10-20-086 F4: the kernel defaults moved to 12 h / 512 (test/unlock-device.test.ts); these M2 falsifiers run
+// at the legacy helper bounds, which is what a 1.6.0 helper (the FakeHelper default, no `bounds`) holds the kernel to.
+const LEGACY_ABS = LEGACY_HELPER_BOUNDS.absoluteMs;
+const legacyStore = (clock: () => number, limits: { maxSignatures?: number } = {}) => new UnlockStore(clock, LEGACY_HELPER_BOUNDS.idleMs, { absoluteMs: LEGACY_ABS, ...limits });
 import { HelperApprovalsKey, HelperUnavailableError, type HelperReply, type HelperTransport } from '../src/kernel/identity/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { FakeHelper } from './helper-fake.js';
@@ -64,19 +69,20 @@ function rig(o: { limits?: { absoluteMs?: number; maxSignatures?: number } } = {
 }
 
 describe('M2: UnlockStore bounds', () => {
-  it('defaults: 15 min idle, 60 min absolute, 64 signatures', () => {
-    expect([UNLOCK_IDLE_MS, UNLOCK_ABSOLUTE_MS, UNLOCK_MAX_SIGNATURES]).toEqual([15 * 60_000, 60 * 60_000, 64]);
+  it('defaults (F4): 12 h absolute = idle, 512 signatures; legacy helper 15 min / 60 min / 64', () => {
+    expect([UNLOCK_IDLE_MS, UNLOCK_ABSOLUTE_MS, UNLOCK_MAX_SIGNATURES]).toEqual([12 * 3600_000, 12 * 3600_000, 512]);
+    expect(LEGACY_HELPER_BOUNDS).toEqual({ idleMs: 15 * 60_000, absoluteMs: 60 * 60_000, maxSignatures: 64 });
   });
 
   it('FALSIFIER: steady use slides the idle timer but never the absolute TTL', () => {
     const now = { t: 0 };
-    const s = new UnlockStore(() => now.t);
+    const s = legacyStore(() => now.t);
     s.open(A);
     for (let i = 0; i < 6; i++) {
       now.t += 10 * 60_000; // every 10 min: never idle
       expect(s.use(A), `use ${i}`).toBe('ok');
     }
-    expect(now.t).toBe(UNLOCK_ABSOLUTE_MS);
+    expect(now.t).toBe(LEGACY_ABS);
     now.t += 1;
     expect(s.state(A)).toBeNull();
     expect(s.ended()).toEqual([{ connId: A, reason: 'expired' }]);
@@ -85,7 +91,7 @@ describe('M2: UnlockStore bounds', () => {
   });
 
   it('FALSIFIER: the cap ends the unlock after exactly maxSignatures uses', () => {
-    const s = new UnlockStore(() => 0, UNLOCK_IDLE_MS, { maxSignatures: 3 });
+    const s = legacyStore(() => 0, { maxSignatures: 3 });
     s.open(A);
     expect([s.use(A), s.use(A), s.use(A)]).toEqual(['ok', 'ok', 'ok']);
     expect(s.has(A)).toBe(false);
@@ -94,10 +100,10 @@ describe('M2: UnlockStore bounds', () => {
 
   it('status idleLeftMs never promises more than the absolute time left', () => {
     const now = { t: 0 };
-    const s = new UnlockStore(() => now.t);
+    const s = legacyStore(() => now.t);
     s.open(A);
-    while (now.t < UNLOCK_ABSOLUTE_MS - 60_000) {
-      now.t = Math.min(now.t + 10 * 60_000, UNLOCK_ABSOLUTE_MS - 60_000);
+    while (now.t < LEGACY_ABS - 60_000) {
+      now.t = Math.min(now.t + 10 * 60_000, LEGACY_ABS - 60_000);
       expect(s.use(A)).toBe('ok');
     }
     expect(s.state(A)).toEqual({ state: 'cached', idleLeftMs: 60_000 });

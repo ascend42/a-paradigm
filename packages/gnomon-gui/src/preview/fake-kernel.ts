@@ -14,6 +14,8 @@
  * effect), `mod.view` for the Paradigm Context mod (paradigm-context.ts). `session.open` is refused in plain words. NOT part of the
  * kernel-served bundle (test/preview.test.ts).
  */
+import { checkCap } from '@a-company/gnomon-contracts';
+import { workshopBlock } from './workshop.js';
 import { CLIENT_API_ID, authServerPreimage, utf8, type HelloResult, type LogRow } from '@a-company/gnomon-contracts';
 import { GUI_FEATURES, RPC, type Transport } from '../core/client.js';
 import { bytesToBase64Url, CARD_ACTION_DOMAIN, keyIdOfSpki } from '../core/server-sig.js';
@@ -60,6 +62,15 @@ export async function signRows(rows: readonly LogRow[], key: PreviewKey): Promis
     if (!card) continue;
     card.actions = await Promise.all(card.actions.map(async (a) => ({ decision: a.decision, keyId: key.keyId, sig: await sign(key, `${CARD_ACTION_DOMAIN}\n${card.cardId}\n${String(a.decision)}\n${card.contentHash}`) })));
   }
+  return out;
+}
+
+/** Every `cap` on a Text node of a block (bounded depth). */
+function capsOf(n: unknown, depth = 0, out: unknown[] = []): unknown[] {
+  if (depth > 32 || !n || typeof n !== 'object') return out;
+  const o = n as Record<string, unknown>;
+  if (o.type === 'Text' && o.cap !== undefined) out.push(o.cap);
+  if (Array.isArray(o.children)) for (const c of o.children) capsOf(c, depth + 1, out);
   return out;
 }
 
@@ -168,9 +179,17 @@ export class FakeKernel implements Transport {
       case 'log.append':
       case 'session.send':
         return { ok: true };
-      case 'mod.view':
+      case 'mod.view': {
         if (this.#paradigm && p.name === PARADIGM_CONTEXT_MOD && p.viewId === PARADIGM_CONTEXT_VIEW) return paradigmContextView(this.#paradigm, p);
-        throw refusal('NOT_INSTALLED', 'not-found', `no mod ${String(p.name)} is installed in this preview`);
+        // S5: the Workshop strip from the REAL mod model over these rows; every cap must pass the contracts check the
+        // kernel gate runs (modhost/block.ts), else the preview refuses like the kernel would
+        const views = ((this.#status.mods as { views?: Array<{ name: string; viewId: string }> } | undefined)?.views ?? []);
+        if (!views.some((v) => v.name === p.name && v.viewId === p.viewId) || p.name !== 'workshop') throw refusal('NOT_FOUND', 'not-running', `mod ${String(p.name)} is not running (preview)`);
+        const block = workshopBlock(this.rows, { motion: 'full', theme: 'day' });
+        const bad = capsOf(block).map(checkCap).find((c) => !c.ok);
+        if (bad && !bad.ok) throw refusal('BAD_REQUEST', 'block', bad.why);
+        return { label: 'mod:workshop', dev: false, block };
+      }
       case 'session.open':
         throw refusal('UNAVAILABLE', 'preview', 'this is the GUI fixture preview: there is no kernel, so no session was opened');
       default:

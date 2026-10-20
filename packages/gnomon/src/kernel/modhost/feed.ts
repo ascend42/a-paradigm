@@ -82,7 +82,7 @@ export function feedReaches(access: { base: boolean; usage: boolean }, kind: str
   if (kind === 'turn.result') return access.base || access.usage;
   return access.base;
 }
-export const FEED_HUES = 8;
+export const FEED_HUES = 6; // S5.6: the six pigments (gnomon-contracts PROJECT_HUES)
 
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;

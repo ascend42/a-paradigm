@@ -27,7 +27,11 @@
  *     (VoiceSessionsPort.busy, from supervisor state). This window covers model streaming plus the tail ONLY: client
  *     TTS that plays longer, a client that logs no voice.turn.agent, or a claimed turn duration of 0 can still get an
  *     echo past it (spec §14.7 residual risk); the client playback rows and the AEC claim are the rest of the defence.
- * No wake word and no ask clamp (founder rulings): a forwarded ambient turn is exactly a typed send by the owner.
+ * No wake word and no ask clamp (founder rulings). TD-2026-10-20-125 (founder ruling, supersedes "ambient behaves like
+ * typed"): ambient speech NEVER sends itself. The voice principal's direct `session.send` is refused voice-off{cause:
+ * 'composer'} for any turn whose mode claim is not `ptt`; an accepted ambient turn is stamped forwardable and fills the
+ * GUI composer, which a human sends (a key press). The PTT claim is the client's (the key lives in the voice app): the
+ * kernel cannot see the key, so a voice principal that lies about `ptt` is outside this guard (spec §14.4.2).
  * Widening to `conversation` takes one fresh presence (Touch ID, a `strictness` card — the run-mode loosening path)
  * per first-party human connection (one GUI login); narrowing, re-attaching at ptt and ending take none. A
  * conversation ceiling with no forwarded turn for ambientIdleMs (default 10 min, never unbounded) is ended by the
@@ -739,6 +743,9 @@ export class VoiceControl {
     if (turn.refused) throw turn.refused;
     const g = this.#guards(turn, a);
     if (g) throw g;
+    // TD-2026-10-20-125 (founder ruling): ambient speech NEVER sends itself. Only a push-to-talk claim (the human held
+    // the key) may ride the voice principal's direct send; an ambient turn fills the GUI composer and a human sends it.
+    if (turn.mode !== 'ptt') throw voiceRefusal('voice-off', 'ambient speech never sends itself: it fills the composer and a human sends it (TD-2026-10-20-125)', { turnId: turn.turnId, mode: turn.mode, ceiling: a.mode, cause: 'composer' });
     this.#forwarded.add(turn.turnId);
     a.lastForwardAt = now;
     this.#armIdle();

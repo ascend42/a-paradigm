@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, DROP_LABEL, DROPPED_FLASH_MS } from '../src/core/capture.js';
+import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, DROP_LABEL, DROPPED_FLASH_MS } from '../src/core/capture.js';
 import { clientOf, clientPillOf, oneLine } from '../src/core/voice-client.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +23,7 @@ const show = (capture: unknown, ageMs = 0) => {
 
 describe('captureStatusOf: the one adapter over status.voice.capture', () => {
   it('reads every state; level only while hearing (clamped), reason only on dropped', () => {
-    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, level: 0.4, kernel: null });
+    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, level: 0.4, kernel: null, text: null });
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 7 }))!.level).toBe(1);
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1' }))!.level).toBe(0);
     expect(captureStatusOf(st({ state: 'transcribing', segId: 's1', level: 0.9 }))!.level).toBeNull();
@@ -138,5 +138,49 @@ describe('Aegis L1 (862ef85a): the pill title is sanitised before it is folded a
     const out = oneLine(s, 10);
     expect(out).toBe(`${'a'.repeat(8)}😀…`);
     expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out)).toBe(false);
+  });
+});
+
+describe('B1 live words: the ghost line (#composer-ghost)', () => {
+  const T = { committed: 'run the', tail: 'tests' };
+  it('hearing and transcribing show committed + tail; with no words the ghost is "…" (ghostText null)', () => {
+    expect(show({ state: 'hearing', segId: 's1', level: 0.3, text: T })).toMatchObject({ ghost: true, ghostText: T });
+    expect(show({ state: 'transcribing', segId: 's1', text: T })).toMatchObject({ ghost: true, ghostText: T });
+    expect(show({ state: 'hearing', segId: 's1' })).toMatchObject({ ghost: true, ghostText: null });
+  });
+  it('clears on captured / dropped / idle (a terminal capture never carries words, even if a status did)', () => {
+    for (const c of [{ state: 'captured', segId: 's1', text: T }, { state: 'dropped', segId: 's1', reason: 'not-enrolled', text: T }, { state: 'idle', segId: 's1', text: T }]) {
+      expect(captureStatusOf(st(c))!.text, c.state).toBeNull();
+      expect(show(c), c.state).toMatchObject({ ghost: false, ghostText: null });
+    }
+    expect(captureDisplayOf(null, 0, true)).toMatchObject({ ghost: false, ghostText: null });
+  });
+  it('a level/words update keeps the flash clock (same segment and state)', () => {
+    const a = captureStep(null, captureStatusOf(st({ state: 'hearing', segId: 's1', text: { committed: '', tail: 'run' } })), 1_000);
+    const b = captureStep(a, captureStatusOf(st({ state: 'hearing', segId: 's1', text: T })), 1_600);
+    expect(b.since).toBe(1_000);
+    expect(b.cap!.text).toEqual(T);
+  });
+  it('ghostTextOf: strings only, whitespace collapsed, capped keeping the newest words', () => {
+    expect(ghostTextOf({ committed: '  run \n the ', tail: 'tests ' })).toEqual({ committed: 'run the', tail: 'tests' });
+    for (const v of [null, 'run', [], { committed: 1, tail: 2 }, { committed: '', tail: '' }]) expect(ghostTextOf(v), JSON.stringify(v)).toBeNull();
+    const g = ghostTextOf({ committed: 'x'.repeat(900), tail: 'end' })!;
+    expect(g.tail).toBe('end');
+    expect(g.committed.length + g.tail.length).toBeLessThanOrEqual(GHOST_TEXT_MAX);
+  });
+  it('the page paints the words into the ghost element only (text nodes via put), never the textarea; reduced motion has no fade', () => {
+    const paint = APP.slice(APP.indexOf('function paintGhost('), APP.indexOf('function paintGhost(') + 900);
+    expect(paint).toContain("committed.className = 'ghost-committed'");
+    expect(paint).toContain("tail.className = 'ghost-tail'");
+    expect(paint).toContain('put(committed, t.committed)');
+    expect(paint).toContain('put(tail, t.tail)');
+    expect(paint).toContain("put(el, '…')");
+    expect(paint).not.toMatch(/innerHTML|composer-text/);
+    expect(APP).toContain('paintGhost(ghost, d.ghost ? d.ghostText : null);');
+    expect(APP).not.toMatch(/composer-text'\)[^;\n]*(ghost|capture|text\.committed|text\.tail)/);
+    expect(APP).not.toMatch(/\.value\s*=\s*[^;\n]*ghostText/);
+    expect(CSS).toMatch(/\.composer-ghost \.ghost-tail \{[^}]*opacity: 0\.55/);
+    expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none !important; transition: none !important; \}/);
+    expect(CSS).not.toMatch(/\.ghost-(tail|committed)[^{]*\{[^}]*animation/);
   });
 });

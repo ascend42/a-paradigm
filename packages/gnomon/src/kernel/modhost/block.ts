@@ -13,13 +13,19 @@
  *   - `Image{blob, alt, w, h}` needs `alt` and a `sha256:` blob id — the
  *     bytes are served by the endpoint's /blob route, never inlined;
  *   - `Canvas{ds, readOnly?}` only NAMES a doodle session (a surface the host
- *     owns); a mod never ships canvas content.
+ *     owns); a mod never ships canvas content;
+ *   - `Text{text, tone?, cap?}`: a `cap` (S5, the Workshop's hats) is the
+ *     closed contracts shape `{shape, hue, filled, state, label}` checked by
+ *     `checkCap` (unknown, missing or out-of-range field = refusal), its label
+ *     sanitized like every string. Data only: the GUI draws the hat from these
+ *     five fields; a mod never ships SVG, a path or a colour. kitId (block
+ *     names only), modAbiId and clientApiId do not move.
  * The result is fenced and labelled `mod:<name>` (a `dev` flag when
  * dev-linked) by the host; a mod block can never be a card body.
  * The full display-block:v1 contract (a JSON Schema in gnomon-contracts) is
  * M1.1's; this gate is the kernel's fail-closed subset until it lands.
  */
-import { KIT_V1_BLOCKS, MOD_BLOCK_LIMITS } from '@a-company/gnomon-contracts';
+import { KIT_V1_BLOCKS, MOD_BLOCK_LIMITS, checkCap } from '@a-company/gnomon-contracts';
 import { sanitizeLine } from '../broker/card.js';
 import { ModRefusal } from './refusal.js';
 
@@ -29,7 +35,7 @@ const COMMAND_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 /** Allowed keys per kit block (besides `type`). */
 const KEYS: Record<string, readonly string[]> = {
   Box: ['children', 'direction', 'title'],
-  Text: ['text', 'tone'],
+  Text: ['text', 'tone', 'cap'],
   List: ['items', 'ordered'],
   Table: ['columns', 'rows'],
   Markdown: ['text'],
@@ -84,6 +90,15 @@ export function sanitizeModBlock(raw: unknown, modName: string): SanitizedBlock 
       case 'Markdown':
         out.text = str(n.text, `${at}.text`);
         if (type === 'Text' && n.tone !== undefined) out.tone = str(n.tone, `${at}.tone`);
+        if (type === 'Text' && n.cap !== undefined) {
+          const c = checkCap(n.cap);
+          if (!c.ok) throw new ModRefusal('BLOCK', `${at}.${c.why}`, { name: modName, at });
+          const cap = { ...c.cap, label: str(c.cap.label, `${at}.cap.label`) };
+          // Aegis S5 L3: the sanitizer may lengthen the label (visible glyphs for hidden characters): check it again
+          const again = checkCap(cap);
+          if (!again.ok) throw new ModRefusal('BLOCK', `${at}.${again.why} after sanitizing`, { name: modName, at });
+          out.cap = again.cap;
+        }
         break;
       case 'Diff':
         out.text = str(n.text, `${at}.text`);

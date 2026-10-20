@@ -50,7 +50,8 @@ import {
   VOICE_CLOSED_VALUES,
 } from './rpc.js';
 import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
-import { JSON_RPC_CODES } from './refusal.js';
+import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
+import { MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
 export const KIT_V1 = 'kit:v1' as const;
@@ -158,6 +159,10 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   decisionSig: DECISION_SIG_DESCRIPTOR,
   // TD-2026-10-19-194 (voice V0): closed disarm reasons + voice-strictness ceilings; status.arms/armCustody ride statusFields.
   voiceClosedValues: VOICE_CLOSED_VALUES,
+  // TD-2026-10-20-086 F6: the daily standing grant's closed values (the deliberate clientApiId move, with T-2026-10-20-007).
+  standingGrant: { tuples: [...STANDING_TUPLES], repoTuples: [...STANDING_REPO_TUPLES], revokeReasons: [...STANDING_REVOKE_REASONS], presencePrefix: STANDING_PRESENCE_PREFIX, maxMs: STANDING_GRANT_MAX_MS },
+  // 8.0:model-switch: the mid-session Claude model switch's closed outcomes, refusal routes and context guard
+  modelSwitch: { outcomes: [...SESSION_MODEL_OUTCOMES], reasons: MODEL_SWITCH_REASON_ROUTES, contextGuard: MODEL_SWITCH_CONTEXT_GUARD },
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {

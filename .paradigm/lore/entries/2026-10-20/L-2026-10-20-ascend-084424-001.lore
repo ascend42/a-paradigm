@@ -1,0 +1,50 @@
+id: L-2026-10-20-ascend-084424-001
+type: agent-session
+timestamp: '2026-10-20T08:44:24.079Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Notify-not-ask F2–F6 built: folder-scope modes, device-bound 12 h unlock, daily standing grant, default auto-edits; clientApiId moved once'
+summary: |-
+  Branch worktree-agent-a19576250eac51800:
+  - F2 5524a9c7: the mode switch goes to "this folder".
+  - F4/F5 5c7e3877: the unlock lasts 12 h/512 sigs, keyed by GUI device id, survives reconnects; helper 1.7.0 Bounds; the kernel uses the lower bound, so 1.6.0 stays at 15 min/60 min/64 until the founder re-signs and notarises the helper.
+  - F6 7ece5fba + 9c6625b0: StandingGrantBook over kernel-signed rows; grant.standing.used notify rows; revoke on lock, sleep or helper exit; a GUI toast feed with Revoke; "Let Gnomon handle these today".
+  - F3 df9ac497: root-signed runModes.default (needs a founder-signed config).
+  - clientApiId ac22e72f… → ebf32456…, including approval.auto.miss and anchoredInputHash, so RC4 is closed in the same move.
+  - Suites: gnomon 2413, gui 266, contracts 457, helper swift 20.
+  Open points: the grant card may cost two prompts (approvals plus root sign); voice arm still prompts in the helper; the restart tuple is unwired (no binaryUnchanged flag); reconsider is unit-only. Aegis review launched.
+symbols_touched:
+  - '#approval-broker'
+  - '#standing-grant'
+  - '#gui'
+  - '#gnomon-helper'
+  - '#gnomon-contracts'
+decisions:
+  - id: TD-2026-10-20-086
+    decision: F2–F6 implemented
+    rationale: 'Founder: notify, don''t ask; Touch ID fails so every prompt is a password'
+verification:
+  status: partial
+  details:
+    gnomon: 2413
+    gui: 266
+    contracts: 457
+    aegis: pending
+    release_steps: helper 1.7.0 sign+notarize; root-signed runModes config
+tags:
+  - gnomon
+  - permissions
+  - marathon-2026-10-20
+linked_commits:
+  - 5524a9c7
+  - 5c7e3877
+  - 7ece5fba
+  - 9c6625b0
+  - df9ac497
+  - 838f0363
+git_context:
+  ref: 463ca37d0611ca2fb9e5276bdb94eeac0604e70f
+  branch: feat/gnomon
+  dirty: true

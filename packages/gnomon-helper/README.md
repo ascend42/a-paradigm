@@ -91,6 +91,10 @@ binary signed with that profile. `build-darwin.mjs` signs with exactly
 `SW4BMQ8PNL.gnomon.prod`, refuses any other signed group list, and records
 `groupGrant: explicit | team-wildcard` in `checksums.json`.
 
+## Helper 1.7.0: rebuild, sign, notarize (founder, TD-2026-10-20-086 F4/F5)
+
+1.7.0 raises the cached-unlock bounds to 12 h and 512 signatures with no separate idle limit (the session observer ends the unlock at lock, sleep or user switch) and reports them on a kept sign (`bounds`). The kernel accepts 1.6.0 and 1.7.0: with 1.6.0 it keeps the lower 1.6.0 bounds (15 min idle, 60 min, 64), so the longer unlock only takes effect once 1.7.0 is built, signed and notarized with the same steps as below (`--version` prints `gnomon-helper 1.7.0`), and `checksums.json` is committed. No new entitlement, same protocol `gnomon-helper:v2`.
+
 ## Helper 1.6.0: rebuild, sign, notarize (founder)
 
 The kernel now requires protocol `gnomon-helper:v2` and helper 1.6.0 or later. Until the helper is rebuilt, every helper-backed step refuses with `version`.

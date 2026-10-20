@@ -337,7 +337,7 @@ export interface VoiceClientPort {
   forget?(payload: { name: string }): Promise<unknown>;
   /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
   stopSpeaking?(): unknown;
-  /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
+  /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?, prints?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
   report?(payload: unknown, connId?: string): unknown;
 }
 
@@ -355,6 +355,12 @@ export const VOICE_CLIENT_REQUEST = 'request.voice.client' as const;
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
+  /** TD-2026-10-20-086 F6 (#standing-grant): request.grant.standing / .revoke from the human; status.standing */
+  standing?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; deviceId?: string }, payload: unknown): Promise<unknown>;
+    revoke(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; deviceId?: string }, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+  };
 }
 
 /** The connection a human-device verb runs for (stamped from THIS connection, never from params). */
@@ -473,9 +479,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
+      ...(o.requests?.standing && cls === 'human' ? { standing: o.requests.standing.status() } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
-      // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 seam (partial words, when B
-      // adds them, reach the gui credential only)
+      // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
+      // capture.text, reach a human-class connection on the gui credential only)
       ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor(o.voice.status(), s.credential, cls), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
@@ -690,7 +697,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (cls === 'voice') throw asRpcRefusal(voiceApproveRefusal()); // every form, before any port (G-ABI-02 voice row)
       if (cls === 'human' && o.approvals) {
         try {
-          return await o.approvals.approve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null, credential: s.credential ?? 'device', isLive: () => !ctx.closed && conns.get(s.connId) === s }, frame.params);
+          return await o.approvals.approve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null, credential: s.credential ?? 'device', ...(s.deviceId ? { deviceId: s.deviceId } : {}), isLive: () => !ctx.closed && conns.get(s.connId) === s }, frame.params);
         } catch (err) {
           throw asRpcRefusal(err);
         }
@@ -763,6 +770,28 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // 8.0:model-switch: the human switches a live Claude session's model (GUI launch token or human device only)
+      if (pa?.kind === 'request.session.model' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.sessions?.model) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [], connId: s.connId, ...(s.credential ? { credential: s.credential } : {}) };
+        try {
+          return await o.sessions.model(sctx, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-20-086 F6: the daily standing grant (mint: the GUI only; revoke: the GUI or this home's device)
+      if ((pa?.kind === 'request.grant.standing' || pa?.kind === 'request.grant.standing.revoke') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.standing) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential, ...(s.deviceId ? { deviceId: s.deviceId } : {}) };
+        try {
+          return await (pa.kind === 'request.grant.standing' ? o.requests.standing.request(asker, pa.payload) : o.requests.standing.revoke(asker, pa.payload));
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // V2e: the human starts / stops the kernel-spawned voice app (never the voice principal, never an agent)
       if (pa?.kind === VOICE_CLIENT_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
@@ -800,7 +829,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // V2e: the voice client's enrolment progress and notices, relayed in status.voice (never a row)
       if (pa?.kind === VOICE_REPORT_REQUEST && cls === 'voice' && s.credential !== 'read-token' && o.voiceClient?.report) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
-        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?, dictation?, playback?, capture?}}`);
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?, dictation?, playback?, capture?, prints?}}`);
         try {
           return o.voiceClient.report(pa.payload, s.connId);
         } catch (err) {

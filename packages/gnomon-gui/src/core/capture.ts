@@ -18,8 +18,10 @@
  *
  * V3 (no push relay, the ids do not move): status is polled while voice is attached and the voice app is connected,
  * about 1 s at rest and CAPTURE_FAST_POLL_MS while hearing or transcribing; never when off (capturePollMs).
- * Phase B (live words) slots in as `capture.text`, which the kernel projects to the gui credential only
- * (voice-requests.ts voiceStatusFor): captureStatusOf would read it and the ghost line would show it; A1 shows "…".
+ * B1 live words (T-2026-10-20-005, V1/V2): `capture.text{committed, tail}`, which the kernel projects to the gui
+ * credential only (voice-requests.ts voiceStatusFor) and only after the voice app's provisional speaker match. The
+ * ghost line (#composer-ghost, its own element, NEVER the textarea, so a send can never carry non-final words) shows
+ * the committed words solid and the tail dim, and "…" while there are none; it clears on captured / dropped.
  */
 
 export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
@@ -42,6 +44,27 @@ export interface CaptureView {
   level: number | null;
   /** Aegis M1: the kernel's cross-check of a captured claim ('accepted' | 'unconfirmed'), or null */
   kernel: 'accepted' | 'unconfirmed' | null;
+  /** B1: the live words (hearing / transcribing only), or null */
+  text: GhostText | null;
+}
+
+/** B1: the ghost line's words: committed (solid) and the unfixed tail (dim). */
+export interface GhostText {
+  committed: string;
+  tail: string;
+}
+/** the ghost line never shows more than this many characters (the kernel caps at 600 too) */
+export const GHOST_TEXT_MAX = 600;
+const ghostWords = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
+/** capture.text → GhostText (strings only, whitespace collapsed, capped keeping the newest words), or null */
+export function ghostTextOf(v: unknown): GhostText | null {
+  const t = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  if (!t) return null;
+  let committed = ghostWords(t.committed);
+  const tail = [...ghostWords(t.tail)].slice(0, GHOST_TEXT_MAX).join('');
+  const room = GHOST_TEXT_MAX - [...tail].length;
+  if ([...committed].length > room) committed = [...committed].slice(-Math.max(0, room)).join('');
+  return committed || tail ? { committed, tail } : null;
 }
 
 /** V4: the reason only, never words or a count. */
@@ -66,7 +89,8 @@ export function captureStatusOf(status: unknown): CaptureView | null {
   if (state === 'dropped' && reason === null) return null;
   const level = state === 'hearing' && typeof c.level === 'number' && Number.isFinite(c.level) ? Math.max(0, Math.min(1, c.level)) : state === 'hearing' ? 0 : null;
   const kernel = c.kernel === 'accepted' || c.kernel === 'unconfirmed' ? c.kernel : null;
-  return { state, segId: c.segId, reason, level, kernel };
+  const text = state === 'hearing' || state === 'transcribing' ? ghostTextOf(c.text) : null;
+  return { state, segId: c.segId, reason, level, kernel, text };
 }
 
 /** Aegis L2: the capture only while the status it came from was received within CAPTURE_STALE_MS of `now` (page clock). */
@@ -98,8 +122,10 @@ export interface CaptureDisplay {
   className: string;
   /** the meter level to draw: the real level while hearing, else 0 (still) */
   meter: number;
-  /** the composer ghost line "…" while hearing or transcribing */
+  /** the composer ghost line while hearing or transcribing ("…" with no words yet) */
   ghost: boolean;
+  /** B1: the words the ghost line shows (null: "…"); always null when the ghost is hidden */
+  ghostText: GhostText | null;
   /** the polite screen-reader caption ('' at rest) */
   caption: string;
   /** ms until the flash ends (repaint then), or null */
@@ -108,22 +134,22 @@ export interface CaptureDisplay {
 
 /** The pill overlay for an attached voice with the voice app connected; anything else shows nothing. */
 export function captureDisplayOf(t: CaptureTrack | null, now: number, live: boolean): CaptureDisplay {
-  const rest: CaptureDisplay = { state: 'idle', label: null, className: 'capture-idle', meter: 0, ghost: false, caption: '', flashLeftMs: null };
+  const rest: CaptureDisplay = { state: 'idle', label: null, className: 'capture-idle', meter: 0, ghost: false, ghostText: null, caption: '', flashLeftMs: null };
   const c = t?.cap;
   if (!live || !c || !t) return rest;
   const age = Math.max(0, now - t.since);
   switch (c.state) {
     case 'hearing':
-      return { state: 'hearing', label: 'Hearing you…', className: 'capture-hearing', meter: c.level ?? 0, ghost: true, caption: 'Hearing you', flashLeftMs: null };
+      return { state: 'hearing', label: 'Hearing you…', className: 'capture-hearing', meter: c.level ?? 0, ghost: true, ghostText: c.text, caption: 'Hearing you', flashLeftMs: null };
     case 'transcribing':
-      return { state: 'transcribing', label: 'Catching that…', className: 'capture-transcribing', meter: 0, ghost: true, caption: 'Catching that', flashLeftMs: null };
+      return { state: 'transcribing', label: 'Catching that…', className: 'capture-transcribing', meter: 0, ghost: true, ghostText: c.text, caption: 'Catching that', flashLeftMs: null };
     case 'captured':
       // Aegis M1: a captured claim the kernel did not see a turn for is not "Got it"
-      if (c.kernel === 'unconfirmed') return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Heard, not confirmed', className: 'capture-dropped', meter: 0, ghost: false, caption: 'Heard, not confirmed', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
-      return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Got it', className: 'capture-captured', meter: 0, ghost: false, caption: 'Got it', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
+      if (c.kernel === 'unconfirmed') return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Heard, not confirmed', className: 'capture-dropped', meter: 0, ghost: false, ghostText: null, caption: 'Heard, not confirmed', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
+      return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Got it', className: 'capture-captured', meter: 0, ghost: false, ghostText: null, caption: 'Got it', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
     case 'dropped': {
       const label = DROP_LABEL[c.reason!];
-      return age < DROPPED_FLASH_MS ? { state: 'dropped', label, className: 'capture-dropped', meter: 0, ghost: false, caption: label, flashLeftMs: DROPPED_FLASH_MS - age } : rest;
+      return age < DROPPED_FLASH_MS ? { state: 'dropped', label, className: 'capture-dropped', meter: 0, ghost: false, ghostText: null, caption: label, flashLeftMs: DROPPED_FLASH_MS - age } : rest;
     }
     default:
       return rest;

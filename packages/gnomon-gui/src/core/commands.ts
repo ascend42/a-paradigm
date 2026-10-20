@@ -11,9 +11,10 @@
  *     extension-risk badge, the connection/identity readout) is not a pane:
  *     no preset can name, move or hide it.
  *   - Theme: day (papercraft) | night (phosphor) | auto (OS
- *     prefers-color-scheme). Slice 1 keeps the choice in page memory: the
- *     spec stores it per device through the kernel (`config.prefs`, signed by
- *     the device key) and never in the browser — that round-trip is slice 2.
+ *     prefers-color-scheme). #gui-settings keeps the choice (and the in-app
+ *     motion override) per browser, like the Layout (core/settings.ts
+ *     THEME_KEY); the spec's per-device kernel round-trip (`config.prefs`,
+ *     signed by the device key) is still slice 2.
  */
 
 export interface Command {
@@ -30,6 +31,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'palette.open', title: 'Command palette', keys: '⌘K / Ctrl+K' },
   { id: 'session.new', title: 'New session', keys: '⌘N / Ctrl+N' },
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
+  // #gui-settings: the sheet that gathers every setting (also the header ⚙ key)
+  { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: day (papercraft)' },
   { id: 'theme.night', title: 'Theme: night (phosphor)' },
@@ -41,15 +44,20 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'layout.decide', title: 'Layout: decide (stack wide)' },
   { id: 'pane.sessions.toggle', title: 'Pane: show/hide sessions' },
   { id: 'pane.stack.toggle', title: 'Pane: show/hide decision stack' },
-  { id: 'pane.shuttle.toggle', title: 'Pane: show/hide Shuttle view' },
+  { id: 'pane.workshop.toggle', title: 'Pane: show/hide the Workshop (needs you / working caps)' },
+  // S5.2: where the Workshop (a sidebar-slot mod view) mounts; the mod's manifest slot never changes
+  { id: 'workshop.footer', title: 'Workshop: footer strip (default)' },
+  { id: 'workshop.right', title: 'Workshop: right column' },
+  { id: 'workshop.left', title: 'Workshop: left column' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
-  // §11.4 run-mode commands (P8-D87): the focused session, or (mode.repo.*) its repo; a looser mode asks for Touch ID
-  { id: 'mode.manual', title: 'Mode: manual (this session) — writes and commands wait on a plan' },
-  { id: 'mode.ask', title: 'Mode: ask (this session) — every write and command asks' },
-  { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session) — edits in this folder pass', keys: '⇧Tab cycles' },
-  { id: 'mode.repo.manual', title: 'Mode: manual (this repo)' },
-  { id: 'mode.repo.ask', title: 'Mode: ask (this repo)' },
-  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this repo)' },
+  // §11.4 run-mode commands (P8-D87): the focused session's folder (mode.repo.*, the default scope, F2 of
+  // TD-2026-10-20-086), or this session only (mode.*); a looser mode asks for presence
+  { id: 'mode.repo.manual', title: 'Mode: manual (this folder) — writes and commands wait on a plan' },
+  { id: 'mode.repo.ask', title: 'Mode: ask (this folder) — every write and command asks' },
+  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this folder) — edits in this folder pass', keys: '⇧Tab cycles' },
+  { id: 'mode.manual', title: 'Mode: manual (this session only)' },
+  { id: 'mode.ask', title: 'Mode: ask (this session only)' },
+  { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session only)' },
   // V2d voice (TD-2026-10-19-298): the focused session (or the attached one); the global hotkeys live in the voice app
   { id: 'voice.off', title: 'Voice: off — close the mic' },
   { id: 'voice.ptt', title: 'Voice: push-to-talk — hold the hotkey to talk', keys: 'hold ⌃⌥Space (voice app)' },
@@ -58,12 +66,13 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'voice.client.start', title: 'Voice: start the voice app' },
   { id: 'voice.client.stop', title: 'Voice: stop the voice app' },
   { id: 'voice.enrol', title: 'Voice: teach Gnomon your voice' },
-  // dictation (TD-2026-10-20-262): the auto-send delay after silence, per machine (the pill menu has the same picks)
-  { id: 'voice.delay.3000', title: 'Dictation: auto-send after 3 s of silence' },
-  { id: 'voice.delay.5000', title: 'Dictation: auto-send after 5 s of silence (default)' },
-  { id: 'voice.delay.8000', title: 'Dictation: auto-send after 8 s of silence' },
-  { id: 'voice.delay.15000', title: 'Dictation: auto-send after 15 s of silence' },
-  { id: 'voice.delay.off', title: 'Dictation: never auto-send (Send or Enter only)' },
+  // dictation (TD-2026-10-20-262): the PUSH-TO-TALK auto-send delay after silence, per machine (the pill menu has the
+  // same picks). TD-2026-10-20-125: ambient speech never auto-sends; it waits in the composer for Enter / Send
+  { id: 'voice.delay.3000', title: 'Dictation: auto-send push-to-talk after 3 s of silence' },
+  { id: 'voice.delay.5000', title: 'Dictation: auto-send push-to-talk after 5 s of silence (default)' },
+  { id: 'voice.delay.8000', title: 'Dictation: auto-send push-to-talk after 8 s of silence' },
+  { id: 'voice.delay.15000', title: 'Dictation: auto-send push-to-talk after 15 s of silence' },
+  { id: 'voice.delay.off', title: 'Dictation: never auto-send push-to-talk (Send or Enter only)' },
   { id: 'voice.dictation.hold', title: 'Dictation: hold / resume the auto-send', keys: '⌃⌥H (voice app)' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
@@ -77,28 +86,34 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  * press look like a kernel or presence action.
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.')),
+  // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
+  // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.')),
 );
 
-export type Pane ='sessions' | 'transcript' | 'stack' | 'shuttle';
-export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'shuttle'] as const);
+export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
+export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'workshop'] as const);
+/** S5.2: where the Workshop mounts when shown (the comp's footer strip, or its 76 px column on either edge). */
+export type WorkshopPlace = 'footer' | 'right' | 'left';
+export const WORKSHOP_PLACES: readonly WorkshopPlace[] = Object.freeze(['footer', 'right', 'left'] as const);
 
 export interface Layout {
   name: string;
   visible: Record<Pane, boolean>;
   stackWide: boolean;
+  workshop: WorkshopPlace;
 }
 
 export const PRESETS: Readonly<Record<string, Layout>> = Object.freeze({
-  desk: { name: 'desk', visible: { sessions: true, transcript: true, stack: true, shuttle: true }, stackWide: false },
-  focus: { name: 'focus', visible: { sessions: false, transcript: true, stack: false, shuttle: false }, stackWide: false },
-  decide: { name: 'decide', visible: { sessions: true, transcript: true, stack: true, shuttle: true }, stackWide: true },
+  desk: { name: 'desk', visible: { sessions: true, transcript: true, stack: true, workshop: true }, stackWide: false, workshop: 'footer' },
+  focus: { name: 'focus', visible: { sessions: false, transcript: true, stack: false, workshop: false }, stackWide: false, workshop: 'footer' },
+  decide: { name: 'decide', visible: { sessions: true, transcript: true, stack: true, workshop: true }, stackWide: true, workshop: 'footer' },
 });
 
-/** Apply a preset; the transcript pane always stays visible (it is the page's purpose). */
-export function applyPreset(name: string): Layout {
+/** Apply a preset; the transcript pane always stays visible (it is the page's purpose). A placement survives it. */
+export function applyPreset(name: string, place: WorkshopPlace = 'footer'): Layout {
   const p = PRESETS[name] ?? PRESETS.desk!;
-  return { name: p.name, visible: { ...p.visible, transcript: true }, stackWide: p.stackWide };
+  return { name: p.name, visible: { ...p.visible, transcript: true }, stackWide: p.stackWide, workshop: place };
 }
 
 export function togglePane(l: Layout, pane: Pane): Layout {
@@ -106,18 +121,25 @@ export function togglePane(l: Layout, pane: Pane): Layout {
   return { ...l, name: 'custom', visible: { ...l.visible, [pane]: !l.visible[pane] } };
 }
 
-/** Round-trip shape for the per-device preset save (kernel `config.prefs`, slice 2). */
+/** S5.2: place the Workshop (and show it). */
+export function placeWorkshop(l: Layout, place: WorkshopPlace): Layout {
+  return { ...l, visible: { ...l.visible, workshop: true }, workshop: place };
+}
+
+/** Round-trip shape for the per-device preset save (localStorage now; kernel `config.prefs` later). */
 export function serializeLayout(l: Layout): string {
-  return JSON.stringify({ name: l.name, visible: l.visible, stackWide: l.stackWide });
+  return JSON.stringify({ name: l.name, visible: l.visible, stackWide: l.stackWide, workshop: l.workshop });
 }
 
 export function parseLayout(s: string): Layout | null {
   try {
-    const v = JSON.parse(s) as Partial<Layout>;
+    const v = JSON.parse(s) as Partial<Layout> & { visible?: Record<string, unknown> };
     if (!v || typeof v.name !== 'string' || !v.visible || typeof v.stackWide !== 'boolean') return null;
     const visible = {} as Record<Pane, boolean>;
-    for (const p of PANES) visible[p] = p === 'transcript' ? true : v.visible[p] === true;
-    return { name: v.name, visible, stackWide: v.stackWide };
+    // a layout saved before S5 named the footer `shuttle`
+    for (const p of PANES) visible[p] = p === 'transcript' ? true : p === 'workshop' ? (v.visible.workshop ?? v.visible.shuttle) === true : v.visible[p] === true;
+    const workshop = (WORKSHOP_PLACES as readonly unknown[]).includes(v.workshop) ? (v.workshop as WorkshopPlace) : 'footer';
+    return { name: v.name, visible, stackWide: v.stackWide, workshop };
   } catch {
     return null;
   }

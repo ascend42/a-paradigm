@@ -27,6 +27,7 @@ import * as path from 'node:path';
 import { canonicalJson, hex, sha256 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
 import { DEFAULT_SESSION_HOOKS, SESSION_HOOKS_MODES, type SessionHooksMode } from '../../adapters/claude-code/adapter.js';
+import { RUN_MODES, type RunMode } from '@a-company/gnomon-contracts';
 
 export const ROOT_CONFIG_FILE = 'config.signed.json';
 export const ROOT_CONFIG_SCHEMA = 'gnomon-root-config:v1' as const;
@@ -65,6 +66,22 @@ export interface LoadedFuseConfig {
    * never wider than what the founder may have chosen), logged.
    */
   sessions: { hooks: SessionHooksMode };
+  /**
+   * TD-2026-10-20-086 F3: `config.runModes.default` — the run mode a repo with no mode of its own takes (never a
+   * home folder, an ancestor of it or `/`: run-mode.ts refuses those the default). null = none (the built-in `ask`).
+   * Any fallback (unsigned, older, invalid) ⇒ null: fail closed, never looser than the built-in default.
+   */
+  runModes: { default: RunMode | null };
+}
+
+/** F3: parse the root config's `runModes` section; null on any unknown key or value. */
+export function parseRunModesSection(section: unknown): { default: RunMode | null } | null {
+  if (section === undefined) return { default: null };
+  if (section === null || typeof section !== 'object' || Array.isArray(section)) return null;
+  const s = section as Record<string, unknown>;
+  if (Object.keys(s).some((k) => k !== 'default')) return null;
+  if (s.default === undefined || s.default === null) return { default: null };
+  return typeof s.default === 'string' && (RUN_MODES as readonly string[]).includes(s.default) ? { default: s.default as RunMode } : null;
 }
 
 /** Parse the root config's `sessions` section; null on any unknown key or value. */
@@ -123,7 +140,7 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const chain = opts.chainHighWater ?? 0;
   const seen = Math.max(sidecar, chain);
   // a fallback AFTER a signed config was seen ⇒ sessions `none` (fail closed); first-run defaults ⇒ DEFAULT_SESSION_HOOKS
-  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash, sessions: { hooks: seen > 0 ? 'none' : DEFAULT_SESSION_HOOKS } });
+  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash, sessions: { hooks: seen > 0 ? 'none' : DEFAULT_SESSION_HOOKS }, runModes: { default: null } });
   const fallBack = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
     emit('config.loaded', { hash, signed: false, fallback: 'defaults', version: typeof version === 'number' ? version : null, highWater: seen, why, ...(opts.chainHighWater !== undefined && sidecar !== chain ? { sidecar, chain } : {}) });
     return defaults(false, hash);
@@ -133,9 +150,9 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
     raw = fs.readFileSync(file, 'utf8');
   } catch {
     if (seen > 0) return fallBack('missing', null, null);
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null, sessions: { hooks: DEFAULT_SESSION_HOOKS } };
+    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null, sessions: { hooks: DEFAULT_SESSION_HOOKS }, runModes: { default: null } };
   }
-  let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown; sessions?: unknown } }; signer?: unknown; sig?: unknown };
+  let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown; sessions?: unknown; runModes?: unknown } }; signer?: unknown; sig?: unknown };
   try {
     doc = JSON.parse(raw) as typeof doc;
   } catch {
@@ -154,7 +171,8 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return fallBack('older', hash, version);
   const merged = mergeFuse(doc.row!.config?.fuse);
   const sessions = parseSessionsSection(doc.row!.config?.sessions);
-  if (!merged || !sessions) {
+  const runModes = parseRunModesSection(doc.row!.config?.runModes);
+  if (!merged || !sessions || !runModes) {
     emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', sessions: { hooks: 'none' } });
     // Aegis low: an invalid fuse OR sessions section ⇒ sessions `none` too (fail closed, never the default)
     return { ...defaults(true, hash), sessions: { hooks: 'none' } };
@@ -167,8 +185,8 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
       emit('config.loaded', { hash, signed: true, version, sidecarWrite: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : 'write failed' });
     }
   }
-  emit('config.loaded', { hash, signed: true, version, highWater: seen, sessions });
-  return { config: merged, signed: true, fellBack: false, hash, sessions };
+  emit('config.loaded', { hash, signed: true, version, highWater: seen, sessions, ...(runModes.default ? { runModes } : {}) });
+  return { config: merged, signed: true, fellBack: false, hash, sessions, runModes };
 }
 
 /** Write a root-signed config (the `gnomon config` root act; tests). Throws RootUnavailableError without a root. */

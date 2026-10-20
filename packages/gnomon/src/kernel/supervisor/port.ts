@@ -20,6 +20,10 @@
  * attachment's pending voice turns and the send is tagged 'voice' (every part matched; parts join with ' ') or
  * 'voice-edited' (some matched), or untagged. Attribution never refuses a human send; a failed send releases the
  * matched turns.
+ *
+ * Model switch (8.0:model-switch): `model(ctx, payload)` serves the human's `log.append{kind:'request.session.model',
+ * payload:{hsid, model}}` (the dispatcher routes it from a first-party gui/device connection only). The payload is
+ * closed to {hsid, model}; the supervisor refuses every non-human class again and does the switch.
  */
 import { refuse, RefusedError } from '@a-company/gnomon-contracts';
 import type { SessionSupervisor } from './supervisor.js';
@@ -58,6 +62,8 @@ export interface SessionPort {
   open(ctx: SessionCallContext, params: unknown): Promise<unknown>;
   send(ctx: SessionCallContext, params: unknown): Promise<unknown>;
   stop(ctx: SessionCallContext, params: unknown): Promise<unknown>;
+  /** 8.0:model-switch: request.session.model{hsid, model} from the human */
+  model(ctx: SessionCallContext, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
 }
 
@@ -131,6 +137,13 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (p.interrupt !== undefined && typeof p.interrupt !== 'boolean') throw bad('interrupt must be a boolean');
       gateResumed(sup, ctx, p.hsid, 'session.stop');
       return sup.stop(ctx.principal, { hsid: p.hsid, ...(p.interrupt === true ? { interrupt: true } : {}) });
+    },
+    model: async (ctx, payload) => {
+      const p = objectParams(payload, ['hsid', 'model'], 'request.session.model');
+      if (typeof p.hsid !== 'string') throw bad('hsid is required');
+      if (typeof p.model !== 'string') throw bad('model is required');
+      gateResumed(sup, ctx, p.hsid, 'request.session.model');
+      return sup.switchModel(ctx.principal, { hsid: p.hsid, model: p.model }, ctx.principalClass);
     },
     status: () => ({ sessions: sup.status(), claudePin: sup.pinStatus(), sessionSandbox: sup.sandboxStatus() }),
   };

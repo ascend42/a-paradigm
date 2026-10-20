@@ -10,7 +10,8 @@
 export const MAX_SESSIONS = 256;
 export const MAX_CARDS = 256;
 export const MAX_PAUSED = 64;
-export const HUES = 8;
+// the six project pigments: the kernel feed projects `project` with gnomon-contracts projectHue (0..5)
+export const HUES = 6;
 export const WORK_TYPES = Object.freeze(['builder', 'reviewer', 'teacher', 'tender']);
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;
@@ -86,8 +87,18 @@ export function apply(state, event) {
 }
 
 const HAT = { builder: '▲', reviewer: '◆', teacher: '■', tender: '●' };
+/** The cap's hat (S5): the closed contracts shapes; the GUI owns the drawing. */
+const SHAPE = { builder: 'tall', reviewer: 'wide', teacher: 'floppy', tender: 'wide' };
+/** The mark a waiting cap's label starts with: KNOT, a failure, a gate-class ask, else a question. */
+const MARK = { knot: '◆', incident: '✕', fallback: '✕', 'gate-class': '!', strictness: '!', grant: '!', install: '!' };
+const LABEL_MAX = 40;
+const label = (s) => [...s].slice(0, LABEL_MAX).join('');
 
-/** render(state, prefs) → display-block:v1. Hat shape = work type; filled = Claude, outlined = local; hue = project; violet only for KNOT. */
+/**
+ * render(state, prefs) → display-block:v1. Hat shape = work type; filled = Claude, outlined = local; hue = project;
+ * violet only for KNOT. Each cap is a Text whose `text` is the accessible (and reduced-motion) form and whose `cap`
+ * is the closed contracts shape {shape, hue, filled, state, label} the kernel gate checks and the GUI draws.
+ */
 export function render(state, prefs = {}) {
   const reduced = prefs.motion === 'reduced';
   const needs = [...state.cards.values()];
@@ -97,7 +108,17 @@ export function render(state, prefs = {}) {
     const fill = s.backend === 'local' ? 'outlined' : 'filled';
     const tone = s.knot ? 'violet' : `hue-${s.project}`;
     const pose = s.streaming ? (reduced ? 'working' : 'bob') : 'still';
-    return { type: 'Text', text: `${hat} ${s.work} ${fill} ${pose}`, tone };
+    const st = s.knot ? 'knot' : s.streaming ? 'working' : 'idle';
+    return { type: 'Text', text: `${hat} ${s.work} ${fill} ${pose}`, tone, cap: { shape: SHAPE[s.work] ?? 'tall', hue: s.project, filled: s.backend !== 'local', state: st, label: s.work } };
+  };
+  const need = (c) => {
+    const s = c.hsid ? state.sessions.get(c.hsid) : undefined;
+    return {
+      type: 'Text',
+      text: `▲ ${c.kind}`,
+      tone: 'cap',
+      cap: { shape: SHAPE[s?.work] ?? 'tall', hue: s ? s.project : 0, filled: s ? s.backend !== 'local' : true, state: c.kind === 'knot' ? 'knot' : 'needs', label: label(`${MARK[c.kind] ?? '?'} ${c.kind}`) },
+    };
   };
   return {
     schemaVersion: 'display-block:v1',
@@ -107,8 +128,8 @@ export function render(state, prefs = {}) {
     children: [
       {
         type: 'Box',
-        title: `needs you ${needs.length} of ${needs.length}`,
-        children: needs.length ? needs.map((c) => ({ type: 'Text', text: `▲ ${c.kind}`, tone: 'cap' })) : [{ type: 'Text', text: 'nothing waiting', tone: 'quiet' }],
+        title: `needs you ${needs.length}`,
+        children: needs.length ? needs.map(need) : [{ type: 'Text', text: 'nothing waiting', tone: 'quiet' }],
       },
       {
         type: 'Box',

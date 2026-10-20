@@ -92,7 +92,10 @@ const resumeAt = args.indexOf('--resume');
 const session = resumeAt >= 0 ? args[resumeAt + 1] : args.indexOf('--session-id') >= 0 ? args[args.indexOf('--session-id') + 1] : 'none';
 if (resumeAt >= 0) trace({ t: 'resume', uuid: session });
 out({ type: 'system', subtype: 'hook_started', hook: 'x', futureField: { a: 1 } });
-out({ type: 'system', subtype: 'init', session_id: session, model: 'fake-model', apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });
+// 8.0:model-switch: the model that runs (init + every assistant message.model); --model / set_model move it
+const modelId = (m) => (m === undefined || m === 'default' ? 'fake-model' : m.startsWith('claude-') ? m.replace('[1m]', '') : `claude-${m.replace('[1m]', '')}-9`);
+let currentModel = modelId(args.indexOf('--model') >= 0 ? args[args.indexOf('--model') + 1] : undefined);
+out({ type: 'system', subtype: 'init', session_id: session, model: currentModel, apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });
 for (const l of mode.extraLines ?? []) out(l);
 if (mode.bigLine) out({ type: 'assistant', message: { id: 'big', content: [{ type: 'text', text: 'x'.repeat(mode.bigLine) }] } });
 let n = 0;
@@ -125,6 +128,19 @@ process.stdin.on('data', (c) => {
     try { m = JSON.parse(line); } catch { trace({ t: 'bad-stdin', line }); continue; }
     trace({ t: 'stdin', m });
     if (m.type === 'control_request') {
+      // set_model (claude 2.1.304 shape, probe p-set-model): mode.setModel = 'error' | 'silent' (switches, answer lost)
+      // | 'silent-keep' (never switches, never answers) | absent (success); mode.setModelDelayMs delays the answer
+      if (m.request?.subtype === 'set_model') {
+        trace({ t: 'set-model', model: m.request.model });
+        if (mode.setModel === 'silent-keep') continue;
+        if (mode.setModel === 'silent') { currentModel = modelId(m.request.model); continue; }
+        if (mode.setModel === 'error') { out({ type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: `Model '${m.request.model}' not found`, error_code: 'catalog_unknown' } }); continue; }
+        currentModel = modelId(m.request.model);
+        const answer = { type: 'control_response', response: { subtype: 'success', request_id: m.request_id } };
+        if (mode.setModelDelayMs) setTimeout(() => out(answer), mode.setModelDelayMs);
+        else out(answer);
+        continue;
+      }
       out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id } });
       continue;
     }
@@ -178,8 +194,11 @@ process.stdin.on('data', (c) => {
     out({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hi' } } });
     const tool = mode.tool ? [{ type: 'tool_use', id: `tu_${n}`, name: mode.tool, input: { question: 'Which?' } }] : [];
     // the same message id twice with cumulative usage: the meter charges the delta once
-    out({ type: 'assistant', message: { id, content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } } });
-    out({ type: 'assistant', message: { id, content: tool, usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 100 } } });
+    out({ type: 'assistant', message: { id, model: currentModel, content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } } });
+    // mode.subagentTokens: a subagent's message (parent_tool_use_id set) — never the main chain's context
+    if (mode.subagentTokens) out({ type: 'assistant', parent_tool_use_id: `tu_parent_${n}`, message: { id: `${id}_sub`, model: currentModel, content: [{ type: 'text', text: 'sub' }], usage: { input_tokens: mode.subagentTokens, output_tokens: 0 } } });
+    // mode.contextTokens: the LAST main-chain message's in+cacheRead+cacheWrite+out (the kernel's context meter)
+    out({ type: 'assistant', message: { id, model: currentModel, content: tool, usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: mode.contextTokens ? Math.max(0, mode.contextTokens - 30) : 100 } } });
     out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } });
     if (mode.resultThenExit) { out({ type: 'result', subtype: 'success', is_error: false, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [] }); process.exit(0); }
     out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' });

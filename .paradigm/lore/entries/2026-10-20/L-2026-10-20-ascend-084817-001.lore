@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-084817-001
+type: review
+timestamp: '2026-10-20T08:48:17.656Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE F2–F6, with M1 (silent join of the device unlock) and M2 (an off-ruling reconsider tuple); the grant can be one prompt
+summary: |-
+  Verified: a standing grant only replaces the presence prompt inside the human-only approve. Root, hand-only, CLI, withdraw, peer and irreversible cards are excluded, and tuples come from kernel-written raise detail. The device id is kernel-bound from launch or resume and can't be forged by a page or session; sessions can't read device keys. Standing decisions still carry approvals-key signatures that replay verifies. Grants end on session end and helper exit, and the stores fold kernel-signed rows only. The F3 home check is realpath and case-folded.
+  M1: a new GUI connection (e.g. via a stolen CLI key or a resume token) silently rides the 12 h device unlock, so log an approval.unlock.joined row and show it in the feed. M2: reconsider:extend crept in beyond the ruling; remove it and require a repo.
+  L1: the presence row on mode loosen is wrong. L2: a test-only software-sig path. L3: the restart tuple must hash binaries kernel-side. L4: the grant fold survives a restart but is safe on the helper path.
+  The two-prompt grant was unnecessary: make only the standing-grant card fresh class (one password). All of this was sent back to the builder with a merge of feat/gnomon.
+symbols_touched:
+  - '#approval-broker'
+  - '#standing-grant'
+  - '#gui'
+learnings:
+  - Lengthening an unlock's lifetime shifts risk to 'who else can join it'; make joins visible (a log row plus a notify) rather than silent.
+  - Builders add adjacent items beyond a ruling (reconsider:extend); reviews must check scope against the ruling text.
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    medium: 2
+    low: 4
+tags:
+  - gnomon
+  - permissions
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: 463ca37d0611ca2fb9e5276bdb94eeac0604e70f
+  branch: feat/gnomon
+  dirty: true

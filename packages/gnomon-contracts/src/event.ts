@@ -16,6 +16,7 @@ import { Checker, ISO_DATE_TIME, SHA256_TAGGED, type ValidateOptions } from './i
 import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT_ID_PATTERN, TURN_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
+import { isClaudeModel } from './claude-model.js';
 
 export const EVENT_V1 = 'event:v1' as const;
 
@@ -47,7 +48,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -70,6 +71,10 @@ const D89 = 'M1.4:P8-D89' as const;
 const D98 = '8.0:P8-D98' as const;
 /** TD-2026-10-20-294 part 3 (prefix-scoped always rules, a deliberate clientApiId move). */
 const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
+/** TD-2026-10-20-086 F6 (the daily standing grant) + T-2026-10-20-007 (approval.auto.miss, anchoredInputHash): one clientApiId move. */
+const STANDING = '8.0:TD-2026-10-20-086' as const;
+/** The mid-session Claude model switch (founder ask 2026-10-20; probe p-set-model): one clientApiId move. */
+const MODEL_SWITCH = '8.0:model-switch' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -115,6 +120,22 @@ const TABLE: Row[] = [
   // revoked a standing `always` rule (rules.revoke). approval.effect.failed{cardId, decision, effect, reason} — a
   // decided card whose effect could not be applied (never a silent success).
   ['approval', 'kernel', 'rule.revoked effect.failed', D98],
+  // TD-2026-10-20-086 F6: grant.standing{grantId, cardId, tuples, repos, device, expiresAt, by} — minted by ONE root-class
+  // `grant` card; grant.standing.used{grantId, cardId, tuple, decision, repo, hsid} — the notify row of each use
+  // (beside approval.decide{presence:'standing:<grantId>'}); grant.standing.revoked{grantId, by, reason} — a tighten,
+  // no presence. request.grant.standing{tuples, repos} / request.grant.standing.revoke{grantId}: the human's asks.
+  ['grant', 'kernel', 'standing standing.used standing.revoked', STANDING],
+  ['request', 'kernel', 'grant.standing grant.standing.revoke', STANDING],
+  // T-2026-10-20-007: approval.auto.miss{hsid, tool, why, inputHash, modeRef} — the supervisor's read-only pass refused
+  // under auto-edits/ask, written before the card (a sensitive kind: why and inputHash are sensitive fields).
+  ['approval', 'kernel', 'auto.miss', STANDING],
+  // Aegis M1 (TD-2026-10-20-086 F5): approval.unlock.joined{connId, scope:'device'} — a new connection of the same GUI
+  // device first used the device's cached unlock (the GUI feed says "another Gnomon window joined your unlock").
+  ['approval', 'kernel', 'unlock.joined', STANDING],
+  // model switch (probe p-set-model): request.session.model{hsid, model} — the human's ask, written by the kernel on a
+  // first-party human connection; session.model{hsid, from, to, permitId, outcome} — what the switch did (closed).
+  ['request', 'kernel', 'session.model', MODEL_SWITCH],
+  ['session', 'kernel', 'model', MODEL_SWITCH],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -187,6 +208,8 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'voice.turn.agent': 'sensitive',
   // "voiceprints secret (§14.4)": the enrol row is the one that carries the print reference.
   'voice.enrol': 'secret',
+  // T-2026-10-20-007: why the read-only pass refused names command structure (paths, words)
+  'approval.auto.miss': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -196,7 +219,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'voice.turn.user': { audioRef: 'sensitive' },
   // Aegis round 3 (P8-D86–D88): a worktree path and a commit trailer can carry
   // project or agent-written detail; the rows stay private + normal.
-  'approval.auto': { path: 'sensitive', inputHash: 'sensitive' },
+  'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },
+  'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
   'merge.reverted': { trailer: 'sensitive' },
   // M1.4 slice 2 round 3 (Aegis): digests of sensitive or low-entropy content are
   // confirmation oracles for a dictionary guess, so a limited reader never gets them.
@@ -260,6 +284,8 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
   'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES }),
   'approval.decide': Object.freeze({ scope: PREFIX_RULES }),
+  // T-2026-10-20-007: the digest of the ANCHORED command the kernel actually ran (the rewritten updatedInput)
+  'approval.auto': Object.freeze({ anchoredInputHash: STANDING }),
   // P8-D98 (TD-2026-10-19-528 F4, §2.4 rule 11): approval.expire{why:'session-drained'} (CARD_EXPIRY_WHYS).
   'approval.expire': Object.freeze({ why: D98 }),
   // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
@@ -295,7 +321,40 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   // P8-D89 (M1.4)
   'daemon.log.quarantined': ['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy'],
   'key.token.revoked': ['tokenId'],
+  // TD-2026-10-20-086 F6 / T-2026-10-20-007
+  'grant.standing': ['grantId', 'cardId', 'tuples', 'repos', 'device', 'expiresAt', 'by'],
+  'grant.standing.used': ['grantId', 'cardId', 'tuple', 'decision', 'repo', 'hsid'],
+  'grant.standing.revoked': ['grantId', 'by', 'reason'],
+  'request.grant.standing': ['tuples', 'repos'],
+  'request.grant.standing.revoke': ['grantId'],
+  'approval.auto.miss': ['hsid', 'tool', 'why', 'inputHash', 'modeRef'],
+  'approval.unlock.joined': ['connId', 'scope'],
 });
+
+/**
+ * TD-2026-10-20-086 F6: what a daily standing grant may cover (CLOSED). Each names a (card kind, decision) the human
+ * still takes by gesture, but with no presence prompt while the grant stands:
+ *   mode.loosen:auto-edits  a strictness card loosening a run mode to auto-edits (detail.op mode.loosen), allow
+ *   permission:always       a permission card's `always`
+ *   voice.widen             a strictness card widening voice to ambient (detail.op voice.widen), allow
+ *   voice-arm:allow         a voice-arm card, allow
+ *   daemon-stop:restart     a daemon-stop card the kernel marked binaryUnchanged (a restart, never an upgrade), accept
+ * (Aegis M2: `reconsider.extend` is NOT standing; the founder's F6 list does not name it.)
+ * NEVER standing (no tuple names them, and the broker refuses them whatever a row says): root-class decisions
+ * (install, use-api-token, peer-pair, a grant), a re-pin or any binary/publisher change, gate-class cards,
+ * fallback-cloud, declassify, and every peer-raised (peer-flagged) card.
+ */
+export const STANDING_TUPLES = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'] as const;
+/** Tuples that apply only inside a granted repo (a match with no repo never uses them). */
+export const STANDING_REPO_TUPLES = ['mode.loosen:auto-edits', 'permission:always'] as const;
+export type StandingTuple = (typeof STANDING_TUPLES)[number];
+/** grant.standing.revoked{reason} (CLOSED): the human's Revoke, or what ended the grant with the unlock. */
+export const STANDING_REVOKE_REASONS = ['human', 'screen-lock', 'display-sleep', 'system-sleep', 'user-switch', 'helper-exit'] as const;
+export type StandingRevokeReason = (typeof STANDING_REVOKE_REASONS)[number];
+/** approval.decide{presence} of a decision a standing grant carried: this prefix + the grantId. */
+export const STANDING_PRESENCE_PREFIX = 'standing:' as const;
+/** The longest a standing grant lives (it also ends at the next screen lock, sleep or user switch). */
+export const STANDING_GRANT_MAX_MS = 12 * 60 * 60_000;
 
 /**
  * Payload fields of BUILT kinds whose payload the kernel validates at append
@@ -309,7 +368,34 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId', 'renewedByDrain', 'expiresAt']),
   'approval.rule.revoked': Object.freeze(['ruleId', 'repoKey', 'tool', 'connId']),
   'approval.effect.failed': Object.freeze(['cardId', 'decision', 'effect', 'reason']),
+  // model switch (8.0:model-switch): the human's ask and its closing row (validateKindPayload)
+  'request.session.model': Object.freeze(['hsid', 'model']),
+  'session.model': Object.freeze(['hsid', 'from', 'to', 'permitId', 'outcome']),
 });
+
+/**
+ * `session.model{outcome}` (CLOSED, 8.0:model-switch): what one request.session.model came to.
+ *   switched         claude answered set_model success; the session runs `to` under the new spawn permit `permitId`
+ *   backend-refused  claude answered an error (e.g. an unknown model); nothing changed, the new permit was released
+ *   timeout          claude did not answer within the kernel's wait; the kernel keeps `from` on record and HOLDS the new
+ *                    permit `permitId` until `reconciled` (released then if the switch never took, or when the session exits)
+ *   permit-refused   the fuse or law 7 refused the new spawn permit; nothing was sent (permitId null)
+ *   reconciled       after a `timeout`, the next main-chain assistant message's `message.model` (ground truth) said which
+ *                    model actually runs: `to` is the model now on record (`from` again when the switch never took;
+ *                    then `to` may be 'claude', Claude Code's default), `permitId` the spawn permit the session runs under
+ *                    (the timeout's held permit when the switch took)
+ */
+export const SESSION_MODEL_OUTCOMES = ['switched', 'backend-refused', 'timeout', 'permit-refused', 'reconciled'] as const;
+export type SessionModelOutcome = (typeof SESSION_MODEL_OUTCOMES)[number];
+/**
+ * The context guard of a switch (8.0:model-switch): no session is switched to a 200k model (a target WITHOUT the
+ * `fromSuffix` `[1m]`, whatever the source model) while more than this many tokens of context are in use (the last
+ * main-chain assistant message's usage), nor while that is unknown (a resumed session before its first message).
+ * Refused UNSUPPORTED{context-too-large}; checkpoint + compact first is the context-meter build's.
+ */
+export const MODEL_SWITCH_CONTEXT_GUARD = Object.freeze({ fromSuffix: '[1m]', maxTokens: 160_000 });
+/** The `from` of a session that runs Claude Code's own default model (session.open{model} absent). */
+export const CLAUDE_DEFAULT_MODEL = 'claude' as const;
 
 /** session.drained reasons (§2.4 rule 11): closed. An upgrade is the only drain in 8.0. */
 export const DRAIN_REASONS = ['upgrade'] as const;
@@ -452,6 +538,19 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
       if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
       if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      break;
+    case 'request.session.model':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('model' in v && !isClaudeModel(v.model)) c.fail('model', 'must be a Claude model alias or a strict claude-… id');
+      break;
+    case 'session.model':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('from' in v && v.from !== CLAUDE_DEFAULT_MODEL && !isClaudeModel(v.from)) c.fail('from', "must be 'claude' or a Claude model");
+      if ('to' in v && !isClaudeModel(v.to) && !(v.outcome === 'reconciled' && v.to === CLAUDE_DEFAULT_MODEL)) c.fail('to', "must be a Claude model alias or a strict claude-… id ('claude' only when reconciled back to the default)");
+      if ('permitId' in v && v.permitId !== null) c.str('permitId', v.permitId, ID_PATTERNS.permit, 'permit:v1:<ULID> or null');
+      if ('outcome' in v) c.closedEnum('outcome', v.outcome, SESSION_MODEL_OUTCOMES);
+      if (v.outcome === 'permit-refused' && v.permitId !== null) c.fail('permitId', 'is null when the permit was refused');
+      if (v.outcome !== 'permit-refused' && v.permitId === null) c.fail('permitId', 'names the new spawn permit');
       break;
     case 'approval.effect.failed':
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');

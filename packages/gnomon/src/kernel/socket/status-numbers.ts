@@ -43,6 +43,7 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'budget.quotaErrors.n': 'gauge', // every quota error since start: the whole set (a counter)
   'web.guiSessions.n': 'gauge',
   'unlocks.n': 'gauge', // spec §9.6 unlocks{n}
+  'standing.maxMs': 'limit', // TD-2026-10-20-086 F6: the longest a standing grant lives (STANDING_GRANT_MAX_MS)
   'mods.running.n': 'gauge',
   'mods.paused.n': 'gauge',
   'daemon.pid': 'ordinal',

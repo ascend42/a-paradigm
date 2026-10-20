@@ -8,6 +8,7 @@ export * from './types.js';
 export * from './voice-client.js';
 export * from './speakable.js';
 export * from './speaker.js';
+export * from './partials.js';
 export * from './enrol.js';
 export * from './enrol-watch.js';
 export * from './manifest.js';

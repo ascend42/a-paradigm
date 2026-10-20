@@ -38,6 +38,12 @@ export function excludedTestFiles(pkgRoot: string, platform: string): string[] {
 
 export const PLATFORM_REGISTRY: PlatformRow[] = [
   {
+    test: 'test/ambient-speaker-repro.test.ts',
+    platforms: ['darwin'],
+    sibling: 'test/speaker-gate.test.ts',
+    na: 'the real Silero / Parakeet / CAM++ / Kokoro engines are native and need the fetched models; the speech gate, front-end filtering and stale prints run on every platform in the sibling with a fake engine (this file also skips itself when the models are absent)',
+  },
+  {
     test: 'test/engines-integration.test.ts',
     platforms: ['darwin'],
     sibling: 'test/pipeline.test.ts',

@@ -31,8 +31,11 @@ components:
       Dictation (TD-2026-10-20-262): delivery 'composer' (default; the
       kernel-spawned run) never calls session.send and appends
       voice.turn.user forwarded:false (the kernel stamps forwardable; the
-      GUI composer sends after a countdown); --delivery direct keeps the old
-      forward for headless use. Activity edges only, as
+      GUI composer sends a push-to-talk draft after a countdown, an ambient
+      draft only on a key press); --delivery direct keeps the old forward for
+      headless use, for PUSH-TO-TALK turns only. TD-2026-10-20-125: ambient
+      speech never sends itself (dictated under either delivery; the kernel
+      refuses a direct non-ptt send voice-off{cause: composer}). Activity edges only, as
       request.voice.report{dictation: {activity speaking|transcribing|idle,
       holdToggles}}; the Ctrl-Alt-H hold-toggle hotkey increments
       holdToggles.
@@ -49,6 +52,29 @@ components:
       waiting capture report of the same segment and state is replaced by
       the newest (no backlog behind a slow kernel); edges and terminal
       states are always queued in order.
+      Live words (B1, T-2026-10-20-005, V1-V5 in TD-2026-10-20-086,
+      src/partials.ts): while hearing, the open segment is buffered in memory
+      with up to 300 ms of pre-roll; every 600 ms of heard audio one tick decodes a
+      window (from the segment start up to 6 s, then about 4 s with its head
+      anchored at a committed word boundary, never sliding freely, capped at
+      8 s) with SttEngine.transcribeWords (sherpa decodeAsync, word starts
+      from tokens + timestamps). ONE decode in flight: a busy tick (or a
+      running final transcription) is skipped, never queued.
+      LocalAgreement-2 (LiveAgreement): words two consecutive decodes agree
+      on are committed and never shrink; a flip inside the committed region
+      commits nothing; trailing punctuation is stripped. V1 gate: no words
+      until SpeakerVerifier.provisional matches an enrolled print on the
+      first 1.5 s (PTT too); a non-match means no words for the segment.
+      Words ride capture reports as text{committed, tail} (sanitised, newest
+      600 chars) on hearing / transcribing only; never log.append rows,
+      voice.turn.user or session.send. The final transcript stays the
+      full-segment decode. SherpaStt decodes are serialized and async
+      (decodeAsync; in the B0 bench on an Apple M4, n = 10, the sync decode
+      blocked the loop for the whole decode, p50 202 to 232 ms).
+      Aegis L2: a decode past STT_DECODE_WATCHDOG_MS (plus the audio length)
+      is rejected, the recognizer rebuilt and the event logged. Aegis L3: the
+      sanitiser also strips tag characters, variation selectors and Hangul
+      fillers (client and kernel).
       Table talk system voice (TD-2026-10-20-294, src/earcon.ts): kernel
       speakable items with from:'kernel' (ask-waiting, edits) are said by a
       different Kokoro speaker (SherpaTts systemSidFor, never the model's
@@ -84,6 +110,21 @@ components:
       tar --no-same-owner, refuses symlinks, non-regular and unpinned
       members, and every model file is re-hashed against the manifest
       before it is loaded. Prints are embeddings only, stored in voice/prints/<name>/.
+      Speaker front end (founder regression 2026-10-20): every CAM++
+      embedding passes the speech gate speechOnly (speech-gate:v1: frames
+      of GATE_FRAME_MS, quiet below max(GATE_FLOOR_DBFS, peak -
+      GATE_REL_DB); edge quiet and inner pauses of GATE_PAUSE_MS or longer
+      cut), so the quiet around speech never moves it. A print records its
+      frontEnd; prints from another front end are never compared and are
+      reported as request.voice.report{prints:{stale}} (status.voice.prints;
+      the GUI nudges "Re-teach Gnomon your voice") with ONE notice per run.
+      Fail closed: VERIFY_THRESHOLD 0.65 and no verify under
+      MIN_VERIFY_SPEECH_MS of gated speech (MIN_PROVISIONAL_SPEECH_MS for
+      live words, MIN_ENROL_SPEECH_MS per enrolment phrase). SherpaStt
+      decode priority: a partial not started while a final waits returns []
+      undecoded. SherpaVad.reset() restarts its sample counter (t0 skew
+      fix). Verification is a convenience filter, not authentication (spec
+      14.4.2).
       Audio is never written to disk (G-VOX-05).
     path: src/
     type: module
@@ -151,6 +192,22 @@ components:
     path: scripts/
     type: module
     tags: [gnomon, voice, signing, build, v2b]
+  gnomon-voice-bench-partials:
+    description: >-
+      scripts/bench-partials.mjs: the B0 benchmark for voice phase B (live
+      words while speaking; T-2026-10-20-005, ruling V5 in
+      TD-2026-10-20-086). Builds the Parakeet recognizer exactly as
+      engines/sherpa.ts does (only numThreads varies), synthesises ~15 s of
+      test speech in memory with Kokoro, and also uses the Parakeet archive's
+      test_wavs/0.wav. It times 4, 6 and 8 s tail-window decodes at 2 and 4
+      threads, measures sync decode against decodeAsync (event-loop block),
+      checks a worker_thread, and measures prefix stability and
+      LocalAgreement-2 commits for decodes every 600 ms. Read-only on the
+      model home (verifiedModelPaths); it writes nothing. Results are in
+      PROBES.md, section B0. Dev tool only, not shipped.
+    path: scripts/
+    type: module
+    tags: [gnomon, voice, benchmark, stt, phase-b]
 
 flows:
   voice-turn:
@@ -167,6 +224,13 @@ flows:
       turnSeq, items}), then Kokoro one sentence at a time, then play, then
       voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: speech
       past the barge-in threshold (configured), or the talk key, stops
-      playback and drops the rest of the reply.
+      playback and drops the rest of the reply. Live words (B1): while a
+      segment is heard, anchored tail-window decodes (decodeAsync, one in
+      flight, busy ticks skipped) fold into LocalAgreement-2; after a
+      provisional speaker match on the first 1.5 s they ride hearing /
+      transcribing capture reports as text{committed, tail}, shown only in
+      the GUI ghost line (gui credential); they never reach log.append,
+      voice.turn.user or session.send, and the turn's text stays the
+      full-segment decode.
     steps: ["#gnomon-voice", "#gnomon-voice-io"]
 

@@ -41,6 +41,10 @@ export interface Fixture {
   workshop: boolean;
   /** #paradigm-context-mod: the K1 slice per live hsid (the fake kernel joins the GUI's {focus:{hsid}} to it, as the host does) */
   paradigm?: Record<string, unknown>;
+  /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
+  choice?: 'day' | 'night' | 'auto';
+  /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
+  open?: 'settings' | 'model-switch';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -218,7 +222,7 @@ const EXTRA_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'billing loosen', kind: 'strictness', hsid: BILLING, lines: ['Loosen billing to auto-edits', 'the session would edit files without a card; Bash still asks'], detail: { op: 'mode.loosen', from: 'ask', to: 'auto-edits' }, decisions: ['allow', 'deny'], strictness: { level: 'L1', mode: 'auto-edits', reason: 'requested from the GUI' } }),
 ];
 
-function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}): Chain {
+function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -232,7 +236,7 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}
   // today's boot
   c.add(T('13:00'), 'daemon.start', { version: '8.0.0', pid: 4242 });
   c.add(T('13:00:01'), 'socket.web.listen', { port: 7311 });
-  for (const a of ACTIVE) c.add(a.key === 'atelier' ? T('13:30') : a.key === 'warpline' ? T('13:40') : a.key === 'billing' ? T('13:58') : a.key === 'ledgerette' ? T('14:02') : T('14:03'), 'session.open', { hsid: a.hsid, backend: 'claude', model: 'claude', cwd: a.cwd }, { session: a.hsid, repo: a.repo });
+  for (const a of ACTIVE) c.add(a.key === 'atelier' ? T('13:30') : a.key === 'warpline' ? T('13:40') : a.key === 'billing' ? T('13:58') : a.key === 'ledgerette' ? T('14:02') : T('14:03'), 'session.open', { hsid: a.hsid, backend: 'claude', model: o.model && a.key === 'billing' ? 'haiku' : 'claude', cwd: a.cwd }, { session: a.hsid, repo: a.repo });
   const on = (key: string, at: string, kind: string, payload: Record<string, unknown>, principal?: string): void => {
     const a = A(key);
     c.add(at, kind, { hsid: a.hsid, ...payload }, { session: a.hsid, repo: a.repo, ...(principal ? { principal } : {}) });
@@ -261,6 +265,13 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}
   ev('billing', T('14:05:27'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
   ev('billing', T('14:05:35'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
   ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
+
+  // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)
+  if (o.model) {
+    const fresh = `permit:v1:${ulid('model switch permit')}`;
+    on('billing', T('14:05:50'), 'request.session.model', { model: 'sonnet' });
+    on('billing', T('14:05:51'), 'session.model', { from: 'haiku', to: 'sonnet', permitId: fresh, outcome: o.model === 'switched' ? 'switched' : 'timeout' });
+  }
 
   // ledgerette: tsc failed, the session exited
   ask('ledgerette', T('14:02:10'), 'Run CI for packages/ledger.');
@@ -291,6 +302,23 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}
   if (o.voice) {
     const voiceSessionId = `vs:${ulid('voice session')}`;
     c.add(T('14:06:30'), 'voice.session.start', { hsid: BILLING, mode: 'conversation', voiceSessionId }, { session: BILLING, repo: 'billing', principal: HUMAN_PRINCIPAL });
+    if (o.talk) {
+      // table talk: the reply's speak block, the kernel's one speakable row (turnSeq set in talkFixture), then one
+      // playback row per sentence from the pipelined TTS (the third cut off by a barge-in)
+      const said = o.talk === 'choices' ? 'The rounding fix is in and the tests pass. Should I open the pull request now?' : 'The rounding fix is in. All twelve billing tests pass. The invoice PDF now matches the totals.';
+      const body = o.talk === 'choices' ? `A  Yes, open it against main.\nB  No, wait until I have read the diff.` : 'I rounded once at the end of `totals.ts`; the three-line order now totals $41.07, as on the invoice.';
+      ev('billing', T('14:09'), textLine(`\`\`\`speak\n${said}\n\`\`\`\n\n${body}`));
+      on('billing', T('14:09:01'), 'voice.turn.agent', { source: 'kernel-speakable', turnSeq: 0, items: [{ kind: 'reply', text: said, from: 'block' }] });
+      if (o.talk === 'spoken') {
+        const sentences = said.split(/(?<=\.) /);
+        sentences.forEach((sentence, i) => {
+          const t0 = Date.parse(T(`14:09:0${2 + i * 2}`));
+          const cut = i === sentences.length - 1;
+          if (cut) on('billing', T(`14:09:0${3 + i * 2}`), 'voice.bargein', { turnId: `a${i}`, atMs: t0 + 900, heardText: 'wait' }, `p:${PREVIEW_NS}/voice`);
+          on('billing', T(`14:09:0${3 + i * 2}.500`), 'voice.turn.agent', { turnId: `a${i}`, t0, t1: t0 + (cut ? 900 : 1800), textPlanned: sentence, textSpoken: cut ? '' : sentence, ...(cut ? { interrupted: true } : {}) }, `p:${PREVIEW_NS}/voice`);
+        });
+      }
+    }
     if (o.voice === 'armed') c.add(T('14:08:05'), 'voice.turn.user', { hsid: BILLING, partial: true, turnId: `vt:${ulid('voice turn')}`, text: 'and while you are in there check the', speakerId: `spk:${PREVIEW_NS}/matt` }, { session: BILLING, repo: 'billing', principal: `p:${PREVIEW_NS}/voice` });
   }
   return c;
@@ -310,8 +338,26 @@ function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean } = {}
 const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, enrolled: [{ name: 'matt' }], maxMode: 'conversation', ambientIdleMs: 600_000 };
 const attached = (since: string): Record<string, unknown> => ({ attached: true, hsid: BILLING, ceiling: 'conversation', since, idleAt: null, voiceSessionId: `vs:${ulid('voice session')}`, turns: 2, echoTailMs: 400, ambientIdleMs: 600_000, maxMode: 'conversation', ambientConfirmed: true, enrolled: [{ name: 'matt' }] });
 
-function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false): Fixture {
-  return { name, title, rows: c.rows(), status, focus, workshop };
+/** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
+const WORKSHOP_VIEW = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
+
+function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false, extra: Pick<Fixture, 'choice' | 'open'> = {}): Fixture {
+  return { name, title, rows: c.rows(), status, focus, workshop, ...extra };
+}
+
+/** #gui-settings: what the sheet reads beyond the desk (today's grant, the served bundle, the kernel key). */
+const SETTINGS_STATUS = {
+  standing: { built: true, tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'], active: [{ grantId: 'sg:01JPREVIEWGRANT0000000001', tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen'], repos: ['billing'], expiresAt: '2026-10-20T22:00:00.000Z', uses: 3 }] },
+  web: { listening: true, port: 7311, bundleHash: 'sha256:53b2cd7a8d74c94306f388e48249f176d37de86a1246995c905d3486db63fc81' },
+  kernelKeyId: 'kk:7k2m9q4xa1b2c3d4',
+};
+/** The talk fixtures: the kernel's speakable row cites its reply's seq (known once the chain is ordered). */
+function talkFixture(name: string, title: string, talk: 'spoken' | 'choices'): Fixture {
+  const fx = fixture(name, title, deskChain({ voice: 'talk', talk }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING);
+  const ev = (r: LogRow): { kind: string; payload: Record<string, unknown> } => (r as unknown as { event: { kind: string; payload: Record<string, unknown> } }).event;
+  const reply = fx.rows.find((r) => ev(r).kind === 'turn.event' && String(ev(r).payload.line).includes('```speak'));
+  for (const r of fx.rows) if (ev(r).payload?.source === 'kernel-speakable') ev(r).payload.turnSeq = reply!.seq;
+  return fx;
 }
 
 /* ── #paradigm-context-mod: the K1 slices the kernel would compute for the live sessions' repos ── */
@@ -392,7 +438,15 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-armed': fixture('voice-armed', 'Ambient voice attached to billing, hearing', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, level: 0.62, dictation: { activity: 'speaking', holdToggles: 0, at: T('14:08:05') } }), BILLING),
   'voice-crashed': fixture('voice-crashed', 'Ambient attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
-  workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
+  workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
+  'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'workshop', why: 'user', cardId: null }] } }, BILLING, true),
+  settings: fixture('settings', 'The Settings sheet open (theme auto, today\'s grant on)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings' }),
+  'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
+  spoken: talkFixture('spoken', 'Table talk: one reply spoken sentence by sentence, the last cut off (one 🔊 marker)', 'spoken'),
+  choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
+  'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
+  'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
+  'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
   'paradigm-context': { ...fixture('paradigm-context', 'Desk with the Paradigm Context mod in the sidebar (billing focused)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { modAbiId: 'preview', running: [{ name: 'paradigm-context', packageHash: 'preview', dev: false, sandbox: 'full' }], paused: [], ...PARADIGM_CONTEXT_STATUS } }, BILLING), paradigm: paradigmSlices() },
 });
 

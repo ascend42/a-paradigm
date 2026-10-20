@@ -22,6 +22,28 @@ description: >-
 
 components:
   gnomon-contracts:
+    model-switch-contract: >-
+      8.0:model-switch (one deliberate clientApiId move,
+      sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f ->
+      sha256:69e8db86c16575e54014e8fa00779e607b3ad34f575ca607c9958e9c0a48cc0e):
+      kernel-owned kinds request.session.model{hsid, model} and
+      session.model{hsid, from, to, permitId, outcome} (KIND_PAYLOADS, closed
+      checks in validateKindPayload), SESSION_MODEL_OUTCOMES (switched,
+      backend-refused, timeout, permit-refused, reconciled: after a timeout the
+      next main-chain assistant message's message.model says which model runs), MODEL_SWITCH_CONTEXT_GUARD
+      (any session -> a target without [1m] above 160k tokens, or with the
+      context unknown, refused; doc-only change, ids unchanged), MODEL_SWITCH_REASON_ROUTES
+      (turn-running, model-switching, local-session, context-too-large,
+      model-switch-failed, model-switch-timeout) in REFUSAL_REASONS; descriptor
+      field modelSwitch.
+    claude-model: >-
+      src/claude-model.ts (model picker, 2026-10-20): CLAUDE_MODEL_ALIASES
+      (default, opus, sonnet, haiku, fable, opusplan, opus[1m], sonnet[1m];
+      claude --help 2.1.304 names the alias form), CLAUDE_MODEL_ID (strict
+      claude-[a-z0-9]+([.-][a-z0-9]+)*([1m])?, max 64), isClaudeModel and
+      claudeModelProblem (never echoes the value). Shared by the kernel
+      (session.open, request.session.model), the adapter (argv guard) and the
+      GUI picker. Pure functions: not an input of clientApiId.
     description: >-
       Package entry (src/index.ts, re-exports every module) plus schemas/.
       probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...},
@@ -156,6 +178,21 @@ components:
     tags: [gnomon, contracts, gui, paradigm-8]
     tests:
       - test/hue.test.ts
+  contract-workshop-cap:
+    description: >-
+      The Workshop cap (critique 2026-10-20 S5.3): a closed, minimal shape a
+      mod may put on a kit Text node, {shape tall|wide|floppy, hue
+      0..PROJECT_HUES-1, filled bool, state needs|working|idle|knot, label
+      1..40 code points, one line}. checkCap refuses any unknown, missing,
+      mistyped or out-of-range field and returns a fresh five-key object. The
+      kernel mod-block gate (modhost/block.ts) and the GUI renderer both call
+      it; a client draws the hat from these fields only (no mod SVG, path,
+      colour or attribute). Not an input to kitId, modAbiId or clientApiId.
+    path: src/cap.ts
+    type: module
+    tags: [gnomon, contracts, gui, workshop, paradigm-8]
+    tests:
+      - test/cap.test.ts
   contract-ids:
     description: >-
       Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
@@ -311,7 +348,17 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-063 (self-update
+      kitId and clientApiId (§12.3, §12.8). TD-2026-10-20-086 F6 + T-2026-10-20-007
+      (one deliberate move) moved clientApiId
+      sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4 →
+      sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f:
+      grant.standing / .used / .revoked, request.grant.standing / .revoke,
+      approval.unlock.joined (Aegis M1; final id after the Aegis fold-ins below),
+      approval.auto.miss (sensitive; why + inputHash sensitive),
+      approval.auto{anchoredInputHash} (sensitive field), STANDING_TUPLES,
+      STANDING_REVOKE_REASONS, STANDING_PRESENCE_PREFIX, STANDING_GRANT_MAX_MS
+      (descriptor standingGrant); modAbiId unchanged
+      (test/standing-grant.test.ts). TD-2026-10-19-063 (self-update
       pickup, founder ruling "ONE Touch ID", a deliberate move) moved
       clientApiId sha256:99d5c152…97d1 →
       sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4
