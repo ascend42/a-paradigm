@@ -26,6 +26,7 @@ import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { mountModPanels } from './mod-panels-mount.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -46,6 +47,7 @@ let session: Session | null = null;
 let verifyKey: string | null = null;
 let status: Record<string, unknown> | null = null;
 let focused: string | null = null; // hsid
+let modPanelRow: (row: { kind?: unknown } | null) => void = () => undefined; // K0 mod panels hook
 let stackScoped = false;
 let theme: ThemeChoice = 'auto';
 let motion: 'reduce' | 'system' = 'system';
@@ -524,6 +526,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
       store.apply([p.row]);
       const r = rowOf(p.row);
       if (r) dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
+      modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
     } else if (p.end) void followLog(c, store).catch(() => undefined);
   });
   c.onClose(() => {
@@ -537,6 +540,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   } catch {
     status = null;
   }
+  modPanelRow = mountModPanels({ client: c, status, focused: () => focused }); // K0 mod panels (ui/mod-panels-mount.ts)
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();

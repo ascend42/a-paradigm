@@ -84,6 +84,7 @@ export function text(doc: MiniDoc, s: unknown): unknown {
   return doc.createTextNode(displayText(s));
 }
 
+const TONE = /^[a-z][a-z0-9-]{0,31}$/;
 const KIT = ['Box', 'Text', 'List', 'Table', 'Markdown', 'Diff', 'Progress', 'Button', 'Image', 'Canvas'] as const;
 
 /** The block name of a node: `block` or `type`, with or without the `kit.` prefix (the broker writes `{type:'Box'}`). */
@@ -113,9 +114,10 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
   const name = blockName(n);
   switch (name) {
     case 'Box':
-      return h(doc, 'div', { class: 'blk blk-box' }, ...kids.map(child));
+      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ...kids.map(child));
     case 'Text':
-      return h(doc, 'p', { class: 'blk blk-text' }, str(data.text));
+      // a tone is a closed-shape token mapped to a class (styles.css .tone-*), never a style or a colour value
+      return h(doc, 'p', { class: `blk blk-text${typeof data.tone === 'string' && TONE.test(data.tone) ? ` tone-${data.tone}` : ''}` }, str(data.text));
     case 'List': {
       const items = Array.isArray(data.items) ? data.items : kids;
       return h(doc, 'ul', { class: 'blk blk-list' }, ...items.map((it) => h(doc, 'li', null, typeof it === 'object' && it !== null ? child(it) : str(it))));

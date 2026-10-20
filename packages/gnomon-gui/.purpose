@@ -16,6 +16,28 @@ description: >-
 
 components:
   gui:
+    mod-panels: >-
+      K0 mod panels (#ledger-mod host slice). core/mod-panels.ts (PURE):
+      modPanelsOf(status) reads status.mods.views (the #mod-host declared
+      views of running mods; the non-human status has counts only, so none)
+      and maps slot to region: composer.footer -> desk footer (under the
+      composer), sidebar -> bottom of the left (sessions) pane, panel -> the
+      right (decisions) pane, below the kernel-owned stack. Every other slot
+      (status.mod, tool.view:*, card.detail:*) and every kernel-owned region
+      is never a mod slot. renderModFence wraps the kit renderer output in a
+      <section class=mod-fence> labelled mod:<name> with a `dev` badge for a
+      dev-linked (tier local) mod or a dev result; a refusal shows verbatim
+      in the fence. ModPanelScheduler: re-render only on a LIVE store row of
+      a MOD_FEED_KINDS kind (held equal to the kernel FEED_KINDS by test),
+      debounced 250 ms, one render in flight (rows during it queue exactly
+      one more), never on a timer. ui/mod-panels-mount.ts is the browser
+      glue (creates the slot containers next to their panes, no index.html
+      change, calls mod.view with input {hsid: focused} as display context);
+      app.ts only calls mountModPanels after each attach's status read and
+      feeds live rows to its hook. render.ts: Text tone -> class tone-<token>
+      (closed token regex), Box direction row -> blk-row; styles.css: fence,
+      tone-quiet/warn/deny text tokens, project hue as a FILL on the cap only
+      (G-GUI-10). test/mod-panels.test.ts.
     self-update: >-
       TD-2026-10-19-063 restart (core/restart.ts, PURE but injected storage
       and fetch): a pending daemon-stop{reason:'upgrade'} card shows the
