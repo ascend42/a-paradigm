@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-3"
+        },
+        {
+          "type": "Text",
+          "text": "a-paradigm"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "tasks · 5 of 12 open · 2 high",
+      "children": [
+        {
+          "type": "Text",
+          "text": "T-2026-10-20-006 ▲ Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet"
+        },
+        {
+          "type": "Text",
+          "text": "T-2026-10-19-011 ▲ Aegis re-check of the auto-edits read-only shell pass before the next dogfood w…"
+        },
+        {
+          "type": "Text",
+          "text": "T-2026-10-20-008 Mod host follow-ups (Aegis, Ledger re-check):"
+        },
+        {
+          "type": "Text",
+          "text": "T-2026-10-20-007 Voice: earcon and a separate system voice for kernel speech"
+        },
+        {
+          "type": "Text",
+          "text": "T-2026-10-18-004 Windows CI: LF pins for the mod fixtures and the 8.3 name check"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "decisions · 5 of 95",
+      "children": [
+        {
+          "type": "Text",
+          "text": "TD-2026-10-20-294 2026-10-20 Table-talk voice replies, and fewer approval prompts under auto-edits"
+        },
+        {
+          "type": "Text",
+          "text": "TD-2026-10-20-262 2026-10-20 Dictation: a human send carries its voice turns, attributed by the kernel"
+        },
+        {
+          "type": "Text",
+          "text": "TD-2026-10-19-063 2026-10-19 A claim-mismatch card arrives with Deny focused"
+        },
+        {
+          "type": "Text",
+          "text": "TD-2026-10-18-097 2026-10-18 Audited sessions load the repo context the way plain Claude Code does"
+        },
+        {
+          "type": "Text",
+          "text": "TD-2026-10-17-041 2026-10-17 Mods are pinned snapshots; a changed linked folder pauses and re-cards"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "lore · 5 of 341",
+      "children": [
+        {
+          "type": "Text",
+          "text": "L-2026-10-20-ascend-054457-857 insight · Decision TD-2026-10-20-294 recorded"
+        },
+        {
+          "type": "Text",
+          "text": "L-2026-10-20-ascend-053549-001 milestone · Ledger mod lands behind log.read:usage (Aegis M1)"
+        },
+        {
+          "type": "Text",
+          "text": "L-2026-10-20-ascend-043827-854 insight · Decision TD-2026-10-20-262 recorded"
+        },
+        {
+          "type": "Text",
+          "text": "L-2026-10-19-ascend-221501-002 decision · Repo hooks stay audited; the human decides each one"
+        },
+        {
+          "type": "Text",
+          "text": "L-2026-10-19-ascend-180211-004 insight · The Workshop strip shows who needs you, never what they said"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "row",
+      "title": "symbols",
+      "children": [
+        {
+          "type": "Text",
+          "text": "#gnomon-voice",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "#gui",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "$voice-turn",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "#ledger-mod",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "#mod-host",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "^repo-hook",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "#workshop-mod",
+          "tone": "chip"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "skipped · 1 malformed",
+      "tone": "quiet"
+    }
+  ]
+}

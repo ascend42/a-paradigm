@@ -58,3 +58,27 @@ components:
       (test/ledger-mod.test.ts, light and dark); goldens regenerate with
       `npm run repin:first-party` in packages/gnomon.
     tags: [mods, first-party]
+  paradigm-context-mod:
+    description: >-
+      #paradigm-context-mod - packages/gnomon-mods/paradigm-context, Paradigm
+      Context (mod #2 of the mods arc). One view `paradigm-context.sheet`
+      (slot sidebar, append), read-only (no Button, no command, no tool): a
+      head with the project swatch (tone hue-<0..7> on the ● cap glyph only,
+      the name in ink), a stale line (warn) when the newest decision or lore
+      entry is > STALE_DAYS (14) older than the slice's `at`, then three
+      zones titled with their {n, of} count - tasks (`tasks · n of m open ·
+      k high`, id + ▲ for high + title), decisions (id + date + title), lore
+      (id + type + title) - then the symbols touched as chips (tone chip,
+      mono ink, never a hue), and a skipped line (malformed / refused /
+      secret counts). Titles cut to 80 code points. Its ONLY input is the
+      host-composed `input.paradigm` (#mod-host K1 paradigm-slice:v1 of the
+      focused LIVE session's repo, joined server-side from {focus:{hsid}},
+      K3); model.mjs re-validates and bounds it (ids, dates, tokens, symbol
+      shape, counts). requires paradigm.read:summary only (no log.read, so
+      no feed), egress none (refused with that capability). index.mjs is the
+      #ledger-mod stdio loop minus the feed (no SDK import, echoes
+      MOD_ABI_ID). Fixtures empty, full, full-dark, stale, unfocused with
+      goldens (test/paradigm-context-mod.test.ts, light and dark);
+      regenerate with `npm run repin:first-party`; tier first-party once
+      pinned in FIRST_PARTY_PACKAGE_HASHES.
+    tags: [mods, first-party]

@@ -1,0 +1,14 @@
+{
+  "view": "paradigm-context.sheet",
+  "input": {
+    "paradigm": {
+      "v": "paradigm-slice:v1",
+      "state": "unfocused"
+    }
+  },
+  "width": 40,
+  "prefs": {
+    "motion": "full",
+    "theme": "day"
+  }
+}

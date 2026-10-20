@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-5"
+        },
+        {
+          "type": "Text",
+          "text": "fresh-repo"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "no decisions or lore yet",
+      "tone": "quiet"
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "tasks · 0 of 0 open",
+      "children": [
+        {
+          "type": "Text",
+          "text": "no open tasks",
+          "tone": "quiet"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "decisions · 0 of 0",
+      "children": [
+        {
+          "type": "Text",
+          "text": "no decisions",
+          "tone": "quiet"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "lore · 0 of 0",
+      "children": [
+        {
+          "type": "Text",
+          "text": "no lore",
+          "tone": "quiet"
+        }
+      ]
+    }
+  ]
+}

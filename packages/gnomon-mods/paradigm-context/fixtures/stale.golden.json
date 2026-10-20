@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Paradigm",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "direction": "row",
+      "children": [
+        {
+          "type": "Text",
+          "text": "●",
+          "tone": "hue-0"
+        },
+        {
+          "type": "Text",
+          "text": "ledgerette"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "stale · last entry 2026-08-30 (51 days ago)",
+      "tone": "warn"
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "tasks · 1 of 1 open",
+      "children": [
+        {
+          "type": "Text",
+          "text": "T-2026-08-12-002 Typecheck packages/ledger after the Cents migration"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "decisions · 1 of 3",
+      "children": [
+        {
+          "type": "Text",
+          "text": "TD-2026-08-30-118 2026-08-30 Money is integer cents end to end"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "column",
+      "title": "lore · 1 of 4",
+      "children": [
+        {
+          "type": "Text",
+          "text": "L-2026-08-29-matt-101500-001 milestone · Ledger import lands"
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "direction": "row",
+      "title": "symbols",
+      "children": [
+        {
+          "type": "Text",
+          "text": "#ledger-post",
+          "tone": "chip"
+        },
+        {
+          "type": "Text",
+          "text": "$import-flow",
+          "tone": "chip"
+        }
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "skipped · 1 refused · 2 secret",
+      "tone": "quiet"
+    }
+  ]
+}
