@@ -13,4 +13,5 @@ export * from './manifest.js';
 export * from './audio-io.js';
 export * from './fake-audio-io.js';
 export * from './kernel-link.js';
+export * from './run.js';
 export { createSherpaEngines, loadSherpa, SherpaSpeaker, SherpaStt, SherpaTts, SherpaVad } from './engines/sherpa.js';

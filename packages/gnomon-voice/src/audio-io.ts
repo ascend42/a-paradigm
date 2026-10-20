@@ -89,7 +89,7 @@ export class FrameReader {
 type Listeners = { [E in keyof AudioIOEvents]: Set<AudioIOEvents[E]> };
 
 export class Emitter {
-  readonly l: Listeners = { frame: new Set(), hotkey: new Set(), mic: new Set(), route: new Set(), level: new Set(), closed: new Set() };
+  readonly l: Listeners = { frame: new Set(), hotkey: new Set(), mic: new Set(), route: new Set(), level: new Set(), closed: new Set(), control: new Set() };
   on<E extends keyof AudioIOEvents>(event: E, cb: AudioIOEvents[E]): () => void {
     (this.l[event] as Set<AudioIOEvents[E]>).add(cb);
     return () => (this.l[event] as Set<AudioIOEvents[E]>).delete(cb);
@@ -109,6 +109,20 @@ export interface SpawnedAudioIOOptions {
   now?: () => number;
   /** spawn seam for tests */
   spawnImpl?: typeof spawn;
+}
+
+/**
+ * The ONLY environment the Swift child gets (item 5 hardening): locale, home and temp for CoreAudio/AppKit, a
+ * fixed system PATH. Never GNOMON_VOICE_IO_DISCLAIMED (the binary's own re-spawn marker), never the parent's
+ * secrets or DYLD_* / NODE_* variables.
+ */
+export const IO_ENV_ALLOW = ['HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING'] as const;
+export const IO_CHILD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+export function ioChildEnv(src: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: IO_CHILD_PATH };
+  for (const k of IO_ENV_ALLOW) if (typeof src[k] === 'string') env[k] = src[k];
+  return env;
 }
 
 export class AudioIOError extends Error {
@@ -132,6 +146,9 @@ export class SpawnedAudioIO implements AudioIO {
   /** capture/level frames are dropped unless the mic is on (after mic.on ok; off once mic.off is sent or mic:false arrives) */
   #micOn = false;
   #disclaimed: boolean | undefined;
+  get micOn(): boolean {
+    return this.#micOn;
+  }
   #killOnExit: (() => void) | undefined;
 
   constructor(o: SpawnedAudioIOOptions) {
@@ -154,9 +171,8 @@ export class SpawnedAudioIO implements AudioIO {
   }
 
   async start(): Promise<void> {
-    // V2b Aegis duty 3: a clean env (the disclaim marker is the binary's own re-spawn signal, never inherited)
-    const env = { ...process.env };
-    delete env.GNOMON_VOICE_IO_DISCLAIMED;
+    // V2b Aegis duty 3 + item 5: an ALLOW-LIST env (the disclaim marker is the binary's own re-spawn signal, never inherited)
+    const env = ioChildEnv();
     const child = (this.#o.spawnImpl ?? spawn)(this.#o.binary, this.#o.args ?? [], { stdio: ['pipe', 'pipe', 'inherit'], env });
     this.#child = child;
     this.#killOnExit = () => void child.kill();
@@ -185,7 +201,8 @@ export class SpawnedAudioIO implements AudioIO {
     // V2b Aegis duty 1: never start capture unless the binary disclaimed TCC responsibility (else the Microphone
     // grant would attach to the parent app)
     const info = await this.command('info');
-    if (info.disclaimed === false || this.#disclaimed === false) {
+    // fail CLOSED: only an explicit `disclaimed: true` (reply or ready event) lets the mic turn on
+    if (!(info.disclaimed === true || (info.disclaimed === undefined && this.#disclaimed === true)) || this.#disclaimed === false) {
       await this.close();
       throw new AudioIOError('info', 'not-disclaimed', 'Gnomon voice will not turn the mic on: the mic permission would attach to the wrong app (gnomon-voice-io is not disclaimed).');
     }
@@ -193,6 +210,17 @@ export class SpawnedAudioIO implements AudioIO {
     this.#micOn = true;
     const r = await this.command('route.get').catch(() => undefined);
     if (r) this.#setRoute(r);
+  }
+
+  /** Local mic toggle (⌃⌥M): mic.on / mic.off on the binary. Frames are dropped from the moment mic.off is sent. */
+  async setMic(on: boolean): Promise<void> {
+    if (!on) {
+      this.#micOn = false;
+      await this.command('mic.off');
+      return;
+    }
+    await this.command('mic.on');
+    this.#micOn = true;
   }
 
   /** One command → its one reply; rejects with AudioIOError on ok:false (e.g. mic-denied, hotkey-taken). */
@@ -263,8 +291,9 @@ export class SpawnedAudioIO implements AudioIO {
         if (this.#micOn && typeof m.rmsDBFS === 'number') this.#ev.emit('level', m.rmsDBFS);
         break;
       case 'hotkey':
-        // only the talk key maps to push-to-talk; mic-toggle / mode-toggle are left to the controller UI (not wired yet)
+        // talk → push-to-talk; mic-toggle (⌃⌥M) / mode-toggle (⌃⌥A) → local controls, on key down only
         if (m.action === 'talk') this.#ev.emit('hotkey', m.phase === 'down', at);
+        else if ((m.action === 'mic-toggle' || m.action === 'mode-toggle') && m.phase === 'down') this.#ev.emit('control', m.action, at);
         break;
       case 'playback.start':
         if (this.#pending && this.#pending.t0 === undefined) this.#pending.t0 = typeof m.audibleAtUs === 'number' ? this.#wall(m.audibleAtUs) : at;

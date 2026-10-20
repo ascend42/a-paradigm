@@ -9,8 +9,8 @@
  *   Parakeet STT → speaker verify (CAM++ vs the enrolled prints) →
  *   `log.append voice.turn.user{turnId, speakerId, speakerEnrolled, forwarded, mode, aec, t0, t1, text}` →
  *   `session.send{hsid, content: [{text}]}` (enrolled speakers only). A refusal is shown and never retried.
- * $voice-turn, agent side: `log.read follow` on the attached session → SpeakableProjector (first paragraph or the
- *   gnome line; edits as "edited N files"; ask-user questions always) → Kokoro per sentence → AudioIO.play →
+ * $voice-turn, agent side: `log.read follow` on the attached session → the KERNEL's speakable rows
+ *   (`voice.turn.agent{source:'kernel-speakable', turnSeq, items}`; never turn.event) → Kokoro per sentence → AudioIO.play →
  *   `log.append voice.turn.agent{turnId, t0, t1, textPlanned, textSpoken}` per played chunk (the windows the
  *   kernel's voice-echo guard checks).
  *
@@ -23,9 +23,9 @@
  * kernel stores no text for spk:unknown-N under V2a) and nothing is sent. No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
-import { SpeakableProjector, sentences, type SpeakItem } from './speakable.js';
+import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
-import type { AudioIO, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
+import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
 export type ClientMode = 'off' | 'ptt' | 'ambient';
@@ -103,7 +103,7 @@ export class VoiceClient {
   readonly #tail: number;
   readonly #wire: WireModes;
   readonly #verifier: SpeakerVerifier;
-  readonly #projector = new SpeakableProjector();
+  #spokenTurns = new Set<string>();
   #requested: ClientMode;
   #attachment: VoiceAttachment | null = null;
   #unfollow: (() => void) | undefined;
@@ -160,6 +160,7 @@ export class VoiceClient {
       a.on('frame', (f) => this.#onFrame(f)),
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
+      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : this.toggleAmbient())),
     );
     await a.start();
     await this.refresh();
@@ -205,6 +206,48 @@ export class VoiceClient {
     this.#o.engines.vad.reset();
     const eff = this.mode;
     if (RANK[m] > RANK[eff]) this.#notice('info', `The human allows up to ${eff === 'off' ? 'nothing (not attached)' : eff} here; using ${eff}.`);
+    return eff;
+  }
+
+  /**
+   * ⌃⌥M: toggle capture locally (mic.on / mic.off on gnomon-voice-io) with a status note. Never touches the
+   * kernel: the attachment and its ceiling are the human's.
+   */
+  async toggleMic(): Promise<boolean> {
+    const on = !this.#o.audio.micOn;
+    try {
+      await this.#o.audio.setMic(on);
+    } catch (err) {
+      this.#notice('warn', `Could not turn the mic ${on ? 'on' : 'off'}: ${err instanceof Error ? err.message : String(err)}`);
+      return this.#o.audio.micOn;
+    }
+    if (!on) {
+      this.#pttHeld = false;
+      this.#pttFrames = [];
+      this.#o.engines.vad.reset();
+    }
+    this.#flow.info('mic toggled', { on });
+    this.#notice('info', on ? 'Mic on.' : 'Mic off. Press ⌃⌥M to turn it back on.');
+    return on;
+  }
+
+  /**
+   * ⌃⌥A: ambient ↔ push-to-talk, LOCAL and only within the human's ceiling. Ambient → ptt narrows; ptt → ambient
+   * re-widens only when the ceiling is ambient. The voice principal cannot change the attachment mode (the kernel
+   * refuses it), so above the ceiling this does nothing but say so and log a client notice the GUI can show.
+   */
+  async toggleAmbient(): Promise<ClientMode> {
+    const eff = this.mode;
+    const ceiling = this.ceiling;
+    if (eff === 'ambient') return this.setMode('ptt');
+    if (eff === 'ptt' && ceiling === 'ambient') return this.setMode('ambient');
+    const text = ceiling === 'off' ? 'Voice is not attached. Open Gnomon to attach it.' : 'Ambient listening is off for this session. Open Gnomon to turn on ambient.';
+    this.#notice('info', text);
+    try {
+      await this.#o.link.append('voice.client.notice', { code: 'ambient-above-ceiling', ceiling, mode: eff, text });
+    } catch (err) {
+      this.#log.warn('client notice not logged', { reason: toRefusal(err).reason });
+    }
     return eff;
   }
 
@@ -338,7 +381,15 @@ export class VoiceClient {
   // ---- speaking ------------------------------------------------------------------------------------------------
 
   #onRow(kind: string, payload: Record<string, unknown>): void {
-    const items: SpeakItem[] = this.#projector.push(kind, payload);
+    const items = kernelSpeakable(kind, payload);
+    if (!items.length) return;
+    // a kernel-speakable row is said once per turnSeq (a re-follow after an attachment change replays rows)
+    const key = typeof payload.turnSeq === 'number' || typeof payload.turnSeq === 'string' ? String(payload.turnSeq) : undefined;
+    if (key !== undefined) {
+      if (this.#spokenTurns.has(key)) return;
+      this.#spokenTurns.add(key);
+      if (this.#spokenTurns.size > 256) this.#spokenTurns.delete(this.#spokenTurns.values().next().value!);
+    }
     for (const it of items) this.say(it.text);
   }
 
@@ -357,13 +408,20 @@ export class VoiceClient {
       this.#speechRunMs = 0;
       const id = turnStamp('a', Math.max(this.#now(), this.#lastAgentMs), ++this.#agentN);
       this.#playing = { t0: this.#now() };
-      let r;
+      let r: PlaybackResult | undefined;
       try {
         r = await this.#o.audio.play({ id, samples: audio.samples, sampleRate: audio.sampleRate });
+      } catch (err) {
+        this.#log.warn('playback failed', { error: err instanceof Error ? err.message : String(err) });
       } finally {
         const t0 = this.#playing?.t0 ?? this.#now();
         this.#playing = null;
+        // L4: play threw ⇒ no result; keep a conservative echo window and drop the rest of the reply
         if (!r) this.#windows.push({ t0, t1: this.#now() });
+      }
+      if (!r) {
+        this.#speakQueue = [];
+        return;
       }
       this.#lastAgentMs = Math.max(this.#lastAgentMs, r.t0);
       this.#windows.push({ t0: r.t0, t1: r.t1 });
