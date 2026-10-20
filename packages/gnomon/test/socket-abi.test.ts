@@ -769,6 +769,12 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         if (cls === 'human' && kind === 'request.mode.set') {
           // P8-D86/D87: served for the human's own device (a first-party connection); a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && kind === 'request.grant.standing') {
+          // TD-2026-10-20-086 F6: a standing grant is minted only on the GUI; the human's CLI device is refused by the grant itself
+          expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+        } else if (cls === 'human' && kind === 'request.grant.standing.revoke') {
+          // F6: Revoke is served for the human device too (a tighten); a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
         } else if (cls === 'human' && humanRequest.has(kind)) {
           expect(e, kind).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
           expect((await s.conn.call('log.append', { kind })) as { error: { data: { data: Res } } }).toMatchObject({ error: { data: { data: { needs: 'first-party human-class connection' } } } });

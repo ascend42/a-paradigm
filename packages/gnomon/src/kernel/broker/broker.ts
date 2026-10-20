@@ -207,6 +207,21 @@ export interface RaiseInput {
   ruleScope?: { repoKey: string };
 }
 
+/** #standing-grant (TD-2026-10-20-086 F6): the live grant that covers a decision. */
+export interface StandingMatch {
+  grantId: string;
+  tuple: string;
+  repo: string | null;
+}
+
+/** The broker's seam to #standing-grant (standing-grant.ts StandingGrants): asked before presence, told after the decide row. */
+export interface StandingSeam {
+  match(ctx: DecideContext, card: CardV1, decision: string, detail: Record<string, unknown>, ruleRepo: string | null): StandingMatch | null;
+  used(m: StandingMatch, d: { cardId: string; decision: string; hsid: string | null; connId: string }): Promise<void>;
+  /** the session ended (lock, sleep, user switch) or the helper exited: every grant ends */
+  endAll?(reason: 'screen-lock' | 'display-sleep' | 'system-sleep' | 'user-switch' | 'helper-exit'): Promise<unknown>;
+}
+
 export interface DecideContext {
   connId: string;
   principal: string;
@@ -232,6 +247,8 @@ export interface DecideContext {
 
 interface CardRecord {
   card: CardV1;
+  /** the raise detail (inside contentHash): #standing-grant reads what the card asserts from it */
+  detail: Record<string, unknown>;
   /** TD-2026-10-19-063 M3: voice-hand-only for every decision */
   handOnly?: boolean;
   tool?: string;
@@ -346,6 +363,11 @@ export class ApprovalBroker {
   readonly #prompting = new Set<string>();
   /** L2: per connection, when its last unproved prompt ended (mono) */
   readonly #cooldownFrom = new Map<string, number>();
+  #standing: StandingSeam | null = null;
+  /** #standing-grant (F6): the daemon wires the grants after the broker exists. */
+  setStanding(s: StandingSeam | null): void {
+    this.#standing = s;
+  }
   /** F5: the last connection that opened or used each unlock key (named on its approval.unlock.dropped row) */
   readonly #lastConn = new Map<string, string>();
 
@@ -403,7 +425,7 @@ export class ApprovalBroker {
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
-    this.#cards.set(cardId, { card, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, detail: input.detail, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
   }
 
@@ -557,6 +579,7 @@ export class ApprovalBroker {
     for (const connId of this.unlocks.connIds()) {
       if (this.unlocks.drop(connId)) await this.#droppedRow(connId, 'helper-exit').catch(() => undefined);
     }
+    await this.#standing?.endAll?.('helper-exit').catch(() => undefined); // F6: a grant never outlives the unlock it signs under
   }
 
   /**
@@ -568,6 +591,8 @@ export class ApprovalBroker {
     for (const connId of this.unlocks.connIds()) {
       if (this.unlocks.drop(connId)) await this.#droppedRow(connId, SESSION_DISARM_REASON[cause], { cause }).catch(() => undefined);
     }
+    // F6: every standing grant ends at the next screen lock, sleep or user switch
+    await this.#standing?.endAll?.(SESSION_DISARM_REASON[cause] as 'screen-lock').catch(() => undefined);
   }
 
   #settle(r: CardRecord, outcome: string): void {
@@ -683,10 +708,31 @@ export class ApprovalBroker {
     const live = (): void => {
       if (ctx.isLive && !ctx.isLive()) throw fail('ENGINE', 'gone', 'the connection closed during the decision', { cardId });
     };
-    let presence: 'fresh' | 'cached' | 'cli';
+    let presence: string;
     let token: PresenceToken | null = null;
     let helperCached = false;
-    if (helperSigns && cls === 'cached' && !isCli && (await this.#useUnlock(uk, ctx.connId)) === 'ok') {
+    // F6 (#standing-grant): a live standing grant of THIS GUI device covering (card, decision) replaces the prompt.
+    // Never for root class, a hand-only card or withdraw; the decisionSig is still the approvals key's (the helper
+    // signs under the device's cached unlock, which the grant's touch kept; no unlock ⇒ the normal prompt below).
+    let standing: StandingMatch | null = null;
+    if (this.#standing && !isCli && cls !== 'root' && cls !== 'none' && !r.handOnly) {
+      const m = this.#standing.match(ctx, card, decision, r.detail, r.ruleScope?.repoKey ?? null);
+      if (m && !helperSigns) standing = m; // a client-supplied decisionSig was verified above
+      else if (m && (await this.#useUnlock(uk, ctx.connId)) === 'ok') {
+        try {
+          decisionSig = (await this.#approvals.signDecision!({ connId: ctx.connId, unlockKey: uk, approver: ctx.principal, message, mode: 'cached' })).decisionSig;
+          standing = m;
+        } catch (err) {
+          this.unlocks.drop(uk);
+          await this.#dropHelperUnlock(uk);
+          if (!(err instanceof HelperUnlockGone)) throw this.#helperFailure(err, cardId);
+          await this.#droppedRow(uk, 'helper-lost');
+        }
+      }
+    }
+    // F6: the grant card's own touch keeps the device's unlock, so the standing uses it mints can be signed
+    const keepForGrant = String(card.kind) === 'grant' && r.detail.op === 'standing';
+    if (!standing && helperSigns && cls === 'cached' && !isCli && (await this.#useUnlock(uk, ctx.connId)) === 'ok') {
       try {
         decisionSig = (await this.#approvals.signDecision!({ connId: ctx.connId, unlockKey: uk, approver: ctx.principal, message, mode: 'cached' })).decisionSig;
         helperCached = true;
@@ -702,13 +748,15 @@ export class ApprovalBroker {
         await this.#droppedRow(uk, 'helper-lost');
       }
     }
-    if (cls === 'none') {
+    if (standing) {
+      presence = `standing:${standing.grantId}`;
+    } else if (cls === 'none') {
       presence = 'fresh'; // unreachable in M1.6 (no held cards); withdraw takes no presence
     } else if (helperCached) {
       presence = 'cached';
     } else if (helperSigns) {
       const hadUnlock = this.unlocks.has(uk);
-      const keep = cls === 'cached' && !isCli;
+      const keep = (cls === 'cached' || keepForGrant) && !isCli;
       const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
       let res: DecisionSignResult;
       try {
@@ -751,7 +799,7 @@ export class ApprovalBroker {
         const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
         if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
       }
-      if (cls === 'cached' && !isCli && !this.unlocks.has(uk)) {
+      if ((cls === 'cached' || keepForGrant) && !isCli && !this.unlocks.has(uk)) {
         live();
         this.unlocks.open(uk);
         this.#lastConn.set(uk, ctx.connId);
@@ -782,13 +830,13 @@ export class ApprovalBroker {
     // Aegis A3: claimed SYNCHRONOUSLY after the re-check — no expire() can interleave from here to the settle
     r.claim = decision;
     try {
-      await this.#decideAndApply(r, ctx, p, { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card });
+      await this.#decideAndApply(r, ctx, p, { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing });
     } catch (err) {
       delete r.claim; // the row or the effect failed: the card stays pending (approval.decide is a record, never authority)
       throw err;
     }
     if (typeof p.note === 'string' && p.note) r.note = p.note;
-    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence, via, cli };
+    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence: presence as CardV1['presence'], via, cli };
     delete r.claim;
     this.#settle(r, decision);
     return r.card;
@@ -798,14 +846,16 @@ export class ApprovalBroker {
     r: CardRecord,
     ctx: DecideContext,
     p: Record<string, unknown>,
-    d: { prefix: string[] | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1 },
+    d: { prefix: string[] | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1; standing: StandingMatch | null },
   ): Promise<void> {
-    const { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card } = d;
+    const { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing } = d;
     await this.#o.log(
       'approval.decide',
       { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(prefix ? { scope: { kind: 'prefix', prefix } } : {}), ...(rootSig ? { rootSig } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
       { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) },
     );
+    // F6: the notify row of a standing use, right after the record it notifies about (the GUI's feed + Revoke)
+    if (standing && this.#standing) await this.#standing.used(standing, { cardId, decision, hsid: card.hsid ?? null, connId: ctx.connId });
     if (decision === 'always') {
       const match = prefix ? { match: 'prefix', prefix } : { matchExact: true };
       await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, ...match, presence, repoKey: r.ruleScope?.repoKey ?? null }, { connId: ctx.connId });

@@ -1661,8 +1661,43 @@ components:
       - test/honesty.test.ts
     oracles: [G-CLI-02, G-OBS-01, G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07]
 
+  standing-grant:
+    description: >-
+      TD-2026-10-20-086 F6 (spec §3.4 "Standing grant"),
+      src/kernel/broker/standing-grant.ts. ONE root-class `grant` card
+      (request.grant.standing{tuples, repos} from the human on the GUI only,
+      detail.op 'standing') mints grant.standing{grantId (= the cardId),
+      cardId, tuples, repos, device (the GUI device's udev: unlock key),
+      expiresAt ≤ 12 h, by}; the same touch keeps the device's cached unlock
+      so later uses can be signed by the helper. While it stands, a human
+      GUI decision on the same device that a tuple covers
+      (STANDING_TUPLES: mode.loosen:auto-edits, permission:always,
+      voice.widen, voice-arm:allow, daemon-stop:restart with
+      detail.binaryUnchanged and no update, reconsider:extend; repo-scoped
+      ones only in the granted repos) takes no prompt: approval.decide
+      {presence:'standing:<grantId>'} then the notify row
+      grant.standing.used{grantId, cardId, tuple, decision, repo, hsid}.
+      Never standing: root class, hand-only, install, gate-class,
+      fallback-cloud, declassify, peer-pair, api-token, grant, handoff,
+      peer-flagged or irreversible cards (standingTupleOf + broker checks).
+      Ends: expiresAt, Revoke (request.grant.standing.revoke{grantId} →
+      grant.standing.revoked{grantId, by, reason:'human'}, a tighten, no
+      presence), the next screen lock / sleep / user switch or a helper exit
+      (broker.helperSessionEnded/helperExited → endAll). StandingGrantBook
+      folds kernel-signed rows only (forged rows ignored), like RuleBook /
+      RunModeBook; status.standing{built, tuples, active[], pendingCardId}.
+      No new signal (events are the §9.1 grant.standing* kinds).
+    path: src/kernel/broker/standing-grant.ts
+    type: module
+    tags: [gnomon, kernel, broker, approvals, presence, td-2026-10-20-086]
+    tests:
+      - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      STANDING GRANT (TD-2026-10-20-086 F6): StandingSeam (setStanding) is
+      asked before any presence; a match is signed under the device unlock
+      (or a verified client decisionSig) with presence 'standing:<id>' and
+      #standing-grant writes grant.standing.used after approval.decide.
       RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
       mode:auto-edits:read-only / mode:ask:read-only (a Bash command
       #shell-readonly proves read-only; TD-2026-10-20-294 part 1, F1

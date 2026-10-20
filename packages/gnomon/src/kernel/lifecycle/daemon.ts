@@ -80,6 +80,7 @@ import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
 import { LOOSEN_TIMEOUT_MS, modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
+import { StandingGrantBook, StandingGrants, standingSourceOf } from '../broker/standing-grant.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
@@ -856,6 +857,19 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // Aegis L2: every applied change reaches the live sessions at once (manual re-entered ⇒ the plan is dropped)
     onChange: () => supervisor.noteModeChange(),
   });
+  // TD-2026-10-20-086 F6 (#standing-grant): the daily standing grant, folded from KERNEL-signed grant.standing* rows
+  // only; the broker asks it before any presence prompt and writes its notify row after approval.decide.
+  const standingBook = new StandingGrantBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const standingGrants = new StandingGrants({
+    broker,
+    book: () => {
+      catchUp(standingBook, standingSourceOf(log));
+      return standingBook;
+    },
+    log: brokerLog,
+    repoKeyOfPath: (abs) => repoKeyOf([abs]),
+  });
+  broker.setStanding(standingGrants);
   // TD-2026-10-19-063: the GUI re-pin of the claude binary. A refused open and a poll of the resolved source
   // pre-stage ONE re-pin card per new sha; only its approved (fresh-presence) effect writes the pin.
   const supSeams = seams.supervisor ?? {};
@@ -1080,7 +1094,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     mods: createModRelayPort(mods),
     sessions,
     approvals,
-    requests: { modeSet: (asker: Parameters<RunModeControl['request']>[0], payload: unknown) => runModes.request(asker, payload), status: () => runModes.status() },
+    requests: {
+      modeSet: (asker: Parameters<RunModeControl['request']>[0], payload: unknown) => runModes.request(asker, payload),
+      status: () => runModes.status(),
+      standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
+    },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),

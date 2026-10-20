@@ -254,7 +254,7 @@ describe('#gnomon-voice V2a idle auto-off and status', () => {
   it('the voice goldens stay put', () => {
     expect(ABI_ID).toBe('sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35');
     // moved once by TD-2026-10-19-063 (gui.resume, merged before V2e; m1-1-reservations.test.ts records it), never by voice
-    expect(CLIENT_API_ID).toBe('sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4');
+    expect(CLIENT_API_ID).toBe('sha256:ebf32456626d7f80f7a6b7e90ab48270476c120e3f80336b3c762d8289a05c01');
   });
 });
 
