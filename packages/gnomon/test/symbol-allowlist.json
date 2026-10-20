@@ -30,6 +30,7 @@
     { "symbol": "#contract-voice-allowlist", "reason": "contract sub-component of #gnomon-contracts; spec has no node (serves #gnomon-voice, $voice-approval, ^voice-armed; TD-2026-10-19-194)" },
     { "symbol": "#gnomon-mod-sdk", "reason": "package-level component of @a-company/gnomon-mod-sdk (spec §18 names the package; Appendix A has no node)" },
     { "symbol": "#gnomon-voice-io", "reason": "the darwin audio I/O binary under packages/gnomon-voice (TD-2026-10-19-298, slice V2b): a sub-component serving the spec node #gnomon-voice, which stays undeclared until the voice child itself is built" },
+    { "symbol": "#gnomon-voice-bench-partials", "reason": "the B0 partial-decode benchmark script (packages/gnomon-voice/scripts/bench-partials.mjs, T-2026-10-20-005, PROBES.md B0), a dev tool of #gnomon-voice, not shipped; spec has no node" },
     { "symbol": "#gnomon-voice-io-build", "reason": "the build-and-sign script of #gnomon-voice-io (packages/gnomon-voice/scripts/build-voice-io.mjs); spec has no node" },
     { "symbol": "#gui-dictation", "reason": "TD-2026-10-20-262 sub-component of #gui (composer dictation reducer); spec §14.7's Dictation paragraph names it in plain words (no node span, no test id), so Appendix A has no node for it" },
     { "symbol": "#ledger-mod", "reason": "first-party mod #1 of the Gnomon mods arc (packages/gnomon-mods/ledger, the context and budget meter over the #mod-host numbers-only feed v2); a sibling of the spec node #workshop-mod, spec Appendix A node pending a spec pass" },

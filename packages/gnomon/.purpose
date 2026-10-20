@@ -1985,8 +1985,11 @@ components:
       reason? closed too-short|echo|not-attached|no-words|not-enrolled|
       barge-in|refused on dropped only, level? 0..1 on hearing only} relayed
       as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor
-      is the V2 seam that keeps a later capture.text for the gui credential
-      only; voice.capture.level declared in status-numbers.ts. Aegis
+      projects B1's capture.text{committed, tail} (the live partial words,
+      hearing / transcribing only, voice principal only, sanitised, capped
+      at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row)
+      to a human-class connection on the gui credential only (V2; the shared
+      CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis
       follow-ups: terminal states are marked claim:'client' and cross-checked
       against the kernel's own acceptances on that voice connection
       (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop
