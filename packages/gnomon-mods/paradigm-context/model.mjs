@@ -87,6 +87,17 @@ function head(sl) {
   return { type: 'Box', direction: 'row', children: [cap, text(sl && sl.name ? sl.name : 'paradigm')] };
 }
 
+/**
+ * Aegis L2: one item line. A FIXED type prefix (task / decision / lore) and the id come from the model; the
+ * repo-authored title follows QUOTED and dim, so a title can never pass for a status glyph, a kernel line or a
+ * card (any status mark, like the ▲ of a high task, is the model's own, in the prefix). Curly quotes inside the
+ * title are flattened so it cannot close its own quote.
+ */
+function line(kind, id, title) {
+  const q = String(title).replace(/[\u201c\u201d]/g, '"');
+  return { type: 'Box', direction: 'row', children: [text(kind, 'quiet'), text(id, 'quiet'), text(`\u201c${q}\u201d`, 'quiet')] };
+}
+
 // a zone heading is a Text (tone head): the GUI's kit renderer draws no Box title, so the {n, of} count rides the text
 function zone(title, lines, empty) {
   return { type: 'Box', direction: 'column', children: [text(title, 'head'), ...(lines.length ? lines : [text(empty, 'quiet')])] };
@@ -105,9 +116,9 @@ export function renderSheet(input, prefs = {}) {
   else if (age !== null && age > STALE_DAYS) children.push(text(`stale · last entry ${sl.newest} (${age} days ago)`, 'warn'));
   const t = sl.tasks;
   children.push(
-    zone(`tasks · ${nOf(t.items.length, t.of)} open${t.high ? ` · ${t.high} high` : ''}`, t.items.map((it) => text(`${it.id}${it.priority === 'high' ? ' ▲' : ''} ${it.title}`)), 'no open tasks'),
-    zone(`decisions · ${nOf(sl.decisions.items.length, sl.decisions.of)}`, sl.decisions.items.map((it) => text(`${it.id}${it.date ? ` ${it.date}` : ''} ${it.title}`)), 'no decisions'),
-    zone(`lore · ${nOf(sl.lore.items.length, sl.lore.of)}`, sl.lore.items.map((it) => text(`${it.id} ${it.type} · ${it.title}`)), 'no lore'),
+    zone(`tasks · ${nOf(t.items.length, t.of)} open${t.high ? ` · ${t.high} high` : ''}`, t.items.map((it) => line(`task${it.priority === 'high' ? ' ▲' : ''}`, it.id, it.title)), 'no open tasks'),
+    zone(`decisions · ${nOf(sl.decisions.items.length, sl.decisions.of)}`, sl.decisions.items.map((it) => line('decision', `${it.id}${it.date ? ` ${it.date}` : ''}`, it.title)), 'no decisions'),
+    zone(`lore · ${nOf(sl.lore.items.length, sl.lore.of)}`, sl.lore.items.map((it) => line(`lore ${it.type}`, it.id, it.title)), 'no lore'),
   );
   // symbol chips: mono ink text (tone chip), never a hue
   if (sl.symbols.length) children.push({ type: 'Box', direction: 'column', children: [text(`symbols · ${sl.symbols.length}`, 'head'), { type: 'Box', direction: 'row', children: sl.symbols.map((s) => text(s, 'chip')) }] });

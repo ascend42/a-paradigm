@@ -29,24 +29,109 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "T-2026-10-20-006 ▲ Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task ▲",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-006",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "T-2026-10-19-011 ▲ Aegis re-check of the auto-edits read-only shell pass before the next dogfood w…"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task ▲",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-19-011",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Aegis re-check of the auto-edits read-only shell pass before the next dogfood w…”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "T-2026-10-20-008 Mod host follow-ups (Aegis, Ledger re-check):"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-008",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Mod host follow-ups (Aegis, Ledger re-check):”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "T-2026-10-20-007 Voice: earcon and a separate system voice for kernel speech"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-20-007",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Voice: earcon and a separate system voice for kernel speech”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "T-2026-10-18-004 Windows CI: LF pins for the mod fixtures and the 8.3 name check"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-10-18-004",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Windows CI: LF pins for the mod fixtures and the 8.3 name check”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },
@@ -60,24 +145,109 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "TD-2026-10-20-294 2026-10-20 Table-talk voice replies, and fewer approval prompts under auto-edits"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-20-294 2026-10-20",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Table-talk voice replies, and fewer approval prompts under auto-edits”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "TD-2026-10-20-262 2026-10-20 Dictation: a human send carries its voice turns, attributed by the kernel"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-20-262 2026-10-20",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Dictation: a human send carries its voice turns, attributed by the kernel”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "TD-2026-10-19-063 2026-10-19 A claim-mismatch card arrives with Deny focused"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-19-063 2026-10-19",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“A claim-mismatch card arrives with Deny focused”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "TD-2026-10-18-097 2026-10-18 Audited sessions load the repo context the way plain Claude Code does"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-18-097 2026-10-18",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Audited sessions load the repo context the way plain Claude Code does”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "TD-2026-10-17-041 2026-10-17 Mods are pinned snapshots; a changed linked folder pauses and re-cards"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-10-17-041 2026-10-17",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Mods are pinned snapshots; a changed linked folder pauses and re-cards”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },
@@ -91,24 +261,109 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "L-2026-10-20-ascend-054457-857 insight · Decision TD-2026-10-20-294 recorded"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-054457-857",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Decision TD-2026-10-20-294 recorded”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "L-2026-10-20-ascend-053549-001 milestone · Ledger mod lands behind log.read:usage (Aegis M1)"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore milestone",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-053549-001",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Ledger mod lands behind log.read:usage (Aegis M1)”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "L-2026-10-20-ascend-043827-854 insight · Decision TD-2026-10-20-262 recorded"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-20-ascend-043827-854",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Decision TD-2026-10-20-262 recorded”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "L-2026-10-19-ascend-221501-002 decision · Repo hooks stay audited; the human decides each one"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-19-ascend-221501-002",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Repo hooks stay audited; the human decides each one”",
+              "tone": "quiet"
+            }
+          ]
         },
         {
-          "type": "Text",
-          "text": "L-2026-10-19-ascend-180211-004 insight · The Workshop strip shows who needs you, never what they said"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore insight",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-10-19-ascend-180211-004",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“The Workshop strip shows who needs you, never what they said”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },

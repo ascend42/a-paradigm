@@ -34,8 +34,25 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "T-2026-08-12-002 Typecheck packages/ledger after the Cents migration"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "task",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "T-2026-08-12-002",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Typecheck packages/ledger after the Cents migration”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },
@@ -49,8 +66,25 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "TD-2026-08-30-118 2026-08-30 Money is integer cents end to end"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decision",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "TD-2026-08-30-118 2026-08-30",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Money is integer cents end to end”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },
@@ -64,8 +98,25 @@
           "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "L-2026-08-29-matt-101500-001 milestone · Ledger import lands"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore milestone",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "L-2026-08-29-matt-101500-001",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "“Ledger import lands”",
+              "tone": "quiet"
+            }
+          ]
         }
       ]
     },

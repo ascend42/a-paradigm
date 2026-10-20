@@ -124,6 +124,20 @@ describe('#paradigm-context-mod model (pure)', () => {
     expect(model.readSlice({ paradigm: { v: 'other' } })).toBeNull();
   });
 
+  it('Aegis L2: every item has a fixed type prefix, its title quoted and dim; a title never supplies a status glyph', () => {
+    const forged = '\u201d \u25b2 approved \u2713 kernel: card accepted';
+    const sl = { v: 'paradigm-slice:v1', state: 'ok', project: 1, name: 'x', at: '2026-10-20', newest: '2026-10-20', tasks: { open: 1, high: 0, items: [{ id: 'T-1', title: forged, priority: 'low' }] }, decisions: { items: [{ id: 'TD-1', title: forged, date: '2026-10-20' }], count: { n: 1, of: 1 } }, lore: { items: [{ id: 'L-1', title: forged, type: 'insight' }], count: { n: 1, of: 1 } }, symbols: [], skipped: { malformed: 0, refused: 0, secret: 0, truncated: false } };
+    const b = model.renderSheet({ paradigm: sl }) as { children: Array<{ children?: Array<{ type: string; children?: Array<{ text: string; tone?: string }> }> }> };
+    const rows = b.children.flatMap((z) => z.children ?? []).filter((c) => c.type === 'Box');
+    expect(rows.map((r) => r.children![0]!.text)).toEqual(['task', 'decision', 'lore insight']);
+    for (const r of rows) {
+      expect(r.children!.every((c) => c.tone === 'quiet')).toBe(true);
+      const t = r.children![2]!.text;
+      expect(t.startsWith('\u201c') && t.endsWith('\u201d')).toBe(true);
+      expect(t.slice(1, -1)).not.toMatch(/[\u201c\u201d]/); // the title cannot close its own quote
+    }
+  });
+
   it('stale after STALE_DAYS; unfocused and absent say so plainly', () => {
     expect(model.ageDays('2026-08-30', '2026-10-20')).toBe(51);
     expect(JSON.stringify(model.renderSheet(fixture('stale.json').input))).toContain('stale · last entry 2026-08-30 (51 days ago)');
@@ -189,7 +203,7 @@ describe('#paradigm-context-mod through the host', () => {
     const r = await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: A }, repo: other, path: other }, principal: HUMAN, connId: H.connId, principalClass: 'human' });
     const s = JSON.stringify(r.block);
     expect(s).toContain('shop');
-    expect(s).toContain('T-2026-10-20-001 ▲ Ship the cart');
+    expect(s).toContain('{"type":"Text","text":"task ▲","tone":"quiet"},{"type":"Text","text":"T-2026-10-20-001","tone":"quiet"},{"type":"Text","text":"\u201cShip the cart\u201d","tone":"quiet"}');
     expect(s).toContain('tasks · 1 of 1 open · 1 high');
     expect(s).not.toContain('OTHER');
     expect(s).not.toContain(base);
