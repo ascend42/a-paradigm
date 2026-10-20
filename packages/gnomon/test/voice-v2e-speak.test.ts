@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { KernelSpeakable, SpeakableProjector, speakableSummary, isKernelSpeakable, ASK_WAITING } from '../src/kernel/voice/speakable.js';
 import { mayBeVisible, projectForReader } from '../src/kernel/log/redaction.js';
 import { VoiceReports, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
+import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
 
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 const line = (content: unknown[]) => JSON.stringify({ type: 'assistant', message: { content } });
@@ -94,5 +95,18 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(r.status().notice!.text).toHaveLength(280);
     t += VOICE_REPORT_TTL_MS + 1;
     expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, stopSpeakingSeq: 0 });
+  });
+
+  it('T-2026-10-19-026: playback edges relay as status.voice.playback; stop-speaking bumps a declared counter', () => {
+    let t = 1_000_000;
+    const r = new VoiceReports(() => t);
+    r.report({ playback: { playing: true } });
+    expect(r.status().playback).toEqual({ playing: true, at: new Date(t).toISOString() });
+    for (const bad of [{ playback: null }, { playback: { playing: 1 } }, { playback: { playing: true, x: 1 } }, { playback: [] }]) expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
+    expect(r.stopSpeaking()).toEqual({ stopSpeakingSeq: 1 });
+    expect(r.stopSpeaking()).toEqual({ stopSpeakingSeq: 2 });
+    expect(checkStatusNumbers({ voice: r.status() })).toEqual([]);
+    t += VOICE_REPORT_TTL_MS + 1;
+    expect(r.status()).toMatchObject({ playback: null, stopSpeakingSeq: 2 });
   });
 });

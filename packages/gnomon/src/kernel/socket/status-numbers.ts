@@ -68,6 +68,9 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'voice.client.downloadMb': 'gauge', // total size of the model download in progress, whole MB
   'voice.enrolment.phrase': 'ordinal', // the enrolment phrase being recorded (1-based)
   'voice.enrolment.of': 'limit', // how many phrases an enrolment records
+  'voice.dictation.holdToggles': 'gauge', // the voice app's hold-toggle presses on this voice connection (a counter; TD-2026-10-20-262)
+  // T-2026-10-19-026: the human's Stop speaking presses since the kernel started (a counter; the voice app acts on a change)
+  'voice.stopSpeakingSeq': 'gauge',
 });
 
 export interface StatusNumberFinding {
