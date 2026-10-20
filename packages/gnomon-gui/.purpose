@@ -543,8 +543,16 @@ components:
       line "…" is its own element (#composer-ghost, never the textarea); the
       polite caption (#voice-caption) changes on a state change only. The
       decorative meter animation and row kick are gone, and the dead
-      voice.turn.partial path is removed. Phase B's live words will read a
-      capture.text the kernel projects to the gui credential only.
+      voice.turn.partial path is removed. B1 live words (T-2026-10-20-005,
+      V1/V2): captureStatusOf reads capture.text{committed, tail} (hearing /
+      transcribing only; ghostTextOf: strings only, whitespace collapsed,
+      capped at GHOST_TEXT_MAX keeping the newest words), which the kernel
+      projects to the human gui credential only; app.ts paintGhost puts the
+      committed words solid (.ghost-committed) and the tail dim
+      (.ghost-tail) as text nodes into #composer-ghost (never the textarea,
+      so a send can never carry non-final words), "…" with no words, and
+      clears on captured / dropped / idle. Reduced motion: the global rule
+      makes the tail fade instant.
       Aegis follow-ups: a capture from a status received more than
       CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
       a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
