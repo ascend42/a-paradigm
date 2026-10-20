@@ -14,7 +14,7 @@
 //   ready {info…}  mic {on, voiceProcessing, aec}  route {route, aec, voiceProcessing}
 //   level {rmsDBFS, peakDBFS} ~15 Hz while the mic is on
 //   playback.start {engine, audibleAtUs, outputLatencyUs}  playback.end {reason, utteranceEnded, queuedMs}
-//   hotkey {action: talk|mic-toggle|mode-toggle, phase: down|up}
+//   hotkey {action: talk|mic-toggle|mode-toggle|hold-toggle, phase: down|up}
 //   engine {what, mic}  error {error, message}  exit {code}
 
 import AppKit

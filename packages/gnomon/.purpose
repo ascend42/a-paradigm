@@ -1867,6 +1867,12 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a
+      kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human
+      session.send{source:'voice'} is hash-matched against the attachment's
+      pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId,
+      voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report
+      {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}.
       #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298:
       the attachment mode is a ceiling, ptt under any, conversation only under
       conversation; widening to conversation takes one fresh-presence strictness
@@ -2171,6 +2177,8 @@ components:
 
   supervisor:
     description: >-
+      session.send accepts source 'voice' from a human only, as a dictation
+      attribution hint for #gnomon-voice (TD-2026-10-20-262).
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
       src/kernel/supervisor/. P8-D96 PERMISSION CHANNEL (probe p01b):
       sessions run --permission-prompts host --permission-prompt-tool stdio;

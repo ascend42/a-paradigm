@@ -334,8 +334,8 @@ export interface VoiceClientPort {
   enrol?(asker: { connId: string; principal: string }, payload: { name: string; consent: string }): Promise<unknown>;
   /** V2e: request.voice.forget{name} (human only, no card: a forget narrows). */
   forget?(payload: { name: string }): Promise<unknown>;
-  /** V2e: request.voice.report{enrolment?, notice?} (voice principal only; relayed in status.voice, never logged). */
-  report?(payload: unknown): unknown;
+  /** V2e: request.voice.report{enrolment?, notice?, dictation?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
+  report?(payload: unknown, connId?: string): unknown;
 }
 
 /** V2e: the human's GUI enrolment request (dispatcher-only like request.voice.client; never written as a row). */
@@ -794,7 +794,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?}}`);
         try {
-          return o.voiceClient.report(pa.payload);
+          return o.voiceClient.report(pa.payload, s.connId);
         } catch (err) {
           if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
           throw asRpcRefusal(err);

@@ -19,7 +19,7 @@ import { fetchModel, loadManifest, validateManifest, verifiedModelPaths, type Fe
 import { runVoice } from '../src/run.js';
 import { kernelSpeakable } from '../src/speakable.js';
 import { PRINT_SCHEMA, type VoicePrint } from '../src/speaker.js';
-import { toRefusal, VoiceClient, type ClientMode, type Notice } from '../src/voice-client.js';
+import { toRefusal, VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
 import { FakeLink, stubEngines } from './stubs.js';
 
 const FAKE_IO = fileURLToPath(new URL('./fixtures/fake-voice-io.mjs', import.meta.url));
@@ -171,13 +171,13 @@ describe('run: exits when the fd closes or stdin ends', () => {
 
 /* ── speakable ─────────────────────────────────────────────────────────────────────────────────────── */
 
-async function setup(o: { mode?: ClientMode; attachMode?: string } = {}) {
+async function setup(o: { mode?: ClientMode; attachMode?: string; delivery?: Delivery } = {}) {
   const audio = new FakeAudioIO();
   const engines = stubEngines();
   const link = new FakeLink();
   if (o.attachMode) link.att = { ...link.att!, mode: o.attachMode };
   const notices: Notice[] = [];
-  const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], mode: o.mode ?? 'ptt', now: () => audio.clock, notice: (n) => notices.push(n) });
+  const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], mode: o.mode ?? 'ptt', delivery: o.delivery ?? 'direct', now: () => audio.clock, notice: (n) => notices.push(n) });
   cleanups.push(() => client.close());
   await client.start();
   return { audio, engines, link, client, notices };

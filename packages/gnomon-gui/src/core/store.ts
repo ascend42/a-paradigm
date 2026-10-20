@@ -41,6 +41,8 @@ export interface Row {
   payload?: unknown;
   view?: string;
   hash?: string;
+  /** dictation (TD-2026-10-20-262): this page's composer echo of an edited voice draft (🎙✎) */
+  mark?: 'voice-edited';
 }
 
 export interface StackCard {
@@ -392,6 +394,8 @@ export interface ChatItem {
   at?: string;
   /** V2d: the voice turn's speaker (the item gets a 🎙 tag) */
   speaker?: string;
+  /** dictation: the kernel's attribution of a sent message (turn.sent source): 🎙 voice or 🎙✎ voice-edited */
+  voice?: 'voice' | 'voice-edited';
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -488,13 +492,23 @@ function reasonWithCause(p: Record<string, unknown>, reason: string): string {
  * A sent voice turn is the user's message with a 🎙 <speaker> tag; turn.sent{source:'voice'} adds one only when the
  * page cannot see the voice.turn.user row it cites (a stub view); a refusal shows its reason inline.
  */
-function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; speakable: { n: number } }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number }) | null | undefined {
+/** The voice turn seqs a turn.sent cites: `voiceTurnSeqs[]` (dictation), else the older single `voiceTurnSeq`. */
+function citedSeqs(p: Record<string, unknown> | null): number[] {
+  if (!p) return [];
+  if (Array.isArray(p.voiceTurnSeqs)) return p.voiceTurnSeqs.filter((n): n is number => typeof n === 'number');
+  return typeof p.voiceTurnSeq === 'number' ? [p.voiceTurnSeq] : [];
+}
+
+type VoiceCtx = { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; editedSeqs: Set<number>; speakable: { n: number } };
+function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number; voice?: ChatItem['voice'] }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
   if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
   if (r.kind === 'turn.sent') {
+    if (p?.source === 'voice-edited') return null; // the words are the human's edit: the composer echo / claude's replay shows them (🎙✎)
     if (p?.source !== 'voice') return undefined;
-    if (typeof p.voiceTurnSeq === 'number' && ctx.shownVoiceSeqs.has(p.voiceTurnSeq)) return null;
-    return { role: 'user', text: '(voice turn; its words are in the voice log)', speaker: 'voice' };
+    const cited = citedSeqs(p);
+    if (cited.length && cited.every((n) => ctx.shownVoiceSeqs.has(n))) return null;
+    return { role: 'user', text: '(voice turn; its words are in the voice log)', speaker: 'voice', voice: 'voice' };
   }
   if (!r.kind.startsWith('voice.')) return undefined;
   if (r.view === 'stub' || r.view === 'oversize' || !p) return null;
@@ -509,7 +523,9 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
     case 'voice.turn.user': {
       if (!text.trim()) return null;
       // sent: the kernel's turn.sent cites this row ⇒ the user's message (one line: spoken text has no layout)
-      if (ctx.sentSeqs.has(r.seq)) return { role: 'user', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker };
+      if (ctx.sentSeqs.has(r.seq)) return { role: 'user', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker, voice: 'voice' };
+      // dictation: the human edited the draft before sending; the sent message is the edit (🎙✎), this is what was heard
+      if (ctx.editedSeqs.has(r.seq)) return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · edited before sending`, speaker, part: 2 };
       // not (yet) sent: refusal / intercepted / forwarded are the voice app's claims, shown attributed (a distinct key,
       // so the row repaints as the user's message once the kernel's turn.sent arrives)
       const why = voiceReasonOf(p);
@@ -517,9 +533,11 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
         ? `voice app says: not sent · ${reasonWithCause(p, why)}`
         : p.intercepted === 'decision' || p.intercepted === 'control'
           ? `voice app says: handled as a ${p.intercepted}`
-          : p.forwarded === false
-            ? 'voice app says: not sent'
-            : 'not sent to the session';
+          : p.forwardable === true
+            ? 'in composer' // dictation: the kernel stamped it forwardable; it waits in the composer until sent
+            : p.forwarded === false
+              ? 'voice app says: not sent'
+              : 'not sent to the session';
       return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
     }
     case 'voice.turn.agent': {
@@ -608,19 +626,24 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const items: ChatItem[] = [];
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string }): void => {
-    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}) });
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice'] }): void => {
+    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}) });
   };
+  // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
+  const voiceEcho = new Map<number, string>();
+  let editedReplays = 0; // turn.sent{voice-edited} not yet matched by the message's replay (it gets the 🎙✎ mark)
   // V2d: a partial shows only while it is the latest word on its turn (a later partial or the final replaces it)
   const lastPartial = new Map<string, number>();
   const finals = new Set<string>();
   const shownVoiceSeqs = new Set<number>();
   // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
   const sentSeqs = new Set<number>();
+  const editedSeqs = new Set<number>();
   const speakable = { n: 0 }; // V2e: kernel-speakable replies not yet matched by the voice app's playback row
   for (const r of rows) {
     const p = objOf(r.payload);
-    if (r.kind === 'turn.sent' && p?.source === 'voice' && typeof p.voiceTurnSeq === 'number') sentSeqs.add(p.voiceTurnSeq);
+    if (r.kind === 'turn.sent' && p?.source === 'voice') for (const n of citedSeqs(p)) sentSeqs.add(n);
+    if (r.kind === 'turn.sent' && p?.source === 'voice-edited') for (const n of citedSeqs(p)) editedSeqs.add(n);
     const tid = p && typeof p.turnId === 'string' ? p.turnId : null;
     if (!tid) continue;
     if (isPartial(r, p)) lastPartial.set(tid, r.seq);
@@ -630,8 +653,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     if (r.connId === 'local') {
       if (r.kind === 'composer') {
         const t = String(r.payload ?? '');
-        echoes.push(t.trim());
-        push(r, 0, { role: 'user', text: t });
+        echoes.push(oneLine(t));
+        push(r, 0, { role: 'user', text: t, ...(r.mark === 'voice-edited' ? { voice: 'voice-edited' as const } : {}) });
+        if (r.mark === 'voice-edited' && editedReplays > 0) editedReplays--;
       } else push(r, 0, { role: 'error', text: String(r.payload ?? '') });
       continue;
     }
@@ -643,21 +667,39 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
       const its = lineItems(p.line).filter((it) => {
         if (it.role !== 'user') return true;
-        const i = echoes.indexOf(it.text.trim());
+        const i = echoes.indexOf(oneLine(it.text));
         if (i < 0) return true;
         echoes.splice(i, 1);
+        if (editedReplays > 0) editedReplays--;
         return false;
       });
       if (!its.length) hidden++;
-      its.forEach((it, i) => push(r, i, it));
+      its.forEach((it, i) => {
+        if (it.role === 'user' && editedReplays > 0) {
+          editedReplays--;
+          push(r, i, { ...it, voice: 'voice-edited' });
+        } else push(r, i, it);
+      });
       continue;
     }
-    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs, speakable });
+    if (r.kind === 'turn.sent' && p?.source === 'voice-edited') editedReplays++;
+    if (r.kind === 'turn.sent' && p?.source === 'voice') {
+      const cited = citedSeqs(p).filter((n) => voiceEcho.has(n));
+      if (cited.length > 1) {
+        for (const n of cited) {
+          const i = echoes.indexOf(voiceEcho.get(n)!);
+          if (i >= 0) echoes.splice(i, 1);
+        }
+        echoes.push(oneLine(cited.map((n) => voiceEcho.get(n)!).join(' ')));
+      }
+    }
+    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs, editedSeqs, speakable });
     if (v !== undefined) {
       if (v === null) hidden++;
       else {
         if (v.role === 'user') {
-          echoes.push(v.text.trim()); // claude's replay of the same words shows once
+          echoes.push(oneLine(v.text)); // claude's replay of the same words shows once
+          voiceEcho.set(r.seq, oneLine(v.text));
           shownVoiceSeqs.add(r.seq);
         }
         push(r, v.part ?? 0, v);

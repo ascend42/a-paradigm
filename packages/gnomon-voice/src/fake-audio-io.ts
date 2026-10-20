@@ -6,7 +6,7 @@
  * (or until stopPlayback). Nothing touches the disk or a sound device.
  */
 import { Emitter } from './audio-io.js';
-import type { AudioIO, AudioIOEvents, PlaybackResult, RouteInfo } from './types.js';
+import type { AudioIO, AudioIOEvents, ControlAction, PlaybackResult, RouteInfo } from './types.js';
 
 /** Decode a PCM16 / float32 mono-or-stereo RIFF WAV buffer to mono Float32. */
 export function decodeWav(buf: Buffer): { samples: Float32Array; sampleRate: number } {
@@ -113,8 +113,8 @@ export class FakeAudioIO implements AudioIO {
     this.micOn = on;
     this.micOps.push(on);
   }
-  /** Press a control hotkey (mic-toggle / mode-toggle). */
-  control(action: 'mic-toggle' | 'mode-toggle'): void {
+  /** Press a control hotkey (mic-toggle / mode-toggle / hold-toggle). */
+  control(action: ControlAction): void {
     this.#ev.emit('control', action, this.clock);
   }
   hotkey(down: boolean): void {

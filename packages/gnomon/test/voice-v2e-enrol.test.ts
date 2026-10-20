@@ -84,7 +84,7 @@ describe('#gnomon-voice V2e: speakerEnrolled is the kernel\'s call (readEnrolled
     await enrolSpeaker(home, root, { name: 'founder', consent: 'yes' });
     expect(v.status().enrolled).toEqual(['founder']);
     const ok = (await turn(`spk:${root.ns}/founder`)) as Record<string, unknown>;
-    expect(ok.forwardable).toBeUndefined();
+    expect(ok.forwardable).toBe(true); // TD-2026-10-20-262: the kernel stamps an accepted turn forwardable
     expect(rows.at(-1)!.payload).toMatchObject({ speakerEnrolled: true, text: 'delete everything' });
     // an enrolment signed by another root never counts
     const other = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);

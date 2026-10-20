@@ -9,6 +9,12 @@
  *   Parakeet STT → speaker verify (CAM++ vs the enrolled prints) →
  *   `log.append voice.turn.user{turnId, speakerId, speakerEnrolled, forwarded, mode, aec, t0, t1, text}` →
  *   `session.send{hsid, content: [{text}]}` (enrolled speakers only). A refusal is shown and never retried.
+ *   DICTATION (TD-2026-10-20-262, the default `delivery: 'composer'`): the client NEVER calls session.send. It appends
+ *   voice.turn.user{forwarded: false}; the kernel stamps `forwardable` and the GUI puts the text into its composer and
+ *   sends it after a countdown (the human's send, attributed by the kernel). `delivery: 'direct'` keeps the old
+ *   forward for headless use (`gnomon-voice run --delivery direct`). Activity edges go to the kernel as
+ *   `request.voice.report{dictation: {activity: speaking | transcribing | idle, holdToggles}}` (edges only); the
+ *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
  * $voice-turn, agent side: `log.read follow` on the attached session → the KERNEL's speakable rows
  *   (`voice.turn.agent{source:'kernel-speakable', turnSeq, items}`; never turn.event) → Kokoro per sentence → AudioIO.play →
  *   `log.append voice.turn.agent{turnId, t0, t1, textPlanned, textSpoken}` per played chunk (the windows the
@@ -29,12 +35,17 @@ import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadS
 import { silentLogger } from './types.js';
 
 export type ClientMode = 'off' | 'ptt' | 'ambient';
+/** TD-2026-10-20-262: where a dictated turn goes — the GUI composer (default) or straight to the session. */
+export type Delivery = 'composer' | 'direct';
+export type DictationActivity = 'speaking' | 'transcribing' | 'idle';
 const RANK: Record<ClientMode, number> = { off: 0, ptt: 1, ambient: 2 };
 
 export const ECHO_TAIL_MS = 750;
 export const BARGE_IN_MS = 300;
 export const MIN_UTTERANCE_MS = 250;
 const WINDOW_KEEP = 64;
+/** dictation activity: an open VAD utterance with no speech for this long is treated as ended */
+const VAD_OPEN_MAX_SILENCE_MS = 2_000;
 
 /** The kernel's mode names: V1 calls continuous listening 'conversation'; V2a may add 'ambient'. */
 export interface WireModes {
@@ -71,6 +82,8 @@ export interface VoiceClientOptions {
   notice?: (n: Notice) => void;
   now?: () => number;
   verifyThreshold?: number;
+  /** TD-2026-10-20-262: default 'composer' (never session.send); 'direct' forwards each enrolled turn itself */
+  delivery?: Delivery;
 }
 
 export function toRefusal(err: unknown): KernelRefusal {
@@ -128,6 +141,14 @@ export class VoiceClient {
   #closed = false;
   #refreshed = false;
   #paused = false;
+  // dictation (TD-2026-10-20-262)
+  readonly #delivery: Delivery;
+  #activity: DictationActivity = 'idle';
+  #holdToggles = 0;
+  #pending = 0;
+  #vadSpeaking = false;
+  #vadLastSpeech = 0;
+  #reports: Promise<void> = Promise.resolve();
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -138,6 +159,47 @@ export class VoiceClient {
     this.#wire = o.wireModes ?? V1_WIRE_MODES;
     this.#requested = o.mode ?? 'ptt';
     this.#verifier = new SpeakerVerifier(o.engines.speaker, o.prints, o.verifyThreshold);
+    this.#delivery = o.delivery ?? 'composer';
+  }
+
+  get delivery(): Delivery {
+    return this.#delivery;
+  }
+  /** the dictation activity last reported (an edge is reported only when it changes) */
+  get activity(): DictationActivity {
+    return this.#activity;
+  }
+  get holdToggles(): number {
+    return this.#holdToggles;
+  }
+
+  /** ⌃⌥H: one more hold toggle, reported to the kernel (status.voice.dictation.holdToggles; the GUI acts on a change). */
+  holdToggle(): number {
+    this.#holdToggles++;
+    this.#flow.info('hold toggled', { holdToggles: this.#holdToggles });
+    this.#report();
+    return this.#holdToggles;
+  }
+
+  /** Recompute the activity from the capture state; report on an edge only. */
+  #recompute(): void {
+    const speaking = !this.#paused && this.mode !== 'off' && (this.#pttHeld || (this.mode === 'ambient' && this.#vadSpeaking));
+    const next: DictationActivity = speaking ? 'speaking' : this.#pending > 0 ? 'transcribing' : 'idle';
+    if (next === this.#activity) return;
+    this.#activity = next;
+    this.#report();
+  }
+
+  /** request.voice.report{dictation}, serialized so holdToggles reaches the kernel in order (monotone). */
+  #report(): void {
+    const dictation = { activity: this.#activity, holdToggles: this.#holdToggles };
+    this.#reports = this.#reports.then(async () => {
+      try {
+        await this.#o.link.append('request.voice.report', { dictation });
+      } catch (err) {
+        this.#log.warn('dictation report not relayed', { reason: toRefusal(err).reason });
+      }
+    });
   }
 
   get attachment(): VoiceAttachment | null {
@@ -161,7 +223,7 @@ export class VoiceClient {
       a.on('frame', (f) => this.#onFrame(f)),
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
-      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : this.toggleAmbient())),
+      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : this.toggleAmbient())),
     );
     await a.start();
     await this.refresh();
@@ -210,6 +272,8 @@ export class VoiceClient {
     this.#o.engines.vad.reset();
     const eff = this.mode;
     if (RANK[m] > RANK[eff]) this.#notice('info', `The human allows up to ${eff === 'off' ? 'nothing (not attached)' : eff} here; using ${eff}.`);
+    this.#vadSpeaking = false;
+    this.#recompute();
     return eff;
   }
 
@@ -271,16 +335,20 @@ export class VoiceClient {
     this.#pttHeld = false;
     this.#pttFrames = [];
     this.#o.engines.vad.reset();
+    this.#vadSpeaking = false;
+    this.#recompute();
   }
 
   /** Wait until queued utterances and speech are done (tests, shutdown). */
   async idle(): Promise<void> {
     let w: Promise<void> | undefined;
     let s: Promise<void> | undefined;
-    while (w !== this.#work || s !== this.#speaking) {
+    let r: Promise<void> | undefined;
+    while (w !== this.#work || s !== this.#speaking || r !== this.#reports) {
       w = this.#work;
       s = this.#speaking;
-      await Promise.all([w, s]);
+      r = this.#reports;
+      await Promise.all([w, s, r]);
     }
   }
 
@@ -302,13 +370,14 @@ export class VoiceClient {
       this.#pttHeld = true;
       this.#pttFrames = [];
       this.#pttT0 = at;
+      this.#recompute();
       return;
     }
     if (!this.#pttHeld) return;
     this.#pttHeld = false;
     const frames = this.#pttFrames;
     this.#pttFrames = [];
-    if (this.mode !== 'ptt' || !frames.length) return;
+    if (this.mode !== 'ptt' || !frames.length) return this.#recompute();
     const sr = frames[0]!.sampleRate;
     const n = frames.reduce((s, f) => s + f.samples.length, 0);
     const samples = new Float32Array(n);
@@ -319,6 +388,7 @@ export class VoiceClient {
     }
     const t0 = frames[0]!.t0;
     this.#segment({ samples, sampleRate: sr, t0, t1: t0 + (n / sr) * 1000 }, this.#pttT0);
+    this.#recompute();
   }
 
   #onFrame(f: PcmFrame): void {
@@ -333,7 +403,16 @@ export class VoiceClient {
       this.#speechRunMs = this.#o.engines.vad.speaking() ? this.#speechRunMs + ms : 0;
       if (this.#speechRunMs >= BARGE_IN_MS) this.#bargeIn('speech');
     }
-    if (mode === 'ambient') for (const s of segs) this.#segment(s);
+    if (mode === 'ambient') {
+      for (const s of segs) this.#segment(s);
+      // speaking from VAD start until its segment closes (the hangover silence is still the utterance), bounded
+      // by VAD_OPEN_MAX_SILENCE_MS in case the VAD drops a segment without emitting it
+      if (this.#o.engines.vad.speaking()) {
+        this.#vadSpeaking = true;
+        this.#vadLastSpeech = f.t0;
+      } else if (segs.length || f.t0 - this.#vadLastSpeech > VAD_OPEN_MAX_SILENCE_MS) this.#vadSpeaking = false;
+      this.#recompute();
+    }
   }
 
   /** Inside our playback or its tail (the client mirror of the kernel's voice-echo guard). */
@@ -356,7 +435,16 @@ export class VoiceClient {
       this.#flow.info('utterance dropped (not attached)', { ms: Math.round(dur) });
       return;
     }
-    this.#work = this.#work.then(() => this.#utterance(seg, a, mode as 'ptt' | 'ambient')).catch((err) => this.#log.warn('utterance failed', { error: err instanceof Error ? err.message : String(err) }));
+    this.#pending++;
+    this.#recompute();
+    this.#work = this.#work
+      .then(() => this.#utterance(seg, a, mode as 'ptt' | 'ambient'))
+      .catch((err) => this.#log.warn('utterance failed', { error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => {
+        // idle after the append (or the drop): the edge is reported once nothing is pending
+        this.#pending--;
+        this.#recompute();
+      });
   }
 
   async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient'): Promise<void> {
@@ -373,7 +461,9 @@ export class VoiceClient {
     const ri = this.#o.audio.routeInfo();
     // the aec claim from the binary's route/mic event (kind when known), plus its transport (V2b Aegis duty 4)
     const aec = ri.aecKind ?? ri.aec;
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
+    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262)
+    const direct = this.#delivery === 'direct';
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
     try {
       await this.#o.link.append('voice.turn.user', payload);
     } catch (err) {
@@ -383,6 +473,10 @@ export class VoiceClient {
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
     if (!enrolled) {
       this.#notice('info', 'I heard someone who is not enrolled; nothing was sent.');
+      return;
+    }
+    if (!direct) {
+      this.#flow.info('turn dictated (composer)', { turnId });
       return;
     }
     try {

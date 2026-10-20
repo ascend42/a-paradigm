@@ -14,10 +14,23 @@
  * open (session.open{runMode}); a looser one opens the session at the repo's
  * mode and raises the loosening `strictness` card (fresh presence), whose id
  * the result carries as `runModeCard`.
+ *
+ * Dictation (TD-2026-10-20-262, #gnomon-voice): session.send accepts `source` ONLY with the value 'voice' and only
+ * from a human principal, as an ATTRIBUTION HINT: the voice port hash-matches the content parts against the
+ * attachment's pending voice turns and the send is tagged 'voice' (every part matched; parts join with ' ') or
+ * 'voice-edited' (some matched), or untagged. Attribution never refuses a human send; a failed send releases the
+ * matched turns.
  */
 import { refuse, RefusedError } from '@a-company/gnomon-contracts';
 import type { SessionSupervisor } from './supervisor.js';
 import type { RunModeControl } from '../broker/run-mode.js';
+import type { VoiceAttribution } from '../voice/voice-control.js';
+
+/** What the session port needs of #gnomon-voice for dictation attribution (voice-control.ts VoiceControl). */
+export interface VoiceAttributionPort {
+  attributeHumanSend(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
+  releaseAttribution(attr: VoiceAttribution): void;
+}
 
 export interface SessionCallContext {
   principal: string;
@@ -60,7 +73,7 @@ function objectParams(params: unknown, allowed: readonly string[], verb: string)
   return p;
 }
 
-export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl): SessionPort {
+export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl, voice?: VoiceAttributionPort): SessionPort {
   return {
     open: async (ctx, params) => {
       const p = objectParams(params, ['backend', 'model', 'cwd', 'systemPrompt', 'attended', ...(modes ? ['runMode'] : [])], 'session.open');
@@ -86,7 +99,9 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       return { ...opened, ...(r && 'pending' in r ? { runModeCard: r.cardId } : { runModeCard: null }) };
     },
     send: async (ctx, params) => {
-      const p = objectParams(params, ['hsid', 'content', 'permitId', 'steer'], 'session.send');
+      const p = objectParams(params, ['hsid', 'content', 'permitId', 'steer', 'source'], 'session.send');
+      // TD-2026-10-20-262: an attribution hint from a human only, and only 'voice'
+      if (p.source !== undefined && (p.source !== 'voice' || ctx.principalClass !== 'human')) throw bad("source is 'voice' (a human's dictation hint) or absent");
       if (p.steer !== undefined && typeof p.steer !== 'boolean') throw bad('steer must be a boolean');
       if (typeof p.hsid !== 'string') throw bad('hsid is required');
       if (!Array.isArray(p.content) || p.content.length === 0) throw bad('content[] is required');
@@ -94,7 +109,21 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (texts.some((t) => t === null)) throw bad('slice 1 serves text content parts only ({text})');
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
       gateResumed(sup, ctx, p.hsid, 'session.send');
-      return sup.send(ctx.principal, { hsid: p.hsid, text: texts.join('\n'), ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}) });
+      let attr: VoiceAttribution | null = null;
+      if (p.source === 'voice' && voice) {
+        try {
+          attr = voice.attributeHumanSend(ctx.principal, p.hsid, texts as string[]);
+        } catch {
+          attr = null; // attribution never refuses a human send
+        }
+      }
+      const text = texts.join(attr?.source === 'voice' ? ' ' : '\n');
+      try {
+        return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}) });
+      } catch (err) {
+        if (attr) voice?.releaseAttribution(attr);
+        throw err;
+      }
     },
     stop: async (ctx, params) => {
       const p = objectParams(params, ['hsid', 'interrupt'], 'session.stop');

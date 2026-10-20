@@ -298,3 +298,37 @@ components:
     tags: [gnomon, gui, setup]
     tests:
       - test/setup.test.ts
+  gui-dictation:
+    description: >-
+      #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation
+      into the composer. core/dictation.ts is a PURE reducer: a live
+      voice.turn.user row with the kernel-stamped `forwardable: true`,
+      non-empty text, no `intercepted`/refusal, for the attached session and
+      past the start seq (no backlog; each seq once) appends to the draft with
+      one space. One countdown ring runs over the per-machine delay
+      (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s;
+      pill menu picks and voice.delay.* palette commands) while the draft is
+      unheld, the voice app idle (status.voice.dictation.activity), the
+      session not streaming, and the attached session is the GUI's focused
+      one (else the pill says "draft waiting"); new speech, transcription, a
+      new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume],
+      the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity),
+      typing in or clicking into a draft. [Send]/Enter/⌘Enter send now. The
+      send is session.send{hsid, content: one part per turn | the edit as ONE
+      part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and
+      the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited,
+      and a forwardable unsent turn as "in composer". Only a human-class
+      connection (canAttach) gets these controls; a voice connection never.
+      Aegis conditions: hold records who set it (gui | voice | detached; a
+      voice toggle never clears a GUI-set or detached hold); no live
+      attachment for the draft's session ⇒ held 'detached', never
+      auto-sent; an edit while sending keeps hold and the edit; turn text is
+      sanitized by the contracts sanitizeDisplayText (sent as the voice app's
+      exact words only when sanitizing changed nothing); the holdToggles
+      baseline resets per voice connection (connEpoch, else
+      client.restarts); edited drafts echo as typed messages.
+    path: src/core/dictation.ts
+    type: module
+    tags: [gnomon, gui, voice, dictation]
+    tests:
+      - test/dictation.test.ts

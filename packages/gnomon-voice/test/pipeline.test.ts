@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeAudioIO } from '../src/fake-audio-io.js';
 import { PRINT_SCHEMA, readPrints, type VoicePrint } from '../src/speaker.js';
-import { VoiceClient, type ClientMode, type Notice } from '../src/voice-client.js';
+import { VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
 import { recordEnrolment } from '../src/enrol.js';
 import { FakeLink, refusal, stubEngines, StubSpeaker, StubVad, tone, toneWav } from './stubs.js';
 
@@ -24,14 +24,14 @@ afterEach(async () => {
   clients = [];
 });
 
-async function setup(o: { mode?: ClientMode; attachMode?: string | null; texts?: string[] } = {}) {
+async function setup(o: { mode?: ClientMode; attachMode?: string | null; texts?: string[]; delivery?: Delivery } = {}) {
   const audio = new FakeAudioIO();
   const engines = stubEngines(o.texts ?? []);
   const link = new FakeLink();
   if (o.attachMode === null) link.att = null;
   else if (o.attachMode) link.att = { ...link.att!, mode: o.attachMode };
   const notices: Notice[] = [];
-  const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], mode: o.mode ?? 'ptt', now: () => audio.clock, notice: (n) => notices.push(n) });
+  const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], mode: o.mode ?? 'ptt', delivery: o.delivery ?? 'direct', now: () => audio.clock, notice: (n) => notices.push(n) });
   clients.push(client);
   await client.start();
   return { audio, engines, link, client, notices };

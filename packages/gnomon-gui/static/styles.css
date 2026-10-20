@@ -374,3 +374,25 @@ html, body {
 .enrol-rec.recording { color: var(--fail); font-weight: 600; }
 .enrol-rec.recording .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); border-style: solid; animation: voice-pulse 1.4s ease-in-out infinite; }
 .enrol-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
+
+/* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
+   auto-send delay. Reduced motion (the setting or the OS) hides the draining ring and shows the seconds as text. */
+.dictation { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.dictation[hidden] { display: none; }
+.dictation-ring { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.dictation-ring[hidden] { display: none; }
+.dictation-ring svg { transform: rotate(-90deg); }
+.dictation-ring .ring-track { fill: none; stroke: var(--rule); stroke-width: 2.5; }
+.dictation-ring .ring-arc { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-dasharray: 100; stroke-dashoffset: 0; stroke-linecap: round; }
+.dictation-ring .ring-secs { display: none; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.dictation-live { min-width: 7ch; }
+.dictation.held .dictation-live { color: var(--warn-ink); }
+#dictation-hold[aria-pressed="true"] { color: var(--warn-ink); }
+.voice-note.dictation-waiting { color: var(--warn-ink); }
+.trow .who .voice-mark { color: var(--sec); }
+[data-motion="reduced"] .dictation-ring svg { display: none; }
+[data-motion="reduced"] .dictation-ring .ring-secs { display: inline; }
+@media (prefers-reduced-motion: reduce) {
+  .dictation-ring svg { display: none; }
+  .dictation-ring .ring-secs { display: inline; }
+}

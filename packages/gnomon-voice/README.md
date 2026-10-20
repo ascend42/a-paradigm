@@ -66,7 +66,7 @@ Events: `{"type":"event","event","tUs",…}`, `tUs` = monotonic µs on the captu
 | `level` | `rmsDBFS peakDBFS`, about 15 Hz while the mic is on |
 | `playback.start` | `engine (duplex|output) audibleAtUs outputLatencyUs` |
 | `playback.end` | `reason (drained|stopped|mic-switch|route-change|exit) utteranceEnded queuedMs`; `drained` fires whenever the queue runs empty |
-| `hotkey` | `action (talk|mic-toggle|mode-toggle) phase (down|up)`; reported only, the controller acts |
+| `hotkey` | `action (talk|mic-toggle|mode-toggle|hold-toggle) phase (down|up)`; reported only, the controller acts |
 | `engine` | `what (restarted|failed|released) mic`, after a device configuration change |
 | `capture.dropped` | `frames`: capture frames dropped because the reader stalled (more than 32 queued); control frames are never dropped |
 | `error` | `error message` (bad playback frame, wrong direction) |

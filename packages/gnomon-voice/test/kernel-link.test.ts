@@ -84,7 +84,9 @@ describe('SpawnedAudioIO against a fake gnomon-voice-io:v1', () => {
     const io = new SpawnedAudioIO({ binary: 'x', now: () => wall, spawnImpl: (() => f.child) as never });
     const keys: boolean[] = [];
     const frames: number[] = [];
+    const controls: string[] = [];
     io.on('hotkey', (d) => keys.push(d));
+    io.on('control', (a) => controls.push(a));
     io.on('frame', (fr) => frames.push(fr.t0));
     await io.start();
     expect(f.ops).toEqual(['info', 'mic.on', 'route.get']);
@@ -92,10 +94,13 @@ describe('SpawnedAudioIO against a fake gnomon-voice-io:v1', () => {
     f.send({ type: 'event', event: 'route', tUs: 1_000, route: { kind: 'speaker' }, aec: 'none' });
     f.send({ type: 'event', event: 'hotkey', tUs: 2_000, action: 'talk', phase: 'down' });
     f.send({ type: 'event', event: 'hotkey', tUs: 3_000, action: 'mode-toggle', phase: 'down' });
+    f.send({ type: 'event', event: 'hotkey', tUs: 3_100, action: 'hold-toggle', phase: 'down' });
+    f.send({ type: 'event', event: 'hotkey', tUs: 3_200, action: 'hold-toggle', phase: 'up' });
     f.stdout.write(encodeCapture(4_000_000n, 16_000, new Float32Array(160)));
     await tick();
     expect(io.routeInfo().aec).toBe(false);
     expect(keys).toEqual([true]);
+    expect(controls).toEqual(['mode-toggle', 'hold-toggle']); // key down only (TD-2026-10-20-262)
     expect(frames[0]).toBe(1_000_000 - 1 + 4); // offset fixed at tUs 1000 → wall 1e6
     const played = io.play({ id: 'a1', samples: new Float32Array(2400), sampleRate: 24_000 });
     await tick();

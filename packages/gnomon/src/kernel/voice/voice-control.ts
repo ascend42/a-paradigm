@@ -36,6 +36,18 @@
  * never its text — and is never forwardable; forwarded turns keep their full text (`sensitive`).
  *   - `session.stop` to the attached session with `interrupt: true` only.
  *
+ * Dictation (TD-2026-10-20-262, spec §14.7 "Dictation"): the default client delivery is the GUI COMPOSER, not a direct
+ * send. An accepted voice.turn.user row (not refused at receipt, not intercepted) carries a KERNEL-stamped
+ * `forwardable: true` (a client-sent `forwardable` is BAD_REQUEST, like receivedAt); an intercepted row carries
+ * `forwardable: false`; a refused row stays hash-only. The human then sends the composer text with `session.send{source:
+ * 'voice'}` — an attribution HINT only (supervisor/port.ts): attributeHumanSend hash-matches each content part, in order,
+ * against this attachment's pending turns (forwardable, unforwarded, the human's own `p:<ns>/voice` principal, the
+ * attached hsid, received after the attachment started). All parts match ⇒ turn.sent{source: 'voice', voiceTurnSeqs,
+ * voiceTurnSeq} and the parts join with ' '; some match ⇒ source 'voice-edited' plus the matched seqs; none ⇒ no voice
+ * tag. Anything not 'voice' (edited sends included) joins its parts with '\n'. The GUI sends an edited draft as ONE
+ * part, which normally matches no pending turn, so it carries no voice tag at all. Matched turns join #forwarded (a
+ * later direct send of the same turn is refused). Attribution never refuses a human send. The 30 s freshness and latest-turn rules bind only the direct (voice principal) path.
+ *
  * Attachment (§14.7 "voice is attached to a session only by a human gesture"): a HUMAN on a first-party connection
  * (GUI launch token or this home's human device) appends `voice.session.start{hsid, mode?}` / `voice.session.end`;
  * the kernel checks the session is the human's own, mints the voiceSessionId and writes the row. The voice child
@@ -131,9 +143,35 @@ export interface VoicePresenceRequest {
  * `turn.sent` carries `source: 'voice'` (§4.10) plus voiceSessionId, voiceTurnId and voiceTurnSeq (the cited voice.turn.user
  * row). Both payloads are opaque to event:v1 (no KIND_PAYLOADS / RESERVED_PAYLOAD_FIELDS row), so nothing published moves.
  */
-export function voiceTag(p: { source?: 'voice'; voice?: VoiceTurnLink }): Record<string, unknown> {
+export function voiceTag(p: { source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution }): Record<string, unknown> {
+  // TD-2026-10-20-262: a human send attributed to dictated turns (the direct voice path never carries one)
+  if (p.voiceAttribution) return dictationTag(p.voiceAttribution);
   if (p.source !== 'voice') return {};
   return { source: 'voice', ...(p.voice ? { voiceSessionId: p.voice.voiceSessionId, voiceTurnId: p.voice.turnId, voiceTurnSeq: p.voice.turnSeq } : {}) };
+}
+
+/**
+ * TD-2026-10-20-262 dictation: the attribution of a HUMAN send whose composer text came from voice turns. 'voice' ⇒ every
+ * content part matched a pending turn, in order; 'voice-edited' ⇒ some did (the human edited the composer).
+ */
+export interface VoiceAttribution {
+  source: 'voice' | 'voice-edited';
+  voiceSessionId: string;
+  turnIds: string[];
+  /** chain seqs of the matched voice.turn.user rows, in content order */
+  turnSeqs: number[];
+}
+
+/** The dictation tag on the kernel-signed turn.sent / session.inject rows (opaque payload fields, nothing published moves). */
+export function dictationTag(a: VoiceAttribution | undefined): Record<string, unknown> {
+  if (!a) return {};
+  return { source: a.source, voiceSessionId: a.voiceSessionId, voiceTurnSeqs: [...a.turnSeqs], ...(a.source === 'voice' ? { voiceTurnSeq: a.turnSeqs[a.turnSeqs.length - 1] } : {}) };
+}
+
+/** The voice principal of a human's namespace: `p:<ns>/<name>` ⇒ `p:<ns>/voice` (undefined for a non-`p:` principal). */
+export function voicePrincipalOf(human: string): string | undefined {
+  const m = /^p:([^/]+)\/[^/]+$/.exec(human);
+  return m ? `p:${m[1]}/voice` : undefined;
 }
 
 /** Aegis M4: what the kernel-signed turn.sent / session.inject rows carry to link a forwarded turn to its voice row. */
@@ -284,11 +322,20 @@ export class VoiceControl {
     return ambientIdleMsOf(this.#o.ambientIdleMs);
   }
 
-  /** Aegis L4: keep only a recent window of turns and playback (a turn older than maxTurnAgeMs is refused anyway). */
+  /** a turn the human may still send from the composer (dictation): accepted, unforwarded, of the live attachment */
+  #pendingDictation(t: UserTurn): boolean {
+    return !t.refused && !t.intercepted && !this.#forwarded.has(t.turnId) && this.#attachment !== null && t.attachment === this.#attachment.voiceSessionId;
+  }
+
+  /**
+   * Aegis L4: keep only a recent window of turns and playback (a turn older than maxTurnAgeMs is refused on the direct
+   * path anyway). TD-2026-10-20-262: a pending dictation turn of the live attachment outlives the horizon (the composer
+   * countdown can be held) but never the cap.
+   */
   #prune(): void {
     const horizon = this.#now() - 2 * this.maxTurnAgeMs;
     for (const [id, t] of this.#userTurns) {
-      if (t.receivedAt >= horizon && this.#userTurns.size <= VOICE_WINDOW_CAP) break; // insertion order = receipt order
+      if (this.#userTurns.size <= VOICE_WINDOW_CAP && (t.receivedAt >= horizon || this.#pendingDictation(t))) continue;
       this.#userTurns.delete(id);
       this.#forwarded.delete(id);
     }
@@ -504,6 +551,8 @@ export class VoiceControl {
     const commit: Array<(seq: number) => void> = [];
     // Aegis M1: the kernel stamps its own receipt time on every turn row; a client-sent receivedAt is refused
     if (Object.hasOwn(p, 'receivedAt')) throw bad('receivedAt is stamped by the kernel');
+    // TD-2026-10-20-262: forwardable is the kernel's verdict on the row, never a client claim
+    if (Object.hasOwn(p, 'forwardable')) throw bad('forwardable is stamped by the kernel');
     const receivedAt = this.#now();
     let stamped: Record<string, unknown> = kind === 'voice.turn.user' || kind === 'voice.turn.agent' ? { ...p, receivedAt } : { ...p };
     let refusedAtReceipt: RefusedError | undefined;
@@ -554,6 +603,9 @@ export class VoiceControl {
           for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
           const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
           stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}) };
+        } else {
+          // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send)
+          stamped = { ...stamped, forwardable: !turn.intercepted };
         }
         commit.push((seq) => {
           turn.seq = seq;
@@ -588,6 +640,7 @@ export class VoiceControl {
     const r = await this.#o.append({ kind, principal: c.principal, payload: stamped, connId: c.connId, ...(a ? { session: a.hsid } : {}), ...(typeof sensitivity === 'string' ? { sensitivity } : {}) });
     for (const f of commit) f(r.seq);
     if (refusedAtReceipt) return { ...r, forwardable: false, refused: ((refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>).reason };
+    if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true };
     return r;
   }
 
@@ -676,6 +729,46 @@ export class VoiceControl {
     a.lastForwardAt = now;
     this.#armIdle();
     return this.#o.sessions.send(a.owner, { hsid: a.hsid, text, source: 'voice', voice: { voiceSessionId: a.voiceSessionId, turnId: turn.turnId, turnSeq: turn.seq } });
+  }
+
+  /**
+   * TD-2026-10-20-262 dictation: attribute a HUMAN `session.send{source: 'voice'}` (the hint is the human's; the match
+   * is the kernel's). Each content part, in order, is hash-matched against the attachment's pending turns: accepted
+   * (forwardable), unforwarded, not intercepted, logged by the human's own `p:<ns>/voice` principal, the attachment is
+   * this human's on this hsid, received after it started. All parts ⇒ 'voice'; some ⇒ 'voice-edited'; none ⇒ null.
+   * Matched turns are claimed into #forwarded at once (release() hands them back if the send fails). NEVER throws:
+   * attribution never refuses a human send. No freshness and no latest-turn rule here (the direct path keeps both).
+   */
+  attributeHumanSend(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null {
+    try {
+      const a = this.#attachment;
+      const vp = voicePrincipalOf(human);
+      if (!a || !vp || a.hsid !== hsid || a.owner !== human || parts.length === 0) return null;
+      const pending = [...this.#userTurns.values()].filter(
+        (t) => t.principal === vp && t.attachment === a.voiceSessionId && t.receivedAt >= a.startedAt && t.seq > 0 && this.#pendingDictation(t),
+      );
+      const matched: UserTurn[] = [];
+      let from = 0;
+      for (const part of parts) {
+        const h = this.#hash(part);
+        const i = pending.findIndex((t, k) => k >= from && t.textHash === h);
+        if (i < 0) continue;
+        matched.push(pending[i]!);
+        from = i + 1;
+      }
+      if (matched.length === 0) return null;
+      for (const t of matched) this.#forwarded.add(t.turnId);
+      a.lastForwardAt = this.#now();
+      this.#armIdle();
+      return { source: matched.length === parts.length ? 'voice' : 'voice-edited', voiceSessionId: a.voiceSessionId, turnIds: matched.map((t) => t.turnId), turnSeqs: matched.map((t) => t.seq) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** The human send an attribution was made for failed: its turns are pending again. */
+  releaseAttribution(attr: VoiceAttribution): void {
+    for (const id of attr.turnIds) this.#forwarded.delete(id);
   }
 
   /** `session.stop` from the voice principal: interrupt only, attached session only. */
