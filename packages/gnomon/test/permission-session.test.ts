@@ -11,7 +11,7 @@ import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RefusedError } from '@a-company/gnomon-contracts';
+import { RefusedError, scopeDigest } from '@a-company/gnomon-contracts';
 import { assertPermissionChannel, buildClaudeArgv, parseStreamLine } from '../src/adapters/claude-code/adapter.js';
 import { ApprovalBroker, approvalsKeyFrom, contentHashOf, PresenceDenied, type PresenceProvider } from '../src/kernel/broker/index.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
@@ -39,7 +39,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
+function rig(o: { now?: { t: number }; slowRequestMs?: number; mode?: { v: string } } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   // S-L1: the rule book folds the rig's rows as KERNEL-signed (principal + kernel key), as the daemon's chain reader does
@@ -66,13 +66,16 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   };
   const now = o.now;
   const broker = new ApprovalBroker({ kernel, kernelPrincipal: 'p:abcdefgh/kernel', log, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, guiSessions: () => 1, ...(now ? { clock: () => now.t } : {}) });
-  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash) => book.match(repoKey, tool, hash) });
+  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash, input, ctx) => book.match(repoKey, tool, hash, input, ctx), ...(o.mode ? { runMode: () => ({ effective: o.mode!.v as never }) } : {}) });
   live.push(() => children.stopAll('test-end'));
   // P8-D98: an answer signs the v2 message over its text's digest (signer decisionMessage); the rest stay v1
   const sig = (cardId: string, decision: string, contentHash: string, approver = HUMAN, note?: unknown) =>
     cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: approver, ...(usesDecisionV2(decision) ? { answerDigest: answerDigest(typeof note === 'string' ? note : '') } : {}) })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64');
   const approve = (cardId: string, decision: string, extra: Record<string, unknown> = {}, ctx: Record<string, unknown> = GUI) =>
     broker.approve(ctx as never, { cardId, decision, decisionSig: sig(cardId, decision, broker.card(cardId)?.contentHash ?? 'sha256:0', HUMAN, extra.note), ...extra });
+  // TD-2026-10-20-294: a prefix always signs the v2 message over the scope digest
+  const approvePrefix = (cardId: string, prefix: string[]) =>
+    broker.approve(GUI as never, { cardId, decision: 'always', scope: { kind: 'prefix', prefix }, decisionSig: cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision: 'always', cardContentHash: broker.card(cardId)!.contentHash, approverPrincipalId: HUMAN, scopeDigest: scopeDigest({ kind: 'prefix', prefix }) })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64') });
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string, pred: (p: Record<string, unknown>) => boolean = () => true) => rows.findIndex((r) => r.kind === k && pred(r.payload));
   const answers = () => trace(w).filter((t) => t.t === 'perm-answer');
@@ -83,7 +86,7 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
     await sup.send(HUMAN, { hsid: s.hsid, text: 'go' });
     return s;
   };
-  return { rows, fuse, broker, sup, approve, kinds, idx, answers, pending, prompts, open, gate, book };
+  return { rows, fuse, broker, sup, approve, approvePrefix, kinds, idx, answers, pending, prompts, open, gate, book };
 }
 
 const marker = () => path.join(w.cwd, 'marker.txt');
@@ -386,6 +389,33 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(r.kinds('approval.auto')).toHaveLength(1);
     expect(r.answers().some((a) => a.id === 'b-4' || a.id === 'b-3')).toBe(false);
   });
+
+  it('9e (Aegis M2). a prefix rule auto-allows in ask mode but never in manual mode (a card is raised, even after an approved plan)', async () => {
+    const mode = { v: 'ask' };
+    const r = rig({ mode });
+    const bash = (id: string, command: string) => ({ request: { id, tool: 'Bash', input: { command } } });
+    await r.open([bash('g-1', 'git log -n 1')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    await r.approvePrefix(c.cardId, ['git', 'log']);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'g-1'))).toBe(true);
+    // ask: a later git log under the same roots passes with no card
+    await r.open([bash('g-2', 'git log --oneline -n 2')], { hold: true });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'g-2'))).toBe(true);
+    expect(r.kinds('approval.auto').map((x) => x.payload.modeRef)).toEqual([`rule:${c.cardId}`]);
+    // ...but not one naming a path outside the roots (M3)
+    await r.open([bash('g-3', 'git log -- /etc/passwd')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    await r.approve(r.pending()[0]!.cardId, 'deny');
+    // manual, plan approved: the prefix rule is skipped and a card is raised
+    mode.v = 'manual';
+    const s = await r.open([{ request: { tool: 'ExitPlanMode', input: { plan: '1. read the log' } } }, bash(undefined as never, 'git log --oneline -n 3')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    await r.approve(r.pending()[0]!.cardId, 'approve-plan');
+    await r.sup.send('p:abcdefgh/founder', { hsid: s.hsid, text: 'again' });
+    expect(await waitFor(() => r.pending().some((x) => x.kind === 'permission'))).toBe(true);
+    expect(r.kinds('approval.auto')).toHaveLength(1);
+  }, 30_000);
 
   it('9d. an approval.auto row that fails to write never leaves the request unanswered: it falls through to the card', async () => {
     const r = rig();
