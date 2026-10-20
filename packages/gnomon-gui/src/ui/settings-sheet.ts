@@ -52,7 +52,7 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     note(r.note);
   } else {
     row.setAttribute('data-readonly', 'true');
-    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned' }, r.value));
+    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}) }, r.value));
     row.appendChild(h(doc, 'p', { class: 'meta settings-how' }, r.how));
   }
   return row;

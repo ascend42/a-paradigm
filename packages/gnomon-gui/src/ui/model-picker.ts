@@ -12,7 +12,7 @@
  *     session's model (the Settings sheet is another module; it only needs to carry the slot).
  * Every request is sent only on a trusted user event (G-GUI-04).
  */
-import { CUSTOM, MODEL_CHOICES, modelLabel, openModelOf, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest, type StorageLike } from '../core/model-picker.js';
+import { CUSTOM, MODEL_CHOICES, modelChipText, modelLabel, openModelOf, sessionModelText, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest, type StorageLike } from '../core/model-picker.js';
 
 interface Caller {
   call<T = unknown>(method: string, params?: unknown): Promise<T>;
@@ -136,7 +136,7 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     const c = d.client();
     if (!c) return d.notice('not connected', true);
     void c.call('log.append', switchRequest(hsid, to)).then(
-      () => d.notice(`switching to ${modelLabel(to)}…`),
+      () => d.notice(`model switched to ${modelLabel(to)} · the conversation continues`),
       (err: unknown) => d.notice(`model switch refused: ${err instanceof Error ? err.message : 'refused'}`, true),
     );
   });
@@ -149,14 +149,14 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     if (!chip) return;
     const m = current(chip.hsid);
     const live = d.live(chip.hsid);
-    chip.btn.textContent = `${modelLabel(m?.model)}${m?.pending ? ` → ${modelLabel(m.pending)}…` : ''}${live ? ' ▾' : ''}`;
-    chip.btn.disabled = !live || !!m?.pending;
-    chip.btn.title = live ? `Model of this session (kernel): ${modelLabel(m?.model)}. Switch it without restarting.` : `Model: ${modelLabel(m?.model)}`;
+    chip.btn.textContent = `${modelChipText(m)}${live && !m?.uncertain && !m?.pending ? ' ▾' : ''}`;
+    chip.btn.disabled = !live || !!m?.pending || !!m?.uncertain;
+    chip.btn.title = m?.uncertain ? `Claude did not confirm the switch to ${modelLabel(m.uncertain)}; the next reply shows which model answered (${modelLabel(m.model)} on record).` : live ? `Model of this session (kernel): ${modelLabel(m?.model)}. Switch it; the conversation continues.` : `Model: ${modelLabel(m?.model)}`;
   };
   const paintSlots = (): void => {
     const h = d.focused();
     const m = h ? current(h) : null;
-    for (const s of Array.from(doc.querySelectorAll('[data-gnomon-slot="session-model"]'))) s.textContent = m ? `${modelLabel(m.model)}${m.backend ? ` · ${m.backend}` : ''}` : 'no session focused';
+    for (const s of Array.from(doc.querySelectorAll('[data-gnomon-slot="session-model"]'))) s.textContent = sessionModelText(m);
   };
 
   return {

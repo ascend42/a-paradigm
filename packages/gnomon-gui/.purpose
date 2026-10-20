@@ -35,6 +35,14 @@ components:
       #model-switch-dialog whose TRUSTED submit is the only sender, and the
       read-only Settings slot [data-gnomon-slot="session-model"]. Tests:
       test/model-picker.test.ts.
+      8.0:model-switch wiring: sessionModelOf also folds
+      session.model{reconciled} (model = to) and {timeout} (uncertain = to,
+      kept until reconciled); modelChipText shows "model: switching…
+      (unconfirmed)" and disables the ▾ meanwhile; sessionModelText feeds the
+      Settings Permissions row `session-model` (readonly, slot
+      session-model, settings.ts SettingsInput.sessionModel); store.ts
+      sessionModelLine writes one transcript line per outcome. Preview
+      fixture `model-switch` (preview/fixtures.ts).
     tags: [gui, model]
   gui:
     workshop-caps: >-

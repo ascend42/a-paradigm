@@ -37,6 +37,7 @@ import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWa
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { mountModPanels } from './mod-panels-mount.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
+import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -756,6 +757,7 @@ const settings = mountSettings(document, {
       status,
       mode: currentMode(),
       dictationDelayMs: dict.delayMs,
+      sessionModel: sessionModelText(focused ? sessionModelOf(store.transcript(focused)) : null),
       connection: session && client ? { principal: session.principal, connId: session.connId, surface: SURFACE, clientApiDrift: session.clientApiDrift } : null,
       gui: GUI_CLIENT,
       unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),

@@ -6,7 +6,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CUSTOM, MODEL_BY_FOLDER_KEY, MODEL_CHOICES, MODEL_LAST_KEY, MODEL_REQUEST, modelLabel, openModelOf, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest } from '../src/core/model-picker.js';
+import { settingsModel } from '../src/core/settings.js';
+import { sessionModelLine } from '../src/core/store.js';
+import { CUSTOM, MODEL_BY_FOLDER_KEY, MODEL_CHOICES, MODEL_LAST_KEY, MODEL_REQUEST, modelChipText, modelLabel, openModelOf, sessionModelText, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest } from '../src/core/model-picker.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = (f: string): string => readFileSync(path.join(ROOT, f), 'utf8');
@@ -75,12 +77,35 @@ describe('model picker: the session model and the switch', () => {
       { kind: 'session.open', payload: { backend: 'claude-code', model: 'claude' } },
       { kind: MODEL_REQUEST, payload: { hsid: 'h', model: 'opus' } },
     ];
-    expect(sessionModelOf(rows)).toEqual({ model: 'claude', backend: 'claude-code', pending: 'opus' });
+    expect(sessionModelOf(rows)).toEqual({ model: 'claude', backend: 'claude-code', pending: 'opus', uncertain: null });
     rows.push({ kind: 'session.model', payload: { outcome: 'switched', from: 'claude', to: 'opus' } } as never);
-    expect(sessionModelOf(rows)).toEqual({ model: 'opus', backend: 'claude-code', pending: null });
+    expect(sessionModelOf(rows)).toEqual({ model: 'opus', backend: 'claude-code', pending: null, uncertain: null });
     rows.push({ kind: 'session.model', payload: { outcome: 'refused', from: 'opus', to: 'haiku' } } as never);
     expect(sessionModelOf(rows)!.model).toBe('opus');
     expect(sessionModelOf([])).toBeNull();
+  });
+  it('a timeout is UNCONFIRMED until the kernel reconciles it from the next reply (switching… (unconfirmed))', () => {
+    const rows: Array<{ kind: string; payload: unknown }> = [
+      { kind: 'session.open', payload: { backend: 'claude-code', model: 'haiku' } },
+      { kind: MODEL_REQUEST, payload: { hsid: 'h', model: 'sonnet' } },
+      { kind: 'session.model', payload: { outcome: 'timeout', from: 'haiku', to: 'sonnet' } },
+    ];
+    const m = sessionModelOf(rows)!;
+    expect(m).toEqual({ model: 'haiku', backend: 'claude-code', pending: null, uncertain: 'sonnet' });
+    expect(modelChipText(m)).toBe('model: switching… (unconfirmed)');
+    expect(sessionModelText(m)).toMatch(/unconfirmed/);
+    rows.push({ kind: 'session.model', payload: { outcome: 'reconciled', from: 'haiku', to: 'sonnet' } });
+    expect(sessionModelOf(rows)).toEqual({ model: 'sonnet', backend: 'claude-code', pending: null, uncertain: null });
+    expect(modelChipText(sessionModelOf(rows))).toBe('sonnet');
+    rows.push({ kind: MODEL_REQUEST, payload: { hsid: 'h', model: 'opus' } }, { kind: 'session.model', payload: { outcome: 'timeout', from: 'sonnet', to: 'opus' } }, { kind: 'session.model', payload: { outcome: 'reconciled', from: 'sonnet', to: 'sonnet' } });
+    expect(sessionModelOf(rows)).toMatchObject({ model: 'sonnet', uncertain: null });
+    expect(sessionModelText(null)).toBe('no session focused');
+  });
+  it('the transcript says what each outcome did', () => {
+    expect(sessionModelLine({ outcome: 'switched', from: 'claude', to: 'opus' })).toMatch(/default → opus · the conversation continues; the prompt cache restarts/);
+    expect(sessionModelLine({ outcome: 'timeout', from: 'haiku', to: 'opus' })).toMatch(/switching… \(unconfirmed\)/);
+    expect(sessionModelLine({ outcome: 'reconciled', from: 'haiku', to: 'haiku' })).toMatch(/did not take/);
+    expect(sessionModelLine({ outcome: 'backend-refused', from: 'haiku', to: 'x' })).toMatch(/stays haiku/);
   });
   it('the request is log.append{request.session.model, {hsid, model}}', () => {
     expect(switchRequest('h', 'sonnet')).toEqual({ kind: 'request.session.model', payload: { hsid: 'h', model: 'sonnet' } });
@@ -88,13 +113,20 @@ describe('model picker: the session model and the switch', () => {
   it('the confirm text is truthful: the conversation continues, the cache restarts, nothing says context is lost', () => {
     const t = switchConfirmText('opus', 'sonnet').join(' ');
     expect(t).toMatch(/conversation continues/);
-    expect(t).toMatch(/cache starts over/);
+    expect(t).toMatch(/prompt cache restarts/);
     expect(t).not.toMatch(/lost|lose/i);
     expect(modelLabel('claude')).toBe('default');
   });
   it('the menu offers every choice but the current one', () => {
     expect(switchChoices('opus')).not.toContain('opus');
     expect(switchChoices('claude')).not.toContain('default');
+  });
+});
+
+describe('model picker: Settings session-model slot', () => {
+  it('a read-only Session model row carries the slot the picker repaints', () => {
+    const rows = settingsModel({ theme: 'auto', motion: 'system', prefersDark: false, prefersReduced: false, layout: { name: 'desk', visible: { sessions: true, stack: true, workshop: true }, workshop: 'footer' } as never, status: null, mode: null, dictationDelayMs: null, sessionModel: 'sonnet · claude-code', connection: null, gui: { name: 'g', version: '1' }, unlock: { state: 'none', at: null, reason: null } }).flatMap((x) => x.rows);
+    expect(rows.find((r) => r.id === 'session-model')).toMatchObject({ kind: 'readonly', value: 'sonnet · claude-code', slot: 'session-model' });
   });
 });
 

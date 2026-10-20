@@ -12,8 +12,10 @@
  *     sends the alias / id, or 'claude' for `default` (Claude Code chooses; no --model).
  *   - Memory: the last choice per folder (localStorage `gnomon.model.byFolder`, ≤ 64 folders, oldest dropped) and
  *     the last choice overall (`gnomon.model.last`) for a new folder. A value that fails the check is never restored.
- *   - The session's model: the kernel's rows only — the last `session.model{outcome:'switched'}.to`, else
- *     `session.open.model` ('claude' = the default).
+ *   - The session's model: the kernel's rows only — the last `session.model{outcome:'switched'|'reconciled'}.to`,
+ *     else `session.open.model` ('claude' = the default). A `timeout` outcome leaves the model UNCONFIRMED (the
+ *     kernel keeps the old one on record) until its `reconciled` row says which model actually answered: the chip
+ *     reads "model: switching… (unconfirmed)" meanwhile (modelChipText).
  *   - The switch: `log.append{kind:'request.session.model', payload:{hsid, model}}` (human, first-party connection;
  *     the kernel sends Claude Code's `set_model` control request into the SAME process, so the conversation and its
  *     context continue; nothing restarts).
@@ -104,23 +106,48 @@ interface RowLike {
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
 /** The model a session runs now, from the kernel's rows (oldest first); null when no session.open is seen. */
-export function sessionModelOf(rows: Iterable<RowLike>): { model: string; backend: string | null; pending: string | null } | null {
+export interface SessionModelView {
+  model: string;
+  backend: string | null;
+  /** a request.session.model with no session.model yet: the switch is in flight */
+  pending: string | null;
+  /** a timed-out switch's target, until the kernel's `reconciled` row */
+  uncertain: string | null;
+}
+export function sessionModelOf(rows: Iterable<RowLike>): SessionModelView | null {
   let model: string | null = null;
   let backend: string | null = null;
   let pending: string | null = null;
+  let uncertain: string | null = null;
   for (const r of rows) {
     const p = obj(r.payload);
     if (r.kind === 'session.open') {
       model = typeof p.model === 'string' ? p.model : 'claude';
       backend = typeof p.backend === 'string' ? p.backend : null;
       pending = null;
+      uncertain = null;
     } else if (r.kind === MODEL_REQUEST && typeof p.model === 'string') pending = p.model;
     else if (r.kind === 'session.model') {
-      if (p.outcome === 'switched' && typeof p.to === 'string') model = p.to;
+      if ((p.outcome === 'switched' || p.outcome === 'reconciled') && typeof p.to === 'string') model = p.to;
+      uncertain = p.outcome === 'timeout' && typeof p.to === 'string' ? p.to : p.outcome === 'reconciled' || p.outcome === 'switched' ? null : uncertain;
       pending = null;
     }
   }
-  return model === null ? null : { model, backend, pending };
+  return model === null ? null : { model, backend, pending, uncertain };
+}
+
+/** The header chip's text: the model, a switch in flight, or an unconfirmed (timed-out) switch. */
+export function modelChipText(m: SessionModelView | null): string {
+  if (m?.uncertain) return 'model: switching… (unconfirmed)';
+  return `${modelLabel(m?.model)}${m?.pending ? ` → ${modelLabel(m.pending)}…` : ''}`;
+}
+
+/** The Settings → Session model value (read-only; the switch is the header's ▾). */
+export function sessionModelText(m: SessionModelView | null): string {
+  if (!m) return 'no session focused';
+  if (m.backend === 'local') return 'local model (gnomon-local): no Claude model to switch';
+  if (m.uncertain) return `switching to ${modelLabel(m.uncertain)}… (unconfirmed: the next reply shows which model answered; ${modelLabel(m.model)} on record)`;
+  return `${modelLabel(m.model)}${m.pending ? ` → ${modelLabel(m.pending)}…` : ''}${m.backend ? ` · ${m.backend}` : ''}`;
 }
 
 /** The switch request (sent only on the human's confirmed, trusted gesture). */
@@ -136,8 +163,8 @@ export function switchRequest(hsid: string, model: string): { kind: typeof MODEL
 export function switchConfirmText(from: string, to: string): string[] {
   return [
     `Switch this session from ${modelLabel(from)} to ${modelLabel(to)}?`,
-    'The conversation continues: the context comes with it and nothing restarts.',
-    'The prompt cache starts over for the new model, so the next turn is slower and bills its input once more.',
+    'The conversation continues in the same Claude process: the context comes with it.',
+    'The prompt cache restarts for the new model, so the next turn is slower and bills its input once more.',
     'A larger model uses your plan limits faster; the budget meter keeps counting by model.',
   ];
 }
