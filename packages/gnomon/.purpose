@@ -2478,18 +2478,23 @@ components:
       prefix-scoped always rule, enforced at the card offer (permission.ts),
       the broker accept (approve scope, bad-params before presence), the rule
       fold and every match. Default deny: 2-3 printable-ASCII words, never
-      one; argv0 no path, never a shell/interpreter/runner; package managers
-      and build tools only with an allowlisted read-only subcommand
-      (npm ls/view/outdated, cargo tree, go list/env ...; npm test refused,
+      one; argv0 no path, never a shell/interpreter/runner; NO package
+      manager or build tool is ever a prefix rule (BUILD_TOOL_PREFIX_ALLOW is
+      empty after the second Aegis BLOCK: yarnPath, rustc-wrapper, go env -w,
+      .pnpmfile and npm view --registry make every subcommand code or
+      exfiltration; an entry needs a malicious-config falsifier;
       ALLOW_NPM_TEST_PREFIX default off); git exactly two words with a
-      read-ish subcommand. prefixMatchRefusal re-checks at match time: git
-      options that run programs or redirect git (-c -C --exec-path
-      --ext-diff --textconv --output --upload-pack ...), non-listing git
-      branch args, -C-style directory/config options, and paths that leave
-      the session roots (.., ~, \, out-of-root absolute). shownPrefixWords
-      renders each word quoted with non-ASCII escaped \uXXXX for the
-      presence prompt (M1; the GUI mirrors it). Residual: Claude's persistent
-      Bash cwd is unknown to the kernel.
+      read-ish subcommand. prefixMatchRefusal re-checks at match time:
+      gitPrefixOptBad models git's option parsing (a --name that prefixes any
+      GIT_REFUSED_LONG option, so abbreviations like --outp/--ext-d/--open;
+      any short bundle containing O c C p u; plus shell-readonly gitOptBad),
+      non-listing git branch args, -C-style directory/config options, paths
+      that leave the session roots (.., ~, \, out-of-root absolute), and
+      gate-class paths (layers gateClassPathRule: .git/**, .claude/**,
+      package.json ...). shownPrefixWords renders each word quoted with
+      non-ASCII escaped \uXXXX for the presence prompt (M1; the GUI mirrors
+      it). Residual: Claude's persistent Bash cwd is unknown to the kernel;
+      git trusts repo config written before the rule or by a carded command.
     path: src/kernel/supervisor/prefix-policy.ts
     type: module
     tags: [gnomon, kernel, approvals, security, paradigm-8, move-1]

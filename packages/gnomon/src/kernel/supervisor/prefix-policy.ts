@@ -80,9 +80,8 @@ export const BUILD_TOOLS: ReadonlySet<string> = new Set([
  * host. An entry added here must ship with a malicious-project-config falsifier for that tool. Only the founder's
  * ALLOW_NPM_TEST_PREFIX switch (default OFF) would add `<pm> test`.
  */
-export const BUILD_TOOL_PREFIX_ALLOW: Readonly<Record<string, readonly string[]>> = Object.freeze(
-  ALLOW_NPM_TEST_PREFIX ? { npm: ['test'], pnpm: ['test'], yarn: ['test'] } : {},
-);
+const NPM_TEST_ALLOW: Record<string, readonly string[]> = { npm: ['test'], pnpm: ['test'], yarn: ['test'] };
+export const BUILD_TOOL_PREFIX_ALLOW: Readonly<Record<string, readonly string[]>> = Object.freeze(ALLOW_NPM_TEST_PREFIX ? NPM_TEST_ALLOW : {});
 
 export const GIT_SUBCOMMAND_ALLOW: ReadonlySet<string> = new Set(['status', 'log', 'diff', 'show', 'branch', 'blame', 'shortlog', 'describe', 'rev-parse', 'ls-files', 'ls-tree', 'grep']);
 
