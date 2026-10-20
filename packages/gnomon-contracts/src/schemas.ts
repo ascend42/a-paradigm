@@ -66,7 +66,7 @@ import {
   RUN_MODES,
 } from './card.js';
 import { CLIENT_NONCE_PATTERN_SOURCE, CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
-import { CONTEXT_SOURCES, OFFER_LIMITS, OFFER_PHASES, OFFER_REACHES, OFFER_SPEC_V1_KEYS, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFERS_PER_MOD_MAX } from './offer.js';
+import { CONTEXT_SOURCES, OFFER_LIMITS, OFFER_PHASES, OFFER_REACHES, OFFER_SPEC_V1_KEYS, OFFER_TITLE_SCHEMA_PATTERN, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFERS_PER_MOD_MAX } from './offer.js';
 
 type Schema = Record<string, unknown>;
 const ID_BASE = 'https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/';
@@ -421,7 +421,7 @@ export const OFFER_SPEC_V1_SCHEMA: Schema = deepFreeze({
     {
       kind: str(OFFER_TOKEN_PATTERN),
       phase: enumOf(OFFER_PHASES),
-      title: offerText(OFFER_LIMITS.title),
+      title: { ...offerText(OFFER_LIMITS.title), pattern: OFFER_TITLE_SCHEMA_PATTERN },
       summary: offerText(OFFER_LIMITS.summary),
       contextIn: arr(enumOf(CONTEXT_SOURCES), { maxItems: OFFER_LIMITS.contextIn, uniqueItems: true }),
       resultOut: str(OFFER_TOKEN_PATTERN),

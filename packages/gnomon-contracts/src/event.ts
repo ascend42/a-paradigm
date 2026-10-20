@@ -17,6 +17,7 @@ import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
 import { isClaudeModel } from './claude-model.js';
+import { GIT_COMMIT_PATTERN, isModId } from './mod-id.js';
 import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferTitle } from './offer.js';
 
 export const EVENT_V1 = 'event:v1' as const;
@@ -143,9 +144,12 @@ const TABLE: Row[] = [
   // question, replyTurnId} (title and contextIn copied by the kernel from the manifest offer spec) — the kernel parsed one ```offer block (offerBlockOf) naming an installed mod's declared offer;
   // offer.decided{offerId, hsid, decision} — the human's open | not-now | stop-here; offer.kept{offerId, hsid, mod, tool}
   // — the opened offer's handoff tool ran (kept/shown is the A6 metric). request.offer.decide{offerId, decision},
-  // request.offer.mute{mod, scope:'repo', repo, muted} (A3), request.mod.install{source:'git'|'folder', url|path} (A8):
-  // the human's asks, written by the kernel on a first-party human connection (like request.session.model).
-  ['offer', 'kernel', 'shown decided kept', DESK],
+  // request.offer.mute{mod, scope:'repo', hsid, muted} (A3; S0b: the human names the session, the kernel derives the
+  // repo), request.mod.install{source:'git'|'folder', url|path, commit?} (A8; commit = 40 hex, git only): the human's
+  // asks, written by the kernel on a first-party human connection (like request.session.model). offer.muted{mod, repo,
+  // muted, hsid} — the kernel-written result of a mute: the repo scope it derived from the live session (S0b).
+  // `mod` is a mod id <publisher>.<name> (S0b) everywhere in the Desk kinds.
+  ['offer', 'kernel', 'shown decided kept muted', DESK],
   ['request', 'kernel', 'offer.decide offer.mute mod.install', DESK],
   // the context meter (TD-2026-10-20-812): session.context.threshold{hsid, usedTokens, windowTokens, ratio} — a Paradigm
   // session crossed the meter's threshold (Claude checkpoints, then the human is ASKED); request.session.restart{hsid,
@@ -393,16 +397,17 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'offer.decided': Object.freeze(['offerId', 'hsid', 'decision']),
   'offer.kept': Object.freeze(['offerId', 'hsid', 'mod', 'tool']),
   'request.offer.decide': Object.freeze(['offerId', 'decision']),
-  'request.offer.mute': Object.freeze(['mod', 'scope', 'repo', 'muted']),
-  // source 'git' carries url (https only), 'folder' carries path (absolute); the other key is refused
-  'request.mod.install': Object.freeze(['source', 'url', 'path']),
+  'request.offer.mute': Object.freeze(['mod', 'scope', 'hsid', 'muted']),
+  'offer.muted': Object.freeze(['mod', 'repo', 'muted', 'hsid']),
+  // source 'git' carries url (https only) and optionally commit (40 hex), 'folder' carries path (absolute); the other keys are refused
+  'request.mod.install': Object.freeze(['source', 'url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['hsid', 'checkpointRef']),
   'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
 });
 
 /** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
 export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  'request.mod.install': Object.freeze(['url', 'path']),
+  'request.mod.install': Object.freeze(['url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['checkpointRef']),
 });
 
@@ -606,7 +611,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'offer.shown':
       if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
-      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('mod' in v) modId(c, v.mod);
       if ('kind' in v) c.str('kind', v.kind, OFFER_TOKEN_PATTERN, 'an offer kind (kebab, ≤ 64)');
       if ('phase' in v) c.closedEnum('phase', v.phase, OFFER_PHASES);
       if ('title' in v && !isOfferTitle(v.title)) c.fail('title', `must be the declared single-line title (≤ ${OFFER_LIMITS.title}, none of < > " \`)`);
@@ -622,7 +627,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'offer.kept':
       if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
-      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('mod' in v) modId(c, v.mod);
       if ('tool' in v) c.str('tool', v.tool, OFFER_TOOL_PATTERN, 'an MCP tool name');
       break;
     case 'request.offer.decide':
@@ -630,19 +635,27 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('decision' in v) c.closedEnum('decision', v.decision, OFFER_DECISIONS);
       break;
     case 'request.offer.mute':
-      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('mod' in v) modId(c, v.mod);
       if ('scope' in v) c.closedEnum('scope', v.scope, OFFER_MUTE_SCOPES);
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('muted' in v) c.bool('muted', v.muted);
+      break;
+    case 'offer.muted':
+      if ('mod' in v) modId(c, v.mod);
       if ('repo' in v) c.str('repo', v.repo, REPO_SCOPE_PATTERN, 'repo:<16 hex>');
       if ('muted' in v) c.bool('muted', v.muted);
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       break;
     case 'request.mod.install':
       if ('source' in v) c.closedEnum('source', v.source, MOD_INSTALL_SOURCES);
       if (v.source === 'git') {
         if ('path' in v) c.fail('path', "is refused for source 'git' (url names it)");
+        if ('commit' in v && (typeof v.commit !== 'string' || !GIT_COMMIT_PATTERN.test(v.commit))) c.fail('commit', 'must be a 40-hex commit id (a sha256-format repo is refused in 8.0)');
         if (!('url' in v)) c.fail('', 'missing property "url" (source git)');
         else if (typeof v.url !== 'string' || v.url.length > MOD_INSTALL_LIMITS.url || !MOD_INSTALL_URL_PATTERN.test(v.url)) c.fail('url', `must be an https URL (no userinfo, no control character, ≤ ${MOD_INSTALL_LIMITS.url})`);
       } else if (v.source === 'folder') {
         if ('url' in v) c.fail('url', "is refused for source 'folder' (path names it)");
+        if ('commit' in v) c.fail('commit', "is refused for source 'folder' (git only)");
         if (!('path' in v)) c.fail('', 'missing property "path" (source folder)');
         else if (!isInstallPath(v.path)) c.fail('path', `must be an absolute path (≤ ${MOD_INSTALL_LIMITS.path}) with no control character and no '..' segment`);
       }
@@ -672,6 +685,12 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       break;
   }
   return c.errors;
+}
+
+/** A mod id field of a Desk kind: MOD_ID_PATTERN and the ≤ 60 total (isModId). */
+function modId(c: Checker, v: unknown): void {
+  c.str('mod', v, OFFER_MOD_PATTERN, 'a mod id <publisher>.<name>');
+  if (typeof v === 'string' && OFFER_MOD_PATTERN.test(v) && !isModId(v)) c.fail('mod', 'a mod id is at most 60 characters');
 }
 
 // eslint-disable-next-line no-control-regex

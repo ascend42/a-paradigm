@@ -25,7 +25,12 @@ components:
     desk-contract: >-
       8.0:TD-2026-10-20-812 (the Desk + the context meter; ONE batched clientApiId
       move, sha256:69e8db86c16575e54014e8fa00779e607b3ad34f575ca607c9958e9c0a48cc0e ->
-      sha256:40efb7259e10d288f08c951ea22af72c76d149a6bd38c395ae7df3dfa8942afd):
+      sha256:40efb7259e10d288f08c951ea22af72c76d149a6bd38c395ae7df3dfa8942afd (S0) ->
+      sha256:4d8830585b5f676ee43c6d5d4a2cff35282344a0019526b2e66358c50599ccd8 (S0b, mod
+      naming, inside the same reservation: desk.modId, request.mod.install commit,
+      request.offer.mute{mod, scope, hsid, muted} + kernel-written offer.muted{mod, repo,
+      muted, hsid}, the offer-spec handoffTool pattern ^[A-Za-z][A-Za-z0-9_-]{0,63}$ and
+      title rule in the schema, the published refusal codes FORMAT/ENGINE/PUBLISHER/COLLISION)):
       kernel-owned, normal kinds offer.shown{offerId, hsid, mod, kind, phase, title,
       contextIn, question, replyTurnId}, offer.decided{offerId, hsid, decision},
       offer.kept{offerId, hsid, mod, tool}, request.offer.decide{offerId, decision},
@@ -46,6 +51,19 @@ components:
       fences ignored, other fences indentable up to 3 spaces; isInstallPath refuses UNC/device
       prefixes, ':' past the drive and dot/space-only segments),
       shared by the kernel and the GUI.
+    mod-id-contract: >-
+      S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
+      src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner
+      shaped, ASCII, no u flag), MOD_NAME_PATTERN (1..24), MOD_ID_PATTERN with the 60-char
+      total checked separately (isModId), parseModId/formatModId; data the kernel applies:
+      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES, FOUNDER_BRANDS
+      (ascend42 github.com-only; a-company/warpline/nevr/nevrland/conductor refused),
+      FIRST_PARTY_DISPLAY_NAMES, modSkeleton (fixed confusable transform); derived names:
+      mcpServerName (gm_<pub>_<name> <= 28 else gx_<name[0..13]>_<hash10>), qualifiedToolName
+      (<= 64), modEnvPrefix (<PUB>__<NAME>__, first-party <NAME>__), modEventPrefix
+      (modns.<id>.), modPrincipalLabel (mod-<id>); git sources: canonicalGitUrl,
+      gitOwnerOf, gitSourceString/parseGitSource (git:<canonical url>#<sha40>, 64-hex
+      refused); MOD_REFUSAL_ROUTES and MANIFEST_FORMAT {current 2, accepted [1, 2]}.
     model-switch-contract: >-
       8.0:model-switch (one deliberate clientApiId move,
       sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f ->

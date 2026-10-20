@@ -11,7 +11,7 @@
  * The MODEL proposes an offer by ending its reply with ONE fenced block:
  *
  *   ```offer
- *   {"mod": "constellation", "kind": "map-the-idea", "question": "Want me to map this on the Constellation board?"}
+ *   {"mod": "gnomon.constellation", "kind": "map-the-idea", "question": "Want me to map this on the Constellation board?"}
  *   ```
  *
  * `offerBlockOf(text)` is the ONE parser, shared by the kernel (which writes offer.shown) and the GUI (which hides the
@@ -23,6 +23,7 @@
  */
 
 import { Checker, type ValidateOptions } from './internal.js';
+import { isModId, MOD_ID_PATTERN } from './mod-id.js';
 
 export const OFFER_SPEC_V1 = 'offer-spec:v1' as const;
 
@@ -54,10 +55,13 @@ export const OFFER_TEXT_MAX = 262_144;
 
 /** A kebab token (offer kinds, contextIn / resultOut / related tokens). */
 export const OFFER_TOKEN_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
-/** A mod name (the manifest NAME rule). */
-export const OFFER_MOD_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
-/** An MCP tool name (the handoff). */
-export const OFFER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/;
+/** A mod id `<publisher>.<name>` (S0b: MOD_ID_PATTERN; the ≤ 60 total is checked separately, isModId). */
+export const OFFER_MOD_PATTERN = MOD_ID_PATTERN;
+/**
+ * An MCP tool name (the handoff), as the mod's server declares it. The whole `mcp__<server>__<tool>` must also fit
+ * QUALIFIED_TOOL_NAME_MAX (64), checked by the kernel at install and at load.
+ */
+export const OFFER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 /**
  * C0, DEL, C1, line/paragraph separators, format characters (bidi controls, zero-widths, tags), lone surrogates and
  * private-use code points (Aegis L3).
@@ -79,6 +83,8 @@ export function isOfferText(v: unknown, max: number): v is string {
 
 /** Characters an offer TITLE never carries (Aegis S1 M1): markup and quoting the roster or a GUI could misread. */
 const TITLE_UNSAFE = /[<>"`]/;
+/** The same rule as a JSON Schema pattern (offer-spec.v1.schema.json `title`). */
+export const OFFER_TITLE_SCHEMA_PATTERN = '^[^<>"`]*$';
 
 /**
  * THE offer title rule (offer-spec:v1 `title` and offer.shown `title`), shared by the kernel and the GUI: isOfferText at
@@ -183,7 +189,10 @@ export function validateOfferBlock(value: unknown): string[] {
   if (!c.obj('', value)) return c.errors;
   c.closed('', value, OFFER_BLOCK_KEYS);
   c.required('', value, OFFER_BLOCK_KEYS);
-  if ('mod' in value) c.str('mod', value.mod, OFFER_MOD_PATTERN, 'a mod name');
+  if ('mod' in value) {
+    c.str('mod', value.mod, OFFER_MOD_PATTERN, 'a mod id <publisher>.<name>');
+    if (typeof value.mod === 'string' && OFFER_MOD_PATTERN.test(value.mod) && !isModId(value.mod)) c.fail('mod', 'a mod id is at most 60 characters');
+  }
   if ('kind' in value) c.str('kind', value.kind, OFFER_TOKEN_PATTERN, 'a kebab token (≤ 64)');
   if ('question' in value && !isOfferQuestion(value.question)) c.fail('question', `must be single-line text of 1..${OFFER_QUESTION_MAX} code points, no control, format or separator character, no edge whitespace`);
   return c.errors;

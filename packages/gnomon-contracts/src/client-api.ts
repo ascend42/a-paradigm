@@ -54,6 +54,7 @@ import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
 import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
 import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
+import { FIRST_PARTY_DISPLAY_NAMES, FOUNDER_BRANDS, GIT_COMMIT_PATTERN, MANIFEST_FORMAT, MCP_SERVER_NAME_MAX, MOD_ID_LIMITS, MOD_ID_PATTERN, MOD_NAME_PATTERN, MOD_REFUSAL_ROUTES, PUBLISHER_PATTERN, QUALIFIED_TOOL_NAME_MAX, RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES } from './mod-id.js';
 
 export const KIT_V1 = 'kit:v1' as const;
 export const KIT_V1_BLOCKS = Object.freeze([
@@ -179,7 +180,27 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
       block: { fence: '```offer', format: 'json', keys: [...OFFER_BLOCK_KEYS], maxChars: OFFER_BLOCK_MAX, maxReplyChars: OFFER_TEXT_MAX, questionMax: OFFER_QUESTION_MAX, onePerReply: true },
     },
     muteScopes: [...OFFER_MUTE_SCOPES],
-    install: { sources: [...MOD_INSTALL_SOURCES], urlPattern: MOD_INSTALL_URL_PATTERN.source, limits: MOD_INSTALL_LIMITS },
+    install: { sources: [...MOD_INSTALL_SOURCES], urlPattern: MOD_INSTALL_URL_PATTERN.source, limits: MOD_INSTALL_LIMITS, commitPattern: GIT_COMMIT_PATTERN.source },
+    // S0b (mod naming and versioning, inside this same move): the mod id grammar and limits, the reserved publishers,
+    // the derived MCP server/tool name limits, the manifest formats and the published manifest refusal codes
+    modId: {
+      publisherPattern: PUBLISHER_PATTERN.source,
+      namePattern: MOD_NAME_PATTERN.source,
+      idPattern: MOD_ID_PATTERN.source,
+      limits: MOD_ID_LIMITS,
+      reservedPublishers: [...RESERVED_PUBLISHERS],
+      deviceNames: [...WINDOWS_DEVICE_NAMES],
+      founderBrands: FOUNDER_BRANDS,
+      firstPartyDisplayNames: [...FIRST_PARTY_DISPLAY_NAMES],
+      skeleton: 'lowercase; strip -; 0>o 1>l i>l 3>e 5>s; rn>m vv>w cl>d',
+      mcpServer: { short: 'gm_<publisher>_<name>', max: MCP_SERVER_NAME_MAX, long: 'gx_<name[0..13]>_<base32(sha256(id))[0..10]>' },
+      qualifiedToolMax: QUALIFIED_TOOL_NAME_MAX,
+      envPrefix: { thirdParty: '<PUB>__<NAME>__', firstParty: '<NAME>__' },
+      eventPrefix: 'modns.<publisher>.<name>.',
+      principalLabel: 'mod-<publisher>.<name>',
+      manifestFormat: MANIFEST_FORMAT,
+      refusals: MOD_REFUSAL_ROUTES,
+    },
     restart: { checkpointRefPattern: CHECKPOINT_REF_PATTERN.source },
     optionalPayloadKeys: KIND_PAYLOAD_OPTIONAL,
   },

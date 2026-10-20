@@ -150,6 +150,7 @@
     "neurons.event",
     "offer.decided",
     "offer.kept",
+    "offer.muted",
     "offer.shown",
     "oracle.result",
     "oracle.run",
@@ -307,6 +308,7 @@
     "merge.reverted": "M1.1:P8-D86-D88",
     "offer.decided": "8.0:TD-2026-10-20-812",
     "offer.kept": "8.0:TD-2026-10-20-812",
+    "offer.muted": "8.0:TD-2026-10-20-812",
     "offer.shown": "8.0:TD-2026-10-20-812",
     "permit.reattributed": "8.0:P8-D98",
     "request.brief.send": "M1.1:P8-R9",
@@ -615,13 +617,20 @@
     "request.offer.mute": [
       "mod",
       "scope",
-      "repo",
+      "hsid",
       "muted"
+    ],
+    "offer.muted": [
+      "mod",
+      "repo",
+      "muted",
+      "hsid"
     ],
     "request.mod.install": [
       "source",
       "url",
-      "path"
+      "path",
+      "commit"
     ],
     "request.session.restart": [
       "hsid",

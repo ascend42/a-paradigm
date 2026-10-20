@@ -122,6 +122,8 @@ export const GRANT_ROW_KINDS = [
   'grant.peer',
   // M1.11 slice 3 (#mod-cli): a root-signed uninstall of a mod (the last pin row naming it wins); not a client schema
   'grant.uninstall',
+  // S0b (mod naming): TOFU binding of a non-GitHub publisher to (host, namespace); not a client schema
+  'grant.publisher',
 ] as const;
 export type GrantRowKind = (typeof GRANT_ROW_KINDS)[number];
 

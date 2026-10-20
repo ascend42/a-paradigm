@@ -49,7 +49,7 @@ const SPEC = {
 } as const;
 
 const fence = (body: string): string => ['```offer', body, '```'].join('\n');
-const BLOCK = '{"mod": "constellation", "kind": "map-the-idea", "question": "Want me to map this on the board?"}';
+const BLOCK = '{"mod": "gnomon.constellation", "kind": "map-the-idea", "question": "Want me to map this on the board?"}';
 
 describe('offer-spec:v1', () => {
   it('accepts a full spec; the constants are closed', () => {
@@ -88,11 +88,11 @@ describe('offer-spec:v1', () => {
 describe('offerBlockOf (goldens)', () => {
   it('finds one block and returns the reply without it', () => {
     const r = offerBlockOf(`Here is the plan.\n\n${fence(BLOCK)}\n`);
-    expect(r).toEqual({ offer: { mod: 'constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' }, body: 'Here is the plan.' });
+    expect(r).toEqual({ offer: { mod: 'gnomon.constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' }, body: 'Here is the plan.' });
   });
   it('tolerates CRLF, trailing fence spaces and trailing blank lines', () => {
     const r = offerBlockOf(`A\r\n\`\`\`offer  \r\n${BLOCK}\r\n\`\`\`\t\r\n  \r\n`);
-    expect(r?.offer.mod).toBe('constellation');
+    expect(r?.offer.mod).toBe('gnomon.constellation');
     expect(r?.body).toBe('A');
   });
   it('M4: the block must END the reply; a block followed by text (an injected block mid-reply) is refused', () => {
@@ -110,7 +110,7 @@ describe('offerBlockOf (goldens)', () => {
     expect(offerBlockOf(` \`\`\`offer\n${BLOCK}\n\`\`\``)).toBeNull();
   });
   it('L3: lone surrogates, private-use code points and mark piles are refused in the question', () => {
-    const q = (question: string) => offerBlockOf(fence(JSON.stringify({ mod: 'm', kind: 'k', question })));
+    const q = (question: string) => offerBlockOf(fence(JSON.stringify({ mod: 'acme.m', kind: 'k', question })));
     expect(q('ok \ud800?')).toBeNull();
     expect(q('ok \ue000?')).toBeNull();
     expect(q('e\u0301\u0302\u0303\u0304?')).toBeNull();
@@ -141,7 +141,7 @@ describe('offerBlockOf (goldens)', () => {
     expect(offerBlockOf(`  \`\`\`offer\n${BLOCK}\n  \`\`\``)).toBeNull();
   });
   it('an oversized block is refused', () => {
-    const big = JSON.stringify({ mod: 'constellation', kind: 'map-the-idea', question: 'q?', pad: 'x'.repeat(OFFER_BLOCK_MAX) });
+    const big = JSON.stringify({ mod: 'gnomon.constellation', kind: 'map-the-idea', question: 'q?', pad: 'x'.repeat(OFFER_BLOCK_MAX) });
     expect(offerBlockOf(fence(big))).toBeNull();
     const manyLines = ['```offer', ...Array.from({ length: 2000 }, () => ''), '```'].join('\n');
     expect(offerBlockOf(manyLines)).toBeNull();
@@ -151,14 +151,14 @@ describe('offerBlockOf (goldens)', () => {
   });
   it.each([
     ['YAML, not JSON', 'mod: constellation\nkind: map-the-idea\nquestion: ok?'],
-    ['an extra key', '{"mod":"constellation","kind":"map-the-idea","question":"ok?","tool":"rm"}'],
-    ['a __proto__ key', '{"mod":"constellation","kind":"map-the-idea","question":"ok?","__proto__":{"x":1}}'],
-    ['a missing question', '{"mod":"constellation","kind":"map-the-idea"}'],
+    ['an extra key', '{"mod":"gnomon.constellation","kind":"map-the-idea","question":"ok?","tool":"rm"}'],
+    ['a __proto__ key', '{"mod":"gnomon.constellation","kind":"map-the-idea","question":"ok?","__proto__":{"x":1}}'],
+    ['a missing question', '{"mod":"gnomon.constellation","kind":"map-the-idea"}'],
     ['an array body', '["constellation","map-the-idea","ok?"]'],
-    ['a newline in the question', '{"mod":"constellation","kind":"map-the-idea","question":"line\\nbreak"}'],
-    ['an ESC in the question', '{"mod":"constellation","kind":"map-the-idea","question":"\\u001b[31mred"}'],
-    ['a bidi override in the question', '{"mod":"constellation","kind":"map-the-idea","question":"ok\\u202e?"}'],
-    ['an over-long question', JSON.stringify({ mod: 'constellation', kind: 'map-the-idea', question: 'q'.repeat(OFFER_QUESTION_MAX + 1) })],
+    ['a newline in the question', '{"mod":"gnomon.constellation","kind":"map-the-idea","question":"line\\nbreak"}'],
+    ['an ESC in the question', '{"mod":"gnomon.constellation","kind":"map-the-idea","question":"\\u001b[31mred"}'],
+    ['a bidi override in the question', '{"mod":"gnomon.constellation","kind":"map-the-idea","question":"ok\\u202e?"}'],
+    ['an over-long question', JSON.stringify({ mod: 'gnomon.constellation', kind: 'map-the-idea', question: 'q'.repeat(OFFER_QUESTION_MAX + 1) })],
     ['a bad mod name', '{"mod":"../x","kind":"map-the-idea","question":"ok?"}'],
     ['trailing garbage', `${BLOCK} trailing`],
   ])('refuses %s', (_why, body) => {
@@ -166,7 +166,7 @@ describe('offerBlockOf (goldens)', () => {
   });
   it('a question of exactly OFFER_QUESTION_MAX code points (astral) is accepted', () => {
     const q = '\u{1F600}'.repeat(OFFER_QUESTION_MAX);
-    expect(offerBlockOf(fence(JSON.stringify({ mod: 'm', kind: 'k', question: q })))?.offer.question).toBe(q);
+    expect(offerBlockOf(fence(JSON.stringify({ mod: 'acme.m', kind: 'k', question: q })))?.offer.question).toBe(q);
   });
   it('adversarial inputs finish in linear time (ReDoS falsifier)', () => {
     const inputs = [
@@ -186,7 +186,7 @@ describe('offerBlockOf (goldens)', () => {
 const hsid = mintHsid();
 const offerId = mintId('offer');
 const turn = `turn:${hsid}/3`;
-const SHOWN = { offerId, hsid, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on the board', contextIn: ['recent-messages'], question: 'Want me to map this?', replyTurnId: turn };
+const SHOWN = { offerId, hsid, mod: 'gnomon.constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on the board', contextIn: ['recent-messages'], question: 'Want me to map this?', replyTurnId: turn };
 
 describe('8.0:TD-2026-10-20-812 kinds', () => {
   const NEW = ['offer.shown', 'offer.decided', 'offer.kept', 'request.offer.decide', 'request.offer.mute', 'request.mod.install', 'request.session.restart', 'session.context.threshold'];
@@ -220,22 +220,34 @@ describe('8.0:TD-2026-10-20-812 kinds', () => {
     expect(validateKindPayload('request.offer.decide', { offerId, decision: 'open', note: 'hi' }).length).toBeGreaterThan(0);
   });
   it('offer.kept names the mod and the handoff tool', () => {
-    expect(validateKindPayload('offer.kept', { offerId, hsid, mod: 'constellation', tool: 'constellation_open' })).toEqual([]);
-    expect(validateKindPayload('offer.kept', { offerId, hsid, mod: 'constellation', tool: 'rm -rf' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('offer.kept', { offerId, hsid, mod: 'gnomon.constellation', tool: 'constellation_open' })).toEqual([]);
+    expect(validateKindPayload('offer.kept', { offerId, hsid, mod: 'gnomon.constellation', tool: 'rm -rf' }).length).toBeGreaterThan(0);
   });
-  it('request.offer.mute: scope repo only, a repo key, a boolean', () => {
+  it('request.offer.mute (S0b): scope repo only, the session hsid (the kernel derives the repo), a boolean', () => {
     const repo = 'repo:0123456789abcdef';
-    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'repo', repo, muted: true })).toEqual([]);
-    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'repo', repo, muted: false })).toEqual([]);
-    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'global', repo, muted: true }).length).toBeGreaterThan(0);
-    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'repo', repo, muted: 'yes' }).length).toBeGreaterThan(0);
-    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'repo', muted: true }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'repo', hsid, muted: true })).toEqual([]);
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'repo', hsid, muted: false })).toEqual([]);
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'global', hsid, muted: true }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'repo', hsid, muted: 'yes' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'repo', muted: true }).length).toBeGreaterThan(0);
+    // the human no longer names the repo: a repo key is refused on the request
+    expect(validateKindPayload('request.offer.mute', { mod: 'gnomon.neurons', scope: 'repo', hsid, repo, muted: true }).length).toBeGreaterThan(0);
+    // a bare (pre-S0b) mod name is refused
+    expect(validateKindPayload('request.offer.mute', { mod: 'neurons', scope: 'repo', hsid, muted: true }).length).toBeGreaterThan(0);
+    // offer.muted: the kernel-written result names the derived repo
+    expect(validateKindPayload('offer.muted', { mod: 'gnomon.neurons', repo, muted: true, hsid })).toEqual([]);
+    expect(validateKindPayload('offer.muted', { mod: 'gnomon.neurons', muted: true, hsid }).length).toBeGreaterThan(0);
   });
   it('request.mod.install{git}: https only, no userinfo, no control, url only', () => {
     const ok = (p: unknown) => expect(validateKindPayload('request.mod.install', p)).toEqual([]);
     const bad = (p: unknown) => expect(validateKindPayload('request.mod.install', p).length).toBeGreaterThan(0);
     ok({ source: 'git', url: 'https://github.com/ascend42/constellation.git' });
     ok({ source: 'git', url: 'https://git.example.com:8443/team/mod' });
+    // S0b: an optional commit, 40 hex, git only (a sha256-format 64-hex repo is refused in 8.0)
+    ok({ source: 'git', url: 'https://github.com/acme/mod', commit: 'a'.repeat(40) });
+    bad({ source: 'git', url: 'https://github.com/acme/mod', commit: 'a'.repeat(64) });
+    bad({ source: 'git', url: 'https://github.com/acme/mod', commit: 'A'.repeat(40) });
+    bad({ source: 'folder', path: '/Users/me/mod', commit: 'a'.repeat(40) });
     bad({ source: 'git', url: 'http://github.com/a/b' });
     bad({ source: 'git', url: 'git@github.com:a/b.git' });
     bad({ source: 'git', url: 'ssh://github.com/a/b' });
@@ -285,7 +297,7 @@ describe('isOfferTitle (Aegis S1 M1)', () => {
     for (const t of ['<b>x', 'a > b', 'say "hi"', 'run `rm`']) expect(isOfferTitle(t), t).toBe(false);
     const spec = { kind: 'map', phase: 'diverge', title: 'Map <it>', summary: 's', contextIn: [], resultOut: 'r', reach: 'mcp', handoffTool: 'open', related: [], restraint: 'r' };
     expect(validateOfferSpecV1(spec).some((e) => e.includes('title'))).toBe(true);
-    const shown = { offerId: 'offer:01J00000000000000000000001', hsid: 'hsid:v1:01J00000000000000000000000', mod: 'm', kind: 'map', phase: 'diverge', title: 'a "b"', contextIn: [], question: 'q?', replyTurnId: 'turn:hsid:v1:01J00000000000000000000000/1' };
+    const shown = { offerId: 'offer:01J00000000000000000000001', hsid: 'hsid:v1:01J00000000000000000000000', mod: 'acme.m', kind: 'map', phase: 'diverge', title: 'a "b"', contextIn: [], question: 'q?', replyTurnId: 'turn:hsid:v1:01J00000000000000000000000/1' };
     expect(validateKindPayload('offer.shown', shown).some((e) => e.includes('title'))).toBe(true);
   });
 });
