@@ -15,7 +15,9 @@ let base = '';
 let repo = '';
 let home = '';
 let outside = '';
-const ro = (c: string) => classifyReadOnly(c, { roots: [repo], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform });
+const ro = (c: string) => classifyReadOnly(c, { roots: [repo], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform, readRoots: [] });
+/** The same with the default system read roots (/usr, /etc, /tmp, ...). */
+const roSys = (c: string) => classifyReadOnly(c, { roots: [repo], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform });
 
 beforeAll(() => {
   base = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ro-fs-'));
@@ -71,6 +73,17 @@ describe('#shell-readonly on a real filesystem', () => {
   it('H2: a glob match that starts with - (a planted `-r`) is refused', () => {
     expect(ro(`cd '${path.join(repo, 'dash')}' && grep x *`)).toMatchObject({ ok: false, why: 'an expanded value starts with -' });
     expect(ro(`cd '${path.join(repo, 'dash')}' && grep x ./*`)).toEqual({ ok: true });
+  });
+  it('H2: diff never takes a directory operand (it would read the files inside, unchecked)', () => {
+    expect(ro(`cd '${repo}' && diff src entries`)).toMatchObject({ ok: false, why: 'diff: a directory operand' });
+    expect(ro(`cd '${repo}' && diff src/a.ts src`)).toMatchObject({ ok: false, why: 'diff: a directory operand' });
+    expect(ro(`cd '${repo}' && diff src/a.ts src/b.ts`)).toEqual({ ok: true });
+  });
+  it('H4: the system read roots are readable by default, and readRoots can only narrow them', () => {
+    expect(roSys('cat /etc/hosts')).toEqual({ ok: true });
+    expect(roSys('ls /usr/bin')).toEqual({ ok: true });
+    expect(ro('cat /etc/hosts')).toMatchObject({ ok: false, why: 'outside the readable roots' });
+    expect(classifyReadOnly('ls /sbin', { roots: [repo], home, gnomonHome: path.join(home, '.gnomon'), readRoots: ['/sbin'] })).toMatchObject({ ok: false, why: 'outside the readable roots' });
   });
   it('H3: cd resolves to its realpath, so a symlinked dir out of the roots is refused', () => {
     expect(ro(`cd '${path.join(repo, 'out')}' && ls`)).toMatchObject({ ok: false, why: 'cd: outside the session roots' });

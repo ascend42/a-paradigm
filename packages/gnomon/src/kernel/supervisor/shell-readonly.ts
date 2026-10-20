@@ -66,6 +66,11 @@
  *     grep -r -R -S -O -d -D --recursive --dereference-recursive
  *     --directories --devices (and every abbreviation), ls -L -R, du -L, stat
  *     -L, diff -r, find -L/-follow; `rg` is gone (it recurses by default);
+ *     `diff` takes no directory operand (`diff DIR DIR` / `diff FILE DIR` read
+ *     files inside the directory that are never operands);
+ *   - zsh EQUALS: a word starting with an unquoted `=` (`=cmd` is the full
+ *     path of cmd from $PATH) is refused; bash's unary `test -a FILE` is a
+ *     file test (its operand is path-checked);
  *   - the command name is a literal word in the allowlist below.
  *
  * ALLOWLIST:
@@ -101,8 +106,12 @@
  *   and (C2) `.gitconfig`, `.git-credentials`, `.netrc` and the other
  *   tool-steering files are gate-class, so a session cannot set them unseen.
  *   A glob is expanded at classification time: a file planted between the
- *   check and the run (by a concurrent process) is not seen. The user's own
- *   shell aliases and functions are trusted.
+ *   check and the run (by a concurrent process) is not seen. A planted file
+ *   NAME inside a session root can still steer which in-root file a literal
+ *   glob reaches. The user's own shell aliases, functions and options (zsh
+ *   EXTENDED_GLOB / KSH_GLOB patterns such as `^x` or `a~b`, which this
+ *   matcher does not model) are trusted. `du` and `find` walk a directory
+ *   (names and sizes, never contents) without following symlinks.
  *
  * simpleArgv: for prefix `always` rules (#always-rules) — the argv of a
  * command that is ONE simple command with only literal words (no ; && || |
@@ -515,6 +524,8 @@ export interface ReadOnlyContext {
   /** the Gnomon home (never read by an auto-passed command) */
   gnomonHome: string;
   platform?: string;
+  /** the system read roots (posix); default SYSTEM_READ_ROOTS. Only ever NARROWED (tests run where /tmp is the tmpdir). */
+  readRoots?: readonly string[];
 }
 export type ReadOnlyVerdict = { ok: true } | { ok: false; why: string };
 
@@ -592,7 +603,7 @@ export function classifyReadOnly(command: string, ctx: ReadOnlyContext): ReadOnl
   const env: Env = { ctx, cwd: null, vars: new Map(), prot, allow: [], fold, pp, native: pp === (process.platform === 'win32' ? path.win32 : path.posix) };
   try {
     env.allow = rootForms(env);
-    if (pp === path.posix) env.allow.push(...SYSTEM_READ_ROOTS);
+    if (pp === path.posix) env.allow.push(...(ctx.readRoots ?? SYSTEM_READ_ROOTS).filter((r) => SYSTEM_READ_ROOTS.includes(r)));
     walkList(list, env, true);
     return { ok: true };
   } catch (e) {
@@ -737,6 +748,8 @@ function expand(w: Word, env: Env): Arg[] {
     }
     return [{ lit: null, sub: true, proc: false, exp: false }];
   }
+  // zsh EQUALS (on by default): an unquoted leading `=cmd` expands to the command's full path, read from $PATH
+  if (p0.t === 'lit' && !p0.quoted && p0.v.startsWith('=')) no('=command expansion');
   let pats = [''];
   let glob = false;
   let fromVar = false;
@@ -993,7 +1006,9 @@ const testRule: Rule = (args, env, name) => {
   }
   for (let i = 0; i < ops.length; i++) {
     const s = ops[i]!;
-    if (TEST_FILE_UNARY.has(s)) {
+    // `-a FILE` is also bash's unary existence test (where a binary `-a` cannot stand): its operand is a path
+    const unaryA = s === '-a' && (i === 0 || ['!', '(', '-a', '-o'].includes(ops[i - 1]!));
+    if (TEST_FILE_UNARY.has(s) || unaryA) {
       if (ops[i + 1] !== undefined) checkPath(ops[++i]!, env);
     } else if (TEST_FILE_BINARY.has(s)) {
       if (ops[i - 1] !== undefined) checkPath(ops[i - 1]!, env);
@@ -1126,7 +1141,7 @@ const sedRule: Rule = (args, env, name) => {
   pathArgs(ops, env, name);
 };
 const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'blame', 'rev-parse', 'ls-files', 'describe']);
-const GIT_BAD = /^(--output|--ext-diff|--textconv|--open-files-in-pager|-O|--exec|--upload-pack|--receive-pack|--paginate)(=|$)/;
+const GIT_BAD = /^(?:(--output|--ext-diff|--textconv|--open-files-in-pager|--exec|--upload-pack|--receive-pack|--paginate)(=|$)|-O)/;
 /** Aegis M3: config keys that may hold a credential (URLs carry user:token, headers carry bearer tokens). */
 const GIT_SECRET_KEY = /^(remote|credential|http|https|url|sendemail)\.|url|token|password|passwd|secret|auth|header|cookie|proxy|key/i;
 const gitRule: Rule = (args, env, name) => {
@@ -1158,6 +1173,26 @@ const gitRule: Rule = (args, env, name) => {
   no(`git: subcommand ${sub}`);
 };
 
+/**
+ * Aegis H2: `diff DIR DIR` compares the files inside both directories and `diff FILE DIR` reads DIR/FILE — paths that
+ * are never operands, so never realpath-checked. A directory operand (at its realpath) is refused.
+ */
+const diffReader = reader('r', ['--recursive'], false, 'X');
+const diffRule: Rule = (args, env, name) => {
+  diffReader(args, env, name);
+  for (const a of args) {
+    if (a.proc || a.lit === null || isFlag(a) || !env.native) continue;
+    const t = env.pp.isAbsolute(a.lit) ? a.lit : env.pp.join(env.cwd ?? '', a.lit);
+    let dir = false;
+    try {
+      dir = fs.statSync(t).isDirectory();
+    } catch {
+      // missing: diff fails on it
+    }
+    if (dir) no('diff: a directory operand');
+  }
+};
+
 export const COMMANDS: Readonly<Record<string, Rule>> = Object.freeze({
   cat: reader(), head: reader(), tail: reader(), cut: reader(), cmp: reader(), realpath: reader(), df: reader(),
   wc: reader('', ['--files0-from']),
@@ -1167,7 +1202,7 @@ export const COMMANDS: Readonly<Record<string, Rule>> = Object.freeze({
   fgrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
   stat: reader('L', ['--dereference']),
   du: reader('L', ['--dereference', '--files0-from'], true, 'X'),
-  diff: reader('r', ['--recursive'], false, 'X'),
+  diff: diffRule,
   echo: echoRule, printf: printfRule,
   basename: textRule({ short: 'az', shortValue: 's', long: ['--multiple', '--zero'], longValue: ['--suffix'] }),
   dirname: textRule({ short: 'z', long: ['--zero'] }),

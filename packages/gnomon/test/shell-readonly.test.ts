@@ -308,6 +308,12 @@ const REFUSE: Array<[string, RegExp]> = [
   [`${C}git config --get credential.helper`, /git config/],
   // Low: `git branch -l NAME` created NAME in older git
   [`${C}git branch -l newname`, /git branch: -l/],
+  // follow-up hardening: a git order file attached to -O, bash's unary `-a FILE`, zsh's `=cmd` PATH expansion
+  [`${C}git diff -Oorder.txt`, /git: -Oorder.txt/],
+  ['test -a ~/.ssh/id_rsa', /protected path/],
+  ['[ ! -a /w/home/.aws/credentials ]', /protected path/],
+  ['cat =ls', /=command expansion/],
+  [`${C}cat =python3`, /=command expansion/],
 ];
 
 describe('#shell-readonly classifyReadOnly', () => {

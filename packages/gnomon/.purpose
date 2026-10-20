@@ -2370,10 +2370,13 @@ components:
       the filesystem with a superset matcher, every match realpath-checked,
       > 200 matches or a match starting with - refused, no recursive or
       symlink-following reader flags (grep -r/-R/-S/-O/-d/-D, ls -L/-R, du -L,
-      stat -L, diff -r, find -L/-follow), rg removed; H3 cd only first, to an
+      stat -L, diff -r, find -L/-follow), rg removed, diff takes no directory
+      operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
+      path-checked; H3 cd only first, to an
       ABSOLUTE path inside a session root, cwd = its realpath; H4 reads only
       inside the session roots and /usr /opt/homebrew /etc /tmp /private/tmp
-      /private/etc (as given and at the deepest-existing-ancestor realpath),
+      /private/etc (as given and at the deepest-existing-ancestor realpath;
+      ctx.readRoots may only narrow that system list),
       plus the device/protected-root deny; M1 date display only; M2 the cwd
       is known only along an unbroken && chain from that cd, else relative
       paths, implicit-cwd reads and git raise the card; M3 no git remote -v,
