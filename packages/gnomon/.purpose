@@ -1159,6 +1159,23 @@ components:
 
   manifest-loader:
     description: >-
+      #manifest-loader, the Desk (TD-2026-10-20-812). manifest.ts: provides.offers
+      (offer-spec:v1 from gnomon-contracts, at most 6, unique kinds, needs a
+      provides.mcp server since reach is mcp) and 'offers' in WIDENING_FIELDS (key
+      kind@phase→handoffTool; a text-only change is no widening); a provides.mcp entry
+      may declare a closed per-user override surface config{command?:true, args?:true,
+      env?:[names]} (env names never PATH/HOME/NODE_OPTIONS/… nor LD_/DYLD_/ANTHROPIC_/
+      CLAUDE_/GNOMON_/NPM_CONFIG_/GIT_; a config is part of the mcp widening key);
+      validateMcpUserConfig + resolveMcpLaunch admit only what it declares, under
+      COMMAND_UNSAFE (first-party servers launch as node <absolute path> from other
+      repos; a user-set command is an absolute path, spawn with shell:false). Env
+      names: MCP_ENV_DENY + MCP_ENV_DENY_PREFIXES (Aegis M1), and below first-party
+      <NAME>_* or *_API_KEY / *_TOKEN only. Each offer contextIn source is its own
+      widening key (kind:in:src). Not yet wired into a launch path. RESERVED_MOD_NAMES
+      (kernel, gnomon, system, paradigm, claude, …; NAME at every tier), FIRST_PARTY_MOD_NAMES
+      and FIRST_PARTY_NAME_PREFIXES (gnomon-, paradigm-, claude-, anthropic-) first-party only. install.ts surfaceOf: one 'offer:' card line per offer and a
+      'user may set:' suffix on an mcp line; both absent when undeclared, so pre-812
+      card detail hashes are unchanged.
       #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,
       §16; §19.1 M1.5). src/kernel/manifest/. manifest.ts — manifest:v1
       validation, producer-strict and fail-closed (wire form: the JSON subset
@@ -1266,6 +1283,7 @@ components:
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
     tests:
+      - test/manifest-offers.test.ts
       - test/manifest-loader.test.ts
       - test/seams-fence.test.ts
     oracles: [G-MAN-01, G-MAN-02, G-MAN-03, G-HON-04, G-LAW-04, G-WIN-04]
@@ -2086,6 +2104,110 @@ components:
       - test/socket-abi.test.ts
       - test/socket-log-read.test.ts
     oracles: [G-VOX-04, G-VOX-06]
+
+  desk-guidance:
+    description: >-
+      #desk-guidance (TD-2026-10-20-812 A1, slice S1; spec §12.9).
+      src/kernel/desk/desk-guidance.ts: the frozen DESK_BODY (pinned
+      DESK_BODY_HASH) and a kernel-composed roster from manifest fields only
+      (mod name, offer kind, phase, title; A7), wrapped in <gnomon-desk>.
+      composeGuidance(voice, desk) returns ONE block (voice first, blank line,
+      desk) so table talk and the Desk share the single extra text block under
+      one turn.sent{guidanceHash} that trace-cli extrasAgree admits (Aegis M2);
+      voice alone is exactly TABLE_TALK_GUIDANCE. The supervisor's
+      setTurnGuidance takes the composite (setVoiceGuidance is its alias).
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]
+    flows: [$offer-handoff]
+    tests:
+      - test/desk-guidance.test.ts
+      - test/table-talk-session.test.ts
+    oracles: [G-DSK-01]
+
+  offer-router:
+    description: >-
+      #offer-router (TD-2026-10-20-812, slice S1; spec §12.9).
+      src/kernel/desk/offer-router.ts: a fold over committed rows (daemon
+      log.onCommit, like the speakable projector; seed() replays offer.* and
+      request.offer.mute at boot). At turn.result it parses the turn's
+      main-chain assistant text with offerBlockOf; at most one per reply, none
+      while another turn is outstanding, none while the session has a pending
+      card; the mod must be installed, granted, unpaused (DeskMods), not muted
+      for the hsid (offer.decided not-now / stop-here) nor its repo
+      (request.offer.mute, repo:<16 hex> from the session's repoKey), and the
+      kind one of its declared offers; phase, title and contextIn are copied
+      from the manifest (Aegis D3). It returns the kernel offer.shown row (the
+      daemon appends it). decide(): request.offer.decide from the human on a
+      gui/device connection only (Aegis D1), offer live (session running and
+      owned by the asker), latest for the hsid, undecided (exactly one
+      decision; a concurrent replay is refused before the row commits); writes
+      request.offer.decide + offer.decided and on open sends the kernel
+      template "Open <title>: use the <handoffTool> tool." as the human
+      (session.inject origin kernel). offer.kept once per offer when the
+      declared handoffTool on mcp__gnomon-<mod>__ completes without error
+      after open. mute(): request.offer.mute row as the kernel. Aegis S1
+      fixes: open names the fully qualified tool mcp__<server>__<handoffTool>;
+      only kernel-principal rows fold; the next turn.sent retires the shown
+      offer; decided once the request row commits (a retry is a replay, no
+      second request row), send failures reported (diag send.failed); a mod
+      paused or muted after open never counts as kept (diag kept.refused);
+      mutes survive session exit until the bounded state is evicted. Pause
+      and mute stop offers at once; removing the server applies to new
+      sessions. CLI
+      `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/open/not-now/
+      stop-here/kept per mod from the verified log.
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]
+    flows: [$offer-handoff]
+    gates: [^offer-accept]
+    signals: []
+    tests:
+      - test/offer-router.test.ts
+    oracles: [G-DSK-02, G-DSK-03, G-DSK-04]
+
+  mcp-passthrough:
+    description: >-
+      #mcp-passthrough (TD-2026-10-20-812 A2, slice S1; spec §12.9).
+      src/kernel/desk/mcp-passthrough.ts: DeskMods / readDeskMods (installed,
+      pinned snapshot verifies, manifest matches its grant, capabilities and
+      egress granted, not paused; cached on the grant table) and mergeDeskMcp,
+      wired as SupervisorOptions.deskMcp into the session mcp.json: gnomon-<mod>
+      (gnomon-<mod>-<entry> for extra entries), never a repo server name nor an
+      earlier mod's, repo-muted mods skipped. Per-user launch override (Aegis
+      D2): kernel state only (<home>/desk/mcp-overrides.json, 0600), never a
+      repo file; `gnomon mod config <mod> --command <abs> --args … --env N=v`
+      writes a request under <home>/mods/<mod>/ (session sandboxes cannot write
+      the home); McpConfigCards raises a root-class grant card showing
+      command, args, env NAMES and the launch hash; only allow writes the
+      store. Accepted only for what provides.mcp[].config declares
+      (validateMcpUserConfig) and an absolute command; a store entry failing
+      the checks falls back to the manifest launch. Fail closed (Aegis S2):
+      a server whose RESOLVED command is not absolute (isAbsoluteCommand:
+      POSIX /… or a Windows drive path; // and UNC refused) is never added
+      (skipped needs-config, daemon diag daemon.desk.mcp.unconfigured with
+      the gnomon mod config hint); both shipped first-party defaults fail it
+      until configured. Names come from ONE helper, serverNameOf: an entry
+      named <mod> or gnomon-<mod> is gnomon-<mod>, else gnomon-<mod>-<entry>
+      (gnomon-neurons-brain); #offer-router's kept check uses the same helper.
+      Aegis S1 fixes: repo servers named with a reserved desk prefix
+      (RESERVED_DESK_PREFIXES gnomon-, gm_, gx_) are dropped (diag
+      mcp.reserved); the daemon records the servers added per hsid and the
+      router offers and counts kept only through them; no desk server before
+      the router is bound (mcp.unbound); per added server a diag mcp.added
+      {server, launchHash, overridden}; launchHashOf is an HMAC under the
+      kernel key <home>/desk/launch-hash.key; overrides refuse secret-marked
+      env names (manifest provides.mcp[].config.secret), non-.exe commands on
+      win32 and args the card would truncate (MCP_CARD_ARGS_MAX); the card
+      says env values land in the session's mcp.json and labels the requester
+      "a request file under the Gnomon home".
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mcp, mod-playbooks, paradigm-8]
+    tests:
+      - test/mcp-passthrough.test.ts
+    oracles: [G-DSK-05]
 
   budget-fuse:
     description: >-
@@ -3173,6 +3295,16 @@ components:
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]
 flows:
+  offer-handoff:
+    description: >-
+      $offer-handoff (TD-2026-10-20-812, spec §12.9): a reply ends with one
+      ```offer block → #offer-router checks budget, gate and declared kind →
+      kernel offer.shown (manifest fields) → the GUI slip → ^offer-accept
+      (human request.offer.decide) → offer.decided → on open a kernel-templated
+      turn as the human → the mod's handoff tool on its gnomon-<mod> server
+      (#mcp-passthrough) → offer.kept.
+    steps: ["#desk-guidance", "#offer-router", "#mcp-passthrough"]
+    tags: [gnomon, desk, mod-playbooks]
   first-run:
     description: >-
       $first-run (spec §2.4 rule 9): unprovisioned Mac → `gnomon` (or `gnomon
@@ -3455,6 +3587,15 @@ flows:
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 gates:
+  offer-accept:
+    description: >-
+      ^offer-accept (TD-2026-10-20-812, spec §12.9; Aegis D1): request.offer.decide
+      and request.offer.mute are served only for the human on a gui or device
+      connection, stamped by connId at dispatch (never an agent, MCP, mod or
+      model connection, nor the offer path itself). decide: the offer is live
+      (its session running and owned by the asker), the latest for its hsid and
+      undecided; exactly one decision per offer, replays refused.
+    prizes: []
   setup-token:
     description: >-
       ^setup-token (spec §11.2 rule 11) — the one-shot setup token of the

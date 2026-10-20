@@ -361,6 +361,14 @@ export interface HumanRequestPort {
     revoke(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; deviceId?: string }, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
   };
+  /**
+   * TD-2026-10-20-812 (#offer-router, ^offer-accept): request.offer.decide / request.offer.mute from the human on a
+   * gui or device connection ONLY (Aegis D1: never an agent, MCP, model or mod connection); the asker is stamped here.
+   */
+  offer?: {
+    decide(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    mute(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+  };
 }
 
 /** The connection a human-device verb runs for (stamped from THIS connection, never from params). */
@@ -790,6 +798,17 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential, ...(s.deviceId ? { deviceId: s.deviceId } : {}) };
         try {
           return await (pa.kind === 'request.grant.standing' ? o.requests.standing.request(asker, pa.payload) : o.requests.standing.revoke(asker, pa.payload));
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-20-812 (Aegis D1): the Desk's two human requests, gui/device human connections only, stamped by connId
+      if ((pa?.kind === 'request.offer.decide' || pa?.kind === 'request.offer.mute') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.offer) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
+        try {
+          return await (pa.kind === 'request.offer.decide' ? o.requests.offer.decide(asker, pa.payload) : o.requests.offer.mute(asker, pa.payload));
         } catch (err) {
           throw asRpcRefusal(err);
         }

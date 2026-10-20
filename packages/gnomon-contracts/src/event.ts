@@ -17,6 +17,7 @@ import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
 import { isClaudeModel } from './claude-model.js';
+import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferTitle } from './offer.js';
 
 export const EVENT_V1 = 'event:v1' as const;
 
@@ -48,7 +49,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -75,6 +76,8 @@ const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
 const STANDING = '8.0:TD-2026-10-20-086' as const;
 /** The mid-session Claude model switch (founder ask 2026-10-20; probe p-set-model): one clientApiId move. */
 const MODEL_SWITCH = '8.0:model-switch' as const;
+/** The Desk (TD-2026-10-20-812: offers, the in-GUI mod install, mute) + the context meter: one clientApiId move. */
+const DESK = '8.0:TD-2026-10-20-812' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -136,6 +139,19 @@ const TABLE: Row[] = [
   // first-party human connection; session.model{hsid, from, to, permitId, outcome} — what the switch did (closed).
   ['request', 'kernel', 'session.model', MODEL_SWITCH],
   ['session', 'kernel', 'model', MODEL_SWITCH],
+  // the Desk (TD-2026-10-20-812, O1 two-step accept): offer.shown{offerId, hsid, mod, kind, phase, title, contextIn,
+  // question, replyTurnId} (title and contextIn copied by the kernel from the manifest offer spec) — the kernel parsed one ```offer block (offerBlockOf) naming an installed mod's declared offer;
+  // offer.decided{offerId, hsid, decision} — the human's open | not-now | stop-here; offer.kept{offerId, hsid, mod, tool}
+  // — the opened offer's handoff tool ran (kept/shown is the A6 metric). request.offer.decide{offerId, decision},
+  // request.offer.mute{mod, scope:'repo', repo, muted} (A3), request.mod.install{source:'git'|'folder', url|path} (A8):
+  // the human's asks, written by the kernel on a first-party human connection (like request.session.model).
+  ['offer', 'kernel', 'shown decided kept', DESK],
+  ['request', 'kernel', 'offer.decide offer.mute mod.install', DESK],
+  // the context meter (TD-2026-10-20-812): session.context.threshold{hsid, usedTokens, windowTokens, ratio} — a Paradigm
+  // session crossed the meter's threshold (Claude checkpoints, then the human is ASKED); request.session.restart{hsid,
+  // checkpointRef?} — the human's yes: restart the session fresh and recover from the checkpoint (never auto-compact).
+  ['session', 'kernel', 'context.threshold', DESK],
+  ['request', 'kernel', 'session.restart', DESK],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -371,7 +387,41 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   // model switch (8.0:model-switch): the human's ask and its closing row (validateKindPayload)
   'request.session.model': Object.freeze(['hsid', 'model']),
   'session.model': Object.freeze(['hsid', 'from', 'to', 'permitId', 'outcome']),
+  // the Desk + the context meter (8.0:TD-2026-10-20-812). Closed, no free text except offer.shown's model-written
+  // `question` (≤ OFFER_QUESTION_MAX, control/format/separator characters refused) and its manifest-declared `title`.
+  'offer.shown': Object.freeze(['offerId', 'hsid', 'mod', 'kind', 'phase', 'title', 'contextIn', 'question', 'replyTurnId']),
+  'offer.decided': Object.freeze(['offerId', 'hsid', 'decision']),
+  'offer.kept': Object.freeze(['offerId', 'hsid', 'mod', 'tool']),
+  'request.offer.decide': Object.freeze(['offerId', 'decision']),
+  'request.offer.mute': Object.freeze(['mod', 'scope', 'repo', 'muted']),
+  // source 'git' carries url (https only), 'folder' carries path (absolute); the other key is refused
+  'request.mod.install': Object.freeze(['source', 'url', 'path']),
+  'request.session.restart': Object.freeze(['hsid', 'checkpointRef']),
+  'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
 });
+
+/** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
+export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'request.mod.install': Object.freeze(['url', 'path']),
+  'request.session.restart': Object.freeze(['checkpointRef']),
+});
+
+/** request.offer.mute{scope} (CLOSED): a mod is muted per repo (A3: Neurons on everywhere, mute per repo). */
+export const OFFER_MUTE_SCOPES = ['repo'] as const;
+/** request.mod.install{source} (CLOSED, A8): a git URL or a local folder. No registry. */
+export const MOD_INSTALL_SOURCES = ['git', 'folder'] as const;
+export type ModInstallSource = (typeof MOD_INSTALL_SOURCES)[number];
+/** request.mod.install limits: url and path length (UTF-16 code units). */
+export const MOD_INSTALL_LIMITS = Object.freeze({ url: 512, path: 1024 });
+/**
+ * request.mod.install{url}: https only, a host of letters, digits, dots and hyphens (no userinfo, so no `@` before the
+ * path), an optional port, then a path of URL-safe printable characters. One pass, no nested quantifier.
+ */
+export const MOD_INSTALL_URL_PATTERN = /^https:\/\/[A-Za-z0-9][A-Za-z0-9.-]{0,252}(?::[0-9]{1,5})?(?:\/[A-Za-z0-9._~%!$&'()*+,;=:@\/?#-]*)?$/;
+/** request.session.restart{checkpointRef}: the opaque id of the Paradigm checkpoint to recover from. */
+export const CHECKPOINT_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+/** offer ids: `offer:<ULID>` (ID_PREFIXES.offer). */
+export const OFFER_ID_PATTERN = ID_PATTERNS.offer;
 
 /**
  * `session.model{outcome}` (CLOSED, 8.0:model-switch): what one request.session.model came to.
@@ -519,7 +569,8 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
   const c = new Checker('strict');
   if (!c.obj('', value)) return c.errors;
   c.closed('', value, keys);
-  c.required('', value, keys);
+  const optional = KIND_PAYLOAD_OPTIONAL[kind] ?? [];
+  c.required('', value, keys.filter((k) => !optional.includes(k)));
   const v = value as Record<string, unknown>;
   switch (kind) {
     case 'session.drained':
@@ -552,6 +603,67 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if (v.outcome === 'permit-refused' && v.permitId !== null) c.fail('permitId', 'is null when the permit was refused');
       if (v.outcome !== 'permit-refused' && v.permitId === null) c.fail('permitId', 'names the new spawn permit');
       break;
+    case 'offer.shown':
+      if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('kind' in v) c.str('kind', v.kind, OFFER_TOKEN_PATTERN, 'an offer kind (kebab, ≤ 64)');
+      if ('phase' in v) c.closedEnum('phase', v.phase, OFFER_PHASES);
+      if ('title' in v && !isOfferTitle(v.title)) c.fail('title', `must be the declared single-line title (≤ ${OFFER_LIMITS.title}, none of < > " \`)`);
+      if ('contextIn' in v) for (const e of contextInProblems(v.contextIn)) c.fail('', e);
+      if ('question' in v && !isOfferQuestion(v.question)) c.fail('question', `must be single-line text of 1..${OFFER_QUESTION_MAX} code points, no control, format or separator character`);
+      if ('replyTurnId' in v) c.str('replyTurnId', v.replyTurnId, TURN_ID_PATTERN, 'turn:<hsid>/<n>');
+      break;
+    case 'offer.decided':
+      if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('decision' in v) c.closedEnum('decision', v.decision, OFFER_DECISIONS);
+      break;
+    case 'offer.kept':
+      if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('tool' in v) c.str('tool', v.tool, OFFER_TOOL_PATTERN, 'an MCP tool name');
+      break;
+    case 'request.offer.decide':
+      if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
+      if ('decision' in v) c.closedEnum('decision', v.decision, OFFER_DECISIONS);
+      break;
+    case 'request.offer.mute':
+      if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
+      if ('scope' in v) c.closedEnum('scope', v.scope, OFFER_MUTE_SCOPES);
+      if ('repo' in v) c.str('repo', v.repo, REPO_SCOPE_PATTERN, 'repo:<16 hex>');
+      if ('muted' in v) c.bool('muted', v.muted);
+      break;
+    case 'request.mod.install':
+      if ('source' in v) c.closedEnum('source', v.source, MOD_INSTALL_SOURCES);
+      if (v.source === 'git') {
+        if ('path' in v) c.fail('path', "is refused for source 'git' (url names it)");
+        if (!('url' in v)) c.fail('', 'missing property "url" (source git)');
+        else if (typeof v.url !== 'string' || v.url.length > MOD_INSTALL_LIMITS.url || !MOD_INSTALL_URL_PATTERN.test(v.url)) c.fail('url', `must be an https URL (no userinfo, no control character, ≤ ${MOD_INSTALL_LIMITS.url})`);
+      } else if (v.source === 'folder') {
+        if ('url' in v) c.fail('url', "is refused for source 'folder' (path names it)");
+        if (!('path' in v)) c.fail('', 'missing property "path" (source folder)');
+        else if (!isInstallPath(v.path)) c.fail('path', `must be an absolute path (≤ ${MOD_INSTALL_LIMITS.path}) with no control character and no '..' segment`);
+      }
+      break;
+    case 'request.session.restart':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('checkpointRef' in v) c.str('checkpointRef', v.checkpointRef, CHECKPOINT_REF_PATTERN, 'a checkpoint id (≤ 128, [A-Za-z0-9._:-])');
+      break;
+    case 'session.context.threshold': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('usedTokens' in v) c.int('usedTokens', v.usedTokens, 0);
+      if ('windowTokens' in v) c.int('windowTokens', v.windowTokens, 1);
+      const u = v.usedTokens;
+      const w = v.windowTokens;
+      if ('ratio' in v && (typeof v.ratio !== 'number' || !Number.isFinite(v.ratio) || v.ratio < 0 || v.ratio > 1)) c.fail('ratio', 'must be a number in [0, 1]');
+      else if (typeof u === 'number' && typeof w === 'number' && w > 0 && Number.isSafeInteger(u) && Number.isSafeInteger(w)) {
+        if (u > w) c.fail('usedTokens', 'cannot exceed windowTokens');
+        else if (typeof v.ratio === 'number' && Math.abs(v.ratio - u / w) > 1e-3) c.fail('ratio', 'must equal usedTokens / windowTokens (±0.001)');
+      }
+      break;
+    }
     case 'approval.effect.failed':
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if ('decision' in v) c.str('decision', v.decision, KEBAB_64, 'a decision');
@@ -560,6 +672,30 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       break;
   }
   return c.errors;
+}
+
+// eslint-disable-next-line no-control-regex
+const PATH_UNSAFE = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
+/**
+ * request.mod.install{path}: absolute (POSIX `/…` or Windows `X:\…` / `X:/…`), bounded, no unsafe character, no UNC or
+ * device prefix, no ':' past the drive, no segment made only of dots and spaces except a single '.'.
+ */
+export function isInstallPath(v: unknown): v is string {
+  if (typeof v !== 'string' || v.length < 2 || v.length > MOD_INSTALL_LIMITS.path || PATH_UNSAFE.test(v)) return false;
+  const c0 = v.charCodeAt(0);
+  const posix = v[0] === '/';
+  const drive = ((c0 >= 0x41 && c0 <= 0x5a) || (c0 >= 0x61 && c0 <= 0x7a)) && v[1] === ':' && (v[2] === '\\' || v[2] === '/');
+  if (!posix && !drive) return false;
+  // Aegis M3: no UNC or device path (//, \\, \\?\, \\.\), no ':' past the drive (alternate data streams)
+  if (v.startsWith('//') || v.startsWith('\\\\') || v.indexOf(':', 2) !== -1) return false;
+  // no segment of only dots and spaces other than a single '.' ('..', '...', '. ', ' .' all resolve surprisingly on win32)
+  for (const seg of v.split(/[\\/]/)) {
+    if (seg === '' || seg === '.') continue;
+    let onlyDots = true;
+    for (let i = 0; i < seg.length; i++) if (seg[i] !== '.' && seg[i] !== ' ') onlyDots = false;
+    if (onlyDots) return false;
+  }
+  return true;
 }
 
 /** session.compacted reasons (Aegis, P8-D93): closed; a backend value outside it is recorded as `unspecified`. */
