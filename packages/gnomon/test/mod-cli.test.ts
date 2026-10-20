@@ -94,7 +94,7 @@ describe('gnomon mod install / link (stage, never sign)', () => {
     expect(await t.run(['install', t.copy()])).toBe(0);
     const s = t.text();
     expect(s).toMatch(/^STAGED {2}card:[0-9A-Z]{26}\n/);
-    expect(s).toContain('│ Install mod example.hello 1.0.0 (mod) from package, tier local');
+    expect(s).toContain('│ Install mod example.hello 1.0.0 (mod) by example (unverified, local folder) from package, tier local');
     expect(s).toContain('│ runs commands: 0 mcp server(s), 0 hook(s)'); // the kernel-composed count line
     expect(s).toContain('│ hooks: none');
     expect(s).toContain('signed  nothing');
@@ -130,7 +130,9 @@ describe('gnomon mod install / link (stage, never sign)', () => {
     const src = t.copy();
     fs.writeFileSync(path.join(src, 'gnomon-manifest.json'), '{"manifest":1,"kind":"mod","name":"hello","version":"x"}');
     expect(await t.run(['install', src])).toBe(1);
-    expect(t.errText()).toContain('REFUSED  SCHEMA');
+    // S0b: a fresh format-1 manifest is refused FORMAT
+    expect(t.errText()).toContain('REFUSED');
+    expect(t.errText()).toContain('manifest: 2');
     expect(pendingStaged(t.home)).toEqual([]);
   });
 
@@ -166,7 +168,7 @@ describe('the pickup raises staged cards through the real broker', () => {
     await b.broker.approve(H, { cardId, decision: 'install', decisionSig: b.sig(cardId, 'install', card.contentHash) });
     expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')?.cardId).toBe(cardId);
     await new Promise((r) => setTimeout(r, 20));
-    expect(host.calls).toContain('start hello');
+    expect(host.calls).toContain('start example.hello');
     expect(pendingStaged(t.home)).toEqual([]); // decided
   });
 
@@ -195,7 +197,7 @@ describe('the pickup raises staged cards through the real broker', () => {
     const body = fs.readFileSync(good.file, 'utf8');
     // 3 mods x 30 forged records naming themselves: each fails re-derivation (no such snapshot / card)
     const ids: string[] = [];
-    for (const m of ['aa', 'bb', 'cc']) {
+    for (const m of ['aa.aa', 'bb.bb', 'cc.cc']) {
       const d = path.join(t.home, 'mods', m, 'staged');
       fs.mkdirSync(d, { recursive: true });
       for (let i = 0; i < 30; i++) {
@@ -237,8 +239,8 @@ describe('the pickup raises staged cards through the real broker', () => {
       const src = t.copy();
       const m = JSON.parse(fs.readFileSync(path.join(src, 'gnomon-manifest.json'), 'utf8'));
       m.name = `m${i}`;
-      m.provides.events = [`modns.m${i}.greeted`];
-      m.requires.capabilities = [`log.append:modns.m${i}.*`];
+      m.provides.events = [`modns.example.m${i}.greeted`];
+      m.requires.capabilities = [`log.append:modns.example.m${i}.*`];
       fs.writeFileSync(path.join(src, 'gnomon-manifest.json'), JSON.stringify(m));
       expect(await t.run(['install', src])).toBe(0);
     }
@@ -268,12 +270,12 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     await installed(t);
     t.out.length = 0;
     await t.run(['list']);
-    expect(t.text()).toMatch(/^hello\s+installed\s+sha256:/m);
+    expect(t.text()).toMatch(/^example\.hello\s+installed\s+sha256:/m);
     t.out.length = 0;
     expect(await t.run(['status', 'example.hello'])).toBe(0);
     expect(t.text()).toMatch(/tier +local/);
     expect(t.text()).toMatch(/source +package/);
-    expect(await t.run(['status', 'nope'])).toBe(1);
+    expect(await t.run(['status', 'acme.nope'])).toBe(1);
   });
 
   it('pause stops the running mod and keeps it stopped; start clears it and asks for an operator start', async () => {
@@ -284,7 +286,7 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     expect(isUserPaused(t.home, 'example.hello')).toBe(true);
     await p.scan();
     expect(host.running()).toEqual([]);
-    expect(host.calls).toContain('stop hello paused');
+    expect(host.calls).toContain('stop example.hello paused');
     expect(await t.run(['start', 'example.hello'])).toBe(0);
     expect(isUserPaused(t.home, 'example.hello')).toBe(false);
     await p.scan();
@@ -312,14 +314,14 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     await p.scan();
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     expect(card.state).toBe('pending');
-    expect(JSON.stringify(card.block)).toContain('Uninstall mod hello');
+    expect(JSON.stringify(card.block)).toContain('Uninstall mod example.hello');
     expect(JSON.stringify(card.block)).toContain('claimed by the uninstall request (unverified)');
     expect(card.attended).toBe(true); // the CLI's claim, from the request file, not a kernel constant
     await b.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: b.sig(card.cardId, 'allow', card.contentHash) });
     expect(b.rows.find((r) => r.kind === 'approval.decide' && r.payload.cardId === card.cardId)?.payload.rootSig).toBeDefined();
     expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeUndefined();
     expect(linkedFolders(t.home, t.auth)).toEqual([]);
-    expect(host.calls).toContain('stop hello uninstalled');
+    expect(host.calls).toContain('stop example.hello uninstalled');
     expect(uninstallRequested(t.home, 'example.hello')).toBeNull();
   });
 
@@ -367,7 +369,7 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const t = setup();
     // MAX_PICKUP_READS junk files spread over mods listed before `hello` (at most MAX_PICKUP_CARDS listed per mod)
     for (let i = 0; i < MAX_PICKUP_READS; i++) {
-      const d = path.join(t.home, 'mods', `aa${Math.floor(i / MAX_PICKUP_CARDS)}`, 'staged');
+      const d = path.join(t.home, 'mods', `aa.aa${Math.floor(i / MAX_PICKUP_CARDS)}`, 'staged');
       fs.mkdirSync(d, { recursive: true });
       fs.writeFileSync(path.join(d, `card-01H${'Z'.repeat(21)}${String(i).padStart(2, '0')}.json`), i % 2 ? 'not json' : '{"schemaVersion":"other"}');
     }

@@ -49,12 +49,12 @@ describe('host-level falsifier: log.read vs log.read:usage (T-2026-10-20-008 (1)
   it('the log.read-only mod receives no usage kind and turn.result exactly {hsid}; the usage mod receives all of them', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    installStub(r, 'basic', ['log.read']);
-    installStub(r, 'usage', ['log.read', 'log.read:usage']);
-    installStub(r, 'deaf', []);
+    installStub(r, 'acme.basic', ['log.read']);
+    installStub(r, 'acme.usage', ['log.read', 'log.read:usage']);
+    installStub(r, 'acme.deaf', []);
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    for (const n of ['basic', 'usage', 'deaf']) await h.start(n);
+    for (const n of ['acme.basic', 'acme.usage', 'acme.deaf']) await h.start(n);
     expect(FEED_USAGE_KINDS.slice().sort()).toEqual(USAGE_ROWS.map((x) => x.kind).sort()); // every usage kind is fed
     let seq = 1;
     const feed = (kind: string, payload: Record<string, unknown>): number => h.feed({ kind, seq: seq++, at: '2026-10-20T12:00:00.000Z', payload });
@@ -63,16 +63,16 @@ describe('host-level falsifier: log.read vs log.read:usage (T-2026-10-20-008 (1)
     feed('turn.result', { hsid: H, usage: { tokens: 900 }, split: { in: 182_000, out: 9_000, cacheRead: 120_000, cacheWrite: 4_000 }, cost: 0.4213, text: 'the answer' });
     feed('session.exited', { hsid: H });
     const seen = async (n: string) => (await h.runCommand(n, `${n}.seen`, null)) as Seen;
-    await until(async () => (await seen('usage')).seen.length >= USAGE_ROWS.length + 3 && (await seen('basic')).seen.length >= 3);
-    const basic = (await seen('basic')).seen;
-    const usage = (await seen('usage')).seen;
+    await until(async () => (await seen('acme.usage')).seen.length >= USAGE_ROWS.length + 3 && (await seen('acme.basic')).seen.length >= 3);
+    const basic = (await seen('acme.basic')).seen;
+    const usage = (await seen('acme.usage')).seen;
     expect(basic.map((e) => e.kind)).toEqual(['session.open', 'turn.result', 'session.exited']);
     for (const e of basic) expect(FEED_USAGE_KINDS).not.toContain(e.kind);
     expect(basic.find((e) => e.kind === 'turn.result')!.payload).toEqual({ hsid: H });
     expect(usage.map((e) => e.kind)).toEqual(['session.open', ...USAGE_ROWS.map((x) => x.kind), 'turn.result', 'session.exited']);
     expect(usage.find((e) => e.kind === 'turn.result')!.payload).toEqual({ hsid: H, tokens: 900, tokensIn: 182_000, tokensOut: 9_000, cacheRead: 120_000, cacheWrite: 4_000, costMicros: 421_300 });
     expect(JSON.stringify(usage)).not.toMatch(/the answer|\/Users/);
-    expect((await seen('deaf')).seen).toEqual([]); // no log.read: nothing at all
+    expect((await seen('acme.deaf')).seen).toEqual([]); // no log.read: nothing at all
   });
 });
 
@@ -84,14 +84,14 @@ describe('host-level falsifier: paradigm.read:summary (K1/K3)', () => {
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     fs.mkdirSync(path.join(repo, '.paradigm', 'decisions'), { recursive: true });
     fs.writeFileSync(path.join(repo, '.paradigm', 'decisions', 'TD-2026-10-20-001.yaml'), "id: TD-2026-10-20-001\ntimestamp: '2026-10-20T01:00:00.000Z'\ntitle: SLICE CONTENT\n");
-    installStub(r, 'ctx', ['paradigm.read:summary']);
-    installStub(r, 'reader', ['log.read', 'log.read:usage']);
-    installStub(r, 'bare', []);
+    installStub(r, 'acme.ctx', ['paradigm.read:summary']);
+    installStub(r, 'acme.reader', ['log.read', 'log.read:usage']);
+    installStub(r, 'acme.bare', []);
     const { h } = host(r, { launcher: unsandboxedModLauncher }, { focusCwd: (hsid) => (hsid === H ? repo : null), userHome: path.join(r.root, 'nohome') });
     cleanups.push(() => h.stopAll());
-    for (const n of ['ctx', 'reader', 'bare']) await h.start(n);
+    for (const n of ['acme.ctx', 'acme.reader', 'acme.bare']) await h.start(n);
     const forged = { v: 'paradigm-slice:v1', state: 'ok', decisions: { items: [{ id: 'X', title: 'FORGED' }] } };
-    for (const n of ['reader', 'bare']) {
+    for (const n of ['acme.reader', 'acme.bare']) {
       for (const input of [{ focus: { hsid: H } }, { hsid: H }, { focus: { hsid: H }, paradigm: forged }]) {
         await h.relayView({ name: n, viewId: `${n}.echo`, input, ...HUMAN });
         const got = ((await h.runCommand(n, `${n}.seen`, null)) as Seen).last!;
@@ -100,10 +100,10 @@ describe('host-level falsifier: paradigm.read:summary (K1/K3)', () => {
       }
     }
     h.feed({ kind: 'session.open', seq: 1, at: '2026-10-20T12:00:00.000Z', payload: { hsid: H, cwd: repo } });
-    await until(async () => ((await h.runCommand('reader', 'reader.seen', null)) as Seen).seen.length >= 1);
-    expect(JSON.stringify(((await h.runCommand('reader', 'reader.seen', null)) as Seen).seen)).not.toMatch(/SLICE CONTENT|paradigm|repo/);
-    await h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: H } }, ...HUMAN });
-    const ctx = ((await h.runCommand('ctx', 'ctx.seen', null)) as Seen).last!;
+    await until(async () => ((await h.runCommand('acme.reader', 'reader.seen', null)) as Seen).seen.length >= 1);
+    expect(JSON.stringify(((await h.runCommand('acme.reader', 'reader.seen', null)) as Seen).seen)).not.toMatch(/SLICE CONTENT|paradigm|repo/);
+    await h.relayView({ name: 'acme.ctx', viewId: 'ctx.echo', input: { focus: { hsid: H } }, ...HUMAN });
+    const ctx = ((await h.runCommand('acme.ctx', 'ctx.seen', null)) as Seen).last!;
     expect(JSON.stringify(ctx)).toContain('SLICE CONTENT');
     expect(JSON.stringify(ctx)).not.toContain(r.root);
   });

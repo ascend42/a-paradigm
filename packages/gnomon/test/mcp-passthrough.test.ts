@@ -43,9 +43,9 @@ describe('#mcp-passthrough: merge', () => {
     const r = mergeDeskMcp({ github: { command: 'gh-mcp' } }, [deskMod('neurons'), deskMod('constellation', { entries: ['constellation', 'board'] })]);
     expect(Object.keys(r.servers)).toEqual(['github', 'gnomon-constellation', 'gnomon-constellation-board', 'gnomon-neurons']);
     expect(r.servers['gnomon-neurons']).toEqual({ type: 'stdio', command: '/usr/local/bin/npx', args: ['neurons-server'] });
-    expect(serverNameOf('solo', { name: 'other', command: 'x' })).toBe('gnomon-solo-other');
-    expect(serverNameOf('neurons', { name: 'brain', command: 'x' })).toBe('gnomon-neurons-brain');
-    expect(serverNameOf('constellation', { name: 'gnomon-constellation', command: 'x' })).toBe('gnomon-constellation');
+    expect(serverNameOf('solo', { command: 'x' })).toBe('gnomon-solo-other');
+    expect(serverNameOf('neurons', { command: 'x' })).toBe('gnomon-neurons-brain');
+    expect(serverNameOf('constellation', { command: 'x' })).toBe('gnomon-constellation');
   });
 
   it('H1a: a repo server using a reserved desk prefix (gnomon-, gm_, gx_) is dropped; the mod\'s own server is added', () => {

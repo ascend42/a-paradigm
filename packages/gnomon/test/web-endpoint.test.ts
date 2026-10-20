@@ -83,7 +83,7 @@ async function rig(o: { logDelay?: { kind: string; ms: number }; handoffAckMs?: 
 async function attach(ep: WebEndpoint, token: string, surface = 'browser'): Promise<{ ws: RawWs; hello: Record<string, unknown>; auth: Record<string, unknown> }> {
   const ws = await wsConnect(ep.port);
   cleanups.push(() => ws.end());
-  ws.sendJson(rpc(1, 'example.hello', HELLO(surface)));
+  ws.sendJson(rpc(1, 'hello', HELLO(surface)));
   const hello = await ws.nextJson();
   ws.sendJson(rpc(2, 'auth', { launchToken: token }));
   const auth = await ws.nextJson();
@@ -354,7 +354,7 @@ describe('G-WEB-08 Reconnect through presence; bundle mismatch', () => {
     await ep.ensureListening();
     const ws = await wsConnect(ep.port);
     cleanups.push(() => ws.end());
-    ws.sendJson(rpc(1, 'example.hello', HELLO('browser')));
+    ws.sendJson(rpc(1, 'hello', HELLO('browser')));
     await ws.nextJson();
     ws.sendJson(rpc(2, 'auth', { reconnect: true }));
     const r = await ws.nextJson();
@@ -391,7 +391,7 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
     early.sendJson(rpc(1, 'status'));
     expect(await early.closed()).toBe(1008);
     const second = await wsConnect(ep.port);
-    second.sendJson(rpc(1, 'example.hello', HELLO()));
+    second.sendJson(rpc(1, 'hello', HELLO()));
     await second.nextJson();
     second.sendJson(rpc(2, 'log.read', {}));
     expect(await second.closed()).toBe(1008);
@@ -428,7 +428,7 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
     const { ep } = await rig();
     await ep.ensureListening();
     const ws = await wsConnect(ep.port);
-    ws.sendJson(rpc(1, 'example.hello', HELLO()));
+    ws.sendJson(rpc(1, 'hello', HELLO()));
     await ws.nextJson();
     ws.sendJson(rpc(2, 'auth', { tokenId: 'rt:x', sig: 'AAAA' }));
     expect(reason(await ws.nextJson())).toBe('auth-params');
@@ -445,7 +445,7 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
     expect(u2.status).toBe(101);
     expect(await u1.closed()).toBe(1013);
     const g2 = await ep.requestLaunch(HUMAN);
-    u2.sendJson(rpc(1, 'example.hello', HELLO()));
+    u2.sendJson(rpc(1, 'hello', HELLO()));
     await u2.nextJson();
     u2.sendJson(rpc(2, 'auth', { launchToken: g2.launchToken }));
     expect((await u2.nextJson()).result).toBeDefined();

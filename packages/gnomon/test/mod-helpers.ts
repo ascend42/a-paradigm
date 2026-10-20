@@ -33,7 +33,7 @@ const run = async (input, api) => {
   if (input.op === 'state.set') return attempt(() => api.state.set('k', input.value ?? 1));
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
-  if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.probe.done' })));
+  if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done' })));
   if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
   if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
   if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
@@ -146,10 +146,10 @@ serveMod({
 export function installStub(r: Rig, id: string, capabilities: string[]): void {
   // S0b: `id` is a mod id; a bare name installs as acme.<name>
   const [publisher, name] = id.includes('.') ? (id.split('.') as [string, string]) : ['acme', id];
-  const m = { manifest: 2, kind: 'mod', publisher, name, version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: `${name}.echo`, slot: 'sidebar', placement: 'append' }], commands: [{ id: `${name}.seen`, title: 'What it saw' }] }, requires: { capabilities, egress: 'none' } };
-  const src = writeModFolder(path.join(r.root, 'src', name), m, ECHO_SOURCE(name));
+  const m = { manifest: 2, kind: 'mod', publisher, name, version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: `${id}.echo`, slot: 'sidebar', placement: 'append' }], commands: [{ id: `${id}.seen`, title: 'What it saw' }] }, requires: { capabilities, egress: 'none' } };
+  const src = writeModFolder(path.join(r.root, 'src', name), m, ECHO_SOURCE(id));
   const st = stageInstall({ home: r.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth });
   if (st.state !== 'staged') throw new Error(`expected staged, got ${JSON.stringify(st)}`);
   const bind = installPresenceBinding(st.cardId, readStaged(r.home, st.record.detail.name, st.cardId)!.card.contentHash, 'install');
-  decideInstallCard(r.home, name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
+  decideInstallCard(r.home, st.record.detail.name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
 }

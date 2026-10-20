@@ -47,10 +47,10 @@ const OFFER = {
   related: [],
   restraint: 'Not while the human is debugging.',
 } as const;
-const MCP: ManifestMcp = { name: 'constellation', command: 'node', args: ['server.js'], config: { args: true, env: ['STARBOARD_HOME'] } };
+const MCP: ManifestMcp = { command: 'node', args: ['server.js'], config: { args: true, env: ['STARBOARD_HOME'] } };
 
 function mod(over: Partial<NonNullable<ManifestV2['provides']>> = {}): ManifestV2 {
-  return { manifest: 1, kind: 'mod', name: 'starboard', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [MCP], offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }], ...over } } as ManifestV2;
+  return { manifest: 2, publisher: 'acme', kind: 'mod', name: 'starboard', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [MCP], offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }], ...over } } as ManifestV2;
 }
 const code = (fn: () => unknown): string => {
   try {
@@ -82,7 +82,7 @@ describe('provides.offers (offer-spec:v1)', () => {
     expect(code(() => validateManifest({ ...mod(), name }, { tier: 'first-party' }))).toBe('NAME');
   });
   it.each(['neurons', 'constellation', 'paradigm-context', 'workshop', 'ledger', 'gnomon-x', 'paradigm-x', 'claude-x', 'anthropic-x'])('L5: %s is first-party only', (name) => {
-    const m = { ...mod({ mcp: [{ name: 'srv', command: 'node' }] }), name };
+    const m = { ...mod({ mcp: [{ command: 'node' }] }), name };
     expect(code(() => v(m))).toBe('NAME');
     // 'neurons' is also a §9.1 userland namespace (neurons.event), so KERNEL_NAMESPACE_TOKENS refuses it at every tier
     expect(code(() => validateManifest(m, { tier: 'first-party' }))).toBe(name === 'neurons' ? 'NAME' : 'none');
@@ -120,7 +120,7 @@ describe('provides.offers (offer-spec:v1)', () => {
     const home = tmp();
     const src = path.join(tmp(), 'plain');
     fs.mkdirSync(src, { recursive: true });
-    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify({ manifest: 1, kind: 'mod', name: 'plain', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [{ name: 'p', command: 'node', args: ['p.js'] }] } }));
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'plain', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [{ command: 'node', args: ['p.js'] }] } }));
     const st = stageInstall({ home, source: src, via: 'package', requestedBy: 'p:abcdefgh/matt', trust: new DevTestRootAuthority(DEV_TEST_ROOT_ACK) });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect('offers' in st.record.detail).toBe(false);
@@ -152,7 +152,7 @@ describe('provides.mcp per-user config override', () => {
     expect(code(() => v(mod({ mcp: [{ ...MCP, config: { env: ['A', 'A'] } }] })))).toBe('SCHEMA');
   });
   it('a config change is a widening of mcp; an entry without config keeps its old key', () => {
-    const plain = mod({ mcp: [{ name: 'constellation', command: 'node', args: ['server.js'] }] });
+    const plain = mod({ mcp: [{ command: 'node', args: ['server.js'] }] });
     expect(detectWidening(plain, mod()).map((w) => w.field)).toEqual(['mcp']);
     expect(detectWidening(plain, plain)).toEqual([]);
   });

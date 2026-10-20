@@ -38,13 +38,13 @@ async function rigged() {
   const r = rig();
   cleanups.push(r.cleanup);
   const { mine, other } = repos(r);
-  installStub(r, 'ctx', ['paradigm.read:summary']);
-  installStub(r, 'plain', []);
+  installStub(r, 'acme.ctx', ['paradigm.read:summary']);
+  installStub(r, 'acme.plain', []);
   const joins: string[] = [];
   const { h } = host(r, { launcher: unsandboxedModLauncher }, { focusCwd: (hsid) => (joins.push(hsid), hsid === LIVE ? mine : hsid === LIVE2 ? other : null), focusPrincipal: (hsid) => OWNER[hsid] ?? null, userHome: path.join(r.root, 'nohome') });
   cleanups.push(() => h.stopAll());
-  await h.start('ctx');
-  await h.start('plain');
+  await h.start('acme.ctx');
+  await h.start('acme.plain');
   const last = async (name: string) => ((await h.runCommand(name, `${name}.seen`, null)) as { last: Record<string, unknown> }).last;
   return { r, h, mine, other, joins, last };
 }
@@ -52,8 +52,8 @@ async function rigged() {
 describe('K3 server-side focus join', () => {
   it('{focus:{hsid}} of a live session ⇒ the slice of THAT session repo; the mod input is exactly {hsid, paradigm}', async () => {
     const w = await rigged();
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE } }, ...HUMAN });
-    const got = await w.last('ctx');
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE } }, ...HUMAN });
+    const got = await w.last('acme.ctx');
     expect(Object.keys(got).sort()).toEqual(['hsid', 'paradigm']);
     expect(got.hsid).toBe(LIVE);
     const p = got.paradigm as Record<string, unknown>;
@@ -65,33 +65,33 @@ describe('K3 server-side focus join', () => {
   it('a forged repo, path, cwd or paradigm slice in a relayed input is ignored (the repo is never chosen by the client)', async () => {
     const w = await rigged();
     const forged = { focus: { hsid: LIVE, repo: w.other, cwd: w.other }, repo: w.other, path: path.join(w.other, '.paradigm'), cwd: w.other, root: w.other, paradigm: { v: 'paradigm-slice:v1', state: 'ok', decisions: { items: [{ id: 'X', title: 'FORGED' }] } } };
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: forged, ...HUMAN });
-    const got = await w.last('ctx');
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: forged, ...HUMAN });
+    const got = await w.last('acme.ctx');
     expect(Object.keys(got).sort()).toEqual(['hsid', 'paradigm']);
     const s = JSON.stringify(got);
     expect(s).toContain('MINE decision');
     expect(s).not.toMatch(/OTHER|FORGED/);
     expect(s).not.toContain(w.r.root); // no path reaches the mod
     // no focus at all, only a forged repo ⇒ unfocused (nothing read)
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { repo: w.other, path: w.other }, ...HUMAN });
-    expect(await w.last('ctx')).toEqual({ paradigm: { v: 'paradigm-slice:v1', state: 'unfocused' } });
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { repo: w.other, path: w.other }, ...HUMAN });
+    expect(await w.last('acme.ctx')).toEqual({ paradigm: { v: 'paradigm-slice:v1', state: 'unfocused' } });
   });
 
   it('a focus naming no live session (exited, unknown, malformed) gets the unfocused slice; the join is the only lookup', async () => {
     const w = await rigged();
     for (const focus of [{ hsid: GONE }, { hsid: '../../etc' }, { hsid: 42 }, 'x', null]) {
-      await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus }, ...HUMAN });
-      expect(await w.last('ctx'), JSON.stringify(focus)).toEqual({ paradigm: { v: 'paradigm-slice:v1', state: 'unfocused' } });
+      await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus }, ...HUMAN });
+      expect(await w.last('acme.ctx'), JSON.stringify(focus)).toEqual({ paradigm: { v: 'paradigm-slice:v1', state: 'unfocused' } });
     }
     expect(w.joins).toEqual([GONE]); // a malformed hsid is never even joined
   });
 
   it('a mod without paradigm.read:summary keeps its display input; host keys are host-composed (focus → hsid, paradigm dropped)', async () => {
     const w = await rigged();
-    await w.h.relayView({ name: 'plain', viewId: 'plain.echo', input: { focus: { hsid: LIVE }, name: 'matt', paradigm: { state: 'ok' } }, ...HUMAN });
-    expect(await w.last('plain')).toEqual({ name: 'matt', hsid: LIVE });
-    await w.h.relayView({ name: 'plain', viewId: 'plain.echo', input: { hsid: LIVE }, ...HUMAN }); // the K0 form still works
-    expect(await w.last('plain')).toEqual({ hsid: LIVE });
+    await w.h.relayView({ name: 'acme.plain', viewId: 'acme.plain.echo', input: { focus: { hsid: LIVE }, name: 'matt', paradigm: { state: 'ok' } }, ...HUMAN });
+    expect(await w.last('acme.plain')).toEqual({ name: 'matt', hsid: LIVE });
+    await w.h.relayView({ name: 'acme.plain', viewId: 'acme.plain.echo', input: { hsid: LIVE }, ...HUMAN }); // the K0 form still works
+    expect(await w.last('acme.plain')).toEqual({ hsid: LIVE });
     expect(HOST_INPUT_KEYS).toEqual(['focus', 'hsid', 'paradigm']);
     expect(w.joins).toEqual([]); // no slice-less mod ever triggers a repo read
   });
@@ -102,8 +102,8 @@ describe('Aegis M1: the K3 join checks the caller', () => {
   it('FALSIFIER: an agent-class (or session-class) caller naming ANOTHER session\'s hsid gets unfocused; nothing is read', async () => {
     const w = await rigged();
     for (const principalClass of ['agent', 'session']) {
-      await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass });
-      const got = await w.last('ctx');
+      await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass });
+      const got = await w.last('acme.ctx');
       expect(got, principalClass).toEqual(UNFOCUSED);
       expect(JSON.stringify(got)).not.toMatch(/OTHER/);
     }
@@ -111,23 +111,23 @@ describe('Aegis M1: the K3 join checks the caller', () => {
   });
   it('an agent or session principal is joined to its OWN session only', async () => {
     const w = await rigged();
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass: 'session' });
-    expect(JSON.stringify(await w.last('ctx'))).toContain('MINE decision');
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-other', connId: 'c3', principalClass: 'agent' });
-    expect(JSON.stringify(await w.last('ctx'))).toContain('OTHER decision');
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass: 'session' });
+    expect(JSON.stringify(await w.last('acme.ctx'))).toContain('MINE decision');
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-other', connId: 'c3', principalClass: 'agent' });
+    expect(JSON.stringify(await w.last('acme.ctx'))).toContain('OTHER decision');
   });
   it('voice, mod, peer, read-token and an unknown or missing class are never joined', async () => {
     const w = await rigged();
     for (const principalClass of ['voice', 'mod', 'peer', 'readToken', 'nobody', '']) {
-      await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c4', principalClass });
-      expect(await w.last('ctx'), principalClass).toEqual(UNFOCUSED);
+      await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c4', principalClass });
+      expect(await w.last('acme.ctx'), principalClass).toEqual(UNFOCUSED);
     }
     expect(w.joins).toEqual([]);
   });
   it('the human class joins any live session (the GUI focus); the mod never sees the class', async () => {
     const w = await rigged();
-    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, ...HUMAN });
-    const got = await w.last('ctx');
+    await w.h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: LIVE2 } }, ...HUMAN });
+    const got = await w.last('acme.ctx');
     expect(JSON.stringify(got)).toContain('OTHER decision');
     expect(JSON.stringify(got)).not.toContain('principalClass');
   });

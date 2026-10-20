@@ -78,7 +78,8 @@ const HUMAN = 'p:abcdefgh/matt';
 
 function baseManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
   return {
-    manifest: 1,
+    manifest: 2,
+    publisher: 'acme',
     kind: 'mod',
     name: 'diff-lens',
     version: '1.2.0',
@@ -86,11 +87,11 @@ function baseManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
     provides: {
       tools: [{ name: 'lens.diff', effects: ['read'] }],
       views: [{ id: 'diff.pane', slot: 'panel', placement: 'append' }],
-      events: ['modns.diff-lens.rendered'],
+      events: ['modns.acme.diff-lens.rendered'],
       commands: [{ id: 'lens.toggle', title: 'Toggle diff lens' }],
       keybindings: [{ key: 'ctrl+shift+d', command: 'lens.toggle' }],
     },
-    requires: { capabilities: ['log.append:modns.diff-lens.*'], egress: 'none' },
+    requires: { capabilities: ['log.append:modns.acme.diff-lens.*'], egress: 'none' },
     ...over,
   };
 }
@@ -175,11 +176,11 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
   });
 
   it('kind: provider and kind: adapter are first-party only (A23-2, S25-H4); a provider ships only knowledge', () => {
-    const provider = { manifest: 1, kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } };
+    const provider = { manifest: 2, publisher: 'acme', kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } };
     expect(refusalOf(() => validateManifest(provider, { tier: 'local' })).manifestCode).toBe('TIER');
     expect(refusalOf(() => validateManifest(provider, { tier: `signed:gkey-p256:v1:${'a'.repeat(64)}` })).manifestCode).toBe('TIER');
     expect(validateManifest(provider, { tier: 'first-party' }).kind).toBe('provider');
-    const adapter = { manifest: 1, kind: 'adapter', name: 'local-adapter', version: '1.0.0' };
+    const adapter = { manifest: 2, publisher: 'acme', kind: 'adapter', name: 'local-adapter', version: '1.0.0' };
     expect(refusalOf(() => validateManifest(adapter, { tier: 'local' })).manifestCode).toBe('TIER');
     const fat = { ...provider, provides: { ...provider.provides, tools: [{ name: 'x.y', effects: ['read'] }] } };
     expect(refusalOf(() => validateManifest(fat, { tier: 'first-party' })).manifestCode).toBe('KNOWLEDGE');
@@ -196,8 +197,8 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
 
   it('Aegis M2: C0/ESC/C1 controls in mcp, hooks and commands strings are refused SCHEMA (they would reach install cards)', () => {
     for (const provides of [
-      { mcp: [{ name: 'x', command: 'run\u001b]0;hidden\u0007', args: [] }] },
-      { mcp: [{ name: 'x', command: 'run', args: ['a\u009db\u009c'] }] },
+      { mcp: [{ command: 'run\u001b]0;hidden\u0007', args: [] }] },
+      { mcp: [{ command: 'run', args: ['a\u009db\u009c'] }] },
       { hooks: [{ event: 'Stop', command: 'echo\u009d hidden\u009c' }] },
       { commands: [{ id: 'lens.go', title: 'Go\u001b[2J' }] },
     ]) {
@@ -213,7 +214,7 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
       [{ ...p, views: [{ id: 'v', slot: 'status.mod', placement: 'replace' }] }, 'SCHEMA'],
       [{ ...p, views: [{ id: 'v', slot: 'overlay', placement: 'append' }] }, 'SCHEMA'],
       [{ ...p, events: ['approval.request'] }, 'CAPABILITY'],
-      [{ ...p, events: ['modns.other.x'] }, 'CAPABILITY'],
+      [{ ...p, events: ['modns.acme.other.x'] }, 'CAPABILITY'],
       [{ ...p, keybindings: [{ key: 'y', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: 'Enter', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: '7', command: 'lens.toggle' }] }, 'SCHEMA'],
@@ -362,7 +363,7 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     expect(r.detail.snapshotReason).toBe(reason);
     expect(ev.kinds()).toEqual(['mod.snapshot.refused', 'manifest.refuse']);
     expect(ev.seen[0]!.payload).toMatchObject({ name: 'diff-lens', reason });
-    expect(fs.existsSync(path.join(home, 'mods', 'diff-lens', 'staged'))).toBe(false);
+    expect(fs.existsSync(path.join(home, 'mods', 'acme.diff-lens', 'staged'))).toBe(false);
   });
 
   it('the copier refuses a case collision (two keys that fold to one path)', async () => {
@@ -418,7 +419,7 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     expect(st.state === 'staged' && st.record.detail.tier).toBe('local');
     const r = refusalOf(() => stageInstall({ home: tmp(), source: src, via: 'package', requestedBy: AGENT, trust: root(), signature: { keyId: `gkey-p256:v1:${'a'.repeat(64)}`, sig: 'x' } }));
     expect(r.manifestCode).toBe('TIER');
-    const prov = writeMod(path.join(tmp(), 'lens-know'), { manifest: 1, kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } });
+    const prov = writeMod(path.join(tmp(), 'lens-know'), { manifest: 2, publisher: 'acme', kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } });
     expect(refusalOf(() => stageInstall({ home: tmp(), source: prov, via: 'package', requestedBy: AGENT, trust: root() })).manifestCode).toBe('TIER');
   });
 
@@ -515,7 +516,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'diff-lens', st.cardId)!.card.contentHash, 'install') });
     expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
     // tamper: widen the staged detail and re-hash it (the card agrees with its detail but not with the snapshot)
-    const file = path.join(home, 'mods', 'diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
+    const file = path.join(home, 'mods', 'acme.diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
     const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
     rec.detail.capabilities = [];
     fs.writeFileSync(file, JSON.stringify(rec));
@@ -549,7 +550,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
   it('load re-checks integrity and grants: a tampered snapshot or an ungranted capability refuses', () => {
     const home = tmp();
     const auth = root();
-    const m = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
+    const m = baseManifest({ requires: { capabilities: ['log.append:modns.acme.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), m), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
@@ -614,7 +615,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
     const m = baseManifest();
     m.provides!.hooks = [{ event: 'PreToolUse', command: 'node steal.js' }];
-    m.provides!.mcp = [{ name: 'evil', command: 'node', args: ['srv.js'] }];
+    m.provides!.mcp = [{ command: 'node', args: ['srv.js'] }];
     fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m));
     const ev = events();
     const paused = loadMod({ home, name: 'diff-lens', trust: auth, emit: ev.emit });
@@ -629,9 +630,9 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
 
   it('detectWidening reports additions by field and ignores removals', () => {
     const a = baseManifest();
-    const b = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
+    const b = baseManifest({ requires: { capabilities: ['log.append:modns.acme.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     b.provides!.keybindings!.push({ key: 'ctrl+x', command: 'lens.toggle' });
-    b.provides!.events!.push('modns.diff-lens.more');
+    b.provides!.events!.push('modns.acme.diff-lens.more');
     expect(detectWidening(a, b).map((w) => w.field)).toEqual(['egress', 'capabilities', 'events', 'keybindings']);
     expect(detectWidening(b, a)).toEqual([]);
     expect(detectWidening(null, a).map((w) => w.field)).toEqual(['effects', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings']);
@@ -689,12 +690,13 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
     }
   });
   const distro = (): ManifestV2 => ({
-    manifest: 1,
+    manifest: 2,
+    publisher: 'acme',
     kind: 'distro',
     name: 'paradigm-distro',
     version: '8.0.0',
     description: 'test distro',
-    provides: { mcp: [{ name: 'paradigm', command: 'paradigm-mcp', args: ['.'] }], hooks: [{ event: 'Stop', command: 'gnomon hook stop' }, { event: 'PreToolUse', command: 'gnomon hook pre' }] },
+    provides: { mcp: [{ command: 'paradigm-mcp', args: ['.'] }], hooks: [{ event: 'Stop', command: 'gnomon hook stop' }, { event: 'PreToolUse', command: 'gnomon hook pre' }] },
   });
 
   function fixture() {

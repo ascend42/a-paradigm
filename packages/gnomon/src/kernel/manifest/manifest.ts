@@ -2,7 +2,7 @@
  * @symbol #manifest-loader
  *
  * #manifest-loader — manifest validation (format 2, S0b; format 1 loads only through
- * the pure upgradeManifestV2), `manifestHash` and manifest widening (spec §3.6, §4.3,
+ * the pure upgradeManifestV1), `manifestHash` and manifest widening (spec §3.6, §4.3,
  * §12.1–§12.5, §12.4.1, §15.4).
  *
  * S0b (mod naming and versioning, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md): a mod is
@@ -91,7 +91,7 @@ export const TRUST_TIER_PATTERN = /^(first-party|local|signed:gkey-[a-z0-9-]+:v1
 export const NEVER_REQUESTABLE = Object.freeze(['approve', 'band:write']);
 
 const TOP_KEYS = ['manifest', 'kind', 'publisher', 'name', 'version', 'engines', 'abi', 'compat', 'provides', 'requires', 'config_schema', 'description'] as const;
-/** The format-1 top-level keys (upgradeManifestV2 reads only these). */
+/** The format-1 top-level keys (upgradeManifestV1 reads only these). */
 const V1_TOP_KEYS = ['manifest', 'kind', 'name', 'version', 'abi', 'compat', 'provides', 'requires', 'config_schema', 'description'] as const;
 /** Keys whose meaning never changes across manifest formats (S0b §3). */
 export const FORMAT_INVARIANT_KEYS = Object.freeze(['manifest', 'publisher', 'name', 'version', 'engines']);
@@ -394,8 +394,8 @@ function checkIdentity(publisher: string, name: string, opts: ValidateManifestOp
  * `modns.<N>.` kinds and log.append become `modns.local.<N>.` (only alias-table `gnomon` mods keep their legacy
  * namespace). The full V2 validator always runs after (readManifest).
  */
-export function upgradeManifestV2(raw: unknown, publisher: 'gnomon' | 'local'): Record<string, unknown> {
-  if (!isPlainObject(raw) || raw.manifest !== 1) fail('FORMAT', 'upgradeManifestV2 reads a format-1 manifest only', {});
+export function upgradeManifestV1(raw: unknown, publisher: 'gnomon' | 'local'): Record<string, unknown> {
+  if (!isPlainObject(raw) || raw.manifest !== 1) fail('FORMAT', 'upgradeManifestV1 reads a format-1 manifest only', {});
   const src = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
   for (const k of Object.keys(src)) if (!(V1_TOP_KEYS as readonly string[]).includes(k)) fail('SCHEMA', `manifest has unknown property "${k}"`, { field: k });
   const name = typeof src.name === 'string' ? src.name : '';
@@ -451,7 +451,7 @@ export function readManifest(raw: Uint8Array | string, opts: ReadManifestOptions
   }
   if (f === 1) {
     if (!opts.legacyPublisher) return fail('FORMAT', 'a fresh install must declare manifest: 2 (format 1 loads only existing pins and historical first-party hashes)', { format: 1 });
-    const up = upgradeManifestV2(v, opts.legacyPublisher);
+    const up = upgradeManifestV1(v, opts.legacyPublisher);
     const manifest = validateManifest(up, { tier: opts.tier, kernelAssignedLocal: opts.legacyPublisher === 'local', ...(opts.legacyPublisher === 'gnomon' ? { legacyName: String((v as { name?: unknown }).name) } : {}) });
     return { manifest, manifestHash: canonicalManifestHash(v), format: 1, upgradedHash: canonicalManifestHash(up) };
   }
@@ -517,7 +517,7 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   if ('source' in m) fail('SCHEMA', 'a manifest carries no source: field (an install-time fact on grant.install)', { field: 'source' });
   if ('postinstall' in m || 'scripts' in m) fail('POSTINSTALL', 'no postinstall anywhere (§3.6)', { field: 'postinstall' in m ? 'postinstall' : 'scripts' });
   closed(m, TOP_KEYS, 'manifest');
-  if (m.manifest === 1) fail('FORMAT', 'format 1 is read only through readManifest (upgradeManifestV2); a fresh install declares manifest: 2', { format: 1 });
+  if (m.manifest === 1) fail('FORMAT', 'format 1 is read only through readManifest (upgradeManifestV1); a fresh install declares manifest: 2', { format: 1 });
   if (typeof m.manifest === 'number' && Number.isInteger(m.manifest) && m.manifest > MANIFEST_FORMAT_CURRENT) fail('FORMAT', `manifest format ${m.manifest} needs a newer Gnomon (this kernel reads ${MANIFEST_FORMATS_ACCEPTED.join(', ')})`, { format: m.manifest });
   if (m.manifest !== 2) fail('SCHEMA', 'manifest must be 2', { field: 'manifest' });
   if (typeof m.kind !== 'string' || !(MANIFEST_KINDS as readonly string[]).includes(m.kind)) fail('SCHEMA', `kind must be one of ${MANIFEST_KINDS.join('|')}`, { field: 'kind' });

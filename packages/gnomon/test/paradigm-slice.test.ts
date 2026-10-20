@@ -353,7 +353,7 @@ describe('K1 paradigm.read:summary capability', () => {
   it('is a manifest capability form; a manifest holding it may list no egress at any tier', () => {
     expect(CAPABILITY_FORMS).toContain('paradigm.read:summary');
     expect(capabilityForm('paradigm.read:summary')).toBe('paradigm.read:summary');
-    const m = (egress: unknown) => ({ manifest: 1, kind: 'mod', name: 'ctx', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'ctx.v', slot: 'sidebar', placement: 'append' }] }, requires: { capabilities: ['paradigm.read:summary'], egress } });
+    const m = (egress: unknown) => ({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'ctx', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'ctx.v', slot: 'sidebar', placement: 'append' }] }, requires: { capabilities: ['paradigm.read:summary'], egress } });
     const net = [{ host: 'example.com', purpose: 'upload' }];
     for (const tier of ['local', 'first-party'] as const) expect(() => validateManifest(m(net), { tier })).toThrow(/paradigm.read:summary cannot list egress/);
     expect(() => validateManifest(m('none'), { tier: 'local' })).not.toThrow();

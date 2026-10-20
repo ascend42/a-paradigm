@@ -116,6 +116,6 @@ describe.runIf(SANDBOX_OK)('#gnomon-voice table talk S2: the supervisor injects 
     expect(rows.filter((r) => r.kind === 'session.inject').map((r) => r.payload.origin)).toEqual(['client', 'kernel']);
     const dirs = fs.readdirSync(path.join(w.home, 'sessions'));
     const mcp = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', dirs[0]!, 'mcp.json'), 'utf8'));
-    expect(Object.keys(mcp.mcpServers)).toContain('gnomon-constellation');
+    expect(Object.keys(mcp.mcpServers)).toContain('gm_acme_constellation');
   }, 60_000);
 });

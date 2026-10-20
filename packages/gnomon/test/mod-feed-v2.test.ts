@@ -87,7 +87,7 @@ describe('#mod-host feed projection v2 (numbers only)', () => {
   });
 
   it('Aegis M1: a local-tier mod may not combine log.read:usage with egress (first-party may; no egress is fine)', () => {
-    const m = (caps: string[], egress: unknown) => ({ manifest: 1, kind: 'mod', name: 'meter', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'meter.v', slot: 'panel', placement: 'append' }] }, requires: { capabilities: caps, egress } });
+    const m = (caps: string[], egress: unknown) => ({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'meter', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'meter.v', slot: 'panel', placement: 'append' }] }, requires: { capabilities: caps, egress } });
     const net = [{ host: 'example.com', purpose: 'upload' }];
     expect(() => validateManifest(m(['log.read', 'log.read:usage'], net), { tier: 'local' })).toThrow(/log.read:usage cannot list egress/);
     expect(() => validateManifest(m(['log.read', 'log.read:usage'], 'none'), { tier: 'local' })).not.toThrow();

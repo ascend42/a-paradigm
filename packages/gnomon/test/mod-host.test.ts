@@ -433,7 +433,7 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
     for (let i = 0; i < 11; i++) {
-      const e = await refused(h.admit(`ghost-${i % 2}`));
+      const e = await refused(h.admit(`acme.ghost-${i % 2}`));
       expect(e.modCode).toBe('NOT_INSTALLED');
       expect(e.refusal).toMatchObject({ code: 'NOT_FOUND', data: { modCode: 'NOT_INSTALLED', reason: 'not-found' } });
     }
@@ -518,7 +518,7 @@ describe('round 3 (Aegis R2-1, R2-2, low)', () => {
     cleanups.push(r.cleanup);
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    for (let i = 0; i < 10_000; i++) await h.admit(`n${i}`).catch(() => undefined);
+    for (let i = 0; i < 10_000; i++) await h.admit(`acme.n${i}`).catch(() => undefined);
     h.flushRelayMisses();
     const co = r.events.filter((e) => e.kind === 'manifest.refuse' && e.payload.coalesced);
     expect(co).toHaveLength(1);
