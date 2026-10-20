@@ -344,6 +344,24 @@ components:
     tags: [gnomon, gui, setup]
     tests:
       - test/setup.test.ts
+  gui-relaunch:
+    description: >-
+      #gui-relaunch page side (T-2026-10-20-001, core/stale.ts). A tab whose
+      connection ended outside the self-update path never points to a
+      terminal as the only way back and never suggests a reload. It polls its
+      own origin (GET /, no credential; 2 s for a minute, then 10 s, ~1 h cap):
+      an answer is NOT proof of Gnomon (Aegis L3, a squatter can answer), so it
+      says only "something is answering; use the window Gnomon opened", and listens on the same-origin BroadcastChannel
+      `gnomon.gui.v1` for a window that attached (`{t:'attached'}`; it asks
+      `{t:'who'}`). Exactly those two shapes, no token/key/connId. On
+      'attached' it says "Gnomon restarted in a new window" and offers one
+      trusted click: Close this tab. The restarted kernel opens its fresh
+      window on a NEW OS-chosen port (Aegis H1: no remembered port), so
+      across a restart 'attached' arrives only from same-origin tabs. It never rejoins in place: a restarted kernel has a new
+      ephemeral key that only a launch fragment delivers (decidePin).
+    tags: [gnomon, gui]
+    tests:
+      - test/stale.test.ts
   gui-stop-speaking:
     description: >-
       #gui Stop speaking (T-2026-10-19-026). A ⏹ "Stop speaking" button beside
@@ -393,6 +411,66 @@ components:
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+  gui-preview:
+    description: >-
+      #gui-preview (DEV ONLY; never in the kernel-served bundle) - the GUI
+      fixture preview for designers and agents. scripts/preview.mjs serves
+      the REAL static/index.html, boot.js and styles.css on 127.0.0.1 only
+      (default port 8790, loopback Host check) with an app.js bundled from
+      src/preview/main.ts: the real ui/app.ts and core run over a fake
+      kernel Transport (src/preview/fake-kernel.ts) that answers hello with a
+      real Ed25519 serverSig from a per-page throwaway WebCrypto key, auth,
+      status, log.read (backlog + follow), approve (emits approval.decide),
+      log.append and session.send (no effect), and refuses session.open.
+      Card actions are signed with the same key, so the real GUI verifies
+      and renders the decision keys. Fixtures (src/preview/fixtures.ts:
+      contracts LogRow chains of registered kinds plus the status result;
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop) are
+      chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
+      src/preview/env.ts stubs only the colour-scheme and reduced-motion
+      media queries and the wrapper surface marker. The workshop fixture runs
+      the real Workshop mod model (packages/gnomon-mods/workshop/model.mjs)
+      over the feed projection and draws it with renderBlock. / lists every
+      fixture x theme; --fixture-list prints the URLs.
+      scripts/preview-shots.mjs writes <fixture>-<theme>.png at 1440x900 with
+      Playwright or Puppeteer when one is already installed (none is added),
+      or an installed Chrome with --chrome; otherwise it skips.
+    path: src/preview/
+    type: module
+    tags: [gnomon, gui, dev-tool, preview]
+    tests:
+      - test/preview.test.ts
+  gui-voice-capture:
+    description: >-
+      #gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live
+      capture feedback. core/capture.ts is PURE: captureStatusOf is the one
+      adapter over status.voice.capture{state, segId, reason?, level?, at}
+      (the voice app's per-segment state, relayed by the kernel with a 5 s
+      TTL); captureStep/captureDisplayOf give the pill words: idle keeps
+      "Listening" / "Hold … to talk" (meter still), hearing "Hearing you…"
+      (pulsing, the meter is the REAL level), transcribing "Catching that…",
+      captured "Got it" (1.2 s flash), dropped the reason only for 2.5 s
+      (no words, no count). capturePollMs is the V3 cadence (no push relay):
+      ~1 s at rest, 175 ms while hearing or transcribing, null when off,
+      detached, the voice app gone or disconnected; app.ts syncClientPoll
+      runs the one attached poll at that cadence (single flight,
+      pollStatusOnce) and stopStatusPolls clears every status poll and the
+      flash timer on disconnect (Aegis L2 of 862ef85a). The composer ghost
+      line "…" is its own element (#composer-ghost, never the textarea); the
+      polite caption (#voice-caption) changes on a state change only. The
+      decorative meter animation and row kick are gone, and the dead
+      voice.turn.partial path is removed. Phase B's live words will read a
+      capture.text the kernel projects to the gui credential only.
+      Aegis follow-ups: a capture from a status received more than
+      CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
+      a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
+      confirmed", never "Got it".
+    path: src/core/capture.ts
+    type: module
+    tags: [gnomon, gui, voice, capture]
+    flows: [$voice-turn]
+    tests:
+      - test/capture.test.ts
   gui-table-talk:
     description: >-
       #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block

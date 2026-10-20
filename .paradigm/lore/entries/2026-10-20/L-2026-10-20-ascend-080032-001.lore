@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-080032-001
+type: agent-session
+timestamp: '2026-10-20T08:00:32.349Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice capture: all Aegis follow-ups in (add4eb82), ready to merge'
+summary: |-
+  add4eb82 makes these changes:
+  - M1: terminal reports carry claim:'client', and the kernel cross-checks each one against the acceptances it saw on that connection within 5 s. A contradicted drop shows as captured with kernel:'accepted'; a captured with no acceptance shows as "Heard, not confirmed".
+  - L1: text is shown only for human+gui.
+  - L2: the GUI ignores a capture from a status older than 5 s, using its own clock.
+  - L3: the capture slot is keyed by connection and cleared when that connection closes.
+  - L4: same-state reports are coalesced; state changes keep their order.
+  Suites: voice 103, gnomon 2251, gui 236; ids unchanged. Merge into feat/gnomon is queued behind the in-flight C1/H1 parity fix (bundle pin conflicts: re-embed after each merge).
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+learnings:
+  - Coalescing a report queue across states loses ordering that tests (and humans) rely on; coalesce only same-segment and same-state updates.
+verification:
+  status: pass
+  details:
+    voice: 103
+    gnomon: 2251
+    gui: 236
+tags:
+  - gnomon
+  - voice
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-005
+linked_commits:
+  - add4eb82
+git_context:
+  ref: cb4ce62ec6d0133e94da03bc27a31eaf37a449af
+  branch: feat/gnomon
+  dirty: true

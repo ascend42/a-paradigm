@@ -1,0 +1,27 @@
+id: L-2026-10-20-ascend-080326-001
+type: review
+timestamp: '2026-10-20T08:03:26.102Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE GUI slice S1 (SVG MIME, binary embed, fonts)
+summary: 'Static files come only from the pinned bundle that is hashed in memory (symlinks and special files refused, path normalisation). A directly opened SVG gets its own CSP, nosniff and CORP. The content type comes from the extension only, so a renamed .js can''t execute. Fonts are pinned and served from the same origin only. Lows: materializeGuiBundle should check the tree hash before writing (and use ''wx''); the kernel scan should ban script/foreignObject/href in SVGs. Info: align TEXT_EXT with the server''s type map, and skip dotfiles and symlinks in the build. All four folded into S2.'
+symbols_touched:
+  - '#gui'
+  - '#web-endpoint'
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    low: 2
+    info: 3
+tags:
+  - gnomon
+  - design
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: c1afbaba7b48df7e3629c39bc759bfdd57f0fca0
+  branch: feat/gnomon
+  dirty: true

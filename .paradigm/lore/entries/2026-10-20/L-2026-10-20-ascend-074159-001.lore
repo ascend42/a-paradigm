@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-074159-001
+type: review
+timestamp: '2026-10-20T07:41:59.241Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis BLOCK on stale-tab relaunch (945349a3): the remembered port reopens a port-squat token theft'
+summary: 'T-2026-10-20-001 was built (945349a3): a non-TTY kernel start auto-opens the GUI, the port is remembered so the new window shares the stale tab''s origin, and the stale tab offers close-this-tab via BroadcastChannel. Aegis BLOCKED it. H1: remembering the port across stop/start lets any local process that binds the loopback port during the down window plant a service worker (after the founder reloads the stale tab), which then reads the auto-opened #launch token. The upgrade path had closed this exact window with an inherited fd. M1: browsers now pop on every non-TTY daemon start. L1–L3: minor. Confirmed sound: gui.open is human-tier only; sessions can''t run open/osascript or read device keys; the token never reaches stdout, logs or argv. Fix chosen: option (a), drop the remembered port. The founder is asleep and the safer default needs no ruling.'
+symbols_touched:
+  - '#gui-relaunch'
+  - '#gui-resume'
+  - '#web-endpoint'
+learnings:
+  - 'A same-origin convenience (reusing a port) plus auto-delivering a secret in the URL fragment is a classic service-worker capture: if the origin can be squatted while you''re down, never auto-deliver secrets to it.'
+  - A fix's guarantees can depend on an earlier fix (inherited fd) whose reasoning isn't restated; reviewers must re-check old closures when a nearby path changes.
+verification:
+  status: fail
+  details:
+    verdict: BLOCK
+    high: 1
+    medium: 1
+    low: 3
+tags:
+  - gnomon
+  - security
+  - aegis
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-001
+linked_commits:
+  - 945349a3
+git_context:
+  ref: dd8e958a2c3feded4c89db6f1a306fd4ba527dc6
+  branch: feat/gnomon
+  dirty: true

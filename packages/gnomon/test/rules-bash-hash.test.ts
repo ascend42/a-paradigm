@@ -1,4 +1,3 @@
-// @gnomon-platform: darwin, linux, win32
 /**
  * #always-rules RC5 (TD-2026-10-20-086): an exact Bash `always` rule also matches by sha256 over `{command}` alone, so
  * Claude's fresh free-text `description` (or a timeout) re-matches; any other key (run_in_background, …) on either

@@ -12,7 +12,9 @@
     "embed": "node scripts/build.mjs --embed",
     "check:bundle": "node scripts/build.mjs --check",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/build.mjs --check && vitest run"
+    "test": "node scripts/build.mjs --check && vitest run",
+    "preview": "node scripts/preview.mjs",
+    "preview:shots": "node scripts/preview-shots.mjs"
   },
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",

@@ -39,6 +39,11 @@
  *     200), so every path that reaches a reader is CONCRETE and checked.
  *     `<(…)` is a whole-word pipe argument of a reader (its content comes from
  *     a proven read-only command);
+ *   - K1 ANCHORED CWD (TD-2026-10-20-086): with ctx.cwd (the realpath of a session root the caller anchors the run
+ *     in, anchorCommand) the cwd is known from the start; a cd is any whole top-level item (absolute, or relative to
+ *     an existing in-root directory; no `..`); the top-level list tracks the SET of possible cwds and walks each item
+ *     once per member; git only while the cwd is a session root. Brace expansion, `case` and tainted locals: see
+ *     the parser and walkList. Without ctx.cwd the old rule below holds;
  *   - M2 KNOWN CWD: the cwd is known only after a first command `cd ABS` (an
  *     absolute literal path or `~/…`, inside a session root, at its realpath;
  *     H3: a relative cd is refused) and only along an unbroken `&&` chain from
@@ -383,6 +388,9 @@ class Lexer {
         const raw = nl < 0 ? this.s.slice(this.pos) : this.s.slice(this.pos, nl);
         this.pos = nl < 0 ? this.s.length : nl + 1;
         const line = h.strip ? raw.replace(/^\t+/, '') : raw;
+        // Aegis C1: in an UNQUOTED heredoc bash and zsh join backslash-newline before matching the delimiter, so
+        // `EO\⏎F` ends the body there and the rest RUNS. Refuse any such line (an odd run of trailing backslashes)
+        if (!h.quoted && /(^|[^\\])(\\\\)*\\$/.test(raw)) parseFail('heredoc: a line ending in a backslash');
         if (line === h.delim) break;
         lines.push(line);
       }
@@ -393,7 +401,11 @@ class Lexer {
 
 const RESERVED = new Set(['if', 'then', 'else', 'elif', 'fi', 'while', 'until', 'case', 'esac', 'function', 'select', '{', '}', '[[', ']]', 'do', 'done', 'in', 'time', 'coproc']);
 /** zsh/bash parameters with a lowercase name that change the shell's behaviour when assigned (zsh/parameter included). */
-export const LOOP_VAR_DENY: ReadonlySet<string> = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'fignore', 'psvar', 'watch', 'prompt', 'histchars', 'argv', 'status', 'pipestatus', 'signals', 'commands', 'functions', 'aliases', 'options', 'parameters', 'dirstack', 'history', 'historywords', 'jobstates', 'jobtexts', 'jobdirs', 'modules', 'nameddirs', 'userdirs', 'reswords', 'builtins', 'termcap', 'terminfo', 'widgets', 'funcstack', 'funcfiletrace', 'funcsourcetrace', 'functrace', 'saliases', 'galiases', 'dis_aliases', 'dis_functions', 'dis_builtins', 'dis_reswords', 'dis_galiases', 'dis_saliases', 'dis_patchars', 'patchars', 'zsh_eval_context', 'zsh_scheduled_events', 'match', 'mbegin', 'mend', 'reply', 'keymaps', 'sysparams', 'errnos']);
+export const LOOP_VAR_DENY: ReadonlySet<string> = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'fignore', 'psvar', 'watch', 'prompt', 'histchars', 'argv', 'status', 'pipestatus', 'signals', 'commands', 'functions', 'aliases', 'options', 'parameters', 'dirstack', 'history', 'historywords', 'jobstates', 'jobtexts', 'jobdirs', 'modules', 'nameddirs', 'userdirs', 'reswords', 'builtins', 'termcap', 'terminfo', 'widgets', 'funcstack', 'funcfiletrace', 'funcsourcetrace', 'functrace', 'saliases', 'galiases', 'dis_aliases', 'dis_functions', 'dis_builtins', 'dis_reswords', 'dis_galiases', 'dis_saliases', 'dis_patchars', 'patchars', 'zsh_eval_context', 'zsh_scheduled_events', 'match', 'mbegin', 'mend', 'reply', 'keymaps', 'sysparams', 'errnos',
+  // Aegis L2: zsh/mapfile (assigning writes a file) and the lowercase proxy variables curl/git/wget honour
+  'mapfile', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'ftp_proxy']);
+/** Aegis L2: a name denied as a loop variable or tainted local — LOOP_VAR_DENY, or any zsh hook array `*_functions`. */
+export const deniedVarName = (n: string): boolean => LOOP_VAR_DENY.has(n) || n.endsWith('_functions');
 /** A brace-list item: a safe literal token (see #brace). */
 const BRACE_ITEM = /^[A-Za-z0-9._+:@%/-]+$/;
 const SEPS = new Set([';', '&', '&&', '||', '\n']);
@@ -472,7 +484,7 @@ class Parser {
     this.lx.take();
     const n = this.lx.take();
     // a lowercase name that is no special parameter of bash or zsh (zsh ties `path` to PATH: `for path in x` would steer lookup)
-    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || LOOP_VAR_DENY.has(n.plain)) parseFail('for: a plain lowercase variable name');
+    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || deniedVarName(n.plain)) parseFail('for: a plain lowercase variable name');
     this.#skipNewlines();
     this.#expectWord('in'); // `for x; do` iterates "$@": refused
     const items: Word[] = [];
@@ -770,8 +782,8 @@ const isCd = (c: Cmd): boolean => c.t === 'simple' && c.words.length > 0 && word
 function assignName(w: Word): string | null {
   const p0 = w.parts[0];
   if (!p0 || p0.t !== 'lit' || p0.quoted) return null;
-  const m = /^([a-z][a-z0-9_]{0,15})=/.exec(p0.v);
-  return m && !LOOP_VAR_DENY.has(m[1]!) ? m[1]! : null;
+  const m = /^([a-z][a-z0-9_]{0,31})=/.exec(p0.v);
+  return m && !deniedVarName(m[1]!) ? m[1]! : null;
 }
 
 /**
@@ -1362,6 +1374,11 @@ const gitRule: Rule = (args, env, name) => {
   needCwd(env, name); // git finds its repo (and that repo's config) from the cwd
   // K1: only while the cwd IS a session root — below it, a planted nested `.git` would choose the repo and its config
   if (!rootForms(env).some((r) => env.fold(r) === env.fold(env.cwd!))) no('git: only with the cwd at a session root');
+  // Aegis H1: the repo's own config may name a program git runs on a read (fsmonitor, textconv, filters, …)
+  if (env.native) {
+    const bad = repoGitExecKey(env.cwd!, env.ctx.home);
+    if (bad !== null) no(`git: the repo config names a program (${bad})`);
+  }
   const sub = args[0]?.lit;
   if (!sub || sub.startsWith('-')) no('git: a global option');
   const rest = args.slice(1);
@@ -1416,6 +1433,136 @@ const gitRule: Rule = (args, env, name) => {
   }
   no(`git: subcommand ${sub}`);
 };
+
+/* ── Aegis H1: exec-class keys in the repo's git config ───────────────────── */
+
+/** The config keys (lowercased `section[.sub].key`) under which a READ-ONLY git command may run a program. */
+function execKey(section: string, sub: string | null, key: string, value: string): boolean {
+  switch (section) {
+    case 'core':
+      if (key === 'fsmonitor') return !/^(false|no|off|0|)$/i.test(value.trim());
+      return ['pager', 'sshcommand', 'hookspath', 'alternaterefscommand', 'askpass', 'gitproxy'].includes(key);
+    case 'diff':
+      return sub === null ? key === 'external' : key === 'textconv' || key === 'command';
+    case 'filter':
+    case 'pager':
+      return true;
+    case 'remote':
+      return key === 'uploadpack' || key === 'receivepack';
+    case 'gpg':
+      return key === 'program';
+    case 'uploadpack':
+      return key === 'packobjectshook';
+    case 'credential':
+      return key === 'helper';
+    default:
+      return false;
+  }
+}
+
+/** A config value: quotes removed, an inline `#`/`;` comment outside quotes dropped (enough to read include paths). */
+function configValue(v: string): string {
+  let out = '';
+  let q = false;
+  for (let i = 0; i < v.length; i++) {
+    const c = v[i]!;
+    if (c === '"') q = !q;
+    else if (c === '\\' && i + 1 < v.length) out += v[++i];
+    else if (!q && (c === '#' || c === ';')) break;
+    else out += c;
+  }
+  return out.trim();
+}
+
+/**
+ * Scan one git config file (and every include / includeIf path, conditions ignored: a superset) for an exec-class
+ * key. Returns the key, null when none, or a reason string when the file cannot be read as git config (fail closed).
+ */
+function scanGitConfig(file: string, home: string, depth: number, seen: Set<string>): string | null {
+  if (depth > 10) return 'include depth';
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? null : `unreadable ${path.basename(file)}`; // git skips a missing include
+  }
+  const real = realOr(file) ?? file;
+  if (seen.has(real)) return null;
+  seen.add(real);
+  const lines = text.replace(/\\\r?\n/g, '').split(/\r?\n/);
+  let section = '';
+  let sub: string | null = null;
+  for (let raw of lines) {
+    let l = raw.trim();
+    if (l === '' || l.startsWith('#') || l.startsWith(';')) continue;
+    if (l.startsWith('[')) {
+      const m = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\]/.exec(l);
+      if (!m) return 'unparsed config section';
+      const name = m[1]!.toLowerCase();
+      const dot = name.indexOf('.');
+      section = dot < 0 ? name : name.slice(0, dot);
+      sub = m[2] !== undefined ? m[2] : dot < 0 ? null : name.slice(dot + 1);
+      raw = l.slice(m[0].length);
+      l = raw.trim();
+      if (l === '' || l.startsWith('#') || l.startsWith(';')) continue;
+    }
+    const k = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=(.*))?$/.exec(l);
+    if (!k) return 'unparsed config line';
+    const key = k[1]!.toLowerCase();
+    const value = configValue(k[2] ?? '');
+    if (execKey(section, sub, key, value)) return `${section}${sub !== null ? `.${sub}` : ''}.${key}`;
+    if ((section === 'include' || section === 'includeif') && key === 'path' && value !== '') {
+      const inc = value.startsWith('~/') ? path.join(home, value.slice(2)) : path.isAbsolute(value) ? value : path.join(path.dirname(file), value);
+      const r = scanGitConfig(inc, home, depth + 1, seen);
+      if (r !== null) return r;
+    }
+  }
+  return null;
+}
+
+/**
+ * Aegis H1: the exec-class key the repo git would use from `cwd` names (its local config, a worktree's
+ * config.worktree, the common dir's config, and their includes), or null. The repo is found as git finds it: the
+ * nearest `.git` dir or `gitdir:` file at or above cwd. The user's global and system config are trusted.
+ */
+export function repoGitExecKey(cwd: string, home: string): string | null {
+  let dir = cwd;
+  for (let i = 0; i < 4096; i++) {
+    const dotgit = path.join(dir, '.git');
+    let st: fs.Stats | null = null;
+    try {
+      st = fs.statSync(dotgit);
+    } catch {
+      st = null;
+    }
+    if (st) {
+      let gitdir = dotgit;
+      if (st.isFile()) {
+        const m = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotgit, 'utf8'));
+        if (!m) return 'unparsed .git file';
+        gitdir = path.resolve(dir, m[1]!);
+      }
+      const files = [path.join(gitdir, 'config'), path.join(gitdir, 'config.worktree')];
+      try {
+        const common = fs.readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim();
+        if (common) files.push(path.join(path.resolve(gitdir, common), 'config'));
+      } catch {
+        // not a linked worktree
+      }
+      const seen = new Set<string>();
+      for (const f of files) {
+        const r = scanGitConfig(f, home, 0, seen);
+        if (r !== null) return r;
+      }
+      return null;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
 
 /**
  * Aegis H2: `diff DIR DIR` compares the files inside both directories and `diff FILE DIR` reads DIR/FILE — paths that
@@ -1501,11 +1648,39 @@ export const shQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
  * K1 (TD-2026-10-20-086): the command as the kernel lets it run after a read-only pass — in `root` (the realpath the
  * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked),
  * the original text inside a brace group on its own lines (a heredoc's delimiter line and a trailing `# comment`
- * end before the closing `}`). zsh: `cd -q` (no chpwd hooks); bash: no -q; unknown: picked at run time by
- * ZSH_VERSION. `builtin` skips a function named cd/unset. If the cd or the unset fails nothing runs.
+ * end before the closing `}`). zsh: `cd -q` (no chpwd hooks), then chpwd/cd functions removed, chpwd_functions
+ * emptied and IGNORE_BRACES off (Aegis M2, L1); bash: no -q, a `cd` function removed, `set -B`; unknown: picked at
+ * run time by ZSH_VERSION. `builtin` skips a function named cd/unset/set. If any step fails nothing runs.
  */
+/**
+ * Aegis H1 (a): command-scope git config (GIT_CONFIG_COUNT/KEY_n/VALUE_n outrank the repo's config) that turns off
+ * the programs a read can start, plus GIT_NO_LAZY_FETCH (M1: a partial clone never fetches) and GIT_PAGER=cat.
+ * Keys git cannot neutralize by value (diff.external, diff.*.textconv/command, filter.*) are refused by
+ * repoGitExecKey instead.
+ */
+export const ANCHOR_GIT_CONFIG: ReadonlyArray<readonly [string, string]> = Object.freeze([
+  ['core.fsmonitor', 'false'],
+  ['core.pager', 'cat'],
+  ['core.hooksPath', '/dev/null'],
+  ['core.sshCommand', 'false'],
+  ['log.showSignature', 'false'],
+  ['gpg.program', 'false'],
+  ['gpg.ssh.program', 'false'],
+  ['gpg.x509.program', 'false'],
+  ['credential.helper', ''],
+] as const);
+export function anchorGitEnv(): string {
+  const kv = ANCHOR_GIT_CONFIG.flatMap(([k, v], i) => [`GIT_CONFIG_KEY_${i}=${shQuote(k)}`, `GIT_CONFIG_VALUE_${i}=${shQuote(v)}`]);
+  return `builtin export GIT_CONFIG_COUNT=${ANCHOR_GIT_CONFIG.length} ${kv.join(' ')} GIT_NO_LAZY_FETCH=1 GIT_PAGER=cat`;
+}
+
 export function anchorCommand(command: string, root: string, flavour: ShellFlavour): string {
   const q = shQuote(root);
-  const cd = flavour === 'zsh' ? `builtin cd -q -- ${q}` : flavour === 'bash' ? `builtin cd -- ${q}` : `if [ -n "\${ZSH_VERSION-}" ]; then builtin cd -q -- ${q}; else builtin cd -- ${q}; fi`;
-  return `${cd} && builtin unset CDPATH && {\n${command}\n}`;
+  // Aegis M2: no user function runs on a later cd in the command (zsh chpwd hooks, a `cd` function such as rvm's);
+  // L1: brace expansion is on, as the classifier assumed (zsh IGNORE_BRACES off; bash -B)
+  const zsh = `builtin cd -q -- ${q} && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; }`;
+  const bash = `builtin cd -- ${q} && { builtin unset -f cd; builtin set -B; }`;
+  const pre = flavour === 'zsh' ? zsh : flavour === 'bash' ? bash : `if [ -n "\${ZSH_VERSION-}" ]; then ${zsh}; else ${bash}; fi`;
+  // L1 guard: brace expansion must really be on for this command (zsh may fix IGNORE_BRACES at parse time): else nothing runs
+  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\n${command}\n}`;
 }

@@ -1,0 +1,32 @@
+id: L-2026-10-20-ascend-074719-001
+type: review
+timestamp: '2026-10-20T07:47:19.302Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE stale-tab relaunch after the H1 fix (42661f9f)
+summary: 'The fix removed the remembered port entirely: plain restarts get an OS-chosen port, and a leftover web-port.json is deleted unread. The stale tab never claims Gnomon is "running again" from a poll and tells the user not to reload; the close offer appears only on a same-origin BroadcastChannel attached. `gnomond --foreground --no-open` now refuses with usage, and GNOMON_NO_OPEN is documented. Aegis APPROVED. Follow-up task: a loopback bind deny in the session profile. Merge into feat/gnomon is deferred until the builders committing directly on the branch finish (GUI bundle pin conflict expected; re-embed after merge). gnomon 2241, gnomon-gui 216.'
+symbols_touched:
+  - '#gui-relaunch'
+  - '#web-endpoint'
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    gnomon: 2241
+    gui: 216
+tags:
+  - gnomon
+  - security
+  - aegis
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-001
+linked_commits:
+  - 945349a3
+  - 42661f9f
+git_context:
+  ref: f7777e694cbec61df8d48c6c2d73285bf539cd89
+  branch: feat/gnomon
+  dirty: true

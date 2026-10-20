@@ -39,10 +39,10 @@
  *     — is a card), the command is text and timeout (if any) a number;
  *   - no session root is the user's home, an ancestor of it, or `/`;
  *   - #shell-readonly classifyReadOnly proves the command read-only (it
- *     fails closed: unparsed or unproven ⇒ a card). Since the Aegis re-check
- *     it needs a KNOWN cwd for anything relative — the command starts with an
- *     absolute `cd` into a session root, joined by `&&` — and reads only
- *     inside the session roots or the system read roots, at realpath;
+ *     fails closed: unparsed or unproven ⇒ a card). K1 (TD-2026-10-20-086):
+ *     it is classified from the realpath of the anchor root (the claude
+ *     child's cwd) and runs there (anchorCommand); it reads only inside the
+ *     session roots or the system read roots, at realpath;
  *   - the card carries no hidden or bidi characters (blockOf flags).
  * The pass is taken in `auto-edits` and (F1, TD-2026-10-20-086) in `ask`
  * (logged `mode:ask:read-only`); never in `manual` (the caller checks the
