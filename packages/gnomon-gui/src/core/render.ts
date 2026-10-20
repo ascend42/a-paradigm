@@ -58,7 +58,7 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
 const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
@@ -390,4 +390,68 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     ),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
+}
+
+/* ── S2.5: a SAFE markdown subset for agent text (DOM building only; no HTML passthrough, no links, no images) ── */
+
+// `code`, **bold** / __bold__, *italic* / _italic_ (an underscore inside a word, as in snake_case, is not emphasis)
+const MD_INLINE = /(`[^`\n]+`)|(\*\*(?=\S)[^*\n]*?\S\*\*|(?<![A-Za-z0-9])__(?=\S)[^_\n]*?\S__(?![A-Za-z0-9]))|(\*(?=[^\s*])[^*\n]*?[^\s*]\*|\*[^\s*]\*|(?<![A-Za-z0-9_])_(?=[^\s_])[^_\n]*?[^\s_]_(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])_[^\s_]_(?![A-Za-z0-9_]))/;
+
+/** Inline markdown as DOM nodes; everything that is not one of the three spans stays text (sanitized by h). */
+export function mdInline(doc: MiniDoc, src: string): Array<MiniEl | string> {
+  const out: Array<MiniEl | string> = [];
+  let rest = src;
+  for (let guard = 0; rest && guard < 10_000; guard++) {
+    const m = MD_INLINE.exec(rest);
+    if (!m) break;
+    if (m.index) out.push(rest.slice(0, m.index));
+    const tok = m[0];
+    if (m[1]) out.push(h(doc, 'code', { class: 'md-code' }, tok.slice(1, -1)));
+    else if (m[2]) out.push(h(doc, 'strong', null, ...mdInline(doc, tok.slice(2, -2))));
+    else out.push(h(doc, 'em', null, ...mdInline(doc, tok.slice(1, -1))));
+    rest = rest.slice(m.index + tok.length);
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+/**
+ * Block markdown: ``` fences (pre > code, the fence's info word dropped), `-`/`*`/`+` and `1.` lists, and paragraphs
+ * (a blank line separates them; single newlines stay as line breaks via pre-wrap). An unclosed fence runs to the end.
+ */
+export function mdBlocks(doc: MiniDoc, src: string): MiniEl[] {
+  const lines = src.replace(/\r\n/g, '\n').split('\n');
+  const out: MiniEl[] = [];
+  let para: string[] = [];
+  const flushPara = (): void => {
+    if (para.length) out.push(h(doc, 'p', { class: 'md-p' }, ...mdInline(doc, para.join('\n'))));
+    para = [];
+  };
+  for (let i = 0; i < lines.length; ) {
+    const line = lines[i]!;
+    if (/^\s*```/.test(line)) {
+      flushPara();
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i]!)) code.push(lines[i++]!);
+      i++; // the closing fence (or past the end)
+      out.push(h(doc, 'pre', { class: 'md-pre' }, h(doc, 'code', null, code.join('\n'))));
+      continue;
+    }
+    const ul = /^\s*[-*+]\s+(.*)$/;
+    const ol = /^\s*\d{1,9}[.)]\s+(.*)$/;
+    const kind = ul.test(line) ? ul : ol.test(line) ? ol : null;
+    if (kind) {
+      flushPara();
+      const lis: MiniEl[] = [];
+      while (i < lines.length && kind.test(lines[i]!)) lis.push(h(doc, 'li', null, ...mdInline(doc, kind.exec(lines[i++]!)![1]!)));
+      out.push(h(doc, kind === ul ? 'ul' : 'ol', { class: 'md-list' }, ...lis));
+      continue;
+    }
+    if (!line.trim()) flushPara();
+    else para.push(line);
+    i++;
+  }
+  flushPara();
+  return out;
 }

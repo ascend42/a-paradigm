@@ -26,7 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
-import { sha256Tagged } from '@a-company/gnomon-contracts';
+import { projectHue, sha256Tagged } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
@@ -65,10 +65,25 @@ export interface SessionRow {
   lastSeq: number;
   /** The kernel boot (count of daemon.start rows read) this session was last opened in. */
   boot: number;
+  /** S2: the session.open cwd (the key of the one project hue, projectHue) and its at (the chat header's "started"). */
+  cwd?: string | null;
+  openedAt?: string | null;
+  /** S2: the first user message (the session's human name, sessionTitle); null until one is seen. */
+  firstUser?: string | null;
 }
 
 /** Session states that mean the session is gone (it can only come back through a session.open of a resume). */
-export const TERMINAL: ReadonlySet<string> = new Set(['ended', 'orphaned', 'refused', 'stopped']);
+export const TERMINAL: ReadonlySet<string> = new Set(['ended', 'failed', 'orphaned', 'refused', 'stopped']);
+
+/**
+ * S2: a session.exited that was not asked for and did not end clean is a failure ("failed", vermilion), not "ended":
+ * the payload says reason 'error', or (no stop reason) a non-zero exit code or a signal.
+ */
+export function failedExit(p: Record<string, unknown>): boolean {
+  if (p.reason === 'error') return true;
+  if (typeof p.reason === 'string') return false;
+  return (typeof p.code === 'number' && p.code !== 0) || typeof p.signal === 'string';
+}
 /** Live = opened and not ended. `seen` (rows with no session.open) is not live: nothing says a process runs. */
 export function isLiveState(state: string): boolean {
   return state !== 'seen' && !TERMINAL.has(state);
@@ -221,11 +236,19 @@ export class GuiStore {
         s.state = typeof p.state === 'string' && !TERMINAL.has(p.state) ? p.state : 'open';
         s.boot = this.boot;
         if (typeof p.backend === 'string') s.backend = p.backend;
+        if (typeof p.cwd === 'string') s.cwd = p.cwd;
+        if (!s.openedAt && typeof r.at === 'string') s.openedAt = r.at;
       } else if (r.kind === 'session.refused') s.state = 'refused';
       else if (r.kind === 'session.orphaned') s.state = 'orphaned'; // the new kernel's boot sweep (§2.4 rule 4)
+      else if (r.kind === 'session.exited' && failedExit(p)) s.state = 'failed';
       else if (r.kind === 'session.exited' || r.kind === 'session.stop' || r.kind === 'session.exit' || r.kind === 'session.end') s.state = 'ended';
       else if (isLiveState(s.state) && r.kind === 'turn.partial') s.state = 'streaming';
       else if (isLiveState(s.state) && r.kind === 'turn.result') s.state = 'idle';
+      if (!s.firstUser) {
+        // S2 session names: the first thing the human said (claude's replay of it, or a sent voice turn)
+        if (r.kind === 'turn.event' && r.view === 'full' && typeof p.line === 'string') s.firstUser = lineItems(p.line).find((it) => it.role === 'user' && it.text.trim())?.text ?? null;
+        else if (r.kind === 'voice.turn.user' && p.partial !== true && typeof p.text === 'string' && p.text.trim()) s.firstUser = p.text;
+      }
       what.add('sessions');
     } else {
       this.kernelFeed.push(r);
@@ -383,7 +406,7 @@ export function turnEventSummary(line: string, type: string | null): string {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-partial' | 'voice-heard' | 'voice-refused' | 'spoken';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-partial' | 'voice-heard' | 'voice-refused' | 'spoken';
 
 export interface ChatItem {
   /** Stable per row (and part): `seq` or `seq.part`. */
@@ -827,4 +850,128 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     else hidden++;
   }
   return { items, hidden };
+}
+
+/* ── S2 desk structure: pure helpers (critique 2026-10-20 §2 S2) ─────────────────────────────────────────────── */
+
+/** S2.1: the project hue of a session group, from the ONE function the kernel's Workshop feed uses (projectHue of the
+ * session.open cwd); a group with no cwd seen yet falls back to its repo name through the same function. */
+export function groupHue(repo: string, sessions: ReadonlyArray<Pick<SessionRow, 'cwd'>>): number {
+  const cwd = sessions.find((s) => typeof s.cwd === 'string' && s.cwd)?.cwd;
+  return projectHue(cwd ?? repo);
+}
+
+export const TITLE_MAX = 28;
+const baseName = (p: string): string => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
+
+/** S2.2: a session's human name: its first user message cut to 28 chars, else `<repo basename> · <hsid tail 4>`. */
+export function sessionTitle(s: Pick<SessionRow, 'hsid' | 'repo' | 'cwd' | 'firstUser'>): string {
+  const first = s.firstUser ? oneLine(s.firstUser) : '';
+  if (first) return first.length > TITLE_MAX ? `${first.slice(0, TITLE_MAX - 1).trimEnd()}…` : first;
+  const where = s.repo && s.repo !== UNSCOPED ? s.repo : s.cwd ? s.cwd : 'session';
+  return `${baseName(where)} · ${s.hsid.slice(-4)}`;
+}
+
+export type NoteTone = 'need' | 'fail' | 'plain';
+/** S2.2: the right-aligned state note of a rail row: cards / KNOT (warn ink), failed (vermilion), else the state. */
+export function sessionNote(s: Pick<SessionRow, 'state'> & { pending: number; knot?: boolean }): { text: string; tone: NoteTone } {
+  if (s.knot) return { text: 'KNOT', tone: 'need' };
+  if (s.pending) return { text: `${s.pending} card${s.pending === 1 ? '' : 's'}`, tone: 'need' };
+  if (s.state === 'failed') return { text: 'failed', tone: 'fail' };
+  return { text: s.state, tone: 'plain' };
+}
+
+/** S2.2: Active (live) and Past (ended | failed | refused | orphaned | seen) sessions. */
+export function splitActivePast<T extends Pick<SessionRow, 'state'>>(ss: readonly T[]): { active: T[]; past: T[] } {
+  const active: T[] = [];
+  const past: T[] = [];
+  for (const s of ss) (isLiveState(s.state) ? active : past).push(s);
+  return { active, past };
+}
+
+const secsBetween = (a?: string, b?: string): number | null => {
+  const x = a ? Date.parse(a) : NaN;
+  const y = b ? Date.parse(b) : NaN;
+  return Number.isFinite(x) && Number.isFinite(y) && y >= x ? Math.round((y - x) / 1000) : null;
+};
+
+/** S2.5: the activity line's summary of folded tool rows: `HH:MM–HH:MM · read N files · ran N commands · Ns of work`. */
+export function activitySummary(children: readonly ChatItem[], from?: string, to?: string): string {
+  let read = 0;
+  let ran = 0;
+  let edited = 0;
+  let other = 0;
+  for (const c of children) {
+    if (c.role !== 'tool') continue;
+    const name = c.text.split(' · ')[0] ?? '';
+    if (/^(Read|Glob|Grep|LS|NotebookRead)$/.test(name)) read++;
+    else if (/^(Bash|BashOutput)$/.test(name)) ran++;
+    else if (/^(Edit|MultiEdit|Write|NotebookEdit)$/.test(name)) edited++;
+    else other++;
+  }
+  const auto = children.filter((c) => c.role === 'auto').length;
+  const hm = (at?: string): string => (at ? at.slice(11, 16) : '');
+  const start = hm(from ?? children[0]?.at);
+  const end = hm(to ?? children[children.length - 1]?.at);
+  const parts = [start && end && start !== end ? `${start}–${end}` : start || end];
+  if (read) parts.push(`read ${read} file${read === 1 ? '' : 's'}`);
+  if (edited) parts.push(`edited ${edited} file${edited === 1 ? '' : 's'}`);
+  if (ran) parts.push(`ran ${ran} command${ran === 1 ? '' : 's'}`);
+  if (other) parts.push(`${other} other tool${other === 1 ? '' : 's'}`);
+  if (auto) parts.push(`${auto} auto-approved`);
+  const work = secsBetween(from, to);
+  if (work !== null) parts.push(`${durationText(work)} of work`);
+  return parts.filter(Boolean).join(' · ');
+}
+
+/** S2.5: "41s", "7m 55s", "1h 4m" (the activity line's "of work" and a reply's "took"). */
+export function durationText(secs: number): string {
+  if (secs < 90) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+}
+
+export interface FoldedItem extends ChatItem {
+  /** S2.5 activity: the folded tool / auto rows (shown when expanded). */
+  children?: ChatItem[];
+  /** S2.5: seconds from the user's message to this reply ("took Ns"). */
+  took?: number;
+}
+
+/**
+ * S2.5 (PURE): consecutive tool and auto rows fold into ONE `activity` item (collapsed by default; key = `act:` + its
+ * first child's key, so expanding it is stable) whose text is activitySummary (from the user's message to the reply
+ * that ends the run); a reply after a user message gets `took` seconds. `expanded` activity keys show their children
+ * inline after the line. Raw mode never folds (the caller skips this).
+ */
+export function foldActivity(items: readonly ChatItem[], expanded: ReadonlySet<string> = new Set()): FoldedItem[] {
+  const out: FoldedItem[] = [];
+  let lastUserAt: string | undefined;
+  let run: ChatItem[] = [];
+  const flush = (nextAt?: string): void => {
+    if (!run.length) return;
+    const first = run[0]!;
+    const key = `act:${first.key}`;
+    out.push({ key, seq: first.seq, role: 'activity', text: activitySummary(run, lastUserAt ?? first.at, nextAt ?? run[run.length - 1]!.at), ...(first.at ? { at: first.at } : {}), children: run });
+    if (expanded.has(key)) out.push(...run);
+    run = [];
+  };
+  for (const it of items) {
+    if (it.role === 'tool' || it.role === 'auto') {
+      run.push(it);
+      continue;
+    }
+    if (it.role === 'assistant') {
+      flush(it.at);
+      const took = lastUserAt !== undefined ? secsBetween(lastUserAt, it.at) : null;
+      out.push(took !== null ? { ...it, took } : it);
+      lastUserAt = undefined;
+      continue;
+    }
+    flush();
+    if (it.role === 'user') lastUserAt = it.at;
+    out.push(it);
+  }
+  flush();
+  return out;
 }

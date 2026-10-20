@@ -198,6 +198,33 @@ components:
       test/fonts.test.ts (pinned sha256, embed byte-exact, licences, CSS
       sources), ../gnomon/test/gui-endpoint.test.ts (served byte-exact).
       scripts/preview.mjs (dev only) serves grain.svg and fonts/* raw too.
+    desk-structure-s2: >-
+      S2 desk structure (critique 2026-10-20 §2 S2). Pure helpers in
+      core/store.ts: groupHue (projectHue of the session.open cwd, else of the
+      repo: the SAME function as the kernel's Workshop feed), sessionTitle (the
+      first user message cut to 28 chars, else repo basename · hsid tail 4;
+      SessionRow gains cwd, openedAt, firstUser), sessionNote (N card(s) /
+      KNOT in warn ink, failed in vermilion), splitActivePast, failedExit (a
+      session.exited with reason error, or no stop reason and a non-zero code
+      or a signal, is state "failed", terminal), foldActivity +
+      activitySummary + durationText (consecutive tool / auto rows fold into
+      ONE collapsible activity line "HH:MM–HH:MM · read N files · ran N
+      commands · Ns of work", key act:<first key>; a reply after a user
+      message gets "took Ns"). core/render.ts mdInline / mdBlocks: a SAFE
+      markdown subset for agent text (inline code, bold, italics, bullet and
+      numbered lists, fenced code) built as DOM nodes through h(); no HTML
+      passthrough, no links, no images. ui/app.ts: the rail is ACTIVE n
+      (project groups: swatch + project ink name) and ▸ PAST n (collapsed by
+      default, toggle kept in localStorage gnomon.gui.pastOpen); the kernel
+      feed is a palette view (view.kernel-feed), the default centre is a
+      quiet "No session open" sheet with + New session; the chat header is
+      the session name plus ■ project · backend · started · elapsed; pinned
+      cards carry "Pending in this session"; the header is wordmark, palette
+      field (Search, run, jump… ⌘K), risk, spacer, conn, voice, ⊞ Layout
+      (presets + pane toggles; kernel-owned chrome is never listed); #inbox
+      sits in the stack head; the composer placeholder is "Reply to <name>…"
+      with the long hint in title=, and send is the filled primary key.
+      Tests: test/desk.test.ts.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a
@@ -314,6 +341,7 @@ components:
       - test/voice.test.ts
       - test/voice-client.test.ts
       - test/fonts.test.ts
+      - test/desk.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:

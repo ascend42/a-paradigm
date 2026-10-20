@@ -30,6 +30,7 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'palette.open', title: 'Command palette', keys: '⌘K / Ctrl+K' },
   { id: 'session.new', title: 'New session', keys: '⌘N / Ctrl+N' },
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
+  { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: day (papercraft)' },
   { id: 'theme.night', title: 'Theme: night (phosphor)' },
   { id: 'theme.auto', title: 'Theme: auto (follow the OS)' },

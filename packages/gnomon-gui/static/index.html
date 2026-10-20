@@ -14,13 +14,13 @@
 <header class="chrome">
 <button id="toggle-sessions" class="key pane-toggle" type="button" aria-controls="pane-sessions" aria-expanded="false" title="Sessions">sessions</button>
 <span class="wordmark">Gnomon</span>
-<span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
+<button id="palette-btn" class="palfield" type="button" title="Command palette (⌘K)">Search, run, jump… <kbd>⌘K</kbd></button>
 <span id="risk" class="badge risk kernel-owned" hidden title="A browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.">browser · extension risk</span>
 <span class="spacer"></span>
+<span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
 <span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false" aria-live="polite" data-state="off" title="Voice (kernel-owned: shows what the kernel says, never the voice app's claim)"><span class="voice-dot" aria-hidden="true"></span><span id="voice-label">Mic off</span><span id="voice-meter" class="voice-meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></span><span id="voice-target" class="voice-target"></span><span id="voice-progress" class="voice-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden><i></i></span></button><button id="voice-stop" class="key quiet voice-action voice-stop kernel-owned" type="button" title="Stop speaking (Esc, ⌃⌥.)" aria-label="Stop speaking" hidden>⏹ Stop speaking</button><button id="voice-action" class="key quiet voice-action kernel-owned" type="button" hidden></button><span id="voice-menu" class="mode-menu voice-menu" role="menu" hidden></span><span id="voice-note" class="meta voice-note" role="status" hidden></span></span>
-<span id="inbox" class="readout" title="global inbox: all projects">0 pending</span>
+<span class="layout-wrap"><button id="layout-btn" class="key quiet layout-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Layout presets and panes">⊞ Layout</button><span id="layout-menu" class="mode-menu layout-menu" role="menu" hidden></span></span>
 <button id="toggle-stack" class="key pane-toggle" type="button" aria-controls="pane-stack" aria-expanded="false" title="Decisions">decisions</button>
-<button id="palette-btn" class="key" type="button" title="Command palette">⌘K</button>
 </header>
 <div id="repin" class="notice repin kernel-owned" role="alert" hidden><span id="repin-text"></span> <button id="repin-ack" class="key" type="button">understood</button></div>
 <div id="voice-dev" class="notice voice-dev kernel-owned" role="alert" hidden></div>
@@ -28,24 +28,25 @@
 <div id="voice-toast" class="voice-toast" role="status" aria-live="polite" hidden></div>
 <main class="desk">
 <nav id="pane-sessions" class="pane sessions" aria-label="sessions">
-<div class="pane-head"><span class="title">sessions</span><button id="new-session" class="key" type="button" title="New session (⌘N)">+ new</button></div>
+<button id="new-session" class="key newb" type="button" title="New session (⌘N)"><span>+ New session</span><kbd>⌘N</kbd></button>
 <div id="session-search-wrap"><input id="session-search" class="field" type="search" placeholder="search sessions" aria-label="search sessions"></div>
 <div id="session-list" class="list"></div>
 </nav>
 <section id="pane-transcript" class="pane transcript" aria-label="transcript">
-<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span class="head-right"><span class="mode-wrap"><button id="mode-btn" class="key quiet mode-btn kernel-owned" type="button" hidden aria-haspopup="menu" aria-expanded="false" title="Run mode of this session (⇧Tab in the composer cycles it)">mode: —</button><span id="mode-menu" class="mode-menu" role="menu" hidden></span></span><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" hidden>show raw events</button></span></div>
+<div class="pane-head chead"><span class="chead-l"><span id="transcript-title" class="title">No session open</span><span id="chead-meta" class="meta chead-meta"></span></span><span class="head-right"><span class="mode-wrap"><button id="mode-btn" class="key quiet mode-btn kernel-owned" type="button" hidden aria-haspopup="menu" aria-expanded="false" title="Run mode of this session (⇧Tab in the composer cycles it)">mode: —</button><span id="mode-menu" class="mode-menu" role="menu" hidden></span></span><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" hidden>show raw events</button></span></div>
 <div class="feed">
 <div id="viewport" class="viewport" tabindex="0" aria-label="conversation"><div id="spacer" class="spacer-v"></div></div>
+<div id="empty" class="empty"><div class="empty-sheet"><p class="title empty-title">No session open</p><p id="empty-meta" class="meta"></p><button id="empty-new" class="key pri" type="button">+ New session <kbd>⌘N</kbd></button><p class="meta">The kernel feed is in the palette: ⌘K, then “kernel feed”.</p></div></div>
 <button id="jump-latest" class="key jump" type="button" hidden>↓ latest</button>
 </div>
 <div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
 <form id="composer" class="composer" autocomplete="off">
-<textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode." aria-label="composer"></textarea>
-<div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><span id="dictation" class="dictation kernel-owned" hidden><span id="dictation-ring" class="dictation-ring" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" focusable="false"><circle class="ring-track" cx="10" cy="10" r="8"></circle><circle id="dictation-arc" class="ring-arc" cx="10" cy="10" r="8" pathLength="100"></circle></svg><span id="dictation-secs" class="ring-secs"></span></span><span id="dictation-live" class="meta dictation-live" role="status" aria-live="polite"></span><button id="dictation-hold" class="key quiet" type="button" aria-pressed="false" title="Hold: no auto-send (⌃⌥H in the voice app toggles it too)">Hold</button><button id="dictation-send" class="key" type="button" title="Send the dictated draft now (Enter / ⌘Enter)">Send</button></span><button id="composer-send" class="key" type="submit">send</button></div>
+<textarea id="composer-text" class="field" rows="2" placeholder="Reply…" title="Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode." aria-label="composer"></textarea>
+<div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><span id="dictation" class="dictation kernel-owned" hidden><span id="dictation-ring" class="dictation-ring" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" focusable="false"><circle class="ring-track" cx="10" cy="10" r="8"></circle><circle id="dictation-arc" class="ring-arc" cx="10" cy="10" r="8" pathLength="100"></circle></svg><span id="dictation-secs" class="ring-secs"></span></span><span id="dictation-live" class="meta dictation-live" role="status" aria-live="polite"></span><button id="dictation-hold" class="key quiet" type="button" aria-pressed="false" title="Hold: no auto-send (⌃⌥H in the voice app toggles it too)">Hold</button><button id="dictation-send" class="key" type="button" title="Send the dictated draft now (Enter / ⌘Enter)">Send</button></span><kbd class="meta composer-kbd">⌘↵</kbd><button id="composer-send" class="key pri" type="submit">send</button></div>
 </form>
 </section>
 <aside id="pane-stack" class="pane stack" aria-label="decision stack">
-<div class="pane-head"><span class="title">decisions</span><button id="stack-scope" class="key" type="button">all projects</button></div>
+<div class="pane-head"><span class="title">decisions</span><span id="inbox" class="meta" title="global inbox: all projects">0 pending</span><button id="stack-scope" class="key" type="button">all projects</button></div>
 <div id="stack" class="pile"></div>
 </aside>
 <div id="scrim" class="scrim" hidden></div>

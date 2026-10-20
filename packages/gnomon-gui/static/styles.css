@@ -460,3 +460,80 @@ html, body {
   .dictation-ring svg { display: none; }
   .dictation-ring .ring-secs { display: inline; }
 }
+
+/* ── S2 desk structure (critique 2026-10-20 §2 S2). Text tokens only; project hue fills sit in a --key-edge ring and
+   project names use the INK pair (--p-*-ink, a fixture text token), never the fill. ── */
+.pink.h0 { color: var(--p-terracotta-ink); }
+.pink.h1 { color: var(--p-sage-ink); }
+.pink.h2 { color: var(--p-slate-ink); }
+.pink.h3 { color: var(--p-ochre-ink); }
+.pink.h4 { color: var(--p-rose-clay-ink); }
+.pink.h5 { color: var(--p-sea-grey-ink); }
+.sessions { background: transparent; padding: 12px 10px 0; }
+.key.newb { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; font-size: 12.5px; text-align: left; }
+.key.newb kbd { font: inherit; font-size: 11px; color: var(--sec); }
+#session-search-wrap { padding: 0 0 6px; }
+#session-search { border-color: var(--rule); background: transparent; }
+.sec-head { display: flex; justify-content: space-between; width: 100%; margin: 8px 0 4px; padding: 0 6px; font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); background: transparent; border: 0; text-align: left; }
+.sec-toggle { cursor: pointer; }
+.sessions .group-head { padding: 6px 6px 2px; font-size: 11.5px; }
+.sessions .swatch, .group-head .swatch { width: 12px; height: 12px; flex: none; }
+.session-row.sess { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border-left: 0; font-size: 12.5px; }
+.session-row.sess.active { background: var(--sheet); color: var(--ink); }
+.session-row.sess.gone { color: var(--sec); }
+.sname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snote { font-size: 10.5px; color: var(--sec); white-space: nowrap; }
+.snote.tone-need { color: var(--warn-ink); font-weight: 500; }
+.snote.tone-fail { color: var(--fail); font-weight: 500; }
+.session-row.state-failed { border-left: 0; }
+
+/* header: the palette field and ⊞ Layout */
+.palfield { display: inline-flex; align-items: center; gap: 8px; min-width: 240px; padding: 3px 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; text-align: left; }
+.palfield kbd { margin-left: auto; font: inherit; font-size: 11px; color: var(--sec); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.palfield:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.layout-wrap { position: relative; display: inline-flex; }
+.layout-menu { right: 0; left: auto; }
+#conn { font-size: 11px; }
+
+/* chat header and the quiet empty centre */
+.pane-head.chead { padding: 10px 20px 8px; align-items: baseline; }
+.chead-l { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-theme="night"] .chead #transcript-title { font-size: 13px; }
+.chead-meta { font-size: 11px; white-space: nowrap; }
+#transcript-count { white-space: nowrap; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.empty-sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 36px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--sheet-shadow); text-align: center; }
+.empty-title { font-size: 20px; margin: 0; }
+.empty-sheet .meta { margin: 0; }
+.empty-sheet .key kbd { font: inherit; font-size: 11px; margin-left: 6px; }
+
+/* chat rows: measure 80ch, the user's message right-aligned, the activity fold, "took Ns", the markdown subset */
+.trow { max-width: none; }
+.trow > .body, .trow > .who, .trow > .said { max-width: 80ch; }
+.trow.role-user { display: flex; flex-direction: column; align-items: flex-end; }
+.trow.role-user .body { border-radius: var(--radius); padding: 8px 12px; }
+.trow.role-user, .trow.role-assistant { padding: 7px 20px; }
+.trow.role-activity { padding: 3px 20px 3px 22px; margin-left: 20px; font-size: 11.5px; color: var(--sec); border-left: 2px solid var(--rule); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(80ch + 22px); }
+.trow.role-activity:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow .who .took { color: var(--sec); }
+.trow .body.md { white-space: normal; }
+.md-p { margin: 0 0 6px; white-space: pre-wrap; }
+.md-p:last-child { margin-bottom: 0; }
+.md-list { margin: 2px 0 6px; padding-left: 20px; }
+.md-pre { margin: 4px 0 6px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-code, .md-pre code { font: inherit; }
+.md-code { background: color-mix(in srgb, var(--rule) 50%, transparent); padding: 0 3px; border-radius: 2px; }
+
+/* pinned (pending in this session) and the composer */
+.pinned { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+.pinned .lbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
+.pinned .card { margin: 0; }
+.composer { margin: 10px 20px 14px; padding: 10px 12px; border: 1px solid var(--key-edge); border-radius: var(--radius); background: var(--sheet); }
+.composer textarea.field { border: 0; padding: 0; background: transparent; }
+.composer-kbd { font: inherit; font-size: 11px; color: var(--sec); margin-left: auto; }
+.composer-foot .key.pri { margin-left: 8px; }
+
+/* palette rows: title left, kbd hint right */
+.pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
+.pal-kbd { font: inherit; font-size: 11px; color: var(--sec); white-space: nowrap; }

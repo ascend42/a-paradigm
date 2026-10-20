@@ -21,7 +21,7 @@
  *   mod.paused        {name, reason}   (Aegis C2: a pause is visible in the Workshop)
  *   mod.health        {name, ok}       (a successful start clears it)
  */
-import { createHash } from 'node:crypto';
+import { projectHue } from '@a-company/gnomon-contracts';
 
 export const FEED_KINDS: readonly string[] = Object.freeze(['session.open', 'session.exited', 'turn.partial', 'turn.result', 'approval.request', 'approval.decide', 'approval.expire', 'warpline.knot', 'mod.paused', 'mod.health']);
 /** The capability that grants the feed. */
@@ -52,7 +52,7 @@ export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknow
       if (!hsid) return null;
       out.hsid = hsid;
       out.backend = p.backend === 'local' ? 'local' : 'claude';
-      out.project = typeof p.cwd === 'string' ? createHash('sha256').update(p.cwd, 'utf8').digest()[0]! % FEED_HUES : 0;
+      out.project = typeof p.cwd === 'string' ? projectHue(p.cwd) : 0; // S2.1: the one hue function the GUI rail uses too (0..5, within 0..FEED_HUES-1)
       break;
     }
     case 'session.exited':
