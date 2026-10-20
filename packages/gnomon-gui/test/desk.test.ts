@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectHue } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { mdBlocks, mdInline, raisedLine, renderCard, splitCardBlock, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { KERNEL_TITLED_KINDS, mdBlocks, mdInline, raisedLine, renderCard, splitCardBlock, stampWord, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { activitySummary, failedExit, foldActivity, groupHue, GuiStore, isLiveState, sessionNote, sessionTitle, splitActivePast, type ChatItem, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -219,7 +219,7 @@ describe('S4 motion', () => {
   });
   it('the stamp then fly-off runs only after the kernel accepted the decision; reduced motion removes at once', () => {
     const decide = app.slice(app.indexOf('async function decide('), app.indexOf('/* ── Shuttle view'));
-    expect(decide).toMatch(/await client\.call\('approve'[\s\S]*?refusals\.delete\(cardId\);\s*flyOff\(cardId\);[\s\S]*\} catch \(err\)/);
+    expect(decide).toMatch(/await client\.call\('approve'[\s\S]*?refusals\.delete\(cardId\);\s*flyOff\(cardId, decision\);[\s\S]*\} catch \(err\)/);
     const fly = app.slice(app.indexOf('function flyOff('), app.indexOf('const lastState'));
     expect(fly).toMatch(/if \(!els\.length \|\| motionReduced\(\)\) return;/);
     expect(fly).toMatch(/setTimeout\(\(\) => settleDeparture\(cardId\), 1500\)/);
@@ -227,6 +227,26 @@ describe('S4 motion', () => {
     expect(css).toMatch(/\.card \.stamp\.on \{ animation: stamp var\(--t-stamp\) forwards; \}/);
     expect(css).toMatch(/\.card\.out \{ animation: flyout var\(--t-flyout\) forwards; \}/);
     expect(css).toMatch(/\[data-motion="reduced"\] \.card \.stamp\.on \{ opacity: 1; transform: rotate\(-8deg\); \}/);
+  });
+  it('Aegis S4 lows: the stamp names the decision; a leaving card is blurred and inert; ask-user stays kernel-titled', () => {
+    expect(stampWord('allow')).toBe('APPROVED');
+    expect(stampWord('deny')).toBe('DENIED');
+    expect(stampWord('answer')).toBe('ANSWERED');
+    expect(stampWord('reject')).toBe('REJECTED');
+    expect(stampWord('__proto__')).toBe('DECIDED');
+    expect(stampWord('<b>x</b>')).toBe('DECIDED');
+    const fly = app.slice(app.indexOf('function flyOff('), app.indexOf('const lastState'));
+    expect(fly).toMatch(/\.blur\(\)/);
+    expect(fly).toMatch(/el\.inert = true;/);
+    expect(fly).toMatch(/st\.textContent = stampWord\(decision\)/);
+    expect(fly.indexOf('el.inert = true')).toBeLessThan(fly.indexOf("classList.add('leaving')"));
+    // the stamp is empty until a decision is accepted (no APPROVED baked into the card)
+    const el = renderCard({ doc: fdoc }, { cardId: 'card:1', kind: 'permission', requestedBy: 'p:x', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [], decisions: ['allow'], decidable: true }, { type: 'Box', children: [{ type: 'Text', text: 'Run' }] }) as FEl;
+    expect(el.children.find((c): c is FEl => c instanceof FEl && c.className === 'stamp')!.text).toBe('');
+    // ask-user line 1 is the kernel's template; the question text is later lines (supervisor/permission.ts)
+    const perm = readFileSync(path.join(ROOT, '../gnomon/src/kernel/supervisor/permission.ts'), 'utf8');
+    expect(perm).toMatch(/const lines = \[`The session asks you \$\{qs\.length === 1 \? 'a question' : `\$\{qs\.length\} questions`\}`, `repo: \$\{ctx\.repo\}`, \.\.\.askLines\(qs\)/);
+    expect(KERNEL_TITLED_KINDS.has('ask-user')).toBe(true);
   });
   it('a held voice decision: amber edge, a 3 s bar, the seconds and the undo phrase in text (kernel-owned)', () => {
     const block = { type: 'Box', children: [{ type: 'Text', text: 'Run the tests' }] };
@@ -285,9 +305,9 @@ describe('Aegis S2/S3 review fixes', () => {
       expect(css).toContain(`.pink.h${i} {`);
     }
   });
-  it('the Layout menu runs only presets and the three pane toggles (never a kernel-owned region)', () => {
+  it('the Layout menu runs only presets, the three pane toggles and the Workshop placements (never a kernel-owned region)', () => {
     const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
     const runs = [...menu.matchAll(/item\('([^']+)'|item\(`([^`]+)`/g)].map((m) => m[1] ?? m[2]);
-    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.shuttle.toggle']);
+    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.${p}']);
   });
 });

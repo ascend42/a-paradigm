@@ -23,7 +23,7 @@
  * block, flags as visible badges beside the decision keys, and the
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
-import { BIDI_GLYPHS, canonicalJson, hex, sanitizeDisplayText, sha256 } from '@a-company/gnomon-contracts';
+import { BIDI_GLYPHS, canonicalJson, checkCap, hex, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
 /** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
@@ -51,6 +51,8 @@ export function flagsOf(value: unknown, acc: Set<string> = new Set(), depth = 0)
 export interface MiniDoc {
   createElement(tag: string): MiniEl;
   createTextNode(text: string): unknown;
+  /** SVG elements (S5 caps); only `svgEl` calls it, with the SVG namespace and an allowlisted tag. */
+  createElementNS?(ns: string, tag: string): MiniEl;
 }
 export interface MiniEl {
   appendChild(child: unknown): unknown;
@@ -84,7 +86,56 @@ export function text(doc: MiniDoc, s: unknown): unknown {
   return doc.createTextNode(displayText(s));
 }
 
-const TONE = /^[a-z][a-z0-9-]{0,31}$/;
+/** S5: the closed Text tones (each maps to a .tone-* class); anything else is dropped. Generic, no mod-name case. */
+// Aegis S5 L2: no `violet` here: violet is the KNOT cap's (renderCap .knot), never a generic text tone
+export const TONES: ReadonlySet<string> = new Set(['cap', 'quiet', 'paused', 'warn', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5']);
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SVG_TAGS = new Set(['svg', 'path']);
+const SVG_ATTRS = new Set(['viewBox', 'd', 'aria-hidden', 'focusable']);
+/** The three hats (the comp, workshop-placement.html), in a 22x28 box. The ONLY path data the GUI ever draws. */
+export const CAP_PATHS: Readonly<Record<Cap['shape'], string>> = Object.freeze({
+  tall: 'M11 1 L19 26 H3 Z',
+  wide: 'M11 6 L21 26 H1 Z',
+  floppy: 'M11 2 C15 8 21 10 20 26 H2 C3 14 9 12 11 2 Z',
+});
+
+/** An SVG element: allowlisted tag and attributes; values are GUI constants (never mod data). */
+function svgEl(doc: MiniDoc, tag: string, attrs: Record<string, string>, ...children: MiniEl[]): MiniEl | null {
+  if (!SVG_TAGS.has(tag) || !doc.createElementNS) return null;
+  const el = doc.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (!SVG_ATTRS.has(k)) throw new Error(`render: svg attribute ${k} is not allowed`);
+    el.setAttribute(k, v);
+  }
+  for (const c of children) el.appendChild(c);
+  return el;
+}
+
+/**
+ * S5: a Text node carrying a valid cap draws a hat. Every visual comes from the five checked fields through
+ * GUI-owned constants and classes: shape -> CAP_PATHS, hue -> .hN, filled -> .outlined, state -> .needs/.working/
+ * .idle/.knot (.bob only while working; violet only for knot). The node's text is the accessible name; the
+ * label shows above a needs/knot cap. Reduced motion hides the bob and prints the word `working` (CSS).
+ */
+export function renderCap(doc: MiniDoc, textValue: string, cap: Cap): MiniEl {
+  const cls = ['cap', `h${cap.hue}`, `cap-${cap.shape}`, `st-${cap.state}`];
+  if (!cap.filled) cls.push('outlined');
+  if (cap.state === 'knot') cls.push('knot');
+  if (cap.state === 'working') cls.push('bob');
+  const path = svgEl(doc, 'path', { d: CAP_PATHS[cap.shape] });
+  const svg = path ? svgEl(doc, 'svg', { viewBox: '0 0 22 28', 'aria-hidden': 'true', focusable: 'false' }, path) : null;
+  const asks = cap.state === 'needs' || cap.state === 'knot';
+  return h(
+    doc,
+    'span',
+    { class: cls.join(' '), role: 'img', 'aria-label': textValue || cap.label, title: cap.label, 'data-cap-state': cap.state },
+    asks ? h(doc, 'span', { class: 'q', 'aria-hidden': 'true' }, cap.label) : null,
+    svg ?? h(doc, 'span', { class: 'cap-glyph', 'aria-hidden': 'true' }, cap.label),
+    h(doc, 'span', { class: 'sh', 'aria-hidden': 'true' }),
+    cap.state === 'working' ? h(doc, 'span', { class: 'cap-word', 'aria-hidden': 'true' }, 'working') : null,
+  );
+}
 const KIT = ['Box', 'Text', 'List', 'Table', 'Markdown', 'Diff', 'Progress', 'Button', 'Image', 'Canvas'] as const;
 
 /** The block name of a node: `block` or `type`, with or without the `kit.` prefix (the broker writes `{type:'Box'}`). */
@@ -100,6 +151,8 @@ export interface RenderCtx {
   /** kit.Button → palette command id (never a verb). */
   onCommand?: (commandId: string) => void;
   depth?: number;
+  /** S5: a mod fence shows each Box title as a heading (card bodies never set this). */
+  boxTitles?: boolean;
 }
 
 /** Render one display-block node (any depth ≤ 32). */
@@ -114,10 +167,16 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
   const name = blockName(n);
   switch (name) {
     case 'Box':
-      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ...kids.map(child));
-    case 'Text':
-      // a tone is a closed-shape token mapped to a class (styles.css .tone-*), never a style or a colour value
-      return h(doc, 'p', { class: `blk blk-text${typeof data.tone === 'string' && TONE.test(data.tone) ? ` tone-${data.tone}` : ''}` }, str(data.text));
+      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ctx.boxTitles && typeof data.title === 'string' && data.title ? h(doc, 'div', { class: 'blk-title' }, data.title) : null, ...kids.map(child));
+    case 'Text': {
+      // S5: a cap is drawn only when every field checks (contracts checkCap); otherwise the text form shows
+      if (data.cap !== undefined) {
+        const c = checkCap(data.cap);
+        if (c.ok) return renderCap(doc, str(data.text), c.cap);
+      }
+      // a tone is one of the closed TONES mapped to a class (styles.css .tone-*), never a style or a colour value
+      return h(doc, 'p', { class: `blk blk-text${typeof data.tone === 'string' && TONES.has(data.tone) ? ` tone-${data.tone}` : ''}` }, str(data.text));
+    }
     case 'List': {
       const items = Array.isArray(data.items) ? data.items : kids;
       return h(doc, 'ul', { class: 'blk blk-list' }, ...items.map((it) => h(doc, 'li', null, typeof it === 'object' && it !== null ? child(it) : str(it))));
@@ -232,7 +291,25 @@ export function raisedLine(raisedAt: string | null | undefined, now: number): st
  * Only these get line 1 promoted to the title; any other kind (a mod's, a future one) keeps its block whole, is titled
  * by its kind, and its first line reads as the requester's quoted text.
  */
+/**
+ * Aegis S4 low (3), checked: `ask-user`'s line 1 is the fixed `The session asks you a question` / `… N questions`
+ * template (supervisor/permission.ts composePermission); the requester's question text starts at line 3 (askLines),
+ * so it stays kernel-titled.
+ */
 export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+
+/**
+ * Aegis S4 low (1): the stamp names the decision the kernel accepted (never always APPROVED). A closed map over the
+ * contracts' CARD_DECISIONS; anything else (a future decision) reads DECIDED, never mod- or card-supplied text.
+ */
+const STAMP_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  allow: 'APPROVED', always: 'APPROVED', accept: 'APPROVED', 'approve-plan': 'APPROVED', install: 'INSTALLED',
+  deny: 'DENIED', reject: 'REJECTED', withdraw: 'WITHDRAWN', answer: 'ANSWERED', resume: 'RESUMED', resolve: 'RESOLVED',
+  'fallback-cloud': 'SENT TO CLOUD', 'use-api-token': 'APPROVED', extend: 'EXTENDED', restart: 'RESTARTED',
+});
+export function stampWord(decision: string): string {
+  return Object.prototype.hasOwnProperty.call(STAMP_WORDS, decision) ? STAMP_WORDS[decision]! : 'DECIDED';
+}
 
 /**
  * S3: the card title is the block's first Text line (a Box whose first child is a Text), and the body is the block
@@ -477,7 +554,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
-    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, 'APPROVED'),
+    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
 }

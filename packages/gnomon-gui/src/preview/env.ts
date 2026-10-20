@@ -3,7 +3,7 @@
  *
  * DEV ONLY (#gui-preview): the page environment of the fixture preview,
  * read from the URL (`?fixture=<name>&theme=day|night&motion=on|off
- * &surface=wrapper|browser`). It MUST be the first import of
+ * &surface=wrapper|browser&workshop=footer|right|left|hidden`). It MUST be the first import of
  * src/preview/main.ts: app.ts reads matchMedia and the host surface when its
  * module evaluates, so the stubs are in place before that. It only answers
  * the two media queries the GUI asks about (colour scheme, reduced motion)
@@ -16,6 +16,8 @@ export interface PreviewParams {
   theme: 'day' | 'night';
   motion: 'on' | 'off';
   surface: 'wrapper' | 'browser';
+  /** S5: where the Workshop mounts (the GUI Layout; `hidden` hides it) */
+  workshop: 'footer' | 'right' | 'left' | 'hidden';
 }
 
 export function previewParams(search: string): PreviewParams {
@@ -25,6 +27,7 @@ export function previewParams(search: string): PreviewParams {
     theme: q.get('theme') === 'night' ? 'night' : 'day',
     motion: q.get('motion') === 'off' ? 'off' : 'on',
     surface: q.get('surface') === 'browser' ? 'browser' : 'wrapper',
+    workshop: ((w) => (w === 'right' || w === 'left' || w === 'hidden' ? w : 'footer'))(q.get('workshop')),
   };
 }
 

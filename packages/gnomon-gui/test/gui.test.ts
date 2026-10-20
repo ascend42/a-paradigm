@@ -240,7 +240,7 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     for (const f of files) {
       const s = readFileSync(f, 'utf8').replace(/^\s*(\*|\/\/).*$/gm, '');
       expect(s, f).not.toMatch(/\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function|setAttribute\(\s*['"]on/);
-      expect(s.replace(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, ''), f).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/); // the SVG namespace is a name, not a load
+      expect(s.replace(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, '').replace(/^const SVG_NS = 'http:\/\/www\.w3\.org\/2000\/svg';$/m, ''), f).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/); // the SVG namespace is a name, not a load
     }
   });
 });

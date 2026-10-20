@@ -41,7 +41,11 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'layout.decide', title: 'Layout: decide (stack wide)' },
   { id: 'pane.sessions.toggle', title: 'Pane: show/hide sessions' },
   { id: 'pane.stack.toggle', title: 'Pane: show/hide decision stack' },
-  { id: 'pane.shuttle.toggle', title: 'Pane: show/hide Shuttle view' },
+  { id: 'pane.workshop.toggle', title: 'Pane: show/hide the Workshop (needs you / working caps)' },
+  // S5.2: where the Workshop (a sidebar-slot mod view) mounts; the mod's manifest slot never changes
+  { id: 'workshop.footer', title: 'Workshop: footer strip (default)' },
+  { id: 'workshop.right', title: 'Workshop: right column' },
+  { id: 'workshop.left', title: 'Workshop: left column' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
   // §11.4 run-mode commands (P8-D87): the focused session's folder (mode.repo.*, the default scope, F2 of
   // TD-2026-10-20-086), or this session only (mode.*); a looser mode asks for presence
@@ -78,28 +82,33 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  * press look like a kernel or presence action.
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.')),
+  // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.')),
 );
 
-export type Pane ='sessions' | 'transcript' | 'stack' | 'shuttle';
-export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'shuttle'] as const);
+export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
+export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'workshop'] as const);
+/** S5.2: where the Workshop mounts when shown (the comp's footer strip, or its 76 px column on either edge). */
+export type WorkshopPlace = 'footer' | 'right' | 'left';
+export const WORKSHOP_PLACES: readonly WorkshopPlace[] = Object.freeze(['footer', 'right', 'left'] as const);
 
 export interface Layout {
   name: string;
   visible: Record<Pane, boolean>;
   stackWide: boolean;
+  workshop: WorkshopPlace;
 }
 
 export const PRESETS: Readonly<Record<string, Layout>> = Object.freeze({
-  desk: { name: 'desk', visible: { sessions: true, transcript: true, stack: true, shuttle: true }, stackWide: false },
-  focus: { name: 'focus', visible: { sessions: false, transcript: true, stack: false, shuttle: false }, stackWide: false },
-  decide: { name: 'decide', visible: { sessions: true, transcript: true, stack: true, shuttle: true }, stackWide: true },
+  desk: { name: 'desk', visible: { sessions: true, transcript: true, stack: true, workshop: true }, stackWide: false, workshop: 'footer' },
+  focus: { name: 'focus', visible: { sessions: false, transcript: true, stack: false, workshop: false }, stackWide: false, workshop: 'footer' },
+  decide: { name: 'decide', visible: { sessions: true, transcript: true, stack: true, workshop: true }, stackWide: true, workshop: 'footer' },
 });
 
-/** Apply a preset; the transcript pane always stays visible (it is the page's purpose). */
-export function applyPreset(name: string): Layout {
+/** Apply a preset; the transcript pane always stays visible (it is the page's purpose). A placement survives it. */
+export function applyPreset(name: string, place: WorkshopPlace = 'footer'): Layout {
   const p = PRESETS[name] ?? PRESETS.desk!;
-  return { name: p.name, visible: { ...p.visible, transcript: true }, stackWide: p.stackWide };
+  return { name: p.name, visible: { ...p.visible, transcript: true }, stackWide: p.stackWide, workshop: place };
 }
 
 export function togglePane(l: Layout, pane: Pane): Layout {
@@ -107,18 +116,25 @@ export function togglePane(l: Layout, pane: Pane): Layout {
   return { ...l, name: 'custom', visible: { ...l.visible, [pane]: !l.visible[pane] } };
 }
 
-/** Round-trip shape for the per-device preset save (kernel `config.prefs`, slice 2). */
+/** S5.2: place the Workshop (and show it). */
+export function placeWorkshop(l: Layout, place: WorkshopPlace): Layout {
+  return { ...l, visible: { ...l.visible, workshop: true }, workshop: place };
+}
+
+/** Round-trip shape for the per-device preset save (localStorage now; kernel `config.prefs` later). */
 export function serializeLayout(l: Layout): string {
-  return JSON.stringify({ name: l.name, visible: l.visible, stackWide: l.stackWide });
+  return JSON.stringify({ name: l.name, visible: l.visible, stackWide: l.stackWide, workshop: l.workshop });
 }
 
 export function parseLayout(s: string): Layout | null {
   try {
-    const v = JSON.parse(s) as Partial<Layout>;
+    const v = JSON.parse(s) as Partial<Layout> & { visible?: Record<string, unknown> };
     if (!v || typeof v.name !== 'string' || !v.visible || typeof v.stackWide !== 'boolean') return null;
     const visible = {} as Record<Pane, boolean>;
-    for (const p of PANES) visible[p] = p === 'transcript' ? true : v.visible[p] === true;
-    return { name: v.name, visible, stackWide: v.stackWide };
+    // a layout saved before S5 named the footer `shuttle`
+    for (const p of PANES) visible[p] = p === 'transcript' ? true : p === 'workshop' ? (v.visible.workshop ?? v.visible.shuttle) === true : v.visible[p] === true;
+    const workshop = (WORKSHOP_PLACES as readonly unknown[]).includes(v.workshop) ? (v.workshop as WorkshopPlace) : 'footer';
+    return { name: v.name, visible, stackWide: v.stackWide, workshop };
   } catch {
     return null;
   }

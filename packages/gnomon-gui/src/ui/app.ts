@@ -16,10 +16,10 @@
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
-import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, PRESETS, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
@@ -54,7 +54,8 @@ let modPanelRow: (row: { kind?: unknown } | null) => void = () => undefined; // 
 let stackScoped = false;
 let theme: ThemeChoice = 'auto';
 let motion: 'reduce' | 'system' = 'system';
-let layout: Layout = applyPreset('desk');
+const LAYOUT_KEY = 'gnomon.gui.layout';
+let layout: Layout = parseLayout(localStorage.getItem(LAYOUT_KEY) ?? '') ?? applyPreset('desk'); // S5.2: persisted per browser
 const local: Row[] = []; // this page's own composer lines (memory only)
 const refusals = new Map<string, ShownRefusal>();
 /** Verified decision keys per (cardId, contentHash) under the current verifyKey (C4, I4). */
@@ -98,8 +99,29 @@ function applyLayout(): void {
   d.classList.toggle('no-sessions', !layout.visible.sessions);
   d.classList.toggle('no-stack', !layout.visible.stack);
   d.classList.toggle('stack-wide', layout.stackWide);
-  $('pane-shuttle').hidden = !layout.visible.shuttle;
+  // S5.2: the Workshop host sits in the footer (default) or in the 76 px column on either edge; under 900 px
+  // (the drawer layout) it is always the footer. The voice indicator and the other kernel-owned regions are not here.
+  const place: WorkshopPlace = narrowQ.matches ? 'footer' : layout.workshop;
+  const show = layout.visible.workshop;
+  const host = $('workshop-host');
+  const col = $('workshop-col');
+  const foot = $('pane-workshop');
+  if (place === 'footer') {
+    if (host.parentElement !== foot) foot.insertBefore(host, foot.firstChild);
+  } else if (host.parentElement !== col) col.appendChild(host);
+  col.hidden = !show || place === 'footer';
+  d.classList.toggle('ws-left', show && place === 'left');
+  d.classList.toggle('ws-right', show && place === 'right');
+  foot.classList.toggle('slim', place !== 'footer');
+  foot.hidden = !show;
+  try {
+    localStorage.setItem(LAYOUT_KEY, serializeLayout(layout));
+  } catch {
+    /* a private window may refuse storage: the layout still applies */
+  }
 }
+const narrowQ = matchMedia('(max-width: 900px)');
+narrowQ.addEventListener('change', () => applyLayout());
 
 /* ── transcript (virtualized chat) ───────────────────────────────── */
 const widths = new WidthCache(22);
@@ -346,7 +368,7 @@ function projectOfCard(c: { repo: string | null; hsid: string | null }): { name:
   return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
 }
 /**
- * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps APPROVED, then flies off
+ * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps the decision it took (stampWord), then flies off
  * 550 ms later and is removed on its flyout's animationend. While it leaves it is kept out of fresh paints (no
  * duplicate) and re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an
  * animation that never runs. A 1.5 s fallback removes it even if animationend never fires (a hidden tab).
@@ -362,13 +384,20 @@ function settleDeparture(cardId: string): void {
   for (const x of d) x.el.remove();
   void paintStack();
 }
-function flyOff(cardId: string): void {
+function flyOff(cardId: string, decision: string): void {
   const els = [...document.querySelectorAll<HTMLElement>(`.card[data-card-id="${CSS.escape(cardId)}"]`)];
   if (!els.length || motionReduced()) return;
   departing.set(cardId, els.map((el) => ({ el, parent: el.parentElement as HTMLElement, index: Array.prototype.indexOf.call(el.parentElement?.children ?? [], el) })));
   for (const el of els) {
+    // Aegis S4 low (2): a leaving card takes no keyboard: drop focus out of it and make it inert
+    if (el.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
+    el.inert = true;
     el.classList.add('leaving');
-    el.querySelector('.stamp')?.classList.add('on');
+    const st = el.querySelector('.stamp');
+    if (st) {
+      st.textContent = stampWord(decision); // Aegis S4 low (1): the decision the kernel accepted
+      st.classList.add('on');
+    }
   }
   setTimeout(() => {
     for (const el of els) {
@@ -545,7 +574,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   try {
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
-    flyOff(cardId); // S4: only after the kernel accepted the decision (a refusal throws before this)
+    flyOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);
@@ -555,9 +584,9 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   void paintStack();
 }
 
-/* ── Shuttle view ───────────────────────────────────────────────── */
+/* ── S5.4 the status line: the old shuttle readout, one --sec line at the footer's right end (opens the kernel feed) ── */
 function paintShuttle(): void {
-  const s = $('pane-shuttle');
+  const s = $('status-line');
   clear(s);
   const by = store.pendingByKind();
   const live = store.liveCount();
@@ -1487,7 +1516,8 @@ function openLayoutMenu(): void {
   for (const name of Object.keys(PRESETS)) m.appendChild(item(`layout.${name}`, `Layout: ${name}`, name === 'desk' ? 'sessions · chat · stack' : name === 'focus' ? 'the chat only' : 'the stack wide', layout.name === name) as unknown as Node);
   m.appendChild(item('pane.sessions.toggle', `${layout.visible.sessions ? 'Hide' : 'Show'} sessions`, 'pane') as unknown as Node);
   m.appendChild(item('pane.stack.toggle', `${layout.visible.stack ? 'Hide' : 'Show'} the stack`, 'pane') as unknown as Node);
-  m.appendChild(item('pane.shuttle.toggle', `${layout.visible.shuttle ? 'Hide' : 'Show'} the status line`, 'pane') as unknown as Node);
+  m.appendChild(item('pane.workshop.toggle', `${layout.visible.workshop ? 'Hide' : 'Show'} the Workshop`, 'pane') as unknown as Node);
+  for (const p of WORKSHOP_PLACES) m.appendChild(item(`workshop.${p}`, `Workshop: ${p}`, p === 'footer' ? 'a strip under the desk' : `a column on the ${p}`, layout.visible.workshop && layout.workshop === p) as unknown as Node);
   m.hidden = false;
   $('layout-btn').setAttribute('aria-expanded', 'true');
 }
@@ -1517,10 +1547,11 @@ function run(id: string): void {
   if (id.startsWith('theme.')) theme = id.slice(6) as ThemeChoice;
   else if (id === 'motion.reduce') motion = 'reduce';
   else if (id === 'motion.system') motion = 'system';
-  else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7));
+  else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
   else if (id === 'pane.sessions.toggle') layout = togglePane(layout, 'sessions');
   else if (id === 'pane.stack.toggle') layout = togglePane(layout, 'stack');
-  else if (id === 'pane.shuttle.toggle') layout = togglePane(layout, 'shuttle');
+  else if (id === 'pane.workshop.toggle') layout = togglePane(layout, 'workshop');
+  else if (id === 'workshop.footer' || id === 'workshop.right' || id === 'workshop.left') layout = placeWorkshop(layout, id.slice(9) as WorkshopPlace);
   else if (id === 'stack.scope.toggle') {
     stackScoped = !stackScoped;
     void paintStack();
@@ -1597,6 +1628,7 @@ function wire(): void {
       paintTranscript(true);
     } else paintTranscript();
   }).observe($('viewport'));
+  $('status-line').addEventListener('click', () => run('view.kernel-feed')); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
     follow.jump();
     paintTranscript();
@@ -1811,6 +1843,7 @@ function wire(): void {
 export function main(raw?: string): void {
   const take = (globalThis as { gnomonTakeLaunch?: () => string }).gnomonTakeLaunch;
   const frag = parseLaunchFragment(raw ?? (take ? take() : ''));
+  layout = parseLayout(localStorage.getItem(LAYOUT_KEY) ?? '') ?? layout; // S5.2: the saved Layout (read at start, not at import)
   applyLook();
   applyLayout();
   wire();

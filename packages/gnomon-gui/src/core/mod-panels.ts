@@ -19,6 +19,11 @@
  *   - Aegis M2: the right-pane (panel) region carries a `mods` heading rule
  *     outside the decision stack's scroll area, and a block holding any
  *     kit.Button is refused there (shown as a refusal in its fence).
+ *   - S5.2: the Workshop's sidebar-slot view (`workshop` / `workshop.strip`) mounts in its own `workshop`
+ *     region, which the GUI Layout places (footer by default, a 76 px column left or right, or hidden). The
+ *     manifest slot is unchanged. Placement is presentation only: the fence and its label stay. With no
+ *     running Workshop the region shows one quiet line (not installed, or paused and why).
+ *   - Mod fences render Box titles (`blk-title`), so a mod's zones keep their headings; card bodies do not.
  *   - Re-render only on a live store row whose kind is a #mod-host FEED kind,
  *     debounced 250 ms, one render in flight (a row during a render queues
  *     exactly one more), never on a timer.
@@ -48,7 +53,9 @@ export const MOD_FEED_KINDS: readonly string[] = Object.freeze([
   'permit.deny',
 ]);
 
-export type ModRegion = 'desk-footer' | 'left-bottom' | 'right';
+export type ModRegion = 'desk-footer' | 'left-bottom' | 'right' | 'workshop';
+/** S5.2: the one view the Layout places (the first-party Workshop strip). */
+export const WORKSHOP_VIEW = Object.freeze({ name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar' });
 /** The only mod slots the GUI renders, and where. */
 export const SLOT_REGIONS: Readonly<Record<string, ModRegion>> = Object.freeze({ 'composer.footer': 'desk-footer', sidebar: 'left-bottom', panel: 'right' });
 export const MOD_PANEL_DEBOUNCE_MS = 250;
@@ -75,12 +82,26 @@ export function modPanelsOf(status: unknown): ModPanelView[] {
     if (!v || typeof v !== 'object') continue;
     const { name, viewId, slot, dev } = v as Record<string, unknown>;
     if (typeof name !== 'string' || !MOD_NAME.test(name) || typeof viewId !== 'string' || !VIEW_ID.test(viewId) || typeof slot !== 'string') continue;
-    const region = Object.hasOwn(SLOT_REGIONS, slot) ? SLOT_REGIONS[slot]! : null;
+    const isWorkshop = name === WORKSHOP_VIEW.name && viewId === WORKSHOP_VIEW.viewId && slot === WORKSHOP_VIEW.slot;
+    const region = isWorkshop ? 'workshop' : Object.hasOwn(SLOT_REGIONS, slot) ? SLOT_REGIONS[slot]! : null;
     if (!region) continue;
     out.push({ name, viewId, slot, region, dev: dev === true });
     if (out.length >= MAX_MOD_PANELS) break;
   }
   return out;
+}
+
+/** S5.1: the quiet line the Workshop region shows when the Workshop view is not running, else null. */
+export function workshopAbsence(status: unknown, views: readonly ModPanelView[]): string | null {
+  if (views.some((v) => v.region === 'workshop')) return null;
+  const mods = status && typeof status === 'object' ? (status as { mods?: unknown }).mods : null;
+  const paused = mods && typeof mods === 'object' ? (mods as { paused?: unknown }).paused : null;
+  const p = Array.isArray(paused) ? paused.find((x) => x && typeof x === 'object' && (x as { name?: unknown }).name === WORKSHOP_VIEW.name) : null;
+  if (p) {
+    const why = (p as { why?: unknown }).why;
+    return `workshop paused${typeof why === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(why) ? ` (${why})` : ''} · gnomon mod start workshop`;
+  }
+  return 'workshop not installed · gnomon mod install packages/gnomon-mods/workshop';
 }
 
 /** The views of one region, in status order. */
@@ -114,7 +135,7 @@ export function holdsButton(node: unknown, depth = 0): boolean {
 }
 
 /** Aegis M2: the panel slot sits beside the kernel's decision keys, so a mod block there may carry no button at all. */
-export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel slot (it sits beside the decision keys)';
+export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel slot or the Workshop (they sit beside the decision keys)';
 
 /** The heading the right-pane mod region always shows, outside the stack's scroll area (Aegis M2). */
 export const PANEL_HEADING = 'mods';
@@ -123,13 +144,15 @@ export const PANEL_HEADING = 'mods';
 export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?: unknown; dev?: unknown } | null, refusal: string | null = null): MiniEl {
   const { doc } = ctx;
   const dev = v.dev || result?.dev === true;
-  if (refusal === null && v.region === 'right' && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
+  // Aegis M2 + S5 M1: the panel slot sits beside the decision keys, and the Workshop region can be placed in a
+  // column beside them too (right / left), so neither ever carries a kit.Button, whatever the placement
+  if (refusal === null && (v.region === 'right' || v.region === 'workshop') && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
   return h(
     doc,
     'section',
     { class: `mod-fence mod-region-${v.region}`, role: 'group', 'aria-label': `${fenceLabel(v.name)} ${v.viewId}`, 'data-mod': v.name, 'data-view': v.viewId },
     h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, fenceLabel(v.name)), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
-    h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock(ctx, result?.block ?? null)),
+    h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true }, result?.block ?? null)),
   );
 }
 

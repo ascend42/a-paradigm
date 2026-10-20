@@ -16,6 +16,25 @@ description: >-
 
 components:
   gui:
+    workshop-caps: >-
+      S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
+      SVG caps. core/render.ts renderCap draws a Text node's `cap` only after
+      contracts checkCap passes (else the text form shows): svg > path built
+      with createElementNS (allowlisted tags svg/path, attrs viewBox/d/
+      aria-hidden/focusable), path d from the GUI constant CAP_PATHS (tall/
+      wide/floppy), colour by classes only (.hN fill + --key-edge ring,
+      .outlined uses the hue ink, .knot violet), .bob only for state
+      working, reduced motion prints `working`; the label shows above a
+      needs/knot cap and the text is the aria-label. Text tones are the
+      closed TONES set. Mod fences render Box titles. core/mod-panels.ts
+      routes the workshop/workshop.strip sidebar view to its own `workshop`
+      region (#workshop-host); app.ts applyLayout places it in the footer
+      (#pane-workshop, default), the 76 px #workshop-col left or right, or
+      hidden (Layout.workshop, persisted via serializeLayout in
+      localStorage; always the footer under 900 px). workshopAbsence shows
+      one quiet line when the Workshop is not running. The old shuttle
+      readout is #status-line at the footer's right end (opens
+      view.kernel-feed). Tests: test/workshop.test.ts.
     mod-panels: >-
       K0 mod panels (#ledger-mod host slice). core/mod-panels.ts (PURE):
       modPanelsOf(status) reads status.mods.views (the #mod-host declared
