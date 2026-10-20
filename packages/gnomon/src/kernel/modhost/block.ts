@@ -93,7 +93,11 @@ export function sanitizeModBlock(raw: unknown, modName: string): SanitizedBlock 
         if (type === 'Text' && n.cap !== undefined) {
           const c = checkCap(n.cap);
           if (!c.ok) throw new ModRefusal('BLOCK', `${at}.${c.why}`, { name: modName, at });
-          out.cap = { ...c.cap, label: str(c.cap.label, `${at}.cap.label`) };
+          const cap = { ...c.cap, label: str(c.cap.label, `${at}.cap.label`) };
+          // Aegis S5 L3: the sanitizer may lengthen the label (visible glyphs for hidden characters): check it again
+          const again = checkCap(cap);
+          if (!again.ok) throw new ModRefusal('BLOCK', `${at}.${again.why} after sanitizing`, { name: modName, at });
+          out.cap = again.cap;
         }
         break;
       case 'Diff':

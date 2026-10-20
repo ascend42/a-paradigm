@@ -7,8 +7,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { applyPreset, parseLayout, placeWorkshop, serializeLayout, togglePane, WORKSHOP_PLACES } from '../src/core/commands.js';
-import { modPanelsOf, renderModFence, WORKSHOP_VIEW, workshopAbsence } from '../src/core/mod-panels.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, parseLayout, placeWorkshop, serializeLayout, togglePane, WORKSHOP_PLACES } from '../src/core/commands.js';
+import { modPanelsOf, PANEL_BUTTON_REFUSAL, renderModFence, WORKSHOP_VIEW, workshopAbsence } from '../src/core/mod-panels.js';
 import { CAP_PATHS, renderBlock, TONES, type MiniDoc, type MiniEl } from '../src/core/render.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -104,10 +104,11 @@ describe('S5 Workshop caps (core/render.ts renderCap)', () => {
     expect(el.all().some((e) => e.className === 'cap-glyph')).toBe(true);
   });
   it('tones are the closed set; an unknown tone adds no class', () => {
-    expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'violet' }) as FEl).className).toBe('blk blk-text tone-violet');
+    expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'quiet' }) as FEl).className).toBe('blk blk-text tone-quiet');
+    expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'violet' }) as FEl).className).toBe('blk blk-text'); // Aegis L2: violet is the knot cap's only
     expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'hue-7' }) as FEl).className).toBe('blk blk-text');
     expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'evil' }) as FEl).className).toBe('blk blk-text');
-    expect([...TONES].sort()).toEqual(['cap', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5', 'paused', 'quiet', 'violet', 'warn']);
+    expect([...TONES].sort()).toEqual(['cap', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5', 'paused', 'quiet', 'warn']);
   });
   it('the CSS colours caps by class only, bobs only .bob, and prints `working` under reduced motion', () => {
     expect(css).toMatch(/\.cap\.bob svg \{ transform-origin: 50% 100%; animation: bob var\(--t-bob\) infinite; \}/);
@@ -118,6 +119,7 @@ describe('S5 Workshop caps (core/render.ts renderCap)', () => {
     expect(css).toMatch(/\.cap path \{ stroke: var\(--key-edge\);/);
     for (let i = 0; i < 6; i++) expect(css).toMatch(new RegExp(`\\.cap\\.h${i} path \\{ fill: var\\(--p-[a-z-]+-fill\\); \\}`));
     expect(css).not.toMatch(/tone-hue-[67]/);
+    expect(css).not.toMatch(/\.tone-violet/);
   });
 });
 
@@ -141,6 +143,23 @@ describe('S5 Workshop region and placement', () => {
     expect(el.all().find((e) => e.className === 'mod-label')!.text).toBe('mod:workshop');
     expect(el.all().filter((e) => e.className === 'blk-title').map((e) => e.text)).toEqual(['Workshop', 'needs you 1']);
     expect((renderBlock({ doc: fdoc }, { type: 'Box', title: 'T', children: [] }) as FEl).all().some((e) => e.className === 'blk-title')).toBe(false);
+  });
+  it('Aegis S5 M1: a kit.Button in the Workshop is refused in every placement (the region, not the placement, decides)', () => {
+    const v = modPanelsOf({ mods: { views: [W] } })[0]!;
+    const block = { type: 'Box', children: [{ type: 'Button', label: 'hide', command: 'layout.focus' }] };
+    for (const place of [...WORKSHOP_PLACES, 'hidden']) {
+      const el = renderModFence({ doc: nsdoc }, v, { block }) as FEl;
+      expect(el.text, place).toContain(PANEL_BUTTON_REFUSAL);
+      expect(el.all().some((e) => e.tag === 'button'), place).toBe(false);
+    }
+    const other = renderModFence({ doc: nsdoc }, { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar', region: 'left-bottom', dev: false }, { block }) as FEl;
+    expect(other.text).not.toContain(PANEL_BUTTON_REFUSAL);
+    const src = readFileSync(path.join(ROOT, 'src', 'core', 'mod-panels.ts'), 'utf8');
+    expect(src).toMatch(/\(v\.region === 'right' \|\| v\.region === 'workshop'\) && holdsButton/);
+  });
+  it('Aegis S5 L4: a block button can name no pane.* or workshop.* command', () => {
+    for (const id of BLOCK_SAFE_COMMANDS) expect(id).not.toMatch(/^(pane|workshop|mode|voice)\./);
+    for (const id of ['pane.workshop.toggle', 'pane.sessions.toggle', 'workshop.footer', 'workshop.right', 'workshop.left']) expect(BLOCK_SAFE_COMMANDS.has(id), id).toBe(false);
   });
   it('the Layout places it (footer default, left, right; hidden) and the placement round-trips', () => {
     const l = applyPreset('desk');

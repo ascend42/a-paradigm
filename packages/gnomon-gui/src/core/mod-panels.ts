@@ -135,7 +135,7 @@ export function holdsButton(node: unknown, depth = 0): boolean {
 }
 
 /** Aegis M2: the panel slot sits beside the kernel's decision keys, so a mod block there may carry no button at all. */
-export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel slot (it sits beside the decision keys)';
+export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel slot or the Workshop (they sit beside the decision keys)';
 
 /** The heading the right-pane mod region always shows, outside the stack's scroll area (Aegis M2). */
 export const PANEL_HEADING = 'mods';
@@ -144,7 +144,9 @@ export const PANEL_HEADING = 'mods';
 export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?: unknown; dev?: unknown } | null, refusal: string | null = null): MiniEl {
   const { doc } = ctx;
   const dev = v.dev || result?.dev === true;
-  if (refusal === null && v.region === 'right' && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
+  // Aegis M2 + S5 M1: the panel slot sits beside the decision keys, and the Workshop region can be placed in a
+  // column beside them too (right / left), so neither ever carries a kit.Button, whatever the placement
+  if (refusal === null && (v.region === 'right' || v.region === 'workshop') && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
   return h(
     doc,
     'section',

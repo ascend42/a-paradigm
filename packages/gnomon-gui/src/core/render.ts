@@ -87,7 +87,8 @@ export function text(doc: MiniDoc, s: unknown): unknown {
 }
 
 /** S5: the closed Text tones (each maps to a .tone-* class); anything else is dropped. Generic, no mod-name case. */
-export const TONES: ReadonlySet<string> = new Set(['cap', 'quiet', 'paused', 'violet', 'warn', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5']);
+// Aegis S5 L2: no `violet` here: violet is the KNOT cap's (renderCap .knot), never a generic text tone
+export const TONES: ReadonlySet<string> = new Set(['cap', 'quiet', 'paused', 'warn', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5']);
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SVG_TAGS = new Set(['svg', 'path']);

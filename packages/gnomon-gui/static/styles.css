@@ -712,7 +712,6 @@ html, body {
 .tone-deny { color: var(--fail); font-weight: 600; }
 /* the cap: a project hue is a FILL (G-GUI-10), the glyph itself stays in ink */
 .tone-paused { color: var(--sec); }
-.tone-violet { color: var(--knot); }
 .blk-text[class*="tone-hue-"] { display: inline-block; min-width: 1.2em; text-align: center; border: 1px dotted var(--rule); border-radius: 50%; }
 .tone-hue-0 { background: var(--p-terracotta-fill); }
 .tone-hue-1 { background: var(--p-sage-fill); }

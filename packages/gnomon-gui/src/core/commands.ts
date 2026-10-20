@@ -81,7 +81,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  * press look like a kernel or presence action.
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.')),
+  // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';

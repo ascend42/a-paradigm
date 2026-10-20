@@ -17,6 +17,7 @@ import { PassThrough, Writable } from 'node:stream';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isRefusalV1, MOD_ABI_ID, RefusedError, refuse } from '@a-company/gnomon-contracts';
+import { sanitizeLine } from '../src/kernel/broker/card.js';
 import { ModRefusal, sanitizeModBlock, EgressProxy, isNonPublicAddress } from '../src/kernel/modhost/index.js';
 import { modLaunchPlan } from '../src/kernel/sandbox/mod.js';
 import { createModHostForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
@@ -145,6 +146,13 @@ describe('closed kit gate (§12.2)', () => {
     const r = sanitizeModBlock(t({ ...cap, label: 'ok\u202Eevil' }), 'm');
     expect(r.flags.length).toBeGreaterThan(0);
     expect((r.block.cap as { label: string }).label).not.toContain('\u202E');
+  });
+  it('Aegis S5 L3: a label the sanitizer lengthens past 40 characters is refused after sanitizing', () => {
+    const grow = ['\u001b', '\u202E', '\u0007', '\u009b'].find((c) => [...sanitizeLine(c).text].length > 1);
+    expect(grow, 'some hidden character is shown as a longer visible glyph').toBeDefined();
+    const label = 'a'.repeat(39) + grow!;
+    expect([...label].length).toBe(40);
+    expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Text', text: 'cap', cap: { shape: 'tall', hue: 0, filled: true, state: 'needs', label } }, 'm')).toThrow(/after sanitizing/);
   });
 });
 
