@@ -6,12 +6,19 @@
   "children": [
     {
       "type": "Box",
-      "title": "needs you 1 of 1",
+      "title": "needs you 1",
       "children": [
         {
           "type": "Text",
           "text": "▲ permission",
-          "tone": "cap"
+          "tone": "cap",
+          "cap": {
+            "shape": "tall",
+            "hue": 2,
+            "filled": true,
+            "state": "needs",
+            "label": "? permission"
+          }
         }
       ]
     },
@@ -22,12 +29,26 @@
         {
           "type": "Text",
           "text": "▲ builder filled bob",
-          "tone": "hue-2"
+          "tone": "hue-2",
+          "cap": {
+            "shape": "tall",
+            "hue": 2,
+            "filled": true,
+            "state": "working",
+            "label": "builder"
+          }
         },
         {
           "type": "Text",
           "text": "▲ builder outlined still",
-          "tone": "violet"
+          "tone": "violet",
+          "cap": {
+            "shape": "tall",
+            "hue": 5,
+            "filled": false,
+            "state": "knot",
+            "label": "builder"
+          }
         }
       ]
     },
