@@ -151,6 +151,22 @@ components:
     path: scripts/
     type: module
     tags: [gnomon, voice, signing, build, v2b]
+  gnomon-voice-bench-partials:
+    description: >-
+      scripts/bench-partials.mjs: the B0 benchmark for voice phase B (live
+      words while speaking; T-2026-10-20-005, ruling V5 in
+      TD-2026-10-20-086). Builds the Parakeet recognizer exactly as
+      engines/sherpa.ts does (only numThreads varies), synthesises ~15 s of
+      test speech in memory with Kokoro, and also uses the Parakeet archive's
+      test_wavs/0.wav. It times 4, 6 and 8 s tail-window decodes at 2 and 4
+      threads, measures sync decode against decodeAsync (event-loop block),
+      checks a worker_thread, and measures prefix stability and
+      LocalAgreement-2 commits for decodes 600 ms apart. Read-only on the
+      model home (verifiedModelPaths); it writes nothing. Results are in
+      PROBES.md, section B0. Dev tool only, not shipped.
+    path: scripts/
+    type: module
+    tags: [gnomon, voice, benchmark, stt, phase-b]
 
 flows:
   voice-turn:
