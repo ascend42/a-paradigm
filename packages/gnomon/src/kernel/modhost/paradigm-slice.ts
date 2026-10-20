@@ -263,21 +263,35 @@ export function readYamlSubset(text: string): Record<string, YVal> | null {
 
 /* ── display text ─────────────────────────────────────────────────────── */
 
-const PATH_UNIX = /(^|[^\w.~:/\\-])\/[^\s/'"`<>()[\]{},;]+(?:\/[^\s'"`<>()[\]{},;]*)+/g;
-const PATH_HOME = /(^|[^\w.~/\\-])~[/\\][^\s'"`<>()[\]{},;]*/g;
-const PATH_WIN = /(^|[^\w])[A-Za-z]:[\\/][^\s'"`<>()[\]{},;]*/g;
-const PATH_UNC = /(^|[^\w\\])\\\\[^\s'"`<>()[\]{},;\\]+\\[^\s'"`<>()[\]{},;]*/g;
+const PATH_UNIX = /\/[^\s/'"`<>()[\]{},;]+(?:\/[^\s'"`<>()[\]{},;]*)+/g;
+const PATH_HOME = /~[/\\][^\s'"`<>()[\]{},;]*/g;
+const PATH_WIN = /[A-Za-z]:\\[^\s'"`<>()[\]{},;]*/g;
+const PATH_WIN_FWD = /(^|[^\w])[A-Za-z]:\/(?!\/)[^\s'"`<>()[\]{},;]*/g;
+const PATH_UNC = /\\\\[^\s'"`<>()[\]{},;\\]+\\[^\s'"`<>()[\]{},;]*/g;
 export const PATH_GLYPH = '\u27e8path\u27e9';
 
-/** Redact absolute paths (POSIX with ≥ 2 segments, ~/…, X:\…, \\server\…) to ⟨path⟩. */
-export function redactPaths(s: string): string {
-  return s.replace(PATH_UNC, `$1${PATH_GLYPH}`).replace(PATH_WIN, `$1${PATH_GLYPH}`).replace(PATH_HOME, `$1${PATH_GLYPH}`).replace(PATH_UNIX, `$1${PATH_GLYPH}`);
+/**
+ * Redact absolute paths to ⟨path⟩: every `~/…`, `X:\…` and `\\server\…`
+ * anywhere; `X:/…` after a non-word character; a POSIX path of ≥ 2 segments
+ * unless it continues a relative path (`packages/x/y`: preceded by a word
+ * character, `.` or `-`) or a URL authority (preceded by `/`). The `scrub`
+ * strings (the kernel's own root, its realpath, the cwd and the home) are
+ * removed wherever they appear, glued or not.
+ */
+export function redactPaths(s: string, scrub: readonly string[] = []): string {
+  let out = s;
+  for (const x of [...scrub].filter((v) => v.length > 1).sort((a, b) => b.length - a.length)) out = out.split(x).join(PATH_GLYPH);
+  out = out.replace(PATH_UNC, PATH_GLYPH).replace(PATH_WIN, PATH_GLYPH).replace(PATH_WIN_FWD, `$1${PATH_GLYPH}`).replace(PATH_HOME, PATH_GLYPH);
+  return out.replace(PATH_UNIX, (m: string, at: number, all: string) => {
+    const prev = at > 0 ? all[at - 1]! : '';
+    return prev !== '' && /[\w./-]/.test(prev) ? m : PATH_GLYPH;
+  });
 }
 
 /** A display title: §4.5 sanitised, one line, paths redacted, capped at `max` code points (… when cut). */
-export function displayTitle(raw: string, max = TITLE_MAX): { text: string; flags: string[] } {
+export function displayTitle(raw: string, max = TITLE_MAX, scrub: readonly string[] = []): { text: string; flags: string[] } {
   const s = sanitizeDisplayText(raw);
-  const one = redactPaths(s.text.replace(/[\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim());
+  const one = redactPaths(s.text.replace(/[\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim(), scrub);
   const cps = [...one];
   return { text: cps.length > max ? `${cps.slice(0, max - 1).join('').trimEnd()}\u2026` : one, flags: [...s.flags] };
 }
@@ -378,8 +392,8 @@ const str = (v: YVal | undefined): string | undefined => (typeof v === 'string' 
 const isSecret = (y: Record<string, YVal>): boolean => str(y.sensitivity)?.trim().toLowerCase() === 'secret';
 const firstLine = (s: string): string => s.split('\n').map((l) => l.trim()).find((l) => l !== '') ?? '';
 
-function titleOf(raw: string): { title: string; flags?: string[] } {
-  const t = displayTitle(raw);
+function titleOf(raw: string, scrub: readonly string[]): { title: string; flags?: string[] } {
+  const t = displayTitle(raw, TITLE_MAX, scrub);
   return { title: t.text, ...(t.flags.length ? { flags: t.flags } : {}) };
 }
 
@@ -429,6 +443,7 @@ export function paradigmSlice(cwd: string, opts: { home?: string; now?: number }
     return { v: PARADIGM_SLICE_V1, state: 'absent', project, at };
   }
   const box = new Confined(real, c);
+  const scrub = [root, real, cwd, path.resolve(opts.home ?? os.homedir())];
   const P = path.join(root, '.paradigm');
 
   // tasks: every active task (bounded), counts + top SLICE_TOP (high first, newest first)
@@ -462,7 +477,7 @@ export function paradigmSlice(cwd: string, opts: { home?: string; now?: number }
     }
   }
   active.sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) || (a.created < b.created ? 1 : a.created > b.created ? -1 : a.id < b.id ? 1 : -1));
-  const taskItems = active.slice(0, SLICE_TOP).map((t) => ({ id: t.id, ...titleOf(t.blurb), priority: t.priority }));
+  const taskItems = active.slice(0, SLICE_TOP).map((t) => ({ id: t.id, ...titleOf(t.blurb, scrub), priority: t.priority }));
 
   // decisions: TD-*.yaml, newest MAX_PARSED by name, then by timestamp
   const decNames = (box.dir(path.join(P, 'decisions')) ?? []).filter((n) => /^TD-[A-Za-z0-9._-]+\.yaml$/.test(n));
@@ -483,7 +498,7 @@ export function paradigmSlice(cwd: string, opts: { home?: string; now?: number }
     decs.push({ id, title, ts: str(y.timestamp) ?? str(y.date) ?? '' });
   }
   decs.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : a.id < b.id ? 1 : -1));
-  const decItems = decs.slice(0, SLICE_TOP).map((d) => ({ id: d.id, ...titleOf(d.title), date: DATE.exec(d.ts)?.[1] ?? null }));
+  const decItems = decs.slice(0, SLICE_TOP).map((d) => ({ id: d.id, ...titleOf(d.title, scrub), date: DATE.exec(d.ts)?.[1] ?? null }));
 
   // lore: entries/<date>/*.lore|*.yaml, newest dirs first, up to MAX_PARSED parsed
   const lEntries = path.join(P, 'lore', 'entries');
@@ -530,7 +545,7 @@ export function paradigmSlice(cwd: string, opts: { home?: string; now?: number }
     newest: dates.length ? dates[dates.length - 1]! : null,
     tasks: { open: active.length, high: active.filter((t) => t.priority === 'high').length, items: taskItems, count: { n: taskItems.length, of: active.length } },
     decisions: { items: decItems, count: { n: decItems.length, of: decNames.length } },
-    lore: { items: loreTop.map((l) => ({ id: l.id, ...titleOf(l.title), type: l.type })), count: { n: loreTop.length, of: loreTotal } },
+    lore: { items: loreTop.map((l) => ({ id: l.id, ...titleOf(l.title, scrub), type: l.type })), count: { n: loreTop.length, of: loreTotal } },
     symbols,
     skipped: { ...c },
   };
