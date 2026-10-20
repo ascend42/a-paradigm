@@ -125,10 +125,33 @@ export interface McpUserConfig {
   args?: string[];
   env?: Record<string, string>;
 }
+/**
+ * A declarable env name: uppercase only. Lowercase names (http_proxy, no_proxy, …, which curl and others honour) are
+ * therefore unreachable by construction, so the denylist below lists only uppercase forms.
+ */
 export const MCP_ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
-/** Env names no override may set: they change how any process loads or where its keys live. */
-export const MCP_ENV_DENY: ReadonlySet<string> = new Set(['PATH', 'HOME', 'USER', 'SHELL', 'TMPDIR', 'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'ELECTRON_RUN_AS_NODE']);
-export const MCP_ENV_DENY_PREFIXES = Object.freeze(['LD_', 'DYLD_', 'ANTHROPIC_', 'CLAUDE_', 'GNOMON_', 'NPM_CONFIG_', 'GIT_']);
+/**
+ * Env names no override may set (Aegis M1): they change how a process loads code, resolves a binary, trusts TLS,
+ * routes traffic, finds its home/temp/config, or where its keys live.
+ */
+export const MCP_ENV_DENY: ReadonlySet<string> = new Set([
+  'PATH', 'HOME', 'USER', 'SHELL', 'ENV', 'ZDOTDIR', 'SHELLOPTS', 'PS4', 'IFS', 'PROMPT_COMMAND', 'CLASSPATH', 'GEM_PATH',
+  'RUSTC_WRAPPER', 'GOFLAGS', 'GOPROXY', 'GOROOT', 'GOPATH', 'GOTOOLCHAIN', 'GOINSECURE', 'GCONV_PATH', 'LOCPATH',
+  'NLSPATH', 'HOSTALIASES', 'RES_OPTIONS', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE', 'HTTPS_PROXY', 'HTTP_PROXY',
+  'ALL_PROXY', 'NO_PROXY', 'FTP_PROXY', 'GNUPGHOME', 'EDITOR', 'VISUAL', 'PAGER', 'BROWSER', 'TMP', 'TEMP', 'TMPDIR',
+  'LOGNAME', 'DISPLAY', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'SYSTEMROOT', 'COMSPEC',
+  'PATHEXT',
+]);
+/** Prefix families no override may set (no bare GO prefix: GOOGLE_… stays declarable; the Go names are exact above). */
+export const MCP_ENV_DENY_PREFIXES = Object.freeze([
+  'LD_', 'DYLD_', 'ANTHROPIC_', 'CLAUDE_', 'GNOMON_', 'NPM_CONFIG_', 'GIT_', 'NODE_', 'ELECTRON_', 'NPM_', 'PYTHON',
+  'PERL', 'RUBY', 'JAVA_', 'JDK_', 'DOTNET_', 'COMPLUS_', 'CORECLR_', 'OPENSSL_', 'SSL_', 'SSH_', 'GPG_', 'XDG_',
+  'MALLOC_', 'CARGO_', 'RUST', 'PIP_', 'UV_', 'BUN_', 'DENO_', 'YARN_', 'PNPM_', 'BASH',
+]);
+/** Below the first-party tier a declared env name must be the mod's own (`<NAME>_…`) or a credential (`…_API_KEY`, `…_TOKEN`). */
+export function mcpEnvOwnPrefix(modName: string): string {
+  return `${modName.toUpperCase().replace(/-/g, '_')}_`;
+}
 export const MCP_CONFIG_LIMITS = Object.freeze({ env: 16, args: 64, value: 4096 });
 export interface ManifestEgress {
   host: string;
@@ -166,8 +189,15 @@ export interface ManifestV1 {
   config_schema?: Record<string, unknown>;
 }
 
-/** Mod names reserved outright (Aegis review of the Desk GUI slice): never a mod, whatever the namespace table says. */
-export const RESERVED_MOD_NAMES: ReadonlySet<string> = new Set(['kernel', 'gnomon', 'system']);
+/** Mod names reserved outright (Aegis, Desk reviews): never a mod at any tier, whatever the namespace table says. */
+export const RESERVED_MOD_NAMES: ReadonlySet<string> = new Set([
+  'kernel', 'gnomon', 'system', 'paradigm', 'claude', 'anthropic', 'desk', 'mod', 'mods', 'mcp', 'core', 'builtin',
+  'admin', 'root', 'human', 'user', 'local', 'first-party',
+]);
+/** Names of the first-party mods (bundled or planned): accepted only from the first-party tier (Aegis L5). */
+export const FIRST_PARTY_MOD_NAMES: ReadonlySet<string> = new Set(['workshop', 'ledger', 'paradigm-context', 'neurons', 'constellation']);
+/** Name prefixes reserved for the first-party tier (Aegis L5). */
+export const FIRST_PARTY_NAME_PREFIXES = Object.freeze(['gnomon-', 'paradigm-', 'claude-', 'anthropic-']);
 
 /** Namespace tokens the kernel owns (the §9.1 registry's namespaces + the reserved prefixes). */
 export const KERNEL_NAMESPACE_TOKENS: ReadonlySet<string> = new Set([
@@ -269,6 +299,9 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   str(m.version, 'version', SEMVER);
   if (m.description !== undefined) str(m.description, 'description');
   if (RESERVED_MOD_NAMES.has(name)) fail('NAME', `name "${name}" is reserved`, { name });
+  if (opts.tier !== 'first-party' && (FIRST_PARTY_MOD_NAMES.has(name) || FIRST_PARTY_NAME_PREFIXES.some((p) => name.startsWith(p)))) {
+    fail('NAME', `name "${name}" is reserved for the first-party tier`, { name, tier: opts.tier });
+  }
   if (KERNEL_NAMESPACE_TOKENS.has(name)) fail('NAME', `name "${name}" collides with a kernel namespace token`, { name });
 
   // abi (§4.3: required for kind: mod; the kernel refuses an unknown abi)
@@ -316,6 +349,9 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
       names.forEach((n, j) => {
         const name = str(n, `${w}.env[${j}]`, MCP_ENV_NAME);
         if (mcpEnvDenied(name)) fail('SCHEMA', `${w}.env[${j}]: ${name} is never user-settable`, { field: `${w}.env[${j}]`, name });
+        if (opts.tier !== 'first-party' && !name.startsWith(mcpEnvOwnPrefix(m.name as string)) && !name.endsWith('_API_KEY') && !name.endsWith('_TOKEN')) {
+          fail('SCHEMA', `${w}.env[${j}]: below the first-party tier a declared name starts with ${mcpEnvOwnPrefix(m.name as string)} or ends _API_KEY / _TOKEN`, { field: `${w}.env[${j}]`, name });
+        }
         if (seen.has(name)) fail('SCHEMA', `${w}.env: duplicate ${name}`, { field: `${w}.env[${j}]` });
         seen.add(name);
       });
@@ -470,6 +506,10 @@ export function validateMcpUserConfig(entry: ManifestMcp, value: unknown): McpUs
   if (o.command !== undefined) {
     if (allow.command !== true) fail('SCHEMA', `${w}: the manifest does not let the user set command`, { field: 'command' });
     out.command = cmdStr(o.command, `${w}.command`);
+    // Aegis L4: an absolute path only (no PATH lookup). The launcher (S1) must spawn with shell:false.
+    if (!/^(?:\/|[A-Za-z]:[\\/])/.test(out.command) || out.command.startsWith('//') || out.command.startsWith('\\\\')) {
+      fail('SCHEMA', `${w}.command must be an absolute path`, { field: 'command' });
+    }
   }
   if (o.args !== undefined) {
     if (allow.args !== true) fail('SCHEMA', `${w}: the manifest does not let the user set args`, { field: 'args' });
@@ -527,7 +567,8 @@ function surface(m: ManifestV1 | null): Record<WideningField, Set<string>> {
     knowledge: new Set((p.knowledge ?? []).map((k) => `${k.name}|${k.scheme}|${k.query}|${k.maxTier}`)),
     // an entry with no config keeps its pre-812 key; a config (what a user may override) is part of the surface
     mcp: new Set((p.mcp ?? []).map((s) => canonicalJson(s.config ? [s.name, s.command, s.args ?? [], s.config] : [s.name, s.command, s.args ?? []]))),
-    offers: new Set((p.offers ?? []).map((o) => `${o.kind}@${o.phase}→${o.handoffTool}`)),
+    // Aegis M2: contextIn is a data-flow grant, so each source is its own key and adding one widens
+    offers: new Set((p.offers ?? []).flatMap((o) => [`${o.kind}@${o.phase}→${o.handoffTool}`, ...o.contextIn.map((src) => `${o.kind}:in:${src}`)])),
     hooks: new Set((p.hooks ?? []).map((h) => canonicalJson([h.event, h.command]))),
   };
 }

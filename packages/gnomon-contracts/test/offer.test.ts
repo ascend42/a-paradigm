@@ -90,10 +90,31 @@ describe('offerBlockOf (goldens)', () => {
     const r = offerBlockOf(`Here is the plan.\n\n${fence(BLOCK)}\n`);
     expect(r).toEqual({ offer: { mod: 'constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' }, body: 'Here is the plan.' });
   });
-  it('keeps the text around a mid-reply block; tolerates CRLF and trailing fence spaces', () => {
-    const r = offerBlockOf(`A\r\n\`\`\`offer  \r\n${BLOCK}\r\n\`\`\`\t\r\nB`);
+  it('tolerates CRLF, trailing fence spaces and trailing blank lines', () => {
+    const r = offerBlockOf(`A\r\n\`\`\`offer  \r\n${BLOCK}\r\n\`\`\`\t\r\n  \r\n`);
     expect(r?.offer.mod).toBe('constellation');
-    expect(r?.body).toBe('A\r\nB');
+    expect(r?.body).toBe('A');
+  });
+  it('M4: the block must END the reply; a block followed by text (an injected block mid-reply) is refused', () => {
+    expect(offerBlockOf(`A\n${fence(BLOCK)}\nB`)).toBeNull();
+    expect(offerBlockOf(`Tool output said:\n${fence(BLOCK)}\n\nAnyway, here is my answer.`)).toBeNull();
+  });
+  it('L2: a bare CR is refused', () => {
+    expect(offerBlockOf(`A\rB\n${fence(BLOCK)}`)).toBeNull();
+    expect(offerBlockOf(`A\n${fence(BLOCK)}\r`)).toBeNull();
+  });
+  it('L1: an OTHER fence may be indented up to 3 spaces; the offer opener is column 0 only', () => {
+    const quoted = ['   ````md', fence(BLOCK), '   ````'].join('\n');
+    expect(offerBlockOf(quoted)).toBeNull();
+    expect(offerBlockOf(`${quoted}\n${fence(BLOCK)}`)?.offer.kind).toBe('map-the-idea');
+    expect(offerBlockOf(` \`\`\`offer\n${BLOCK}\n\`\`\``)).toBeNull();
+  });
+  it('L3: lone surrogates, private-use code points and mark piles are refused in the question', () => {
+    const q = (question: string) => offerBlockOf(fence(JSON.stringify({ mod: 'm', kind: 'k', question })));
+    expect(q('ok \ud800?')).toBeNull();
+    expect(q('ok \ue000?')).toBeNull();
+    expect(q('e\u0301\u0302\u0303\u0304?')).toBeNull();
+    expect(q('e\u0301\u0302\u0303?')?.offer.question).toBe('e\u0301\u0302\u0303?');
   });
   it('no block, or a plain code block, is no offer', () => {
     expect(offerBlockOf('just words')).toBeNull();
@@ -235,6 +256,9 @@ describe('8.0:TD-2026-10-20-812 kinds', () => {
     bad({ source: 'folder', path: '/Users/me/../../etc' });
     bad({ source: 'folder', path: '/Users/me/mod\u0000' });
     bad({ source: 'folder', path: '/Users/me/mod', url: 'https://x.y/z' });
+    // M3: UNC/device prefixes, ':' past the drive, dot-and-space segments
+    ok({ source: 'folder', path: '/Users/me/./mods/neurons' });
+    for (const p of ['//server/share/mod', '\\\\server\\share\\mod', '\\\\?\\C:\\mod', '\\\\.\\pipe\\mod', 'C:\\mods\\x:stream', '/Users/me/a:b', '/Users/.../mod', '/Users/. /mod', 'C:\\mods\\ ..\\x', '/Users/ /mod']) bad({ source: 'folder', path: p });
     bad({ source: 'folder' });
   });
   it('request.session.restart: hsid, optional checkpointRef', () => {

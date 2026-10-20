@@ -181,7 +181,7 @@ function surfaceOf(m: ManifestV1): Surface {
     keybindings: (p.keybindings ?? []).map((k) => `${k.key}→${k.command}`).sort(),
     knowledge: (p.knowledge ?? []).map((k) => `${k.name} ${k.scheme} ${k.query} ≤${k.maxTier}`).sort(),
     mcp: (p.mcp ?? []).map((s) => `${s.name}: ${[s.command, ...(s.args ?? [])].join(' ')}${mcpConfigSuffix(s.config)}`).sort(),
-    ...(p.offers?.length ? { offers: p.offers.map((o) => `${o.kind} (${o.phase}) → ${o.handoffTool}: ${o.title}`).sort() } : {}),
+    ...(p.offers?.length ? { offers: p.offers.map((o) => `${o.kind} (${o.phase}) → ${o.handoffTool}: ${o.title} · takes: ${o.contextIn.join(', ') || 'nothing'}`).sort() } : {}),
     hooks: (p.hooks ?? []).map((h) => `${h.event}: ${h.command}`).sort(),
     opaque,
     effects: [...new Set((p.tools ?? []).flatMap((t) => t.effects))].sort(),

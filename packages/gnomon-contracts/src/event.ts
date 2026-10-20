@@ -676,14 +676,26 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
 
 // eslint-disable-next-line no-control-regex
 const PATH_UNSAFE = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
-/** request.mod.install{path}: absolute (POSIX `/…` or Windows `X:\…` / `X:/…`), bounded, no unsafe character, no `..` segment. */
+/**
+ * request.mod.install{path}: absolute (POSIX `/…` or Windows `X:\…` / `X:/…`), bounded, no unsafe character, no UNC or
+ * device prefix, no ':' past the drive, no segment made only of dots and spaces except a single '.'.
+ */
 export function isInstallPath(v: unknown): v is string {
   if (typeof v !== 'string' || v.length < 2 || v.length > MOD_INSTALL_LIMITS.path || PATH_UNSAFE.test(v)) return false;
   const c0 = v.charCodeAt(0);
   const posix = v[0] === '/';
   const drive = ((c0 >= 0x41 && c0 <= 0x5a) || (c0 >= 0x61 && c0 <= 0x7a)) && v[1] === ':' && (v[2] === '\\' || v[2] === '/');
   if (!posix && !drive) return false;
-  return !v.split(/[\\/]/).includes('..');
+  // Aegis M3: no UNC or device path (//, \\, \\?\, \\.\), no ':' past the drive (alternate data streams)
+  if (v.startsWith('//') || v.startsWith('\\\\') || v.indexOf(':', 2) !== -1) return false;
+  // no segment of only dots and spaces other than a single '.' ('..', '...', '. ', ' .' all resolve surprisingly on win32)
+  for (const seg of v.split(/[\\/]/)) {
+    if (seg === '' || seg === '.') continue;
+    let onlyDots = true;
+    for (let i = 0; i < seg.length; i++) if (seg[i] !== '.' && seg[i] !== ' ') onlyDots = false;
+    if (onlyDots) return false;
+  }
+  return true;
 }
 
 /** session.compacted reasons (Aegis, P8-D93): closed; a backend value outside it is recorded as `unspecified`. */

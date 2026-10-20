@@ -17,8 +17,8 @@
  * `offerBlockOf(text)` is the ONE parser, shared by the kernel (which writes offer.shown) and the GUI (which hides the
  * block from the rendered reply). It is strict and bounded: the body is strict JSON (no YAML), at most
  * OFFER_BLOCK_MAX characters, closed keys; the fence lines are compared as strings (no regular expression runs over
- * the reply); a fence inside another code fence is ignored; two offer blocks, an unclosed block or a reply over
- * OFFER_TEXT_MAX ⇒ null (no offer, the text renders as is). The `question` is MODEL text: bounded by
+ * the reply); a fence inside another code fence is ignored; the block must END the reply (only blank lines after it);
+ * an unclosed block, a bare CR or a reply over OFFER_TEXT_MAX ⇒ null (no offer, the text renders as is). The `question` is MODEL text: bounded by
  * OFFER_QUESTION_MAX code points and refused on any control/format/line-separator character.
  */
 
@@ -58,9 +58,14 @@ export const OFFER_TOKEN_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 export const OFFER_MOD_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 /** An MCP tool name (the handoff). */
 export const OFFER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/;
-/** C0, DEL, C1, line/paragraph separators and format characters (bidi controls, zero-widths, tags). */
+/**
+ * C0, DEL, C1, line/paragraph separators, format characters (bidi controls, zero-widths, tags), lone surrogates and
+ * private-use code points (Aegis L3).
+ */
 // eslint-disable-next-line no-control-regex
-const UNSAFE_TEXT = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
+const UNSAFE_TEXT = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}\p{Cs}\p{Co}]/u;
+/** More than three combining marks in a row (zalgo, Aegis L3). One quantifier, no nesting. */
+const MARK_PILE = /\p{M}{4}/u;
 
 /**
  * THE offer text rule, shared by the kernel and the GUI: a non-empty single-line text of at most `max` code points with
@@ -68,7 +73,7 @@ const UNSAFE_TEXT = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
  */
 export function isOfferText(v: unknown, max: number): v is string {
   if (typeof v !== 'string' || v.length === 0 || v.length > max * 2) return false;
-  if (UNSAFE_TEXT.test(v) || v.trim() !== v) return false;
+  if (UNSAFE_TEXT.test(v) || MARK_PILE.test(v) || v.trim() !== v) return false;
   return Array.from(v).length <= max;
 }
 
@@ -157,7 +162,7 @@ export const OFFER_BLOCK_KEYS = ['mod', 'kind', 'question'] as const;
 
 export interface OfferBlockResult {
   offer: OfferBlockV1;
-  /** the reply without the block (what the GUI renders) */
+  /** the reply before the block (the block ends the reply; what the GUI renders) */
   body: string;
 }
 
@@ -190,6 +195,13 @@ function runOf(line: string, ch: number): number {
   return n;
 }
 
+/** Up to three leading spaces (CommonMark fence indent), for OTHER fences only (Aegis L1). */
+function unindent(line: string): string {
+  let n = 0;
+  while (n < 3 && line.charCodeAt(n) === 0x20) n++;
+  return line.slice(n);
+}
+
 const BACKTICK = 0x60;
 const TILDE = 0x7e;
 
@@ -203,6 +215,8 @@ const TILDE = 0x7e;
  */
 export function offerBlockOf(text: unknown): OfferBlockResult | null {
   if (typeof text !== 'string' || text.length > OFFER_TEXT_MAX) return null;
+  // Aegis L2: a bare CR (not part of CRLF) could hide a fence from one renderer and not another
+  for (let k = text.indexOf('\r'); k !== -1; k = text.indexOf('\r', k + 1)) if (text.charCodeAt(k + 1) !== 0x0a) return null;
   const lines = text.split('\n');
   const at = (i: number): string => trimTrail(lines[i]!.endsWith('\r') ? lines[i]!.slice(0, -1) : lines[i]!);
   let other: { ch: number; n: number } | null = null;
@@ -210,8 +224,9 @@ export function offerBlockOf(text: unknown): OfferBlockResult | null {
   for (let i = 0; i < lines.length; i++) {
     const line = at(i);
     if (other) {
-      const n = runOf(line, other.ch);
-      if (n >= other.n && n === line.length) other = null;
+      const u = unindent(line);
+      const n = runOf(u, other.ch);
+      if (n >= other.n && n === u.length) other = null;
       continue;
     }
     if (line === OPEN_FENCE) {
@@ -225,11 +240,13 @@ export function offerBlockOf(text: unknown): OfferBlockResult | null {
       }
       if (j >= lines.length) return null; // unclosed
       found = { start: i, end: j };
-      i = j;
-      continue;
+      // Aegis M4: the block must END the reply; anything but blank lines after it (an injected block mid-reply) ⇒ null
+      for (let k = j + 1; k < lines.length; k++) if (lines[k]!.trim() !== '') return null;
+      break;
     }
+    const u = unindent(line);
     for (const ch of [BACKTICK, TILDE]) {
-      const n = runOf(line, ch);
+      const n = runOf(u, ch);
       if (n >= 3) {
         other = { ch, n };
         break;
@@ -246,6 +263,6 @@ export function offerBlockOf(text: unknown): OfferBlockResult | null {
   }
   if (validateOfferBlock(parsed).length) return null;
   const p = parsed as Record<string, string>;
-  const body = [...lines.slice(0, found.start), ...lines.slice(found.end + 1)].join('\n').trimEnd();
+  const body = lines.slice(0, found.start).join('\n').trimEnd();
   return { offer: { mod: p.mod!, kind: p.kind!, question: p.question! }, body };
 }

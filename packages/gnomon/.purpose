@@ -1168,8 +1168,12 @@ components:
       CLAUDE_/GNOMON_/NPM_CONFIG_/GIT_; a config is part of the mcp widening key);
       validateMcpUserConfig + resolveMcpLaunch admit only what it declares, under
       COMMAND_UNSAFE (first-party servers launch as node <absolute path> from other
-      repos). Not yet wired into a launch path. RESERVED_MOD_NAMES kernel, gnomon,
-      system (NAME). install.ts surfaceOf: one 'offer:' card line per offer and a
+      repos; a user-set command is an absolute path, spawn with shell:false). Env
+      names: MCP_ENV_DENY + MCP_ENV_DENY_PREFIXES (Aegis M1), and below first-party
+      <NAME>_* or *_API_KEY / *_TOKEN only. Each offer contextIn source is its own
+      widening key (kind:in:src). Not yet wired into a launch path. RESERVED_MOD_NAMES
+      (kernel, gnomon, system, paradigm, claude, …; NAME at every tier), FIRST_PARTY_MOD_NAMES
+      and FIRST_PARTY_NAME_PREFIXES (gnomon-, paradigm-, claude-, anthropic-) first-party only. install.ts surfaceOf: one 'offer:' card line per offer and a
       'user may set:' suffix on an mcp line; both absent when undeclared, so pre-812
       card detail hashes are unchanged.
       #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,

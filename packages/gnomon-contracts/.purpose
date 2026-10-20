@@ -42,7 +42,9 @@ components:
       rule isOfferText / isOfferQuestion (240 code points, no control/format/separator,
       no edge whitespace), and offerBlockOf(text): the ONE strict, linear parser of a
       model's ```offer block (strict JSON {mod, kind, question}, 1024-char body,
-      262144-char reply cap, one block per reply, CommonMark-nested fences ignored),
+      262144-char reply cap, the block must END the reply, bare CR refused, CommonMark-nested
+      fences ignored, other fences indentable up to 3 spaces; isInstallPath refuses UNC/device
+      prefixes, ':' past the drive and dot/space-only segments),
       shared by the kernel and the GUI.
     model-switch-contract: >-
       8.0:model-switch (one deliberate clientApiId move,
