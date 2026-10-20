@@ -11,7 +11,7 @@
  */
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
-import { main } from '../ui/app.js';
+import { devArmOfferOnce, main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-kernel.js';
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
@@ -40,6 +40,7 @@ async function boot(): Promise<void> {
   const rows = await signRows(fx.rows, key);
   let kernel: FakeKernel | null = null;
   (globalThis as { WebSocket: unknown }).WebSocket = fakeWebSocketClass((url) => (kernel = new FakeKernel(fx, rows, key, url)));
+  if (fx.open === 'offer-armed') devArmOfferOnce(); // #gui-offer-slip DEV ONLY: the slip as a first trusted press leaves it
   main(`#launch=cHJldmlldy1sYXVuY2g&k=${key.spki}`);
   for (let i = 0; i < 200 && !kernel; i++) await frames(1);
   if (!kernel) return;
