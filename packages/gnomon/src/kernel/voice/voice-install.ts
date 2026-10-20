@@ -14,7 +14,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
 import { DISABLE_SIGUSR1 } from '../lifecycle/env.js';
 import { voiceChildEnv, type VoicePrepared } from './voice-child.js';
@@ -29,15 +29,34 @@ export function voiceBinDir(home: string): string {
   return path.join(home, 'bin', 'voice');
 }
 
-/** The client entry (gnomon-voice dist/cli.js), darwin only; null with a plain reason otherwise. */
-export function resolveVoiceClientEntry(platform: NodeJS.Platform = process.platform): { entry: string | null; reason?: string } {
+/**
+ * The client entry (gnomon-voice dist/cli.js), darwin only; null with a plain reason otherwise. Resolved LAZILY at
+ * daemon start, never imported: @a-company/gnomon-voice is not a dependency of the kernel (G-SEC-01, zero runtime
+ * dependencies). Looked for, in order: an installed package next to the kernel (node_modules/@a-company/gnomon-voice)
+ * walking up from this file, then the workspace sibling (packages/gnomon-voice). Any other OS: unavailable.
+ */
+export function resolveVoiceClientEntry(platform: NodeJS.Platform = process.platform, from: string = fileURLToPath(import.meta.url)): { entry: string | null; reason?: string } {
   if (platform !== 'darwin') return { entry: null, reason: 'voice runs on macOS only for now' };
+  let found: string | null = null;
+  let packaged = false;
+  for (let dir = path.dirname(from); ; dir = path.dirname(dir)) {
+    for (const c of [path.join(dir, 'node_modules', '@a-company', 'gnomon-voice'), path.join(dir, 'gnomon-voice')]) {
+      if (found === null && isVoicePackage(c)) {
+        packaged = true;
+        if (fs.existsSync(path.join(c, 'dist', 'cli.js'))) found = path.join(c, 'dist', 'cli.js');
+      }
+    }
+    if (found !== null || path.dirname(dir) === dir) break;
+  }
+  if (found !== null) return { entry: found };
+  return { entry: null, reason: packaged ? 'the voice client is not built' : 'the voice client is not installed' };
+}
+
+function isVoicePackage(dir: string): boolean {
   try {
-    const main = createRequire(import.meta.url).resolve('@a-company/gnomon-voice');
-    const cli = path.join(path.dirname(main), 'cli.js');
-    return fs.existsSync(cli) ? { entry: cli } : { entry: null, reason: 'the voice client is not built' };
+    return (JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { name?: unknown }).name === '@a-company/gnomon-voice';
   } catch {
-    return { entry: null, reason: 'the voice client is not installed' };
+    return false;
   }
 }
 

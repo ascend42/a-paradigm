@@ -303,6 +303,8 @@ export interface DaemonHandle {
   readonly dispatcher: Pick<KernelDispatcher, 'callAs' | 'clients'>;
   /** #scheduler (log-derived timers, automations). */
   readonly scheduler: Scheduler;
+  /** V2e (#gnomon-voice): the kernel-spawned voice client (tests; the human drives it with request.voice.client). */
+  readonly voiceClient: Pick<VoiceChildSupervisor, 'start' | 'stop' | 'status' | 'connId'>;
   /** The start-up orphan sweep's result (G-DMN-04). */
   readonly orphanSweep: { orphans: number; stopped: number };
   /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
@@ -1220,6 +1222,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     mods,
     modPickup,
     modKernelCall,
+    voiceClient: voiceChild,
     dispatcher,
     scheduler,
     orphanSweep,

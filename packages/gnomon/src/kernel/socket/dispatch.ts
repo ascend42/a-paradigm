@@ -327,7 +327,15 @@ export interface VoiceClientPort {
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   connectionClosed(connId: string): void;
+  /**
+   * V2e: GUI enrolment (request.voice.enrol{name, consent}): raise a fresh-presence card whose allow effect writes
+   * the root-signed enrolment row. Resolves with the card. Absent ⇒ the request is refused like any unserved kind.
+   */
+  enrol?(asker: { connId: string; principal: string }, payload: { name: string; consent: string }): Promise<unknown>;
 }
+
+/** V2e: the human's GUI enrolment request (dispatcher-only like request.voice.client; never written as a row). */
+export const VOICE_ENROL_REQUEST = 'request.voice.enrol' as const;
 
 /**
  * V2e: the human's start/stop of the voice app rides the §5 `request.*` append exception like request.mode.set. It
@@ -745,6 +753,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const op = (pa.payload as { op?: unknown } | null | undefined)?.op;
         if (extra.length || (op !== 'start' && op !== 'stop') || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'}}`);
         return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };
+      }
+      if (pa?.kind === VOICE_ENROL_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.enrol && s.principal) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        const ep = pa.payload as { name?: unknown; consent?: unknown } | null | undefined;
+        const shape = `log.append{kind:'${VOICE_ENROL_REQUEST}', payload:{name, consent}}`;
+        if (extra.length || !ep || typeof ep !== 'object' || Object.keys(ep).some((k) => k !== 'name' && k !== 'consent') || typeof ep.name !== 'string' || typeof ep.consent !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', shape);
+        try {
+          return { card: await o.voiceClient.enrol({ connId: s.connId, principal: s.principal }, { name: ep.name, consent: ep.consent }) };
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
       }
       // voice slice V1: the human's attach / detach gesture, and the voice principal's voice.* rows
       const vkind = typeof pa?.kind === 'string' ? pa.kind : '';

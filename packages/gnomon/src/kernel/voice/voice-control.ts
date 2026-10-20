@@ -156,7 +156,7 @@ export interface VoiceAppendRow {
 
 export interface VoiceControlOptions {
   /** V2e: the kernel-spawned voice client's status (status.voice.clientConnected, status.voice.client). */
-  clientStatus?: () => { clientConnected: boolean } & Record<string, unknown>;
+  clientStatus?: () => { clientConnected: boolean };
   sessions: VoiceSessionsPort;
   /** Write one row (as: userland); resolves with what log.append returns. */
   append(row: VoiceAppendRow): Promise<{ seq: number; hash: string; id?: string }>;
