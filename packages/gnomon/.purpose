@@ -1909,9 +1909,13 @@ components:
       allow-list env, backoff restarts, dies on every daemon exit and drain
       (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app
       into <home>/bin/voice and fetches models; the client entry resolves
-      lazily, darwin only. Aegis M2: createVoicePrepare copies the client
-      (dist/cli.js, a module package.json, the optional sherpa-onnx-node and
-      its platform packages) into <home>/bin/voice/client (0700/0600), pins a
+      lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks
+      the workspace gnomon-voice dist against dist/voice-client.manifest.json
+      and that manifest against the loaded build stamp's voiceClientManifest
+      (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of
+      dist, voice-models.manifest.json, a module package.json and the optional
+      sherpa-onnx-node + platform packages into <home>/bin/voice/client
+      (0700/0600), pins a
       sha256 of every file in memory, runs the model fetch and the spawn from
       the COPY, and re-verifies the pin last in every prepare; a changed,
       added or missing file is VoiceClientRefused, phase 'unavailable' with

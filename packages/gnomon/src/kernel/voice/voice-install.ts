@@ -179,20 +179,57 @@ function nativeDeps(sourcePkg: string): Array<{ name: string; dir: string }> {
 }
 
 /**
- * Copy the client from its source (`entry` = <pkg>/dist/cli.js) into `<home>/bin/voice/client/` and pin every file.
- * The source is read once, here; nothing runs from it.
+ * Verify the client's dist against the stamp-pinned manifest, copy all of dist (+ the native engine packages) into
+ * `<home>/bin/voice/client/` and pin every copied file. The source is read once, here; nothing runs from it. The
+ * native packages are outside dist, so they are pinned at copy (trust on first copy, per daemon start).
  */
-export function installVoiceClient(o: { home: string; entry: string }): VoiceClientPin {
+export const VOICE_CLIENT_MANIFEST = 'voice-client.manifest.json';
+/** package-root files the client reads at runtime; the only non-dist paths a manifest may name */
+export const VOICE_CLIENT_ROOT_FILES: readonly string[] = Object.freeze(['voice-models.manifest.json']);
+
+/**
+ * Aegis M2 (TOFU closed): the workspace dist must be EXACTLY what this kernel's build was made with. `expected` is
+ * the build stamp's voiceClientManifest (sha256 of dist/voice-client.manifest.json); the manifest must hash to it,
+ * and every dist file (no more, no fewer) must match the manifest. Throws VoiceClientRefused otherwise.
+ */
+export function verifyVoiceDist(pkg: string, expected: string | null | undefined): void {
+  const dist = path.join(pkg, 'dist');
+  if (!expected) throw new VoiceClientRefused('this Gnomon build does not pin a voice client (build @a-company/gnomon-voice, then @a-company/gnomon); refusing to start voice');
+  let body: Buffer;
+  try {
+    body = fs.readFileSync(path.join(dist, VOICE_CLIENT_MANIFEST));
+  } catch {
+    throw new VoiceClientRefused('the voice client has no build manifest (rebuild @a-company/gnomon-voice); refusing to start it');
+  }
+  if (`sha256:${createHash('sha256').update(body).digest('hex')}` !== expected) throw new VoiceClientRefused('the voice client on disk is not the one this Gnomon build was made with (manifest mismatch); refusing to start it');
+  let files: Record<string, string>;
+  try {
+    files = (JSON.parse(body.toString('utf8')) as { files: Record<string, string> }).files;
+    if (!files || typeof files !== 'object') throw new Error('no files');
+  } catch {
+    throw new VoiceClientRefused('the voice client manifest is malformed; refusing to start it');
+  }
+  // package-relative: every dist file but the manifest, plus the allow-listed root files (no other path is honoured)
+  const now = [...filesUnder(dist).filter((f) => f !== VOICE_CLIENT_MANIFEST).map((f) => `dist/${f}`), ...VOICE_CLIENT_ROOT_FILES.filter((f) => fs.existsSync(path.join(pkg, f)))];
+  const bad = now.find((f) => !(f in files) || sha256File(path.join(pkg, f)) !== files[f]) ?? Object.keys(files).find((f) => !now.includes(f));
+  if (bad !== undefined) throw new VoiceClientRefused(`the voice client on disk does not match its build manifest (${bad}); refusing to start it`);
+}
+
+export function installVoiceClient(o: { home: string; entry: string; expectedManifest: string | null | undefined }): VoiceClientPin {
   if (!fs.existsSync(o.entry)) throw new VoiceClientRefused('the voice client is not built');
-  const sourcePkg = path.dirname(path.dirname(o.entry));
+  const sourceDist = path.dirname(o.entry);
+  const sourcePkg = path.dirname(sourceDist);
+  verifyVoiceDist(sourcePkg, o.expectedManifest);
   const bin = voiceBinDir(o.home);
   ensurePrivateDir(path.dirname(bin));
   ensurePrivateDir(bin);
   const dir = voiceClientDir(o.home);
   const staging = path.join(bin, '.client.staging');
   fs.rmSync(staging, { recursive: true, force: true });
-  fs.mkdirSync(path.join(staging, 'dist'), { recursive: true, mode: 0o700 });
-  fs.copyFileSync(o.entry, path.join(staging, 'dist', 'cli.js'));
+  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+  // all of dist (verified against the manifest above), so no bundled chunk is ever missing from the copy
+  fs.cpSync(sourceDist, path.join(staging, 'dist'), { recursive: true, dereference: true });
+  for (const f of VOICE_CLIENT_ROOT_FILES) if (fs.existsSync(path.join(sourcePkg, f))) fs.copyFileSync(path.join(sourcePkg, f), path.join(staging, f));
   fs.writeFileSync(path.join(staging, 'package.json'), `${JSON.stringify({ name: '@a-company/gnomon-voice', private: true, type: 'module' })}\n`, { mode: 0o600 });
   for (const d of nativeDeps(sourcePkg)) fs.cpSync(d.dir, path.join(staging, 'node_modules', ...d.name.split('/')), { recursive: true, dereference: true });
   lockDown(staging);
@@ -259,20 +296,30 @@ export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: 
 
 /** The daemon's default prepare: install + verify the app copy, then make sure the models are present and verified. */
 /**
- * The daemon's prepare (one per daemon): the FIRST call copies and pins the client; every call installs and verifies
- * the io app copy, fetches the models with the client COPY, and re-verifies the pin last, right before the spawn.
+ * The daemon's prepare (one per daemon). Built at DAEMON START: the workspace dist is verified against the build
+ * stamp's manifest hash and copied + pinned right then (a refusal is remembered and every start reports it). Each
+ * prepare re-verifies the pin, installs and verifies the io app copy, fetches the models with the client COPY, and
+ * re-verifies the pin last, right before the spawn.
  */
 export function createVoicePrepare(o: {
   home: string;
   entry: string;
   devUnsigned: boolean;
+  /** the loaded build stamp's voiceClientManifest (null: this build pins no client ⇒ refused) */
+  expectedManifest: string | null | undefined;
   installApp?: typeof installVoiceApp;
   fetchModels?: typeof fetchVoiceModels;
 }): (report: (phase: 'installing' | 'downloading-models', mb?: number) => void) => Promise<VoicePrepared> {
   let pin: VoiceClientPin | null = null;
+  let refused: VoiceClientRefused | null = null;
+  try {
+    pin = installVoiceClient({ home: o.home, entry: o.entry, expectedManifest: o.expectedManifest });
+  } catch (e) {
+    refused = e instanceof VoiceClientRefused ? e : new VoiceClientRefused(`the voice client could not be installed (${e instanceof Error ? e.message : String(e)})`);
+  }
   return async (report) => {
+    if (refused || !pin) throw refused ?? new VoiceClientRefused('the voice client is not installed');
     report('installing');
-    pin ??= installVoiceClient({ home: o.home, entry: o.entry });
     verifyVoiceClient(pin);
     const sourceApp = path.resolve(path.dirname(o.entry), '..', 'bin', 'darwin', VOICE_APP_NAME);
     const prepared = (o.installApp ?? installVoiceApp)({ home: o.home, sourceApp, devUnsigned: o.devUnsigned });

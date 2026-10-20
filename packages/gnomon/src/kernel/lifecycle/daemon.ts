@@ -1012,6 +1012,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // Aegis V2a M2: a failed idle end is counted in status.voice.idleEndFailures{n} and the timer re-armed (no new log
     // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
+  // TD-2026-10-19-063: the build stamp this kernel LOADED, read once at boot (Aegis V2e M2: it also pins the voice
+  // client manifest, so it is read before the voice client is verified and copied below)
+  const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
+  const buildStamp = stampPath ? readBuildStamp(stampPath) : null;
   // V2e (#gnomon-voice): the voice client is the kernel's own supervised child, linked over an inherited socketpair
   const voiceEntry = opts.voice?.client?.entry !== undefined ? { entry: opts.voice.client.entry } : resolveVoiceClientEntry();
   const voiceChild: VoiceChildSupervisor = new VoiceChildSupervisor({
@@ -1020,7 +1024,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...('reason' in voiceEntry && voiceEntry.reason ? { unavailableReason: voiceEntry.reason } : {}),
     spawn: opts.voice?.client?.spawn ?? ((cmd, args, o) => spawnChild(cmd, args, o)),
     // Aegis M2: the client runs from the kernel's pinned copy in <home>/bin/voice/client, never from the workspace
-    prepare: opts.voice?.client?.prepare ?? (voiceEntry.entry ? createVoicePrepare({ home, entry: voiceEntry.entry, devUnsigned: opts.voice?.client?.devUnsigned === true }) : async () => Promise.reject(new Error('the voice client is not installed'))),
+    prepare: opts.voice?.client?.prepare ?? (voiceEntry.entry ? createVoicePrepare({ home, entry: voiceEntry.entry, devUnsigned: opts.voice?.client?.devUnsigned === true, expectedManifest: buildStamp?.voiceClientManifest ?? null }) : async () => Promise.reject(new Error('the voice client is not installed'))),
     ...(opts.voice?.client?.backoffMinMs !== undefined ? { backoffMinMs: opts.voice.client.backoffMinMs } : {}),
     attach: async (sock) => {
       if (!server) throw new Error('the kernel socket is not up yet');
@@ -1194,8 +1198,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     throw err;
   }
   // TD-2026-10-19-063: record what this kernel LOADED (0600) for the launcher, and watch the on-disk stamp
-  const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
-  const buildStamp = stampPath ? readBuildStamp(stampPath) : null;
   try {
     writeKernelBuild(home, { stamp: buildStamp, pid: pidfile.pid, startedAt: pidfile.startedAt });
   } catch {

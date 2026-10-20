@@ -35,6 +35,9 @@ components:
       carries no phrase text), stores the print (0700 dir, 0600 file) and
       reports ready, recording, recorded (phrase 0-based, of 3), then done,
       or failed with the reason (mic off and not turnable on, no speech).
+      Build: tsup (splitting off), then scripts/voice-manifest.mjs writes
+      dist/voice-client.manifest.json (sha256 of every dist file and
+      voice-models.manifest.json); the gnomon build stamp pins its hash.
       Aegis M1: SpawnedAudioIO spawns gnomon-voice-io with IO_CHILD_STDIO
       (pipe, pipe, inherit, ignore): fd 3, the kernel link, never reaches the
       io binary (a test falsifies it against a real socket on fd 3).

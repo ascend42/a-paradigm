@@ -20,7 +20,7 @@
     "voice-models.manifest.json"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/voice-manifest.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

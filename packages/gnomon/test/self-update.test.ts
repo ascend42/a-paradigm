@@ -30,6 +30,11 @@ describe('build stamp', () => {
     expect(parseBuildStamp(stamp('a'))).toEqual(stamp('a'));
     expect(parseBuildStamp({ ...stamp('a'), distHash: 'nope' })).toBeNull();
     expect(parseBuildStamp(null)).toBeNull();
+    // Aegis V2e M2: the voice client manifest hash rides the stamp (optional; malformed ⇒ the stamp is refused)
+    const v = `sha256:${'b'.repeat(64)}`;
+    expect(parseBuildStamp({ ...stamp('a'), voiceClientManifest: v })).toEqual({ ...stamp('a'), voiceClientManifest: v });
+    expect(parseBuildStamp({ ...stamp('a'), voiceClientManifest: null })).toEqual(stamp('a'));
+    expect(parseBuildStamp({ ...stamp('a'), voiceClientManifest: 'sha1:x' })).toBeNull();
     expect(sameBuild(stamp('a'), stamp('a', '9'))).toBe(true);
     expect(sameBuild(stamp('a'), null)).toBe(false);
     expect(describeUpdate(stamp('a'), stamp('b', '8.0.1'))).toBe('8.0.0→8.0.1 (cb)');
