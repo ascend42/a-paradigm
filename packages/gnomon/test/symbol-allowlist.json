@@ -20,6 +20,7 @@
     { "symbol": "#gnomon-probes", "reason": "M1.0 probe harness (§19.1 probe table); Appendix A notes: the probe table names no node span on purpose" },
     { "symbol": "#contract-event-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-ids", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-workshop-cap", "reason": "contract sub-component of #gnomon-contracts (checkCap, the closed Workshop cap shape the kernel mod-block gate and the GUI both check, GUI critique S5.3); spec has no node" },
     { "symbol": "#contract-project-hue", "reason": "contract sub-component of #gnomon-contracts (projectHue, the one project-hue function of the GUI rail and the Workshop feed, GUI critique S2.1); spec §18 Relations lists it, spec has no node" },
     { "symbol": "#contract-principal", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-ref-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },

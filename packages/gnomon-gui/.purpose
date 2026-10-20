@@ -296,7 +296,7 @@ components:
       takes one of four preset tilts (.r-a..d by cardId; never inline
       style). Approve: ONLY after the kernel accepted the decision (a
       refusal throws first), flyOff stamps APPROVED (--stamp ink), adds
-      .out 550 ms later (flyout) and removes the sheet on its animationend,
+      .out after a fixed setTimeout constant in app.ts (flyout) and removes the sheet on its animationend,
       with a 1.5 s fallback; a departing card is kept out of fresh paints and
       re-inserted at its place. Reduced motion (in-app or OS): nothing
       animates and the card goes at once; the stamp's end state is styled to
