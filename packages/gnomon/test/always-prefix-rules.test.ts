@@ -31,8 +31,9 @@ const book = (rows: RuleRow[]) => {
 };
 const m = (b: RuleBook, command: string, repo = REPO, extra: Record<string, unknown> = {}) => {
   const input = { command, ...extra };
-  return b.match(repo, 'Bash', inputHash(input), input);
+  return b.match(repo, 'Bash', inputHash(input), input, CTX);
 };
+const CTX = { prefixRules: true, roots: ['/work/repo'] };
 
 describe('#always-rules prefix rules (TD-2026-10-20-294)', () => {
   it('matches a single literal simple command starting with the prefix, and nothing that widens it', () => {
@@ -106,19 +107,21 @@ describe('#always-rules prefix rules (TD-2026-10-20-294)', () => {
   it('revoke removes a prefix rule and a replayed learned row does not bring it back', () => {
     const rows = prefixRows(card(13));
     const b = book(rows);
-    expect(m(b, 'git log -p')).not.toBeNull();
+    expect(m(b, 'git log --stat')).not.toBeNull();
     b.fold({ principal: K, keyId: KEY, kind: 'approval.rule.revoked', payload: { ruleId: card(13), repoKey: REPO, tool: 'Bash', connId: 'conn:x' } });
-    expect(m(b, 'git log -p')).toBeNull();
+    expect(m(b, 'git log --stat')).toBeNull();
     b.fold(rows[2]!);
-    expect(m(b, 'git log -p')).toBeNull();
+    expect(m(b, 'git log --stat')).toBeNull();
   });
 
-  it('a Bash card offers prefix choices (first 1-2 argv words) inside contentHash detail only for one literal simple command', () => {
+  it('a Bash card offers prefix choices (first two argv words, policy-checked) inside contentHash detail only for one literal simple command', () => {
     const plan = (command: string) => composePermission({ requestId: 'q', toolName: 'Bash', toolUseId: 't', input: { command } }, { repo: '/r', denyWrite: [] }) as { kind: string; detail: Record<string, unknown>; block: { children: Array<{ type?: string; detail?: unknown }> } };
     const p = plan('git log -n 5');
-    expect(p.detail.prefixOptions).toEqual([['git'], ['git', 'log']]);
+    expect(p.detail.prefixOptions).toEqual([['git', 'log']]); // Aegis H1: never one word
     expect(p.block.children.filter((c) => c.type === 'bash-prefix').map((c) => c.detail)).toEqual([p.detail]);
-    expect(plan('ls').detail.prefixOptions).toEqual([['ls']]);
+    expect(plan('ls').detail.prefixOptions).toBeUndefined();
+    expect(plan('rg foo').detail.prefixOptions).toEqual([['rg', 'foo']]);
+    for (const c of ['ls -la', 'bash x.sh', 'python3 x.py', 'npm test', 'npm run build', 'git push origin', 'git -c x=y log', 'cargo build', 'make all', './run.sh go', 'g\u0456t log']) expect(plan(c).detail.prefixOptions, c).toBeUndefined();
     for (const c of ['git log | sh', 'git log; rm x', 'FOO=1 git log', 'git log $(x)', 'git log > f']) {
       const q = plan(c);
       expect(q.detail.prefixOptions, c).toBeUndefined();

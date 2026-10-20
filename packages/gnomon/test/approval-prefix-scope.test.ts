@@ -76,9 +76,9 @@ describe('#approval-broker prefix-scoped always (TD-2026-10-20-294)', () => {
     const book = new RuleBook({ principal: KERNEL, isKernelKey: () => true });
     for (const row of r.rows) book.fold({ kind: row.kind, principal: KERNEL, keyId: 'k', payload: row.payload });
     const input = { command: 'git log --oneline' };
-    expect(book.match(REPO, 'Bash', inputHash(input), input)).toMatchObject({ ruleId: c.cardId, match: 'prefix' });
+    expect(book.match(REPO, 'Bash', inputHash(input), input, { prefixRules: true, roots: ['/r'] })).toMatchObject({ ruleId: c.cardId, match: 'prefix' });
     const bad = { command: 'git log; rm -rf x' };
-    expect(book.match(REPO, 'Bash', inputHash(bad), bad)).toBeNull();
+    expect(book.match(REPO, 'Bash', inputHash(bad), bad, { prefixRules: true, roots: ['/r'] })).toBeNull();
   });
 
   it('decisionSig covers the scope: a v1 (unscoped) signature or one over another prefix is refused AUTH', async () => {
@@ -128,5 +128,40 @@ describe('#approval-broker prefix-scoped always (TD-2026-10-20-294)', () => {
     await r.broker.approve(H, { cardId: c.cardId, decision: 'always', scope: { kind: 'exact' }, decisionSig: r.v1(c.cardId, 'always', c.contentHash) });
     expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload.scope).toBeUndefined();
     expect(r.rows.find((x) => x.kind === 'approval.rule.learned')!.payload).toMatchObject({ matchExact: true });
+  });
+  it('Aegis H1: the broker refuses a prefix the policy refuses, even when it is a true prefix of the shown command', async () => {
+    const r = rig();
+    for (const [command, prefix] of [['npm test', ['npm', 'test']], ['bash x.sh', ['bash', 'x.sh']], ['git push origin', ['git', 'push']], ['git log -n 5', ['git']], ['g\u0456t log', ['g\u0456t', 'log']], ['python3 -m http.server', ['python3', '-m']], ['cargo build', ['cargo', 'build']]] as Array<[string, string[]]>) {
+      const c = await r.raise(command);
+      const e = await refusal(r.broker.approve(H, { cardId: c.cardId, decision: 'always', scope: { kind: 'prefix', prefix }, decisionSig: r.scoped(c.cardId, c.contentHash, prefix) }));
+      expect(e, command).toMatchObject({ code: 'BAD_REQUEST' });
+    }
+    expect(r.prompts).toEqual([]); // refused before any presence prompt
+    expect(r.rows.map((x) => x.kind)).not.toContain('approval.decide');
+  });
+
+  it('Aegis M1: the presence prompt shows each prefix word quoted and escaped', async () => {
+    const r = rig();
+    const c = await r.raise('git log -n 5');
+    await r.broker.approve(H, { cardId: c.cardId, decision: 'always', scope: { kind: 'prefix', prefix: ['git', 'log'] }, decisionSig: r.scoped(c.cardId, c.contentHash, ['git', 'log']) });
+    expect(r.prompts[0]).toContain("'git' 'log' (2 words)");
+  });
+
+  it('Aegis L1: a CLI-credential always+prefix takes FRESH presence (presence:cli), every time, and learns the same rule', async () => {
+    const r = rig();
+    const CLI = { ...H, connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZC', surface: 'cli', credential: 'cli' };
+    for (const n of [1, 2]) {
+      const c = await r.raise('git log -n 5');
+      const d = await r.broker.approve(CLI, { cardId: c.cardId, decision: 'always', scope: { kind: 'prefix', prefix: ['git', 'log'] }, decisionSig: r.scoped(c.cardId, c.contentHash, ['git', 'log']) });
+      expect(d).toMatchObject({ state: 'decided', presence: 'cli', via: 'cli' });
+      expect(r.prompts).toHaveLength(n); // a prompt per decision: no cached unlock on a CLI connection
+      expect(r.bindings[n - 1]!.scopeDigest).toBe(scopeDigest({ kind: 'prefix', prefix: ['git', 'log'] }));
+    }
+    const learned = r.rows.filter((x) => x.kind === 'approval.rule.learned').map((x) => x.payload);
+    expect(learned).toHaveLength(2);
+    for (const l of learned) expect(l).toMatchObject({ match: 'prefix', prefix: ['git', 'log'], presence: 'cli' });
+    const book = new RuleBook({ principal: KERNEL, isKernelKey: () => true });
+    for (const row of r.rows) book.fold({ kind: row.kind, principal: KERNEL, keyId: 'k', payload: row.payload });
+    expect(book.list().filter((x) => x.match === 'prefix')).toHaveLength(2);
   });
 });
