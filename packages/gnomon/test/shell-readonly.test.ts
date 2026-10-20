@@ -1,6 +1,8 @@
 /**
- * #shell-readonly (TD-2026-10-20-294 part 1): the read-only Bash classifier, as a table. PURE: virtual posix paths
- * under platform 'linux' (none exist, so realpath never resolves them on any host).
+ * #shell-readonly (TD-2026-10-20-294 part 1, Aegis C1–C2 H1–H4 M1–M3 re-check): the read-only Bash classifier, as a
+ * table. PURE: virtual posix paths under platform 'linux' (none exist, so realpath never resolves them and a glob
+ * matches nothing on any host). The filesystem half (symlinks, glob expansion, the founder's loop) is
+ * shell-readonly-fs.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import * as os from 'node:os';
@@ -11,70 +13,91 @@ import { classifyReadOnly, parseShell, simpleArgv, ShellParseError } from '../sr
 const REPO = '/w/repo';
 const ctx = { roots: [REPO], home: '/w/home', gnomonHome: '/w/home/.gnomon', platform: 'linux' };
 const ro = (c: string) => classifyReadOnly(c, ctx);
+/** M2: a known cwd — an absolute cd into the root, then an unbroken && chain */
+const C = `cd ${REPO} && `;
 
+/** The founder's real loop: REFUSED now (C1: `$(ls -d …)` is a substitution feeding the loop's paths). */
 const FOUNDER = `cd ${REPO}/.paradigm/tasks/entries && for f in $(ls -d 2026-10-* ); do echo "$f: $(grep -m1 '^status:' $f/meta.yaml | awk '{print $2}')"; done`;
+/** Its closest safe equivalent: a literal glob loop (accepted when the glob matches; see shell-readonly-fs.test.ts). */
+const FOUNDER_SAFE = (dir: string) => `cd ${dir} && for f in 2026-10-*; do echo "$f: $(grep -m1 '^status:' $f/meta.yaml | awk '{print $2}')"; done`;
 
 const ACCEPT: string[] = [
-  'ls',
-  'ls -la src',
-  'cat README.md',
-  'head -n 50 src/a.ts',
-  'tail -20 log.txt',
-  'wc -l src/*.ts',
-  "grep -rn 'foo bar' src",
-  'grep -c x a.txt 2>/dev/null',
-  'rg -n TODO src',
-  "find . -name '*.ts' -type f -maxdepth 3",
-  'find src -newer package.json -print0',
-  'stat -f %m a.txt',
-  'file a.bin',
+  // no path at all: the cwd need not be known
   'pwd',
   'echo hi',
+  'echo -n hi',
   "printf '%s\\n' a b",
   'true && echo ok || echo no',
-  'test -f a.txt && echo yes',
-  '[ -d src ] && ls src',
   'basename /x/y.ts',
   'dirname src/a.ts',
-  'realpath src',
   'which node',
-  'sort -n a.txt | uniq -c | head',
-  "cut -d: -f1 a.txt | tr a-z A-Z",
-  'diff a.txt b.txt',
-  'cmp a b',
-  'du -sh src',
-  'df -h .',
   'date +%Y-%m-%d',
-  "jq -r '.name' package.json",
-  'git status',
-  'git log --oneline -20',
-  'git diff HEAD~1 -- src',
-  'git show HEAD:src/a.ts',
-  'git branch -a',
-  'git branch --list "feat/*"',
-  'git rev-parse --abbrev-ref HEAD',
-  'git ls-files src',
-  'git blame -L 1,10 src/a.ts',
-  'git describe --tags',
-  'git remote -v',
-  'git config --get user.name',
-  "sed -n '1,40p' src/a.ts",
-  "awk -F: '{print $1}' a.txt",
-  'ls | wc -l; echo done',
-  '(cd_free=1; true) 2>/dev/null'.replace('cd_free=1; ', ''),
-  'ls src >/dev/null 2>&1',
-  'cat < a.txt',
-  'grep x <<< "hello"',
-  "cat <<'EOF'\nliteral $x\nEOF",
-  'diff <(sort a) <(sort b)',
-  'echo `ls`',
-  'ls # a comment',
+  'date -u +%s',
+  'echo `pwd`',
+  'echo "now: $(date +%s)"',
   'echo $ "a $"',
-  `cd ${REPO} && git log -1`,
-  `cd ${REPO}/src\nls\nwc -l *.ts`,
+  'echo "--- done"',
   'for f in a b c; do echo $f; done',
-  'for f in src/*.ts; do wc -l "$f"; done',
-  FOUNDER,
+  `${C}grep x <<< "hello"`,
+  "cat <<'EOF'\nliteral $x\nEOF",
+  // absolute paths inside a readable root: the cwd need not be known
+  `cat ${REPO}/README.md`,
+  `ls -la ${REPO}/src`,
+  'cat /etc/hosts',
+  'ls /usr/local/bin',
+  `cat < ${REPO}/a.txt`,
+  // a known cwd (M2)
+  `${C}ls`,
+  `${C}ls -la src`,
+  `${C}cat README.md`,
+  `${C}head -n 50 src/a.ts`,
+  `${C}tail -20 log.txt`,
+  `${C}wc -l src/*.ts`,
+  `${C}grep -n 'foo bar' src/a.ts`,
+  `${C}grep -c x a.txt 2>/dev/null`,
+  `${C}find . -name '*.ts' -type f -maxdepth 3`,
+  `${C}find src -newer package.json -print0`,
+  `${C}find -H src -type l`,
+  `${C}stat -f %m a.txt`,
+  `${C}file a.bin`,
+  `${C}test -f a.txt && echo yes`,
+  `${C}[ -d src ] && ls src`,
+  `${C}realpath src`,
+  `${C}sort -n a.txt | uniq -c | head`,
+  `${C}cut -d: -f1 a.txt | tr a-z A-Z`,
+  `${C}diff a.txt b.txt`,
+  `${C}cmp a b`,
+  `${C}du -sh src`,
+  `${C}df -h .`,
+  `${C}jq -r '.name' package.json`,
+  `${C}git status`,
+  `${C}git log --oneline -20`,
+  `${C}git diff HEAD~1 -- src`,
+  `${C}git show HEAD:src/a.ts`,
+  `${C}git branch -a`,
+  `${C}git branch --list "feat/*"`,
+  `${C}git rev-parse --abbrev-ref HEAD`,
+  `${C}git ls-files src`,
+  `${C}git blame -L 1,10 src/a.ts`,
+  `${C}git describe --tags`,
+  `${C}git remote`,
+  `${C}git config --get user.name`,
+  `${C}sed -n '1,40p' src/a.ts`,
+  `${C}awk -F: '{print $1}' a.txt`,
+  `${C}awk '{print $2, NR}' a.txt`,
+  `${C}awk 'NR>1 {print $NF}' a.txt`,
+  `${C}awk '/^x/ {print}' a.txt`,
+  `${C}ls | wc -l && echo done`,
+  `${C}(ls; true) 2>/dev/null`,
+  `${C}ls src >/dev/null 2>&1`,
+  `${C}diff <(sort a) <(sort b)`,
+  `${C}ls # a comment`,
+  `${C}git log -1`,
+  `cd ${REPO}/src && ls && wc -l a.ts`,
+  `cd ~/../repo && ls`.replace('~/../repo', REPO),
+  `${C}for f in a b c; do wc -l $f/x.ts; done`,
+  `${C}for f in src/a.ts src/b.ts; do wc -l "$f"; done`,
+  `${C}echo "$(grep -m1 '^status:' a/meta.yaml | awk '{print $2}')"`,
 ];
 
 const REFUSE: Array<[string, RegExp]> = [
@@ -91,22 +114,22 @@ const REFUSE: Array<[string, RegExp]> = [
   ['exec ls', /not allowlisted: exec/],
   ['source x.sh', /not allowlisted/],
   ['. x.sh', /not allowlisted/],
-  ['xargs rm < list', /not allowlisted: xargs/],
-  ['ls | xargs cat', /not allowlisted: xargs/],
+  [`${C}xargs rm < list`, /not allowlisted: xargs/],
+  [`${C}ls | xargs cat`, /not allowlisted: xargs/],
   ['env ls', /not allowlisted: env/],
   ['sudo ls', /not allowlisted: sudo/],
-  ['find . -exec rm \'{}\' \\;', /find: -exec/],
+  [`${C}find . -exec rm '{}' \\;`, /find: -exec/],
   ['find . -exec rm {} \\;', /unquoted brace/],
-  ['find . -delete', /find: -delete/],
-  ['find . -ok rm "{}" \\;', /find: -ok/],
-  ['find . -execdir ls ;', /find: -execdir/],
-  ['find . -fprint out', /find: -fprint/],
-  ["sed -i 's/a/b/' x", /sed/],
-  ["sed 's/a/b/w out' x", /sed: script/],
-  ["sed -n '1e rm x' a", /sed: script/],
-  ["awk 'BEGIN{system(\"rm x\")}'", /awk/],
-  ["awk '{print > \"out\"}' a", /awk/],
-  ["awk '{ \"date\" | getline d }'", /awk/],
+  [`${C}find . -delete`, /find: -delete/],
+  [`${C}find . -ok rm "{}" \\;`, /find: -ok/],
+  [`${C}find . -execdir ls ;`, /find: -execdir/],
+  [`${C}find . -fprint out`, /find: -fprint/],
+  [`${C}sed -i 's/a/b/' x`, /sed/],
+  [`${C}sed 's/a/b/w out' x`, /sed: script/],
+  [`${C}sed -n '1e rm x' a`, /sed: script/],
+  ["awk 'BEGIN{system(\"rm x\")}'", /awk: only a print program/],
+  [`${C}awk '{print > "out"}' a`, /awk: only a print program/],
+  ["awk '{ \"date\" | getline d }'", /awk: only a print program/],
   ['awk -f prog.awk a', /awk: flag/],
   ['echo $(rm -rf x)', /not allowlisted: rm/],
   ['echo `touch x`', /not allowlisted: touch/],
@@ -122,46 +145,41 @@ const REFUSE: Array<[string, RegExp]> = [
   ['ls /w/home/.gnomon', /protected path/],
   ['cat /w/home/.config/gh/hosts.yml', /protected path/],
   ['ls ~', /protected path/],
-  ['grep -r token /w/home', /protected path/],
   ['ls /', /protected path/],
-  ['cat ~/.s*/id_rsa', /protected path/],
-  ['grep --file=/w/home/.netrc x', /protected path/],
+  ['cat ~/.s*/id_rsa', /outside the readable roots/],
+  [`${C}grep --file=/w/home/.netrc x`, /protected path/],
   ['cat /dev/zero', /device path/],
-  ['head -c 10 /dev/urandom', /device path/],
+  [`${C}head -c 10 /dev/urandom`, /device path/],
   ['cat /proc/self/environ', /device path/],
-  ['cat ../../home/.ssh/id_rsa', /relative \.\./],
-  ['for f in a; do cat ../$f; done', /dynamic path/],
-  ['for f in a; do cat /w/home/$f; done', /dynamic path/],
-  ['git -c core.pager=sh log', /global option/],
-  ['git -C /tmp log', /global option/],
-  ['git --exec-path=/x status', /global option/],
-  ['git log --output=x', /git: --output/],
-  ['git diff --ext-diff', /git: --ext-diff/],
-  ['git show --textconv HEAD', /git: --textconv/],
-  ['git commit -m x', /git: subcommand commit/],
-  ['git push', /git: subcommand push/],
-  ['git checkout main', /git: subcommand checkout/],
-  ['git branch newname', /git branch: a name/],
-  ['git branch -D x', /git branch: -D/],
-  ['git remote add x y', /git remote/],
-  ['git config user.name x', /git config/],
-  ['git stash', /git: subcommand stash/],
-  ['sort -o out a', /sort: flag -o/],
-  ['sort --output=out a', /sort: flag --output/],
-  ['sort --compress-program=sh a', /sort: flag --compress-program/],
-  ['uniq a out', /uniq: a second operand/],
-  ['file -C -m x', /file: flag -C/],
+  [`${C}cat ../home/.ssh/id_rsa`, /protected path/],
+  [`${C}for f in a; do cat ../$f; done`, /outside the readable roots/],
+  [`${C}for f in a; do cat /w/home/$f; done`, /outside the readable roots/],
+  [`${C}git -c core.pager=sh log`, /global option/],
+  [`${C}git -C /tmp log`, /global option/],
+  [`${C}git --exec-path=/x status`, /global option/],
+  [`${C}git log --output=x`, /git: --output/],
+  [`${C}git diff --ext-diff`, /git: --ext-diff/],
+  [`${C}git show --textconv HEAD`, /git: --textconv/],
+  [`${C}git commit -m x`, /git: subcommand commit/],
+  [`${C}git push`, /git: subcommand push/],
+  [`${C}git checkout main`, /git: subcommand checkout/],
+  [`${C}git branch newname`, /git branch: a name/],
+  [`${C}git branch -D x`, /git branch: -D/],
+  [`${C}git remote add x y`, /git remote/],
+  [`${C}git config user.name x`, /git config/],
+  [`${C}git stash`, /git: subcommand stash/],
+  [`${C}sort -o out a`, /sort: flag -o/],
+  [`${C}sort --output=out a`, /sort: flag --output/],
+  [`${C}sort --compress-program=sh a`, /sort: flag --compress-program/],
+  [`${C}uniq a out`, /uniq: a second operand/],
+  [`${C}file -C -m x`, /file: flag -C/],
   ['date 010100002030', /date: an operand sets the clock/],
-  ['rg --pre sh x', /rg: --pre/],
-  ['rg -z x', /rg: -z/],
-  ['jq -f prog.jq a', /jq: -f/],
-  ["jq -n 'env'", /jq: env/],
-  ["jq -n '$ENV.TOKEN'", /jq: env/],
-  ['for f in $(ls); do sort $f; done', /sort: dynamic/],
-  ['for f in $(ls); do git show $f; done', /git: dynamic/],
+  [`${C}jq -f prog.jq a`, /jq: -f/],
+  [`${C}jq -n 'env'`, /jq: env/],
+  [`${C}jq -n '$ENV.TOKEN'`, /jq: env/],
   ['cd /w/home && ls', /cd: outside/],
-  ['cd .. && ls', /cd: a relative path with \.\./],
-  ['ls && cd src', /cd: only as the first/],
+  ['cd .. && ls', /cd: a relative path/],
+  [`${C}ls && cd src`, /cd: only as the first/],
   ['cd src | ls', /cd: only as the first|not allowlisted/],
   ['cd - && ls', /cd: one literal path/],
   ['! ls', /negation/],
@@ -187,8 +205,8 @@ const REFUSE: Array<[string, RegExp]> = [
   ['$(echo rm) -rf x', /command name not literal/],
   ['"$x"', /command name not literal/],
   ['time ls', /unsupported compound time/],
-  ['ls 3>/dev/null', /redirection 3>/],
-  ['ls 2>&-', /redirection/],
+  [`${C}ls 3>/dev/null`, /redirection 3>/],
+  [`${C}ls 2>&-`, /redirection/],
   ['', /empty/],
   ['cat $=HOME/.ssh/id_rsa', /\$= expansion/],
   ['cat $~x', /\$~ expansion/],
@@ -201,6 +219,90 @@ const REFUSE: Array<[string, RegExp]> = [
   ['echo x >! out', /redirection/],
   ['cat =(ls)', /unparsed/],
   ['ls ~+/x', /~user/],
+  // Aegis C1: a substitution never reaches a path argument; a loop iterates only literal items
+  ['cat "$(echo ~/.ssh/id_rsa)"', /cat: a substitution in a path argument/],
+  [`${C}cat "$(echo ~/.ssh/id_rsa)"`, /cat: a substitution in a path argument/],
+  ['for f in $(printf %s ~/.aws/credentials); do cat $f; done', /for: a substitution in the word list/],
+  ['cat $(dirname ~/.ssh/x)/id_rsa', /cat: a substitution in a path argument/],
+  ['cat `echo ~/.ssh/id_rsa`', /cat: a substitution in a path argument/],
+  [`${C}for f in $(ls); do sort $f; done`, /for: a substitution/],
+  [`${C}for f in $(ls); do git show $f; done`, /for: a substitution/],
+  [`${C}for f in "a b"; do cat $f; done`, /for: an unsafe value/],
+  [`${C}for f in -r; do grep x $f; done`, /for: an unsafe value/],
+  [`${C}for f in 2026-10-*; do cat $f; done`, /for: an unsafe value \(or a glob that matched nothing\)/],
+  [`${C}for f in a; do for g in $(cat $f); do cat $g; done; done`, /for: a substitution/],
+  [`${C}grep x <(cat ~/.ssh/id_rsa)`, /protected path/],
+  [`${C}sort $(echo a)`, /sort: dynamic argument/],
+  // the founder's original loop is refused under C1 (see FOUNDER_SAFE)
+  [FOUNDER, /for: a substitution in the word list/],
+  // Aegis C2: printf takes no flag; echo/test/pwd/which only a tight flag set
+  ['printf -v HOME %s h; git status', /printf: a flag/],
+  ['printf -v PATH %s /tmp/evil', /printf: a flag/],
+  ['printf -- -v', /printf: a flag/],
+  ['printf "$(echo %s)" x', /printf: the format is not literal/],
+  ['echo -x hi', /echo: flag -x/],
+  [`${C}test -v HOME`, /test: flag -v/],
+  ['pwd -x', /pwd: flag -x/],
+  ['pwd src', /pwd: an operand/],
+  ['which -x node', /which: flag -x/],
+  ['test -f ~/.ssh/id_rsa', /protected path/],
+  // Aegis H1: awk is one print program, nothing else
+  [`${C}awk '{print ARGV[1]}' a`, /awk: only a print program/],
+  [`${C}awk 'BEGIN{while((getline l < ARGV[1])>0) print l}' a`, /awk: only a print program/],
+  [`${C}awk '{print FILENAME}' a`, /awk: only a print program/],
+  [`${C}awk '{print ENVIRON["HOME"]}' a`, /awk: only a print program/],
+  [`${C}awk -v x=1 '{print $1}' a`, /awk: flag -v/],
+  // Aegis H2: no recursive or symlink-following reader flags; rg is gone (recursive by default)
+  [`${C}grep -rn 'foo bar' src`, /grep: flag -r/],
+  [`${C}grep -R x .`, /grep: flag -R/],
+  [`${C}grep -S x a`, /grep: flag -S/],
+  [`${C}grep --recursive x .`, /grep: flag --recursive/],
+  [`${C}grep --recur x .`, /grep: flag --recur/],
+  [`${C}grep --dereference-recursive x .`, /grep: flag --dereference-recursive/],
+  [`${C}grep -d recurse x .`, /grep: flag -d/],
+  [`${C}egrep -r x .`, /egrep: flag -r/],
+  [`${C}rg -n TODO src`, /not allowlisted: rg/],
+  [`${C}ls -L src`, /ls: flag -L/],
+  [`${C}ls -lR src`, /ls: flag -R/],
+  [`${C}ls --recursive`, /ls: flag --recursive/],
+  [`${C}du -L src`, /du: flag -L/],
+  [`${C}du --files0-from=-`, /du: flag --files0-from/],
+  [`${C}wc --files0-from=list`, /wc: flag --files0-from/],
+  [`${C}find -L src`, /find: -L|find: src/],
+  [`${C}find src -follow`, /find: -follow/],
+  [`${C}stat -L a`, /stat: flag -L/],
+  [`${C}diff -r a b`, /diff: flag -r/],
+  [`${C}file -f names`, /file: flag -f/],
+  // Aegis H3: a relative cd is refused (the cwd it starts from is unknown); a cd outside a root too
+  ['cd src && ls', /cd: a relative path/],
+  [`cd ${REPO}/../home && ls`, /cd: outside/],
+  // Aegis H4: reads only inside the session roots and the system read roots
+  ['cat /Users/someone/notes.txt', /outside the readable roots/],
+  ['cat /w/other/a.txt', /outside the readable roots/],
+  ['ls /var/log', /outside the readable roots/],
+  [`${C}cat ../other/x`, /outside the readable roots/],
+  // Aegis M1: date displays only
+  ['date -f dates.txt', /date: flag -f/],
+  ['date -r 0', /date: flag -r/],
+  ['date -s 12:00', /date: flag -s/],
+  ['date -d yesterday', /date: flag -d/],
+  // Aegis M2: a relative path, an implicit cwd or git needs a known cwd
+  ['ls', /a relative path with an unknown cwd/],
+  ['cat README.md', /a relative path with an unknown cwd/],
+  ['git status', /git: the cwd is unknown/],
+  ['find . -name x', /a relative path with an unknown cwd/],
+  ['wc -l src/*.ts', /a relative glob with an unknown cwd/],
+  [`cd ${REPO}; cat README.md`, /a relative path with an unknown cwd/],
+  [`cd ${REPO}\nls`, /a relative path with an unknown cwd/],
+  [`${C}true || cat README.md`, /a relative path with an unknown cwd/],
+  [`${C}ls; cat README.md`, /a relative path with an unknown cwd/],
+  // Aegis M3: no remote URLs, no credential-bearing config keys
+  [`${C}git remote -v`, /git remote: only bare/],
+  [`${C}git config --get remote.origin.url`, /git config/],
+  [`${C}git config --get-all http.https://x.extraheader`, /git config/],
+  [`${C}git config --get credential.helper`, /git config/],
+  // Low: `git branch -l NAME` created NAME in older git
+  [`${C}git branch -l newname`, /git branch: -l/],
 ];
 
 describe('#shell-readonly classifyReadOnly', () => {
@@ -212,22 +314,23 @@ describe('#shell-readonly classifyReadOnly', () => {
     expect(v.ok).toBe(false);
     expect((v as { why: string }).why).toMatch(why);
   });
-  it("the founder's real example is a for loop over read-only bodies, parsed properly", () => {
+  it("the founder's real example still parses as a for loop over read-only bodies", () => {
     const l = parseShell(FOUNDER);
     expect(l.items).toHaveLength(2);
     expect(l.items[1]!.pipe.cmds[0]!.t).toBe('for');
-    expect(ro(FOUNDER.replace("awk '{print $2}'", 'sh'))).toMatchObject({ ok: false, why: 'not allowlisted: sh' });
+    expect(ro(FOUNDER_SAFE(`${REPO}/.paradigm/tasks/entries`).replace("awk '{print $2}'", 'sh'))).toMatchObject({ ok: false });
   });
   it('a too-long or NUL command is unparsed', () => {
     expect(ro('ls '.repeat(30_000)).ok).toBe(false);
     expect(ro('ls\0')).toMatchObject({ ok: false });
     expect(() => parseShell('ls\0')).toThrow(ShellParseError);
   });
-  it('win32: a device namespace path is refused, case-folded protected paths too', () => {
+  it('win32: a device namespace path is refused, case-folded protected paths too, the system roots are posix-only', () => {
     const w = { roots: ['C:\\w\\repo'], home: 'C:\\Users\\me', gnomonHome: 'C:\\Users\\me\\.gnomon', platform: 'win32' };
     expect(classifyReadOnly('cat \\\\\\\\.\\\\PhysicalDrive0', w).ok).toBe(false);
     expect(classifyReadOnly("cat 'C:\\USERS\\ME\\.SSH\\id_rsa'", w)).toMatchObject({ ok: false, why: 'protected path' });
     expect(classifyReadOnly("cat 'C:\\w\\repo\\a.txt'", w)).toEqual({ ok: true });
+    expect(classifyReadOnly("cat 'C:\\Windows\\win.ini'", w)).toMatchObject({ ok: false, why: 'outside the readable roots' });
   });
 });
 
@@ -249,16 +352,17 @@ describe('#supervisor autoBashReadOnly (the auto-edits gate around the classifie
   const gh = path.join(home, '.gnomon');
   const pass = (input: Record<string, unknown>, lines: string[] = ['x'], roots = [root]) => autoBashReadOnly('Bash', input, roots, lines, gh, process.platform, home);
   it('passes a read-only command with only command/description/timeout', () => {
-    expect(pass({ command: 'ls', description: 'd', timeout: 1000 })).toEqual({ ok: true });
+    expect(pass({ command: 'pwd', description: 'd', timeout: 1000 })).toEqual({ ok: true });
   });
-  it('cards any other key, a non-text command, a flagged card, a home root, another tool', () => {
-    expect(pass({ command: 'ls', run_in_background: true })).toMatchObject({ ok: false, why: 'input-key' });
-    expect(pass({ command: 'ls', dangerouslyDisableSandbox: false })).toMatchObject({ ok: false, why: 'input-key' });
+  it('cards any other key, a non-text command, a flagged card, a home root, another tool, an unknown cwd', () => {
+    expect(pass({ command: 'pwd', run_in_background: true })).toMatchObject({ ok: false, why: 'input-key' });
+    expect(pass({ command: 'pwd', dangerouslyDisableSandbox: false })).toMatchObject({ ok: false, why: 'input-key' });
     expect(pass({ command: ['ls'] })).toMatchObject({ ok: false, why: 'bad-input' });
-    expect(pass({ command: 'ls', timeout: '1' })).toMatchObject({ ok: false, why: 'bad-input' });
-    expect(pass({ command: 'ls' }, ['ls \u202e'.replace('\\u202e', '\u202e')])).toMatchObject({ ok: false, why: 'flagged' });
-    expect(pass({ command: 'ls' }, ['x'], [home])).toMatchObject({ ok: false, why: 'home-root' });
+    expect(pass({ command: 'pwd', timeout: '1' })).toMatchObject({ ok: false, why: 'bad-input' });
+    expect(pass({ command: 'pwd' }, ['ls \u202e'])).toMatchObject({ ok: false, why: 'flagged' });
+    expect(pass({ command: 'pwd' }, ['x'], [home])).toMatchObject({ ok: false, why: 'home-root' });
     expect(pass({ command: 'rm x' })).toMatchObject({ ok: false, why: 'not-read-only: not allowlisted: rm' });
+    expect(pass({ command: 'ls' })).toMatchObject({ ok: false, why: 'not-read-only: a relative path with an unknown cwd' });
     expect(autoBashReadOnly('Write', { command: 'ls' }, [root], ['x'], gh, process.platform, home)).toMatchObject({ ok: false, why: 'tool' });
   });
 });

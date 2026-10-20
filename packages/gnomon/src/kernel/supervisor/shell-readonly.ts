@@ -479,7 +479,7 @@ export function parseShell(src: string): List {
 /* ── classify ─────────────────────────────────────────────────────────────── */
 
 export interface ReadOnlyContext {
-  /** the session roots (cwd, worktree): `cd` must stay inside one; relative paths resolve against the first */
+  /** the session roots (cwd, worktree): reads stay inside one (or a system read root); an absolute `cd` must land in one */
   roots: readonly string[];
   home: string;
   /** the Gnomon home (never read by an auto-passed command) */
@@ -496,9 +496,20 @@ const no = (why: string): never => {
 /** Protected roots relative to the home (credentials, keys, the Gnomon home is added by the caller). */
 export const PROTECTED_HOME_PATHS = Object.freeze(['.ssh', '.aws', '.config/gh', '.config/gcloud', '.azure', '.kube', '.docker', '.gnupg', '.netrc', '.npmrc', '.git-credentials', '.pypirc', 'Library/Keychains', '.gnomon']);
 export const PROTECTED_ABS_PATHS = Object.freeze(['/Library/Keychains']);
+/** Aegis H4: besides the session roots, the only places a read may reach (posix; compared after realpath). */
+export const SYSTEM_READ_ROOTS = Object.freeze(['/usr', '/opt/homebrew', '/etc', '/tmp', '/private/tmp', '/private/etc']);
+/** Aegis H2: a glob (or a loop's value list, or a word's expansions) that yields more is refused. */
+export const MAX_EXPANSIONS = 200;
+/** Aegis C1: a `for` value is one safe file-name-ish token: no space, glob, quote, `$` or backslash (so `$f` never splits or globs again). */
+const LOOP_VALUE = /^[A-Za-z0-9._+,:@%=/-]+$/;
 
-interface Arg { lit: string | null; glob: boolean; tilde: boolean; word: Word }
-interface Env { ctx: ReadOnlyContext; cwd: string | null; vars: ReadonlySet<string>; prot: string[]; fold: (s: string) => string; pp: typeof path }
+/**
+ * An argument after expansion: `lit` its concrete argv string, or null for a word holding a command substitution
+ * (`sub`) or that IS one process substitution (`proc`, a pipe path). `exp` marks a value produced by a loop variable
+ * or a glob match.
+ */
+interface Arg { lit: string | null; sub: boolean; proc: boolean; exp: boolean }
+interface Env { ctx: ReadOnlyContext; cwd: string | null; vars: ReadonlyMap<string, readonly string[]>; prot: string[]; allow: string[]; fold: (s: string) => string; pp: typeof path; native: boolean }
 
 const realOr = (p: string): string | null => {
   try {
@@ -507,6 +518,29 @@ const realOr = (p: string): string | null => {
     return null;
   }
 };
+
+/**
+ * Aegis H2: the realpath of `p`, or — when it does not exist — the realpath of its deepest existing ancestor joined
+ * with the rest (normalized: a `..` below a missing component lands where it would if that component were a plain
+ * directory; the OS fails there today). Only on the host's own path flavour (`native`); null otherwise.
+ */
+function realDeep(p: string, env: Env): string | null {
+  if (!env.native) return null;
+  const { pp } = env;
+  let cur = p;
+  const rest: string[] = [];
+  for (let i = 0; i < 4096; i++) {
+    const r = realOr(cur);
+    if (r !== null) {
+      return rest.length ? pp.join(r, ...rest.reverse()) : r;
+    }
+    const parent = pp.dirname(cur);
+    if (parent === cur) return null;
+    rest.push(pp.basename(cur));
+    cur = parent;
+  }
+  return null;
+}
 
 export function classifyReadOnly(command: string, ctx: ReadOnlyContext): ReadOnlyVerdict {
   let list: List;
@@ -525,8 +559,10 @@ export function classifyReadOnly(command: string, ctx: ReadOnlyContext): ReadOnl
     if (r && !prot.includes(r)) prot.push(r);
   }
   if (ctx.roots.length === 0) return { ok: false, why: 'no-root' };
-  const env: Env = { ctx, cwd: null, vars: new Set(), prot, fold, pp };
+  const env: Env = { ctx, cwd: null, vars: new Map(), prot, allow: [], fold, pp, native: pp === (process.platform === 'win32' ? path.win32 : path.posix) };
   try {
+    env.allow = rootForms(env);
+    if (pp === path.posix) env.allow.push(...SYSTEM_READ_ROOTS);
     walkList(list, env, true);
     return { ok: true };
   } catch (e) {
@@ -535,35 +571,46 @@ export function classifyReadOnly(command: string, ctx: ReadOnlyContext): ReadOnl
   }
 }
 
+/** Each session root as given and at its (deepest-ancestor) realpath. */
+function rootForms(env: Env): string[] {
+  const out: string[] = [];
+  for (const r of env.ctx.roots) {
+    out.push(env.pp.resolve(r));
+    const real = realDeep(r, env);
+    if (real !== null) out.push(real);
+  }
+  return out;
+}
+
 function walkList(list: List, env: Env, top: boolean): void {
   for (const [i, it] of list.items.entries()) {
     if (it.sep === '&') no('background');
     if (it.pipe.bang) no('negation');
-    if (top && i === 0 && it.pipe.cmds.length === 1 && isCd(it.pipe.cmds[0]!)) {
-      cdTo(it.pipe.cmds[0] as Extract<Cmd, { t: 'simple' }>, env);
-      continue;
-    }
-    for (const c of it.pipe.cmds) walkCmd(c, env);
+    if (top && i === 0 && it.pipe.cmds.length === 1 && isCd(it.pipe.cmds[0]!)) cdTo(it.pipe.cmds[0] as Extract<Cmd, { t: 'simple' }>, env);
+    else for (const c of it.pipe.cmds) walkCmd(c, env);
+    // Aegis H3/M2: a command runs in the cd's directory only along an unbroken `&&` chain from it — after `;`, a
+    // newline or `||` the cd may have failed, so the cwd is unknown again
+    if (top && it.sep !== '&&') env.cwd = null;
   }
 }
 
 const isCd = (c: Cmd): boolean => c.t === 'simple' && c.words.length > 0 && wordLit(c.words[0]!) === 'cd';
 
+/** Aegis H3: `cd` takes one ABSOLUTE literal path (or `~/…`) inside a session root; the cwd becomes its realpath. */
 function cdTo(c: Extract<Cmd, { t: 'simple' }>, env: Env): void {
   if (c.assigns.length || c.redirs.length || c.words.length !== 2) no('cd: one literal path');
-  const a = argOf(c.words[1]!, env);
-  if (a.lit === null || a.glob || a.lit === '-' || a.lit.startsWith('-') || a.lit === '') no('cd: one literal path');
+  const w = c.words[1]!;
+  if (!w.parts.every((p, i) => p.t === 'lit' || (p.t === 'tilde' && i === 0))) no('cd: one literal path');
   const { pp, ctx, fold } = env;
-  const raw = a.tilde ? pp.join(ctx.home, a.lit!) : a.lit!;
-  if (!pp.isAbsolute(raw) && raw.split(/[\\/]+/).includes('..')) no('cd: a relative path with ..');
-  const bases = pp.isAbsolute(raw) ? [raw] : ctx.roots.map((r) => pp.resolve(r, raw));
-  for (const b of bases) {
-    const target = pp.resolve(b);
-    const forms = [target, realOr(target)].filter((x): x is string => x !== null);
-    const inside = forms.every((f) => ctx.roots.some((r) => [pp.resolve(r), realOr(r)].some((rr) => rr !== null && within(fold(f), fold(rr), pp, true))));
-    if (!inside) no('cd: outside the session roots');
-  }
-  if (pp.isAbsolute(raw)) env.cwd = pp.resolve(raw);
+  const rest = w.parts.map((p) => (p.t === 'lit' ? p.v : '')).join('');
+  const t = w.parts[0]!.t === 'tilde' ? pp.join(ctx.home, rest) : rest;
+  if (t === '' || t.startsWith('-')) no('cd: one literal path');
+  if (!pp.isAbsolute(t)) no('cd: a relative path (the cwd is unknown)');
+  const real = realDeep(t, env);
+  const forms = [pp.resolve(t), ...(real !== null ? [real] : [])];
+  const roots = rootForms(env);
+  if (!forms.every((f) => roots.some((r) => within(fold(f), fold(r), pp, true)))) no('cd: outside the session roots');
+  env.cwd = real ?? pp.resolve(t);
 }
 
 function within(p: string, root: string, pp: typeof path, orEqual: boolean): boolean {
@@ -576,12 +623,17 @@ function walkCmd(c: Cmd, env: Env): void {
   checkRedirs(c.redirs, env);
   if (c.t === 'subshell') return walkList(c.body, env, false);
   if (c.t === 'for') {
+    // Aegis C1: a loop iterates only literal words and literal globs (expanded now, every match a safe token)
+    const vals: string[] = [];
     for (const w of c.items) {
-      const a = argOf(w, env);
-      if (a.lit !== null) checkPath(a, env);
-      else checkDynamic(a);
+      for (const a of expand(w, env)) {
+        if (a.lit === null) no('for: a substitution in the word list');
+        if (!LOOP_VALUE.test(a.lit!) || a.lit!.startsWith('-')) no('for: an unsafe value (or a glob that matched nothing)');
+        vals.push(a.lit!);
+      }
     }
-    return walkList(c.body, { ...env, vars: new Set([...env.vars, c.name]) }, false);
+    if (vals.length > MAX_EXPANSIONS) no('for: too many values');
+    return walkList(c.body, { ...env, vars: new Map([...env.vars, [c.name, vals]]) }, false);
   }
   if (c.assigns.length) no('env assignment');
   if (c.words.length === 0) no('no command');
@@ -590,9 +642,10 @@ function walkCmd(c: Cmd, env: Env): void {
   const name = w0.parts.length === 1 && p0.t === 'glob' && p0.v === '[' ? '[' : wordLit(w0);
   if (name === null || name === '') no('command name not literal');
   if (name === 'cd') no('cd: only as the first command');
-  const args = c.words.slice(1).map((w) => argOf(w, env));
   const rule = COMMANDS[name!];
   if (!rule) no(`not allowlisted: ${name}`);
+  const args = c.words.slice(1).flatMap((w) => expand(w, env));
+  if (args.length > MAX_EXPANSIONS) no('too many arguments after expansion');
   rule!(args, env, name!);
 }
 
@@ -603,19 +656,20 @@ function checkRedirs(rs: readonly Redir[], env: Env): void {
       if (!r.heredoc.quoted && /[$`]/.test(r.heredoc.body!)) no('heredoc expansion');
       continue;
     }
-    const a = argOf(r.target!, env);
     if (r.op === '<<<') {
-      if (a.lit === null) checkDynamic(a);
+      expand(r.target!, env); // data on stdin, never a path: a substitution here is fine once proven read-only
       continue;
     }
     if (r.op === '<') {
       if (r.fd !== null && r.fd !== 0) no('input redirection fd');
-      if (a.lit === null) no('dynamic input redirection');
-      checkPath(a, env);
+      const v = expand(r.target!, env);
+      if (v.length !== 1 || v[0]!.lit === null) no('input redirection: one literal path');
+      checkPath(v[0]!.lit!, env);
       continue;
     }
-    if ((r.op === '>&' && (r.fd === null || r.fd === 1 || r.fd === 2)) && (a.lit === '1' || a.lit === '2') && !a.tilde) continue;
-    if (['>', '>>', '&>', '&>>'].includes(r.op) && (r.fd === null || r.fd === 1 || r.fd === 2) && a.lit === '/dev/null' && !a.tilde && !a.glob) continue;
+    const t = wordLit(r.target!);
+    if (r.op === '>&' && (r.fd === null || r.fd === 1 || r.fd === 2) && (t === '1' || t === '2')) continue;
+    if (['>', '>>', '&>', '&>>'].includes(r.op) && (r.fd === null || r.fd === 1 || r.fd === 2) && t === '/dev/null') continue;
     no(`redirection ${r.fd ?? ''}${r.op}`);
   }
 }
@@ -629,61 +683,153 @@ function wordLit(w: Word): string | null {
   return s;
 }
 
-/** A word as an argument: its literal text when static (globs kept as text), else null — every substitution proven read-only. */
-function argOf(w: Word, env: Env): Arg {
-  let s = '';
-  let dynamic = false;
+/* glob patterns: a quoted char is escaped with `\`; an unquoted glob char is bare */
+const escQ = (v: string): string => v.replace(/[\\*?[\]]/g, '\\$&');
+const unesc = (v: string): string => v.replace(/\\(.)/gsu, '$1');
+const hasGlob = (seg: string): boolean => /(^|[^\\])(\\\\)*[*?[]/.test(seg);
+
+/**
+ * A word's argv strings: loop variables substituted (each value a safe token), then — when an unquoted glob char is
+ * present — the pattern expanded against the filesystem NOW (Aegis H2), every match becoming its own argument; a
+ * pattern that matches nothing is passed literally (bash) or not run (zsh). Every substitution is proven read-only
+ * here; a word holding one has no static value (`sub`).
+ */
+function expand(w: Word, env: Env): Arg[] {
+  const p0 = w.parts[0]!;
+  if (w.parts.length === 1 && p0.t === 'sub' && p0.kind === '<(') {
+    walkList(p0.list, { ...env }, false);
+    return [{ lit: null, sub: false, proc: true, exp: false }];
+  }
+  if (w.parts.some((p) => p.t === 'sub')) {
+    for (const p of w.parts) {
+      if (p.t === 'sub') walkList(p.list, { ...env }, false);
+      else if (p.t === 'var' && !env.vars.has(p.name)) no(`parameter $${p.name}`);
+    }
+    return [{ lit: null, sub: true, proc: false, exp: false }];
+  }
+  let pats = [''];
   let glob = false;
-  let tilde = false;
+  let fromVar = false;
   for (const p of w.parts) {
-    if (p.t === 'lit') s += p.v;
+    if (p.t === 'lit') pats = pats.map((s) => s + (p.quoted ? escQ(p.v) : p.v));
     else if (p.t === 'glob') {
-      s += p.v;
+      pats = pats.map((s) => s + p.v);
       glob = true;
-    } else if (p.t === 'tilde') tilde = true;
+    } else if (p.t === 'tilde') pats = pats.map((s) => s + escQ(env.ctx.home));
     else if (p.t === 'var') {
-      if (!env.vars.has(p.name)) no(`parameter $${p.name}`);
-      dynamic = true;
-    } else {
-      walkList(p.list, { ...env }, false);
-      dynamic = true;
+      const vs = env.vars.get(p.name);
+      if (!vs) no(`parameter $${p.name}`);
+      fromVar = true;
+      pats = pats.flatMap((s) => vs!.map((v) => s + escQ(v)));
+      if (pats.length > MAX_EXPANSIONS) no('too many expansions');
     }
   }
-  return { lit: dynamic ? null : s, glob, tilde, word: w };
+  const out: Arg[] = [];
+  for (const pt of pats) {
+    const matches = glob && hasGlob(pt) ? globExpand(pt, env) : [];
+    if (matches.length === 0) out.push({ lit: unesc(pt), sub: false, proc: false, exp: fromVar });
+    else for (const m of matches) out.push({ lit: m, sub: false, proc: false, exp: true });
+    if (out.length > MAX_EXPANSIONS) no(`glob: more than ${MAX_EXPANSIONS} matches`);
+  }
+  for (const a of out) if (a.exp && a.lit!.startsWith('-')) no('an expanded value starts with -');
+  return out;
 }
 
-/** A dynamic word: no `..` segment in its literal text, and it does not start at `/` or `~`. */
-function checkDynamic(a: Arg): void {
-  const lits = a.word.parts.map((p) => (p.t === 'lit' ? p.v : p.t === 'glob' ? p.v : p.t === 'tilde' ? '~' : '\u0000')).join('');
-  if (a.tilde || lits.startsWith('/') || lits.startsWith('\\') || lits.split(/[\\/\u0000]+/).includes('..')) no('dynamic path');
+/** One glob segment as a regex that matches a SUPERSET of what bash or zsh would (any case, dotfiles too, every bracket class as one char). */
+function segRegex(seg: string): RegExp {
+  let r = '';
+  for (let i = 0; i < seg.length; i++) {
+    const c = seg[i]!;
+    if (c === '\\') {
+      r += (seg[++i] ?? '').replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    } else if (c === '*') {
+      if (seg[i + 1] === '*') no('glob: **');
+      r += '[^/]*';
+    } else if (c === '?') r += '[^/]';
+    else if (c === '[') {
+      let j = i + 1;
+      if (seg[j] === '!' || seg[j] === '^') j++;
+      if (seg[j] === ']') j++;
+      const k = seg.indexOf(']', j);
+      if (k < 0) {
+        r += '\\[';
+        continue;
+      }
+      const body = seg.slice(i + 1, k);
+      if (/[[\\/]/.test(body)) no('glob: a bracket class with [ \\ or /');
+      r += '[^/]';
+      i = k;
+    } else r += c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  }
+  return new RegExp(`^${r}$`, 'iu');
 }
 
-function checkPath(a: Arg, env: Env): void {
-  const { pp, ctx, fold } = env;
-  let t = a.lit!;
-  if (a.tilde) t = pp.join(ctx.home, t);
-  if (t === '') return;
-  if (/^[\\/]{2}/.test(t) && env.pp === path.win32) no('device path');
-  if (!pp.isAbsolute(t) && env.cwd === null && t.split(/[\\/]+/).includes('..')) no('relative .. with an unknown cwd');
-  const bases = pp.isAbsolute(t) ? [t] : env.cwd !== null ? [pp.resolve(env.cwd, t)] : ctx.roots.map((r) => pp.resolve(r, t));
-  for (let abs of bases) {
-    abs = pp.resolve(abs);
-    if (a.glob) {
-      const gi = abs.search(/[*?[]/);
-      const cut = abs.slice(0, gi);
-      abs = cut.endsWith(pp.sep) ? cut.slice(0, -1) || pp.sep : pp.dirname(cut);
+/** Expand a pattern against the filesystem (never more than MAX_EXPANSIONS); [] when nothing matches. */
+function globExpand(pat: string, env: Env): string[] {
+  const abs = pat.startsWith('/');
+  if (!abs && env.cwd === null) no('a relative glob with an unknown cwd');
+  if (!env.native) return []; // a foreign path flavour (tests): nothing exists to match
+  const joinSh = (sh: string, s: string): string => (sh === '' ? s : sh.endsWith('/') && s !== '' ? sh + s : `${sh}/${s}`);
+  const joinFs = (f: string, s: string): string => (f.endsWith('/') || f.endsWith('\\') ? f + s : `${f}/${s}`);
+  let cur: Array<[string, string]> = [[abs ? '/' : '', abs ? '/' : env.cwd!]];
+  const segs = pat.split('/');
+  for (const [i, seg] of segs.entries()) {
+    if (abs && i === 0) continue;
+    if (!hasGlob(seg)) {
+      const s = unesc(seg);
+      cur = cur.map(([sh, f]) => [joinSh(sh, s), s === '' ? f : joinFs(f, s)]);
+      continue;
     }
-    const forms = [abs, realOr(abs)].filter((x): x is string => x !== null);
-    for (const f of forms) {
-      const ff = fold(f);
-      if (pp === path.posix && (ff === '/dev' || ff.startsWith('/dev/') || ff === '/proc' || ff.startsWith('/proc/'))) no('device path');
-      for (const p of env.prot) {
-        const fp = fold(p);
-        if (within(ff, fp, pp, true) || within(fp, ff, pp, false)) no('protected path');
+    const re = segRegex(seg);
+    const next: Array<[string, string]> = [];
+    for (const [sh, f] of cur) {
+      let names: string[];
+      try {
+        names = fs.readdirSync(f);
+      } catch {
+        continue;
+      }
+      if (seg.startsWith('.') || seg.startsWith('\\.')) names.push('.', '..');
+      for (const n of names) {
+        if (!re.test(n)) continue;
+        if (n.includes('\uFFFD')) no('glob: an undecodable file name');
+        next.push([joinSh(sh, n), joinFs(f, n)]);
+        if (next.length > MAX_EXPANSIONS) no(`glob: more than ${MAX_EXPANSIONS} matches`);
       }
     }
+    cur = next;
+  }
+  return cur.map(([sh]) => sh);
+}
+
+/**
+ * A path operand: resolved against the KNOWN cwd (Aegis M2: a relative path with an unknown cwd is refused), then,
+ * as given and at its (deepest-ancestor) realpath: not a device path, not inside or an ancestor of a protected root,
+ * and inside a session root or a system read root (Aegis H4 allowlist).
+ */
+function checkPath(t: string, env: Env): void {
+  const { pp, fold } = env;
+  if (t === '' || t === '-') return;
+  if (pp === path.win32 && /^[\\/]{2}/.test(t)) no('device path');
+  let raw: string;
+  if (pp.isAbsolute(t)) raw = t;
+  else if (env.cwd === null) return no('a relative path with an unknown cwd');
+  else raw = env.cwd.endsWith(pp.sep) ? env.cwd + t : env.cwd + pp.sep + t;
+  const real = realDeep(raw, env);
+  for (const f of [pp.resolve(raw), ...(real !== null ? [real] : [])]) {
+    const ff = fold(f);
+    if (pp === path.posix && (within(ff, '/dev', pp, true) || within(ff, '/proc', pp, true))) no('device path');
+    for (const p of env.prot) {
+      const fp = fold(p);
+      if (within(ff, fp, pp, true) || within(fp, ff, pp, false)) no('protected path');
+    }
+    if (!env.allow.some((a) => within(ff, fold(a), pp, true))) no('outside the readable roots');
   }
 }
+
+const needCwd = (env: Env, name: string): void => {
+  if (env.cwd === null) no(`${name}: the cwd is unknown`);
+};
 
 /* ── the allowlist ────────────────────────────────────────────────────────── */
 
@@ -691,33 +837,50 @@ type Rule = (args: Arg[], env: Env, name: string) => void;
 
 const isFlag = (a: Arg): boolean => a.lit !== null && a.lit.startsWith('-') && a.lit !== '-';
 
-/** Check a reader's static arguments as paths (flag values after `=` too); dynamic ones by checkDynamic. */
-function pathArgs(args: readonly Arg[], env: Env): void {
+/** Aegis C1: every argument of a path-taking command is checked as a path (flag values after `=` or a `/` too); a substitution never reaches one. */
+function pathArgs(args: readonly Arg[], env: Env, name: string): void {
   for (const a of args) {
-    if (a.lit === null) {
-      checkDynamic(a);
-      continue;
-    }
+    if (a.proc) continue; // `<(…)`: a pipe holding a proven read-only command's output
+    if (a.lit === null) no(`${name}: a substitution in a path argument`);
     if (isFlag(a)) {
-      const eq = a.lit.indexOf('=');
-      if (eq > 0) checkPath({ ...a, lit: a.lit.slice(eq + 1), tilde: false }, env);
+      const s = a.lit!;
+      const eq = s.indexOf('=');
+      if (eq > 0) checkPath(s.slice(eq + 1), env);
       else {
-        const slash = a.lit.search(/[\\/]/);
-        if (slash > 0) checkPath({ ...a, lit: a.lit.slice(slash), tilde: false }, env);
+        const slash = s.search(/[\\/]/);
+        if (slash > 0) checkPath(s.slice(slash), env);
       }
       continue;
     }
-    checkPath(a, env);
+    checkPath(a.lit!, env);
   }
 }
 
-const flagSafeReader: Rule = (args, env) => pathArgs(args, env);
-const noPath: Rule = (args) => {
-  for (const a of args) if (a.lit === null) checkDynamic(a);
-};
 const staticOnly = (args: readonly Arg[], name: string): void => {
   if (args.some((a) => a.lit === null)) no(`${name}: dynamic argument`);
 };
+
+/**
+ * Aegis H2: a reader whose flags never write or execute, minus its recursive / symlink-following / name-list flags
+ * (`denyShort` letters in any cluster; `denyLong` names and every abbreviation of them). `implicitCwd`: with no
+ * operand it reads the cwd, which must be known.
+ */
+function reader(denyShort = '', denyLong: readonly string[] = [], implicitCwd = false): Rule {
+  return (args, env, name) => {
+    for (const a of args) {
+      if (!isFlag(a) || a.lit === '--') continue;
+      const s = a.lit!;
+      if (s.startsWith('--')) {
+        const k = s.split('=')[0]!;
+        if (denyLong.some((d) => d.startsWith(k))) no(`${name}: flag ${k}`);
+        continue;
+      }
+      for (const ch of s.slice(1)) if (denyShort.includes(ch)) no(`${name}: flag -${ch}`);
+    }
+    if (implicitCwd && !args.some((a) => !isFlag(a))) checkPath('.', env);
+    pathArgs(args, env, name);
+  };
+}
 
 /** A literal flag check: `short` letters (cluster ok), `withValue` letters/longs consuming the next arg, `long` names. */
 function flags(args: readonly Arg[], name: string, o: { short: string; shortValue?: string; long?: readonly string[]; longValue?: readonly string[] }): Arg[] {
@@ -755,35 +918,64 @@ function flags(args: readonly Arg[], name: string, o: { short: string; shortValu
   return operands;
 }
 
+/** Output-only commands. Aegis C2: echo takes only -n/-e/-E; printf no flag at all (`printf -v HOME …` assigns). */
+const ECHO_FLAGS = new Set(['-n', '-e', '-E', '-ne', '-en', '-nE', '-En']);
+const echoRule: Rule = (args) => {
+  for (const a of args) if (a.lit !== null && /^-[A-Za-z]+$/.test(a.lit) && !ECHO_FLAGS.has(a.lit)) no(`echo: flag ${a.lit}`);
+};
+const printfRule: Rule = (args) => {
+  const f = args[0];
+  if (!f) no('printf: a format');
+  if (f!.lit === null) no('printf: the format is not literal');
+  if (f!.lit!.startsWith('-')) no('printf: a flag');
+};
+const textRule = (o: { short: string; shortValue?: string; long?: readonly string[]; longValue?: readonly string[] }, maxOperands = Infinity): Rule => (args, _env, name) => {
+  staticOnly(args, name);
+  if (flags(args, name, o).length > maxOperands) no(`${name}: an operand`);
+};
+const TEST_FILE_UNARY = new Set(['-e', '-f', '-d', '-s', '-r', '-w', '-x', '-L', '-h', '-b', '-c', '-p', '-S', '-O', '-G', '-N', '-k', '-u', '-g']);
+const TEST_FILE_BINARY = new Set(['-nt', '-ot', '-ef']);
+const TEST_OTHER = new Set(['-z', '-n', '-t', '-eq', '-ne', '-lt', '-le', '-gt', '-ge', '-a', '-o']);
+const testRule: Rule = (args, env, name) => {
+  staticOnly(args, name);
+  let ops = args.map((a) => a.lit!);
+  if (name === '[') {
+    if (ops.at(-1) !== ']') no('[: a closing ]');
+    ops = ops.slice(0, -1);
+  }
+  for (let i = 0; i < ops.length; i++) {
+    const s = ops[i]!;
+    if (TEST_FILE_UNARY.has(s)) {
+      if (ops[i + 1] !== undefined) checkPath(ops[++i]!, env);
+    } else if (TEST_FILE_BINARY.has(s)) {
+      if (ops[i - 1] !== undefined) checkPath(ops[i - 1]!, env);
+      if (ops[i + 1] !== undefined) checkPath(ops[++i]!, env);
+    } else if (/^-./.test(s) && !TEST_OTHER.has(s)) no(`${name}: flag ${s}`);
+  }
+};
+
 const sortRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   flags(args, name, { short: 'bdfghiMnrRsuVzc', shortValue: 'kt', long: ['--reverse', '--numeric-sort', '--unique', '--human-numeric-sort', '--version-sort', '--ignore-case', '--stable', '--general-numeric-sort', '--month-sort', '--dictionary-order', '--ignore-leading-blanks', '--check', '--zero-terminated'], longValue: ['--key', '--field-separator'] });
-  pathArgs(args, env);
+  pathArgs(args, env, name);
 };
 const uniqRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   const ops = flags(args, name, { short: 'cdDuiz', shortValue: 'fsw', long: ['--count', '--repeated', '--unique', '--ignore-case'], longValue: ['--skip-fields', '--skip-chars', '--check-chars'] });
   if (ops.length > 1) no('uniq: a second operand is an output file');
-  pathArgs(args, env);
+  pathArgs(args, env, name);
 };
 const fileRule: Rule = (args, env, name) => {
   staticOnly(args, name);
-  flags(args, name, { short: 'bihLNkzZ0p', shortValue: 'mfFe', long: ['--brief', '--mime', '--mime-type', '--mime-encoding', '--dereference', '--no-dereference', '--keep-going'] });
-  pathArgs(args, env);
+  // no -f (a list of names read from a file), no -C (compile)
+  flags(args, name, { short: 'bihLNkzZ0p', shortValue: 'mFe', long: ['--brief', '--mime', '--mime-type', '--mime-encoding', '--dereference', '--no-dereference', '--keep-going'] });
+  pathArgs(args, env, name);
 };
+/** Aegis M1: display only — `+FORMAT`, -u -R -j -I and -v ADJUST; never -f (read a file), -r (a file's time), -d, -s. */
 const dateRule: Rule = (args, _env, name) => {
   staticOnly(args, name);
-  const ops = flags(args, name, { short: 'uRjI', shortValue: 'rdvf', long: ['--utc', '--universal', '--rfc-email', '--iso-8601', '--rfc-3339'], longValue: ['--date', '--reference'] });
+  const ops = flags(args, name, { short: 'uRjI', shortValue: 'v', long: ['--utc', '--universal', '--rfc-email', '--iso-8601', '--rfc-3339'] });
   if (ops.some((a) => !a.lit!.startsWith('+'))) no('date: an operand sets the clock');
-};
-const rgRule: Rule = (args, env, name) => {
-  staticOnly(args, name);
-  for (const a of args) {
-    const s = a.lit!;
-    if (/^--(pre|pre-glob|search-zip|hostname-bin)(=|$)/.test(s)) no(`rg: ${s.split('=')[0]}`);
-    if (/^-[^-]*z/.test(s)) no('rg: -z');
-  }
-  pathArgs(args, env);
 };
 const jqRule: Rule = (args, env, name) => {
   staticOnly(args, name);
@@ -815,14 +1007,15 @@ const jqRule: Rule = (args, env, name) => {
     else rest.push(a);
   }
   if (filter && /env|ENV|import|include|input_filename|\$__loc__/.test(filter.lit!)) no('jq: env or module access in the filter');
-  pathArgs(rest, env);
+  pathArgs(rest, env, name);
 };
 const FIND_PRED = new Set(['-name', '-iname', '-path', '-ipath', '-wholename', '-iwholename', '-regex', '-iregex', '-type', '-xtype', '-maxdepth', '-mindepth', '-newer', '-mtime', '-mmin', '-atime', '-amin', '-ctime', '-cmin', '-size', '-perm', '-user', '-group', '-links', '-uid', '-gid', '-inum', '-samefile', '-lname', '-ilname']);
-const FIND_FLAG = new Set(['-print', '-print0', '-prune', '-o', '-or', '-a', '-and', '-not', '!', '(', ')', ',', '-empty', '-depth', '-d', '-follow', '-xdev', '-mount', '-true', '-false', '-ls', '-readable', '-writable', '-executable', '-nouser', '-nogroup', '-quit', '-printf', '-L', '-H', '-P', '-E', '-X', '-s', '-x', '-noleaf', '-regextype']);
+/** Aegis H2: no -L / -follow (symlink following); -H follows only the roots, which are realpath-checked. */
+const FIND_FLAG = new Set(['-print', '-print0', '-prune', '-o', '-or', '-a', '-and', '-not', '!', '(', ')', ',', '-empty', '-depth', '-d', '-xdev', '-mount', '-true', '-false', '-ls', '-readable', '-writable', '-executable', '-nouser', '-nogroup', '-quit', '-printf', '-H', '-P', '-E', '-X', '-s', '-x', '-noleaf', '-regextype']);
 const findRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   let i = 0;
-  while (i < args.length && ['-L', '-H', '-P', '-E', '-X', '-s', '-x', '-d'].includes(args[i]!.lit!)) i++;
+  while (i < args.length && ['-H', '-P', '-E', '-X', '-s', '-x', '-d'].includes(args[i]!.lit!)) i++;
   const roots: Arg[] = [];
   while (i < args.length && !args[i]!.lit!.startsWith('-') && !['!', '(', ')'].includes(args[i]!.lit!)) roots.push(args[i++]!);
   for (; i < args.length; i++) {
@@ -835,10 +1028,16 @@ const findRule: Rule = (args, env, name) => {
     if (FIND_FLAG.has(s)) continue;
     no(`find: ${s}`);
   }
-  if (roots.length === 0) roots.push({ lit: '.', glob: false, tilde: false, word: { parts: [] } });
-  pathArgs(roots, env);
+  if (roots.length === 0) checkPath('.', env);
+  pathArgs(roots, env, name);
 };
-const AWK_BAD = /system|getline|close|fflush|ENVIRON|PROCINFO|[|>@]/;
+/**
+ * Aegis H1: awk runs ONE print program of a strict shape — an optional pattern (`/re/`, `NR|NF|$N <op> number|"str"`,
+ * `END`) and `{ print ITEMS }` where an item is `$N`, `$NF`, `NF`, `NR` or a plain string. Nothing else can appear, so
+ * no ARGV/ARGC/FILENAME/ENVIRON/getline/system/close/redirection.
+ */
+const AWK_ITEM = String.raw`(?:\$(?:\d+|NF)|NF|NR|"[^"\\]*")`;
+const AWK_PROG = new RegExp(String.raw`^\s*(?:(?:NR|NF|\$\d+)\s*(?:==|!=|<=|>=|<|>)\s*(?:\d+|"[^"\\]*")\s*|\/[^/\\\n]*\/\s*|END\s*)?\{\s*print(?:\s+${AWK_ITEM}(?:\s*,?\s*${AWK_ITEM})*)?\s*;?\s*\}\s*$`);
 const awkRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   let i = 0;
@@ -848,13 +1047,13 @@ const awkRule: Rule = (args, env, name) => {
       i++;
       break;
     }
-    if (s === '-F' || s === '-v') i++;
-    else if (!/^-F./.test(s) && !/^-v./.test(s)) no(`awk: flag ${s}`);
+    if (s === '-F') i++;
+    else if (!/^-F./.test(s)) no(`awk: flag ${s}`);
   }
   const prog = args[i];
   if (!prog) no('awk: a program');
-  if (AWK_BAD.test(prog!.lit!)) no('awk: the program may write or run');
-  pathArgs(args.slice(i + 1), env);
+  if (!AWK_PROG.test(prog!.lit!)) no('awk: only a print program');
+  pathArgs(args.slice(i + 1), env, name);
 };
 const SED_SCRIPT = /^\s*(?:(?:\d+|\$)(?:\s*,\s*(?:\d+|\$))?|\/[^/\\\n]*\/)\s*p\s*$/;
 const sedRule: Rule = (args, env, name) => {
@@ -875,43 +1074,60 @@ const sedRule: Rule = (args, env, name) => {
     } else ops.push(args[i]!);
   }
   if (!script) no('sed: script');
-  pathArgs(ops, env);
+  pathArgs(ops, env, name);
 };
 const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'blame', 'rev-parse', 'ls-files', 'describe']);
 const GIT_BAD = /^(--output|--ext-diff|--textconv|--open-files-in-pager|-O|--exec|--upload-pack|--receive-pack|--paginate)(=|$)/;
+/** Aegis M3: config keys that may hold a credential (URLs carry user:token, headers carry bearer tokens). */
+const GIT_SECRET_KEY = /^(remote|credential|http|https|url|sendemail)\.|url|token|password|passwd|secret|auth|header|cookie|proxy|key/i;
 const gitRule: Rule = (args, env, name) => {
   staticOnly(args, name);
+  needCwd(env, name); // git finds its repo (and that repo's config) from the cwd
   const sub = args[0]?.lit;
   if (!sub || sub.startsWith('-')) no('git: a global option');
   const rest = args.slice(1);
   for (const a of rest) if (GIT_BAD.test(a.lit!)) no(`git: ${a.lit!.split('=')[0]}`);
-  if (GIT_READ.has(sub!)) return pathArgs(rest, env);
+  if (GIT_READ.has(sub!)) return pathArgs(rest, env, name);
   if (sub === 'branch') {
-    const list = rest.some((a) => a.lit === '--list' || a.lit === '-l');
+    const names = rest.filter((a) => !isFlag(a));
     for (const a of rest) {
       const s = a.lit!;
-      if (isFlag(a)) {
-        if (!/^(-[avrl]+|-vv|--list|--all|--remotes|--verbose|--show-current|--merged|--no-merged|--contains|--no-contains|--sort=.*|--format=.*|--color|--no-color|--column|--no-column)$/.test(s)) no(`git branch: ${s}`);
-      } else if (!list) no('git branch: a name (only with --list)');
+      if (isFlag(a) && !/^(-[avr]+|-vv|--list|--all|--remotes|--verbose|--show-current|--merged|--no-merged|--contains|--no-contains|--sort=.*|--format=.*|--color|--no-color|--column|--no-column)$/.test(s)) no(`git branch: ${s}`);
     }
+    // Low: `-l NAME` was --create-reflog in older git (it created NAME); a pattern only after the long --list
+    if (names.length && !rest.some((a) => a.lit === '--list')) no('git branch: a name (only with --list)');
     return;
   }
   if (sub === 'remote') {
-    if (rest.length === 0 || (rest.length === 1 && rest[0]!.lit === '-v')) return;
-    no('git remote: only bare or -v');
+    if (rest.length === 0) return;
+    no('git remote: only bare (a -v listing shows URLs, which may hold credentials)');
   }
   if (sub === 'config') {
-    if (rest.length === 2 && ['--get', '--get-all'].includes(rest[0]!.lit!) && !rest[1]!.lit!.startsWith('-')) return;
-    no('git config: only --get/--get-all KEY');
+    if (rest.length === 2 && ['--get', '--get-all'].includes(rest[0]!.lit!) && !rest[1]!.lit!.startsWith('-') && !GIT_SECRET_KEY.test(rest[1]!.lit!)) return;
+    no('git config: only --get/--get-all KEY, never a key that may hold a credential');
   }
   no(`git: subcommand ${sub}`);
 };
 
 export const COMMANDS: Readonly<Record<string, Rule>> = Object.freeze({
-  cat: flagSafeReader, head: flagSafeReader, tail: flagSafeReader, wc: flagSafeReader, ls: flagSafeReader, grep: flagSafeReader, egrep: flagSafeReader, fgrep: flagSafeReader,
-  stat: flagSafeReader, du: flagSafeReader, df: flagSafeReader, cut: flagSafeReader, diff: flagSafeReader, cmp: flagSafeReader, realpath: flagSafeReader,
-  echo: noPath, printf: noPath, basename: noPath, dirname: noPath, tr: noPath, which: noPath, test: noPath, '[': noPath, true: noPath, false: noPath, pwd: noPath,
-  sort: sortRule, uniq: uniqRule, file: fileRule, date: dateRule, rg: rgRule, jq: jqRule, find: findRule, awk: awkRule, sed: sedRule, git: gitRule,
+  cat: reader(), head: reader(), tail: reader(), cut: reader(), cmp: reader(), realpath: reader(), df: reader(),
+  wc: reader('', ['--files0-from']),
+  ls: reader('LR', ['--dereference', '--recursive'], true),
+  grep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
+  egrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
+  fgrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
+  stat: reader('L', ['--dereference']),
+  du: reader('L', ['--dereference', '--files0-from'], true),
+  diff: reader('r', ['--recursive']),
+  echo: echoRule, printf: printfRule,
+  basename: textRule({ short: 'az', shortValue: 's', long: ['--multiple', '--zero'], longValue: ['--suffix'] }),
+  dirname: textRule({ short: 'z', long: ['--zero'] }),
+  tr: textRule({ short: 'cdsCu' }),
+  which: textRule({ short: 'as' }),
+  pwd: textRule({ short: 'LP' }, 0),
+  true: textRule({ short: '' }, Infinity), false: textRule({ short: '' }, Infinity),
+  test: testRule, '[': testRule,
+  sort: sortRule, uniq: uniqRule, file: fileRule, date: dateRule, jq: jqRule, find: findRule, awk: awkRule, sed: sedRule, git: gitRule,
 });
 
 /* ── prefix rules ─────────────────────────────────────────────────────────── */
