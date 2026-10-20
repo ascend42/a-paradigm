@@ -722,3 +722,10 @@ html, body {
 .tone-hue-3 { background: var(--p-ochre-fill); }
 .tone-hue-4 { background: var(--p-rose-clay-fill); }
 .tone-hue-5 { background: var(--p-sea-grey-fill); }
+/* #gui-model-picker: the New-session "claude model" select and the header model chip (ui/model-picker.ts) */
+.ns-claude { display: flex; flex-direction: column; gap: 6px; }
+.ns-claude[hidden], #ns-model-id[hidden], #ns-model-why[hidden] { display: none; }
+.model-wrap { vertical-align: baseline; }
+.model-btn { white-space: nowrap; padding: 0 6px; font-size: 12px; }
+.model-menu { left: 0; right: auto; min-width: 240px; }
+.model-switch-lines p { margin: 0 0 4px; }

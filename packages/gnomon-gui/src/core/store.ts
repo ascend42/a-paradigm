@@ -723,6 +723,8 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
   switch (r.kind) {
     case 'session.open':
       return { role: 'system', text: `${objOf(p.resume) ? 'session resumed' : 'session opened'}${typeof p.model === 'string' ? ` · ${p.model}` : ''}${typeof p.cwd === 'string' ? ` · ${p.cwd}` : ''}` };
+    case 'session.model': // #gui-model-picker: the kernel's record of a mid-session switch
+      return { role: 'system', text: p.outcome === 'switched' ? `model switched · ${String(p.from)} → ${String(p.to)} · the conversation continues` : `model switch refused · stays ${String(p.from)}${typeof p.reason === 'string' ? ` · ${p.reason}` : ''}` };
     case 'session.exited':
       return { role: 'system', text: `session ended${typeof p.reason === 'string' ? ` · ${p.reason}` : ''}${typeof p.code === 'number' ? ` · exit ${p.code}` : ''}${typeof p.signal === 'string' ? ` · ${p.signal}` : ''}` };
     case 'session.orphaned':
