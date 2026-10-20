@@ -396,6 +396,8 @@ export interface ChatItem {
   speaker?: string;
   /** dictation: the kernel's attribution of a sent message (turn.sent source): 🎙 voice or 🎙✎ voice-edited */
   voice?: 'voice' | 'voice-edited';
+  /** table talk (TD-2026-10-20-294): an assistant reply's speak block, shown as the "said aloud" line (the body omits it) */
+  said?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -428,8 +430,88 @@ function textOf(content: unknown): string {
   return out.join('\n');
 }
 
+/* ── table talk (TD-2026-10-20-294; mirrors the kernel's speakable.ts speakBlock) ── */
+
+const SPEAK_MAX = 300;
+function speakWords(s: string): string {
+  const t = s
+    .replace(/\bhttps?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__|\*|_)(\S[^*_]*?)\1/g, '$2')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/\b[0-9a-f]{12,}\b/gi, (w) => (/[0-9]/.test(w) ? '' : w))
+    .replace(/\d[\d,._:-]*\d/g, (w) => (w.replace(/\D/g, '').length >= 5 ? '' : w))
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (t.length <= SPEAK_MAX) return t;
+  const cut = t.slice(0, SPEAK_MAX);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '), /[.?!]$/.test(cut) ? cut.length - 1 : -1);
+  if (end > 0) return cut.slice(0, end + 1);
+  const sp = cut.lastIndexOf(' ', SPEAK_MAX - 1);
+  return `${(sp > 0 ? cut.slice(0, sp) : cut.slice(0, SPEAK_MAX - 1)).trimEnd()}…`;
+}
+
+/**
+ * A reply's first speak block (the words the voice said) and the body without it. An unclosed fence runs to its
+ * first blank line. No block (a heuristic reply) ⇒ said null and the body unchanged: no "said aloud" highlight.
+ */
+export function splitSpeak(text: string): { said: string | null; body: string } {
+  const open = /(?:^|\n)[ \t]*```speak[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!open) return { said: null, body: text };
+  const before = text.slice(0, open.index);
+  const rest = text.slice(open.index + open[0].length);
+  const close = /(?:^|\n)[ \t]*```[ \t]*(?:\r?\n|$)/.exec(rest);
+  const para = close ? null : /\n\s*\n/.exec(rest);
+  const block = close ? rest.slice(0, close.index) : para ? rest.slice(0, para.index) : rest;
+  const after = close ? rest.slice(close.index + close[0].length) : para ? rest.slice(para.index) : '';
+  const said = speakWords(block);
+  if (!said || !/[A-Za-z]/.test(said)) return { said: null, body: text };
+  return { said, body: `${before.trimEnd()}${before.trim() && after.trim() ? '\n\n' : ''}${after.replace(/^\s*\n/, '')}`.trim() };
+}
+
+/** One line of a reply body: a LABELLED line (bold letter / number / name at line start) or plain text. */
+export type ReplyPart = { label: string; text: string } | { text: string };
+
+/**
+ * The labels the agent chose (no fixed scheme: A/B/C, 1/2/3, short names): a line that starts with a bold label,
+ * optionally after a list marker, becomes a labelled part; consecutive plain lines stay one text part. No labelled
+ * line ⇒ one text part (the body as is).
+ */
+export function replyParts(body: string): ReplyPart[] {
+  const out: ReplyPart[] = [];
+  let plain: string[] = [];
+  const flush = (): void => {
+    if (plain.length) out.push({ text: plain.join('\n') });
+    plain = [];
+  };
+  for (const ln of body.split('\n')) {
+    const m = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?\*\*([^*\n]{1,40}?)\*\*\s*[.):\-–—]?\s*(.*)$/.exec(ln);
+    if (m && m[1]!.trim()) {
+      flush();
+      out.push({ label: m[1]!.trim().replace(/[.):]$/, ''), text: m[2]!.trim() });
+    } else plain.push(ln);
+  }
+  flush();
+  return out;
+}
+
+/** The human's own text of a replayed user message: the FIRST text block (a second one is the table-talk guidance). */
+function firstTextOf(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  for (const c of content) {
+    const x = objOf(c);
+    if (x?.type === 'text' && typeof x.text === 'string') return x.text;
+  }
+  return '';
+}
+
 /** One turn.event line as chat items (none = noise: hooks, partials, rate limits, status, control frames, tool results). */
-function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text'>> {
+function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text' | 'said'>> {
   let m: Record<string, unknown> | null = null;
   try {
     m = objOf(JSON.parse(line));
@@ -439,9 +521,12 @@ function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text'>> {
   if (!m) return [];
   const msg = objOf(m.message);
   if (m.type === 'assistant' && msg) {
-    const out: Array<Pick<ChatItem, 'role' | 'text'>> = [];
+    const out: Array<Pick<ChatItem, 'role' | 'text' | 'said'>> = [];
     const text = textOf(msg.content);
-    if (text.trim()) out.push({ role: 'assistant', text: cap(text, CHAT_TEXT_MAX) });
+    if (text.trim()) {
+      const { said, body } = splitSpeak(text);
+      out.push({ role: 'assistant', text: cap(body, CHAT_TEXT_MAX), ...(said !== null ? { said } : {}) });
+    }
     if (Array.isArray(msg.content))
       for (const c of msg.content) {
         const x = objOf(c);
@@ -452,7 +537,7 @@ function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text'>> {
   // the user's own message as claude replays it (--replay-user-messages): the only row that carries its text
   // (session.inject / turn.sent log a hash and a byte count, never the text — G-LOG-03)
   if (m.type === 'user' && msg) {
-    const text = textOf(msg.content);
+    const text = firstTextOf(msg.content);
     return text.trim() ? [{ role: 'user', text: cap(text, CHAT_TEXT_MAX) }] : [];
   }
   return [];
