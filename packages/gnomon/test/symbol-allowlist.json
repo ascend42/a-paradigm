@@ -1,6 +1,7 @@
 {
   "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
   "entries": [
+    { "symbol": "#shell-readonly", "reason": "TD-2026-10-20-294 part 1 sub-component of #supervisor (spec §3.4 run modes, auto-edits read-only Bash classifier); spec Appendix A node pending the TD" },
     { "symbol": "#update-watch", "reason": "TD-2026-10-19-063 sub-component of $daemon-lifecycle (§2.4 rule 11 self-update pickup: build stamp poll, kernel upgrade card, helper re-pin); spec Appendix A node pending the TD-2026-10-19-063 spec pass" },
     { "symbol": "#gui-resume", "reason": "TD-2026-10-19-063 sub-component of #web-endpoint (the {resumeToken} auth form, §4.9 / §11.2); spec Appendix A node pending the TD-2026-10-19-063 spec pass" },
     { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },

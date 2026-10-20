@@ -100,7 +100,7 @@ export interface Pipeline { cmds: Cmd[]; bang: boolean }
 export interface List { items: Array<{ pipe: Pipeline; sep: string | null }> }
 
 export class ShellParseError extends Error {}
-const bad = (why: string): never => {
+const parseFail = (why: string): never => {
   throw new ShellParseError(why);
 };
 
@@ -145,7 +145,7 @@ class Lexer {
     }
     for (const op of ['&>>', '&>', '&&', '||', ';;', '|&', '<<<', '<<-', '<<', '<>', '<&', '>>', '>&', '>|']) {
       if (at(op)) {
-        if (op === ';;' || op === '|&') bad(`operator ${op}`);
+        if (op === ';;' || op === '|&') parseFail(`operator ${op}`);
         this.pos += op.length;
         return { t: 'op', v: op };
       }
@@ -155,7 +155,7 @@ class Lexer {
       const list = this.#nested();
       return { t: 'word', w: { parts: [{ t: 'sub', list, kind: '<(' }] }, plain: null };
     }
-    if (c === '>' && s[this.pos + 1] === '(') bad('process substitution >(…)');
+    if (c === '>' && s[this.pos + 1] === '(') parseFail('process substitution >(…)');
     if (';&|<>()'.includes(c)) {
       this.pos++;
       return { t: 'op', v: c };
@@ -168,11 +168,11 @@ class Lexer {
 
   /** `$(` … `)` / `<(` … `)`: a nested list on this lexer, up to its `)`. */
   #nested(): List {
-    if (this.depth >= MAX_DEPTH) bad('nesting too deep');
+    if (this.depth >= MAX_DEPTH) parseFail('nesting too deep');
     const p = new Parser(this, this.depth + 1);
     const list = p.list(new Set([')']));
     const t = this.take();
-    if (!(t.t === 'op' && t.v === ')')) bad('unterminated substitution');
+    if (!(t.t === 'op' && t.v === ')')) parseFail('unterminated substitution');
     return list;
   }
 
@@ -189,12 +189,12 @@ class Lexer {
       if (META.includes(c)) break;
       if (c === '\\') {
         const n = s[this.pos + 1];
-        if (n === undefined) bad('trailing backslash');
+        if (n === undefined) parseFail('trailing backslash');
         this.pos += 2;
         if (n !== '\n') lit(n!, true);
       } else if (c === "'") {
         const end = s.indexOf("'", this.pos + 1);
-        if (end < 0) bad("unterminated '");
+        if (end < 0) parseFail("unterminated '");
         lit(s.slice(this.pos + 1, end), true);
         this.pos = end + 1;
       } else if (c === '"') {
@@ -208,10 +208,10 @@ class Lexer {
         parts.push({ t: 'glob', v: c });
         this.pos++;
       } else if (c === '{' || c === '}') {
-        bad('unquoted brace');
+        parseFail('unquoted brace');
       } else if (c === '~' && parts.length === 0) {
         const n = s[this.pos + 1];
-        if (n !== undefined && n !== '/' && !META.includes(n)) bad('~user');
+        if (n !== undefined && n !== '/' && !META.includes(n)) parseFail('~user');
         parts.push({ t: 'tilde' });
         this.pos++;
       } else {
@@ -219,14 +219,14 @@ class Lexer {
         this.pos++;
       }
     }
-    if (parts.length === 0) bad('empty word');
+    if (parts.length === 0) parseFail('empty word');
     return { parts };
   }
 
   #double(parts: Part[], lit: (v: string, q: boolean) => void): void {
     const s = this.s;
     for (;;) {
-      if (this.pos >= s.length) bad('unterminated "');
+      if (this.pos >= s.length) parseFail('unterminated "');
       const c = s[this.pos]!;
       if (c === '"') {
         this.pos++;
@@ -235,7 +235,7 @@ class Lexer {
       }
       if (c === '\\') {
         const n = s[this.pos + 1];
-        if (n === undefined) bad('unterminated "');
+        if (n === undefined) parseFail('unterminated "');
         this.pos += 2;
         if (n === '\n') continue;
         lit('$`"\\'.includes(n!) ? n! : `\\${n}`, true);
@@ -252,19 +252,19 @@ class Lexer {
     const s = this.s;
     const n = s[this.pos + 1];
     if (n === '(') {
-      if (s[this.pos + 2] === '(') bad('arithmetic $((…))');
+      if (s[this.pos + 2] === '(') parseFail('arithmetic $((…))');
       this.pos += 2;
       parts.push({ t: 'sub', list: this.#nested(), kind: '$(' });
       return;
     }
     if (n === '{') {
       const m = /^\$\{(#?)([A-Za-z_][A-Za-z0-9_]*)\}/.exec(s.slice(this.pos));
-      if (!m) bad('parameter expansion form');
+      if (!m) parseFail('parameter expansion form');
       parts.push({ t: 'var', name: m![2]! });
       this.pos += m![0].length;
       return;
     }
-    if (!quoted && (n === "'" || n === '"')) bad(`$${n}…${n} quoting`);
+    if (!quoted && (n === "'" || n === '"')) parseFail(`$${n}…${n} quoting`);
     const m = /^\$([A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])/.exec(s.slice(this.pos));
     if (m) {
       parts.push({ t: 'var', name: m[1]! });
@@ -272,7 +272,7 @@ class Lexer {
       return;
     }
     // a bare `$` only before whitespace, the end or a closing quote; zsh reads `$=x`, `$~x`, `$^x`, `$+x` as expansions
-    if (n !== undefined && !' \t\n'.includes(n) && !(quoted && n === '"')) bad(`$${n} expansion`);
+    if (n !== undefined && !' \t\n'.includes(n) && !(quoted && n === '"')) parseFail(`$${n} expansion`);
     lit('$', quoted);
     this.pos++;
   }
@@ -282,7 +282,7 @@ class Lexer {
     let i = this.pos + 1;
     let inner = '';
     for (;;) {
-      if (i >= s.length) bad('unterminated `');
+      if (i >= s.length) parseFail('unterminated `');
       const c = s[i]!;
       if (c === '`') break;
       if (c === '\\' && (s[i + 1] === '`' || s[i + 1] === '\\' || s[i + 1] === '$')) {
@@ -294,7 +294,7 @@ class Lexer {
       }
     }
     this.pos = i + 1;
-    if (this.depth >= MAX_DEPTH) bad('nesting too deep');
+    if (this.depth >= MAX_DEPTH) parseFail('nesting too deep');
     return { t: 'sub', list: parseWith(inner, this.depth + 1), kind: '`' };
   }
 
@@ -304,7 +304,7 @@ class Lexer {
       const h = r.heredoc!;
       const lines: string[] = [];
       for (;;) {
-        if (this.pos >= this.s.length) bad('unterminated heredoc');
+        if (this.pos >= this.s.length) parseFail('unterminated heredoc');
         const nl = this.s.indexOf('\n', this.pos);
         const raw = nl < 0 ? this.s.slice(this.pos) : this.s.slice(this.pos, nl);
         this.pos = nl < 0 ? this.s.length : nl + 1;
@@ -334,11 +334,11 @@ class Parser {
       const t = this.lx.peek();
       const atTerm = (t.t === 'eof' && terms.has('eof')) || (t.t === 'op' && terms.has(t.v)) || (t.t === 'word' && t.plain !== null && terms.has(t.plain));
       if (atTerm) {
-        if (lastSep === '&&' || lastSep === '||') bad(`nothing after ${lastSep}`);
+        if (lastSep === '&&' || lastSep === '||') parseFail(`nothing after ${lastSep}`);
         return { items };
       }
-      if (t.t === 'eof') bad('unexpected end');
-      if (lastSep === null) bad('missing separator');
+      if (t.t === 'eof') parseFail('unexpected end');
+      if (lastSep === null) parseFail('missing separator');
       const pipe = this.#pipeline();
       const n = this.lx.peek();
       const sep = n.t === 'op' && SEPS.has(n.v) ? n.v : null;
@@ -372,41 +372,41 @@ class Parser {
     const t = this.lx.peek();
     if (t.t === 'op' && t.v === '(') {
       this.lx.take();
-      if (this.depth >= MAX_DEPTH) bad('nesting too deep');
+      if (this.depth >= MAX_DEPTH) parseFail('nesting too deep');
       const body = new Parser(this.lx, this.depth + 1).list(new Set([')']));
       this.#expectOp(')');
       return { t: 'subshell', body, redirs: this.#redirs([]) };
     }
     if (t.t === 'word' && t.plain === 'for') return this.#for();
-    if (t.t === 'word' && t.plain !== null && RESERVED.has(t.plain)) bad(`unsupported compound ${t.plain}`);
+    if (t.t === 'word' && t.plain !== null && RESERVED.has(t.plain)) parseFail(`unsupported compound ${t.plain}`);
     return this.#simple();
   }
 
   #expectOp(v: string): void {
     const t = this.lx.take();
-    if (!(t.t === 'op' && t.v === v)) bad(`expected ${v}`);
+    if (!(t.t === 'op' && t.v === v)) parseFail(`expected ${v}`);
   }
   #expectWord(v: string): void {
     const t = this.lx.take();
-    if (!(t.t === 'word' && t.plain === v)) bad(`expected ${v}`);
+    if (!(t.t === 'word' && t.plain === v)) parseFail(`expected ${v}`);
   }
 
   #for(): Cmd {
     this.lx.take();
     const n = this.lx.take();
     // a lowercase name that is no special parameter of bash or zsh (zsh ties `path` to PATH: `for path in x` would steer lookup)
-    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || LOOP_VAR_DENY.has(n.plain)) bad('for: a plain lowercase variable name');
+    if (n.t !== 'word' || n.plain === null || !/^[a-z][a-z0-9_]{0,15}$/.test(n.plain) || LOOP_VAR_DENY.has(n.plain)) parseFail('for: a plain lowercase variable name');
     this.#skipNewlines();
     this.#expectWord('in'); // `for x; do` iterates "$@": refused
     const items: Word[] = [];
     for (let t = this.lx.peek(); t.t === 'word'; t = this.lx.peek()) items.push((this.lx.take() as { w: Word }).w);
     const sep = this.lx.take();
-    if (!(sep.t === 'op' && (sep.v === ';' || sep.v === '\n'))) bad('for: ; or newline after the word list');
+    if (!(sep.t === 'op' && (sep.v === ';' || sep.v === '\n'))) parseFail('for: ; or newline after the word list');
     this.#skipNewlines();
     this.#expectWord('do');
-    if (this.depth >= MAX_DEPTH) bad('nesting too deep');
+    if (this.depth >= MAX_DEPTH) parseFail('nesting too deep');
     const body = new Parser(this.lx, this.depth + 1).list(new Set(['done']));
-    if (body.items.length === 0) bad('for: empty body');
+    if (body.items.length === 0) parseFail('for: empty body');
     this.#expectWord('done');
     return { t: 'for', name: (n as { plain: string }).plain, items, body, redirs: this.#redirs([]) };
   }
@@ -428,7 +428,7 @@ class Parser {
     }
     if (!assigns.length && !words.length && !redirs.length) {
       const t = this.lx.peek();
-      bad(`unexpected ${t.t === 'op' ? JSON.stringify(t.v) : t.t}`);
+      parseFail(`unexpected ${t.t === 'op' ? JSON.stringify(t.v) : t.t}`);
     }
     return { t: 'simple', assigns, words, redirs };
   }
@@ -445,13 +445,13 @@ class Parser {
       fd = t.n;
       t = this.lx.take();
     }
-    if (t.t !== 'op' || !REDIR_OPS.has(t.v)) bad('redirection');
+    if (t.t !== 'op' || !REDIR_OPS.has(t.v)) parseFail('redirection');
     const op = (t as { v: string }).v;
     const target = this.lx.take();
-    if (target.t !== 'word') bad('redirection target');
+    if (target.t !== 'word') parseFail('redirection target');
     const w = (target as { w: Word }).w;
     if (op === '<<' || op === '<<-') {
-      if (!w.parts.every((p) => p.t === 'lit')) bad('heredoc delimiter');
+      if (!w.parts.every((p) => p.t === 'lit')) parseFail('heredoc delimiter');
       const delim = w.parts.map((p) => (p as { v: string }).v).join('');
       const r: Redir = { fd, op, target: null, heredoc: { delim, quoted: w.parts.some((p) => p.t === 'lit' && p.quoted), strip: op === '<<-', body: null } };
       this.lx.heredocs.push(r);
@@ -465,14 +465,14 @@ class Parser {
 function parseWith(src: string, depth: number): List {
   const lx = new Lexer(src, depth);
   const list = new Parser(lx, depth).list(new Set(['eof']));
-  if (lx.heredocs.length) bad('unterminated heredoc');
+  if (lx.heredocs.length) parseFail('unterminated heredoc');
   return list;
 }
 
 /** Parse a command (the supported subset). Throws ShellParseError for anything outside it. */
 export function parseShell(src: string): List {
-  if (src.length > MAX_LEN) bad('too long');
-  if (src.includes('\0')) bad('NUL');
+  if (src.length > MAX_LEN) parseFail('too long');
+  if (src.includes('\0')) parseFail('NUL');
   return parseWith(src, 0);
 }
 
