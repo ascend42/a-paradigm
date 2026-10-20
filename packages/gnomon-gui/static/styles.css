@@ -1,8 +1,15 @@
 /* #gui themes (spec §11.3, .atelier/design-system.yaml gnomon.*): papercraft by day, phosphor by night, auto.
    Tokens are the G-GUI-10 fixtures verbatim (docs/specs/gnomon-fixtures/contrast.json; test/theme.test.ts checks
    them). `color:` only ever takes a TEXT token; project hues are fills only (--p-*-fill), never text.
-   Fonts: JetBrains Mono spine, Fraunces for day titles only. Slice 1 names the families and falls back to the
-   system mono/serif; the bundled font files (law 6, no CDN) are M1.10 slice 2. */
+   Fonts: JetBrains Mono spine, Fraunces for day titles only. S1 (critique 2026-10-20) bundles them as self-hosted
+   latin woff2 under fonts/ (law 6, font-src 'self', no CDN), each family with its OFL 1.1 licence beside it
+   (fonts/OFL-*.txt; Fontsource 5.3.0 latin subsets, no Reserved Font Name declared upstream). */
+
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); }
+/* one variable cut (opsz 9-144 and the wght axis) covers the comp's 460 and 600 */
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/Fraunces-opsz-wght.woff2") format("woff2"); }
 
 :root,
 [data-theme="day"] {
@@ -28,9 +35,25 @@
   --p-ochre-fill: #D2B074;
   --p-rose-clay-fill: #C9949A;
   --p-sea-grey-fill: #8FB0AE;
+  --p-terracotta-ink: #8E4E38;
+  --p-sage-ink: #56663F;
+  --p-slate-ink: #44577C;
+  --p-ochre-ink: #7A5A1C;
+  --p-rose-clay-ink: #874B54;
+  --p-sea-grey-ink: #3F6664;
+  --on-ink: #F8F5EE;
   --shadow: 2px 3px 0 rgba(22, 21, 15, 0.18);
-  --glow: none;
-  --title-font: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --key-shadow: 2px 2px 0 var(--key-edge);
+  --sheet-shadow: 0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14);
+  --edge-w: 4px;
+  --grain: url("grain.svg");
+  --grain-opacity: .3;
+  --wm-glow: none;
+  --cap-shadow: rgba(40, 30, 15, .22);
+  --cap-glow: none;
+  --stamp: #3F6664;
+  --title-font: "Fraunces", Georgia, serif;
+  --display-wght: 600;
   --title-transform: none;
   --title-spacing: 0;
 }
@@ -58,9 +81,25 @@
   --p-ochre-fill: #E8C88C;
   --p-rose-clay-fill: #E4AEB4;
   --p-sea-grey-fill: #A8CFCB;
+  --p-terracotta-ink: #E6A88F;
+  --p-sage-ink: #B7CCA3;
+  --p-slate-ink: #A9B9DB;
+  --p-ochre-ink: #E8C88C;
+  --p-rose-clay-ink: #E4AEB4;
+  --p-sea-grey-ink: #A8CFCB;
+  --on-ink: #171A21;
   --shadow: none;
-  --glow: 0 0 6px rgba(232, 244, 240, 0.18);
+  --key-shadow: none;
+  --sheet-shadow: none;
+  --edge-w: 3px;
+  --grain: none;
+  --grain-opacity: 0;
+  --wm-glow: 0 0 6px rgba(200, 255, 235, .35);
+  --cap-shadow: transparent;
+  --cap-glow: 0 0 8px 1px rgba(160, 255, 220, .22);
+  --stamp: #A8CFCB;
   --title-font: var(--mono);
+  --display-wght: 500;
   --title-transform: uppercase;
   --title-spacing: 0.08em;
 }
@@ -69,6 +108,13 @@
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --fly: 550ms cubic-bezier(.3, .7, .3, 1);
   --reflow: 220ms;
+  --radius: 3px;
+  --t-stamp: 400ms cubic-bezier(.3, 1.4, .5, 1);
+  --t-flyout: 450ms ease-in;
+  --t-droop: 500ms ease-out;
+  --t-walk: 900ms ease-in-out;
+  --t-bob: 1.1s ease-in-out;
+  --t-hold: 3s linear;
 }
 
 * { box-sizing: border-box; }
@@ -86,20 +132,27 @@ html, body {
 
 /* the app fills the viewport: header, notices, the desk (grows), the status line; only panes scroll inside (the
    page itself does not: the shell is exactly the viewport; the first-run setup screens still scroll the body) */
-.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; position: relative; isolation: isolate; background: var(--ground); }
+/* S1 grain (papercraft day only): a bundled grain.svg (img-src 'self'; the comp's data: URL is CSP-blocked) tiled under
+   the content. isolation keeps it inside the shell's stacking context at z-index -1, so it sits above the ground and
+   below every pane, card and menu (never over text; no z-index juggling for the header menus). Night: --grain none. */
+.shell::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: multiply; }
 .shell > .chrome, .shell > .notice, .shell > .shuttle { flex: 0 0 auto; }
 .shell > .desk { flex: 1 1 auto; }
 
 .chrome {
   display: flex; align-items: center; gap: 12px;
-  padding: 6px 14px;
-  background: var(--sheet);
+  padding: 0 14px;
+  min-height: 44px;
+  background: transparent;
   border-bottom: 1px solid var(--rule);
 }
-.wordmark { font-family: var(--title-font); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); font-size: 18px; color: var(--ink); }
+.wordmark { font-family: var(--title-font); font-weight: var(--display-wght); font-size: 17px; letter-spacing: -.01em; color: var(--ink); }
+/* night: mono caps, and the one glow besides the caps (--wm-glow; S1.2: no card or sheet glows) */
+[data-theme="night"] .wordmark { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; text-shadow: var(--wm-glow); }
 .spacer { flex: 1; }
 .readout, .meta { font-size: 11.5px; color: var(--sec); }
-.title { font-family: var(--title-font); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
+.title { font-family: var(--title-font); font-weight: var(--display-wght); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
 
 .badge {
   display: inline-block; padding: 0 6px;
@@ -114,19 +167,24 @@ html, body {
 .notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: 12px; }
 .notice.fail { border-color: var(--fail-edge); color: var(--fail); background: var(--sheet); }
 
+/* S1 ink keys: a hard 2px ink offset (--key-shadow, none at night where the [ ] caps carry the key), a --key-edge
+   ring (>= 3:1 on both surfaces; never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
 .key {
-  font: inherit; font-size: 12px;
+  font: inherit; font-size: 11.5px; font-weight: 500;
   color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--key-edge);
-  border-radius: 4px;
-  padding: 1px 8px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  padding: 3px 9px;
+  min-height: 28px;
+  box-shadow: var(--key-shadow);
   cursor: pointer;
 }
+.key.pri { background: var(--ink); color: var(--on-ink); }
+[data-theme="night"] .key.pri::before, [data-theme="night"] .key.pri::after { color: var(--on-ink); }
 [data-theme="night"] .key::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key::after { content: "]"; color: var(--sec); }
-.key:active { transform: translate(1px, 1px); box-shadow: none; }
+.key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled] { color: var(--sec); cursor: not-allowed; }
 
@@ -134,13 +192,13 @@ html, body {
   font: inherit; color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--key-edge);
-  border-radius: 4px;
+  border-radius: var(--radius);
   padding: 4px 8px;
   width: 100%;
 }
 
-.desk { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(260px, 340px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; }
-.desk.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(260px, 340px); }
+.desk { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(300px, 340px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; }
+.desk.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(300px, 340px); }
 .desk.no-stack { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) 0; }
 .desk.no-sessions.no-stack { grid-template-columns: 0 minmax(0, 1fr) 0; }
 .desk.stack-wide { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(320px, 460px); }
@@ -171,11 +229,11 @@ html, body {
 .session-row.gone .glyph { color: var(--sec); }
 .glyph { color: var(--ink2); }
 
-.transcript { background: var(--ground); }
+.transcript { background: transparent; }
 .feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
-.key.quiet { box-shadow: none; color: var(--ink2); font-size: 11px; }
+.key.quiet { box-shadow: none; color: var(--ink2); font-size: 11px; min-height: 0; padding: 1px 8px; }
 .spacer-v { width: 1px; }
 .trow { position: absolute; left: 0; right: 0; padding: 1px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
 /* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */
@@ -185,7 +243,9 @@ html, body {
 .trow.role-assistant .body { color: var(--ink); }
 .trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--slate); border-radius: 3px; padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
 .trow.role-assistant .said .said-tag { color: var(--sec); font-size: 11px; font-weight: 400; }
-.trow.role-assistant .body .chip { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; margin: 3px 0; }
+/* Aegis L2: an agent's bold-label line is plain prose with a quiet rule, never a box that could pass for a kernel chip */
+.trow.role-assistant .body .chip { border: 0; border-left: 2px solid var(--rule); border-radius: 0; padding: 0 0 0 8px; margin: 3px 0; }
+.trow.role-assistant .body .chip-label { font-weight: 600; }
 .trow.role-assistant .body .chip-label { margin-right: 4px; }
 .trow.role-tool { color: var(--ink2); font-size: 12px; padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow.role-tool::before { content: "↳ "; color: var(--sec); }
@@ -201,23 +261,64 @@ html, body {
 .composer textarea { resize: vertical; max-height: 40vh; }
 .composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
 
-.stack { background: var(--fold); border-right: 0; border-left: 1px solid var(--rule); }
-.pile { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px; }
+/* S3 (critique 2026-10-20 §2 S3): the stack is a paper pile on the ground; a card is a sheet with a state edge on the
+   left (--edge-w: 4px day, 3px night) and a folded-paper shadow (--sheet-shadow; none at night, where a 1px --rule
+   ring draws the sheet). A neutral card's edge is --key-edge (>= 3:1), never --rule. Rotation and overlap come from
+   classes (inline style is banned); the pile fans on :hover AND :focus-within, so a keyboard user reaches every
+   buried key. */
+.stack { background: transparent; border-right: 0; border-left: 1px solid var(--rule); }
+.pilehead .title { font-size: 15px; }
+.pilehead #stack-hint { margin-left: auto; font-size: 10.5px; white-space: nowrap; }
+.pilehead #inbox { font-size: 10.5px; white-space: nowrap; }
+.pilehead #stack-scope { white-space: nowrap; }
+.pile { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; }
 .card {
   position: relative;
-  margin: 0 0 10px;
-  padding: 8px 10px;
+  margin: 0;
+  padding: 10px 12px 10px 14px;
   background: var(--sheet);
-  border: 1px solid var(--key-edge);
-  border-radius: 3px;
-  box-shadow: var(--shadow), var(--glow);
-  transition: top var(--reflow);
+  border: 0;
+  border-left: var(--edge-w) solid var(--edge, var(--key-edge));
+  border-radius: var(--radius);
+  box-shadow: var(--sheet-shadow);
+  transform: rotate(var(--r, 0deg));
+  transition: margin var(--reflow) cubic-bezier(.2, .8, .2, 1), transform var(--reflow), top var(--reflow);
 }
-.card.kind-knot { border-color: var(--knot-edge); }
-.card.failed { border-color: var(--fail-edge); }
-.card-head { display: flex; gap: 6px; align-items: baseline; }
-.card-kind { color: var(--ink); }
-.card-body { margin: 6px 0; }
+[data-theme="night"] .card { border: 1px solid var(--rule); border-left: var(--edge-w) solid var(--edge, var(--key-edge)); }
+.card.kind-knot { --edge: var(--knot-edge); }
+.card.failed { --edge: var(--fail-edge); }
+.card.kind-gate-class, .card.held { --edge: var(--warn-edge); }
+.card-head { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; font-size: 10.5px; color: var(--sec); }
+.card-project { font-weight: 500; }
+.card-kind { color: var(--ink2); font-weight: 500; }
+.card-voice { color: var(--sec); }
+.card-voice .handle { display: inline-block; padding: 0 5px; border-radius: 2px; background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; letter-spacing: .04em; }
+.card-title { margin: 2px 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--ink); }
+.card.kind-knot .card-title { color: var(--knot); }
+.card.failed .card-title { color: var(--fail); }
+.card-body { margin: 4px 0 6px; font-size: 12px; color: var(--ink2); }
+.card-raised { display: block; font-size: 10.5px; }
+.card .bar { height: 3px; margin-top: 6px; border-radius: 2px; overflow: hidden; background: var(--rule); display: none; }
+.card.held .bar { display: block; }
+.card .bar-i { display: block; height: 100%; background: var(--warn-edge); transform-origin: left; }
+.card .stamp { position: absolute; right: 12px; top: 8px; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--sec); border: 2px solid currentColor; border-radius: var(--radius); padding: 0 6px; opacity: 0; transform: rotate(-8deg); pointer-events: none; }
+.card .content-hash { display: block; margin-top: 6px; font-size: 10px; opacity: .8; }
+/* the pile: overlap, a few degrees of rotation, z-order top-down; fanned flat on hover / focus-within / .fan / .open */
+.pile .card + .card { margin-top: -64px; }
+.pile .card:nth-child(1) { z-index: 4; }
+.pile .card:nth-child(2) { --r: 1.2deg; z-index: 3; }
+.pile .card:nth-child(3) { --r: -1deg; z-index: 2; }
+.pile .card:nth-child(4) { --r: .8deg; z-index: 1; }
+.pile .card:nth-child(n+5) { --r: 0deg; z-index: 0; }
+.pile:hover .card + .card, .pile:focus-within .card + .card, .pile.fan .card + .card, .pile.open .card + .card { margin-top: 10px; }
+.pile:hover .card, .pile:focus-within .card, .pile.fan .card, .pile.open .card { --r: 0deg; }
+.pile-more { align-self: center; margin-top: 12px; }
+/* Aegis M2: a buried card's keys take no click until the pile is fanned (hover, keyboard focus, .fan, .open) */
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-keys { pointer-events: none; }
+.card-requester { color: var(--sec); }
+/* a card kind whose first line the kernel does not compose: its words read as the requester's quoted text */
+.card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
+.pinned .card { --r: 0deg; margin: 0; }
 .card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .card .refusal { color: var(--fail); font-size: 12px; white-space: pre-wrap; }
 .blk-text, .blk-md, .blk-diff { margin: 0; white-space: pre-wrap; word-break: break-word; }
@@ -228,15 +329,48 @@ html, body {
 .notice.repin { border-color: var(--warn-edge); }
 .notice .key { margin-left: 8px; }
 /* TD-2026-10-19-063: a claim-mismatch card's first line ("NOT signed by the expected publisher") is red */
-.card.claim-mismatch { border-color: var(--fail-edge); }
+.card.claim-mismatch { --edge: var(--fail-edge); }
 .card.claim-mismatch .card-body > :first-child { color: var(--fail); font-weight: 600; }
 
+/* ── S4 motion (critique 2026-10-20 §2 S4). Every motion is an event's (nothing idles); the global reduced-motion kill
+   above stays, and the rules at the end of this block keep the END states visible without motion. ── */
 .card.arriving { animation: card-in var(--fly); }
 @keyframes card-in {
-  0% { transform: translateX(120%) rotate(12deg); opacity: 0; }
-  70% { transform: translateX(-5%) rotate(-3deg); opacity: 1; }
-  100% { transform: none; }
+  0% { transform: translateX(120%) rotate(12deg); }
+  55% { transform: translateX(-5%) rotate(-3deg); }
+  75% { transform: translateX(2%) rotate(1.5deg); }
+  100% { transform: translateX(0) rotate(var(--r, 0deg)); }
 }
+/* a pinned card settles at one of four preset tilts (by cardId; classes, never inline style) */
+.pinned .card.r-a { --r: -.6deg; }
+.pinned .card.r-b { --r: .4deg; }
+.pinned .card.r-c { --r: -.3deg; }
+.pinned .card.r-d { --r: .7deg; }
+/* approved: the stamp lands, then the sheet flies off (removed on animationend; at once under reduced motion) */
+.card .stamp { color: var(--stamp); }
+.card .stamp.on { animation: stamp var(--t-stamp) forwards; }
+@keyframes stamp {
+  0% { opacity: 0; transform: rotate(-8deg) scale(1.9); }
+  60% { opacity: 1; transform: rotate(-8deg) scale(.92); }
+  100% { opacity: 1; transform: rotate(-8deg) scale(1); }
+}
+.card.leaving { pointer-events: none; }
+.card.out { animation: flyout var(--t-flyout) forwards; }
+@keyframes flyout {
+  30% { transform: scale(.97) rotate(var(--r, 0deg)); }
+  100% { transform: translate(-30px, -60px) rotate(-14deg); opacity: 0; }
+}
+/* a held voice decision: the amber edge and a 3 s countdown bar (kernel-owned; the seconds are also in the text) */
+.card.held .bar-i { animation: count var(--t-hold) forwards; }
+@keyframes count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.card .held-note { color: var(--warn-ink); font-weight: 500; }
+/* a failure droops once (no shake, ever) */
+.card.failed.fx, .session-row.fx { animation: droop var(--t-droop) forwards; }
+.card.failed.fx.arriving { animation: card-in var(--fly), droop var(--t-droop) 550ms forwards; }
+@keyframes droop { to { transform: rotate(2.2deg) translateY(3px); } }
+.session-row.fx { transform-origin: left center; }
+[data-motion="reduced"] .card .stamp.on { opacity: 1; transform: rotate(-8deg); }
+@media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: rotate(-8deg); } }
 
 .shuttle {
   display: flex; flex-wrap: wrap; gap: 14px;
@@ -248,7 +382,7 @@ html, body {
 .shuttle .v { color: var(--ink2); }
 
 .overlay { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; background: rgba(15, 17, 22, 0.35); }
-.sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: 4px; box-shadow: var(--shadow), var(--glow); display: flex; flex-direction: column; gap: 8px; }
+.sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
 .palette-card .list { max-height: 50vh; }
 .pal-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 6px; color: var(--ink2); cursor: pointer; }
 .pal-row.sel { background: var(--fold); color: var(--ink); }
@@ -293,7 +427,7 @@ html, body {
   .chrome { flex-wrap: wrap; row-gap: 4px; }
   .desk, .desk.no-sessions, .desk.no-stack, .desk.no-sessions.no-stack, .desk.stack-wide, .desk.stack-wide.no-sessions { grid-template-columns: minmax(0, 1fr); }
   .desk > .transcript { grid-column: 1; grid-row: 1; border-right: 0; }
-  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow), var(--glow); }
+  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow); }
   .desk > .sessions { left: 0; }
   .desk > .stack { right: 0; }
   .desk.open-sessions > .sessions, .desk.open-stack > .stack { display: flex; }
@@ -313,32 +447,34 @@ html, body {
 .mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: 11px; }
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
-/* V2d voice pill (kernel-owned; TD-2026-10-19-298). Text tokens only from the G-GUI-10 fixture: Mic off = --sec on
-   --sheet; push-to-talk = --slate (a text token) with a slate dot; ambient = the fixture's voice-armed pair
-   (--warn-ink on --warn-bg) inside a vermilion --fail-edge (nonText, >= 3:1) with a pulsing red dot. The pulse and the
-   meter are motion: [data-motion="reduced"] and prefers-reduced-motion stop them (the edge and dot stay, so the
-   state never depends on motion). */
+/* V2d voice pill (kernel-owned; TD-2026-10-19-298), restyled in S1 (critique 2026-10-20 §2 S1.5; same states, same
+   logic). Text tokens only from the G-GUI-10 fixture. Mic off = --sec, dashed --key-edge; push-to-talk = neutral
+   --ink2 with a filled --ink2 dot (slate is a project hue, never a state); ambient (the live mic, "armed") = the
+   fixture's voice-armed pair (--warn-ink on --warn-bg) inside a 1px amber --warn-edge (3.24:1 on its fill, a fixture
+   pair) with a 7px amber dot, STATIC: amber = armed, vermilion = failure only, nothing idles. Only the level meter
+   moves, and only with the real mic level (#gui-voice-capture); crashed keeps vermilion (a failure). */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.voice-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; font: inherit; font-size: 11.5px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; box-shadow: var(--shadow); }
+.voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; border-radius: var(--radius); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
-.voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
+.voice-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
 .voice-pill.voice-off .voice-dot { border-style: dashed; }
-.voice-pill.voice-ptt { color: var(--slate); border-color: var(--slate); }
-.voice-pill.voice-ptt .voice-dot { background: var(--p-slate-fill); border-color: var(--slate); }
-.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 2px solid var(--fail-edge); font-weight: 600; animation: voice-ring 1.4s ease-in-out infinite; }
-.voice-pill.voice-ambient .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); animation: voice-pulse 1.4s ease-in-out infinite; }
+.voice-pill.voice-ptt { color: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.voice-ptt .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); font-weight: 600; }
+.voice-pill.voice-ambient .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
 .voice-pill.voice-noclient { color: var(--sec); border-style: dashed; }
 .voice-target { font-weight: 400; }
 /* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level) while hearing,
    and still otherwise; no decorative animation */
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
 .voice-meter[hidden] { display: none; }
-.voice-meter i { display: block; width: 2px; background: var(--fail-edge); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+/* S1 + capture merge: amber (armed), static; the meter follows the REAL level only (no idle or decorative motion) */
+.voice-meter i { display: block; width: 2px; background: var(--warn-edge); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
 .voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
 .voice-pill.capture-hearing { font-weight: 600; }
-.voice-pill.capture-hearing .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); animation: voice-pulse 1.1s ease-in-out infinite; }
-.voice-pill.capture-transcribing .voice-dot { background: var(--slate); border-color: var(--slate); }
-.voice-pill.capture-captured { border-color: var(--slate); color: var(--ink); }
+.voice-pill.capture-hearing .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
+.voice-pill.capture-transcribing .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.capture-captured { border-color: var(--key-edge); color: var(--ink); }
 .voice-pill.capture-dropped { border-style: dashed; color: var(--warn-ink); }
 .composer-ghost { padding: 2px 10px; font-style: italic; color: var(--sec); }
 .composer-ghost[hidden] { display: none; }
@@ -346,15 +482,13 @@ html, body {
 .voice-note { font-style: italic; }
 .voice-menu { left: 0; right: auto; }
 .voice-keys { padding: 4px 8px 2px; border-top: 1px solid var(--rule); }
-.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--fail); }
-.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--slate); }
+.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--warn-ink); }
+.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--ink2); }
 .voice-item.voice-off .mode-name::before { content: "○ "; color: var(--sec); }
 .voice-attach { display: flex; gap: 4px; padding: 2px 10px 4px 24px; flex-wrap: wrap; }
-.voice-row-btn.voice-ambient { color: var(--fail); }
-.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--slate); }
+.voice-row-btn.voice-ambient { color: var(--warn-ink); }
+.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--ink2); }
 .voice-choice.current { border-width: 2px; }
-@keyframes voice-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(1.35); } }
-@keyframes voice-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(180, 56, 42, 0.35); } 50% { box-shadow: 0 0 0 4px rgba(180, 56, 42, 0); } }
 /* the transcript's voice turns */
 .trow.voice .who { color: var(--slate); }
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
@@ -365,12 +499,12 @@ html, body {
 .voice-pill.voice-setup { border-style: solid; }
 .voice-pill.voice-crashed { color: var(--fail); border-color: var(--fail-edge); border-style: solid; }
 .voice-pill.voice-unavailable { color: var(--sec); }
-.voice-pill.voice-nudge { color: var(--slate); border-color: var(--slate); border-style: dashed; }
+.voice-pill.voice-nudge { color: var(--ink2); border-color: var(--key-edge); border-style: dashed; }
 /* T-2026-10-20-002, Aegis M (V2d): an attached ambient mic keeps its loud colours when a voice-app condition is appended (dashed edge = the app's trouble) */
-.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 2px dashed var(--fail-edge); }
+.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 1px dashed var(--warn-edge); }
 .voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
 .voice-progress[hidden] { display: none; }
-.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--slate); }
+.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
 .voice-action { font-size: 11.5px; padding: 1px 8px; }
 .voice-stop { color: var(--fail); border-color: var(--fail-edge); }
 .voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
@@ -382,8 +516,8 @@ html, body {
 .enrol-phrase { font-size: 17px; line-height: 1.4; padding: 10px 4px; font-weight: 600; }
 .enrol-rec { display: inline-flex; align-items: center; gap: 6px; color: var(--sec); font-size: 12px; }
 .enrol-rec .voice-dot { border-style: dashed; }
-.enrol-rec.recording { color: var(--fail); font-weight: 600; }
-.enrol-rec.recording .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); border-style: solid; animation: voice-pulse 1.4s ease-in-out infinite; }
+.enrol-rec.recording { color: var(--warn-ink); font-weight: 600; }
+.enrol-rec.recording .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); border-style: solid; }
 .enrol-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
@@ -407,3 +541,107 @@ html, body {
   .dictation-ring svg { display: none; }
   .dictation-ring .ring-secs { display: inline; }
 }
+
+/* ── S2 desk structure (critique 2026-10-20 §2 S2). Text tokens only; project hue fills sit in a --key-edge ring and
+   project names use the INK pair (--p-*-ink, a fixture text token), never the fill. ── */
+.pink.h0 { color: var(--p-terracotta-ink); }
+.pink.h1 { color: var(--p-sage-ink); }
+.pink.h2 { color: var(--p-slate-ink); }
+.pink.h3 { color: var(--p-ochre-ink); }
+.pink.h4 { color: var(--p-rose-clay-ink); }
+.pink.h5 { color: var(--p-sea-grey-ink); }
+.sessions { background: transparent; padding: 12px 10px 0; }
+.key.newb { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; font-size: 12.5px; text-align: left; }
+.key.newb kbd { font: inherit; font-size: 11px; color: var(--sec); }
+#session-search-wrap { padding: 0 0 6px; }
+#session-search { border-color: var(--rule); background: transparent; }
+.sec-head { display: flex; justify-content: space-between; width: 100%; margin: 8px 0 4px; padding: 0 6px; font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); background: transparent; border: 0; text-align: left; }
+.sec-toggle { cursor: pointer; }
+.sessions .group-head { padding: 6px 6px 2px; font-size: 11.5px; }
+.sessions .swatch, .group-head .swatch { width: 12px; height: 12px; flex: none; }
+.session-row.sess { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border-left: 0; font-size: 12.5px; }
+.session-row.sess.active { background: var(--sheet); color: var(--ink); }
+.session-row.sess.gone { color: var(--sec); }
+.sname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snote { font-size: 10.5px; color: var(--sec); white-space: nowrap; }
+.snote.tone-need { color: var(--warn-ink); font-weight: 500; }
+.snote.tone-fail { color: var(--fail); font-weight: 500; }
+.session-row.state-failed { border-left: 0; }
+
+/* header: the palette field and ⊞ Layout */
+.palfield { display: inline-flex; align-items: center; gap: 8px; min-width: 240px; padding: 3px 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; text-align: left; }
+.palfield kbd { margin-left: auto; font: inherit; font-size: 11px; color: var(--sec); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.palfield:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.layout-wrap { position: relative; display: inline-flex; }
+.layout-menu { right: 0; left: auto; }
+#conn { font-size: 11px; }
+
+/* chat header and the quiet empty centre */
+.pane-head.chead { padding: 10px 20px 8px; align-items: baseline; }
+.chead-l { display: flex; flex: 1 1 auto; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
+.chead .head-right { flex: none; }
+.chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-theme="night"] .chead #transcript-title { font-size: 13px; }
+.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; }
+#transcript-count, .head-right .key { white-space: nowrap; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.empty-sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 36px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--sheet-shadow); text-align: center; }
+.empty-title { font-size: 20px; margin: 0; }
+.empty-sheet .meta { margin: 0; }
+.empty-sheet .key kbd { font: inherit; font-size: 11px; margin-left: 6px; }
+
+/* chat rows: measure 80ch, the user's message right-aligned, the activity fold, "took Ns", the markdown subset */
+.trow { max-width: none; }
+.trow > .body, .trow > .who, .trow > .said { max-width: 80ch; }
+.trow.role-user { display: flex; flex-direction: column; align-items: flex-end; }
+.trow.role-user .body { border-radius: var(--radius); padding: 8px 12px; }
+.trow.role-user, .trow.role-assistant { padding: 7px 20px; }
+.trow.role-activity { padding: 3px 20px 3px 22px; margin-left: 20px; font-size: 11.5px; color: var(--sec); border-left: 2px solid var(--rule); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(80ch + 22px); }
+.trow.role-activity:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow .who .took { color: var(--sec); }
+.trow .body.md { white-space: normal; }
+.md-p { margin: 0 0 6px; white-space: pre-wrap; }
+.md-p:last-child { margin-bottom: 0; }
+.md-list { margin: 2px 0 6px; padding-left: 20px; }
+.md-pre { margin: 4px 0 6px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-code, .md-pre code { font: inherit; }
+.md-code { background: color-mix(in srgb, var(--rule) 50%, transparent); padding: 0 3px; border-radius: 2px; }
+
+/* pinned (pending in this session) and the composer */
+.pinned { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+.pinned .lbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
+.pinned .card { margin: 0; }
+.composer { margin: 10px 20px 14px; padding: 10px 12px; border: 1px solid var(--key-edge); border-radius: var(--radius); background: var(--sheet); }
+.composer textarea.field { border: 0; padding: 0; background: transparent; }
+.composer-kbd { font: inherit; font-size: 11px; color: var(--sec); margin-left: auto; }
+.composer-foot .key.pri { margin-left: 8px; }
+
+/* palette rows: title left, kbd hint right */
+.pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
+.pal-kbd { font: inherit; font-size: 11px; color: var(--sec); white-space: nowrap; }
+/* ── K0 mod panels (core/mod-panels.ts, ui/mod-panels-mount.ts): a mod view sits in a labelled fence, apart from
+   kernel-owned regions; tones are tokens (.tone-*), the project hue only ever colours a cap glyph. ── */
+.mod-slot { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; }
+.mod-slot[hidden] { display: none; }
+/* Aegis M2: the right-pane mod region is ruled off from the decision stack (outside its scroll), headed `mods` */
+.mod-slot-right { flex: none; max-height: 40%; overflow-y: auto; border-top: 2px solid var(--rule); margin-top: 6px; }
+.mod-slot-head { color: var(--sec); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.mod-fence { border: 1px dashed var(--rule); border-radius: 4px; padding: 4px 8px; background: var(--sheet); }
+.mod-fence-head { display: flex; gap: 6px; align-items: center; }
+.mod-label { color: var(--sec); font-size: 11px; }
+.mod-dev { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); }
+.mod-fence .blk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mod-fence .blk-progress { display: inline-flex; gap: 6px; align-items: center; }
+.mod-fence progress { transition: none; }
+.tone-quiet { color: var(--sec); }
+.tone-warn { color: var(--warn-ink); }
+.tone-deny { color: var(--fail); font-weight: 600; }
+/* the cap: a project hue is a FILL (G-GUI-10), the glyph itself stays in ink */
+.blk-text[class*="tone-hue-"] { display: inline-block; min-width: 1.2em; text-align: center; border: 1px dotted var(--rule); border-radius: 50%; }
+.tone-hue-0, .tone-hue-6 { background: var(--p-terracotta-fill); }
+.tone-hue-1, .tone-hue-7 { background: var(--p-sage-fill); }
+.tone-hue-2 { background: var(--p-slate-fill); }
+.tone-hue-3 { background: var(--p-ochre-fill); }
+.tone-hue-4 { background: var(--p-rose-clay-fill); }
+.tone-hue-5 { background: var(--p-sea-grey-fill); }

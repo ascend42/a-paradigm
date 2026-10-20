@@ -383,6 +383,11 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
       if (!v.ok) fail('EGRESS', v.why === 'anthropic' ? `egress to an Anthropic API host is refused (${v.host})` : `egress host ${v.host} is refused (${v.why})`, { host: v.host, why: v.why });
     });
   }
+  // Aegis M1 (#ledger-mod): usage numbers (tokens, cache share, cost, compactions) plus a network path is an exfiltration
+  // shape; a local-tier mod may hold log.read:usage or egress, never both
+  if (caps.includes('log.read:usage') && opts.tier === 'local' && egress !== undefined && egress !== 'none' && Array.isArray(egress) && egress.length > 0) {
+    fail('EGRESS', 'a local-tier mod with log.read:usage cannot list egress', { capability: 'log.read:usage', tier: opts.tier });
+  }
   return value as ManifestV1;
 }
 

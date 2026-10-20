@@ -45,7 +45,9 @@ function listPage(list) {
 <table>${rows}</table>`;
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
+// S1 materials: the bundled fonts and grain, served raw (the same bytes build.mjs pins); plain names only, no `..`
+const STATIC_ASSET = /^\/(grain\.svg|fonts\/[A-Za-z0-9._-]+\.(woff2|txt))$/;
 
 /** Start the server; resolves {url, close}. port 0 picks a free port. */
 export async function startPreview({ port = 8790 } = {}) {
@@ -66,6 +68,7 @@ export async function startPreview({ port = 8790 } = {}) {
         return send(200, TYPES['.html'], readFileSync(path.join(ROOT, 'static', 'index.html')));
       }
       if (u.pathname === '/boot.js' || u.pathname === '/styles.css') return send(200, TYPES[path.extname(u.pathname)], readFileSync(path.join(ROOT, 'static', u.pathname.slice(1))));
+      if (STATIC_ASSET.test(u.pathname) && !u.pathname.includes('..')) return send(200, TYPES[path.extname(u.pathname)], readFileSync(path.join(ROOT, 'static', ...u.pathname.slice(1).split('/'))));
       if (u.pathname === '/app.js') {
         try {
           return send(200, TYPES['.js'], await bundlePreview());

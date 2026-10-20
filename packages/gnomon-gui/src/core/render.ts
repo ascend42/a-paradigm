@@ -58,7 +58,7 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
 const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
@@ -84,6 +84,7 @@ export function text(doc: MiniDoc, s: unknown): unknown {
   return doc.createTextNode(displayText(s));
 }
 
+const TONE = /^[a-z][a-z0-9-]{0,31}$/;
 const KIT = ['Box', 'Text', 'List', 'Table', 'Markdown', 'Diff', 'Progress', 'Button', 'Image', 'Canvas'] as const;
 
 /** The block name of a node: `block` or `type`, with or without the `kit.` prefix (the broker writes `{type:'Box'}`). */
@@ -113,9 +114,10 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
   const name = blockName(n);
   switch (name) {
     case 'Box':
-      return h(doc, 'div', { class: 'blk blk-box' }, ...kids.map(child));
+      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ...kids.map(child));
     case 'Text':
-      return h(doc, 'p', { class: 'blk blk-text' }, str(data.text));
+      // a tone is a closed-shape token mapped to a class (styles.css .tone-*), never a style or a colour value
+      return h(doc, 'p', { class: `blk blk-text${typeof data.tone === 'string' && TONE.test(data.tone) ? ` tone-${data.tone}` : ''}` }, str(data.text));
     case 'List': {
       const items = Array.isArray(data.items) ? data.items : kids;
       return h(doc, 'ul', { class: 'blk blk-list' }, ...items.map((it) => h(doc, 'li', null, typeof it === 'object' && it !== null ? child(it) : str(it))));
@@ -180,6 +182,72 @@ export interface CardView {
   ask?: AskCardDetail | null;
   /** Bash permission: the prefix-scoped always choices from the contentHash-verified detail (prefixOptionsOf); null ⇒ exact only */
   prefixOptions?: string[][] | null;
+  /** S3: the card's project (repo basename) and its ONE project hue (groupHue / projectHue); null ⇒ no project line */
+  project?: { name: string; hue: number } | null;
+  /** S3: the approval.request row's at and the page's now (ms) for "raised HH:MM · waiting Nm" */
+  raisedAt?: string | null;
+  now?: number;
+  /** S3: the kernel's voice handle of the card (card.voice: eligible none | reversible | gate, and its label) */
+  voice?: { eligible: string; label: string } | null;
+  /** S4: a held voice decision the kernel reports (seconds left, the undo phrase): the amber countdown, kernel-owned */
+  held?: { seconds: number; undo: string } | null;
+}
+
+/** S3: the card's voice tag from the kernel's handle: `🎙 reversible · card 3`, `🎙 gate` + the handle word, or `hand-only`. */
+export function voiceTagOf(v: CardView['voice']): { text: string; handle: string | null } | null {
+  if (!v) return null;
+  if (v.eligible === 'reversible') return { text: `🎙 reversible${v.label ? ` · ${v.label}` : ''}`, handle: null };
+  if (v.eligible === 'gate') return { text: '🎙 gate', handle: v.label || null };
+  return { text: 'hand-only', handle: null };
+}
+
+/** S3: the card's voice handle from the kernel card (card.voice), or null. */
+export function cardVoiceOf(card: Record<string, unknown>): CardView['voice'] {
+  const v = card.voice && typeof card.voice === 'object' && !Array.isArray(card.voice) ? (card.voice as Record<string, unknown>) : null;
+  if (!v || typeof v.eligible !== 'string') return null;
+  return { eligible: v.eligible, label: typeof v.label === 'string' ? v.label : '' };
+}
+
+/** S3: "raised 14:06 · waiting 3m" (minutes; under a minute reads "just now"). */
+export function raisedLine(raisedAt: string | null | undefined, now: number): string | null {
+  if (!raisedAt) return null;
+  const t = Date.parse(raisedAt);
+  if (!Number.isFinite(t)) return null;
+  const m = Math.max(0, Math.floor((now - t) / 60_000));
+  const waiting = m < 1 ? 'just now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `raised ${raisedAt.slice(11, 16)} · waiting ${waiting}`;
+}
+
+/**
+ * Aegis S2/S3 M1: the card kinds whose FIRST line the kernel itself composes (a fixed template the kernel fills),
+ * checked at every broker.raise call site that builds `lines` (packages/gnomon/src/kernel):
+ *   permission, ask-user, plan    supervisor/permission.ts (the run-tool / question / plan templates) via supervisor.ts b.raise
+ *   gate-class                    supervisor/repo-hooks.ts repoHookCard (supervisor.ts), runner/repin-card.ts, broker/theft-card.ts
+ *   strictness                    broker/run-mode.ts (loosen), lifecycle/daemon.ts (voice widen), voice/voice-requests.ts (enrol)
+ *   daemon-stop                   broker/daemon-stop.ts (stop + upgrade)
+ *   api-token                     broker/api-token.ts
+ *   fallback                      supervisor/local-session.ts
+ *   install                       manifest/install.ts (kernel-composed lines first; the staged CLAIMS come after)
+ *   grant                         modhost/control.ts (uninstall)
+ * Only these get line 1 promoted to the title; any other kind (a mod's, a future one) keeps its block whole, is titled
+ * by its kind, and its first line reads as the requester's quoted text.
+ */
+export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+
+/**
+ * S3: the card title is the block's first Text line (a Box whose first child is a Text), and the body is the block
+ * without it. A claim-mismatch card keeps its block whole (its red first line stays the body's first line) and is
+ * titled by its kind; so is every kind outside KERNEL_TITLED_KINDS (Aegis M1).
+ */
+export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean): { title: string; body: unknown } {
+  if (!KERNEL_TITLED_KINDS.has(kind)) keepWhole = true;
+  const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
+  const kids = b && Array.isArray(b.children) ? (b.children as unknown[]) : null;
+  const first = kids?.[0] && typeof kids[0] === 'object' ? (kids[0] as Record<string, unknown>) : null;
+  const isText = !!first && (first.type === 'Text' || first.block === 'kit.Text' || first.block === 'Text');
+  const text = isText ? (typeof first!.text === 'string' ? first!.text : first!.data && typeof (first!.data as Record<string, unknown>).text === 'string' ? String((first!.data as Record<string, unknown>).text) : '') : '';
+  if (keepWhole || !text.trim() || !kids) return { title: kind, body: block };
+  return { title: text.split('\n')[0]!, body: { ...b, children: kids.slice(1) } };
 }
 
 /**
@@ -363,12 +431,35 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
   const loud = v.flags.includes('claim-mismatch');
+  // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
+  // where Deny stays the default focus and nothing is filled
+  const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
+  // S3 anatomy: ■ project · kind · voice tag (requestedBy and the session in title=), the title, the body, raised · waiting
+  const { title, body } = splitCardBlock(block, v.kind, loud);
+  const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
+  const tag = voiceTagOf(v.voice ?? null);
+  const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
+  const failed = v.kind === 'incident' || v.flags.includes('failed');
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
-    h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
-    h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    h(
+      doc,
+      'header',
+      { class: 'card-head k', title: `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}` },
+      v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
+      v.project ? ' · ' : null,
+      h(doc, 'strong', { class: 'card-kind' }, v.kind),
+      // Aegis M1: who asked is VISIBLE text, never only a tooltip
+      ' · ',
+      h(doc, 'span', { class: 'card-requester' }, `by ${v.requestedBy}`),
+      tag ? ' · ' : null,
+      tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
+    ),
+    h(doc, 'p', { class: 'card-title' }, title),
+    h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, renderBlock(ctx, body)),
+    raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     h(
       doc,
@@ -378,13 +469,79 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ...keys.flatMap((d) =>
         d === 'always' && v.prefixOptions?.length
           ? [
-              h(doc, 'button', { class: 'key key-always', type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
+              h(doc, 'button', { class: `key key-always${d === pri ? ' pri' : ''}`, type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
               ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${shownPrefixWords(p)} …`)),
             ]
-          : [h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
+          : [h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
+    h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
+    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, 'APPROVED'),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
+}
+
+/* ── S2.5: a SAFE markdown subset for agent text (DOM building only; no HTML passthrough, no links, no images) ── */
+
+// `code`, **bold** / __bold__, *italic* / _italic_ (an underscore inside a word, as in snake_case, is not emphasis)
+const MD_INLINE = /(`[^`\n]+`)|(\*\*(?=\S)[^*\n]*?\S\*\*|(?<![A-Za-z0-9])__(?=\S)[^_\n]*?\S__(?![A-Za-z0-9]))|(\*(?=[^\s*])[^*\n]*?[^\s*]\*|\*[^\s*]\*|(?<![A-Za-z0-9_])_(?=[^\s_])[^_\n]*?[^\s_]_(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])_[^\s_]_(?![A-Za-z0-9_]))/;
+
+/** Inline markdown as DOM nodes; everything that is not one of the three spans stays text (sanitized by h). */
+export function mdInline(doc: MiniDoc, src: string): Array<MiniEl | string> {
+  const out: Array<MiniEl | string> = [];
+  let rest = src;
+  for (let guard = 0; rest && guard < 10_000; guard++) {
+    const m = MD_INLINE.exec(rest);
+    if (!m) break;
+    if (m.index) out.push(rest.slice(0, m.index));
+    const tok = m[0];
+    if (m[1]) out.push(h(doc, 'code', { class: 'md-code' }, tok.slice(1, -1)));
+    else if (m[2]) out.push(h(doc, 'strong', null, ...mdInline(doc, tok.slice(2, -2))));
+    else out.push(h(doc, 'em', null, ...mdInline(doc, tok.slice(1, -1))));
+    rest = rest.slice(m.index + tok.length);
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+/**
+ * Block markdown: ``` fences (pre > code, the fence's info word dropped), `-`/`*`/`+` and `1.` lists, and paragraphs
+ * (a blank line separates them; single newlines stay as line breaks via pre-wrap). An unclosed fence runs to the end.
+ */
+export function mdBlocks(doc: MiniDoc, src: string): MiniEl[] {
+  const lines = src.replace(/\r\n/g, '\n').split('\n');
+  const out: MiniEl[] = [];
+  let para: string[] = [];
+  const flushPara = (): void => {
+    if (para.length) out.push(h(doc, 'p', { class: 'md-p' }, ...mdInline(doc, para.join('\n'))));
+    para = [];
+  };
+  for (let i = 0; i < lines.length; ) {
+    const line = lines[i]!;
+    if (/^\s*```/.test(line)) {
+      flushPara();
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i]!)) code.push(lines[i++]!);
+      i++; // the closing fence (or past the end)
+      out.push(h(doc, 'pre', { class: 'md-pre' }, h(doc, 'code', null, code.join('\n'))));
+      continue;
+    }
+    const ul = /^\s*[-*+]\s+(.*)$/;
+    const ol = /^\s*\d{1,9}[.)]\s+(.*)$/;
+    const kind = ul.test(line) ? ul : ol.test(line) ? ol : null;
+    if (kind) {
+      flushPara();
+      const lis: MiniEl[] = [];
+      while (i < lines.length && kind.test(lines[i]!)) lis.push(h(doc, 'li', null, ...mdInline(doc, kind.exec(lines[i++]!)![1]!)));
+      out.push(h(doc, kind === ul ? 'ul' : 'ol', { class: 'md-list' }, ...lis));
+      continue;
+    }
+    if (!line.trim()) flushPara();
+    else para.push(line);
+    i++;
+  }
+  flushPara();
+  return out;
 }

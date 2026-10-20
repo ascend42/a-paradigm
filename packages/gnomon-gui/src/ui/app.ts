@@ -16,19 +16,20 @@
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
-import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, PRESETS, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
-import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
+import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { mountStandingFeed } from './standing-feed.js';
 import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { mountModPanels } from './mod-panels-mount.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -49,6 +50,7 @@ let session: Session | null = null;
 let verifyKey: string | null = null;
 let status: Record<string, unknown> | null = null;
 let focused: string | null = null; // hsid
+let modPanelRow: (row: { kind?: unknown } | null) => void = () => undefined; // K0 mod panels hook
 let stackScoped = false;
 let theme: ThemeChoice = 'auto';
 let motion: 'reduce' | 'system' = 'system';
@@ -106,20 +108,29 @@ let width = 0;
 let items: ChatItem[] = [];
 let hiddenRows = 0;
 let rawMode = false; // "show raw events": every row as its one-line summary
+let feedView = false; // S2.3: the kernel feed is a palette view (view.kernel-feed), never the default centre
+const expandedActs = new Set<string>(); // S2.5: activity lines the human expanded (keys are stable per transcript)
+const PAST_KEY = 'gnomon.gui.pastOpen';
+let pastOpen = localStorage.getItem(PAST_KEY) === '1'; // S2.2: Past is collapsed by default; the toggle persists per browser
 const follow = new Follow(); // stickiness: core/follow.ts (unit-tested)
 const mounted = new Map<number, HTMLElement>();
 let memo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
 
-const transcriptId = (): string => `${focused ?? 'feed'}${rawMode ? '\u0000raw' : ''}`;
+const transcriptId = (): string => `${focused ?? (feedView ? 'feed' : 'empty')}${rawMode ? '\u0000raw' : ''}`;
 
 function currentItems(): { items: ChatItem[]; hidden: number } {
+  // S2.3: nothing focused and the kernel feed view not open ⇒ the quiet empty centre, no rows
+  if (!focused && !feedView) return { items: [], hidden: 0 };
   const base = focused ? store.transcript(focused) : store.kernelFeed;
   const mine = local.filter((r) => (r.session ?? null) === focused);
-  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}`;
+  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}`;
   if (memo?.key === key) return memo.out;
   const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
   // the kernel feed has no conversation: it stays the raw row list
-  const out = chatItems(rows, { raw: rawMode || !focused });
+  const raw = rawMode || !focused;
+  const base2 = chatItems(rows, { raw });
+  // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
+  const out = raw ? base2 : { items: foldActivity(base2.items, expandedActs), hidden: base2.hidden };
   memo = { key, out };
   return out;
 }
@@ -136,25 +147,55 @@ function resetTranscript(): void {
   items = [];
   follow.jump();
   heights = widths.restore(transcriptId(), width, 0);
-  put($('transcript-title'), focused ? focused.slice(-10) : 'kernel feed');
-  $('transcript-title').title = focused ?? '';
+  paintChatHead();
   $('raw-toggle').hidden = !focused;
-  put($('raw-toggle'), rawMode ? 'chat view' : 'show raw events');
+  put($('raw-toggle'), rawMode ? 'chat' : 'raw');
+  $('raw-toggle').title = rawMode ? 'Back to the chat view' : 'Show raw events (every row as its one-line summary)';
   paintTranscript();
+}
+
+/** S2.4: the chat header (session name in the title font; ■ project · backend · started HH:MM · elapsed) and the
+ * quiet empty centre when nothing is focused and the kernel feed view is not open. */
+function paintChatHead(): void {
+  const s = focused ? store.sessions.get(focused) : undefined;
+  const title = s ? sessionTitle(s) : focused ? focused.slice(-10) : feedView ? 'kernel feed' : 'No session open';
+  put($('transcript-title'), title);
+  $('transcript-title').title = focused ?? '';
+  const meta = $('chead-meta');
+  clear(meta);
+  if (s) {
+    const g = store.groups().find((x) => x.sessions.some((y) => y.hsid === s.hsid));
+    const hue = groupHue(s.repo ?? UNSCOPED, g?.sessions ?? [s]);
+    const started = s.openedAt ? s.openedAt.slice(11, 16) : '';
+    const mins = s.openedAt ? Math.max(0, Math.round((Date.now() - Date.parse(s.openedAt)) / 60_000)) : null;
+    meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
+    meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
+  }
+  const t = s ? sessionTitle(s) : '';
+  $<HTMLTextAreaElement>('composer-text').placeholder = s ? `Reply to ${t}${t.endsWith('…') ? '' : '…'}` : 'Open a session to write to it';
+  const empty = $('empty');
+  empty.hidden = !!focused || feedView;
+  if (!empty.hidden) put($('empty-meta'), `${store.liveCount()} live · ${store.cards.size} need you`);
 }
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
 /** table talk: an assistant body whose lines start with a bold label (the agent's own A/B/C, 1/2/3 or names) shows those lines as chips. */
 function replyBody(it: ChatItem): MiniEl {
   const parts = it.role === 'assistant' ? replyParts(it.text) : [];
-  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body' }, it.text);
-  return h(doc, 'div', { class: 'body' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', x.text) : h(doc, 'div', { class: 'plain' }, x.text))));
+  // S2.5: agent text renders a SAFE markdown subset (DOM nodes only, never markup); the user's words stay verbatim
+  if (it.role !== 'assistant') return h(doc, 'div', { class: 'body' }, it.text);
+  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, it.text));
+  return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))));
 }
-function itemEl(it: ChatItem): HTMLElement {
+function itemEl(it: FoldedItem): HTMLElement {
+  if (it.role === 'activity') {
+    const open = expandedActs.has(it.key);
+    return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`) as unknown as HTMLElement;
+  }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
@@ -227,7 +268,7 @@ function paintTranscript(remeasure = false): void {
     for (const [i, el] of mounted) el.style.top = `${heights.offsetOf(i)}px`;
     if (!changed) break;
   }
-  put($('transcript-count'), focused && !rawMode ? `${items.length} items${hiddenRows ? ` · ${hiddenRows} raw hidden` : ''}` : `${items.length} rows`);
+  put($('transcript-count'), !focused && !feedView ? '' : focused && !rawMode ? `${items.length} items${hiddenRows ? ` · ${hiddenRows} raw hidden` : ''}` : `${items.length} rows`);
   const jump = $('jump-latest');
   jump.hidden = !follow.showJump;
   put(jump, follow.unseen ? `↓ latest · ${follow.unseen} new` : '↓ latest');
@@ -251,37 +292,101 @@ function closeDrawers(): void {
 }
 
 /* ── sessions sidebar ───────────────────────────────────────────── */
-function hueOf(repo: string): number {
-  let x = 0;
-  for (const c of repo) x = (x * 31 + c.charCodeAt(0)) >>> 0;
-  return x % 6;
+/** S2.2: the rail: ACTIVE n (grouped by project, swatch + project ink name), then ▸ PAST n (collapsed by default).
+ * Rows: 12px swatch · name (sessionTitle) · right-aligned state note. The kernel feed is a palette view now. */
+function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][number], hue: number): HTMLElement {
+  const was = lastState.get(s.hsid);
+  lastState.set(s.hsid, s.state);
+  if (s.state === 'failed' && was !== undefined && was !== 'failed') drooped.add(s.hsid);
+  const knot = [...store.cards.values()].some((c) => c.hsid === s.hsid && /knot/.test(c.kind));
+  const note = sessionNote({ ...s, knot });
+  const vv = voiceStatusOf(status);
+  const mic = vv.state !== 'off' && vv.hsid === s.hsid ? (vv.state === 'ambient' ? '🎙 ' : '🎙 ptt ') : '';
+  return h(
+    doc,
+    'button',
+    { class: `session-row sess state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}${drooped.has(s.hsid) ? ' fx' : ''}`, type: 'button', 'data-hsid': s.hsid, title: `${s.hsid}${s.backend ? ` · ${s.backend}` : ''}` },
+    h(doc, 'span', { class: `swatch h${hue}` }),
+    h(doc, 'span', { class: 'sname' }, sessionTitle(s)),
+    h(doc, 'span', { class: `snote tone-${note.tone}` }, `${mic}${note.text}`),
+  ) as unknown as HTMLElement;
 }
 function paintSessions(): void {
   const list = $('session-list');
   clear(list);
   const q = ($('session-search') as HTMLInputElement).value.trim().toLowerCase();
-  const feed = h(doc, 'button', { class: `session-row${focused === null ? ' active' : ''}`, type: 'button', 'data-hsid': '' }, 'kernel feed') as unknown as HTMLElement;
-  list.appendChild(feed);
-  for (const g of store.groups()) {
-    const ss = g.sessions.filter((s) => !q || s.hsid.toLowerCase().includes(q) || g.repo.toLowerCase().includes(q));
-    if (!ss.length) continue;
-    const sw = h(doc, 'span', { class: `swatch h${hueOf(g.repo)}` });
-    list.appendChild(h(doc, 'div', { class: 'group-head' }, sw, g.repo === UNSCOPED ? 'unscoped' : g.repo) as unknown as Node);
-    for (const s of ss) {
-      const glyph = s.backend === 'local' ? '○' : '●';
-      const vv = voiceStatusOf(status);
-      const mic = vv.state !== 'off' && vv.hsid === s.hsid ? (vv.state === 'ambient' ? ' · 🎙 ambient' : ' · 🎙 push-to-talk') : '';
-      list.appendChild(h(doc, 'button', { class: `session-row state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: s.hsid }, h(doc, 'span', { class: 'glyph' }, glyph), `${s.hsid.slice(-10)} · ${s.state}${s.pending ? ` · ${s.pending} need you` : ''}${mic}`) as unknown as Node);
+  const groups = store.groups().map((g) => ({ ...g, hue: groupHue(g.repo, g.sessions), sessions: g.sessions.filter((s) => !q || s.hsid.toLowerCase().includes(q) || g.repo.toLowerCase().includes(q) || sessionTitle(s).toLowerCase().includes(q)) }));
+  const active = groups.map((g) => ({ ...g, sessions: splitActivePast(g.sessions).active })).filter((g) => g.sessions.length);
+  const past = groups.flatMap((g) => splitActivePast(g.sessions).past.map((s) => ({ s, hue: g.hue }))).sort((a, b) => b.s.lastSeq - a.s.lastSeq);
+  const nActive = active.reduce((n, g) => n + g.sessions.length, 0);
+  list.appendChild(h(doc, 'div', { class: 'sec-head' }, h(doc, 'span', null, 'Active'), h(doc, 'span', null, String(nActive))) as unknown as Node);
+  const vv = voiceStatusOf(status);
+  for (const g of active) {
+    list.appendChild(h(doc, 'div', { class: 'group-head' }, h(doc, 'span', { class: `swatch h${g.hue}` }), h(doc, 'span', { class: `pink h${g.hue}` }, g.repo === UNSCOPED ? 'unscoped' : g.repo)) as unknown as Node);
+    for (const s of g.sessions) {
+      list.appendChild(sessionRowEl(s, g.hue));
       // V2d: the focused live session gets [Voice ▾] (PTT | Ambient); only a human connection is offered it
       if (focused === s.hsid && isLiveState(s.state) && canAttach(status)) list.appendChild(voiceRowEl(s.hsid, vv));
     }
   }
+  list.appendChild(h(doc, 'button', { class: 'sec-head sec-toggle', type: 'button', 'data-past-toggle': '1', 'aria-expanded': String(pastOpen) }, h(doc, 'span', null, `${pastOpen ? '▾' : '▸'} Past`), h(doc, 'span', null, String(past.length))) as unknown as Node);
+  if (pastOpen) for (const { s, hue } of past) list.appendChild(sessionRowEl(s, hue));
 }
 
 /* ── decision stack ─────────────────────────────────────────────── */
+const PILE_MAX = 6;
+const RELAYOUT_GUARD_MS = 300;
+let stackLaidOutAt = -Infinity;
+let pileOpen = false;
+/** S3: a card's project line: its repo basename in the ONE project hue (the rail's group hue for that repo). */
+function projectOfCard(c: { repo: string | null; hsid: string | null }): { name: string; hue: number } | null {
+  const repo = c.repo ?? (c.hsid ? (store.sessions.get(c.hsid)?.repo ?? null) : null);
+  if (!repo) return null;
+  const g = store.groups().find((x) => x.repo === repo);
+  return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
+}
+/**
+ * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps APPROVED, then flies off
+ * 550 ms later and is removed on its flyout's animationend. While it leaves it is kept out of fresh paints (no
+ * duplicate) and re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an
+ * animation that never runs. A 1.5 s fallback removes it even if animationend never fires (a hidden tab).
+ */
+const departing = new Map<string, Array<{ el: HTMLElement; parent: HTMLElement; index: number }>>();
+function motionReduced(): boolean {
+  return document.documentElement.dataset.motion === 'reduced' || motionQ.matches;
+}
+function settleDeparture(cardId: string): void {
+  const d = departing.get(cardId);
+  if (!d) return;
+  departing.delete(cardId);
+  for (const x of d) x.el.remove();
+  void paintStack();
+}
+function flyOff(cardId: string): void {
+  const els = [...document.querySelectorAll<HTMLElement>(`.card[data-card-id="${CSS.escape(cardId)}"]`)];
+  if (!els.length || motionReduced()) return;
+  departing.set(cardId, els.map((el) => ({ el, parent: el.parentElement as HTMLElement, index: Array.prototype.indexOf.call(el.parentElement?.children ?? [], el) })));
+  for (const el of els) {
+    el.classList.add('leaving');
+    el.querySelector('.stamp')?.classList.add('on');
+  }
+  setTimeout(() => {
+    for (const el of els) {
+      el.classList.add('out');
+      el.addEventListener('animationend', (e) => {
+        if ((e as AnimationEvent).animationName === 'flyout') settleDeparture(cardId);
+      });
+    }
+  }, 550);
+  setTimeout(() => settleDeparture(cardId), 1500);
+}
+/** S4 droop: a session that flips to failed in this page's view droops once (never a shake). */
+const lastState = new Map<string, string>();
+const drooped = new Set<string>();
+
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
-  const cards = stackScoped && focused ? store.stack(focusRepo) : store.stack();
+  const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
   put($('stack-scope'), stackScoped && focused ? 'this project' : 'all projects');
   put($('inbox'), `${store.cards.size} pending`);
   for (const c of cards) {
@@ -307,6 +412,10 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         decidable: isCardDecidable(c.card as never),
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
         prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
+        project: projectOfCard(c),
+        raisedAt: c.raisedAt ?? null,
+        now: Date.now(),
+        voice: cardVoiceOf(c.card),
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -316,16 +425,38 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       el.classList.add('arriving');
       // TD-2026-10-19-063: a claim-mismatch card arrives with Deny focused (a keypress never lands on allow)
       queueMicrotask(() => (el.querySelector('[data-default]') as HTMLElement | null)?.focus());
-      el.addEventListener('animationend', () => el.classList.remove('arriving'), { once: true });
+      // S4 droop: a failed-session card droops once as it lands (it keeps the chained animation; nothing restarts)
+      if (el.classList.contains('failed')) el.classList.add('fx');
+      else el.addEventListener('animationend', () => el.classList.remove('arriving'), { once: true });
     }
     return el;
   };
   const pile = $('stack');
   clear(pile);
-  for (const c of cards) pile.appendChild(mk(c));
+  stackLaidOutAt = performance.now();
+  // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
+  const shown = pileOpen ? cards : cards.slice(0, PILE_MAX);
+  for (const c of shown) pile.appendChild(mk(c));
+  pile.classList.toggle('open', pileOpen);
+  if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
+  put($('stack-hint'), cards.length > 1 ? 'hover to fan' : '');
   const pinned = $('pinned');
   clear(pinned);
-  if (focused) for (const c of store.stack(focusRepo)) if (c.hsid === focused) pinned.appendChild(mk(c));
+  const mine = focused ? store.stack(focusRepo).filter((c) => c.hsid === focused) : [];
+  // S2.6: the pinned cards carry their label (only when there are any)
+  if (mine.length) pinned.appendChild(h(doc, 'span', { class: 'lbl' }, 'Pending in this session') as unknown as Node);
+  // S4: a pinned card settles at one of four preset tilts (classes, never inline style), picked by its cardId
+  for (const c of mine) {
+    const el = mk(c);
+    let x = 0;
+    for (const ch of c.cardId) x = (x + ch.charCodeAt(0)) % 997; // a tilt pick, not a hue: hues come from projectHue
+    el.classList.add(['r-a', 'r-b', 'r-c', 'r-d'][x % 4]!);
+    pinned.appendChild(el);
+  }
+  // S4: cards still flying off go back where they were (the fresh paint never shows them twice)
+  for (const d of departing.values())
+    for (const x of d)
+      if (!x.el.isConnected && (x.parent === pile || x.parent === pinned)) x.parent.insertBefore(x.el, x.parent.children[x.index] ?? null);
   paintUpdateBanner();
 }
 
@@ -397,6 +528,8 @@ function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
 
 async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null, keyEl?: HTMLElement | null): Promise<void> {
   if (!client) return;
+  // Aegis S2/S3 M2: a key that moved under the pointer (the stack was just re-laid out) never takes the click
+  if (performance.now() - stackLaidOutAt < RELAYOUT_GUARD_MS) return;
   let note: string | null = null;
   if (decision === 'answer') {
     note = cardEl ? askNoteFrom(cardEl, cardId) : null;
@@ -412,6 +545,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   try {
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
+    flyOff(cardId); // S4: only after the kernel accepted the decision (a refusal throws before this)
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);
@@ -445,7 +579,10 @@ function schedule(what: Set<string>): void {
     const w = pending;
     pending = new Set();
     if ([...w].some((x) => x === 'feed' || x.startsWith('transcript:'))) paintTranscript();
-    if (w.has('sessions') || w.has('cards')) paintSessions();
+    if (w.has('sessions') || w.has('cards')) {
+      paintSessions();
+      paintChatHead(); // S2: the session's name (its first message) and the empty centre's counts follow the log
+    }
     if (w.has('cards')) void paintStack(w);
     // T-2026-10-20-002: the card the notice names was decided (or swept): the stale notice goes with it
     if (noticeCard) {
@@ -538,6 +675,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
         standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
       }
+      modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
     } else if (p.end) void followLog(c, store).catch(() => undefined);
   });
   c.onClose(() => {
@@ -555,6 +693,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   } catch {
     status = null;
   }
+  modPanelRow = mountModPanels({ client: c, status, focused: () => focused }); // K0 mod panels (ui/mod-panels-mount.ts)
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();
@@ -658,6 +797,7 @@ function focusCard(cardId: string | null): void {
 function focus(hsid: string | null): void {
   if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
+  if (hsid) feedView = false;
   closeDrawers();
   closeModeMenu();
   closeVoiceMenu();
@@ -1339,6 +1479,23 @@ function showToast(): void {
 }
 
 /* ── palette ────────────────────────────────────────────────────── */
+/* ── S2.8 ⊞ Layout: the presets and the pane toggles (kernel-owned chrome is never a toggle) ── */
+function openLayoutMenu(): void {
+  const m = $('layout-menu');
+  clear(m);
+  const item = (cmd: string, name: string, note: string, on = false) => h(doc, 'button', { class: `mode-item${on ? ' current' : ''}`, type: 'button', role: 'menuitem', 'data-run': cmd }, h(doc, 'span', { class: 'mode-name' }, name), h(doc, 'span', { class: 'mode-note' }, note));
+  for (const name of Object.keys(PRESETS)) m.appendChild(item(`layout.${name}`, `Layout: ${name}`, name === 'desk' ? 'sessions · chat · stack' : name === 'focus' ? 'the chat only' : 'the stack wide', layout.name === name) as unknown as Node);
+  m.appendChild(item('pane.sessions.toggle', `${layout.visible.sessions ? 'Hide' : 'Show'} sessions`, 'pane') as unknown as Node);
+  m.appendChild(item('pane.stack.toggle', `${layout.visible.stack ? 'Hide' : 'Show'} the stack`, 'pane') as unknown as Node);
+  m.appendChild(item('pane.shuttle.toggle', `${layout.visible.shuttle ? 'Hide' : 'Show'} the status line`, 'pane') as unknown as Node);
+  m.hidden = false;
+  $('layout-btn').setAttribute('aria-expanded', 'true');
+}
+function closeLayoutMenu(): void {
+  $('layout-menu').hidden = true;
+  $('layout-btn').setAttribute('aria-expanded', 'false');
+}
+
 let palSel = 0;
 let palItems: Command[] = [];
 function openPalette(prefix = ''): void {
@@ -1353,7 +1510,7 @@ function paintPalette(): void {
   palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
   const l = $('palette-list');
   clear(l);
-  palItems.forEach((c, i) => l.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}${c.verb && !c.available ? ' unavailable' : ''}`, role: 'option', 'data-id': c.id }, h(doc, 'span', null, `${c.id}  ${c.title}`), h(doc, 'small', { class: 'meta' }, c.keys ?? c.why ?? '')) as unknown as Node));
+  palItems.forEach((c, i) => l.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}${c.verb && !c.available ? ' unavailable' : ''}`, role: 'option', 'data-id': c.id }, h(doc, 'span', { class: 'pal-title' }, c.title), h(doc, 'kbd', { class: 'pal-kbd' }, c.keys ?? c.why ?? c.id)) as unknown as Node));
 }
 function run(id: string): void {
   $('palette').hidden = true;
@@ -1372,6 +1529,15 @@ function run(id: string): void {
     $('new-session-dialog').hidden = false;
   }
   else if (id === 'composer.focus') $('composer-text').focus();
+  else if (id === 'view.kernel-feed') {
+    // S2.3: the raw kernel feed, on demand only (it is never the default centre)
+    if (width) widths.save(transcriptId(), width, heights);
+    focused = null;
+    feedView = true;
+    resetTranscript();
+    paintSessions();
+    void paintStack();
+  }
   else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', true);
   else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', true);
   else if (id === 'voice.client.start') void voiceClientOp('start', true);
@@ -1436,6 +1602,31 @@ function wire(): void {
     paintTranscript();
     $('composer-text').focus();
   });
+  // S2.5: an activity line expands / collapses its steps (click or Enter / Space)
+  const toggleAct = (t: EventTarget | null): void => {
+    const a = (t as HTMLElement | null)?.closest('[data-act]') as HTMLElement | null;
+    if (!a) return;
+    const k = a.dataset.act!;
+    if (expandedActs.has(k)) expandedActs.delete(k);
+    else expandedActs.add(k);
+    paintTranscript();
+  };
+  $('viewport').addEventListener('click', (e) => toggleAct(e.target));
+  $('viewport').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (!(e.target as HTMLElement).closest('[data-act]')) return;
+      e.preventDefault();
+      toggleAct(e.target);
+    }
+  });
+  $('empty-new').addEventListener('click', () => run('session.new'));
+  $('layout-btn').addEventListener('click', () => ($('layout-menu').hidden ? openLayoutMenu() : closeLayoutMenu()));
+  $('layout-menu').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
+    if (!b) return;
+    closeLayoutMenu();
+    run(b.dataset.run!);
+  });
   $('raw-toggle').addEventListener('click', () => {
     if (width) widths.save(transcriptId(), width, heights);
     rawMode = !rawMode;
@@ -1451,6 +1642,11 @@ function wire(): void {
       voiceRowOpen = !voiceRowOpen;
       return paintSessions();
     }
+    if ((e.target as HTMLElement).closest('[data-past-toggle]')) {
+      pastOpen = !pastOpen;
+      localStorage.setItem(PAST_KEY, pastOpen ? '1' : '0');
+      return paintSessions();
+    }
     const b = (e.target as HTMLElement).closest('[data-hsid]') as HTMLElement | null;
     if (b) focus(b.dataset.hsid || null);
   });
@@ -1461,7 +1657,13 @@ function wire(): void {
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
     if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
   };
-  $('stack').addEventListener('click', onCard);
+  $('stack').addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('[data-pile-more]')) {
+      pileOpen = true;
+      return void paintStack();
+    }
+    onCard(e);
+  });
   $('pinned').addEventListener('click', onCard);
   $('stack-scope').addEventListener('click', () => run('stack.scope.toggle'));
   $('composer').addEventListener('submit', (e) => {
@@ -1612,6 +1814,8 @@ export function main(raw?: string): void {
   applyLook();
   applyLayout();
   wire();
+  paintChatHead(); // S2.3: the quiet empty centre until a session is focused
+  paintSessions(); // the ACTIVE / PAST heads show before the first row arrives
   // #bare-entry: the folder hint is decoded here but applied by attach only after the token verified (Aegis M1)
   // TD-2026-10-19-063: the page that accepted an upgrade reloads once and reattaches with the single-use resume form
   const resumed = frag ? (clearRestarting(sessionStorage), null) : takeRestart(sessionStorage);

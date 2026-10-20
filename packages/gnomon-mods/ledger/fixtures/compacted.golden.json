@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Ledger",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Table",
+      "columns": [
+        "session",
+        "in",
+        "out",
+        "cache",
+        "cost",
+        "⇣ compactions"
+      ],
+      "rows": [
+        [
+          "…ZZZZZA",
+          "182k",
+          "9k",
+          "71%",
+          "$0.42",
+          "2 (190k → 41k)"
+        ],
+        [
+          "…ZZZZZB (ended)",
+          "33k",
+          "-",
+          "-",
+          "-",
+          "1 (31k → 6k)"
+        ]
+      ]
+    },
+    {
+      "type": "Text",
+      "text": "total · 182k in · 9k out · 71% cache · 33k local · $0.42 · ⇣ 3 compactions (31k → 6k)",
+      "tone": "quiet"
+    }
+  ]
+}

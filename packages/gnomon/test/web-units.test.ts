@@ -18,8 +18,14 @@ import {
   routeHttp,
   securityHeaders,
   sniffRaster,
+  staticContentType,
   treeHashOf,
 } from '../src/kernel/web/index.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { hashBundleDir } from '../src/kernel/web/bundle.js';
+import { materializeGuiBundle } from '../src/kernel/web/gui-pin.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/index.js';
 import { validateChildRecord } from '../src/kernel/web/protocol.js';
 import { acceptKey, encodeClientFrame, FrameDecoder, OP, validCloseCode } from '../src/transport/ws-codec.js';
@@ -233,12 +239,37 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:bcf530eadea2fd51938ae8bf22f5394ac078be5d2bc552dd65491904c3ea5555');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:cd5d720ef3bc684a9de9d8d9ba2b83a0eff52d12218ab1286605ba17f955fd01');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
     expect(treeHashOf(f)).not.toBe(GUI_BUNDLE_HASH);
-    expect([...guiBundleFiles().keys()].sort()).toEqual(['app.js', 'boot.js', 'index.html', 'styles.css']);
+    expect([...guiBundleFiles().keys()].sort()).toEqual([
+      'app.js', 'boot.js',
+      'fonts/Fraunces-opsz-wght.woff2', 'fonts/JetBrainsMono-Medium.woff2', 'fonts/JetBrainsMono-Regular.woff2', 'fonts/JetBrainsMono-SemiBold.woff2',
+      'fonts/OFL-Fraunces.txt', 'fonts/OFL-JetBrainsMono.txt',
+      'grain.svg', 'index.html', 'styles.css',
+    ]);
+  });
+  it('S1: binary bundle files survive the base64 embed raw (woff2 magic + the kernel serves them as font/woff2)', () => {
+    const fonts = [...guiBundleFiles()].filter(([n]) => n.endsWith('.woff2'));
+    expect(fonts.length).toBe(4);
+    for (const [n, b] of fonts) {
+      expect(b.subarray(0, 4).toString('latin1'), n).toBe('wOF2');
+      expect(b.includes(Buffer.from([0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd, 0xef, 0xbf, 0xbd])), `${n} looks utf8-mangled`).toBe(false);
+      expect(staticContentType(n)).toBe('font/woff2');
+    }
+    expect(staticContentType('grain.svg')).toBe('image/svg+xml'); // the bundle's own grain (static only; /blob refuses SVG)
+  });
+  it('Aegis S1 L1: materializeGuiBundle writes the pinned tree (sub-directories included) and it re-hashes to the pin', () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'gnomon-gui-pin-'));
+    try {
+      const dir = materializeGuiBundle(home);
+      expect(hashBundleDir(dir).hash).toBe(GUI_BUNDLE_HASH);
+      expect(materializeGuiBundle(home)).toBe(dir); // a second start replaces the tree (rmSync then wx writes)
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
   it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
     const files = guiBundleFiles();
@@ -246,8 +277,15 @@ describe('G-WEB-08 bundle pin', () => {
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
     expect(html).not.toMatch(/<style|\sstyle=|\son[a-z]+=/i);
     expect(html.indexOf('/boot.js')).toBeLessThan(html.indexOf('/app.js')); // fragment read-and-clear runs first
+    const binary = (n: string): boolean => /\.(woff2?|ttf|png|jpe?g|webp|wasm)$/.test(n); // opaque bytes: not code, never scanned as text
     for (const [n, v] of files) {
+      if (binary(n)) continue;
       const s = v.toString();
+      if (n.endsWith('.txt')) { // the OFL licences: inert text, but no data: URL
+        expect(s, n).not.toMatch(/data:[a-z]+\//);
+        continue;
+      }
+      if (n.endsWith('.svg')) expect(s, n).not.toMatch(/<script|foreignObject|\son[a-z]+=|href/i); // Aegis S1 L2: an SVG is an image, never active
       expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }

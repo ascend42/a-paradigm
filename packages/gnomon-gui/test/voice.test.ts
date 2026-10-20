@@ -254,6 +254,20 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(css).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}animation: none !important/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
   });
+  it('S1: the live mic is amber and static (amber = armed, vermilion = failure only); push-to-talk never uses slate', () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^\.voice-(pill|meter|item|row-btn|choice)/.test(l));
+    const amb = rules.find((l) => l.startsWith('.voice-pill.voice-ambient {'))!;
+    expect(amb).toMatch(/border: 1px solid var\(--warn-edge\);/);
+    expect(rules.find((l) => l.startsWith('.voice-pill.voice-ambient .voice-dot'))).toMatch(/background: var\(--warn-edge\)/);
+    for (const l of rules) {
+      expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring/);
+      if (/voice-ptt|voice-nudge/.test(l)) expect(l, l).not.toMatch(/slate/);
+      if (/voice-ambient/.test(l) && !/voice-crashed \{/.test(l)) expect(l, l).not.toMatch(/--fail/);
+    }
+    expect(css).toMatch(/\.voice-pill\.voice-crashed \{ color: var\(--fail\); border-color: var\(--fail-edge\);/); // a failure keeps vermilion
+    expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--warn-edge\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level
+    expect(css).not.toMatch(/@keyframes voice-(pulse|ring|meter)/);
+  });
 });
 
 describe('the "decide the pending card" notice clears once its card is decided (T-2026-10-20-002)', () => {

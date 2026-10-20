@@ -281,7 +281,7 @@ export type AdapterEvent =
   | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number } }
   | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean }
   | { kind: 'user'; type: string; replay: boolean; toolResults: ToolResultSeen[] }
-  | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; costUsd: number | null; permissionDenials: number; quota: boolean }
+  | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; split: UsageSplit | null; costUsd: number | null; permissionDenials: number; quota: boolean }
   | { kind: 'control'; type: string; subtype: string | null; requestId: string | null }
   | { kind: 'permission-request'; type: 'control_request.can_use_tool'; requestId: string; toolName: string; toolUseId: string | null; input: Record<string, unknown> }
   | { kind: 'control-cancel'; type: 'control_cancel_request'; requestId: string }
@@ -303,6 +303,23 @@ export const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+
+/** The turn's usage by kind (#ledger-mod): numbers only, from result.usage. */
+export interface UsageSplit {
+  in: number;
+  out: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+/** input / output / cache read / cache creation; null when no usage object. */
+export function usageSplit(u: unknown): UsageSplit | null {
+  const o = obj(u);
+  if (!o) return null;
+  // Aegis L2: floored and clamped at the source, so the logged row is exactly what the feed projects
+  const int = (v: unknown): number => Math.min(Math.floor(num(v)), Number.MAX_SAFE_INTEGER);
+  return { in: int(o.input_tokens), out: int(o.output_tokens), cacheRead: int(o.cache_read_input_tokens), cacheWrite: int(o.cache_creation_input_tokens) };
+}
 
 /** input + output + cache creation + cache read; null when no usage object. */
 export function usageTokens(u: unknown): number | null {
@@ -364,6 +381,7 @@ export function parseStreamLine(line: string): AdapterEvent {
         subtype: str(o.subtype),
         isError,
         tokens: usageTokens(o.usage),
+        split: usageSplit(o.usage),
         costUsd: typeof o.total_cost_usd === 'number' && Number.isFinite(o.total_cost_usd) && o.total_cost_usd >= 0 ? o.total_cost_usd : null,
         permissionDenials: Array.isArray(o.permission_denials) ? o.permission_denials.length : 0,
         quota: isError && QUOTA.test(text),

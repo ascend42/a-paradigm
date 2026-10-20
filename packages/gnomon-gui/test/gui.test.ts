@@ -119,6 +119,14 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     expect(el.all().filter((e) => e.attrs.has('data-default')).map((e) => e.attrs.get('data-decision'))).toEqual(['deny']);
     const plain = renderCard({ doc: fdoc }, { ...v, flags: [] }, block) as FEl;
     expect(plain.all().filter((e) => e.attrs.has('data-default'))).toHaveLength(0);
+    // S1 ink keys: a plain card fills its first non-deny key; the claim-mismatch card fills none (Deny stays default, unfilled)
+    const priOf = (x: FEl): (string | undefined)[] => x.all().filter((e) => /(^| )pri( |$)/.test(e.className)).map((e) => e.attrs.get('data-decision'));
+    expect(priOf(plain)).toEqual(['allow']);
+    expect(priOf(el)).toEqual([]);
+    expect(priOf(renderCard({ doc: fdoc }, { ...v, flags: [], decisions: ['deny', 'allow'] }, block) as FEl)).toEqual(['allow']);
+    expect(priOf(renderCard({ doc: fdoc }, { ...v, flags: [], decisions: ['deny'] }, block) as FEl)).toEqual([]);
+    // the contentHash line stays on every card (GUI-core security summary)
+    expect(plain.all().some((e) => e.className.includes('content-hash') && e.text.startsWith('contentHash sha256:'))).toBe(true);
   });
   it('ask-user card (Aegis C1): the picker comes from the contentHash-verified structured detail, never from display text', () => {
     const t = (text: string) => ({ type: 'Text', text });
@@ -223,15 +231,16 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
       for (const n of readdirSync(d)) {
         const p = path.join(d, n);
         if (statSync(p).isDirectory()) walk(p);
-        else files.push(p);
+        else if (/\.(ts|js|mjs|html|css|svg)$/.test(n)) files.push(p); // code only: the fonts are binary, the OFL texts carry upstream URLs (test/fonts.test.ts)
       }
     };
     walk(path.join(ROOT, 'src'));
     walk(path.join(ROOT, 'static'));
+    expect(files.some((f) => f.endsWith('styles.css'))).toBe(true);
     for (const f of files) {
       const s = readFileSync(f, 'utf8').replace(/^\s*(\*|\/\/).*$/gm, '');
       expect(s, f).not.toMatch(/\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function|setAttribute\(\s*['"]on/);
-      expect(s, f).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
+      expect(s.replace(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, ''), f).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/); // the SVG namespace is a name, not a load
     }
   });
 });
@@ -472,17 +481,42 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     const m = new RegExp(theme === 'day' ? String.raw`:root,\s*\[data-theme="day"\]\s*\{([^}]*)\}` : String.raw`\[data-theme="night"\]\s*\{([^}]*)\}`).exec(css)!;
     return Object.fromEntries([...m[1]!.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map((x) => [x[1]!, x[2]!.trim().toUpperCase()]));
   };
-  const MAP: Record<string, [string, string]> = { ground: ['surfaces', 'ground'], sheet: ['surfaces', 'sheet'], ink: ['text', 'ink'], ink2: ['text', 'ink2'], sec: ['text', 'sec'], fail: ['text', 'fail'], 'warn-ink': ['text', 'warnInk'], knot: ['text', 'knot'], slate: ['text', 'slate'], 'key-edge': ['nonText', 'keyEdge'], 'warn-edge': ['nonText', 'warnEdge'], 'fail-edge': ['nonText', 'failEdge'], 'knot-edge': ['nonText', 'knotEdge'] };
+  const MAP: Record<string, [string, string]> = { ground: ['surfaces', 'ground'], sheet: ['surfaces', 'sheet'], ink: ['text', 'ink'], ink2: ['text', 'ink2'], sec: ['text', 'sec'], fail: ['text', 'fail'], 'warn-ink': ['text', 'warnInk'], knot: ['text', 'knot'], slate: ['text', 'slate'], 'key-edge': ['nonText', 'keyEdge'], 'warn-edge': ['nonText', 'warnEdge'], 'fail-edge': ['nonText', 'failEdge'], 'knot-edge': ['nonText', 'knotEdge'],
+    // S1: the project ink pairs (project names as text) are fixture text tokens
+    'p-terracotta-ink': ['text', 'terracotta'], 'p-sage-ink': ['text', 'sage'], 'p-slate-ink': ['text', 'slate'], 'p-ochre-ink': ['text', 'ochre'], 'p-rose-clay-ink': ['text', 'rose-clay'], 'p-sea-grey-ink': ['text', 'sea-grey'] };
   it.each(['day', 'night'])('%s tokens equal contrast.json', (theme) => {
     const t = tokens(theme);
     for (const [v, [grp, key]] of Object.entries(MAP)) expect(t[v], `${theme} --${v}`).toBe((fx.themes[theme] as unknown as Record<string, Record<string, string>>)[grp]![key]!.toUpperCase());
   });
+  it.each(['day', 'night'])('%s --on-ink is the fixture on-ink pair (primary key text on its --ink fill)', (theme) => {
+    const t = tokens(theme);
+    const pair = (fx.themes[theme] as unknown as { pairs: { fg: string; bg: string; what: string }[] }).pairs.find((p) => p.what.startsWith('on-ink'))!;
+    expect([t['on-ink'], t['ink']]).toEqual([pair.fg.toUpperCase(), pair.bg.toUpperCase()]);
+  });
+  it('S1: the voice-armed edge on its fill is a fixture nonText pair (>= 3:1), and sage stays fill-only', () => {
+    const day = fx.themes.day as unknown as { pairs: { fg: string; bg: string; kind: string; what: string }[]; fillOnly: Record<string, string> };
+    expect(day.pairs.find((p) => p.what.startsWith('voice-armed indicator edge'))).toMatchObject({ fg: tokens('day')['warn-edge'], bg: tokens('day')['warn-bg'], kind: 'nonText' });
+    expect(tokens('day')['p-sage-fill']).toBe(day.fillOnly.sage!.toUpperCase());
+    expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/(?<![-a-z])(color|border(-[a-z]+)?|outline):[^;}]*--p-sage-fill/);
+  });
   it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
-    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate']); // slate: the V2d push-to-talk text (a fixture text token)
+    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'stamp', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
     for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
     }
+  });
+  it('S1 ink keys: hard 2px ink offset on a --key-edge ring (>= 3:1), filled primary in on-ink; none at night; no card glow', () => {
+    const t = tokens('day');
+    expect(t['key-shadow']).toBe('2PX 2PX 0 VAR(--KEY-EDGE)');
+    expect(tokens('night')['key-shadow']).toBe('NONE');
+    const key = /\n\.key \{([^}]*)\}/.exec(css)![1]!;
+    expect(key).toMatch(/border: 1px solid var\(--key-edge\);/);
+    expect(key).toMatch(/box-shadow: var\(--key-shadow\);/);
+    expect(key).toMatch(/min-height: 28px;/);
+    expect(css).toMatch(/\.key\.pri \{ background: var\(--ink\); color: var\(--on-ink\); \}/);
+    expect(css).not.toMatch(/--glow\b/);
+    expect(css).toMatch(/\[data-theme="night"\] \.wordmark \{[^}]*text-shadow: var\(--wm-glow\);/);
   });
   it('check-contrast.mjs passes', () => {
     expect(execFileSync(process.execPath, [path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'check-contrast.mjs')], { encoding: 'utf8' })).toContain('all pairs pass');

@@ -6,12 +6,12 @@
  * runs the REAL first-party mod's pure model
  * (packages/gnomon-mods/workshop/model.mjs) over the fixture rows projected
  * the way #mod-host's feed projects them (modhost/feed.ts: session.open
- * {hsid, backend, project = sha256(cwd)[0] % 8}, turn.partial, approval.request
+ * {hsid, backend, project = projectHue(cwd), the ONE hue function, 0..5}, turn.partial, approval.request
  * {cardId, kind, hsid}, …), and draws its display-block:v1 output with the
  * GUI's own kit renderer (core/render.ts renderBlock) under each Box title,
  * at the foot of the sessions pane (the manifest's `sidebar`/`append` slot).
  */
-import { sha256, utf8, type LogRow } from '@a-company/gnomon-contracts';
+import { projectHue, type LogRow } from '@a-company/gnomon-contracts';
 import { h, renderBlock, type MiniDoc, type MiniEl } from '../core/render.js';
 // @ts-ignore -- the mod is plain ESM with no types (its packageHash is pinned: no .d.ts may be added beside it)
 import * as model from '../../../gnomon-mods/workshop/model.mjs';
@@ -23,7 +23,6 @@ interface WorkshopModel {
 }
 const workshop = model as unknown as WorkshopModel;
 
-const FEED_HUES = 8;
 
 /** One kernel row as the #mod-host feed projects it to a mod (only the fields the caps derive from), or null. */
 export function feedEventOf(r: LogRow): { kind: string; payload: Record<string, unknown> } | null {
@@ -34,7 +33,7 @@ export function feedEventOf(r: LogRow): { kind: string; payload: Record<string, 
   const card = (p.card && typeof p.card === 'object' ? p.card : {}) as Record<string, unknown>;
   switch (e.kind) {
     case 'session.open':
-      return { kind: e.kind, payload: { hsid, backend: p.backend === 'local' ? 'local' : 'claude', project: typeof p.cwd === 'string' ? sha256(utf8(p.cwd))[0]! % FEED_HUES : 0 } };
+      return { kind: e.kind, payload: { hsid, backend: p.backend === 'local' ? 'local' : 'claude', project: typeof p.cwd === 'string' ? projectHue(p.cwd) : 0 } };
     case 'session.exited':
     case 'turn.partial':
     case 'turn.result':
