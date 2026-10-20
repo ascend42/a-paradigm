@@ -2,6 +2,19 @@
 // `quit` and — like the Swift binary (Command.swift: "stdin EOF does the same") — exits 0 when stdin ends.
 // argv[2] (optional): 'ignore-quit' to prove the stdin EOF path alone ends it.
 const ignoreQuit = process.argv[2] === 'ignore-quit';
+// 'report-fd3 <file>': write what this process holds on fd 3 (Aegis M1: never the kernel link)
+if (process.argv[2] === 'report-fd3') {
+  const fs = await import('node:fs');
+  let r;
+  try {
+    const st = fs.fstatSync(3);
+    const dn = fs.statSync('/dev/null');
+    r = { open: true, socket: st.isSocket(), devNull: st.isCharacterDevice() && st.ino === dn.ino && st.rdev === dn.rdev, ino: st.ino };
+  } catch {
+    r = { open: false };
+  }
+  fs.writeFileSync(process.argv[3], JSON.stringify(r));
+}
 let buf = Buffer.alloc(0);
 const send = (o) => {
   const p = Buffer.from(JSON.stringify(o));

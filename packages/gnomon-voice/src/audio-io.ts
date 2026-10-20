@@ -132,6 +132,9 @@ export class AudioIOError extends Error {
   }
 }
 
+/** The io child's stdio: frames on stdin/stdout, stderr shared, fd 3 (the kernel link here) replaced by /dev/null. */
+export const IO_CHILD_STDIO: readonly ['pipe', 'pipe', 'inherit', 'ignore'] = Object.freeze(['pipe', 'pipe', 'inherit', 'ignore'] as const);
+
 export class SpawnedAudioIO implements AudioIO {
   readonly captureSampleRate = 16_000;
   readonly #o: SpawnedAudioIOOptions;
@@ -173,7 +176,10 @@ export class SpawnedAudioIO implements AudioIO {
   async start(): Promise<void> {
     // V2b Aegis duty 3 + item 5: an ALLOW-LIST env (the disclaim marker is the binary's own re-spawn signal, never inherited)
     const env = ioChildEnv();
-    const child = (this.#o.spawnImpl ?? spawn)(this.#o.binary, this.#o.args ?? [], { stdio: ['pipe', 'pipe', 'inherit'], env });
+    // Aegis M1: fd 3 of THIS process is the kernel-authenticated voice link (`run --fd 3`). The io binary must never
+    // inherit it: an explicit 'ignore' puts /dev/null on the child's fd 3 (Node has no fcntl to set FD_CLOEXEC on an
+    // inherited fd, so the explicit stdio entry is the guarantee; macOS posix_spawn's CLOEXEC_DEFAULT is a second one).
+    const child = (this.#o.spawnImpl ?? spawn)(this.#o.binary, this.#o.args ?? [], { stdio: IO_CHILD_STDIO as never, env });
     this.#child = child;
     this.#killOnExit = () => void child.kill();
     process.once('exit', this.#killOnExit);

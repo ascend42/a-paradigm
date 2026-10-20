@@ -123,8 +123,10 @@ describe('#gnomon-voice V2e: the kernel-spawned voice client', () => {
     await d.voiceClient.start();
     await d.shutdown('upgrade');
     daemons.splice(0);
-    await kids[0]!.exited;
+    // awaited (Aegis item 7): the child has exited by the time shutdown('upgrade') resolves — the card path's drain
+    // ends in this same shutdown('upgrade'), so no successor ever starts beside a live voice child
     expect(kids[0]!.child.exitCode !== null || kids[0]!.child.signalCode !== null).toBe(true);
+    expect(d.voiceClient.status()).toMatchObject({ phase: 'stopped', clientConnected: false });
     expect(kids).toHaveLength(1);
   });
 });

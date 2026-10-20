@@ -179,6 +179,20 @@ describe('#gnomon-voice V2e: VoiceChildSupervisor', () => {
     expect(r.timers).toHaveLength(0);
   });
 
+  it("Aegis M2: a client copy that fails the kernel's pin is 'unavailable' with the reason; nothing is spawned or retried", async () => {
+    const refused = Object.assign(new Error('the installed voice client changed since the kernel copied it (dist/cli.js); refusing to start it'), { name: 'VoiceClientRefused' });
+    const r = rig({ prepare: async () => Promise.reject(refused) });
+    expect(await r.sup.start()).toMatchObject({ phase: 'unavailable', wanted: false, unavailable: expect.stringMatching(/changed since the kernel copied it/) });
+    expect(r.spawns).toHaveLength(0);
+    expect(r.timers).toHaveLength(0);
+  });
+
+  it('Aegis M2: the spawn runs the verified COPY the prepare returns, never the workspace entry', async () => {
+    const r = rig({ prepare: async () => ({ ioBinary: '/io', devUnsigned: false, clientEntry: '/h/bin/voice/client/dist/cli.js' }) });
+    await r.sup.start();
+    expect(r.spawns[0]!.args[1]).toBe('/h/bin/voice/client/dist/cli.js');
+  });
+
   it('an attach refusal kills the child; a connection close clears clientConnected', async () => {
     const r = rig({ attach: async () => Promise.reject(new Error('the kernel log refused the voice auth row')) });
     const s = await r.sup.start();

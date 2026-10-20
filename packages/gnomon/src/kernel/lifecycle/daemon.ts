@@ -137,7 +137,7 @@ import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type 
 import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
 import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
-import { defaultVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
+import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { spawn as spawnChild } from 'node:child_process';
@@ -1019,7 +1019,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     clientEntry: voiceEntry.entry,
     ...('reason' in voiceEntry && voiceEntry.reason ? { unavailableReason: voiceEntry.reason } : {}),
     spawn: opts.voice?.client?.spawn ?? ((cmd, args, o) => spawnChild(cmd, args, o)),
-    prepare: opts.voice?.client?.prepare ?? ((report) => defaultVoicePrepare({ home, entry: voiceEntry.entry!, devUnsigned: opts.voice?.client?.devUnsigned === true, report })),
+    // Aegis M2: the client runs from the kernel's pinned copy in <home>/bin/voice/client, never from the workspace
+    prepare: opts.voice?.client?.prepare ?? (voiceEntry.entry ? createVoicePrepare({ home, entry: voiceEntry.entry, devUnsigned: opts.voice?.client?.devUnsigned === true }) : async () => Promise.reject(new Error('the voice client is not installed'))),
     ...(opts.voice?.client?.backoffMinMs !== undefined ? { backoffMinMs: opts.voice.client.backoffMinMs } : {}),
     attach: async (sock) => {
       if (!server) throw new Error('the kernel socket is not up yet');

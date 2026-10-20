@@ -20,7 +20,7 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import type * as net from 'node:net';
 import { DEFAULT_REEXEC_PATH, DISABLE_SIGUSR1 } from '../lifecycle/env.js';
 
-export type VoiceChildPhase = 'stopped' | 'preparing' | 'installing' | 'downloading-models' | 'starting' | 'running' | 'backoff' | 'failed';
+export type VoiceChildPhase = 'stopped' | 'preparing' | 'installing' | 'downloading-models' | 'starting' | 'running' | 'backoff' | 'failed' | 'unavailable';
 
 export interface VoiceChildStatus {
   /** explicit boolean: the spawned client's authenticated connection is up (status.voice.clientConnected) */
@@ -43,6 +43,8 @@ export interface VoicePrepared {
   /** absolute path of the verified gnomon-voice-io binary inside the installed app copy */
   ioBinary: string;
   devUnsigned: boolean;
+  /** Aegis M2: the kernel's verified COPY of the client entry; the spawn runs this, never the workspace */
+  clientEntry?: string;
 }
 
 export interface VoiceChildOptions {
@@ -101,6 +103,7 @@ export class VoiceChildSupervisor {
   #downloadMb: number | undefined;
   #devUnsigned = false;
   #lastError: string | undefined;
+  #unavailable: string | undefined;
   #closed = false;
   #exitWaiters: Array<() => void> = [];
   #starting: Promise<void> | null = null;
@@ -138,7 +141,7 @@ export class VoiceChildSupervisor {
       devUnsigned: this.#devUnsigned,
       ...(this.#downloadMb !== undefined && this.#phase === 'downloading-models' ? { downloadMb: this.#downloadMb } : {}),
       ...(this.#lastError ? { lastError: this.#lastError } : {}),
-      ...(this.#o.clientEntry === null ? { unavailable: this.#o.unavailableReason ?? 'the voice client is not installed' } : {}),
+      ...(this.#o.clientEntry === null ? { unavailable: this.#o.unavailableReason ?? 'the voice client is not installed' } : this.#unavailable ? { unavailable: this.#unavailable } : {}),
     };
   }
 
@@ -189,17 +192,22 @@ export class VoiceChildSupervisor {
         this.#set(phase);
       });
     } catch (e) {
-      // a refusal to install (unsigned, mismatched requirement, bad model hash) is not retried by backoff
+      // a refusal to install (unsigned, mismatched requirement, bad model hash) is not retried by backoff;
+      // a client copy that no longer matches the kernel's pin (Aegis M2) is 'unavailable', with the reason
       this.#lastError = e instanceof Error ? e.message : String(e);
       this.#wanted = false;
-      this.#set('failed');
+      if (e instanceof Error && e.name === 'VoiceClientRefused') {
+        this.#unavailable = this.#lastError;
+        this.#set('unavailable');
+      } else this.#set('failed');
       return;
     }
     this.#downloadMb = undefined;
+    this.#unavailable = undefined;
     this.#devUnsigned = prepared.devUnsigned;
     if (!this.#wanted || this.#closed) return void this.#set('stopped');
     this.#set('starting');
-    const child = this.#o.spawn(this.#o.execPath ?? process.execPath, voiceChildArgs(this.#o.clientEntry!, this.#o.home, prepared.ioBinary), {
+    const child = this.#o.spawn(this.#o.execPath ?? process.execPath, voiceChildArgs(prepared.clientEntry ?? this.#o.clientEntry!, this.#o.home, prepared.ioBinary), {
       stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
       env: voiceChildEnv(this.#o.sourceEnv ?? process.env, this.#o.home),
       cwd: this.#o.home,

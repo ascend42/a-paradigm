@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ioChildEnv, SpawnedAudioIO } from '../src/audio-io.js';
+import { IO_CHILD_STDIO, ioChildEnv, SpawnedAudioIO } from '../src/audio-io.js';
 import { FakeAudioIO } from '../src/fake-audio-io.js';
 import { FdRpc, GnomonKernelLink, principalFromStatus } from '../src/kernel-link.js';
 import { fetchModel, loadManifest, validateManifest, verifiedModelPaths, type FetchLike, type ModelEntry } from '../src/manifest.js';
@@ -279,6 +279,43 @@ describe('gnomon-voice-io hardening', () => {
     expect(got.env!.PATH).toBe('/usr/bin:/bin:/usr/sbin:/sbin');
     expect(ioChildEnv({ NODE_OPTIONS: '--require x', HOME: '/h' })).toEqual({ PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: '/h' });
     await a.close();
+  });
+
+  it('Aegis M1: the io child never inherits fd 3 (the kernel link): IO_CHILD_STDIO, falsified against a real socket fd 3', async () => {
+    let stdio: unknown;
+    const a = new SpawnedAudioIO({
+      binary: process.execPath,
+      args: [FAKE_IO],
+      spawnImpl: ((b: string, args: string[], o: { stdio: unknown }) => {
+        stdio = o.stdio;
+        const c = spawn(b, args, o as never);
+        spawned.push(c);
+        return c;
+      }) as never,
+    });
+    await a.start();
+    expect(stdio).toEqual([...IO_CHILD_STDIO]);
+    await a.close();
+    // a stand-in for `gnomon-voice run --fd 3`: its fd 3 IS a socket (the kernel's socketpair); it spawns the io
+    // child with the given stdio, which reports what it holds on fd 3
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-fd3-'));
+    const runAs = async (childStdio: unknown): Promise<{ open: boolean; socket?: boolean }> => {
+      const file = path.join(dir, `${Math.random().toString(36).slice(2)}.json`);
+      const wrapper = `const { spawn } = require('node:child_process'); const fs = require('node:fs');
+if (!fs.fstatSync(3).isSocket()) { console.error('wrapper fd 3 is not a socket'); process.exit(2); }
+const c = spawn(process.execPath, [${JSON.stringify(FAKE_IO)}, 'report-fd3', ${JSON.stringify(file)}], { stdio: ${JSON.stringify(childStdio)} });
+setTimeout(() => { c.kill(); process.exit(0); }, 400);`;
+      const w = spawn(process.execPath, ['-e', wrapper], { stdio: ['pipe', 'inherit', 'inherit', 'pipe'] });
+      spawned.push(w);
+      const code = await new Promise<number | null>((r) => w.once('exit', (c) => r(c)));
+      expect(code).toBe(0);
+      return JSON.parse(fs.readFileSync(file, 'utf8')) as { open: boolean; socket?: boolean };
+    };
+    // the control: without the explicit entry the link leaks (Linux; macOS posix_spawn may close it anyway)
+    const leaked = await runAs(['pipe', 'pipe', 'inherit', 3]);
+    expect(leaked).toMatchObject({ open: true, socket: true });
+    const guarded = await runAs([...IO_CHILD_STDIO]);
+    expect(guarded.socket ?? false).toBe(false);
   });
 
   it('the child quits when its stdin closes (quit ignored: EOF alone ends it)', async () => {
