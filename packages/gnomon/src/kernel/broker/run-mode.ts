@@ -18,8 +18,12 @@
  *               session's own roots (cwd, worktree), not gate-class (§15.7,
  *               manifest/layers.ts gateClassPathRule) and with no hidden or
  *               bidi characters on its card pass with no card, after
- *               `approval.auto{hsid, tool, path, inputHash, modeRef}`; Bash,
- *               network, every other tool and every other path still ask.
+ *               `approval.auto{hsid, tool, path, inputHash, modeRef}`. A Bash
+ *               command #shell-readonly PROVES read-only passes too, after
+ *               `approval.auto{modeRef:'mode:auto-edits:read-only'}` (no path;
+ *               TD-2026-10-20-294, supervisor/auto-edits.ts autoBashReadOnly);
+ *               every other Bash command, network, every other tool and every
+ *               other path still ask.
  *
  * HOME (Aegis M3): auto-edits is refused (FORBIDDEN{strictness,
  * strictness-mode}) at admission for a folder that is the user's home, an

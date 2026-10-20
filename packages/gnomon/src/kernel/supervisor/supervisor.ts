@@ -106,7 +106,7 @@ import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTING
 import type { LocalLaneConfig } from '../local/config.js';
 import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
-import { autoEditPass } from './auto-edits.js';
+import { autoBashReadOnly, autoEditPass, READ_ONLY_MODE_REF } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -954,6 +954,24 @@ export class SessionSupervisor {
         }
         if (logged) {
           await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: 'mode:auto-edits' });
+          return;
+        }
+      }
+    }
+    if (mode === 'auto-edits' && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
+      // TD-2026-10-20-294 part 1: a PROVABLY read-only command (#shell-readonly; fails closed) passes with no card
+      const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#o.userHome ?? os.homedir());
+      if (pass.ok) {
+        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
+        let logged = false;
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: READ_ONLY_MODE_REF });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+        if (logged) {
+          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: READ_ONLY_MODE_REF });
           return;
         }
       }

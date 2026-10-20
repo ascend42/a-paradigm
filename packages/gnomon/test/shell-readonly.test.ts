@@ -3,6 +3,9 @@
  * under platform 'linux' (none exist, so realpath never resolves them on any host).
  */
 import { describe, expect, it } from 'vitest';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { autoBashReadOnly } from '../src/kernel/supervisor/auto-edits.js';
 import { classifyReadOnly, parseShell, simpleArgv, ShellParseError } from '../src/kernel/supervisor/shell-readonly.js';
 
 const REPO = '/w/repo';
@@ -238,4 +241,24 @@ describe('#shell-readonly simpleArgv (prefix rules)', () => {
     '%j is not',
     (c) => expect(simpleArgv(c)).toBeNull(),
   );
+});
+
+describe('#supervisor autoBashReadOnly (the auto-edits gate around the classifier)', () => {
+  const root = path.join(os.tmpdir(), 'gnomon-ro-root');
+  const home = path.join(os.tmpdir(), 'gnomon-ro-home');
+  const gh = path.join(home, '.gnomon');
+  const pass = (input: Record<string, unknown>, lines: string[] = ['x'], roots = [root]) => autoBashReadOnly('Bash', input, roots, lines, gh, process.platform, home);
+  it('passes a read-only command with only command/description/timeout', () => {
+    expect(pass({ command: 'ls', description: 'd', timeout: 1000 })).toEqual({ ok: true });
+  });
+  it('cards any other key, a non-text command, a flagged card, a home root, another tool', () => {
+    expect(pass({ command: 'ls', run_in_background: true })).toMatchObject({ ok: false, why: 'input-key' });
+    expect(pass({ command: 'ls', dangerouslyDisableSandbox: false })).toMatchObject({ ok: false, why: 'input-key' });
+    expect(pass({ command: ['ls'] })).toMatchObject({ ok: false, why: 'bad-input' });
+    expect(pass({ command: 'ls', timeout: '1' })).toMatchObject({ ok: false, why: 'bad-input' });
+    expect(pass({ command: 'ls' }, ['ls \u202e'.replace('\\u202e', '\u202e')])).toMatchObject({ ok: false, why: 'flagged' });
+    expect(pass({ command: 'ls' }, ['x'], [home])).toMatchObject({ ok: false, why: 'home-root' });
+    expect(pass({ command: 'rm x' })).toMatchObject({ ok: false, why: 'not-read-only: not allowlisted: rm' });
+    expect(autoBashReadOnly('Write', { command: 'ls' }, [root], ['x'], gh, process.platform, home)).toMatchObject({ ok: false, why: 'tool' });
+  });
 });

@@ -102,12 +102,24 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     expect(fs.readFileSync(target, 'utf8')).toBe('auto');
   }, 30_000);
 
+  it('TD-2026-10-20-294: auto-edits passes a PROVABLY read-only Bash command with no card (mode:auto-edits:read-only); a writing one still cards', async () => {
+    const r = sessionRig();
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
+    const s = await r.open([r.req('ro-1', 'Bash', { command: 'ls -la && git status 2>/dev/null | head -5', description: 'look' }), r.req('ro-2', 'Bash', { command: 'ls > listing.txt' }), r.req('ro-3', 'Bash', { command: 'ls', run_in_background: true })]);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'ro-1') && r.pending().length >= 2, 10_000)).toBe(true);
+    expect(r.answers().find((a) => a.id === 'ro-1')).toMatchObject({ behavior: 'allow' });
+    expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', inputHash: expect.stringMatching(/^sha256:/), modeRef: 'mode:auto-edits:read-only' }]);
+    const carded = r.pending().map((c) => JSON.stringify(c.block));
+    expect(carded.some((t) => t.includes('listing.txt'))).toBe(true);
+    expect(carded.some((t) => t.includes('run_in_background'))).toBe(true);
+  }, 30_000);
+
   it('auto-edits still cards Bash, a Write outside the worktree, .claude/settings.json, CLAUDE.md and package.json — never auto-approved', async () => {
     const r = sessionRig();
     await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
     const outside = path.join(w.root, 'outside.txt');
     await r.open([
-      r.req('x-bash', 'Bash', { command: 'echo hi' }),
+      r.req('x-bash', 'Bash', { command: 'echo hi > hi.txt' }),
       r.req('x-out', 'Write', { file_path: outside, content: 'o' }),
       r.req('x-claude', 'Write', { file_path: path.join(w.cwd, '.claude', 'settings.json'), content: '{}' }),
       r.req('x-md', 'Edit', { file_path: path.join(w.cwd, 'CLAUDE.md'), old_string: 'a', new_string: 'b' }),
@@ -118,7 +130,7 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     expect(r.kinds('approval.auto')).toHaveLength(0);
     expect(r.answers().filter((a) => a.behavior === 'allow')).toHaveLength(0);
     const carded = r.pending().map((c) => JSON.stringify(c.block));
-    expect(carded.some((t) => t.includes('echo hi'))).toBe(true); // Bash: a card
+    expect(carded.some((t) => t.includes('echo hi'))).toBe(true); // a writing Bash command: a card
     expect(carded.some((t) => t.includes('outside.txt'))).toBe(true); // outside the worktree: a card
     expect(carded.some((t) => t.includes('package.json'))).toBe(true); // gate-class, not denyWrite: a card
     expect(fs.existsSync(outside)).toBe(false);
