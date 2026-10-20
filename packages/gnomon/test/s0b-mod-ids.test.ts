@@ -142,12 +142,12 @@ describe('S0b publisher against the source', () => {
 
   it('other hosts: TOFU (host, namespace) binding; another binding refused unless re-bound; display "acme @ host"', () => {
     const src = `git:https://gitlab.com/acme/sub/board#${SHA}`;
-    expect(checkPublisherSource(m('acme'), src, grants())).toEqual({ host: 'gitlab.com', namespace: 'acme/sub', rebind: false });
+    expect(checkPublisherSource(m('acme'), src, grants())).toEqual({ host: 'gitlab.com', namespace: 'acme/sub', rebind: false, from: null });
     const bound = grants({ publishers: new Map([['acme', { host: 'gitlab.com', namespace: 'acme/sub' }]]) });
     expect(checkPublisherSource(m('acme'), src, bound)).toBeNull();
     const elsewhere = `git:https://codeberg.org/acme/board#${SHA}`;
     expect(code(() => checkPublisherSource(m('acme'), elsewhere, bound))).toBe('PUBLISHER');
-    expect(checkPublisherSource(m('acme'), elsewhere, bound, { rebind: true })).toEqual({ host: 'codeberg.org', namespace: 'acme', rebind: true });
+    expect(checkPublisherSource(m('acme'), elsewhere, bound, { rebind: true })).toEqual({ host: 'codeberg.org', namespace: 'acme', rebind: true, from: { host: 'gitlab.com', namespace: 'acme/sub' } });
     expect(code(() => checkPublisherSource(m('acme'), gh('acme'), bound))).toBe('PUBLISHER');
     expect(publisherDisplay('acme', src)).toBe('acme @ gitlab.com');
     expect(publisherDisplay('acme', 'linked:/x')).toBe('acme (unverified, local folder)');
@@ -263,7 +263,7 @@ describe('Aegis S0b M4: re-binding back to github.com', () => {
   it('a GitHub re-bind returns a github.com binding; that binding is then the same identity', () => {
     const onGitlab = grants({ publishers: new Map([['acme', { host: 'gitlab.com', namespace: 'acme' }]]) });
     expect(code(() => checkPublisherSource(m('acme'), gh('acme'), onGitlab))).toBe('PUBLISHER');
-    expect(checkPublisherSource(m('acme'), gh('acme'), onGitlab, { rebind: true })).toEqual({ host: 'github.com', namespace: 'acme', rebind: true });
+    expect(checkPublisherSource(m('acme'), gh('acme'), onGitlab, { rebind: true })).toEqual({ host: 'github.com', namespace: 'acme', rebind: true, from: { host: 'gitlab.com', namespace: 'acme' } });
     const onGithub = grants({ publishers: new Map([['acme', { host: 'github.com', namespace: 'acme' }]]) });
     expect(checkPublisherSource(m('acme'), gh('acme'), onGithub)).toBeNull();
     // and leaving GitHub again needs a re-bind

@@ -100,6 +100,9 @@ export function deriveTier(packageHash: string, signature?: { keyId: string; sig
 export type InstallSource = 'package' | `linked:${string}` | `git:${string}`;
 
 /** S0b §3: how the bytes compare with the approved history of this mod id (the card's index-3 line). */
+/** What a publisher binding replaces (Aegis S0b M2). */
+export type PublisherFrom = { host: string; namespace: string } | 'github.com' | null;
+
 export type VersionClass = 'first' | 'update' | 'downgrade' | 'revert' | 'same-version-new-bytes' | 'format-only';
 
 /** What the install card shows (§12.5), and what its contentHash covers. */
@@ -122,7 +125,12 @@ export interface InstallCardDetail {
   /** the derived MCP server name (absent when the mod has no provides.mcp) */
   serverName?: string;
   /** a non-GitHub publisher re-bound to a new (host, namespace) by this card */
-  rebind?: { host: string; namespace: string };
+  /**
+   * the publisher binding this install writes (Aegis S0b M2): `from` is the binding it replaces as seen at stage
+   * ({host, namespace}, 'github.com' for the implicit owner claim, or null for a first binding); decide refuses
+   * PUBLISHER unless the binding is still `from`
+   */
+  rebind?: { host: string; namespace: string; from?: PublisherFrom };
   kind: ManifestV2['kind'];
   version: string;
   source: InstallSource;
@@ -235,7 +243,7 @@ export function publisherDisplay(publisher: string, source: string): string {
  * S0b §1: the publisher against the source and the TOFU bindings (at stage AND at load). Returns the (host, namespace)
  * a non-GitHub git install binds (or re-binds), or null. Throws PUBLISHER.
  */
-export function checkPublisherSource(manifest: ManifestV2, source: string, grants: ResolvedGrants, opts: { rebind?: boolean; tier?: TrustTier } = {}): { host: string; namespace: string; rebind: boolean } | null {
+export function checkPublisherSource(manifest: ManifestV2, source: string, grants: ResolvedGrants, opts: { rebind?: boolean; tier?: TrustTier } = {}): { host: string; namespace: string; rebind: boolean; from: PublisherFrom } | null {
   const pub = manifest.publisher;
   const refuse = (msg: string, detail: Record<string, unknown> = {}): never => {
     throw new ManifestRefusal('PUBLISHER', msg, { publisher: pub, ...detail });
@@ -259,7 +267,7 @@ export function checkPublisherSource(manifest: ManifestV2, source: string, grant
     // which records grant.publisher{github.com, <owner>} so the binding table follows the move back to GitHub
     const here = bound !== undefined && bound.host === 'github.com' && bound.namespace === pub;
     if (bound && !here && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound.host}/${bound.namespace}; re-bind it through a full card`, { boundHost: bound.host });
-    return bound && !here ? { host: 'github.com', namespace: pub, rebind: true } : null;
+    return bound && !here ? { host: 'github.com', namespace: pub, rebind: true, from: { host: bound.host, namespace: bound.namespace } } : null;
   }
   if (ascendLike) refuse(`publisher ${pub} is accepted only from github.com/${ascendLike[1]!.githubOwner}`);
   const bound = grants.publishers.get(pub);
@@ -268,7 +276,7 @@ export function checkPublisherSource(manifest: ManifestV2, source: string, grant
   const githubClaim = [...new Set(grants.installs.map((r) => r.name))].some((id) => id.startsWith(`${pub}.`) && parseGitSource(effectiveInstall(grants, id)?.source ?? '')?.host === 'github.com');
   const same = bound !== undefined && bound.host === g.host && bound.namespace === g.namespace;
   if (!same && (bound !== undefined || githubClaim) && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound ? `${bound.host}/${bound.namespace}` : 'github.com'}; re-bind it through a full card`, { host: g.host, namespace: g.namespace });
-  return same ? null : { host: g.host, namespace: g.namespace, rebind: bound !== undefined || githubClaim };
+  return same ? null : { host: g.host, namespace: g.namespace, rebind: bound !== undefined || githubClaim, from: bound ? { host: bound.host, namespace: bound.namespace } : githubClaim ? 'github.com' : null };
 }
 
 /** S0b §2: the mod's derived MCP server name against installed mods and the user's .mcp.json (COLLISION). */
@@ -431,7 +439,11 @@ export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>
     // S0b: index 3, kernel-composed: what these bytes are against the approved history
     versionLine(d),
     ...(d.sourceChangedFrom ? [`SOURCE CHANGED: ${d.sourceChangedFrom} → ${d.source}`] : []),
-    ...(d.rebind ? [`PUBLISHER RE-BIND: ${d.publisher} → ${d.rebind.host}/${d.rebind.namespace}`] : []),
+    ...(d.rebind
+      ? [d.rebind.from === null || d.rebind.from === undefined
+          ? `publisher ${d.publisher}: first binding to ${d.rebind.host}/${d.rebind.namespace}`
+          : `PUBLISHER RE-BIND from ${d.rebind.from === 'github.com' ? 'github.com' : `${d.rebind.from.host}/${d.rebind.from.namespace}`}: ${d.publisher} → ${d.rebind.host}/${d.rebind.namespace}`]
+      : []),
     ...(d.looksLike ? [`publisher ${d.publisher} looks like ${d.looksLike} (installed)`] : []),
   ];
   // S0b §3: a short card only when nothing widens and the source did not change (a downgrade line stays at index 3)
@@ -605,7 +617,7 @@ export function stageInstall(opts: StageOptions): StageResult {
     ...(sourceChangedFrom ? { sourceChangedFrom } : {}),
     ...(looksLike ? { looksLike } : {}),
     ...(serverName ? { serverName } : {}),
-    ...(binding ? { rebind: { host: binding.host, namespace: binding.namespace } } : {}),
+    ...(binding ? { rebind: { host: binding.host, namespace: binding.namespace, from: binding.from } } : {}),
     kind: manifest.kind,
     version: manifest.version,
     source,
@@ -767,6 +779,14 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
     // the publisher and the server name are re-checked against the grant table as it is NOW (S0b)
     const g = readGrants(home, opts.authority);
     const bind = checkPublisherSource(manifest, source, g, { rebind: rec.detail.rebind !== undefined, tier });
+    // Aegis S0b M2 (TOFU race): the binding must still be what the card showed it replacing; a binding that appeared
+    // (or changed) since stage, or one the card never showed, refuses PUBLISHER and the install must be re-staged
+    if (bind) {
+      const shown = rec.detail.rebind;
+      if (!shown || shown.host !== bind.host || shown.namespace !== bind.namespace || canonicalJson(shown.from ?? null) !== canonicalJson(bind.from)) {
+        throw new ManifestRefusal('PUBLISHER', `publisher ${manifest.publisher}: the binding changed since this card was staged; stage it again`, { name, cardId, publisher: manifest.publisher });
+      }
+    }
     checkServerCollision(home, manifest, g, opts.userMcpServers);
     appendGrantRow(home, opts.authority, { kind: 'grant.trust', manifestHash: mh, tier }, now);
     if (surf.capabilities.length) {
