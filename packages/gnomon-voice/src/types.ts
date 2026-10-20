@@ -14,6 +14,8 @@
  * voice.turn.* rows the kernel's echo check compares).
  */
 
+import type { PartialWord } from './partials.js';
+
 /** One captured PCM frame. */
 export interface PcmFrame {
   samples: Float32Array;
@@ -100,6 +102,12 @@ export interface VadEngine {
 export interface SttEngine {
   readonly model: string;
   transcribe(samples: Float32Array, sampleRate: number): Promise<string>;
+  /**
+   * B1 live words (T-2026-10-20-005): decode a partial window into words with their start times (seconds from the
+   * window's first sample). Optional: an engine without it gets no live words (the final transcript is unaffected).
+   * Must not block the event loop (sherpa: decodeAsync).
+   */
+  transcribeWords?(samples: Float32Array, sampleRate: number): Promise<PartialWord[]>;
 }
 
 export interface TtsEngine {

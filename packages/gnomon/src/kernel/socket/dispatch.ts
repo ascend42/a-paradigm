@@ -481,8 +481,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
       ...(o.requests?.standing && cls === 'human' ? { standing: o.requests.standing.status() } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
-      // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 seam (partial words, when B
-      // adds them, reach the gui credential only)
+      // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
+      // capture.text, reach a human-class connection on the gui credential only)
       ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor(o.voice.status(), s.credential, cls), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,

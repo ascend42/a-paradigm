@@ -46,6 +46,7 @@
 import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
+import { capPartial, LiveAgreement, PARTIAL_ANCHOR_MARGIN_MS, PARTIAL_FULL_WINDOW_MS, PARTIAL_GATE_MS, PARTIAL_MAX_SEGMENT_MS, PARTIAL_MAX_WINDOW_MS, PARTIAL_PREROLL_MS, PARTIAL_TAIL_WINDOW_MS, PARTIAL_TICK_MS, type PartialText } from './partials.js';
 import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
@@ -65,6 +66,36 @@ export interface CaptureReport {
   reason?: CaptureDropReason;
   /** mic level 0..1, hearing reports only (A2) */
   level?: number;
+  /**
+   * B1 live words: hearing / transcribing reports only, and only after a provisional speaker match (V1). Display
+   * only: the kernel keeps it in memory for the gui credential; it is never a row, a turn or a send.
+   */
+  text?: PartialText;
+}
+
+/** B1 counters (tests and the bench): decodes run, ticks skipped because a decode was in flight, gate verdicts. */
+export interface PartialStats {
+  decodes: number;
+  skipped: number;
+  gatedIn: number;
+  gatedOut: number;
+}
+
+/** The open segment's audio for live words (memory only, G-VOX-05) and its agreement state. */
+interface LiveSeg {
+  segId: string;
+  buf: Float32Array;
+  n: number;
+  sr: number;
+  sinceTickMs: number;
+  /** V1: no words until a provisional speaker match; 'reject' ⇒ no words for the whole segment */
+  gate: 'pending' | 'match' | 'reject';
+  agree: LiveAgreement;
+  /** the window head (a sample index into buf), moved only to a committed word boundary */
+  anchor: number;
+  text: PartialText | null;
+  /** the segment left hearing: no more decodes; a decode still in flight is discarded */
+  closed: boolean;
 }
 /** non-terminal capture reports are sent at most this often (≤ 5 Hz); terminal ones always */
 export const CAPTURE_REPORT_MIN_MS = 200;
@@ -167,6 +198,8 @@ export interface VoiceClientOptions {
   verifyThreshold?: number;
   /** TD-2026-10-20-262: default 'composer' (never session.send); 'direct' forwards each enrolled turn itself */
   delivery?: Delivery;
+  /** B1 live words (default on when the STT engine has transcribeWords) */
+  partials?: boolean;
 }
 
 export function toRefusal(err: unknown): KernelRefusal {
@@ -252,6 +285,15 @@ export class VoiceClient {
   #capTimer: ReturnType<typeof setTimeout> | undefined;
   /** Aegis L4: capture reports waiting on the #reports chain; a waiting non-terminal one is replaced, never queued behind */
   #capQueue: CaptureReport[] = [];
+  // B1 live words (T-2026-10-20-005): pre-roll ring, the open segment, ONE decode in flight (a busy tick is skipped)
+  #preroll: PcmFrame[] = [];
+  #prerollMs = 0;
+  #live: LiveSeg | null = null;
+  #partialBusy = false;
+  #partialJob: Promise<void> = Promise.resolve();
+  /** final transcriptions running: a partial tick never competes with one */
+  #sttBusy = 0;
+  #partialStats: PartialStats = { decodes: 0, skipped: 0, gatedIn: 0, gatedOut: 0 };
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -303,6 +345,7 @@ export class VoiceClient {
     if (this.#cap?.state === 'hearing') return this.#cap.segId;
     const segId = `s${++this.#capN}`;
     this.#cap = { segId, state: 'hearing' };
+    this.#openLive(segId);
     this.#capture({ state: 'hearing', segId });
     return segId;
   }
@@ -311,12 +354,14 @@ export class VoiceClient {
   #takeLive(): string {
     const live = this.#cap?.state === 'hearing' ? this.#cap.segId : `s${++this.#capN}`;
     this.#cap = null;
+    if (this.#live) this.#live.closed = true; // no more partial decodes; its last words ride the transcribing report
     return live;
   }
 
   /** End a segment: dropped{reason}, captured, or idle (abandoned by a mode change or pause). Always sent. */
   #endCapture(segId: string, state: 'captured' | 'dropped' | 'idle', reason?: CaptureDropReason): void {
     if (this.#cap?.segId === segId) this.#cap = null;
+    if (this.#live?.segId === segId) this.#live = null; // the segment's audio and words go with it
     if (state === 'dropped') this.#flow.info('capture dropped', { segId, reason });
     this.#capture({ state, segId, ...(state === 'dropped' && reason ? { reason } : {}) });
   }
@@ -364,7 +409,9 @@ export class VoiceClient {
   /** request.voice.report{capture}, on the serialized #reports chain. A hearing report carries the latest level. */
   #sendCapture(r: CaptureReport): void {
     this.#capLastSent = this.#now();
-    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level } : r;
+    // B1: the live words ride hearing / transcribing reports only, and only once the speaker provisionally matched (V1)
+    const text = r.state === 'hearing' || r.state === 'transcribing' ? this.#textFor(r.segId) : null;
+    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level, ...(text ? { text } : {}) } : r.state === 'transcribing' ? { state: r.state, segId: r.segId, ...(text ? { text } : {}) } : { state: r.state, segId: r.segId, ...(r.reason ? { reason: r.reason } : {}) };
     this.#lastCapture = capture;
     // Aegis L4: a slow kernel never builds a backlog: the newest report replaces a waiting one of the same segment and
     // state (a level update or keepalive). A state change is queued, so every edge, and every terminal state, still
@@ -392,6 +439,116 @@ export class VoiceClient {
     this.#level = levelOf(db);
     const live = this.#cap;
     if (live?.state === 'hearing' && !this.#paused && this.mode !== 'off') this.#capture({ state: 'hearing', segId: live.segId });
+  }
+
+  // ---- B1 live words (T-2026-10-20-005; V1–V5 in TD-2026-10-20-086; partials.ts) ---------------------------------
+
+  /** decodes run, busy ticks skipped, gate verdicts */
+  get partialStats(): PartialStats {
+    return { ...this.#partialStats };
+  }
+
+  #partialsOn(): boolean {
+    return this.#o.partials !== false && typeof this.#o.engines.stt.transcribeWords === 'function';
+  }
+
+  /** A segment opened: its buffer starts with the pre-roll ring (the VAD's start latency). */
+  #openLive(segId: string): void {
+    this.#live = null;
+    if (!this.#partialsOn()) return;
+    const sr = this.#preroll[0]?.sampleRate ?? this.#o.audio.captureSampleRate;
+    const pre = this.#preroll.filter((f) => f.sampleRate === sr);
+    const n = pre.reduce((s, f) => s + f.samples.length, 0);
+    const buf = new Float32Array(Math.max(n, sr * 4));
+    let off = 0;
+    for (const f of pre) (buf.set(f.samples, off), (off += f.samples.length));
+    this.#live = { segId, buf, n, sr, sinceTickMs: 0, gate: 'pending', agree: new LiveAgreement(), anchor: 0, text: null, closed: false };
+  }
+
+  /** Keep the last PARTIAL_PREROLL_MS of frames (memory only). */
+  #keepPreroll(f: PcmFrame): void {
+    if (!this.#partialsOn()) return;
+    this.#preroll.push(f);
+    this.#prerollMs += (f.samples.length / f.sampleRate) * 1000;
+    while (this.#preroll.length > 1 && this.#prerollMs - (this.#preroll[0]!.samples.length / this.#preroll[0]!.sampleRate) * 1000 >= PARTIAL_PREROLL_MS) {
+      const old = this.#preroll.shift()!;
+      this.#prerollMs -= (old.samples.length / old.sampleRate) * 1000;
+    }
+  }
+
+  /** A frame of the open segment: buffer it; every PARTIAL_TICK_MS of heard audio, one tick. */
+  #feedLive(f: PcmFrame): void {
+    const p = this.#live;
+    if (!p || p.closed || this.#cap?.segId !== p.segId || this.#cap.state !== 'hearing') return;
+    if (f.sampleRate !== p.sr || p.n + f.samples.length > (p.sr * PARTIAL_MAX_SEGMENT_MS) / 1000) {
+      p.closed = true; // a route change or a very long segment: no more live words (the final decode is unaffected)
+      return;
+    }
+    if (p.n + f.samples.length > p.buf.length) {
+      const grown = new Float32Array(Math.max(p.buf.length * 2, p.n + f.samples.length));
+      grown.set(p.buf.subarray(0, p.n));
+      p.buf = grown;
+    }
+    p.buf.set(f.samples, p.n);
+    p.n += f.samples.length;
+    p.sinceTickMs += (f.samples.length / f.sampleRate) * 1000;
+    if (p.sinceTickMs < PARTIAL_TICK_MS) return;
+    p.sinceTickMs -= PARTIAL_TICK_MS;
+    this.#partialTick(p);
+  }
+
+  /** ONE decode in flight: a tick that finds one running (or a final transcription) is skipped, never queued. */
+  #partialTick(p: LiveSeg): void {
+    if (p.gate === 'reject') return;
+    if (this.#partialBusy || this.#sttBusy > 0) {
+      this.#partialStats.skipped++;
+      return;
+    }
+    this.#partialBusy = true;
+    this.#partialJob = this.#runPartial(p)
+      .catch((err) => this.#log.warn('live words failed', { error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => {
+        this.#partialBusy = false;
+      });
+  }
+
+  async #runPartial(p: LiveSeg): Promise<void> {
+    const stt = this.#o.engines.stt;
+    if (!stt.transcribeWords) return;
+    const ms = (x: number): number => Math.round((p.sr * x) / 1000);
+    if (p.gate === 'pending') {
+      if (p.n < ms(PARTIAL_GATE_MS)) return;
+      // V1: a provisional CAM++ match on the first 1.5 s; a non-match means no words for this whole segment (PTT too)
+      const ok = await this.#verifier.provisional(p.buf.slice(0, ms(PARTIAL_GATE_MS)), p.sr);
+      if (this.#live !== p) return;
+      p.gate = ok ? 'match' : 'reject';
+      this.#partialStats[ok ? 'gatedIn' : 'gatedOut']++;
+      this.#flow.info('live words gate', { segId: p.segId, match: ok });
+      if (!ok || p.closed) return;
+    }
+    const total = p.n;
+    if (!(p.anchor === 0 && total <= ms(PARTIAL_FULL_WINDOW_MS)) && total - p.anchor > ms(PARTIAL_TAIL_WINDOW_MS)) {
+      // move the head to a committed word boundary: the smallest that leaves ≤ the tail window, else the latest one
+      const cands = p.agree.boundaries().map((b) => ({ b, at: Math.max(p.anchor, p.anchor + Math.floor(b.start * p.sr) - ms(PARTIAL_ANCHOR_MARGIN_MS)) }));
+      const pick = cands.find((c) => total - c.at <= ms(PARTIAL_TAIL_WINDOW_MS)) ?? cands[cands.length - 1];
+      if (pick && pick.at > p.anchor) {
+        p.agree.reanchor(pick.b);
+        p.anchor = pick.at;
+      }
+    }
+    if (total - p.anchor > ms(PARTIAL_MAX_WINDOW_MS)) return; // no boundary to anchor at: the line stays as it is
+    this.#partialStats.decodes++;
+    const words = await stt.transcribeWords(p.buf.slice(p.anchor, total), p.sr);
+    if (this.#live !== p || p.closed) return; // the segment ended under us: discarded
+    p.text = capPartial(p.agree.push(words));
+    if (this.#cap?.segId === p.segId && this.#cap.state === 'hearing') this.#capture({ state: 'hearing', segId: p.segId });
+  }
+
+  /** V1/V4: the words for a report of `segId` — only for the open segment, only after a provisional match. */
+  #textFor(segId: string): PartialText | null {
+    const p = this.#live;
+    if (!p || p.segId !== segId || p.gate !== 'match' || !p.text || (!p.text.committed && !p.text.tail)) return null;
+    return { committed: p.text.committed, tail: p.text.tail };
   }
 
   /** request.voice.report{dictation}, serialized so holdToggles reaches the kernel in order (monotone). */
@@ -616,11 +773,13 @@ export class VoiceClient {
     let w: Promise<void> | undefined;
     let s: Promise<void> | undefined;
     let r: Promise<void> | undefined;
-    while (w !== this.#work || s !== this.#speaking || r !== this.#reports) {
+    let p: Promise<void> | undefined;
+    while (w !== this.#work || s !== this.#speaking || r !== this.#reports || p !== this.#partialJob) {
       w = this.#work;
       s = this.#speaking;
       r = this.#reports;
-      await Promise.all([w, s, r]);
+      p = this.#partialJob;
+      await Promise.all([w, s, r, p]);
     }
   }
 
@@ -679,6 +838,9 @@ export class VoiceClient {
     const mode = this.mode;
     if (mode === 'off' || this.#paused) return;
     if (mode === 'ptt' && this.#pttHeld) this.#pttFrames.push(f);
+    // B1: the pre-roll ring, then the open segment's buffer (a segment opened by THIS frame already has it in its pre-roll)
+    this.#keepPreroll(f);
+    this.#feedLive(f);
     // keep a long live segment fresh in the kernel (its capture TTL is short)
     const live = this.#cap;
     if (live?.state === 'hearing' && this.#now() - this.#capLastSent >= CAPTURE_KEEPALIVE_MS) this.#capture({ state: 'hearing', segId: live.segId });
@@ -757,7 +919,14 @@ export class VoiceClient {
   }
 
   async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason) => void): Promise<void> {
-    const text = (await this.#o.engines.stt.transcribe(seg.samples, seg.sampleRate)).trim();
+    // the final transcript is always the FULL-segment decode (never the live words)
+    this.#sttBusy++;
+    let text: string;
+    try {
+      text = (await this.#o.engines.stt.transcribe(seg.samples, seg.sampleRate)).trim();
+    } finally {
+      this.#sttBusy--;
+    }
     if (!text) return end('dropped', 'no-words');
     const who = await this.#verifier.identify(seg.samples, seg.sampleRate);
     // the samples are not kept past this point (G-VOX-05)

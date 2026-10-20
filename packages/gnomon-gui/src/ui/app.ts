@@ -26,7 +26,7 @@ import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState,
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { mountStandingFeed } from './standing-feed.js';
 import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
-import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack } from '../core/capture.js';
+import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { mountModPanels } from './mod-panels-mount.js';
@@ -1239,7 +1239,8 @@ let captionState: string | null = null;
 /**
  * The capture overlay on the attached pill: only while voice is attached and the voice app is connected (`live`).
  * The meter is drawn from the REAL level while hearing and is still otherwise (no decorative motion); the composer
- * ghost line "…" is its own element, never the textarea; the polite caption changes on a state change only.
+ * ghost line is its own element, never the textarea (B1: the live words, committed solid and the tail dim, or "…");
+ * the polite caption changes on a state change only.
  */
 function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): void {
   const live = pillOwned && !!client && v.state !== 'off' && v.clientConnected === true;
@@ -1252,13 +1253,38 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
   const meter = $('voice-meter');
   meter.hidden = !live;
   meter.style.setProperty('--level', String(d.meter));
-  $('composer-ghost').hidden = !d.ghost;
+  const ghost = $('composer-ghost');
+  ghost.hidden = !d.ghost;
+  paintGhost(ghost, d.ghost ? d.ghostText : null);
   if (d.state !== captionState) {
     captionState = d.state;
     put($('voice-caption'), d.caption);
   }
   if (captureFlash) clearTimeout(captureFlash);
   captureFlash = d.flashLeftMs !== null ? setTimeout(() => ((captureFlash = null), paintVoice()), d.flashLeftMs + 20) : null;
+}
+
+let ghostShown: string | null = null;
+/**
+ * B1 live words in #composer-ghost (never the textarea: a send can never carry non-final words). Text nodes only
+ * (put → sanitizeDisplayText), repainted only when the words change; cleared to "…" when there are none.
+ */
+function paintGhost(el: HTMLElement, t: GhostText | null): void {
+  const key = t ? `${t.committed}\u0000${t.tail}` : '';
+  if (key === ghostShown) return;
+  ghostShown = key;
+  clear(el);
+  if (!t) {
+    put(el, '…');
+    return;
+  }
+  const committed = document.createElement('span');
+  committed.className = 'ghost-committed';
+  put(committed, t.committed);
+  const tail = document.createElement('span');
+  tail.className = 'ghost-tail';
+  put(tail, t.tail);
+  el.append(committed, document.createTextNode(t.committed && t.tail ? ' ' : ''), tail);
 }
 
 /** The session a choice applies to: Off and a mode switch go to the attached session; nothing attached ⇒ the focused one. */
