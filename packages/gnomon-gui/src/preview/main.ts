@@ -53,6 +53,8 @@ async function boot(): Promise<void> {
     paint();
     k.onRow(paint);
   }
+  // S3: ?fan=1 shows the stack pile fanned (what :hover / :focus-within does), for the screenshot
+  if (new URLSearchParams(location.search).get('fan') === '1') document.getElementById('stack')?.classList.add('fan');
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }
