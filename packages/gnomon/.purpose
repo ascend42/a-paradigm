@@ -2255,6 +2255,12 @@ components:
     oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]
 
   supervisor:
+    usage-split: >-
+      #ledger-mod (K2 feed v2): the Claude turn.result row additionally
+      records split {in, out, cacheRead, cacheWrite} (the turn's own totals
+      from result.usage) when the stream reported a usage object; additive,
+      numbers only, no budget/fuse behaviour change. The #mod-host feed
+      projects it as tokensIn/tokensOut/cacheRead/cacheWrite.
     description: >-
       AUTO-EDITS READ-ONLY BASH (TD-2026-10-20-294 part 1):
       auto-edits.ts autoBashReadOnly passes a Bash request with no card,
@@ -2843,6 +2849,12 @@ components:
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
 
   claude-adapter:
+    usage-split: >-
+      #ledger-mod (K2 feed v2): parseStreamLine's result event also carries
+      split {in, out, cacheRead, cacheWrite} = usageSplit(result.usage)
+      (numbers only; Aegis L2: each floored and clamped to a safe integer at
+      the source, so the logged row equals the feed projection); the total and the
+      UsageMeter charging are unchanged.
     backend-scope: >-
       TD-2026-10-19-252 (spec §1, §2.2, §22 item 26): backends are Claude
       and local models only. Other agents (opencode, grok, ...) get their
@@ -2951,8 +2963,22 @@ components:
       droppedNotifications) forwards a fixed projection of session.open/exited,
       turn.partial/result, approval.request/decide/expire and warpline.knot
       (kernel fields only; project = a hue index from sha256(cwd)) to running
-      mods requiring log.read - the #workshop-mod input. FIRST_PARTY_PACKAGE_HASHES
-      pins the Workshop. Still to come: spend from the caller permit,
+      mods requiring log.read - the #workshop-mod input. Projection v2
+      (#ledger-mod input; Aegis M1: ONLY to mods granted the narrower
+      log.read:usage capability, named on the install card; log.read alone
+      gets v1 and turn.result as {hsid}; feedAccessOf/feedReaches; a
+      local-tier manifest may not combine log.read:usage with egress,
+      #manifest-loader validateManifest) adds NUMBERS-ONLY rows: turn.usage/turn.result
+      {hsid, tokens, tokensIn/tokensOut/cacheRead/cacheWrite from the
+      turn.result split the supervisor now records from Claude's
+      result.usage, costMicros}, session.compacted {hsid, tokensBefore,
+      tokensAfter}, budget.usage {dimension, n, of?, usdMicros?, over?},
+      budget.ladder {dimension, scope, rung %}, budget.pause/resume/
+      breaker.open/close and permit.deny {dimension}; every number clamped
+      (feedCount), strings only ids or enum tokens (test/mod-feed-v2.test.ts
+      property test); seq/at validated. status() lists views of running mods
+      ({name, viewId, slot, placement, dev}) for the #gui mod panels.
+      FIRST_PARTY_PACKAGE_HASHES pins the Workshop and the Ledger. Still to come: spend from the caller permit,
       dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
 

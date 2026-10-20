@@ -20,5 +20,5 @@ export { ModState, STATE_LIMITS, stateDir, blobsDir } from './state.js';
 export { ModChannel, MOD_FRAME_MAX_BYTES } from './channel.js';
 export { StagedCardPickup, pendingStaged, listStaged, readStagedEntry, claimLine, MAX_PICKUP_READS, MAX_STAGED_BYTES, MAX_LISTED, isUserPaused, writePause, requestStart, takeStartRequest, requestUninstall, uninstallRequested, UNINSTALL_REQUEST, modNames, modsRoot, PAUSE_MARKER, START_REQUEST, MAX_PICKUP_CARDS, MAX_PICKUP_REFUSED, PICKUP_SCAN_MS } from './control.js';
 export type { PendingStaged, StagedEntry, PickupHost, PickupOptions } from './control.js';
-export { projectFeedEvent, FEED_KINDS, FEED_CAPABILITY, FEED_HUES } from './feed.js';
+export { projectFeedEvent, FEED_KINDS, FEED_CAPABILITY, FEED_USAGE_CAPABILITY, FEED_USAGE_KINDS, FEED_HUES } from './feed.js';
 export type { FeedEvent } from './feed.js';

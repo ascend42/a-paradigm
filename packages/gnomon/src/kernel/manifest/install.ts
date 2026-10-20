@@ -60,11 +60,13 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /**
  * packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods).
- * M1.11 slice 3: the Workshop (#workshop-mod). Any edit to its tree moves the
- * hash; test/workshop-mod.test.ts holds the pin.
+ * M1.11 slice 3: the Workshop (#workshop-mod); mod #1: the Ledger (#ledger-mod).
+ * Any edit to a tree moves its hash; test/workshop-mod.test.ts and
+ * test/ledger-mod.test.ts hold the pins.
  */
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   'sha256:07a1cf2c8a61ba9f17681f6af4308b859ffcc35ab6f9f225a4946f5a915223e6', // packages/gnomon-mods/workshop 1.0.0
+  'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // packages/gnomon-mods/ledger 1.0.0 (#ledger-mod)
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
