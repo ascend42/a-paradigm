@@ -1642,6 +1642,9 @@ components:
 
   approval-broker:
     description: >-
+      RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
+      mode:auto-edits:read-only (a Bash command #shell-readonly proves
+      read-only; TD-2026-10-20-294 part 1) or rule:<cardId>.
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
       Voice (TD-2026-10-19-194): whether voice may take a decision is
       gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
@@ -2177,6 +2180,12 @@ components:
 
   supervisor:
     description: >-
+      AUTO-EDITS READ-ONLY BASH (TD-2026-10-20-294 part 1):
+      auto-edits.ts autoBashReadOnly passes a Bash request with no card,
+      after approval.auto{modeRef:'mode:auto-edits:read-only'} (log before
+      effect), only when its input keys are command/description/timeout, no
+      root is home-or-above, the card is not flagged and #shell-readonly
+      proves the command read-only; never in ask or manual.
       session.send accepts source 'voice' from a human only, as a dictation
       attribution hint for #gnomon-voice (TD-2026-10-20-262).
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
@@ -2337,6 +2346,30 @@ components:
       - test/repo-context.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
 
+  shell-readonly:
+    description: >-
+      #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1) in
+      src/kernel/supervisor/shell-readonly.ts. PURE, fails closed. parseShell
+      is a real tokenizer/parser for a shell subset (quotes, escapes, line
+      continuations, $NAME/${NAME}, $(...), backticks, <(...), globs, tilde,
+      comments, ; && || | & newline, subshells, for-in loops, redirections
+      with IO numbers, heredocs); it refuses $((...)), $'...', $"...",
+      >(...), |&, ;;, unquoted braces, ~user, zsh $= $~ $^ forms and every
+      other compound. classifyReadOnly proves read-only: allowlisted command
+      names with per-command flag rules (git read subcommands, no global
+      options; find without -exec/-delete/-ok/-fprint; sed print scripts
+      only; awk without system/getline/pipes/redirection; sort/uniq/file/
+      date/rg/jq restricted), no background/negation/env assignment, output
+      redirection only to /dev/null, substitutions recursively read-only,
+      loop variables lowercase and not shell-special, cd only first and into
+      a session root, path operands never device paths nor inside/ancestor
+      of the Gnomon home or credential dirs. simpleArgv returns the argv of
+      a single literal simple command (for future prefix always rules).
+    tags: [kernel, security]
+    signals: []
+    tests:
+      - test/shell-readonly.test.ts
+      - test/run-modes-session.test.ts
   always-rules:
     description: >-
       #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in

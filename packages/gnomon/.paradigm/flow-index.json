@@ -1,0 +1,102 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-10-20T05:58:46.614Z",
+  "flows": {
+    "$first-run": {
+      "id": "$first-run",
+      "description": "$first-run (spec §2.4 rule 9): unprovisioned Mac → `gnomon` (or `gnomon setup`) → #setup-preflight → leftover purge (presence per key) → name → #provisioner init (lock, key.list, key.create ×2, root sign 1 of 2 and 2 of 2 with shown digests, commit identity.json then registry row) → summary → #gnomon-up runUp in the same process (TTY launch URL, folder hint). Resume: an identity whose registry row is missing is completed as its own root-signed step (I10).",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#first-run",
+          "symbol": "#first-run"
+        },
+        {
+          "id": "step-2",
+          "action": "#setup-preflight",
+          "symbol": "#setup-preflight"
+        },
+        {
+          "id": "step-3",
+          "action": "#provisioner",
+          "symbol": "#provisioner"
+        },
+        {
+          "id": "step-4",
+          "action": "#gnomon-up",
+          "symbol": "#gnomon-up"
+        }
+      ],
+      "definedIn": ".purpose"
+    },
+    "$daemon-lifecycle": {
+      "id": "$daemon-lifecycle",
+      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for its ready line (item 3 below); (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed; Aegis L2: an EPERM holder — another user's pid — is residue and reclaimed, and a same-user live holder is `already-running` only if a kernel answers hello on OUR socket within 2 s, else `holder-silent`, transient, pidfile left alone — a silent holder may be a racer — UNLESS its `ps -o lstart=` start witness (TZ=UTC) lies more than a 2 s tolerance (HOLDER_START_TOLERANCE_MS, a configured bound) after the pidfile's startedAt: a recycled pid after a crash or reboot, so the pidfile is reclaimed (pid+startedAt+inode re-checked, at most once, daemon.lock.reclaimed emitted; T-2026-10-19-017); no witness or an unparseable startedAt stays holder-silent); (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or ephemeral in-memory software Ed25519 key, custody partial; keystore item is M1.3) and the root authority (default unprovisioned), #socket listens at 0600 with the hello/auth dispatcher, daemon.start is emitted AND logged (daemon.exit logged at shutdown, then the log is closed before the lock is released); (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Since M1.4 slice 2 every log.read{follow} subscription is an idle holder ('subscriber') and the hub is closed first at shutdown. Not yet built: sessions/timers as holders, mod stop, orphan sweep, the Windows pipe. M1.4: the #web-endpoint is started by requestWebLaunch, its WebSocket connections are idle holders, and it is stopped (child ended) before the socket closes at shutdown. M1.9: (5) home — the daemon takes its home only from --home (daemonHomeOf; GNOMON_HOME is a client-side test seam it never reads — both gnomond paths, foreground and detaching; only `gnomon` client commands honour the seam); (6) orphan sweep at start, before the socket listens — every KERNEL-written session.spawned with no session.exited/orphaned is recorded session.orphaned{probe, action} BEFORE any signal, and its group is signalled only when the row's boot session (log/boot.ts) equals this boot AND the live leader's start-time witness (process-control.ts: macOS ps lstart, Linux /proc stat field 22, read with TZ=UTC before any await at track; ps forks — never on a hot path; win32 = parity phase, never signalled) equals the recorded one — else probe stale-boot | unattributable, action none; orphans stopped in parallel, counted only when gone (G-DMN-04); (7) supervised children (DaemonChildren: session, local-runner, mod) — intend() writes session.spawned{phase:'intent'} before the fork, track() writes {phase:'running', pid, pgid, boot, startTime} and refuses a session child that does not lead its own group; sessions write session.exited and hold idle ('session'); mods never hold, and have no spawn/exit kinds in §9.1, so a crash-orphaned mod is not swept (residual); stop = SIGTERM → grace → SIGKILL, then group members outliving the leader are SIGKILLed and counted; every shutdown (idle included) stops the scheduler, then stops and AWAITS every child (mod.stopped{reason}) and the web transport child (socket.web.stop{reason:'idle'|'daemon-exit'}) BEFORE daemon.exit {reason, liveChildren} is written — the falsifier \"daemon exits with a live child\"; (8) idle holders are connections, subscribers (log.read follow AND open GUI WebSockets), sessions and #scheduler timers due inside 10 min. Not yet built: the session runner and mod host that call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object and owner-only DACL read-back (G-WIN-02, parity phase P8-D78). T-2026-10-18-030 (1): the clean re-exec passes exactly one node flag, --disable-sigusr1 (env.ts DISABLE_SIGUSR1 / reexecArgs), and runForeground refuses to start without it in execArgv ([sigusr1-enabled]) — a same-user kill -USR1 would otherwise open the V8 inspector in the key-holding process; a JS SIGUSR1 listener never counts. Both bins use `#!/usr/bin/env -S node --disable-sigusr1`. Falsifier: a running gnomond receiving SIGUSR1 opens no inspector and keeps running (test/daemon-lifecycle.test.ts, control arm proves the detector). A SEA must bake the flag into sea-config execArgv. T-2026-10-19-009 item 1 (descendant sweep): before the first signal a session / local-runner stop takes an ASYNC process-table snapshot from the kernel (process-control snapshot(): `ps -A -o pid=,ppid=,pgid=,lstart=`, TZ=UTC, execFile — never spawnSync on the event loop), collects the leader's descendants (ppid walk) and group members with their lstart witnesses, SIGTERMs out-of-group ones with the group, and after the grace SIGKILLs only pids whose witness still matches (a recycled pid is never signalled). session.exited{tree} = exited | alive | unverifiable (no snapshot / failed re-check / win32 ⇒ unverifiable, never folded). Residual: a descendant reparented to init before the stop began is unreachable; lstart is 1 s resolution. A leader already gone at snapshot time with no group member left ⇒ unverifiable + treeDetail 'leader-gone-before-stop', never exited. stopAll takes ONE snapshot for all its children (T-2026-10-19-011), not one `ps` per child; a single stop takes its own. T-2026-10-19-009 item 3 (readiness handshake, Orca Adopt 3): the activator (lifecycle/ready.ts launchDaemon, used by `gnomon daemon --detach` and plain gnomond) spawns the kernel with an inherited ready pipe (`--ready-fd 3`) and a bounded stderr tail (8 KiB; after an exit the tail is judged once stderr ends, waiting at most 250 ms); the kernel writes one gnomonReady:v1 {pid, startedAt, socketPath, kernelPrincipal} line once it holds the lock and serves, then stops writing events to the activator's stderr (EPIPE swallowed). No socket polling. A child that exits superseded (lost lock race) or transient before ready makes the activator wait for the winner's socket and report `attached` (exit 0, no error); no ready line on a live child (Windows fallback) = socket probing until the GLOBAL deadline. Probes are a 1 s `hello` RPC (not a bare connect) and every probe loop stops once the launch settles. Our own live child owning the socket (pidfile names it) at the deadline = timeout, never attached. The ready line is capped at 4 KiB and must name the child pid AND the expected socketPath, else it is rejected (noted in the tail). kernelPrincipal from it is an unauthenticated hint, never pinned (only M1.4 mutual auth authenticates). gnomond seals the inherited ready fd first thing (sealReadyFd: re-open via /proc/self/fd or /dev/fd with O_CLOEXEC, close the inheritable one; unsealable => closed) so the identity helper and web child cannot forge it. Linux (libuv's stdio pipe is a socketpair /proc/self/fd cannot re-open) uses the 'fifo' channel instead (T-2026-10-19-011): a private 0600 FIFO in a fresh 0700 mkdtemp dir, read end opened by the activator before the spawn, only its path passed (`--ready-fifo`), the kernel opens the write end O_CLOEXEC (FIFO/owner/mode/inode checked, its parent dir ours and 0700 (Aegis L2), O_NOFOLLOW) and unlinks the name first thing, the activator removes the dir at settle; mkfifo runs by absolute path (/usr/bin, then /bin, never PATH); a FIFO failure passes NO ready channel (never the unsealable fd, Aegis L1): the tail and the attached outcome's readyDowngrade record `ready fifo unavailable: <code>; probing the socket` and the socket is probed until the global deadline. macOS keeps the sealed fd (kqueue never reports the FIFO writer's close, losing the no-ready-line fallback). Residual: win32 handle inheritance; pid + socketPath pin applies on every channel. `gnomon daemon status` PINS (T-2026-10-19-016(a)): an unpinned hello learns only the CLAIMED serverKeyId; the pin is read from the home (root-signed registry kernel row, else keys/kernel-pub.jsonl = pinSource home-kernel-pub, same-user custody partial) and a fresh pinned hello must verify, then `running:true, serverVerified:true, pinSource`. A key the home does not know prints `running:null, answering:true, serverVerified:false` with clientApi/serverKeyId only under `unverified` (exit 0); a known key whose serverSig fails is refused (exit 1). Never running:true on an unverified hello. Aegis L4: KernelLog.open runs after the pidfile lock and BEFORE the socket is published (the sweep, dispatcher and pre-auth rows need the log first; a refused open must not leave a served endpoint). Its exclusivity rests on the pidfile lock, which assumes same uid and same pid namespace for every contender; a home shared across pid namespaces is unsupported (a holder there can look dead and be reclaimed). Exit codes are defined ONLY in lifecycle/exit-codes.ts: 0 ok, 4 superseded, 64 usage, 70 internal, 75 transient, 78 config; config/superseded never restart, transient and internal restart with backoff. Every LifecycleRefusalReason is classified by a Record (a new reason is a compile error until it is). Tests: test/daemon-ready.test.ts (POSIX, registry row), test/daemon-exit-codes.test.ts (every platform).",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#gnomon-kernel",
+          "symbol": "#gnomon-kernel"
+        },
+        {
+          "id": "step-2",
+          "action": "#kernel-log",
+          "symbol": "#kernel-log"
+        },
+        {
+          "id": "step-3",
+          "action": "#identity",
+          "symbol": "#identity"
+        },
+        {
+          "id": "step-4",
+          "action": "#socket",
+          "symbol": "#socket"
+        },
+        {
+          "id": "step-5",
+          "action": "#scheduler",
+          "symbol": "#scheduler"
+        },
+        {
+          "id": "step-6",
+          "action": "#web-endpoint",
+          "symbol": "#web-endpoint"
+        }
+      ],
+      "definedIn": ".purpose"
+    }
+  },
+  "symbolToFlows": {
+    "#first-run": [
+      "$first-run"
+    ],
+    "#setup-preflight": [
+      "$first-run"
+    ],
+    "#provisioner": [
+      "$first-run"
+    ],
+    "#gnomon-up": [
+      "$first-run"
+    ],
+    "#gnomon-kernel": [
+      "$daemon-lifecycle"
+    ],
+    "#kernel-log": [
+      "$daemon-lifecycle"
+    ],
+    "#identity": [
+      "$daemon-lifecycle"
+    ],
+    "#socket": [
+      "$daemon-lifecycle"
+    ],
+    "#scheduler": [
+      "$daemon-lifecycle"
+    ],
+    "#web-endpoint": [
+      "$daemon-lifecycle"
+    ]
+  }
+}
