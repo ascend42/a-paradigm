@@ -903,21 +903,23 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const deskAdded = new Map<string, Set<string>>();
   const supervisor: SessionSupervisor = new SessionSupervisor({
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
-    deskMcp: (repoServers, ctx) => {
+    // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
+    deskMcp: (distroServers, ctx) => {
       const router = offerRouter;
       if (!router) {
         // L3: fail closed until the router is bound (no desk server, reserved repo names still dropped)
-        const only = repoServersOnly(repoServers);
+        const only = repoServersOnly({}, distroServers);
         for (const server of only.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
         emit({ kind: 'daemon.desk', event: 'mcp.unbound', hsid: ctx.hsid });
         return only.servers;
       }
       const repo = deskRepoScope(repoKeyOf([ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])]));
-      const r = mergeDeskMcp(repoServers, deskMods.list(), { overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
+      const r = mergeDeskMcp({}, deskMods.list(), { distro: distroServers, overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
       // H1b: the servers actually added to THIS session (offers and kept go only through them)
       if (deskAdded.size >= 512) deskAdded.delete(deskAdded.keys().next().value!);
       deskAdded.set(ctx.hsid, new Set(r.added.map((a) => a.server)));
       for (const server of r.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
+      for (const server of r.shadowed) emit({ kind: 'daemon.desk', event: 'mcp.distro-shadowed', hsid: ctx.hsid, server });
       for (const a of r.added) emit({ kind: 'daemon.desk', event: 'mcp.added', hsid: ctx.hsid, name: a.mod, server: a.server, launchHash: a.launchHash, overridden: a.overridden });
       // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config
       for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk', event: 'mcp.needs-config', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });

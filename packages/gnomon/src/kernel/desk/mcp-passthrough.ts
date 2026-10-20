@@ -9,6 +9,12 @@
  *     through serverNameOf (the one naming helper); the override store is keyed by mod id;
  *   - a name the repo's own .mcp.json already uses is NEVER overridden (the mod server is skipped), nor is a name an
  *     earlier mod (sorted by name) took;
+ *   - the repo's VERIFIED GENERATED distro servers (`opts.distro`: the kernel-written, record-verified
+ *     `.gnomon/generated/.mcp.json`, named by renderGenerated as mcpServerName(`<publisher>.<name>`), i.e. `gm_…`) are
+ *     kernel output, not repo-authored: they pass through the reserved-prefix rule (S0b regression fix: the distro's
+ *     own server, e.g. gm_gnomon_paradigm-distro, was being dropped). H1 is kept: a distro entry never displaces an
+ *     installed mod's server (the mod wins its own name; the entry is reported `shadowed`), and a distro server is
+ *     never in `added`, so it can never receive an offer handoff or a kept credit (H1b);
  *   - a mod the human muted for the session's repo (request.offer.mute) is skipped;
  *   - a server whose resolved command is not absolute (isAbsoluteCommand) is skipped as 'needs-config' (fail
  *     closed; the daemon reports UNCONFIGURED_HINT).
@@ -222,6 +228,8 @@ export interface PassthroughResult {
   servers: Record<string, unknown>;
   /** repo server names dropped for using a reserved desk prefix (H1a) */
   dropped: string[];
+  /** verified distro server names displaced by an installed mod deriving the same name (the mod wins; H1) */
+  shadowed: string[];
   added: Array<{ mod: string; server: string; launchHash: string; overridden: boolean }>;
   skipped: Array<{ mod: string; server?: string; why: 'repo-muted' | 'name-taken' | 'needs-config' }>;
 }
@@ -230,8 +238,10 @@ export interface PassthroughResult {
  * Merge mods' provides.mcp into the repo's mcp servers. Pure (overrides passed in). The repo's entries come first and
  * are never replaced.
  */
-export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskMod[], opts: { overrides?: McpOverrides; repoMuted?: (mod: string) => boolean; launchKey?: Buffer; platform?: string } = {}): PassthroughResult {
-  const { servers, dropped } = repoServersOnly(repo);
+export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskMod[], opts: { distro?: Record<string, unknown>; overrides?: McpOverrides; repoMuted?: (mod: string) => boolean; launchKey?: Buffer; platform?: string } = {}): PassthroughResult {
+  const { servers, dropped } = repoServersOnly(repo, opts.distro);
+  const distroNames = new Set(Object.keys(opts.distro ?? {}).filter((k) => servers[k] === opts.distro?.[k]));
+  const shadowed: string[] = [];
   const added: PassthroughResult['added'] = [];
   const skipped: PassthroughResult['skipped'] = [];
   for (const m of [...mods].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
@@ -243,6 +253,12 @@ export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskM
     }
     for (const e of entries) {
       const server = serverNameOf(m.name);
+      if (distroNames.has(server)) {
+        // H1: a distro entry never takes an installed mod's own name; the mod's server replaces it
+        delete servers[server];
+        distroNames.delete(server);
+        shadowed.push(server);
+      }
       if (Object.prototype.hasOwnProperty.call(servers, server)) {
         skipped.push({ mod: m.name, server, why: 'name-taken' });
         continue;
@@ -257,17 +273,22 @@ export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskM
       added.push({ mod: m.name, server, launchHash: launchHashOf(launch, opts.launchKey ?? PROCESS_KEY), overridden });
     }
   }
-  return { servers, dropped, added, skipped };
+  return { servers, dropped, shadowed, added, skipped };
 }
 
-/** The repo's servers minus any using a reserved desk prefix (H1a; also the fail-closed result when the Desk is not bound). */
-export function repoServersOnly(repo: Record<string, unknown>): { servers: Record<string, unknown>; dropped: string[] } {
+/**
+ * The repo's servers minus any using a reserved desk prefix (H1a; also the fail-closed result when the Desk is not
+ * bound), plus the verified generated distro servers, which are kernel output and pass as is (a repo-authored name
+ * never displaces one).
+ */
+export function repoServersOnly(repo: Record<string, unknown>, distro: Record<string, unknown> = {}): { servers: Record<string, unknown>; dropped: string[] } {
   const servers: Record<string, unknown> = {};
   const dropped: string[] = [];
   for (const [k, v] of Object.entries(repo)) {
     if (isReservedDeskName(k)) dropped.push(k);
-    else servers[k] = v;
+    else if (!Object.prototype.hasOwnProperty.call(distro, k)) servers[k] = v;
   }
+  for (const [k, v] of Object.entries(distro)) servers[k] = v;
   return { servers, dropped };
 }
 

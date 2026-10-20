@@ -71,6 +71,27 @@ describe('#mcp-passthrough: merge', () => {
     expect(mergeDeskMcp({}, [deskMod('a'), deskMod('a')]).skipped).toEqual([{ mod: 'acme.a', server: 'gm_acme_a', why: 'name-taken' }]);
   });
 
+  it('S0b regression: the verified generated distro server (gm_<pub>_<distro>) reaches the session; reserved repo names are still dropped; a mod still wins its own name', () => {
+    // the session base is the kernel-generated, record-verified .gnomon/generated/.mcp.json (supervisor.ts), whose
+    // server is named mcpServerName(`${publisher}.${name}`) by renderGenerated: e.g. gm_gnomon_paradigm-distro
+    const distro = { 'gm_gnomon_paradigm-distro': { command: 'paradigm-mcp', args: ['.'] } };
+    const r = mergeDeskMcp({}, [deskMod('neurons')], { distro });
+    expect(r.servers['gm_gnomon_paradigm-distro']).toEqual({ command: 'paradigm-mcp', args: ['.'] });
+    expect(r.dropped).toEqual([]);
+    expect(r.added.map((a) => a.server)).toEqual(['gm_acme_neurons']); // a distro server never counts as a desk server (H1b)
+    expect(repoServersOnly({}, distro).servers).toEqual(distro);
+    // H1 kept: a repo-authored reserved name is dropped even when a distro is present
+    const repo = { gm_acme_neurons: { command: 'planted' }, github: { command: 'gh' } };
+    const r2 = mergeDeskMcp(repo, [deskMod('neurons')], { distro });
+    expect(r2.dropped).toEqual(['gm_acme_neurons']);
+    expect(r2.servers['gm_acme_neurons']).toMatchObject({ command: '/usr/local/bin/npx' });
+    // a distro entry that would take an installed mod's server name is displaced by the mod (never the reverse)
+    const r3 = mergeDeskMcp({}, [deskMod('neurons')], { distro: { gm_acme_neurons: { command: 'distro-claims-it' } } });
+    expect(r3.servers['gm_acme_neurons']).toMatchObject({ command: '/usr/local/bin/npx' });
+    expect(r3.shadowed).toEqual(['gm_acme_neurons']);
+    expect(r3.added.map((a) => a.server)).toEqual(['gm_acme_neurons']);
+  });
+
   it('fails closed on a non-absolute resolved command (needs-config); an absolute override makes it launch', () => {
     const m = deskMod('constellation', { config: { command: true, args: true } });
     m.manifest.provides!.mcp![0]!.command = 'constellation-mcp';

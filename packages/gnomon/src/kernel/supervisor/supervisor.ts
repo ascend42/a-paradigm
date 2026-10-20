@@ -242,10 +242,12 @@ export interface SupervisorOptions {
   /** whose hooks run (T-2026-10-18-010 L4, P8-D94): the root-signed `config.sessions.hooks` mode; default `audited` */
   hooksMode?: SessionHooksMode;
   /**
-   * #mcp-passthrough (TD-2026-10-20-812): the session's mcp servers = the repo's (never replaced) + installed, granted
-   * mods' provides.mcp namespaced gnomon-<mod>. Absent ⇒ the repo's servers only.
+   * #mcp-passthrough (TD-2026-10-20-812): the session's mcp servers = the repo's VERIFIED GENERATED distro servers
+   * (`.gnomon/generated/.mcp.json`, kernel output checked against the kernel-held record; passed through, never
+   * subject to the reserved-prefix drop) + installed, granted mods' provides.mcp as gm_<pub>_<name>. Absent ⇒ the
+   * distro servers only.
    */
-  deskMcp?: (repoServers: Record<string, unknown>, ctx: { hsid: string; cwd: string; worktree?: string }) => Record<string, unknown>;
+  deskMcp?: (distroServers: Record<string, unknown>, ctx: { hsid: string; cwd: string; worktree?: string }) => Record<string, unknown>;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -654,8 +656,8 @@ export class SessionSupervisor {
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
       fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
-      const repoServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {};
-      const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(repoServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : repoServers;
+      const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
+      const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
