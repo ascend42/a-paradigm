@@ -28,7 +28,9 @@ describe('dictation: the composer takes forwardable live turns', () => {
   it('consecutive turns append with one space, each once by seq', () => {
     const s = run(ready(), turn(11, 'open the file', 0), turn(12, ' and  fix it ', 100), turn(12, 'and fix it', 200));
     expect(s.text).toBe('open the file and fix it');
-    expect(s.parts).toEqual([{ seq: 11, text: 'open the file' }, { seq: 12, text: 'and fix it' }]);
+    // the shown text is collapsed; the send keeps the voice app's exact words (the kernel hash-matches them)
+    expect(s.parts).toEqual([{ seq: 11, text: 'open the file' }, { seq: 12, text: 'and fix it', send: ' and  fix it ' }]);
+    expect(sendRequest(s)!.content).toEqual([{ text: 'open the file' }, { text: ' and  fix it ' }]);
   });
   it('backlog rows (at or before the start seq) are never inserted; nothing before start', () => {
     expect(run(ready(), turn(9, 'old', 0), turn(10, 'older', 0)).text).toBe('');
@@ -165,11 +167,76 @@ describe('dictation: the send', () => {
   });
 });
 
+describe('dictation: Aegis conditions', () => {
+  it('M1: the voice hotkey sets hold and clears its own, never a GUI-set hold', () => {
+    const base = run(ready(), turn(11, 'hello', 0), { type: 'holdToggle', count: 0, now: 0 });
+    // voice sets, voice clears
+    let s = run(base, { type: 'holdToggle', count: 1, now: 0 });
+    expect(s).toMatchObject({ hold: true, holdBy: 'voice' });
+    s = run(s, { type: 'holdToggle', count: 2, now: 0 });
+    expect(s).toMatchObject({ hold: false, holdBy: null });
+    // GUI-set (button, typing, click) stays through a voice toggle; [Resume] clears it
+    for (const ev of [{ type: 'hold', hold: true, now: 0 }, { type: 'userEdit', text: 'hello!', now: 0 }, { type: 'focusComposer', now: 0 }] as DictationEvent[]) {
+      let g = run(base, ev);
+      expect(g.holdBy).toBe('gui');
+      g = run(g, { type: 'holdToggle', count: 1, now: 0 }, { type: 'holdToggle', count: 3, now: 0 });
+      expect(g).toMatchObject({ hold: true, holdBy: 'gui' });
+      expect(run(g, { type: 'hold', hold: false, now: 0 }).hold).toBe(false);
+    }
+    // Send clears a GUI-set hold
+    expect(run(base, { type: 'hold', hold: true, now: 0 }, { type: 'sendNow', now: 0 }, { type: 'sent', now: 0 }).hold).toBe(false);
+  });
+  it('M2: no live attachment (moved, ended, idle auto-off) ⇒ the draft is held "detached", never auto-sent', () => {
+    for (const attached of [null, B]) {
+      let s = run(ready(), turn(11, 'hello', 0), { type: 'context', attached, focused: A, now: 0 }, { type: 'tick', now: 1e9 });
+      expect(s).toMatchObject({ sending: false, hold: true, holdBy: 'detached' });
+      expect(armed(s)).toBe(false);
+      expect(dictationNote(s)).toBe('draft held · voice detached');
+      // a voice toggle never clears it; re-attaching does not resume it by itself
+      s = run(s, { type: 'holdToggle', count: 0, now: 0 }, { type: 'holdToggle', count: 1, now: 0 }, { type: 'context', attached: A, focused: A, now: 0 }, { type: 'tick', now: 2e9 });
+      expect(s).toMatchObject({ sending: false, hold: true, holdBy: 'detached' });
+      expect(run(s, { type: 'hold', hold: false, now: 0 }, { type: 'tick', now: 3e9 }).sending).toBe(true); // [Resume], attached again
+    }
+    // armed() itself refuses a draft whose session is not the attachment, whatever the hold says
+    const s = run(ready(), turn(11, 'hello', 0));
+    expect(armed({ ...s, attached: null })).toBe(false);
+  });
+  it('M3: an edit while sending keeps hold and the edited text; turns heard in flight append to it', () => {
+    let s = run(ready(), turn(11, 'one', 0), { type: 'sendNow', now: 0 }, { type: 'userEdit', text: 'one, and', now: 1 }, turn(12, 'two', 2), { type: 'sent', now: 3 });
+    expect(s).toMatchObject({ text: 'one, and two', hold: true, holdBy: 'gui', edited: true, sending: false });
+    // what is sent next is exactly what is shown
+    expect(sendRequest(s)).toEqual({ hsid: A, content: [{ text: 'one, and two' }], source: 'voice' });
+    // a failed send keeps the edit too
+    s = run(ready(), turn(11, 'one', 0), { type: 'sendNow', now: 0 }, { type: 'userEdit', text: 'one!', now: 1 }, { type: 'sendFailed', now: 2 });
+    expect(s).toMatchObject({ text: 'one!', hold: true });
+  });
+  it('L4: bidi controls never reach the composer invisibly, control characters go, and such a turn is sent as shown', () => {
+    const t = insertableText({ forwardable: true, text: 'rm ‮txt.exe‬ a⁦b⁩ c\u0007d\te' })!;
+    expect(t).not.toMatch(/[‪-‮⁦-⁩\u0000-\u0009\u000B-\u001F]/);
+    expect(t).toContain('d e');
+    const s = run(ready(), turn(11, 'x‮y', 0));
+    expect(sendRequest(s)!.content[0]!.text).toBe(s.text); // never the hidden characters
+  });
+  it('L5: a holdToggles count from another voice connection is a new baseline (connEpoch, else client.restarts)', () => {
+    expect(dictationStatusOf({ voice: { dictation: { activity: 'idle', holdToggles: 2, connEpoch: 'e7' } } }).epoch).toBe('c:e7');
+    expect(dictationStatusOf({ voice: { dictation: { activity: 'idle', holdToggles: 2 }, client: { restarts: 3 } } }).epoch).toBe('r:3');
+    let s = run(ready(), turn(11, 'hello', 0), { type: 'holdToggle', count: 5, epoch: 'r:0', now: 0 });
+    s = run(s, { type: 'holdToggle', count: 6, epoch: 'r:1', now: 0 }); // the voice app restarted: baseline, no flip
+    expect(s).toMatchObject({ hold: false, holdToggles: 6, holdEpoch: 'r:1' });
+    s = run(s, { type: 'holdToggle', count: 7, epoch: 'r:1', now: 0 });
+    expect(s.hold).toBe(true);
+  });
+  it('L1: an edited draft is echoed as a typed message (no 🎙✎ local mark)', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    expect(app).not.toContain("mark: 'voice-edited'");
+  });
+});
+
 describe('dictation: adapters', () => {
   it('reads status.voice.dictation; an older kernel reads idle with no toggles', () => {
-    expect(dictationStatusOf({ voice: { dictation: { activity: 'speaking', holdToggles: 3, at: 'x' } } })).toEqual({ activity: 'speaking', holdToggles: 3 });
-    expect(dictationStatusOf({ voice: {} })).toEqual({ activity: 'idle', holdToggles: null });
-    expect(dictationStatusOf(null)).toEqual({ activity: 'idle', holdToggles: null });
+    expect(dictationStatusOf({ voice: { dictation: { activity: 'speaking', holdToggles: 3, at: 'x' } } })).toEqual({ activity: 'speaking', holdToggles: 3, epoch: null });
+    expect(dictationStatusOf({ voice: {} })).toEqual({ activity: 'idle', holdToggles: null, epoch: null });
+    expect(dictationStatusOf(null)).toEqual({ activity: 'idle', holdToggles: null, epoch: null });
   });
   it('the delay is stored per machine as 3000/5000/8000/15000/off; anything else is the 5 s default', () => {
     expect(parseDelay(null)).toBe(5000);

@@ -44,8 +44,9 @@
  * against this attachment's pending turns (forwardable, unforwarded, the human's own `p:<ns>/voice` principal, the
  * attached hsid, received after the attachment started). All parts match ⇒ turn.sent{source: 'voice', voiceTurnSeqs,
  * voiceTurnSeq} and the parts join with ' '; some match ⇒ source 'voice-edited' plus the matched seqs; none ⇒ no voice
- * tag. Matched turns join #forwarded (a later direct send of the same turn is refused). Attribution never refuses a
- * human send. The 30 s freshness and latest-turn rules bind only the direct (voice principal) path.
+ * tag. Anything not 'voice' (edited sends included) joins its parts with '\n'. The GUI sends an edited draft as ONE
+ * part, which normally matches no pending turn, so it carries no voice tag at all. Matched turns join #forwarded (a
+ * later direct send of the same turn is refused). Attribution never refuses a human send. The 30 s freshness and latest-turn rules bind only the direct (voice principal) path.
  *
  * Attachment (§14.7 "voice is attached to a session only by a human gesture"): a HUMAN on a first-party connection
  * (GUI launch token or this home's human device) appends `voice.session.start{hsid, mode?}` / `voice.session.end`;

@@ -319,6 +319,14 @@ components:
       the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited,
       and a forwardable unsent turn as "in composer". Only a human-class
       connection (canAttach) gets these controls; a voice connection never.
+      Aegis conditions: hold records who set it (gui | voice | detached; a
+      voice toggle never clears a GUI-set or detached hold); no live
+      attachment for the draft's session ⇒ held 'detached', never
+      auto-sent; an edit while sending keeps hold and the edit; turn text is
+      sanitized by the contracts sanitizeDisplayText (sent as the voice app's
+      exact words only when sanitizing changed nothing); the holdToggles
+      baseline resets per voice connection (connEpoch, else
+      client.restarts); edited drafts echo as typed messages.
     path: src/core/dictation.ts
     type: module
     tags: [gnomon, gui, voice, dictation]

@@ -641,7 +641,7 @@ function syncDictationContext(): void {
   if (!on) return;
   const d = dictationStatusOf(status);
   if (d.activity !== dict.activity) dispatchDictation({ type: 'activity', activity: d.activity, now });
-  if (d.holdToggles !== null && d.holdToggles !== dict.holdToggles) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, now });
+  if (d.holdToggles !== null && (d.holdToggles !== dict.holdToggles || d.epoch !== dict.holdEpoch)) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, epoch: d.epoch, now });
 }
 
 function setDictationDelay(d: number | null): void {
@@ -670,14 +670,15 @@ async function sendDictation(): Promise<void> {
   const req = sendRequest(dict);
   if (!client || !req) return dispatchDictation({ type: 'sendFailed', now: Date.now() });
   // an edited draft's words are the human's: this page echoes them (🎙✎); unedited turns become the 🎙 bubbles
-  if (dict.edited) local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: req.hsid, payload: dict.text, at: new Date().toISOString(), mark: 'voice-edited' });
+  // an edited draft is the human's own text (one part; the kernel attributes nothing, Aegis L1): echoed as typed
+  if (dict.edited) local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: req.hsid, payload: dict.text, at: new Date().toISOString() });
   schedule(new Set([`transcript:${req.hsid}`]));
-  const sentText = dict.text;
   try {
     await client.call('session.send', req);
     dispatchDictation({ type: 'sent', now: Date.now() });
+    // Aegis M3: the composer shows exactly the reducer's text: the in-flight edit (held) or the turns heard in flight
     const ta = $<HTMLTextAreaElement>('composer-text');
-    if (dict.focusedHere && (ta.value === sentText || !ta.value)) ta.value = dict.text; // turns heard in flight stay
+    if (dict.focusedHere) ta.value = dict.text;
   } catch (err) {
     if (err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: req.hsid, payload: refusalText(err.refusal) });
     else notice('the dictated draft was not sent; it stays in the composer', true);
@@ -1278,8 +1279,10 @@ function wire(): void {
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $<HTMLTextAreaElement>('composer-text');
+    // Aegis M3: a dictated draft stays shown until the kernel took it (the reducer then sets what remains)
+    const viaDictation = dictationOn() && dict.focusedHere && dict.parts.length > 0 && hasDraft(dict);
     void send(t.value);
-    t.value = '';
+    if (!viaDictation) t.value = '';
   });
   // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
   $('composer-text').addEventListener('input', () => {
