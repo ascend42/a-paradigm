@@ -201,7 +201,7 @@ describe('the pickup raises staged cards through the real broker', () => {
       const d = path.join(t.home, 'mods', m, 'staged');
       fs.mkdirSync(d, { recursive: true });
       for (let i = 0; i < 30; i++) {
-        const id = `card:01H${'Z'.repeat(19)}${m.toUpperCase()}${String(i).padStart(2, '0')}`;
+        const id = `card:01H${'Z'.repeat(19)}${m.slice(0, 2).toUpperCase()}${String(i).padStart(2, '0')}`;
         const rec = JSON.parse(body);
         rec.card.cardId = id;
         rec.detail.name = m;

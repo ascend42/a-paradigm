@@ -92,7 +92,7 @@ describe('#mod-host feed projection v2 (numbers only)', () => {
     expect(() => validateManifest(m(['log.read', 'log.read:usage'], net), { tier: 'local' })).toThrow(/log.read:usage cannot list egress/);
     expect(() => validateManifest(m(['log.read', 'log.read:usage'], 'none'), { tier: 'local' })).not.toThrow();
     expect(() => validateManifest(m(['log.read'], net), { tier: 'local' })).not.toThrow();
-    expect(() => validateManifest(m(['log.read', 'log.read:usage'], net), { tier: 'first-party' })).not.toThrow();
+    expect(() => validateManifest({ ...m(['log.read', 'log.read:usage'], net), publisher: 'gnomon' }, { tier: 'first-party' })).not.toThrow();
   });
 
   it('property: no projected payload holds a string outside the id/enum regexes; numbers are clamped (seeded)', () => {

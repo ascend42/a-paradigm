@@ -100,10 +100,10 @@ describe('host-level falsifier: paradigm.read:summary (K1/K3)', () => {
       }
     }
     h.feed({ kind: 'session.open', seq: 1, at: '2026-10-20T12:00:00.000Z', payload: { hsid: H, cwd: repo } });
-    await until(async () => ((await h.runCommand('acme.reader', 'reader.seen', null)) as Seen).seen.length >= 1);
-    expect(JSON.stringify(((await h.runCommand('acme.reader', 'reader.seen', null)) as Seen).seen)).not.toMatch(/SLICE CONTENT|paradigm|repo/);
-    await h.relayView({ name: 'acme.ctx', viewId: 'ctx.echo', input: { focus: { hsid: H } }, ...HUMAN });
-    const ctx = ((await h.runCommand('acme.ctx', 'ctx.seen', null)) as Seen).last!;
+    await until(async () => ((await h.runCommand('acme.reader', 'acme.reader.seen', null)) as Seen).seen.length >= 1);
+    expect(JSON.stringify(((await h.runCommand('acme.reader', 'acme.reader.seen', null)) as Seen).seen)).not.toMatch(/SLICE CONTENT|paradigm|repo/);
+    await h.relayView({ name: 'acme.ctx', viewId: 'acme.ctx.echo', input: { focus: { hsid: H } }, ...HUMAN });
+    const ctx = ((await h.runCommand('acme.ctx', 'acme.ctx.seen', null)) as Seen).last!;
     expect(JSON.stringify(ctx)).toContain('SLICE CONTENT');
     expect(JSON.stringify(ctx)).not.toContain(r.root);
   });

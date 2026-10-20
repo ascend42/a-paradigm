@@ -355,7 +355,7 @@ describe('K1 paradigm.read:summary capability', () => {
     expect(capabilityForm('paradigm.read:summary')).toBe('paradigm.read:summary');
     const m = (egress: unknown) => ({ manifest: 2, publisher: 'acme', kind: 'mod', name: 'ctx', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'ctx.v', slot: 'sidebar', placement: 'append' }] }, requires: { capabilities: ['paradigm.read:summary'], egress } });
     const net = [{ host: 'example.com', purpose: 'upload' }];
-    for (const tier of ['local', 'first-party'] as const) expect(() => validateManifest(m(net), { tier })).toThrow(/paradigm.read:summary cannot list egress/);
+    for (const tier of ['local', 'first-party'] as const) expect(() => validateManifest({ ...m(net), publisher: tier === 'first-party' ? 'gnomon' : 'acme' }, { tier })).toThrow(/paradigm.read:summary cannot list egress/);
     expect(() => validateManifest(m('none'), { tier: 'local' })).not.toThrow();
   });
 });
