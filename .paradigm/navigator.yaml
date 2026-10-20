@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:14:20.930Z'
+generated: '2026-10-20T06:46:08.325Z'
 structure: {}
 key_files:
   config:
@@ -299,6 +299,7 @@ symbols:
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
+  '#purpose-component-shell-readonly': packages/gnomon/
   '#purpose-component-always-rules': packages/gnomon/
   '#purpose-component-trace-capture': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
@@ -1388,6 +1389,8 @@ symbols:
   $purpose-ref-flow-flow: packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
+  $purpose-ref-flow-NAME: packages/gnomon/
+  '@purpose-ref-aspect-user': packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
