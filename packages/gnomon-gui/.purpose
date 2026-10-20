@@ -46,6 +46,9 @@ components:
       .card-sep, and the CSS wraps the composed title (pre-wrap, overflow-wrap: anywhere, no ellipsis).
       A capped arg adds a "longer than N characters" note and shows the kernel body VISIBLY, outside
       details (like a claim-mismatch card).
+      L2: shortRequester(requestedBy, localNs) shortens only when the principal's namespace is the local
+      trust set's (localNsOf the handshake principal, passed as CardView.localNs); else the principal shows
+      whole.
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
       SVG caps. core/render.ts renderCap draws a Text node's `cap` only after

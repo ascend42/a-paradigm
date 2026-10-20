@@ -252,6 +252,8 @@ export interface CardView {
   held?: { seconds: number; undo: string } | null;
   /** fidelity 2: a permission card's one-line title the GUI composed from the kernel's STRUCTURED fields (permissionTitleOf) */
   composedTitle?: ComposedTitle | null;
+  /** Aegis L2: the local trust set's namespace (localNsOf the connection's principal); null/absent => no shortening */
+  localNs?: string | null;
 }
 
 /** A permission card's composed title: the verb, the whole arg (lines kept), and whether the arg hit TITLE_ARG_MAX. */
@@ -262,13 +264,21 @@ export interface ComposedTitle {
 }
 
 /**
- * fidelity 2: the short requester mark a card shows: a LOCAL principal (`p:<ns>/<name>`, the one trust set, where the
- * name is unique) shows its name (`claude` for `p:7k2m9q4x/claude`); a foreign principal (`…@rootKeyId8`) or anything
- * else shows whole. The full principal stays in the card head's title= and in its details.
+ * fidelity 2: the short requester mark a card shows. Aegis L2: only a principal of the LOCAL trust set shortens: a
+ * `p:<ns>/<name>` whose `<ns>` is the connected home's namespace (`localNs`, from the handshake's own principal, the
+ * one trust set, where the name is unique) shows its name (`claude` for `p:7k2m9q4x/claude`). Any other namespace, a
+ * foreign principal (`…@rootKeyId8`), anything odd, or no known local namespace shows WHOLE. The full principal stays
+ * in the card head's title= and in its details.
  */
-export function shortRequester(requestedBy: string): string {
+export function shortRequester(requestedBy: string, localNs: string | null | undefined): string {
   const m = PRINCIPAL_ID_PATTERN.exec(requestedBy);
-  return m ? m[2]! : requestedBy;
+  return m && typeof localNs === 'string' && m[1] === localNs ? m[2]! : requestedBy;
+}
+
+/** Aegis L2: the local trust set's namespace from the connection's own principal (`p:<ns>/<name>`), else null. */
+export function localNsOf(principal: string | null | undefined): string | null {
+  const m = typeof principal === 'string' ? PRINCIPAL_ID_PATTERN.exec(principal) : null;
+  return m ? m[1]! : null;
 }
 
 /** inputHash exactly as the kernel's supervisor computes it (permission.ts inputHash): sha256 over canonical JSON. */
@@ -635,7 +645,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       h(doc, 'span', { class: 'card-kind' }, v.kind),
       // Aegis M1: who asked is VISIBLE text, never only a tooltip (the short mark; the full principal in title= and details)
       ' · ',
-      h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy)}`),
+      h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy, v.localNs)}`),
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),

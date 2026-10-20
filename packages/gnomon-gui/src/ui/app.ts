@@ -21,7 +21,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -545,6 +545,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         now: Date.now(),
         voice: cardVoiceOf(c.card),
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
+        localNs: localNsOf(session?.principal),
       },
       c.card.block,
     ) as unknown as HTMLElement;

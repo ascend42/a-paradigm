@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectHue } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { cardContentHash, KERNEL_TITLED_KINDS, mdBlocks, mdInline, permissionTitleOf, raisedLine, renderCard, shortRequester, splitCardBlock, stampWord, TITLE_ARG_MAX, toolInputHash, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { cardContentHash, KERNEL_TITLED_KINDS, localNsOf, mdBlocks, mdInline, permissionTitleOf, raisedLine, renderCard, shortRequester, splitCardBlock, stampWord, TITLE_ARG_MAX, toolInputHash, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { activitySummary, failedExit, foldActivity, groupHue, GuiStore, isLiveState, sessionNote, sessionTitle, splitActivePast, type ChatItem, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -172,7 +172,7 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
 
 describe('S3 the card sheet and the stack pile', () => {
   const block = { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'The session asks to run Bash' }, { type: 'Text', text: 'command: pnpm test' }] };
-  const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:7k2m9q4x/claude', hsid: 'hsid:v1:A', repo: 'billing', state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [] as string[], decisions: ['allow', 'deny'], decidable: true };
+  const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:7k2m9q4x/claude', hsid: 'hsid:v1:A', repo: 'billing', state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [] as string[], decisions: ['allow', 'deny'], decidable: true, localNs: '7k2m9q4x' };
   it('fidelity 2 anatomy: ■ project · kind · by <name> + the voice chip, ONE title line, raised · waiting, keys, the contentHash line, then details', () => {
     const el = renderCard({ doc: fdoc }, { ...v, project: { name: 'billing', hue: 0 }, raisedAt: '2026-10-20T14:06:00Z', now: Date.parse('2026-10-20T14:09:30Z'), voice: { eligible: 'reversible', label: 'card 3' } }, block) as FEl;
     const kids = el.children.filter((c): c is FEl => c instanceof FEl);
@@ -191,13 +191,28 @@ describe('S3 the card sheet and the stack pile', () => {
     expect(det.text).toContain('requested by p:7k2m9q4x/claude · hsid:v1:A · billing');
     expect(det.text).toContain('command: pnpm test');
   });
-  it('the short requester mark: the name after the last /, else the whole principal', () => {
-    expect(shortRequester('p:7k2m9q4x/claude')).toBe('claude');
-    expect(shortRequester('p:7k2m9q4x/kernel')).toBe('kernel');
-    expect(shortRequester('weird')).toBe('weird');
-    expect(shortRequester('p:x/has space')).toBe('p:x/has space');
-    // a foreign principal (another trust set) never shortens to a bare name
-    expect(shortRequester('p:7k2m9q4x/claude@0a1b2c3d')).toBe('p:7k2m9q4x/claude@0a1b2c3d');
+  it('Aegis L2: the short requester mark shortens ONLY in the local trust set (the handshake principal\'s namespace)', () => {
+    const ns = localNsOf('p:7k2m9q4x/human');
+    expect(ns).toBe('7k2m9q4x');
+    expect(localNsOf(null)).toBeNull();
+    expect(localNsOf('weird')).toBeNull();
+    expect(shortRequester('p:7k2m9q4x/claude', ns)).toBe('claude');
+    expect(shortRequester('p:7k2m9q4x/kernel', ns)).toBe('kernel');
+    // another namespace (another home's trust set) shows whole, never as a bare name
+    expect(shortRequester('p:0a1b2c3d/claude', ns)).toBe('p:0a1b2c3d/claude');
+    // no known local namespace (not connected): nothing shortens
+    expect(shortRequester('p:7k2m9q4x/claude', null)).toBe('p:7k2m9q4x/claude');
+    expect(shortRequester('p:7k2m9q4x/claude', undefined)).toBe('p:7k2m9q4x/claude');
+    expect(shortRequester('weird', ns)).toBe('weird');
+    expect(shortRequester('p:x/has space', ns)).toBe('p:x/has space');
+    // a foreign principal never shortens to a bare name
+    expect(shortRequester('p:7k2m9q4x/claude@0a1b2c3d', ns)).toBe('p:7k2m9q4x/claude@0a1b2c3d');
+    // the card head: whole when the namespace is not the local one
+    const head = (localNs: string | null): string => (renderCard({ doc: fdoc }, { ...v, localNs }, block) as FEl).children.filter((c): c is FEl => c instanceof FEl)[0]!.text;
+    expect(head('7k2m9q4x')).toContain('by claude');
+    expect(head('0a1b2c3d')).toContain('by p:7k2m9q4x/claude');
+    expect(head(null)).toContain('by p:7k2m9q4x/claude');
+    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8')).toMatch(/localNs: localNsOf\(session\?\.principal\)/);
   });
   it('a requester-written card: its words go in details, labelled as the requester\'s; the title is the kind', () => {
     const el = renderCard({ doc: fdoc }, { ...v, kind: 'knot', decisions: ['resolve'] }, { type: 'Box', children: [{ type: 'Text', text: 'KNOT · two strands' }] }) as FEl;
