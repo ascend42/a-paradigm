@@ -298,6 +298,21 @@ components:
     tags: [gnomon, gui, setup]
     tests:
       - test/setup.test.ts
+  gui-stop-speaking:
+    description: >-
+      #gui Stop speaking (T-2026-10-19-026). A ⏹ "Stop speaking" button beside
+      the mic pill (static/index.html #voice-stop), shown only for a human
+      connection with the voice app connected (status.voice.clientConnected)
+      and status.voice.playback.playing; a trusted click, or Esc when no menu
+      or dialog is open and focus is not in the composer, sends ONE log.append
+      request.voice.client{op:'stop-speaking'} (narrows: no card, no presence).
+      core/voice.ts holds the pure decisions (playbackPlaying,
+      stopSpeakingShown, speakPollWanted, escStopsSpeaking); app.ts re-reads
+      status every 300 ms (SPEAK_POLL_MS) only while speech plays, plus a 4 s
+      watch window after a voice row (playback reports are never logged, so
+      the page cannot otherwise see a reply start).
+    tags: [voice, gui]
+    signals: []
   gui-dictation:
     description: >-
       #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation

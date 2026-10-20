@@ -194,7 +194,9 @@ describe('$voice-turn agent side + half-duplex', () => {
     expect(audio.played[0]!.completed).toBe(false);
     audio.silence(400);
     await client.idle();
-    expect(engines.tts.said).toEqual(['First long sentence here.']);
+    // pipelined: the second sentence was synthesized during the first, but the barge-in dropped it unplayed
+    expect(engines.tts.said).toEqual(['First long sentence here.', 'Second sentence never said.']);
+    expect(audio.played).toHaveLength(1);
     const agent = link.appends.filter((a) => a.kind === 'voice.turn.agent');
     expect(agent[0]!.payload).toMatchObject({ textSpoken: '', interrupted: true });
     expect(link.appends.filter((a) => a.kind === 'voice.turn.user')).toHaveLength(0);

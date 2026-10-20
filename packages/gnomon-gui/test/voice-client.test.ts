@@ -214,7 +214,7 @@ describe('"Teach Gnomon your voice"', () => {
   });
   it('the page folds status.voice on every status read and polls lightly only while the dialog waits', () => {
     expect(APP).toContain('function foldVoiceReports(');
-    expect(APP).toMatch(/foldVoiceReports\(\);\n\}/);
+    expect(APP).toMatch(/foldVoiceReports\(\);\n\s*syncSpeakPoll\(\);\n\}/);
     const poll = APP.slice(APP.indexOf('function syncEnrolPoll('), APP.indexOf('function syncEnrolPoll(') + 600);
     expect(poll).toContain("s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase'");
     expect(poll).toContain('ENROL_POLL_MS');

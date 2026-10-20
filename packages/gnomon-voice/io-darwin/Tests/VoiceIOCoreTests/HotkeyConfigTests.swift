@@ -4,13 +4,23 @@ import XCTest
 final class HotkeyConfigTests: XCTestCase {
     func testDefaults() {
         let d = HotkeyConfig.defaults
-        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+alt+m", "mode-toggle": "ctrl+alt+a", "hold-toggle": "ctrl+alt+h"])
+        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+alt+m", "mode-toggle": "ctrl+alt+a", "hold-toggle": "ctrl+alt+h", "stop-speaking": "ctrl+alt+."])
         XCTAssertEqual(d.bindings[.talk]?.keyCode, 0x31)
         XCTAssertEqual(d.bindings[.talk]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
         XCTAssertEqual(d.bindings[.micToggle]?.keyCode, 0x2E)
         XCTAssertEqual(d.bindings[.modeToggle]?.keyCode, 0x00)
         XCTAssertEqual(d.bindings[.holdToggle]?.keyCode, 0x04)
         XCTAssertEqual(d.bindings[.holdToggle]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
+        XCTAssertEqual(d.bindings[.stopSpeaking]?.keyCode, 0x2F)
+        XCTAssertEqual(d.bindings[.stopSpeaking]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
+    }
+
+    func testPeriodKey() throws {
+        XCTAssertEqual(try HotkeySpec.parse("ctrl+alt+period")?.canonical, "ctrl+alt+.")
+        XCTAssertEqual(try HotkeySpec.parse("cmd+.")?.keyCode, 0x2F)
+        XCTAssertThrowsError(try HotkeySpec.parse(".")) { XCTAssertEqual($0 as? HotkeyError, .needsModifier(".")) }
+        // "period" and "." are the same chord, so binding both is a duplicate
+        XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["talk": "alt+ctrl+period"])) { XCTAssertEqual($0 as? HotkeyError, .duplicate("ctrl+alt+.")) }
     }
 
     func testParseSynonymsAndCanonicalOrder() throws {
@@ -53,5 +63,7 @@ final class HotkeyConfigTests: XCTestCase {
         XCTAssertNil(HotkeyAction(carbonId: 99))
         XCTAssertEqual(HotkeyAction.holdToggle.carbonId, 4)
         XCTAssertEqual(HotkeyAction(rawValue: "hold-toggle"), .holdToggle)
+        XCTAssertEqual(HotkeyAction.stopSpeaking.carbonId, 5)
+        XCTAssertEqual(HotkeyAction(rawValue: "stop-speaking"), .stopSpeaking)
     }
 }

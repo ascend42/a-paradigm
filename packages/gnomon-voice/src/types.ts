@@ -42,13 +42,13 @@ export interface PlaybackResult {
 }
 
 /** The local control hotkeys the controller acts on (key down only). */
-export type ControlAction = 'mic-toggle' | 'mode-toggle' | 'hold-toggle';
+export type ControlAction = 'mic-toggle' | 'mode-toggle' | 'hold-toggle' | 'stop-speaking';
 
 export interface AudioIOEvents {
   frame(f: PcmFrame): void;
   /** the push-to-talk hotkey */
   hotkey(down: boolean, atMs: number): void;
-  /** a local control hotkey: ⌃⌥M mic-toggle, ⌃⌥A mode-toggle, ⌃⌥H hold-toggle (gnomon-voice-io default bindings) */
+  /** a local control hotkey: ⌃⌥M mic-toggle, ⌃⌥A mode-toggle, ⌃⌥H hold-toggle, ⌃⌥. stop-speaking (gnomon-voice-io default bindings) */
   control(action: ControlAction, atMs: number): void;
   /** the human muted or unmuted the mic (hardware/menu) */
   mic(muted: boolean): void;
@@ -105,6 +105,8 @@ export interface SttEngine {
 export interface TtsEngine {
   readonly voice: string;
   synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }>;
+  /** one silent synthesis at client start so the first spoken reply does not pay the cold start (optional) */
+  warmUp?(): Promise<void>;
 }
 
 export interface SpeakerEngine {
@@ -144,6 +146,11 @@ export interface KernelRow {
 export interface KernelLink {
   /** status → voice.attached (null when nothing is attached) */
   attachment(): Promise<VoiceAttachment | null>;
+  /**
+   * status.voice.stopSpeakingSeq from the LAST attachment() read (the human's ⏹ Stop speaking count; the client stops
+   * playback when it changes). null when the kernel does not report it. Optional for stubs.
+   */
+  stopSpeakingSeq?(): number | null;
   append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }>;
   send(hsid: string, text: string): Promise<unknown>;
   /** session.stop{interrupt: true} — the only stop voice may make */

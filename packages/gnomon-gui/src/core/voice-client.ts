@@ -11,7 +11,7 @@
  *     downloading | starting | running | crashed | unavailable, downloadMb?: {n, of}, devUnsigned?, lastError?,
  *     unavailable?}` plus the enrolled voices (`status.voice.enrolled`, see ASSUMPTIONS). Unknown phases fail toward
  *     "not running" (the human is offered Start, never told a dead app is listening).
- *   - The human's gestures are `log.append` rows: `request.voice.client{op: 'start' | 'stop'}`,
+ *   - The human's gestures are `log.append` rows: `request.voice.client{op: 'start' | 'stop' | 'stop-speaking'}`,
  *     `request.voice.enrol{name, consent}` (the kernel raises a fresh-presence Touch ID card whose effect writes the
  *     root-signed enrolment row), and `request.voice.forget{name}` (no card).
  *   - The pill (core/voice.ts pillOf) is kernel-owned; `clientPillOf` only overrides it while NOTHING is attached (an
@@ -179,11 +179,13 @@ export function clientMenuEntries(c: ClientView, attachable: boolean): ClientMen
 }
 
 export type ClientRequest =
-  | { kind: 'request.voice.client'; payload: { op: 'start' | 'stop' } }
+  | { kind: 'request.voice.client'; payload: { op: 'start' | 'stop' | 'stop-speaking' } }
   | { kind: 'request.voice.enrol'; payload: { name: string; consent: string } }
   | { kind: 'request.voice.forget'; payload: { name: string } };
 
 export const clientRequest = (op: 'start' | 'stop'): ClientRequest => ({ kind: 'request.voice.client', payload: { op } });
+/** Stop speaking (T-2026-10-19-026): narrows only (silences the voice app), so no card and no presence. */
+export const stopSpeakingRequest = (): ClientRequest => ({ kind: 'request.voice.client', payload: { op: 'stop-speaking' } });
 
 /** The kernel's speaker-name rule (kernel/voice/enrolment.ts NAME): lowercase, ≤ 64. */
 export const VOICE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;

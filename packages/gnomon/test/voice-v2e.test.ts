@@ -268,6 +268,7 @@ function drig() {
       enrol: async (asker, p) => (calls.push(`enrol:${asker.principal}:${JSON.stringify(p)}`), { cardId: 'card:x' }),
       forget: async (p) => (calls.push(`forget:${p.name}`), { forgotten: true }),
       report: (p) => (calls.push(`report:${JSON.stringify(p)}`), { ok: true }),
+      stopSpeaking: () => (calls.push('stop-speaking'), { stopSpeakingSeq: calls.filter((c) => c === 'stop-speaking').length }),
     },
   });
   let n = 0;
@@ -363,6 +364,23 @@ describe('#gnomon-voice V2e: request.voice.client is human only', () => {
       for (const op of ['start', 'stop']) await expect(call('log.append', { kind: 'request.voice.client', payload: { op } }), `${who.kind} ${op}`).rejects.toBeInstanceOf(RpcRefusal);
     }
     expect(r.calls).toEqual([]);
+  });
+
+  it("T-2026-10-19-026: op 'stop-speaking' is human only (device or GUI), no card, no row; a voice principal and every other class are refused", async () => {
+    const r = drig();
+    for (const credential of ['device', 'gui'] as const) {
+      const call = await r.connect({ kind: 'human', credential });
+      expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'stop-speaking' } })).toEqual({ voiceClient: { stopSpeakingSeq: credential === 'device' ? 1 : 2 } });
+    }
+    expect(r.calls).toEqual(['stop-speaking', 'stop-speaking']);
+    for (const who of [{ kind: 'voice' }, { kind: 'agent' }, { kind: 'session' }, { kind: 'mod' }, { kind: 'readToken' }, { kind: 'peer' }] as Who[]) {
+      const call = await r.connect(who);
+      await expect(call('log.append', { kind: 'request.voice.client', payload: { op: 'stop-speaking' } }), who.kind).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    const human = await r.connect({ kind: 'human' });
+    expect(await refusal(human('log.append', { kind: 'request.voice.client', payload: { op: 'stop-speaking', x: 1 } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(r.calls).toEqual(['stop-speaking', 'stop-speaking']);
+    expect(r.logged.filter((x) => x.kind.startsWith('request.') || x.kind.startsWith('card.'))).toEqual([]);
   });
 
   it('request.voice.enrol / forget are human only; request.voice.report is voice only; replies are the port results', async () => {

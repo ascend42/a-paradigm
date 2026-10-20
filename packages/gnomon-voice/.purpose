@@ -72,8 +72,10 @@ components:
     flows: [$voice-turn]
   gnomon-voice-io:
     description: >-
-      Hotkeys talk, mic-toggle, mode-toggle and hold-toggle (carbonId 4,
-      default ctrl+alt+h, TD-2026-10-20-262 dictation hold).
+      Hotkeys talk, mic-toggle, mode-toggle, hold-toggle (carbonId 4,
+      default ctrl+alt+h, TD-2026-10-20-262 dictation hold) and stop-speaking
+      (carbonId 5, default ctrl+alt+. — the period key, kVK_ANSI_Period 0x2F,
+      spelled "." or "period"; T-2026-10-19-026: cuts the reply being read aloud).
       The voice child's audio I/O, mic only (no keychain group, no network,
       writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same
       framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON
@@ -86,7 +88,7 @@ components:
       clock): ready, mic, route {route, aec: vpio|headphones|none}, level
       {rmsDBFS, peakDBFS} ~15 Hz, playback.start {audibleAtUs},
       playback.end {reason: drained|stopped|mic-switch|route-change|exit},
-      hotkey {action: talk|mic-toggle|mode-toggle, phase: down|up}, engine,
+      hotkey {action: talk|mic-toggle|mode-toggle|hold-toggle|stop-speaking, phase: down|up}, engine,
       error, exit. Mic on = one AVAudioEngine with
       inputNode.setVoiceProcessingEnabled(true) (VoiceProcessingIO AEC) and
       a player node in the same engine, so TTS is the echo reference; mic

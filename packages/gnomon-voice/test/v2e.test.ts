@@ -218,7 +218,8 @@ describe('kernel-speakable rows', () => {
     link.speakable([{ kind: 'reply', text: 'One. Two.' }]);
     await settle();
     await client.idle();
-    expect(engines.tts.said).toEqual(['One.']);
+    // T-2026-10-19-026 pipelining: 'Two.' was prefetched while 'One.' played, but never played
+    expect(engines.tts.said).toEqual(['One.', 'Two.']);
     expect(link.appends.filter((a) => a.kind === 'voice.turn.agent')).toHaveLength(0);
   });
 });

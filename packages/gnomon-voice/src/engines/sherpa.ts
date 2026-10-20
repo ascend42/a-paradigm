@@ -102,18 +102,34 @@ export class SherpaStt implements SttEngine {
   }
 }
 
+/** Kokoro threads (T-2026-10-19-026 bench, Apple M4, warm: RTF 0.71/0.69/0.68 at 2/4/6 threads, speed 1.0; see the spec §14.4.1 note) */
+export const TTS_THREADS = 4;
+/** Kokoro speed (1.0 = the voice's natural rate) */
+export const TTS_SPEED = 1.0;
+
 export class SherpaTts implements TtsEngine {
   readonly voice: string;
   readonly #tts: Sherpa;
   readonly #sid: number;
-  constructor(sherpa: Sherpa, p: Record<string, string>, o: { sid?: number; voice?: string } = {}) {
-    this.#tts = new sherpa.OfflineTts({ model: { kokoro: { model: p.model, voices: p.voices, tokens: p.tokens, dataDir: p.dataDir }, numThreads: 2, provider: 'cpu', debug: false }, maxNumSentences: 1 });
+  readonly #speed: number;
+  constructor(sherpa: Sherpa, p: Record<string, string>, o: { sid?: number; voice?: string; numThreads?: number; speed?: number } = {}) {
+    this.#tts = new sherpa.OfflineTts({ model: { kokoro: { model: p.model, voices: p.voices, tokens: p.tokens, dataDir: p.dataDir }, numThreads: o.numThreads ?? TTS_THREADS, provider: 'cpu', debug: false }, maxNumSentences: 1 });
     this.#sid = o.sid ?? 0;
+    this.#speed = o.speed ?? TTS_SPEED;
     this.voice = o.voice ?? `kokoro-en-v0_19:${this.#sid}`;
   }
+  /**
+   * T-2026-10-19-026: generateAsync runs on the addon's worker thread, so the event loop keeps serving capture frames
+   * and the stop hotkey while the next sentence synthesizes (the sync generate() blocked it for ~1 s per sentence).
+   */
   async synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }> {
-    const a = this.#tts.generate({ text: sentence, sid: this.#sid, speed: 1.0 }) as { samples: Float32Array; sampleRate: number };
+    const req = { text: sentence, sid: this.#sid, speed: this.#speed };
+    const a = (typeof this.#tts.generateAsync === 'function' ? await this.#tts.generateAsync(req) : this.#tts.generate(req)) as { samples: Float32Array; sampleRate: number };
     return { samples: a.samples, sampleRate: a.sampleRate };
+  }
+  /** One discarded synthesis so the first reply does not pay the cold start (graph init, allocator warm-up). */
+  async warmUp(): Promise<void> {
+    await this.synthesize('Ready.');
   }
 }
 
