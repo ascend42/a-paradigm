@@ -21,7 +21,8 @@
  *   mod.paused        {name, reason}   (Aegis C2: a pause is visible in the Workshop)
  *   mod.health        {name, ok}       (a successful start clears it)
  *
- * Projection v2 (#ledger-mod, the context and budget meter): NUMBERS ONLY.
+ * Projection v2 (#ledger-mod, the context and budget meter): NUMBERS ONLY, and only
+ * to a mod granted `log.read:usage` (FEED_USAGE_CAPABILITY; Aegis M1).
  * Every number is clamped to a finite non-negative safe integer; no string
  * leaves except an id (ID) or a closed enum / enum-shaped token (DIMENSION).
  *   turn.usage        {hsid, tokens}                                   (a per-message delta, as charged)
@@ -61,6 +62,26 @@ export const FEED_KINDS: readonly string[] = Object.freeze([
 ]);
 /** The capability that grants the feed. */
 export const FEED_CAPABILITY = 'log.read';
+/**
+ * Aegis M1 (#ledger-mod): the NARROWER capability that grants the projection v2 usage rows and fields (the
+ * USAGE kinds below, and turn.result's tokens / split / cost). The install card names it (it is a manifest
+ * capability); a local-tier mod may not combine it with egress (#manifest-loader). log.read alone gets v1 only.
+ */
+export const FEED_USAGE_CAPABILITY = 'log.read:usage';
+export const FEED_USAGE_KINDS: readonly string[] = Object.freeze(['turn.usage', 'session.compacted', 'budget.usage', 'budget.ladder', 'budget.pause', 'budget.resume', 'budget.breaker.open', 'budget.breaker.close', 'permit.deny']);
+
+/** Which projection a mod's granted capabilities reach (none ⇒ no feed). */
+export function feedAccessOf(capabilities: readonly string[] | undefined): { base: boolean; usage: boolean } {
+  const caps = capabilities ?? [];
+  return { base: caps.includes(FEED_CAPABILITY), usage: caps.includes(FEED_USAGE_CAPABILITY) };
+}
+
+/** Whether a mod with this access receives an event of this kind. */
+export function feedReaches(access: { base: boolean; usage: boolean }, kind: string): boolean {
+  if (FEED_USAGE_KINDS.includes(kind)) return access.usage;
+  if (kind === 'turn.result') return access.base || access.usage;
+  return access.base;
+}
 export const FEED_HUES = 8;
 
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
@@ -92,8 +113,11 @@ export interface FeedEvent {
 }
 
 /** The projection of one kernel event, or null when it is not a feed kind. */
-export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }): FeedEvent | null {
+export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }, opts: { usage?: boolean } = {}): FeedEvent | null {
   if (typeof e?.kind !== 'string' || !FEED_KINDS.includes(e.kind)) return null;
+  // Aegis M1: without log.read:usage, no usage kind and no usage field
+  const usage = opts.usage === true;
+  if (!usage && FEED_USAGE_KINDS.includes(e.kind)) return null;
   const p = (e.payload && typeof e.payload === 'object' ? e.payload : {}) as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   const hsid = id(p.hsid);
@@ -114,6 +138,7 @@ export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknow
     case 'turn.result': {
       if (!hsid) return null;
       out.hsid = hsid;
+      if (!usage) break; // v1 turn.result: {hsid} only
       out.tokens = feedCount(obj(p.usage).tokens);
       if (e.kind === 'turn.result') {
         const split = obj(p.split);

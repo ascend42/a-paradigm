@@ -2954,7 +2954,11 @@ components:
       turn.partial/result, approval.request/decide/expire and warpline.knot
       (kernel fields only; project = a hue index from sha256(cwd)) to running
       mods requiring log.read - the #workshop-mod input. Projection v2
-      (#ledger-mod input) adds NUMBERS-ONLY rows: turn.usage/turn.result
+      (#ledger-mod input; Aegis M1: ONLY to mods granted the narrower
+      log.read:usage capability, named on the install card; log.read alone
+      gets v1 and turn.result as {hsid}; feedAccessOf/feedReaches; a
+      local-tier manifest may not combine log.read:usage with egress,
+      #manifest-loader validateManifest) adds NUMBERS-ONLY rows: turn.usage/turn.result
       {hsid, tokens, tokensIn/tokensOut/cacheRead/cacheWrite from the
       turn.result split the supervisor now records from Claude's
       result.usage, costMicros}, session.compacted {hsid, tokensBefore,

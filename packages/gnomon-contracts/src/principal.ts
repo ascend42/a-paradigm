@@ -134,6 +134,7 @@ export const CAPABILITY_FORMS = [
   'log.append:<ns>.*',
   'log.read',
   'log.read:sensitive',
+  'log.read:usage',
   'turn.text:attached-session',
   'ref.resolve',
   'resolver:<scheme>',

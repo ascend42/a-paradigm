@@ -167,7 +167,7 @@ components:
       isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey,
       peerKernelPrincipal. Also the closed-kind row vocabularies of §3.1/§15.4:
       REGISTRY_ROW_KINDS (kernel, link), GRANT_ROW_KINDS (incl. reserved
-      grant.voice-approvals, grant.peer), CAPABILITY_FORMS and
+      grant.voice-approvals, grant.peer), CAPABILITY_FORMS (incl. log.read:usage, the #mod-host usage feed grant, Aegis M1) and
       FIRST_PARTY_ONLY_CAPABILITIES (link:send, knowledge:federate),
       GRANT_DERIVED_ONLY_CAPABILITIES (voice.approve:<class>) — not
       clientApiId inputs. Serves #identity and #peer-link (G-ID-08 contract

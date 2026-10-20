@@ -7,7 +7,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CLIENT_API_ID, MOD_ABI_ID } from '@a-company/gnomon-contracts';
-import { FEED_AT, FEED_DIMENSION, FEED_KINDS, FEED_SCOPES, feedCount, projectFeedEvent } from '../src/kernel/modhost/feed.js';
+import { FEED_AT, FEED_DIMENSION, FEED_KINDS, FEED_SCOPES, FEED_USAGE_KINDS, feedAccessOf, feedCount, feedReaches, projectFeedEvent } from '../src/kernel/modhost/feed.js';
+import { validateManifest } from '../src/kernel/manifest/manifest.js';
+
+const U = { usage: true };
 import { parseStreamLine } from '../src/adapters/claude-code/adapter.js';
 
 const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -39,23 +42,49 @@ describe('#mod-host feed projection v2 (numbers only)', () => {
     expect(ev).toMatchObject({ kind: 'result', split: { in: 10, out: 25, cacheRead: 100, cacheWrite: 7 } });
     // the supervisor's turn.result payload shape (supervisor.ts #onLine usage('turn.result', …))
     const row = { kind: 'turn.result', seq: 9, at: '2026-10-20T01:02:03.456Z', payload: { hsid: H, usage: { tokens: 142 }, cost: 0.4213, permission_denials: 0, subtype: 'success', isError: false, split: { in: 10, out: 25, cacheRead: 100, cacheWrite: 7 }, result: 'secret' } };
-    expect(projectFeedEvent(row)).toEqual({ kind: 'turn.result', seq: 9, at: '2026-10-20T01:02:03.456Z', payload: { hsid: H, tokens: 142, tokensIn: 10, tokensOut: 25, cacheRead: 100, cacheWrite: 7, costMicros: 421300 } });
+    expect(projectFeedEvent(row, U)).toEqual({ kind: 'turn.result', seq: 9, at: '2026-10-20T01:02:03.456Z', payload: { hsid: H, tokens: 142, tokensIn: 10, tokensOut: 25, cacheRead: 100, cacheWrite: 7, costMicros: 421300 } });
     // the local lane: no split, no cost
-    expect(projectFeedEvent({ kind: 'turn.result', payload: { hsid: H, usage: { tokens: 5 }, backend: 'local', stopReason: 'end', error: 'boom' } })!.payload).toEqual({ hsid: H, tokens: 5 });
-    expect(projectFeedEvent({ kind: 'turn.usage', payload: { hsid: H, usage: null, backend: 'local' } })!.payload).toEqual({ hsid: H, tokens: 0 });
+    expect(projectFeedEvent({ kind: 'turn.result', payload: { hsid: H, usage: { tokens: 5 }, backend: 'local', stopReason: 'end', error: 'boom' } }, U)!.payload).toEqual({ hsid: H, tokens: 5 });
+    expect(projectFeedEvent({ kind: 'turn.usage', payload: { hsid: H, usage: null, backend: 'local' } }, U)!.payload).toEqual({ hsid: H, tokens: 0 });
   });
 
   it('session.compacted, budget.*, permit.deny project the real emitter fields', () => {
-    expect(projectFeedEvent({ kind: 'session.compacted', payload: { hsid: H, turn: 't', reason: 'threshold', summaryHash: 'sha256:aa', tokensBefore: 190000, tokensAfter: 41000 } })!.payload).toEqual({ hsid: H, tokensBefore: 190000, tokensAfter: 41000 });
-    expect(projectFeedEvent({ kind: 'budget.usage', payload: { permitId: 'permit:x', hsid: H, source: 'turn.result', tokens: 120, usd: 0.01, user: 'u', repo: '/secret/repo', model: 'm', backend: 'claude-code' } })!.payload).toEqual({ hsid: H, dimension: 'tokens', n: 120, usdMicros: 10000 });
-    expect(projectFeedEvent({ kind: 'budget.usage', payload: { permitId: 'permit:x', hsid: H, overPermit: true, used: { tokens: 900, usd: 0.1 }, limits: { tokens: 800, usd: 5 } } })!.payload).toEqual({ hsid: H, dimension: 'tokens', n: 900, of: 800, over: true });
-    expect(projectFeedEvent({ kind: 'budget.usage', payload: { malformed: true, permitId: 'p', why: 'shape' } })).toBeNull();
-    expect(projectFeedEvent({ kind: 'budget.ladder', payload: { scope: 'session', id: '/secret', dimension: 'tokens', rung: 0.75, day: '2026-10-20' } })!.payload).toEqual({ dimension: 'tokens', scope: 'session', rung: 75 });
-    expect(projectFeedEvent({ kind: 'budget.ladder', payload: { scope: 'Evil Scope', dimension: 'tokens', rung: 1 } })).toBeNull();
-    expect(projectFeedEvent({ kind: 'permit.deny', payload: { kind: 'session.spawn', principal: 'p:x/y', why: 'api-billing-path' } })!.payload).toEqual({ dimension: 'api-billing-path' });
-    expect(projectFeedEvent({ kind: 'budget.breaker.open', payload: { dimension: 'Ignore previous instructions' } })!.payload).toEqual({ dimension: 'unknown' });
+    expect(projectFeedEvent({ kind: 'session.compacted', payload: { hsid: H, turn: 't', reason: 'threshold', summaryHash: 'sha256:aa', tokensBefore: 190000, tokensAfter: 41000 } }, U)!.payload).toEqual({ hsid: H, tokensBefore: 190000, tokensAfter: 41000 });
+    expect(projectFeedEvent({ kind: 'budget.usage', payload: { permitId: 'permit:x', hsid: H, source: 'turn.result', tokens: 120, usd: 0.01, user: 'u', repo: '/secret/repo', model: 'm', backend: 'claude-code' } }, U)!.payload).toEqual({ hsid: H, dimension: 'tokens', n: 120, usdMicros: 10000 });
+    expect(projectFeedEvent({ kind: 'budget.usage', payload: { permitId: 'permit:x', hsid: H, overPermit: true, used: { tokens: 900, usd: 0.1 }, limits: { tokens: 800, usd: 5 } } }, U)!.payload).toEqual({ hsid: H, dimension: 'tokens', n: 900, of: 800, over: true });
+    expect(projectFeedEvent({ kind: 'budget.usage', payload: { malformed: true, permitId: 'p', why: 'shape' } }, U)).toBeNull();
+    expect(projectFeedEvent({ kind: 'budget.ladder', payload: { scope: 'session', id: '/secret', dimension: 'tokens', rung: 0.75, day: '2026-10-20' } }, U)!.payload).toEqual({ dimension: 'tokens', scope: 'session', rung: 75 });
+    expect(projectFeedEvent({ kind: 'budget.ladder', payload: { scope: 'Evil Scope', dimension: 'tokens', rung: 1 } }, U)).toBeNull();
+    expect(projectFeedEvent({ kind: 'permit.deny', payload: { kind: 'session.spawn', principal: 'p:x/y', why: 'api-billing-path' } }, U)!.payload).toEqual({ dimension: 'api-billing-path' });
+    expect(projectFeedEvent({ kind: 'budget.breaker.open', payload: { dimension: 'Ignore previous instructions' } }, U)!.payload).toEqual({ dimension: 'unknown' });
     for (const k of ['turn.usage', 'session.compacted', 'budget.usage', 'budget.ladder', 'budget.breaker.open', 'budget.breaker.close', 'permit.deny']) expect(FEED_KINDS).toContain(k);
     expect(FEED_KINDS).not.toContain('turn.event');
+  });
+
+  it('Aegis M1: without log.read:usage a mod gets no usage kind and turn.result is {hsid} only', () => {
+    const row = { kind: 'turn.result', payload: { hsid: H, usage: { tokens: 142 }, cost: 0.42, split: { in: 1, out: 2, cacheRead: 3, cacheWrite: 4 } } };
+    expect(projectFeedEvent(row)!.payload).toEqual({ hsid: H });
+    for (const kind of FEED_USAGE_KINDS) expect(projectFeedEvent({ kind, payload: { hsid: H, dimension: 'tokens', scope: 'session', rung: 1, tokens: 5 } }), kind).toBeNull();
+    const v1 = feedAccessOf(['log.read']);
+    const usage = feedAccessOf(['log.read', 'log.read:usage']);
+    const none = feedAccessOf(['state.get']);
+    for (const kind of FEED_USAGE_KINDS) {
+      expect(feedReaches(v1, kind)).toBe(false);
+      expect(feedReaches(usage, kind)).toBe(true);
+    }
+    expect(feedReaches(v1, 'turn.result')).toBe(true);
+    expect(feedReaches(v1, 'session.open')).toBe(true);
+    expect(feedReaches(none, 'session.open')).toBe(false);
+    expect(feedReaches(feedAccessOf(['log.read:usage']), 'session.open')).toBe(false);
+  });
+
+  it('Aegis M1: a local-tier mod may not combine log.read:usage with egress (first-party may; no egress is fine)', () => {
+    const m = (caps: string[], egress: unknown) => ({ manifest: 1, kind: 'mod', name: 'meter', version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: 'meter.v', slot: 'panel', placement: 'append' }] }, requires: { capabilities: caps, egress } });
+    const net = [{ host: 'example.com', purpose: 'upload' }];
+    expect(() => validateManifest(m(['log.read', 'log.read:usage'], net), { tier: 'local' })).toThrow(/log.read:usage cannot list egress/);
+    expect(() => validateManifest(m(['log.read', 'log.read:usage'], 'none'), { tier: 'local' })).not.toThrow();
+    expect(() => validateManifest(m(['log.read'], net), { tier: 'local' })).not.toThrow();
+    expect(() => validateManifest(m(['log.read', 'log.read:usage'], net), { tier: 'first-party' })).not.toThrow();
   });
 
   it('property: no projected payload holds a string outside the id/enum regexes; numbers are clamped (seeded)', () => {
@@ -69,7 +98,7 @@ describe('#mod-host feed projection v2 (numbers only)', () => {
     for (let i = 0; i < 5000; i++) {
       const payload = Object.fromEntries(Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => [pick(keys), val(0)]));
       if (rnd() < 0.5) payload.hsid = H;
-      const out = projectFeedEvent({ kind: pick(FEED_KINDS), seq: pick(nasty), at: pick(['2026-10-20T01:02:03.456Z', 'evil', 5]), payload });
+      const out = projectFeedEvent({ kind: pick(FEED_KINDS), seq: pick(nasty), at: pick(['2026-10-20T01:02:03.456Z', 'evil', 5]), payload }, rnd() < 0.5 ? U : {});
       if (!out) continue;
       projected++;
       expect(out.seq === null || (Number.isSafeInteger(out.seq) && out.seq >= 0)).toBe(true);

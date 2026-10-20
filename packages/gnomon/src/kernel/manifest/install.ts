@@ -66,7 +66,7 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
  */
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   'sha256:07a1cf2c8a61ba9f17681f6af4308b859ffcc35ab6f9f225a4946f5a915223e6', // packages/gnomon-mods/workshop 1.0.0
-  'sha256:ea715d0ed0c15c74fe7d872b6dda956ef0a4baddc1ea317b0299a1a085b1e67a', // packages/gnomon-mods/ledger 1.0.0 (#ledger-mod)
+  'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // packages/gnomon-mods/ledger 1.0.0 (#ledger-mod)
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();

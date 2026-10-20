@@ -11,5 +11,5 @@
       { "id": "ledger.sheet", "slot": "sidebar", "placement": "append", "fixtures": ["fixtures/compacted.json"] }
     ]
   },
-  "requires": { "capabilities": ["log.read"], "egress": "none" }
+  "requires": { "capabilities": ["log.read", "log.read:usage"], "egress": "none" }
 }

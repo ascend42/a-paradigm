@@ -168,7 +168,7 @@ describe('#ledger-mod through the host', () => {
   it('it echoes the current modAbiId and declares only log.read, egress none, two views in mod slots', () => {
     expect(fs.readFileSync(path.join(LEDGER, 'index.mjs'), 'utf8')).toContain(`const MOD_ABI_ID = '${MOD_ABI_ID}'`);
     const m = JSON.parse(fs.readFileSync(path.join(LEDGER, 'gnomon-manifest.json'), 'utf8'));
-    expect(m.requires).toEqual({ capabilities: ['log.read'], egress: 'none' });
+    expect(m.requires).toEqual({ capabilities: ['log.read', 'log.read:usage'], egress: 'none' });
     expect(m.provides.views.map((v: { id: string; slot: string; placement: string }) => `${v.id}@${v.slot}:${v.placement}`)).toEqual(['ledger.strip@composer.footer:append', 'ledger.sheet@sidebar:append']);
     expect(m.provides.tools).toBeUndefined();
     expect(m.provides.commands).toBeUndefined();
@@ -180,6 +180,7 @@ describe('#ledger-mod through the host', () => {
     const g = readGrants(w.home, w.auth);
     expect(g.trust.get(effectiveInstall(g, 'ledger')!.manifestHash)).toBe('first-party');
     expect(w.out).toContain('│ effects: none · egress: none');
+    expect(w.out).toContain('│ capabilities: log.read, log.read:usage · read paths: none'); // Aegis M1: the card names the usage capability
     expect(await w.host.start('ledger')).toMatchObject({ state: 'running', effects: [] });
     expect((w.host.status().views as unknown[])).toEqual([
       { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar', placement: 'append', dev: false },
