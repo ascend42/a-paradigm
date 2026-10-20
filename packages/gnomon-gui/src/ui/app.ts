@@ -24,9 +24,9 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
-import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -436,7 +436,10 @@ function schedule(what: Set<string>): void {
     if (w.has('sessions') || w.has('cards')) paintSessions();
     if (w.has('cards')) void paintStack(w);
     if (w.has('modes') || w.has('voice')) void refreshStatus();
-    if (w.has('voice-activity')) kickMeter();
+    if (w.has('voice-activity')) {
+      kickMeter();
+      watchSpeech();
+    }
     paintShuttle();
   });
 }
@@ -734,6 +737,37 @@ async function refreshStatus(): Promise<void> {
   paintSessions();
   syncDictationContext();
   foldVoiceReports();
+  syncSpeakPoll();
+}
+
+/* ── Stop speaking (T-2026-10-19-026; core/voice.ts) ───────────────── */
+let speakPoll: ReturnType<typeof setInterval> | null = null;
+let speakWatchUntil: number | null = null;
+/** A voice row arrived: re-read status for a short window so a reply that starts speaking shows its ⏹. */
+function watchSpeech(): void {
+  speakWatchUntil = Date.now() + SPEAK_WATCH_MS;
+  syncSpeakPoll();
+}
+/** The 300 ms status re-read runs only while the voice app is speaking (or within the watch window). */
+function syncSpeakPoll(): void {
+  const want = !!client && speakPollWanted(status, speakWatchUntil, Date.now());
+  if (want && !speakPoll) speakPoll = setInterval(() => void refreshStatus(), SPEAK_POLL_MS);
+  else if (!want && speakPoll) {
+    clearInterval(speakPoll);
+    speakPoll = null;
+  }
+}
+/** ⏹ / Esc: one log.append request.voice.client{op:'stop-speaking'} on a trusted gesture. */
+async function stopSpeaking(trusted: boolean): Promise<void> {
+  if (!trusted || !client || !stopSpeakingShown(status)) return;
+  $('voice-stop').hidden = true; // the press is seen at once; the next status re-read is the truth
+  try {
+    await client.call('log.append', stopSpeakingRequest());
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not stopped', true);
+  } finally {
+    await refreshStatus();
+  }
 }
 
 let lastNoticeAt: string | null | undefined;
@@ -881,6 +915,7 @@ function paintVoice(): void {
     bar.style.setProperty('--progress', String(cp.progress));
     bar.setAttribute('aria-valuenow', String(Math.round(cp.progress * 100)));
   }
+  $('voice-stop').hidden = !stopSpeakingShown(status);
   const act = $('voice-action');
   act.hidden = cp.action === null;
   act.dataset.action = cp.action ?? '';
@@ -1318,6 +1353,7 @@ function wire(): void {
     void setMode(b.dataset.mode as RunMode, 'session', e.isTrusted);
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
+  $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
     const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
     if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
@@ -1404,6 +1440,9 @@ function wire(): void {
       closeVoiceMenu();
     } else if (e.key === 'Escape' && !$('enrol-dialog').hidden) {
       void closeEnrol(e.isTrusted);
+    } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
+      e.preventDefault();
+      void stopSpeaking(e.isTrusted);
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new');
