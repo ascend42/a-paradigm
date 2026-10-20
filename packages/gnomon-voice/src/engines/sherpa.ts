@@ -102,7 +102,7 @@ export class SherpaStt implements SttEngine {
   }
 }
 
-/** Kokoro threads (T-2026-10-19-026 bench on an M4: see the spec §14 note) */
+/** Kokoro threads (T-2026-10-19-026 bench, Apple M4, warm: RTF 0.71/0.69/0.68 at 2/4/6 threads, speed 1.0; see the spec §14.4.1 note) */
 export const TTS_THREADS = 4;
 /** Kokoro speed (1.0 = the voice's natural rate) */
 export const TTS_SPEED = 1.0;
