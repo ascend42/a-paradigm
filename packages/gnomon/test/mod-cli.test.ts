@@ -428,3 +428,52 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     expect(await runModCommand(['list', '--home', 'rel'], t.io)).toBe(64);
   });
 });
+
+describe('Aegis S0b M1: COLLISION against the user MCP servers, wired at the call sites', () => {
+  const withMcp = (t: ReturnType<typeof setup>): string => {
+    const src = t.copy();
+    const mf = path.join(src, 'gnomon-manifest.json');
+    const m = JSON.parse(fs.readFileSync(mf, 'utf8'));
+    m.provides = { ...(m.provides ?? {}), mcp: [{ command: '/usr/local/bin/hello-mcp' }] };
+    fs.writeFileSync(mf, JSON.stringify(m, null, 2));
+    return src;
+  };
+  const userHomeWith = (t: ReturnType<typeof setup>, servers: string[], where: 'user' | 'local' = 'user'): string => {
+    const uh = fs.mkdtempSync(path.join(t.root, 'uh-'));
+    const map = Object.fromEntries(servers.map((s) => [s, { command: 'x' }]));
+    fs.writeFileSync(path.join(uh, '.claude.json'), JSON.stringify(where === 'user' ? { mcpServers: map } : { projects: { '/some/repo': { mcpServers: map } } }));
+    return uh;
+  };
+
+  it('gnomon mod install refuses COLLISION when ~/.claude.json (user or local scope) or the project .mcp.json has the derived name', async () => {
+    for (const where of ['user', 'local'] as const) {
+      const t = setup();
+      const code = await runModCommand(['install', withMcp(t), '--home', t.home], t.io, { trust: t.auth, env: {}, userHome: userHomeWith(t, ['gm_example_hello'], where), cwd: t.root });
+      expect(code, where).toBe(1);
+      expect(t.errText()).toContain('COLLISION');
+      expect(pendingStaged(t.home)).toEqual([]);
+    }
+    const t = setup();
+    const repo = fs.mkdtempSync(path.join(t.root, 'repo-'));
+    fs.writeFileSync(path.join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { gm_example_hello: { command: 'x' } } }));
+    expect(await runModCommand(['install', withMcp(t), '--home', t.home], t.io, { trust: t.auth, env: {}, userHome: userHomeWith(t, []), cwd: repo })).toBe(1);
+    // no clash: staged
+    const ok = setup();
+    expect(await runModCommand(['install', withMcp(ok), '--home', ok.home], ok.io, { trust: ok.auth, env: {}, userHome: userHomeWith(ok, ['github']), cwd: ok.root })).toBe(0);
+  });
+
+  it('the pickup re-checks at decide: a server added to ~/.claude.json after staging refuses the install', async () => {
+    const t = setup();
+    const uh = userHomeWith(t, []);
+    expect(await runModCommand(['install', withMcp(t), '--home', t.home], t.io, { trust: t.auth, env: {}, userHome: uh, cwd: t.root })).toBe(0);
+    const { cardId } = pendingStaged(t.home)[0]!;
+    const b = brokerRig(t.auth);
+    const p = new StagedCardPickup({ home: t.home, broker: b.broker, authority: t.auth, host: fakeHost(), userHome: uh });
+    await p.scan();
+    const card = b.broker.card(cardId)!;
+    fs.writeFileSync(path.join(uh, '.claude.json'), JSON.stringify({ mcpServers: { gm_example_hello: { command: 'x' } } }));
+    await b.broker.approve(H, { cardId, decision: 'install', decisionSig: b.sig(cardId, 'install', card.contentHash) }).catch(() => undefined);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeUndefined();
+    p.stop();
+  });
+});

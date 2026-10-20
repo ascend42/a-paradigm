@@ -80,6 +80,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
+import os from 'node:os';
 import * as path from 'node:path';
 import { isModId, MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
 import { ownsModKind } from '../manifest/mod-kind.js';
@@ -89,6 +90,7 @@ import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import type { TrackInput } from '../lifecycle/children.js';
 import { effectiveInstall, readGrants } from '../manifest/grants.js';
 import { loadMod } from '../manifest/install.js';
+import { userMcpServerNames } from '../manifest/user-mcp.js';
 import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { noEvents, type ManifestEventSink } from '../manifest/refusal.js';
 import { checkEgressHost } from '../manifest/egress.js';
@@ -461,7 +463,7 @@ export class ModHost {
       this.#paused.set(name, p);
       return p;
     }
-    const loaded = loadMod({ home: this.#o.home, name, trust: this.#o.trust, emit: this.#emit, ...(this.#o.kernelPrincipal ? { kernelPrincipal: this.#o.kernelPrincipal } : {}) });
+    const loaded = loadMod({ home: this.#o.home, name, trust: this.#o.trust, emit: this.#emit, userMcpServers: userMcpServerNames({ userHome: this.#o.userHome ?? os.homedir() }), ...(this.#o.kernelPrincipal ? { kernelPrincipal: this.#o.kernelPrincipal } : {}) });
     if (loaded.state === 'paused') {
       this.#unwatch(name);
       const p = { state: 'paused' as const, name, why: 'changed' as const, cardId: loaded.cardId, files: loaded.files };

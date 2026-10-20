@@ -34,6 +34,7 @@
  * request) and, for uninstall, the root-key presence on the card.
  */
 import * as fs from 'node:fs';
+import os from 'node:os';
 import * as path from 'node:path';
 import { HSID_PATTERN, isModId } from '@a-company/gnomon-contracts';
 import { RootVerifier } from '../kernel/identity/root-authority.js';
@@ -44,6 +45,7 @@ import { resolveGnomonHome } from '../kernel/lifecycle/home.js';
 import { effectiveInstall, readGrants } from '../kernel/manifest/grants.js';
 import { rederiveInstallDetail, stageInstall } from '../kernel/manifest/install.js';
 import { ManifestRefusal } from '../kernel/manifest/refusal.js';
+import { userMcpServerNames } from '../kernel/manifest/user-mcp.js';
 import { modDir } from '../kernel/manifest/snapshot.js';
 import { isUserPaused, modNames, pendingStaged, requestStart, writePause, requestUninstall, uninstallRequested } from '../kernel/modhost/control.js';
 import { GNOMON_VERSION } from '../version.js';
@@ -85,6 +87,10 @@ export interface ModCliDeps {
   trust?: RowVerifier;
   env?: NodeJS.ProcessEnv;
   now?: () => Date;
+  /** the user home whose .claude.json MCP servers a mod's derived server name may not collide with (default os.homedir()) */
+  userHome?: string;
+  /** the project whose .mcp.json is checked too (default the working directory) */
+  cwd?: string;
 }
 
 /** The root that signs this home's grant table, read from the home (never asserted by the caller). */
@@ -188,6 +194,8 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
           ...(hsid && HSID_PATTERN.test(hsid) ? { hsid } : {}),
           attended: !hsid,
           trust,
+          // Aegis S0b M1: COLLISION against the user's MCP servers (user + local scope, and this project's .mcp.json)
+          userMcpServers: userMcpServerNames({ userHome: deps.userHome ?? os.homedir(), repo: deps.cwd ?? process.cwd() }),
           ...(deps.now ? { now: deps.now() } : {}),
         });
       } catch (err) {
