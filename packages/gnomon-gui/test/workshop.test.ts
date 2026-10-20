@@ -124,17 +124,17 @@ describe('S5 Workshop caps (core/render.ts renderCap)', () => {
 });
 
 describe('S5 Workshop region and placement', () => {
-  const W = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', dev: false };
+  const W = { name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar', dev: false };
   it('the Workshop sidebar view mounts in its own region; another sidebar view stays left-bottom', () => {
-    const v = modPanelsOf({ mods: { views: [W, { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar' }, { name: 'workshop', viewId: 'workshop.other', slot: 'sidebar' }] } });
-    expect(v.map((x) => `${x.name}/${x.viewId}:${x.region}`)).toEqual(['workshop/workshop.strip:workshop', 'ledger/ledger.sheet:left-bottom', 'workshop/workshop.other:left-bottom']);
-    expect(WORKSHOP_VIEW).toEqual({ name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar' });
+    const v = modPanelsOf({ mods: { views: [W, { name: 'gnomon.ledger', viewId: 'ledger.sheet', slot: 'sidebar' }, { name: 'gnomon.workshop', viewId: 'workshop.other', slot: 'sidebar' }] } });
+    expect(v.map((x) => `${x.name}/${x.viewId}:${x.region}`)).toEqual(['gnomon.workshop/workshop.strip:workshop', 'gnomon.ledger/ledger.sheet:left-bottom', 'gnomon.workshop/workshop.other:left-bottom']);
+    expect(WORKSHOP_VIEW).toEqual({ name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar' });
   });
   it('one quiet line when the Workshop is not running: not installed, or paused and why', () => {
     expect(workshopAbsence({ mods: { views: [W] } }, modPanelsOf({ mods: { views: [W] } }))).toBeNull();
     expect(workshopAbsence({}, [])).toBe('workshop not installed · gnomon mod install packages/gnomon-mods/workshop');
-    expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'workshop', why: 'user' }] } }, [])).toBe('workshop paused (user) · gnomon mod start workshop');
-    expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'workshop', why: '<b>x' }] } }, [])).toBe('workshop paused · gnomon mod start workshop');
+    expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user' }] } }, [])).toBe('workshop paused (user) · gnomon mod start gnomon.workshop');
+    expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'gnomon.workshop', why: '<b>x' }] } }, [])).toBe('workshop paused · gnomon mod start gnomon.workshop');
     // fidelity 2: install has no GUI request kind (modhost/control.ts): the key is shown, disabled, the command in title=
     expect(WORKSHOP_INSTALL_KEY.enabled).toBe(false);
     expect(WORKSHOP_INSTALL_KEY.title).toContain('gnomon mod install packages/gnomon-mods/workshop');
@@ -155,7 +155,7 @@ describe('S5 Workshop region and placement', () => {
       expect(el.text, place).toContain(PANEL_BUTTON_REFUSAL);
       expect(el.all().some((e) => e.tag === 'button'), place).toBe(false);
     }
-    const other = renderModFence({ doc: nsdoc }, { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar', region: 'left-bottom', dev: false }, { block }) as FEl;
+    const other = renderModFence({ doc: nsdoc }, { name: 'gnomon.ledger', viewId: 'ledger.sheet', slot: 'sidebar', region: 'left-bottom', dev: false }, { block }) as FEl;
     expect(other.text).not.toContain(PANEL_BUTTON_REFUSAL);
     const src = readFileSync(path.join(ROOT, 'src', 'core', 'mod-panels.ts'), 'utf8');
     expect(src).toMatch(/\(v\.region === 'right' \|\| v\.region === 'workshop'\) && holdsButton/);

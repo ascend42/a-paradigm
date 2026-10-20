@@ -148,6 +148,10 @@
     "model.probe",
     "model.repair",
     "neurons.event",
+    "offer.decided",
+    "offer.kept",
+    "offer.muted",
+    "offer.shown",
     "oracle.result",
     "oracle.run",
     "paradigm.doodle.exported",
@@ -164,8 +168,12 @@
     "request.grant.standing.revoke",
     "request.incident",
     "request.link.revoke",
+    "request.mod.install",
     "request.mode.set",
+    "request.offer.decide",
+    "request.offer.mute",
     "request.session.model",
+    "request.session.restart",
     "request.strictness.set",
     "request.voice.arm",
     "request.voice.narrow",
@@ -177,6 +185,7 @@
     "session.alias",
     "session.alias.rejected",
     "session.compacted",
+    "session.context.threshold",
     "session.drained",
     "session.exited",
     "session.idle",
@@ -297,6 +306,10 @@
     "link.scan.hit": "M1.1:P8-R9",
     "merge.ref.rewritten": "M1.1:P8-D86-D88",
     "merge.reverted": "M1.1:P8-D86-D88",
+    "offer.decided": "8.0:TD-2026-10-20-812",
+    "offer.kept": "8.0:TD-2026-10-20-812",
+    "offer.muted": "8.0:TD-2026-10-20-812",
+    "offer.shown": "8.0:TD-2026-10-20-812",
     "permit.reattributed": "8.0:P8-D98",
     "request.brief.send": "M1.1:P8-R9",
     "request.cowork.allow": "M1.1:P8-R9",
@@ -305,11 +318,16 @@
     "request.grant.standing.revoke": "8.0:TD-2026-10-20-086",
     "request.incident": "M1.1:P8-D86-D88",
     "request.link.revoke": "M1.1:P8-R9",
+    "request.mod.install": "8.0:TD-2026-10-20-812",
     "request.mode.set": "M1.1:P8-D86-D88",
+    "request.offer.decide": "8.0:TD-2026-10-20-812",
+    "request.offer.mute": "8.0:TD-2026-10-20-812",
     "request.session.model": "8.0:model-switch",
+    "request.session.restart": "8.0:TD-2026-10-20-812",
     "request.strictness.set": "M1.1:P8-D86-D88",
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
+    "session.context.threshold": "8.0:TD-2026-10-20-812",
     "session.drained": "8.0:P8-D98",
     "session.model": "8.0:model-switch",
     "verdict.incident": "M1.1:P8-D86-D88"
@@ -569,6 +587,60 @@
       "to",
       "permitId",
       "outcome"
+    ],
+    "offer.shown": [
+      "offerId",
+      "hsid",
+      "mod",
+      "kind",
+      "phase",
+      "title",
+      "contextIn",
+      "question",
+      "replyTurnId"
+    ],
+    "offer.decided": [
+      "offerId",
+      "hsid",
+      "decision"
+    ],
+    "offer.kept": [
+      "offerId",
+      "hsid",
+      "mod",
+      "tool"
+    ],
+    "request.offer.decide": [
+      "offerId",
+      "decision"
+    ],
+    "request.offer.mute": [
+      "mod",
+      "scope",
+      "hsid",
+      "muted"
+    ],
+    "offer.muted": [
+      "mod",
+      "repo",
+      "muted",
+      "hsid"
+    ],
+    "request.mod.install": [
+      "source",
+      "url",
+      "path",
+      "commit"
+    ],
+    "request.session.restart": [
+      "hsid",
+      "checkpointRef"
+    ],
+    "session.context.threshold": [
+      "hsid",
+      "usedTokens",
+      "windowTokens",
+      "ratio"
     ]
   },
   "x-gnomon-compaction-reasons": [

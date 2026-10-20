@@ -14,7 +14,7 @@
  * `reason` (strict refusal:v1 validation checks `data.reason` against that enum). Adding these codes to REFUSAL_REASONS is a batch
  * candidate for the next clientApiId move (reported in the M1.5 hand-off).
  */
-import { refuse, RefusedError, type RefusalCode, type RefusalGate } from '@a-company/gnomon-contracts';
+import { MOD_REFUSAL_ROUTES, refuse, RefusedError, type RefusalCode, type RefusalGate } from '@a-company/gnomon-contracts';
 
 /** Manifest refusal codes (kernel-internal; `manifest.refuse{code}` and `refusal.data.manifestCode`). */
 export const MANIFEST_REFUSAL_CODES = [
@@ -32,6 +32,11 @@ export const MANIFEST_REFUSAL_CODES = [
   'INTEGRITY', // a pinned snapshot no longer hashes to its packageHash
   'GENERATED', // a generated-file target is not ours (never overwrite a user file)
   'NOT_INSTALLED', // no effective grant.install for the mod
+  // S0b (published in contracts MOD_REFUSAL_ROUTES, clientApiId desk.modId.refusals):
+  'FORMAT', // an unknown future manifest major, or a fresh format-1 install
+  'ENGINE', // engines.gnomon does not admit this kernel
+  'PUBLISHER', // a reserved / founder-brand / confusable / source-mismatched publisher, or a first-party name
+  'COLLISION', // the MCP server name is taken (an installed mod or the user's .mcp.json)
 ] as const;
 export type ManifestRefusalCode = (typeof MANIFEST_REFUSAL_CODES)[number];
 
@@ -50,6 +55,10 @@ const ROUTE: Record<ManifestRefusalCode, { code: RefusalCode; gate: RefusalGate 
   INTEGRITY: { code: 'INTEGRITY_BROKEN', gate: 'trust' },
   GENERATED: { code: 'FORBIDDEN', gate: 'usage' },
   NOT_INSTALLED: { code: 'NOT_FOUND', gate: 'usage' },
+  FORMAT: MOD_REFUSAL_ROUTES.FORMAT,
+  ENGINE: MOD_REFUSAL_ROUTES.ENGINE,
+  PUBLISHER: MOD_REFUSAL_ROUTES.PUBLISHER,
+  COLLISION: MOD_REFUSAL_ROUTES.COLLISION,
 };
 
 export class ManifestRefusal extends RefusedError {

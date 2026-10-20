@@ -21,19 +21,19 @@
  * `approve` is never proxied; a verb whose §5 mod cell is ✗ is refused.
  */
 import { VERBS } from '@a-company/gnomon-contracts';
-import type { ManifestV1, ToolEffect } from '../manifest/manifest.js';
+import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { ModRefusal } from './refusal.js';
 
 export type CallContext = { kind: 'tool'; tool: string; hsid?: string } | { kind: 'command' } | { kind: 'view' } | { kind: 'idle' };
 
-export function declaredEffects(m: ManifestV1): Set<ToolEffect> {
+export function declaredEffects(m: ManifestV2): Set<ToolEffect> {
   const out = new Set<ToolEffect>();
   for (const t of m.provides?.tools ?? []) for (const e of t.effects) out.add(e);
   return out;
 }
 
 /** The effects in force for a call context (∩ the dev cap). */
-export function effectsFor(m: ManifestV1, ctx: CallContext, dev: boolean): Set<ToolEffect> {
+export function effectsFor(m: ManifestV2, ctx: CallContext, dev: boolean): Set<ToolEffect> {
   let set: Set<ToolEffect>;
   if (ctx.kind === 'tool') set = new Set(m.provides?.tools?.find((t) => t.name === ctx.tool)?.effects ?? []);
   else if (ctx.kind === 'command') set = declaredEffects(m);

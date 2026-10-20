@@ -10,7 +10,7 @@ import path from 'node:path';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
-import { appendGrantRow, MANIFEST_FILE, readStaged, removeTree, stageInstall, type ManifestV1 } from '../src/kernel/manifest/index.js';
+import { appendGrantRow, MANIFEST_FILE, readStaged, removeTree, stageInstall, type ManifestV2 } from '../src/kernel/manifest/index.js';
 import { installPresenceBinding } from '../src/kernel/manifest/install.js';
 import { createModHostForTest, decideInstallCard, mintTestPresence } from '../src/kernel/testing.js';
 import type { ModHostOptions, ModHostSeams } from '../src/kernel/modhost/host.js';
@@ -33,7 +33,7 @@ const run = async (input, api) => {
   if (input.op === 'state.set') return attempt(() => api.state.set('k', input.value ?? 1));
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
-  if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.probe.done' })));
+  if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.acme.probe.done' })));
   if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
   if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
   if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
@@ -63,10 +63,11 @@ serveMod({
 });
 `;
 
-export function probeManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
+export function probeManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
   return {
-    manifest: 1,
+    manifest: 2,
     kind: 'mod',
+    publisher: 'acme',
     name: 'probe',
     version: '1.0.0',
     abi: 'mod-abi:v1',
@@ -79,9 +80,9 @@ export function probeManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
       ],
       views: [{ id: 'probe.view', slot: 'panel', placement: 'append' }],
       commands: [{ id: 'probe.who', title: 'Who acted' }],
-      events: ['modns.probe.done'],
+      events: ['modns.acme.probe.done'],
     },
-    requires: { capabilities: ['log.append:modns.probe.*'], egress: [{ host: 'api.example.com', purpose: 'test' }] },
+    requires: { capabilities: ['log.append:modns.acme.probe.*'], egress: [{ host: 'api.example.com', purpose: 'test' }] },
     ...over,
   };
 }
@@ -118,7 +119,7 @@ export function install(r: Rig, folder: string, opts: { via?: 'package' | 'linke
   const bind = installPresenceBinding(st.cardId, readStaged(r.home, st.record.detail.name, st.cardId)!.card.contentHash, 'install');
   decideInstallCard(r.home, st.record.detail.name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
   const d = st.record.detail;
-  appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: d.manifestHash, capabilities: ['log.append:modns.probe.*', 'log.append:modns.hello.*'] });
+  appendGrantRow(r.home, r.auth, { kind: 'grant.capability', manifestHash: d.manifestHash, capabilities: ['log.append:modns.acme.probe.*', 'log.append:modns.example.hello.*'] });
   if (opts.egress) appendGrantRow(r.home, r.auth, { kind: 'grant.egress', manifestHash: d.manifestHash, hosts: opts.egress });
   return { manifestHash: d.manifestHash, packageHash: d.packageHash };
 }
@@ -142,11 +143,13 @@ serveMod({
 `;
 
 /** Install (stage + decide the card, the human path) a stub mod `name` requiring `capabilities`; no egress. */
-export function installStub(r: Rig, name: string, capabilities: string[]): void {
-  const m = { manifest: 1, kind: 'mod', name, version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: `${name}.echo`, slot: 'sidebar', placement: 'append' }], commands: [{ id: `${name}.seen`, title: 'What it saw' }] }, requires: { capabilities, egress: 'none' } };
-  const src = writeModFolder(path.join(r.root, 'src', name), m, ECHO_SOURCE(name));
+export function installStub(r: Rig, id: string, capabilities: string[]): void {
+  // S0b: `id` is a mod id; a bare name installs as acme.<name>
+  const [publisher, name] = id.includes('.') ? (id.split('.') as [string, string]) : ['acme', id];
+  const m = { manifest: 2, kind: 'mod', publisher, name, version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: `${id}.echo`, slot: 'sidebar', placement: 'append' }], commands: [{ id: `${id}.seen`, title: 'What it saw' }] }, requires: { capabilities, egress: 'none' } };
+  const src = writeModFolder(path.join(r.root, 'src', name), m, ECHO_SOURCE(id));
   const st = stageInstall({ home: r.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth });
   if (st.state !== 'staged') throw new Error(`expected staged, got ${JSON.stringify(st)}`);
-  const bind = installPresenceBinding(st.cardId, readStaged(r.home, name, st.cardId)!.card.contentHash, 'install');
-  decideInstallCard(r.home, name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
+  const bind = installPresenceBinding(st.cardId, readStaged(r.home, st.record.detail.name, st.cardId)!.card.contentHash, 'install');
+  decideInstallCard(r.home, st.record.detail.name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
 }

@@ -22,31 +22,79 @@
  * their owners (M1.3, Move 4, M2.8). `grant.install` carries `name` in
  * addition to the §15.4 fields so the effective pin of a mod is a lookup, not
  * a scan of every snapshot directory (kernel-internal row; no client schema).
+ *
+ * S0b (mod ids): grant.install / grant.uninstall / grant.publisher are written as `grantRow:v2` rows whose `name` is
+ * the FULL mod id `<publisher>.<name>`; every other kind stays `grantRow:v1` (keyed by manifestHash). An older kernel
+ * fails closed on a v2 row (its reader refuses the unknown schemaVersion: the mod simply does not load there).
+ * Legacy `grantRow:v1` install/uninstall rows (a bare name) are resolved at READ time, never rewritten, through the
+ * frozen alias table: `gnomon.<N>` only when N is one of LEGACY_ALIASES AND the row's grant.trust tier is first-party
+ * AND its packageHash is a historical first-party pin; anything else is `local.<N>`. The resolved row keeps the bare
+ * name as `legacyName` (its snapshot directory, pinDirKey). grant.publisher{publisher, host, namespace} is the TOFU
+ * binding of a non-GitHub publisher (the last row per publisher wins).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { GRANT_ROW_KINDS, isPlainObject, type GrantRowKind } from '@a-company/gnomon-contracts';
+import { GRANT_ROW_KINDS, isModId, isPlainObject, MANIFEST_FORMAT, parseGitSource, PUBLISHER_PATTERN, type GrantRowKind } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { checkEgressHost } from './egress.js';
+import { LEGACY_ALIASES } from './mod-kind.js';
 import { capabilityForm, TRUST_TIER_PATTERN, type TrustTier } from './manifest.js';
 import { ManifestRefusal } from './refusal.js';
 
 export const GRANTS_FILE = 'grants.jsonl';
 export const GRANT_ROW_SCHEMA = 'grantRow:v1' as const;
+/** S0b: the row schema of grant.install / grant.uninstall / grant.publisher (full mod ids). */
+export const GRANT_ROW_SCHEMA_V2 = 'grantRow:v2' as const;
+const V2_KINDS: readonly string[] = Object.freeze(['grant.install', 'grant.uninstall', 'grant.publisher']);
+const LEGACY_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+
+export { LEGACY_ALIASES, ownsModKind } from './mod-kind.js';
+/** packageHashes of the historical (format-1) first-party pins: an alias resolves to gnomon.<N> only from one of these. */
+export const HISTORICAL_FIRST_PARTY_PINS: ReadonlySet<string> = new Set<string>([
+  'sha256:3c09d9cb5d22c3e75773baf547456bc4b2a2b0bebdaff9d67baaad159ff06e1d', // workshop 1.0.0
+  'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // ledger 1.0.0
+  'sha256:be0cce015b2db126206973adddd899060b6a3e6ff28fd7e53d5d0842530cfd71', // paradigm-context 1.0.0
+]);
+/** Is format 1 still loadable (MANIFEST_FORMAT.accepted)? The alias table is only meaningful while it is. */
+export const FORMAT_1_SUPPORTED: boolean = MANIFEST_FORMAT.accepted.includes(1);
+
+/** The alias of a legacy bare name (S0b §4): the full mod id it resolves to. */
+export function aliasOf(legacyName: string, tier: TrustTier | undefined, packageHash: string): string {
+  return LEGACY_ALIASES.includes(legacyName) && tier === 'first-party' && HISTORICAL_FIRST_PARTY_PINS.has(packageHash) ? `gnomon.${legacyName}` : `local.${legacyName}`;
+}
+
+/** The snapshot directory key of a pin row: the legacy bare name for a resolved v1 row, else the mod id. */
+export function pinDirKey(row: { name: string; legacyName?: string }): string {
+  return row.legacyName ?? row.name;
+}
 const SHA = /^sha256:[0-9a-f]{64}$/;
 const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 
 export interface GrantInstallRow {
-  schemaVersion: typeof GRANT_ROW_SCHEMA;
+  schemaVersion: typeof GRANT_ROW_SCHEMA | typeof GRANT_ROW_SCHEMA_V2;
   kind: 'grant.install';
   createdAt: string;
+  /** the full mod id (v2 rows; a resolved v1 row carries its alias here) */
   name: string;
+  /** a resolved v1 row only: the bare legacy name (never written) */
+  legacyName?: string;
   manifestHash: string;
   packageHash: string;
   cardId: string;
-  source: 'package' | `linked:${string}`;
+  source: 'package' | `linked:${string}` | `git:${string}`;
+  /** a format-1 manifest: canonicalManifestHash of its upgraded V2 object (a mismatch at load re-cards) */
+  upgradedHash?: string;
   dev?: { until: string };
+}
+/** S0b: the TOFU binding of a non-GitHub publisher to (host, namespace). */
+export interface GrantPublisherRow {
+  schemaVersion: typeof GRANT_ROW_SCHEMA_V2;
+  kind: 'grant.publisher';
+  createdAt: string;
+  publisher: string;
+  host: string;
+  namespace: string;
 }
 export interface GrantCapabilityRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA;
@@ -82,15 +130,16 @@ export interface GrantBindRow {
 }
 /** M1.11 slice 3: a root-signed uninstall (decided on a root-class card); the effective pin is the LAST install/uninstall row naming the mod. */
 export interface GrantUninstallRow {
-  schemaVersion: typeof GRANT_ROW_SCHEMA;
+  schemaVersion: typeof GRANT_ROW_SCHEMA | typeof GRANT_ROW_SCHEMA_V2;
   kind: 'grant.uninstall';
   createdAt: string;
   name: string;
+  legacyName?: string;
   /** the pin it removes */
   packageHash: string;
   cardId: string;
 }
-export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow | GrantUninstallRow;
+export type GrantRow = GrantInstallRow | GrantCapabilityRow | GrantTrustRow | GrantEgressRow | GrantBindRow | GrantUninstallRow | GrantPublisherRow;
 /** What a writer passes: a grant row without schemaVersion (createdAt optional). */
 export type GrantRowInput = GrantRow extends infer R ? (R extends GrantRow ? Omit<R, 'schemaVersion' | 'createdAt'> & { createdAt?: string } : never) : never;
 
@@ -102,6 +151,9 @@ export interface ResolvedGrants {
   installs: GrantInstallRow[]; // file order
   /** grant.install and grant.uninstall rows in file order (effectiveInstall reads this) */
   pins: Array<GrantInstallRow | GrantUninstallRow>;
+  /** S0b: publisher → its TOFU (host, namespace) binding (last row wins) */
+  /** publisher → its newest accepted binding (Aegis S0b M6: per-publisher strictly increasing createdAt) */
+  publishers: Map<string, { host: string; namespace: string; createdAt?: string }>;
   other: Array<{ line: number; kind: GrantRowKind }>;
   rejected: Array<{ line: number; reason: string }>;
 }
@@ -114,19 +166,32 @@ const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) =>
 
 /** Row-shape check; null = valid. Never consults other rows. */
 export function checkGrantRow(row: unknown): string | null {
-  if (!isPlainObject(row) || row.schemaVersion !== GRANT_ROW_SCHEMA) return 'schema';
+  if (!isPlainObject(row) || (row.schemaVersion !== GRANT_ROW_SCHEMA && row.schemaVersion !== GRANT_ROW_SCHEMA_V2)) return 'schema';
   if (typeof row.kind !== 'string' || !(GRANT_ROW_KINDS as readonly string[]).includes(row.kind)) return 'kind';
+  const v2 = row.schemaVersion === GRANT_ROW_SCHEMA_V2;
+  // S0b: v2 only for the id-carrying kinds; grant.publisher only as v2
+  if (v2 !== V2_KINDS.includes(row.kind) && !(row.schemaVersion === GRANT_ROW_SCHEMA && (row.kind === 'grant.install' || row.kind === 'grant.uninstall'))) return 'schema';
   if (typeof row.createdAt !== 'string') return 'createdAt';
+  const nameOk = (n: unknown) => typeof n === 'string' && (v2 ? isModId(n) : LEGACY_NAME.test(n));
   switch (row.kind as GrantRowKind) {
     case 'grant.install': {
-      if (typeof row.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(row.name)) return 'name';
+      if (!nameOk(row.name)) return 'name';
       if (typeof row.manifestHash !== 'string' || !SHA.test(row.manifestHash)) return 'manifestHash';
       if (typeof row.packageHash !== 'string' || !SHA.test(row.packageHash)) return 'packageHash';
       if (typeof row.cardId !== 'string' || !CARD_ID.test(row.cardId)) return 'cardId';
-      if (row.source !== 'package' && !(typeof row.source === 'string' && /^linked:.+/.test(row.source))) return 'source';
+      const gitOk = v2 && typeof row.source === 'string' && parseGitSource(row.source) !== null;
+      if (row.source !== 'package' && !(typeof row.source === 'string' && /^linked:.+/.test(row.source)) && !gitOk) return 'source';
+      if (row.upgradedHash !== undefined && !(v2 && typeof row.upgradedHash === 'string' && SHA.test(row.upgradedHash))) return 'upgradedHash';
       if (row.dev !== undefined && !(isPlainObject(row.dev) && typeof row.dev.until === 'string')) return 'dev';
       return null;
     }
+    case 'grant.publisher':
+      if (typeof row.publisher !== 'string' || !PUBLISHER_PATTERN.test(row.publisher)) return 'publisher';
+      if (typeof row.host !== 'string' || !/^[a-z0-9.-]{1,253}$/.test(row.host)) return 'host';
+      // Aegis S0b M4: a github.com binding (written by a re-bind back to GitHub) names the owner, which is the publisher
+      if (row.host === 'github.com' && row.namespace !== row.publisher) return 'host';
+      if (typeof row.namespace !== 'string' || !/^[a-z0-9._/-]{1,512}$/.test(row.namespace)) return 'namespace';
+      return null;
     case 'grant.capability': {
       const subj = (typeof row.manifestHash === 'string' && SHA.test(row.manifestHash)) !== (typeof row.deviceId === 'string');
       if (!subj) return 'subject';
@@ -139,7 +204,7 @@ export function checkGrantRow(row: unknown): string | null {
       return null;
     }
     case 'grant.uninstall':
-      if (typeof row.name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(row.name)) return 'name';
+      if (!nameOk(row.name)) return 'name';
       if (typeof row.packageHash !== 'string' || !SHA.test(row.packageHash)) return 'packageHash';
       if (typeof row.cardId !== 'string' || !CARD_ID.test(row.cardId)) return 'cardId';
       return null;
@@ -172,7 +237,9 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
   } catch {
     text = '';
   }
-  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], pins: [], other: [], rejected: [] };
+  const out: ResolvedGrants = { capabilities: new Map(), trust: new Map(), egress: new Map(), binds: [], installs: [], pins: [], publishers: new Map(), other: [], rejected: [] };
+  // pin rows are resolved after every line is read: a legacy name's alias needs the grant.trust tier (S0b)
+  const pinLines: Array<{ line: number; row: GrantInstallRow | GrantUninstallRow }> = [];
   const egressLines = new Map<string, number[]>();
   // Aegis C1 (M1.11 slice 3): a pin row (install/uninstall) whose createdAt is not later than the newest pin
   // row already seen for that name is a REPLAY (an old row re-appended) and never resolves. Rollback and
@@ -205,14 +272,18 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     const row = rec.row as unknown as GrantRow | { kind: GrantRowKind };
     switch (row.kind) {
       case 'grant.install':
-        if (replayed(row as GrantInstallRow)) return void out.rejected.push({ line, reason: 'replay' });
-        out.installs.push(row as GrantInstallRow);
-        out.pins.push(row as GrantInstallRow);
-        break;
       case 'grant.uninstall':
-        if (replayed(row as GrantUninstallRow)) return void out.rejected.push({ line, reason: 'replay' });
-        out.pins.push(row as GrantUninstallRow);
+        pinLines.push({ line, row: { ...(row as GrantInstallRow | GrantUninstallRow) } });
         break;
+      case 'grant.publisher': {
+        const r = row as GrantPublisherRow;
+        // Aegis S0b M6: like pin rows, a binding not newer than the newest accepted one for that publisher is a replay
+        const t = Date.parse(r.createdAt);
+        const prev = out.publishers.get(r.publisher)?.createdAt;
+        if (!Number.isFinite(t) || (prev !== undefined && t <= Date.parse(prev))) return void out.rejected.push({ line, reason: 'replay' });
+        out.publishers.set(r.publisher, { host: r.host, namespace: r.namespace, createdAt: r.createdAt });
+        break;
+      }
       case 'grant.capability': {
         const r = row as GrantCapabilityRow;
         const key = r.manifestHash ?? `device:${r.deviceId}`;
@@ -242,6 +313,23 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
         out.other.push({ line, kind: row.kind });
     }
   });
+  // S0b: resolve legacy bare names through the frozen alias table, then the replay rule on the resolved ids
+  const legacyIds = new Map<string, string>(); // legacy name → id of its newest resolved install row
+  for (const { line, row } of pinLines) {
+    if (row.schemaVersion === GRANT_ROW_SCHEMA) {
+      const bare = row.name;
+      const id = row.kind === 'grant.install' ? aliasOf(bare, out.trust.get(row.manifestHash), row.packageHash) : (legacyIds.get(bare) ?? `local.${bare}`);
+      if (row.kind === 'grant.install') legacyIds.set(bare, id);
+      row.name = id;
+      row.legacyName = bare;
+    }
+    if (replayed(row)) {
+      out.rejected.push({ line, reason: 'replay' });
+      continue;
+    }
+    if (row.kind === 'grant.install') out.installs.push(row);
+    out.pins.push(row);
+  }
   // never egress together with knowledge:provide (§15.4): fail closed — drop the egress, surface the rows
   for (const [mh, lines] of egressLines) {
     if (out.capabilities.get(mh)?.capabilities.has('knowledge:provide')) {
@@ -272,7 +360,9 @@ export function newestPinMs(grants: ResolvedGrants, name: string): number | unde
 const isPin = (r: GrantRow): r is GrantInstallRow | GrantUninstallRow => r.kind === 'grant.install' || r.kind === 'grant.uninstall';
 
 export function appendGrantRow(home: string, authority: RootAuthority, input: GrantRowInput, now: Date = new Date()): GrantRow {
-  const row = { schemaVersion: GRANT_ROW_SCHEMA, ...input, createdAt: input.createdAt ?? now.toISOString() } as GrantRow;
+  // S0b: id-carrying kinds are v2 rows with the full mod id; never write a resolved row's legacyName
+  const { legacyName: _legacy, ...rest } = input as GrantRowInput & { legacyName?: string };
+  const row = { schemaVersion: V2_KINDS.includes(input.kind) ? GRANT_ROW_SCHEMA_V2 : GRANT_ROW_SCHEMA, ...rest, createdAt: input.createdAt ?? now.toISOString() } as GrantRow;
   if (isPin(row)) {
     // Aegis round 3: the reader rejects a pin row not newer than the last one for that mod (replay, C1). A clock step
     // back or two rows in one millisecond must never turn a legitimate pin into a "replay": createdAt is
@@ -280,6 +370,12 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
     const newest = newestPinMs(readGrants(home, authority), row.name);
     const t = Date.parse(row.createdAt);
     if (newest !== undefined && !(Number.isFinite(t) && t > newest)) row.createdAt = new Date(newest + 1).toISOString();
+  }
+  if (row.kind === 'grant.publisher') {
+    // Aegis S0b M6: the reader keeps only a strictly newer binding per publisher; never sign one it would reject
+    const prev = readGrants(home, authority).publishers.get(row.publisher)?.createdAt;
+    const t = Date.parse(row.createdAt);
+    if (prev !== undefined && !(Number.isFinite(t) && t > Date.parse(prev))) row.createdAt = new Date(Date.parse(prev) + 1).toISOString();
   }
   const bad = checkGrantRow(row);
   if (bad) {

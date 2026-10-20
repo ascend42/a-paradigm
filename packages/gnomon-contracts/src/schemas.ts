@@ -66,6 +66,7 @@ import {
   RUN_MODES,
 } from './card.js';
 import { CLIENT_NONCE_PATTERN_SOURCE, CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
+import { CONTEXT_SOURCES, OFFER_LIMITS, OFFER_PHASES, OFFER_REACHES, OFFER_SPEC_V1_KEYS, OFFER_TITLE_SCHEMA_PATTERN, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFERS_PER_MOD_MAX } from './offer.js';
 
 type Schema = Record<string, unknown>;
 const ID_BASE = 'https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/';
@@ -403,6 +404,36 @@ export const HELLO_V1_SCHEMA: Schema = deepFreeze({
   },
 });
 
+/* ── offer-spec:v1 (the Desk, TD-2026-10-20-812) ── */
+
+/** Single-line display text: the validator also refuses control, format and separator characters and edge whitespace. */
+const offerText = (max: number): Schema => ({ type: 'string', minLength: 1, maxLength: max, 'x-gnomon-single-line': true });
+const offerTokens = (max: number): Schema => arr(str(OFFER_TOKEN_PATTERN), { maxItems: max, uniqueItems: true });
+
+export const OFFER_SPEC_V1_SCHEMA: Schema = deepFreeze({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: `${ID_BASE}offer-spec.v1.schema.json`,
+  title: 'offer-spec:v1',
+  description:
+    'One playbook offer a mod manifest declares under provides.offers (the Desk, TD-2026-10-20-812). Structured fields only (A7). A model proposes it with one ```offer block {mod, kind, question} (offerBlockOf).',
+  'x-gnomon-max-per-mod': OFFERS_PER_MOD_MAX,
+  ...closedObj(
+    {
+      kind: str(OFFER_TOKEN_PATTERN),
+      phase: enumOf(OFFER_PHASES),
+      title: { ...offerText(OFFER_LIMITS.title), pattern: OFFER_TITLE_SCHEMA_PATTERN },
+      summary: offerText(OFFER_LIMITS.summary),
+      contextIn: arr(enumOf(CONTEXT_SOURCES), { maxItems: OFFER_LIMITS.contextIn, uniqueItems: true }),
+      resultOut: str(OFFER_TOKEN_PATTERN),
+      reach: enumOf(OFFER_REACHES),
+      handoffTool: str(OFFER_TOOL_PATTERN),
+      related: offerTokens(OFFER_LIMITS.related),
+      restraint: offerText(OFFER_LIMITS.restraint),
+    },
+    OFFER_SPEC_V1_KEYS,
+  ),
+});
+
 /** File name → schema, for the generator and the fixed-point test. */
 export const CONTRACT_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze({
   'event.v1.schema.json': EVENT_V1_SCHEMA,
@@ -412,6 +443,7 @@ export const CONTRACT_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze(
   'gnomon-rpc.v1.hello.schema.json': HELLO_V1_SCHEMA,
   'review-finding.v1.schema.json': REVIEW_FINDING_V1_SCHEMA,
   'change-note.v1.schema.json': CHANGE_NOTE_V1_SCHEMA,
+  'offer-spec.v1.schema.json': OFFER_SPEC_V1_SCHEMA,
 });
 
 /** How a schema file is serialized on disk (2-space JSON + newline). */

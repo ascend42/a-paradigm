@@ -25,6 +25,8 @@ export interface InstallCardOptions {
   cardId: string;
   authority: RootAuthority;
   emit?: ManifestEventSink;
+  /** the user's MCP server names, read when the human decides (Aegis S0b M1: COLLISION re-checked at decide) */
+  userMcpServers?: () => readonly string[];
 }
 
 export async function raiseInstallCard(broker: ApprovalBroker, o: InstallCardOptions): Promise<CardV1> {
@@ -43,7 +45,7 @@ export async function raiseInstallCard(broker: ApprovalBroker, o: InstallCardOpt
     flags,
     presence: { purpose: 'mod.install', binding: (decision) => installPresenceBinding(o.cardId, detailHash, decision === 'install' ? 'install' : 'deny'), consumedByEffect: true },
     effect: (decision, ctx) => {
-      decideInstall(o.home, o.name, o.cardId, decision === 'install' ? 'install' : 'deny', { presenceToken: ctx.token, authority: o.authority, ...(o.emit ? { emit: o.emit } : {}) });
+      decideInstall(o.home, o.name, o.cardId, decision === 'install' ? 'install' : 'deny', { presenceToken: ctx.token, authority: o.authority, ...(o.emit ? { emit: o.emit } : {}), ...(o.userMcpServers ? { userMcpServers: o.userMcpServers() } : {}) });
     },
   });
 }

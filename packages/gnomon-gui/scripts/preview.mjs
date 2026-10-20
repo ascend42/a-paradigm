@@ -18,7 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const THEMES = ['day', 'night'];
 const HOST = '127.0.0.1';
 
-const opts = (entry, platform) => ({ entryPoints: [path.join(ROOT, 'src', 'preview', entry)], bundle: true, format: platform === 'browser' ? 'iife' : 'esm', platform, target: 'es2022', charset: 'utf8', write: false, logLevel: 'silent', legalComments: 'none' });
+const opts = (entry, platform) => ({ entryPoints: [path.join(ROOT, 'src', 'preview', entry)], bundle: true, format: platform === 'browser' ? 'iife' : 'esm', platform, target: 'es2022', charset: 'utf8', write: false, logLevel: 'silent', legalComments: 'none', define: { __GNOMON_PREVIEW__: 'true' } });
 
 /** The preview app.js (never written to dist/bundle). */
 export async function bundlePreview() {

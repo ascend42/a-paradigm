@@ -13,5 +13,6 @@ export * from './grants.js';
 export * from './layers.js';
 export * from './policy.js';
 export * from './generate.js';
+export * from './user-mcp.js';
 export { stageInstall, loadMod, linkedFolders, readStaged, STAGED_RECORD_SCHEMA } from './install.js';
 export type { InstallCardDetail, StagedRecord, StageOptions, StageResult, LoadResult, LoadOptions, InstallSource, DecideOptions } from './install.js';

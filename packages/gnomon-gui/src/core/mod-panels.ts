@@ -30,6 +30,8 @@
  *     debounced 250 ms, one render in flight (a row during a render queues
  *     exactly one more), never on a timer.
  */
+import { isModId } from '@a-company/gnomon-contracts';
+import { modLabel, publisherDisplayOf, type PublisherDisplay } from './mod-label.js';
 import { h, renderBlock, type MiniEl, type RenderCtx } from './render.js';
 
 /** The #mod-host feed kinds (packages/gnomon/src/kernel/modhost/feed.ts FEED_KINDS; test/mod-panels.test.ts holds them equal). */
@@ -57,13 +59,14 @@ export const MOD_FEED_KINDS: readonly string[] = Object.freeze([
 
 export type ModRegion = 'desk-footer' | 'left-bottom' | 'right' | 'workshop';
 /** S5.2: the one view the Layout places (the first-party Workshop strip). */
-export const WORKSHOP_VIEW = Object.freeze({ name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar' });
+export const WORKSHOP_VIEW = Object.freeze({ name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar' });
 /** The only mod slots the GUI renders, and where. */
 export const SLOT_REGIONS: Readonly<Record<string, ModRegion>> = Object.freeze({ 'composer.footer': 'desk-footer', sidebar: 'left-bottom', panel: 'right' });
 export const MOD_PANEL_DEBOUNCE_MS = 250;
 export const MAX_MOD_PANELS = 16;
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name> (contracts isModId). */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const VIEW_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 
 export interface ModPanelView {
@@ -72,6 +75,8 @@ export interface ModPanelView {
   slot: string;
   region: ModRegion;
   dev: boolean;
+  /** Aegis S0b L1: status.mods.publishers[name] (null when absent or malformed) */
+  publisherDisplay?: PublisherDisplay | null;
 }
 
 /** The mod views to show, from status.mods.views (malformed entries and slots with no region are dropped; bounded). */
@@ -87,7 +92,7 @@ export function modPanelsOf(status: unknown): ModPanelView[] {
     const isWorkshop = name === WORKSHOP_VIEW.name && viewId === WORKSHOP_VIEW.viewId && slot === WORKSHOP_VIEW.slot;
     const region = isWorkshop ? 'workshop' : Object.hasOwn(SLOT_REGIONS, slot) ? SLOT_REGIONS[slot]! : null;
     if (!region) continue;
-    out.push({ name, viewId, slot, region, dev: dev === true });
+    out.push({ name, viewId, slot, region, dev: dev === true, publisherDisplay: publisherDisplayOf(status, name) });
     if (out.length >= MAX_MOD_PANELS) break;
   }
   return out;
@@ -101,7 +106,7 @@ export function workshopAbsence(status: unknown, views: readonly ModPanelView[])
   const p = Array.isArray(paused) ? paused.find((x) => x && typeof x === 'object' && (x as { name?: unknown }).name === WORKSHOP_VIEW.name) : null;
   if (p) {
     const why = (p as { why?: unknown }).why;
-    return `workshop paused${typeof why === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(why) ? ` (${why})` : ''} · gnomon mod start workshop`;
+    return `workshop paused${typeof why === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(why) ? ` (${why})` : ''} · gnomon mod start gnomon.workshop`;
   }
   return WORKSHOP_NOT_INSTALLED;
 }
@@ -128,7 +133,7 @@ export function panelsIn(views: readonly ModPanelView[], region: ModRegion): Mod
 
 /** The fence label: always `mod:<name>` (the kernel's label is checked against it, never trusted over it). */
 export function fenceLabel(name: string): string {
-  return `mod:${name}`;
+  return `mod:${modLabel(name)}`;
 }
 
 /** Whether a live row should re-render the panels. */
@@ -168,7 +173,7 @@ export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?
     doc,
     'section',
     { class: `mod-fence mod-region-${v.region}`, role: 'group', 'aria-label': `${fenceLabel(v.name)} ${v.viewId}`, 'data-mod': v.name, 'data-view': v.viewId },
-    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, fenceLabel(v.name)), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
+    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, `mod:${modLabel(v.name, v.publisherDisplay)}`), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
     h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true }, result?.block ?? null)),
   );
 }

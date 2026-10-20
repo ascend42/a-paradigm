@@ -33,11 +33,11 @@ afterEach(async () => {
 async function started(opts: { linked?: boolean; egress?: string[] } = {}) {
   const r = rig();
   cleanups.push(r.cleanup);
-  const folder = writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest());
+  const folder = writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest());
   install(r, folder, { via: opts.linked ? 'linked' : 'package', egress: opts.egress ?? ['api.example.com'] });
   const { h } = host(r, { launcher: unsandboxedModLauncher });
   cleanups.push(() => h.stopAll());
-  const s = await h.start('probe');
+  const s = await h.start('acme.probe');
   return { r, h, s, folder };
 }
 
@@ -59,28 +59,28 @@ const kinds = (r: Rig) => r.events.map((e) => e.kind);
 describe('mod-abi:v1 lifecycle (§12.3, G-MOD-01)', () => {
   it('starts from the pinned snapshot, negotiates init with this modAbiId, logs mod.sandbox and mod.health', async () => {
     const { r, h, s } = await started();
-    expect(s).toMatchObject({ state: 'running', name: 'probe', sandbox: 'none' });
+    expect(s).toMatchObject({ state: 'running', name: 'acme.probe', sandbox: 'none' });
     expect(MOD_ABI_ID).toMatch(/^sha256:/);
     expect(kinds(r)).toEqual(expect.arrayContaining(['manifest.load', 'mod.sandbox', 'mod.health']));
-    expect(await h.health('probe')).toBe(true);
-    await h.stop('probe', 'test');
-    expect(r.events.find((e) => e.kind === 'mod.stopped')?.payload).toMatchObject({ name: 'probe', reason: 'test' });
+    expect(await h.health('acme.probe')).toBe(true);
+    await h.stop('acme.probe', 'test');
+    expect(r.events.find((e) => e.kind === 'mod.stopped')?.payload).toMatchObject({ name: 'acme.probe', reason: 'test' });
     expect(h.running()).toEqual([]);
   });
 
   it('the example mod (packages/gnomon-mod-sdk/example/hello) renders, runs its command and keeps state', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    const folder = path.join(r.root, 'hello');
+    const folder = path.join(r.root, 'example.hello');
     fs.cpSync(EXAMPLE_MOD, folder, { recursive: true });
     writeModFolder(folder, JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8')), fs.readFileSync(path.join(EXAMPLE_MOD, 'index.mjs'), 'utf8'));
     install(r, folder);
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    await h.start('hello');
-    expect(await h.relayCommand({ name: 'hello', commandId: 'hello.bump', principal: 'p:abcdefgh/matt', connId: 'c1' })).toEqual({ count: 1 });
-    const v = await h.relayView({ name: 'hello', viewId: 'hello.panel', input: { name: 'matt' }, principal: 'p:abcdefgh/matt', connId: 'c1' });
-    expect(v.label).toBe('mod:hello');
+    await h.start('example.hello');
+    expect(await h.relayCommand({ name: 'example.hello', commandId: 'hello.bump', principal: 'p:abcdefgh/matt', connId: 'c1' })).toEqual({ count: 1 });
+    const v = await h.relayView({ name: 'example.hello', viewId: 'hello.panel', input: { name: 'matt' }, principal: 'p:abcdefgh/matt', connId: 'c1' });
+    expect(v.label).toBe('mod:example.hello');
     expect(JSON.stringify(v.block)).toContain('hello, matt');
   });
 });
@@ -88,26 +88,26 @@ describe('mod-abi:v1 lifecycle (§12.3, G-MOD-01)', () => {
 describe('declared effects at the RPC boundary (G-MOD-02; falsifier: a mod exceeds its declared effects)', () => {
   it('a read tool cannot state.set; a write tool can; refusals log mod.effect.refused', async () => {
     const { r, h } = await started();
-    expect(await h.callTool('probe', 'probe.read', { op: 'state.set' })).toMatchObject({ ok: false });
-    expect(r.events.find((e) => e.kind === 'mod.effect.refused')?.payload).toMatchObject({ name: 'probe', effect: 'write', method: 'state.set' });
-    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: true });
-    expect(await h.callTool('probe', 'probe.read', { op: 'state.get' })).toEqual({ ok: true, v: '2' });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'state.set' })).toMatchObject({ ok: false });
+    expect(r.events.find((e) => e.kind === 'mod.effect.refused')?.payload).toMatchObject({ name: 'acme.probe', effect: 'write', method: 'state.set' });
+    expect(await h.callTool('acme.probe', 'probe.write', {})).toMatchObject({ ok: true });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'state.get' })).toEqual({ ok: true, v: '2' });
   });
 
   it('approve is never proxied; log.append needs write; an undeclared tool/view/command is refused', async () => {
     const { r, h } = await started();
-    expect(await h.callTool('probe', 'probe.read', { op: 'approve' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'approve' })).toMatchObject({ ok: false });
     expect(r.events.filter((e) => e.kind === 'mod.effect.refused').map((e) => e.payload.effect)).toContain('approve');
-    expect(await h.callTool('probe', 'probe.read', { op: 'append' })).toMatchObject({ ok: false }); // write outside a read tool
-    expect((await refused(h.callTool('probe', 'probe.nope', {}))).modCode).toBe('UNDECLARED');
-    expect((await refused(h.render('probe', 'other.view', {}))).modCode).toBe('UNDECLARED');
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'append' })).toMatchObject({ ok: false }); // write outside a read tool
+    expect((await refused(h.callTool('acme.probe', 'probe.nope', {}))).modCode).toBe('UNDECLARED');
+    expect((await refused(h.render('acme.probe', 'other.view', {}))).modCode).toBe('UNDECLARED');
   });
 });
 
 describe('relays stamp relayedFor (§12.2/§12.3)', () => {
   it('the command receives the host-stamped principal/connId, never a client-chosen one', async () => {
     const { h } = await started();
-    const out = await h.relayCommand({ name: 'probe', commandId: 'probe.who', args: { relayedFor: { principal: 'p:evil/x', connId: 'z' } }, principal: 'p:abcdefgh/matt', connId: 'conn-7' });
+    const out = await h.relayCommand({ name: 'acme.probe', commandId: 'probe.who', args: { relayedFor: { principal: 'p:evil/x', connId: 'z' } }, principal: 'p:abcdefgh/matt', connId: 'conn-7' });
     expect(out).toEqual({ relayedFor: { principal: 'p:abcdefgh/matt', connId: 'conn-7' } });
   });
 });
@@ -115,12 +115,12 @@ describe('relays stamp relayedFor (§12.2/§12.3)', () => {
 describe('closed kit gate (§12.2)', () => {
   it('refuses non-kit nodes, unknown keys, oversize blocks and an Image without alt', async () => {
     const { h } = await started();
-    expect((await refused(h.render('probe', 'probe.view', { raw: { schemaVersion: 'display-block:v1', type: 'Html', html: '<script>' } }))).modCode).toBe('BLOCK');
+    expect((await refused(h.render('acme.probe', 'probe.view', { raw: { schemaVersion: 'display-block:v1', type: 'Html', html: '<script>' } }))).modCode).toBe('BLOCK');
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Text', text: 'x', onclick: 'y' }, 'm')).toThrow(ModRefusal);
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Image', blob: `sha256:${'a'.repeat(64)}`, alt: ' ', w: 1, h: 1 }, 'm')).toThrow(/alt/);
     expect(() => sanitizeModBlock({ schemaVersion: 'display-block:v1', type: 'Text', text: 'x'.repeat(300 * 1024) }, 'm')).toThrow(/exceeds/);
-    const ok = await h.render('probe', 'probe.view', {});
-    expect(ok).toMatchObject({ label: 'mod:probe', dev: false, block: { schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' } });
+    const ok = await h.render('acme.probe', 'probe.view', {});
+    expect(ok).toMatchObject({ label: 'mod:acme.probe', dev: false, block: { schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' } });
   });
   it('S5: a Text cap passes only as the closed five-field shape; unknown or out-of-range fields are refused', () => {
     const cap = { shape: 'floppy', hue: 5, filled: false, state: 'needs', label: '! gate-class' };
@@ -159,33 +159,33 @@ describe('closed kit gate (§12.2)', () => {
 describe('supervision (G-MOD-03, §12.3 cancel)', () => {
   it('a crashing mod never takes the host down and is restarted (cap 3 / 10 min)', async () => {
     const { r, h } = await started();
-    await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+    await refused(h.callTool('acme.probe', 'probe.read', { op: 'crash' }));
     await new Promise((res) => setTimeout(res, 800));
     expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.ok === false)).toBe(true);
-    expect(h.restarts('probe')).toBe(1);
-    expect(await h.callTool('probe', 'probe.read', { op: 'state.get' })).toMatchObject({ ok: true });
+    expect(h.restarts('acme.probe')).toBe(1);
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'state.get' })).toMatchObject({ ok: true });
   });
 
   it('a call past its timeout is cancelled, and an unhonoured cancel restarts the child', async () => {
     const { h } = await started();
-    const e = await refused(h.callTool('probe', 'probe.read', { op: 'hang' }, { timeoutMs: 300 }));
+    const e = await refused(h.callTool('acme.probe', 'probe.read', { op: 'hang' }, { timeoutMs: 300 }));
     expect(e.modCode).toBe('TIMEOUT');
     expect(e.detail.honoured).toBe(false);
-    expect(h.restarts('probe')).toBe(1);
-    expect(await h.health('probe')).toBe(true);
+    expect(h.restarts('acme.probe')).toBe(1);
+    expect(await h.health('acme.probe')).toBe(true);
   });
 });
 
 describe('the pin (G-MOD-05 / G-MOD-08; falsifier: a changed linked folder loads without a card)', () => {
   it('an edited linked folder pauses the mod on its next load and stages a re-approve card', async () => {
     const { r, h, folder } = await started({ linked: true });
-    await h.stop('probe');
+    await h.stop('acme.probe');
     fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited\n');
-    const s = await h.start('probe');
+    const s = await h.start('acme.probe');
     expect(s).toMatchObject({ state: 'paused', why: 'changed' });
     expect(s.state === 'paused' && s.cardId).toMatch(/^card:/);
     expect(kinds(r)).toContain('mod.paused');
-    expect((await refused(h.callTool('probe', 'probe.read', {}))).modCode).toBe('PAUSED');
+    expect((await refused(h.callTool('acme.probe', 'probe.read', {}))).modCode).toBe('PAUSED');
   });
 });
 
@@ -206,7 +206,7 @@ describe('egress proxy (§3.8, §15.4 grant.egress)', () => {
     await new Promise<void>((r) => target.listen(0, '127.0.0.1', () => r()));
     const tport = (target.address() as net.AddressInfo).port;
     let resolved = '93.184.216.34';
-    const p = new EgressProxy({ name: 'probe', hosts: new Set(['api.example.com']), emit: (_k, pl) => void emitted.push(pl), dial: { resolve: async () => resolved, connect: () => net.connect({ host: '127.0.0.1', port: tport }) } });
+    const p = new EgressProxy({ name: 'acme.probe', hosts: new Set(['api.example.com']), emit: (_k, pl) => void emitted.push(pl), dial: { resolve: async () => resolved, connect: () => net.connect({ host: '127.0.0.1', port: tport }) } });
     const port = await p.listen();
     cleanups.push(async () => {
       await p.close();
@@ -227,7 +227,7 @@ describe('egress proxy (§3.8, §15.4 grant.egress)', () => {
   it('a tool without `network` cannot open a tunnel even though the mod has a proxy', async () => {
     const { r, h, s } = await started();
     expect(s.state === 'running' && s.egressPort).toBeGreaterThan(0);
-    expect(await h.callTool('probe', 'probe.read', { op: 'egress', host: 'api.example.com' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'egress', host: 'api.example.com' })).toMatchObject({ ok: false });
     expect(r.events.find((e) => e.kind === 'mod.effect.refused' && e.payload.why === 'effect')).toBeTruthy();
   });
 });
@@ -244,50 +244,50 @@ describe('round 2 (Aegis F2, reviewer #5)', () => {
   it('F2: a tunnel opened in a network tool is dead when the next tool starts', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()), { egress: ['api.example.com'] });
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()), { egress: ['api.example.com'] });
     const { h } = host(r, { launcher: unsandboxedModLauncher, dial: await withTarget() });
     cleanups.push(() => h.stopAll());
-    await h.start('probe');
-    expect(await h.callTool('probe', 'probe.net', { op: 'hold', host: 'api.example.com' })).toEqual({ ok: true, v: 'held' });
+    await h.start('acme.probe');
+    expect(await h.callTool('acme.probe', 'probe.net', { op: 'hold', host: 'api.example.com' })).toEqual({ ok: true, v: 'held' });
     await new Promise((res) => setTimeout(res, 100));
-    expect(await h.callTool('probe', 'probe.read', { op: 'held' })).toEqual({ ok: true, v: 'true' });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'held' })).toEqual({ ok: true, v: 'true' });
   });
 
   it('kernel.call success path with a stub kernel: declared log.append in a write tool; session.send stamps the caller hsid and strips permitId', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const calls: unknown[] = [];
     const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: async (req) => (calls.push(req), { seq: 1 }) });
     cleanups.push(() => h.stopAll());
-    await h.start('probe');
-    expect(await h.callTool('probe', 'probe.write', { op: 'append' })).toEqual({ ok: true, v: '{"seq":1}' });
-    expect(calls[0]).toMatchObject({ verb: 'log.append', principal: expect.stringMatching(/\/mod-probe$/), params: { kind: 'modns.probe.done' } });
-    expect(await h.callTool('probe', 'probe.spend', { op: 'send' })).toMatchObject({ ok: false }); // no caller hsid
-    expect(await h.callTool('probe', 'probe.spend', { op: 'send', params: { hsid: 'other', content: [] } }, { hsid: 'hs-1' })).toMatchObject({ ok: false });
-    expect(await h.callTool('probe', 'probe.spend', { op: 'send', params: { content: [], permitId: 'mine' } }, { hsid: 'hs-1' })).toMatchObject({ ok: true });
+    await h.start('acme.probe');
+    expect(await h.callTool('acme.probe', 'probe.write', { op: 'append' })).toEqual({ ok: true, v: '{"seq":1}' });
+    expect(calls[0]).toMatchObject({ verb: 'log.append', principal: expect.stringMatching(/\/mod-acme.probe$/), params: { kind: 'modns.acme.probe.done' } });
+    expect(await h.callTool('acme.probe', 'probe.spend', { op: 'send' })).toMatchObject({ ok: false }); // no caller hsid
+    expect(await h.callTool('acme.probe', 'probe.spend', { op: 'send', params: { hsid: 'other', content: [] } }, { hsid: 'hs-1' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.spend', { op: 'send', params: { content: [], permitId: 'mine' } }, { hsid: 'hs-1' })).toMatchObject({ ok: true });
     expect(calls[1]).toMatchObject({ verb: 'session.send', hsid: 'hs-1', params: { hsid: 'hs-1' } });
     expect((calls[1] as { params: Record<string, unknown> }).params.permitId).toBeUndefined();
-    expect(await h.callTool('probe', 'probe.write', { op: 'send', params: {} }, { hsid: 'hs-1' })).toMatchObject({ ok: false }); // spend not declared there
+    expect(await h.callTool('acme.probe', 'probe.write', { op: 'send', params: {} }, { hsid: 'hs-1' })).toMatchObject({ ok: false }); // spend not declared there
   });
 
   it('dev mode caps effects at read; an expired dev period pauses the mod', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
-    const row = effectiveInstall(readGrants(r.home, r.auth), 'probe')!;
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
+    const row = effectiveInstall(readGrants(r.home, r.auth), 'acme.probe')!;
     const { schemaVersion: _s, createdAt: _c, ...rest } = row;
     appendGrantRow(r.home, r.auth, { ...rest, dev: { until: new Date(Date.now() + 3_600_000).toISOString() } });
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    const s = await h.start('probe');
+    const s = await h.start('acme.probe');
     expect(s).toMatchObject({ state: 'running', dev: true, effects: ['read'], egressPort: null });
-    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: false });
-    expect((await h.render('probe', 'probe.view', {})).dev).toBe(true);
-    await h.stop('probe');
+    expect(await h.callTool('acme.probe', 'probe.write', {})).toMatchObject({ ok: false });
+    expect((await h.render('acme.probe', 'probe.view', {})).dev).toBe(true);
+    await h.stop('acme.probe');
     const { h: later } = host(r, { launcher: unsandboxedModLauncher }, { now: () => Date.now() + 2 * 3_600_000 });
     cleanups.push(() => later.stopAll());
-    expect(await later.start('probe')).toMatchObject({ state: 'paused', why: 'dev-expired' });
+    expect(await later.start('acme.probe')).toMatchObject({ state: 'paused', why: 'dev-expired' });
     expect(kinds(r)).toContain('mod.dev.expired');
   });
 
@@ -295,10 +295,10 @@ describe('round 2 (Aegis F2, reviewer #5)', () => {
     const r = rig();
     cleanups.push(r.cleanup);
     const raw = `process.stdin.on('data', (b) => { for (const l of String(b).split('\\n').filter(Boolean)) { const m = JSON.parse(l); if (m.id !== undefined) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { abi: 'mod-abi:v1', features: [], modAbiId: 'sha256:${'0'.repeat(64)}' } }) + '\\n'); } });`;
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest(), raw));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest(), raw));
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    expect((await refused(h.start('probe'))).modCode).toBe('ABI');
+    expect((await refused(h.start('acme.probe'))).modCode).toBe('ABI');
     expect(h.running()).toEqual([]);
   });
 
@@ -306,21 +306,21 @@ describe('round 2 (Aegis F2, reviewer #5)', () => {
     const r = rig();
     cleanups.push(r.cleanup);
     const src = PROBE_SOURCE.replace("import { serveMod } from './gnomon-mod-sdk.mjs';", "import { serveMod } from './gnomon-mod-sdk.mjs';\nprocess.stdout.write('not json\\n' + 'x'.repeat(2 * 1024 * 1024) + '\\n[1]\\n');");
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest(), src));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest(), src));
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    await h.start('probe');
-    expect(await h.health('probe')).toBe(true);
-    expect(h.inspect('probe').protocolErrors).toBe(3);
+    await h.start('acme.probe');
+    expect(await h.health('acme.probe')).toBe(true);
+    expect(h.inspect('acme.probe').protocolErrors).toBe(3);
   });
 
   it('the restart cap: after 3 restarts in 10 min the mod stays down and mod.health{restart-cap} is logged', async () => {
     const { r, h } = await started();
     for (let i = 0; i < 4; i++) {
-      await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+      await refused(h.callTool('acme.probe', 'probe.read', { op: 'crash' }));
       await new Promise((res) => setTimeout(res, 700));
     }
-    expect(h.restarts('probe')).toBe(3);
+    expect(h.restarts('acme.probe')).toBe(3);
     expect(h.running()).toEqual([]);
     expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.why === 'restart-cap')).toBe(true);
   });
@@ -330,7 +330,7 @@ describe('round 3 (reviewer)', () => {
   it('a child that cannot be tracked is killed and the start refused CRASHED', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     let pid: number | undefined;
     const children = {
       track: async (i: { child: ChildProcess }) => {
@@ -340,7 +340,7 @@ describe('round 3 (reviewer)', () => {
       stop: async () => false,
     };
     const h = createModHostForTest({ home: r.home, trust: r.auth, children: children as never, emit: (kind, payload) => r.events.push({ kind, payload }) }, { launcher: unsandboxedModLauncher });
-    expect((await refused(h.start('probe'))).modCode).toBe('CRASHED');
+    expect((await refused(h.start('acme.probe'))).modCode).toBe('CRASHED');
     expect(h.running()).toEqual([]);
     await new Promise((res) => setTimeout(res, 200));
     expect(() => process.kill(pid!, 0)).toThrow();
@@ -349,9 +349,9 @@ describe('round 3 (reviewer)', () => {
   it('stopAll waits for an in-flight start: no child outlives it', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const { h, children } = host(r, { launcher: unsandboxedModLauncher });
-    const p = h.start('probe').catch((e: unknown) => e);
+    const p = h.start('acme.probe').catch((e: unknown) => e);
     await h.stopAll();
     await p;
     expect(h.running()).toEqual([]);
@@ -360,7 +360,7 @@ describe('round 3 (reviewer)', () => {
 
   it('a mod flooding state.get gets at most 8 requests in flight in the host (16 on the channel); the rest are refused BUSY', async () => {
     const { h } = await started();
-    const out = (await h.callTool('probe', 'probe.read', { op: 'flood' })) as { ok: number; busy: number };
+    const out = (await h.callTool('acme.probe', 'probe.read', { op: 'flood' })) as { ok: number; busy: number };
     expect(out.ok + out.busy).toBe(40);
     expect(out.busy).toBeGreaterThan(0);
     expect(out.ok).toBeGreaterThanOrEqual(8);
@@ -395,22 +395,22 @@ describe('the mod profile registry (G-WIN-05)', () => {
 describe('call-id binding (M1.11 slice 2, Aegis)', () => {
   it('a request echoing an ENDED call is refused CALL even when the call in force would allow it; mod.effect.refused{why:call-id}', async () => {
     const { r, h } = await started();
-    expect(await h.callTool('probe', 'probe.write', { op: 'keep' })).toEqual({ ok: true, v: 'kept' });
+    expect(await h.callTool('acme.probe', 'probe.write', { op: 'keep' })).toEqual({ ok: true, v: 'kept' });
     // the kept api echoes the write call's id; that call has ended, and a later write tool is in force
-    expect(await h.callTool('probe', 'probe.write', { op: 'stale' })).toMatchObject({ ok: false });
-    expect(await h.callTool('probe', 'probe.read', { op: 'stale.get' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.write', { op: 'stale' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'stale.get' })).toMatchObject({ ok: false });
     const refusedRows = r.events.filter((e) => e.kind === 'mod.effect.refused' && e.payload.why === 'call-id');
     expect(refusedRows.length).toBe(2);
-    expect(refusedRows[0]!.payload).toMatchObject({ name: 'probe', method: 'state.set', effect: 'call-id' });
+    expect(refusedRows[0]!.payload).toMatchObject({ name: 'acme.probe', method: 'state.set', effect: 'call-id' });
     // the live call's own id still works
-    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: true });
+    expect(await h.callTool('acme.probe', 'probe.write', {})).toMatchObject({ ok: true });
   });
 });
 
 describe('folder watch (G-MOD-08, slice 2)', () => {
   it('an edit to a RUNNING linked mod\'s folder stops it within the debounce and pauses it with a re-approve card', async () => {
     const { r, h, folder } = await started({ linked: true });
-    expect(h.watching()).toEqual(['probe']);
+    expect(h.watching()).toEqual(['acme.probe']);
     // FSEvents on a loaded CI runner can coalesce or drop the first event: edit again every 2 s, up to 15 s.
     // Security does not rest on the watch (every start re-hashes the folder); this checks the prompt stop.
     for (let i = 0; i < 150 && h.running().length; i++) {
@@ -421,7 +421,7 @@ describe('folder watch (G-MOD-08, slice 2)', () => {
     expect(h.running()).toEqual([]);
     expect(r.events.find((e) => e.kind === 'mod.stopped' && e.payload.reason === 'changed')).toBeTruthy();
     expect(kinds(r)).toContain('mod.paused');
-    expect(h.status()).toMatchObject({ paused: [expect.objectContaining({ name: 'probe', why: 'changed' })] });
+    expect(h.status()).toMatchObject({ paused: [expect.objectContaining({ name: 'acme.probe', why: 'changed' })] });
     expect(h.watching()).toEqual([]);
   });
 });
@@ -433,7 +433,7 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
     for (let i = 0; i < 11; i++) {
-      const e = await refused(h.admit(`ghost-${i % 2}`));
+      const e = await refused(h.admit(`acme.ghost-${i % 2}`));
       expect(e.modCode).toBe('NOT_INSTALLED');
       expect(e.refusal).toMatchObject({ code: 'NOT_FOUND', data: { modCode: 'NOT_INSTALLED', reason: 'not-found' } });
     }
@@ -446,39 +446,39 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
 
   it('a paused mod is answered from memory (no loadMod, no second card); a relay start counts against RESTART_CAP; DOWN until an operator start', async () => {
     const { r, h, folder } = await started({ linked: true });
-    await h.stop('probe');
+    await h.stop('acme.probe');
     fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited\n');
-    expect(await h.start('probe')).toMatchObject({ state: 'paused' });
+    expect(await h.start('acme.probe')).toMatchObject({ state: 'paused' });
     const staged = r.events.filter((e) => e.kind === 'manifest.staged').length;
-    for (let i = 0; i < 3; i++) expect((await refused(h.admit('probe'))).modCode).toBe('PAUSED');
+    for (let i = 0; i < 3; i++) expect((await refused(h.admit('acme.probe'))).modCode).toBe('PAUSED');
     expect(r.events.filter((e) => e.kind === 'manifest.staged').length).toBe(staged);
 
     const { h: h2 } = await started();
-    await h2.stop('probe');
-    await h2.admit('probe'); // a relay-triggered start
-    expect(h2.restarts('probe')).toBe(1);
+    await h2.stop('acme.probe');
+    await h2.admit('acme.probe'); // a relay-triggered start
+    expect(h2.restarts('acme.probe')).toBe(1);
     for (let i = 0; i < 2; i++) {
-      await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+      await refused(h2.callTool('acme.probe', 'probe.read', { op: 'crash' }));
       await new Promise((res) => setTimeout(res, 700));
     }
-    await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+    await refused(h2.callTool('acme.probe', 'probe.read', { op: 'crash' }));
     await new Promise((res) => setTimeout(res, 500));
     expect(h2.running()).toEqual([]);
-    const down = await refused(h2.admit('probe'));
+    const down = await refused(h2.admit('acme.probe'));
     expect(down.modCode).toBe('DOWN');
-    expect(h2.down()).toEqual(['probe']);
-    expect(await h2.start('probe')).toMatchObject({ state: 'running' }); // the operator path lifts it
+    expect(h2.down()).toEqual(['acme.probe']);
+    expect(await h2.start('acme.probe')).toMatchObject({ state: 'running' }); // the operator path lifts it
     expect(h2.down()).toEqual([]);
   });
 
   it('F2: a mod has at most 8 mod → host requests in flight in the host; the rest are refused BUSY', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: () => new Promise((res) => setTimeout(() => res({ ok: 1 }), 300)) });
     cleanups.push(() => h.stopAll());
-    await h.start('probe');
-    expect(await h.callTool('probe', 'probe.read', { op: 'kflood' })).toEqual({ ok: 8, busy: 12 });
+    await h.start('acme.probe');
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'kflood' })).toEqual({ ok: 8, busy: 12 });
   });
 
   it('I1: watching() tells the truth across a crash restart and the restart cap', async () => {
@@ -486,15 +486,15 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
     const until = async (f: () => boolean, ms = 20_000) => {
       for (let t = 0; t < ms && !f(); t += 50) await new Promise((res) => setTimeout(res, 50));
     };
-    expect(h.watching()).toEqual(['probe']);
-    await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
-    await until(() => h.restarts('probe') === 1 && h.running().length === 1 && h.watching().length === 1);
-    expect(h.running()).toEqual(['probe']);
-    expect(h.watching()).toEqual(['probe']); // re-armed by the successful restart
+    expect(h.watching()).toEqual(['acme.probe']);
+    await refused(h.callTool('acme.probe', 'probe.read', { op: 'crash' }));
+    await until(() => h.restarts('acme.probe') === 1 && h.running().length === 1 && h.watching().length === 1);
+    expect(h.running()).toEqual(['acme.probe']);
+    expect(h.watching()).toEqual(['acme.probe']); // re-armed by the successful restart
     for (let n = 2; n <= 4; n++) {
       await until(() => h.running().length === 1);
-      await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
-      await until(() => (n <= 3 ? h.restarts('probe') === n && h.running().length === 1 : h.down().includes('probe')));
+      await refused(h.callTool('acme.probe', 'probe.read', { op: 'crash' }));
+      await until(() => (n <= 3 ? h.restarts('acme.probe') === n && h.running().length === 1 : h.down().includes('acme.probe')));
     }
     expect(h.running()).toEqual([]);
     expect(h.watching()).toEqual([]);
@@ -504,13 +504,13 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
 describe('round 3 (Aegis R2-1, R2-2, low)', () => {
   it('R2-1: a 1000-request refusal loop writes at most 8 individual mod.effect.refused rows + 1 coalesced row', async () => {
     const { r, h } = await started();
-    expect(await h.callTool('probe', 'probe.read', { op: 'aloop', n: 1000 }, { timeoutMs: 20_000 })).toEqual({ refused: 1000 });
-    await h.stop('probe'); // stop flushes the fold
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'aloop', n: 1000 }, { timeoutMs: 20_000 })).toEqual({ refused: 1000 });
+    await h.stop('acme.probe'); // stop flushes the fold
     const rows = r.events.filter((e) => e.kind === 'mod.effect.refused');
     expect(rows.filter((e) => !e.payload.coalesced)).toHaveLength(8);
     const co = rows.filter((e) => e.payload.coalesced);
     expect(co).toHaveLength(1);
-    expect(co[0]!.payload).toMatchObject({ name: 'probe', count: 992, byKey: { 'approve||approve': 992 }, otherKeys: 0, distinct: 1 });
+    expect(co[0]!.payload).toMatchObject({ name: 'acme.probe', count: 992, byKey: { 'approve||approve': 992 }, otherKeys: 0, distinct: 1 });
   }, 30_000);
 
   it('R2-2: 10 000 rotating relay-miss names fold into one coalesced row under 4 KiB (16 keys + otherNames + distinct)', async () => {
@@ -518,7 +518,7 @@ describe('round 3 (Aegis R2-1, R2-2, low)', () => {
     cleanups.push(r.cleanup);
     const { h } = host(r, { launcher: unsandboxedModLauncher });
     cleanups.push(() => h.stopAll());
-    for (let i = 0; i < 10_000; i++) await h.admit(`n${i}`).catch(() => undefined);
+    for (let i = 0; i < 10_000; i++) await h.admit(`acme.n${i}`).catch(() => undefined);
     h.flushRelayMisses();
     const co = r.events.filter((e) => e.kind === 'manifest.refuse' && e.payload.coalesced);
     expect(co).toHaveLength(1);

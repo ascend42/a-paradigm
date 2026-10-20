@@ -35,7 +35,9 @@
  * this gate (dispatch.ts `requests`; broker/run-mode.ts), which validates it
  * and writes the KERNEL-signed request row itself. `request.session.model`
  * (8.0:model-switch) from the same human on the same connections goes to the
- * session port (SessionPort.model), which writes its request row. Every other caller and
+ * session port (SessionPort.model), which writes its request row. `request.offer.decide` and
+ * `request.offer.mute` (TD-2026-10-20-812) from the same human on the same connections go to
+ * #offer-router (requests.offer), which writes the request rows. Every other caller and
  * kind still lands here.
  *
  * So in M1.4 NO principal can append through the socket: every outcome is a
@@ -46,6 +48,7 @@
 import { KIND_PATTERN as EVENT_KIND_PATTERN, MODNS_KIND_PATTERN, kindOwner } from '@a-company/gnomon-contracts';
 import { RpcRefusal } from './rpc.js';
 import { modNameOf } from './log-read.js';
+import { ownsModKind } from '../manifest/mod-kind.js';
 
 /** §5's `request.*` append exception, human on a first-party human-class connection. */
 export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
@@ -59,6 +62,8 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.incident',
   'request.voice.arm',
   'request.session.model',
+  'request.offer.decide',
+  'request.offer.mute',
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);
@@ -97,7 +102,7 @@ export function refuseAppend(cls: AppendClass, principal: string | undefined, pa
   switch (cls) {
     case 'mod': {
       const name = modNameOf(principal);
-      if (name && isModns && kind.startsWith(`modns.${name}.`)) {
+      if (name && isModns && ownsModKind(name, kind)) {
         throw new RpcRefusal('ENGINE', 'not-implemented', 'a mod appends its own modns kinds with its manifest labels through the mod host; it lands with M1.11', { ...data, milestone: 'M1.11' });
       }
       throw new RpcRefusal('FORBIDDEN', 'modns-not-own', 'a mod appends only its own modns.<name>.* kinds (§5)', data);

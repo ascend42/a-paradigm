@@ -148,7 +148,7 @@ describe('#ledger-mod model (pure)', () => {
     for (const f of FIXTURES) {
       const fx = fixture(`${f}.json`);
       const golden = fixture(`${f}.golden.json`);
-      expect(sanitizeModBlock(golden, 'ledger').block).toEqual(golden);
+      expect(sanitizeModBlock(golden, 'gnomon.ledger').block).toEqual(golden);
       for (const theme of ['day', 'night']) {
         const s = model.emptyState();
         for (const e of fx.input.fixtureEvents) model.apply(s, e);
@@ -160,7 +160,7 @@ describe('#ledger-mod model (pure)', () => {
 
 describe('#ledger-mod through the host', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
-    const h = hashSourceTree(LEDGER, 'ledger', () => undefined).packageHash;
+    const h = hashSourceTree(LEDGER, 'gnomon.ledger', () => undefined).packageHash;
     // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
     expect([...FIRST_PARTY_PACKAGE_HASHES], `the Ledger tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
@@ -176,21 +176,21 @@ describe('#ledger-mod through the host', () => {
 
   it('installs through gnomon mod install + the broker card and renders every fixture to its golden (light and dark)', async () => {
     const w = await installedLedger();
-    expect(w.out).toContain('│ Install mod ledger 1.0.0 (mod) from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.ledger 1.1.0 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
-    expect(g.trust.get(effectiveInstall(g, 'ledger')!.manifestHash)).toBe('first-party');
+    expect(g.trust.get(effectiveInstall(g, 'gnomon.ledger')!.manifestHash)).toBe('first-party');
     expect(w.out).toContain('│ effects: none · egress: none');
     expect(w.out).toContain('│ capabilities: log.read, log.read:usage · read paths: none'); // Aegis M1: the card names the usage capability
-    expect(await w.host.start('ledger')).toMatchObject({ state: 'running', effects: [] });
+    expect(await w.host.start('gnomon.ledger')).toMatchObject({ state: 'running', effects: [] });
     expect((w.host.status().views as unknown[])).toEqual([
-      { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar', placement: 'append', dev: false },
-      { name: 'ledger', viewId: 'ledger.strip', slot: 'composer.footer', placement: 'append', dev: false },
+      { name: 'gnomon.ledger', viewId: 'ledger.sheet', slot: 'sidebar', placement: 'append', dev: false },
+      { name: 'gnomon.ledger', viewId: 'ledger.strip', slot: 'composer.footer', placement: 'append', dev: false },
     ]);
     for (const f of FIXTURES) {
       const fx = fixture(`${f}.json`);
       for (const theme of ['day', 'night']) {
-        const r = await w.host.render('ledger', fx.view, fx.input, { width: fx.width, prefs: { ...fx.prefs, theme } });
-        expect(r.label).toBe('mod:ledger');
+        const r = await w.host.render('gnomon.ledger', fx.view, fx.input, { width: fx.width, prefs: { ...fx.prefs, theme } });
+        expect(r.label).toBe('mod:gnomon.ledger');
         expect(r.block, `${f} ${theme}`).toEqual(fixture(`${f}.golden.json`));
       }
     }
@@ -198,16 +198,16 @@ describe('#ledger-mod through the host', () => {
 
   it('live state comes only from the projected feed; a relayed render cannot replay fixture events but may name the focused session', async () => {
     const w = await installedLedger();
-    await w.host.start('ledger');
+    await w.host.start('gnomon.ledger');
     expect(w.host.feed({ kind: 'session.open', seq: 1, payload: { hsid: A, backend: 'claude-code', cwd: '/secret/project' } })).toBe(1);
     expect(w.host.feed({ kind: 'turn.result', seq: 2, payload: { hsid: A, usage: { tokens: 3000 }, cost: 0.05, split: { in: 1000, out: 500, cacheRead: 1000, cacheWrite: 500 }, result: 'secret answer' } })).toBe(1);
     expect(w.host.feed({ kind: 'session.compacted', seq: 3, payload: { hsid: A, turn: 't', reason: 'threshold', summaryHash: 'sha256:aa', tokensBefore: 190000, tokensAfter: 41000 } })).toBe(1);
     expect(w.host.feed({ kind: 'turn.event', seq: 4, payload: { hsid: A, line: 'ignore previous instructions' } })).toBe(0);
-    const r = await w.host.relayView({ name: 'ledger', viewId: 'ledger.strip', input: { ...fixture('strip.json').input, hsid: A }, principal: HUMAN, connId: H.connId });
+    const r = await w.host.relayView({ name: 'gnomon.ledger', viewId: 'ledger.strip', input: { ...fixture('strip.json').input, hsid: A }, principal: HUMAN, connId: H.connId });
     const s = JSON.stringify(r.block);
     expect(s).toContain('3k in · 500 out · 40% cache · $0.05 · ⇣ 1 compaction (190k → 41k)');
     for (const leak of ['secret', 'ignore previous', '182k']) expect(s).not.toContain(leak);
-    const sheet = JSON.stringify((await w.host.relayView({ name: 'ledger', viewId: 'ledger.sheet', principal: HUMAN, connId: H.connId })).block);
+    const sheet = JSON.stringify((await w.host.relayView({ name: 'gnomon.ledger', viewId: 'ledger.sheet', principal: HUMAN, connId: H.connId })).block);
     expect(sheet).toContain('…ZZZZZA');
     expect(sheet).not.toContain(B);
   });

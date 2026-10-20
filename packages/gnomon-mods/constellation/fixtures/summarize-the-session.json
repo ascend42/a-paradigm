@@ -1,0 +1,3 @@
+{
+  "reply": "That closes the migration: the schema moved, the backfill ran clean and the old table is gone.\n\n```offer\n{\"mod\":\"gnomon.constellation\",\"kind\":\"summarize-the-session\",\"question\":\"Shall I write the session summary to Constellation?\"}\n```\n"
+}

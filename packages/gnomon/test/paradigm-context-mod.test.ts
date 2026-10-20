@@ -98,7 +98,7 @@ describe('#paradigm-context-mod model (pure)', () => {
     const chips = all.filter((n) => n.tone === 'chip').map((n) => n.text);
     expect(chips).toEqual(['#gnomon-voice', '#gui', '$voice-turn', '#ledger-mod', '#mod-host', '^repo-hook', '#workshop-mod']);
     for (const n of all) if (n.type === 'Text') expect([...String(n.text)].length).toBeLessThanOrEqual(64 + 1 + 10 + 1 + model.TITLE_MAX + 4);
-    expect(sanitizeModBlock(b, 'paradigm-context').flags).toEqual([]);
+    expect(sanitizeModBlock(b, 'gnomon.paradigm-context').flags).toEqual([]);
   });
 
   it('re-validates the slice: bad ids, oversize lists, a hue out of range, a non-symbol and a forged count are dropped or clamped', () => {
@@ -149,16 +149,16 @@ describe('#paradigm-context-mod model (pure)', () => {
 
 describe('#paradigm-context-mod through the host', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
-    const h = hashSourceTree(CTX, 'paradigm-context', () => undefined).packageHash;
+    const h = hashSourceTree(CTX, 'gnomon.paradigm-context', () => undefined).packageHash;
     // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
     expect([...FIRST_PARTY_PACKAGE_HASHES], `the Paradigm Context tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
 
   it('installs as tier first-party', async () => {
     const w = await installed();
-    expect(w.out).toContain('│ Install mod paradigm-context 1.0.0 (mod) from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.0 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
-    expect(g.trust.get(effectiveInstall(g, 'paradigm-context')!.manifestHash)).toBe('first-party');
+    expect(g.trust.get(effectiveInstall(g, 'gnomon.paradigm-context')!.manifestHash)).toBe('first-party');
   });
 
   it('echoes the current modAbiId and declares only paradigm.read:summary, egress none, one sidebar view, no commands or tools', () => {
@@ -176,13 +176,13 @@ describe('#paradigm-context-mod through the host', () => {
     const w = await installed();
     expect(w.out).toContain('│ effects: none · egress: none');
     expect(w.out).toContain('│ capabilities: paradigm.read:summary · read paths: none');
-    expect(await w.host.start('paradigm-context')).toMatchObject({ state: 'running', effects: [] });
-    expect(w.host.status().views).toEqual([{ name: 'paradigm-context', viewId: 'paradigm-context.sheet', slot: 'sidebar', placement: 'append', dev: false }]);
+    expect(await w.host.start('gnomon.paradigm-context')).toMatchObject({ state: 'running', effects: [] });
+    expect(w.host.status().views).toEqual([{ name: 'gnomon.paradigm-context', viewId: 'paradigm-context.sheet', slot: 'sidebar', placement: 'append', dev: false }]);
     for (const f of FIXTURES) {
       const fx = fixture(`${f}.json`);
       for (const theme of ['day', 'night']) {
-        const r = await w.host.render('paradigm-context', fx.view, fx.input, { width: fx.width, prefs: { ...fx.prefs, theme } });
-        expect(r.label).toBe('mod:paradigm-context');
+        const r = await w.host.render('gnomon.paradigm-context', fx.view, fx.input, { width: fx.width, prefs: { ...fx.prefs, theme } });
+        expect(r.label).toBe('mod:gnomon.paradigm-context');
         expect(r.block, `${f} ${theme}`).toEqual(fixture(`${f}.golden.json`));
       }
     }
@@ -199,15 +199,15 @@ describe('#paradigm-context-mod through the host', () => {
       fs.writeFileSync(path.join(r, '.paradigm', 'tasks', 'entries', '2026-10-20', 'T-2026-10-20-001.yaml'), `id: T-2026-10-20-001\nblurb: ${title}\npriority: high\nstatus: open\ncreated: '2026-10-20T01:00:00.000Z'\n`);
     }
     const w = await installed({ focusCwd: (h) => (h === A ? repo : null), userHome: path.join(base, 'nohome') });
-    await w.host.start('paradigm-context');
-    const r = await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: A }, repo: other, path: other }, principal: HUMAN, connId: H.connId, principalClass: 'human' });
+    await w.host.start('gnomon.paradigm-context');
+    const r = await w.host.relayView({ name: 'gnomon.paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: A }, repo: other, path: other }, principal: HUMAN, connId: H.connId, principalClass: 'human' });
     const s = JSON.stringify(r.block);
     expect(s).toContain('shop');
     expect(s).toContain('{"type":"Text","text":"task ▲","tone":"quiet"},{"type":"Text","text":"T-2026-10-20-001","tone":"quiet"},{"type":"Text","text":"\u201cShip the cart\u201d","tone":"quiet"}');
     expect(s).toContain('tasks · 1 of 1 open · 1 high');
     expect(s).not.toContain('OTHER');
     expect(s).not.toContain(base);
-    const none = JSON.stringify((await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' } }, principal: HUMAN, connId: H.connId, principalClass: 'human' })).block);
+    const none = JSON.stringify((await w.host.relayView({ name: 'gnomon.paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' } }, principal: HUMAN, connId: H.connId, principalClass: 'human' })).block);
     expect(none).toContain('focus a live session');
   });
 });

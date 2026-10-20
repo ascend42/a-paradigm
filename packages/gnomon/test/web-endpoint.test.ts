@@ -515,7 +515,7 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
   it('mod.command is refused (no gesture proof yet) and status reports it available:false; mod.view is served with relayedFor from the GUI connection', async () => {
     const seen: unknown[] = [];
     const mods: ModRelayPort = {
-      view: async (rf, req) => (seen.push({ rf, req }), { label: 'mod:probe' }),
+      view: async (rf, req) => (seen.push({ rf, req }), { label: 'mod:acme.probe' }),
       command: async () => {
         throw new Error('must not be reached');
       },
@@ -529,11 +529,11 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
     const st = (await ws.nextJson()).result as { relays: Array<{ relay: string; available: boolean }>; mods: unknown };
     expect(st.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: false })]);
     expect(st.mods).toEqual({ full: true }); // GUI = the human class
-    ws.sendJson(rpc(4, 'mod.command', { name: 'probe', commandId: 'probe.who', args: {} }));
+    ws.sendJson(rpc(4, 'mod.command', { name: 'acme.probe', commandId: 'probe.who', args: {} }));
     expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.10' } } } });
-    ws.sendJson(rpc(5, 'mod.view', { name: 'probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
-    expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:probe' } });
-    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human' }, req: { name: 'probe', viewId: 'probe.view', input: {} } }]);
+    ws.sendJson(rpc(5, 'mod.view', { name: 'acme.probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
+    expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:acme.probe' } });
+    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human' }, req: { name: 'acme.probe', viewId: 'probe.view', input: {} } }]);
   });
 });
 

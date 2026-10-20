@@ -772,6 +772,9 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         if (cls === 'human' && kind === 'request.session.model') {
           // 8.0:model-switch: served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && (kind === 'request.offer.decide' || kind === 'request.offer.mute')) {
+          // TD-2026-10-20-812 (Aegis D1): served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
         } else if (cls === 'human' && kind === 'request.mode.set') {
           // P8-D86/D87: served for the human's own device (a first-party connection); a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });

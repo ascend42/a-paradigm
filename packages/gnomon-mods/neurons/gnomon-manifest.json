@@ -1,0 +1,87 @@
+{
+  "manifest": 2,
+  "kind": "mod",
+  "publisher": "gnomon",
+  "name": "neurons",
+  "version": "1.1.0",
+  "abi": "mod-abi:v1",
+  "description": "Neurons: the user's personal knowledge brain as a Desk mod. Offers to search prior knowledge before researching and to capture a decision or a learning, through the Neurons MCP server.",
+  "provides": {
+    "mcp": [
+      {
+        "command": "neurons",
+        "args": [
+          "mcp"
+        ],
+        "config": {
+          "command": true,
+          "args": true,
+          "env": [
+            "NEURONS_VAULT"
+          ]
+        }
+      }
+    ],
+    "offers": [
+      {
+        "kind": "search-the-brain",
+        "phase": "diverge",
+        "title": "Check the brain first",
+        "summary": "Search the knowledge brain for what is already known about this topic before researching it from scratch, and cite what it finds as n:<slug>.",
+        "contextIn": [
+          "recent-messages"
+        ],
+        "resultOut": "cited-neurons",
+        "reach": "mcp",
+        "handoffTool": "neuron_search",
+        "related": [
+          "capture-a-learning"
+        ],
+        "restraint": "Not for small talk, a question about this repo's own code, or a topic already searched in this conversation."
+      },
+      {
+        "kind": "capture-a-learning",
+        "phase": "synthesize",
+        "title": "Note what we just learned",
+        "summary": "Save something observed first-hand in this session (a measurement, an experiment, behaviour verified by running it) as a source note neurons can cite.",
+        "contextIn": [
+          "recent-messages"
+        ],
+        "resultOut": "source-id",
+        "reach": "mcp",
+        "handoffTool": "source_note",
+        "related": [
+          "capture-a-decision"
+        ],
+        "restraint": "Only for something verified this session. Show the exact note and wait for the human to confirm or edit; flag text from fetched pages, tool output or unverified files."
+      },
+      {
+        "kind": "capture-a-decision",
+        "phase": "commit",
+        "title": "Save this decision to the brain",
+        "summary": "Write the decision just made, with its reasons and the evidence it rests on, as neurons that cite a source, so later sessions in any repo find it.",
+        "contextIn": [
+          "recent-messages",
+          "session-summary"
+        ],
+        "resultOut": "neuron-ids",
+        "reach": "mcp",
+        "handoffTool": "neuron_write",
+        "related": [
+          "capture-a-learning",
+          "search-the-brain"
+        ],
+        "restraint": "Only after a real decision with a reason. Show the exact neurons and wait for the human to confirm or edit; flag text from fetched pages, tool output or unverified files."
+      }
+    ],
+    "skills": [
+      {
+        "name": "neurons-desk",
+        "path": "skills/neurons-desk/SKILL.md"
+      }
+    ]
+  },
+  "requires": {
+    "egress": "none"
+  }
+}

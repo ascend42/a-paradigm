@@ -56,6 +56,8 @@
   --display-wght: 600;
   --title-transform: none;
   --title-spacing: 0;
+  --slip-shadow: 1px 2px 0 rgba(22, 21, 15, .08);
+  --slip-tilt: 1;
 }
 
 [data-theme="night"] {
@@ -102,6 +104,8 @@
   --display-wght: 500;
   --title-transform: uppercase;
   --title-spacing: 0.08em;
+  --slip-shadow: none;
+  --slip-tilt: 0;
 }
 
 :root {
@@ -514,6 +518,42 @@ html, body {
 .pal-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 6px; color: var(--ink2); cursor: pointer; }
 .pal-row.sel { background: var(--fold); color: var(--ink); }
 .pal-row.unavailable { color: var(--sec); }
+
+/* #gui-offer-slip (TD-2026-10-20-812 O1, Luna's comp refs/flow.html): the margin slip under the reply that offered.
+   Model-adjacent, so NEVER a kernel key: a DASHED edge, a soft shadow (no hard ink offset), no .key class, no [ ].
+   Tilted -0.7deg by day (--slip-tilt 1), flat at night; slides in over 320ms, instant under reduced motion (the
+   global rule). The tab is GUI-drawn: glyph + offer · mod:<name>, ink only (L2: no per-mod hue). */
+.slip {
+  display: flex; flex-direction: column; width: fit-content; max-width: min(440px, 100%);
+  margin: 8px 0 2px 6px; background: var(--sheet); color: var(--ink);
+  border: 1px dashed var(--ink2); border-radius: var(--radius);
+  box-shadow: var(--slip-shadow); transform: rotate(calc(-0.7deg * var(--slip-tilt)));
+}
+[data-theme="night"] .slip { border-color: var(--sec); }
+.slip-tab { display: flex; gap: 6px; align-items: center; padding: 2px 8px; font-size: 11px; color: var(--sec); border-bottom: 1px dashed var(--rule); }
+.slip-g { color: var(--ink2); }
+.slip-q { padding: 6px 10px 2px; font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+.slip-ctx, .slip-hint { padding: 0 10px; font-size: 11px; color: var(--sec); }
+.slip-hint { color: var(--warn-ink); }
+.slip-acts { display: flex; gap: 10px; align-items: center; padding: 6px 10px 7px; }
+.slip-open {
+  font: inherit; font-size: 12px; display: inline-flex; gap: 6px; align-items: baseline; cursor: pointer;
+  color: var(--ink); background: transparent; border: 1px dashed var(--ink2); border-radius: 14px; padding: 2px 10px 2px 4px;
+}
+.slip-open kbd { font: inherit; font-size: 10.5px; font-weight: 600; background: var(--ink); color: var(--on-ink); border-radius: 9px; padding: 0 5px; }
+.slip-open:hover:not([disabled]) { border-style: solid; background: var(--ground); }
+.slip-open:focus-visible, .slip-notnow:focus-visible { outline: 2px dashed var(--ink2); outline-offset: 2px; }
+.slip.armed .slip-open { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); }
+.slip-notnow { font: inherit; font-size: 11.5px; color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.slip-meta { font-size: 11px; color: var(--sec); }
+.slip.inert { opacity: .7; }
+.slip.inert button { cursor: default; }
+[data-theme="night"] .slip-open { border-color: var(--sec); }
+[data-theme="night"] .slip-open kbd { background: transparent; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+.slip.gone { border: 0; box-shadow: none; transform: none; background: none; margin-left: 0; }
+.slip.gone .slip-tab { border: 0; padding: 0; }
+.slip.arrive { animation: slip-in 320ms cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes slip-in { from { opacity: 0; transform: translateY(-6px) rotate(0); } to { opacity: 1; transform: rotate(calc(-0.7deg * var(--slip-tilt))); } }
 
 /* reduced motion (OS or in-app): every transition and animation is instant (design-system motion rules) */
 [data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after {

@@ -76,7 +76,7 @@
  * buffer. Each live subscription holds the idle monitor ('subscriber'); a
  * subscription ends with its connection (no extra verb exists to cancel).
  */
-import { isHsid, monotonicUlidFactory, RefusedError, validateLogReadCursor, type EventV1, type LogReadCursor } from '@a-company/gnomon-contracts';
+import { isModId, isHsid, monotonicUlidFactory, RefusedError, validateLogReadCursor, type EventV1, type LogReadCursor } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/kernel-log.js';
 import { mayBeVisible, type LogView, type ReaderClass } from '../log/redaction.js';
 import { RpcRefusal } from './rpc.js';
@@ -123,9 +123,14 @@ export interface ReaderGrant {
   fullView?: { needs: string };
 }
 
-/** The `<name>` of a mod principal `p:<ns>/mod-<name>`, or undefined. */
+/**
+ * The mod id of a mod principal `p:<ns>/mod-<publisher>.<name>` (S0b), or undefined. A legacy `p:<ns>/mod-<kebab>`
+ * (rows written before S0b) still parses, as its bare name: it owns no `modns.<publisher>.<name>.*` namespace.
+ */
 export function modNameOf(principal: string | undefined): string | undefined {
-  return /^p:[^/]+\/mod-([a-z0-9][a-z0-9-]{0,63})$/.exec(principal ?? '')?.[1];
+  const m = /^p:[^/]+\/mod-([a-z0-9][a-z0-9.-]{0,62})$/.exec(principal ?? '')?.[1];
+  if (m === undefined) return undefined;
+  return isModId(m) || /^[a-z0-9][a-z0-9-]{0,62}$/.test(m) ? m : undefined;
 }
 
 export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' | 'credential'>, scope?: { voiceHsid: string | null }): ReaderGrant {

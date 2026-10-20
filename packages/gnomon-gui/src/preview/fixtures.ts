@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'model-switch';
+  open?: 'settings' | 'model-switch' | 'offer-armed';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -222,7 +222,11 @@ const EXTRA_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'billing loosen', kind: 'strictness', hsid: BILLING, lines: ['Loosen billing to auto-edits', 'the session would edit files without a card; Bash still asks'], detail: { op: 'mode.loosen', from: 'ask', to: 'auto-edits' }, decisions: ['allow', 'deny'], strictness: { level: 'L1', mode: 'auto-edits', reason: 'requested from the GUI' } }),
 ];
 
-function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed' } = {}): Chain {
+export const OFFER_ID = `offer:${ulid('offer constellation')}`;
+const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
+const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
+
+function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -265,6 +269,16 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
   ev('billing', T('14:05:27'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
   ev('billing', T('14:05:35'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
   ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
+
+  // #gui-offer-slip: the kernel's offer.shown under the billing reply (the #offer-router disposed its ```offer block)
+  const shown = (at: string, offerId: string, mod: string, kind: string, question: string, title: string, contextIn: string[]): void => on('billing', at, 'offer.shown', { offerId, mod, kind, phase: 'synthesize', title, question, replyTurnId: `turn:${BILLING}/1`, contextIn });
+  if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it', ['recent-messages', 'open-files']);
+  if (o.offer === 'muted') {
+    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['recent-messages']);
+    on('billing', T('14:05:55'), 'offer.decided', { offerId: OFFER_MUTED_ID, decision: 'not-now' });
+    ev('billing', T('14:06:20'), textLine('The fix is staged: one rounding call at the end of `totals()`. The tests are next once you allow the run.'));
+    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['recent-messages']);
+  }
 
   // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)
   if (o.model) {
@@ -446,6 +460,9 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
   'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
   'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
+  'offer-slip': fixture('offer-slip', 'The Desk: a margin slip from mod:constellation under the billing reply', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING),
+  'offer-armed': fixture('offer-armed', 'The slip armed by a first press: "takes: … · ↵ to open"', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'offer-armed' }),
+  'offer-muted': fixture('offer-muted', '"not now" on mod:neurons: a trace, and its next offer stays quiet (L4)', deskChain({ offer: 'muted' }), statusOf(VOICE_RUNNING), BILLING),
   'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
   'paradigm-context': { ...fixture('paradigm-context', 'Desk with the Paradigm Context mod in the sidebar (billing focused)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { modAbiId: 'preview', running: [{ name: 'paradigm-context', packageHash: 'preview', dev: false, sandbox: 'full' }], paused: [], ...PARADIGM_CONTEXT_STATUS } }, BILLING), paradigm: paradigmSlices() },
 });

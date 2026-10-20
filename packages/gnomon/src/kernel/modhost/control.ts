@@ -42,6 +42,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import os from 'node:os';
+import { userMcpServerNames } from '../manifest/user-mcp.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { raiseInstallCard } from '../broker/install-card.js';
@@ -50,9 +52,10 @@ import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js'
 import { appendGrantRow, effectiveInstall, readGrants, type ResolvedGrants } from '../manifest/grants.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { RowFold } from './fold.js';
-import { HSID_PATTERN, mintId } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, isModId, mintId } from '@a-company/gnomon-contracts';
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name>. */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const STAGED_FILE = /^card-[0-9A-HJKMNP-TV-Z]{26}\.json$/;
 export const PAUSE_MARKER = 'paused';
 export const START_REQUEST = 'start.request';
@@ -243,6 +246,8 @@ export interface PickupOptions {
   authority: RootAuthority;
   host: PickupHost;
   emit?: ManifestEventSink;
+  /** the user home whose .claude.json MCP server names a decided install may not collide with (default os.homedir()) */
+  userHome?: string;
   /** cardIds whose manifest.staged row the kernel already wrote (staged in-process) */
   alreadyLogged?: (cardId: string) => boolean;
 }
@@ -390,6 +395,7 @@ export class StagedCardPickup {
           name: p.name,
           cardId: p.cardId,
           authority: this.#o.authority,
+          userMcpServers: () => userMcpServerNames({ userHome: this.#o.userHome ?? os.homedir() }),
           emit: (kind, payload) => {
             emit(kind, payload);
             // a decided install starts the mod (unless the user paused it)

@@ -43,6 +43,7 @@
  * connection — never the input.
  */
 import { canonicalJson, AUDIENCES, SENSITIVITIES } from '@a-company/gnomon-contracts';
+import { ownsModKind } from '../manifest/mod-kind.js';
 import type { ModHost, KernelCallRequest, RenderResult } from './host.js';
 import { ModRefusal } from './refusal.js';
 
@@ -74,7 +75,7 @@ export interface ModKernelPorts {
 /** Clamp a mod's log.append params to the fields it may supply (Aegis C2). */
 export function clampModAppend(name: string, principal: string, params: Record<string, unknown>): ModAppendRow {
   const kind = params.kind;
-  if (typeof kind !== 'string' || !kind.startsWith(`modns.${name}.`)) throw new ModRefusal('VERB', `${name} may append only its own modns.${name}.* kinds`, { name, verb: 'log.append' });
+  if (typeof kind !== 'string' || !ownsModKind(name, kind)) throw new ModRefusal('VERB', `${name} may append only its own modns.${name}.* kinds`, { name, verb: 'log.append' });
   const raw = params.payload ?? {};
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ModRefusal('LOG', 'log.append payload must be a plain object', { name, kind });
   const bytes = Buffer.byteLength(canonicalJson(raw), 'utf8');

@@ -45,6 +45,7 @@ import {
   MANIFEST_FILE,
   ManifestRefusal,
   manifestHash,
+  canonicalManifestHash,
   pinnedDir,
   policyHash,
   readGrants,
@@ -55,7 +56,7 @@ import {
   uninstallHome,
   uninstallRepo,
   validateManifest,
-  type ManifestV1,
+  type ManifestV2,
 } from '../src/kernel/manifest/index.js';
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
 import { installPresenceBinding, rollbackPresenceBinding } from '../src/kernel/manifest/install.js';
@@ -76,9 +77,10 @@ afterEach(() => {
 const AGENT = 'p:abcdefgh/s-01hzzzzz';
 const HUMAN = 'p:abcdefgh/matt';
 
-function baseManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
+function baseManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
   return {
-    manifest: 1,
+    manifest: 2,
+    publisher: 'acme',
     kind: 'mod',
     name: 'diff-lens',
     version: '1.2.0',
@@ -86,13 +88,19 @@ function baseManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
     provides: {
       tools: [{ name: 'lens.diff', effects: ['read'] }],
       views: [{ id: 'diff.pane', slot: 'panel', placement: 'append' }],
-      events: ['modns.diff-lens.rendered'],
+      events: ['modns.acme.diff-lens.rendered'],
       commands: [{ id: 'lens.toggle', title: 'Toggle diff lens' }],
       keybindings: [{ key: 'ctrl+shift+d', command: 'lens.toggle' }],
     },
-    requires: { capabilities: ['log.append:modns.diff-lens.*'], egress: 'none' },
+    requires: { capabilities: ['log.append:modns.acme.diff-lens.*'], egress: 'none' },
     ...over,
   };
+}
+
+/** The same mod under the first-party publisher (S0b: the first-party tier is publisher gnomon only). */
+function fpManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
+  const b = baseManifest();
+  return { ...b, publisher: 'gnomon', provides: { ...b.provides, events: ['modns.gnomon.diff-lens.rendered'] }, requires: { capabilities: ['log.append:modns.gnomon.diff-lens.*'], egress: 'none' }, ...over };
 }
 
 function writeMod(dir: string, m: unknown, files: Record<string, string> = {}): string {
@@ -153,9 +161,12 @@ const rbBound = (name: string, to: string | undefined) => mintTestPresence('mod.
 describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
   it('accepts the §4.3 example mod and hashes it canonically (key order does not matter)', () => {
     const m = validateManifest(baseManifest(), { tier: 'local' });
-    const reordered = JSON.parse(JSON.stringify({ requires: m.requires, provides: m.provides, name: m.name, kind: m.kind, manifest: 1, version: m.version, abi: m.abi }));
-    expect(manifestHash(reordered)).toBe(manifestHash(m));
-    expect(manifestHash(m)).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const reordered = JSON.parse(JSON.stringify({ requires: m.requires, provides: m.provides, name: m.name, publisher: m.publisher, kind: m.kind, manifest: 2, version: m.version, abi: m.abi }));
+    // S0b: the canonical hash (format-1 rows, upgradedHash, distro marker) ignores key order; manifestHash is the RAW bytes
+    expect(canonicalManifestHash(reordered)).toBe(canonicalManifestHash(m));
+    expect(canonicalManifestHash(m)).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(manifestHash(JSON.stringify(m))).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(manifestHash(JSON.stringify(reordered))).not.toBe(manifestHash(JSON.stringify(m)));
   });
 
   it.each([
@@ -175,14 +186,14 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
   });
 
   it('kind: provider and kind: adapter are first-party only (A23-2, S25-H4); a provider ships only knowledge', () => {
-    const provider = { manifest: 1, kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } };
+    const provider = { manifest: 2, publisher: 'acme', kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } };
     expect(refusalOf(() => validateManifest(provider, { tier: 'local' })).manifestCode).toBe('TIER');
     expect(refusalOf(() => validateManifest(provider, { tier: `signed:gkey-p256:v1:${'a'.repeat(64)}` })).manifestCode).toBe('TIER');
-    expect(validateManifest(provider, { tier: 'first-party' }).kind).toBe('provider');
-    const adapter = { manifest: 1, kind: 'adapter', name: 'local-adapter', version: '1.0.0' };
+    expect(validateManifest({ ...provider, publisher: 'gnomon' }, { tier: 'first-party' }).kind).toBe('provider');
+    const adapter = { manifest: 2, publisher: 'acme', kind: 'adapter', name: 'local-adapter', version: '1.0.0' };
     expect(refusalOf(() => validateManifest(adapter, { tier: 'local' })).manifestCode).toBe('TIER');
     const fat = { ...provider, provides: { ...provider.provides, tools: [{ name: 'x.y', effects: ['read'] }] } };
-    expect(refusalOf(() => validateManifest(fat, { tier: 'first-party' })).manifestCode).toBe('KNOWLEDGE');
+    expect(refusalOf(() => validateManifest({ ...fat, publisher: 'gnomon' }, { tier: 'first-party' })).manifestCode).toBe('KNOWLEDGE');
   });
 
   it('provides.knowledge needs knowledge:provide and well-formed entries', () => {
@@ -196,8 +207,8 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
 
   it('Aegis M2: C0/ESC/C1 controls in mcp, hooks and commands strings are refused SCHEMA (they would reach install cards)', () => {
     for (const provides of [
-      { mcp: [{ name: 'x', command: 'run\u001b]0;hidden\u0007', args: [] }] },
-      { mcp: [{ name: 'x', command: 'run', args: ['a\u009db\u009c'] }] },
+      { mcp: [{ command: 'run\u001b]0;hidden\u0007', args: [] }] },
+      { mcp: [{ command: 'run', args: ['a\u009db\u009c'] }] },
       { hooks: [{ event: 'Stop', command: 'echo\u009d hidden\u009c' }] },
       { commands: [{ id: 'lens.go', title: 'Go\u001b[2J' }] },
     ]) {
@@ -213,18 +224,18 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
       [{ ...p, views: [{ id: 'v', slot: 'status.mod', placement: 'replace' }] }, 'SCHEMA'],
       [{ ...p, views: [{ id: 'v', slot: 'overlay', placement: 'append' }] }, 'SCHEMA'],
       [{ ...p, events: ['approval.request'] }, 'CAPABILITY'],
-      [{ ...p, events: ['modns.other.x'] }, 'CAPABILITY'],
+      [{ ...p, events: ['modns.acme.other.x'] }, 'CAPABILITY'],
       [{ ...p, keybindings: [{ key: 'y', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: 'Enter', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: '7', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: 'ctrl+k', command: 'not.declared' }] }, 'SCHEMA'],
     ];
-    for (const [provides, code] of cases) expect(refusalOf(() => validateManifest(baseManifest({ provides } as Partial<ManifestV1>), { tier: 'local' })).manifestCode).toBe(code);
+    for (const [provides, code] of cases) expect(refusalOf(() => validateManifest(baseManifest({ provides } as Partial<ManifestV2>), { tier: 'local' })).manifestCode).toBe(code);
     expect(validateManifest(baseManifest({ provides: { ...p, views: [{ id: 'v', slot: 'card.detail:install', placement: 'append' }] } }), { tier: 'local' })).toBeTruthy();
   });
 
   it('capabilities: §15.4 forms only; first-party-only and grant-derived-only refused; log.append only on its own modns', () => {
-    const caps = (c: string[], tier: 'local' | 'first-party' = 'local') => () => validateManifest(baseManifest({ requires: { capabilities: c } }), { tier });
+    const caps = (c: string[], tier: 'local' | 'first-party' = 'local') => () => validateManifest(tier === 'first-party' ? fpManifest({ requires: { capabilities: c } }) : baseManifest({ requires: { capabilities: c } }), { tier });
     expect(refusalOf(caps(['approve'])).manifestCode).toBe('CAPABILITY');
     expect(refusalOf(caps(['band:write'])).manifestCode).toBe('CAPABILITY');
     expect(refusalOf(caps(['root.sign'])).manifestCode).toBe('CAPABILITY');
@@ -244,8 +255,9 @@ describe('G-MAN-01 egress refusals (Anthropic hosts refused in manifests and gra
     'G-MAN-01: manifest egress to %s is refused',
     (host) => {
       expect(isAnthropicHost(host)).toBe(true);
-      const m = baseManifest({ requires: { capabilities: [], egress: [{ host, purpose: 'p' }] } });
+      const m = fpManifest({ requires: { capabilities: [], egress: [{ host, purpose: 'p' }] } });
       const r = refusalOf(() => validateManifest(m, { tier: 'first-party' }));
+      expect(refusalOf(() => validateManifest(baseManifest({ requires: { capabilities: [], egress: [{ host, purpose: 'p' }] } }), { tier: 'local' })).manifestCode).toBe('EGRESS');
       expect(r.manifestCode).toBe('EGRESS');
       expect(r.refusal.code).toBe('FORBIDDEN');
     },
@@ -340,7 +352,7 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     const b = stage(h2, src);
     if (a.state !== 'staged' || b.state !== 'staged') throw new Error('expected staged');
     expect(a.record.detail.packageHash).toBe(b.record.detail.packageHash);
-    const dir = pinnedDir(h1, 'diff-lens', a.record.detail.packageHash);
+    const dir = pinnedDir(h1, 'acme.diff-lens', a.record.detail.packageHash);
     expect(fs.existsSync(path.join(dir, 'dist', 'index.js'))).toBe(true);
     expect(fs.existsSync(path.join(dir, '.git'))).toBe(false);
     fs.writeFileSync(path.join(src, '.git', 'config'), '[core]\nchanged\n');
@@ -361,8 +373,8 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     expect(r.manifestCode).toBe('SNAPSHOT');
     expect(r.detail.snapshotReason).toBe(reason);
     expect(ev.kinds()).toEqual(['mod.snapshot.refused', 'manifest.refuse']);
-    expect(ev.seen[0]!.payload).toMatchObject({ name: 'diff-lens', reason });
-    expect(fs.existsSync(path.join(home, 'mods', 'diff-lens', 'staged'))).toBe(false);
+    expect(ev.seen[0]!.payload).toMatchObject({ name: 'acme.diff-lens', reason });
+    expect(fs.existsSync(path.join(home, 'mods', 'acme.diff-lens', 'staged'))).toBe(false);
   });
 
   it('the copier refuses a case collision (two keys that fold to one path)', async () => {
@@ -405,11 +417,11 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     if (mk.status === 0 && fs.lstatSync(path.join(f, 'pipe'), { throwIfNoEntry: false })?.isFIFO()) expect(refusalOf(() => stage(tmp(), f)).detail.snapshotReason).toBe('special-file');
     // inode swap between the walk and the read
     const w = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'a.js': 'one' });
-    const entries = walkSource(w, 'diff-lens', () => undefined);
+    const entries = walkSource(w, 'acme.diff-lens', () => undefined);
     const e = entries.find((x) => x.rel === 'a.js')!;
     fs.writeFileSync(path.join(w, 'b.js'), 'evil');
     fs.renameSync(path.join(w, 'b.js'), path.join(w, 'a.js'));
-    expect(refusalOf(() => readChecked(e, 'diff-lens', () => undefined)).detail.snapshotReason).toBe('changed-during-copy');
+    expect(refusalOf(() => readChecked(e, 'acme.diff-lens', () => undefined)).detail.snapshotReason).toBe('changed-during-copy');
   });
 
   it('tier is derived, never asserted: a linked folder is local, a signature without a trusted key is refused (Aegis F4)', () => {
@@ -418,7 +430,7 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     expect(st.state === 'staged' && st.record.detail.tier).toBe('local');
     const r = refusalOf(() => stageInstall({ home: tmp(), source: src, via: 'package', requestedBy: AGENT, trust: root(), signature: { keyId: `gkey-p256:v1:${'a'.repeat(64)}`, sig: 'x' } }));
     expect(r.manifestCode).toBe('TIER');
-    const prov = writeMod(path.join(tmp(), 'lens-know'), { manifest: 1, kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } });
+    const prov = writeMod(path.join(tmp(), 'lens-know'), { manifest: 2, publisher: 'acme', kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } });
     expect(refusalOf(() => stageInstall({ home: tmp(), source: prov, via: 'package', requestedBy: AGENT, trust: root() })).manifestCode).toBe('TIER');
   });
 
@@ -475,10 +487,10 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const { card, detail } = st.record;
     expect(validateCardV1(card, { mode: 'strict' })).toEqual([]);
     expect(card).toMatchObject({ kind: 'install', state: 'pending', requestedBy: AGENT, actions: [] });
-    expect(detail).toMatchObject({ name: 'diff-lens', source: 'package', tier: 'local', effects: ['read'], egress: [], replaces: null, stagedBy: AGENT });
+    expect(detail).toMatchObject({ name: 'acme.diff-lens', source: 'package', tier: 'local', effects: ['read'], egress: [], replaces: null, stagedBy: AGENT });
     expect(ev.kinds()).toEqual(['manifest.staged']);
     expect(fs.existsSync(grantsPath(home))).toBe(false);
-    expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(refusalOf(() => loadMod({ home, name: 'acme.diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
     // re-staging the same bytes raises no second card
     const again = stageInstall({ home, source: src, via: 'package', requestedBy: AGENT, trust: auth });
     expect(again.state === 'staged' && again.cardId).toBe(st.cardId);
@@ -491,18 +503,18 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const st = stageInstall({ home, source: src, via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
     for (const bad of [undefined, 'presence', mintTestPresence('log.gap.acknowledge'), mintTestPresence('mod.rollback')]) {
-      expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bad, authority: auth })).manifestCode).toBe('GRANT');
+      expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bad, authority: auth })).manifestCode).toBe('GRANT');
     }
-    expect(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: new UnprovisionedRootAuthority() })).toThrow(/M1\.3/);
+    expect(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: new UnprovisionedRootAuthority() })).toThrow(/M1\.3/);
     expect(readGrants(home, auth).installs).toEqual([]);
     const ev = events();
-    const decided = decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth, emit: ev.emit });
+    const decided = decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth, emit: ev.emit });
     expect(decided.card.state).toBe('decided');
     expect(ev.kinds()).toEqual(['manifest.installed', 'mod.installed']);
-    const loaded = loadMod({ home, name: 'diff-lens', trust: auth });
+    const loaded = loadMod({ home, name: 'acme.diff-lens', trust: auth });
     expect(loaded.state).toBe('ready');
-    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth }).card.state).toBe('decided'); // idempotent
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId, 'deny'), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth }).card.state).toBe('decided'); // idempotent
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'acme.diff-lens', st.cardId, 'deny'), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 
   it('decide trusts nothing in the staged record: bad cardId, name mismatch, tampered detail, stale and reused presence (Aegis F5/F6)', () => {
@@ -510,27 +522,27 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', '../../x', 'install', { presenceToken: bound(home, 'diff-lens', '../../x'), authority: auth })).manifestCode).toBe('SCHEMA');
-    expect(refusalOf(() => decideInstallCard(home, 'other-mod', st.cardId, 'install', { presenceToken: bound(home, 'other-mod', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
-    const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'diff-lens', st.cardId)!.card.contentHash, 'install') });
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', '../../x', 'install', { presenceToken: bound(home, 'acme.diff-lens', '../../x'), authority: auth })).manifestCode).toBe('SCHEMA');
+    expect(refusalOf(() => decideInstallCard(home, 'acme.other-mod', st.cardId, 'install', { presenceToken: bound(home, 'acme.other-mod', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'acme.diff-lens', st.cardId)!.card.contentHash, 'install') });
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
     // tamper: widen the staged detail and re-hash it (the card agrees with its detail but not with the snapshot)
-    const file = path.join(home, 'mods', 'diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
+    const file = path.join(home, 'mods', 'acme.diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
     const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
     rec.detail.capabilities = [];
     fs.writeFileSync(file, JSON.stringify(rec));
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
     rec.card.contentHash = `sha256:${createHash('sha256').update(canonicalJson(rec.detail)).digest('hex')}`;
     fs.writeFileSync(file, JSON.stringify(rec));
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
     expect(readGrants(home, auth).installs).toEqual([]);
     // restore and decide; the token is single-use; a re-decide is idempotent and appends nothing
     fs.writeFileSync(file, `${JSON.stringify(st.record)}\n`);
-    const tok = bound(home, 'diff-lens', st.cardId);
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth });
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth })).detail.presence).toBe('used');
+    const tok = bound(home, 'acme.diff-lens', st.cardId);
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth });
+    expect(refusalOf(() => decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth })).detail.presence).toBe('used');
     const rows = fs.readFileSync(grantsPath(home), 'utf8');
-    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth }).card.state).toBe('decided');
+    expect(decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth }).card.state).toBe('decided');
     expect(fs.readFileSync(grantsPath(home), 'utf8')).toBe(rows);
     const lines = rows.trim().split('\n').map((l) => JSON.parse(l).row.kind);
     expect(lines[lines.length - 1]).toBe('grant.install');
@@ -541,25 +553,25 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId, 'deny'), authority: auth });
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'acme.diff-lens', st.cardId, 'deny'), authority: auth });
     expect(readGrants(home, auth).installs).toEqual([]);
-    expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(refusalOf(() => loadMod({ home, name: 'acme.diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 
   it('load re-checks integrity and grants: a tampered snapshot or an ungranted capability refuses', () => {
     const home = tmp();
     const auth = root();
-    const m = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
+    const m = baseManifest({ requires: { capabilities: ['log.append:modns.acme.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), m), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
-    expect(loadMod({ home, name: 'diff-lens', trust: auth }).state).toBe('ready');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    expect(loadMod({ home, name: 'acme.diff-lens', trust: auth }).state).toBe('ready');
     const g = readGrants(home, auth);
     expect([...g.egress.get(st.record.detail.manifestHash)!]).toEqual(['api.github.com']);
-    const dir = pinnedDir(home, 'diff-lens', st.record.detail.packageHash);
+    const dir = pinnedDir(home, 'acme.diff-lens', st.record.detail.packageHash);
     fs.chmodSync(dir, 0o700);
     fs.writeFileSync(path.join(dir, 'planted.js'), 'evil');
-    expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('INTEGRITY');
+    expect(refusalOf(() => loadMod({ home, name: 'acme.diff-lens', trust: auth })).manifestCode).toBe('INTEGRITY');
   });
 });
 
@@ -574,10 +586,10 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth, emit: ev.emit });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(st.record.detail.source).toBe(`linked:${fs.realpathSync.native(src)}`);
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth, emit: ev.emit });
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth, emit: ev.emit });
     expect(ev.kinds()).toContain('mod.linked');
     expect(linkedFolders(home, auth)).toEqual([fs.realpathSync.native(src)]);
-    const ready = loadMod({ home, name: 'diff-lens', trust: auth });
+    const ready = loadMod({ home, name: 'acme.diff-lens', trust: auth });
     expect(ready.state).toBe('ready');
 
     // edit + widen: a new write tool
@@ -586,23 +598,23 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     wide.provides!.tools!.push({ name: 'lens.write', effects: ['write'] });
     fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(wide, null, 2));
     const ev2 = events();
-    const paused = loadMod({ home, name: 'diff-lens', trust: auth, emit: ev2.emit });
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev2.emit });
     if (paused.state !== 'paused') throw new Error('expected paused');
     expect(paused.files.changed.map((f) => f.path).sort()).toEqual(['dist/view.js', MANIFEST_FILE].sort());
     expect(ev2.kinds()).toEqual(['mod.paused', 'manifest.widened', 'manifest.staged']);
     expect(ev2.seen[1]!.payload.fields).toEqual(['effects', 'tools']);
     expect(fs.readFileSync(path.join(paused.snapshotDir, 'dist', 'view.js'), 'utf8')).toBe('v1\n');
-    const rec = readStaged(home, 'diff-lens', paused.cardId!)!;
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
     expect(rec.detail.replaces?.packageHash).toBe(st.record.detail.packageHash);
     expect(rec.card.block.children).toEqual(expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining('WIDENED') })]));
     // still paused on the next load, and no second card
-    const again = loadMod({ home, name: 'diff-lens', trust: auth });
+    const again = loadMod({ home, name: 'acme.diff-lens', trust: auth });
     expect(again.state === 'paused' && again.cardId).toBe(paused.cardId);
     // approving re-pins; the old snapshot is kept for rollback
-    decideInstallCard(home, 'diff-lens', paused.cardId!, 'install', { presenceToken: bound(home, 'diff-lens', paused.cardId!), authority: auth });
-    const now = loadMod({ home, name: 'diff-lens', trust: auth });
+    decideInstallCard(home, 'acme.diff-lens', paused.cardId!, 'install', { presenceToken: bound(home, 'acme.diff-lens', paused.cardId!), authority: auth });
+    const now = loadMod({ home, name: 'acme.diff-lens', trust: auth });
     expect(now.state === 'ready' && now.packageHash).toBe(rec.detail.packageHash);
-    expect(fs.existsSync(pinnedDir(home, 'diff-lens', st.record.detail.packageHash))).toBe(true);
+    expect(fs.existsSync(pinnedDir(home, 'acme.diff-lens', st.record.detail.packageHash))).toBe(true);
   });
 
   it('an added hook or MCP server is a widening and shows a WIDENED line on the re-approve card (Aegis F3)', () => {
@@ -611,27 +623,27 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
     const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
     if (st.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
     const m = baseManifest();
     m.provides!.hooks = [{ event: 'PreToolUse', command: 'node steal.js' }];
-    m.provides!.mcp = [{ name: 'evil', command: 'node', args: ['srv.js'] }];
+    m.provides!.mcp = [{ command: 'node', args: ['srv.js'] }];
     fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m));
     const ev = events();
-    const paused = loadMod({ home, name: 'diff-lens', trust: auth, emit: ev.emit });
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth, emit: ev.emit });
     if (paused.state !== 'paused') throw new Error('paused');
     expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['mcp', 'hooks']);
-    const rec = readStaged(home, 'diff-lens', paused.cardId!)!;
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
     const texts = (rec.card.block.children as Array<{ text: string }>).map((c) => c.text);
     expect(texts.find((t) => t.startsWith('WIDENED'))).toMatch(/hooks \+.*PreToolUse.*steal\.js/);
     expect(texts.some((t) => t.includes('hooks: PreToolUse: node steal.js'))).toBe(true);
-    expect(rec.detail.mcp).toEqual(['evil: node srv.js']);
+    expect(rec.detail.mcp).toEqual(['gm_acme_diff-lens: node srv.js']); // S0b: the kernel derives the server name
   });
 
   it('detectWidening reports additions by field and ignores removals', () => {
     const a = baseManifest();
-    const b = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
+    const b = baseManifest({ requires: { capabilities: ['log.append:modns.acme.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     b.provides!.keybindings!.push({ key: 'ctrl+x', command: 'lens.toggle' });
-    b.provides!.events!.push('modns.diff-lens.more');
+    b.provides!.events!.push('modns.acme.diff-lens.more');
     expect(detectWidening(a, b).map((w) => w.field)).toEqual(['egress', 'capabilities', 'events', 'keybindings']);
     expect(detectWidening(b, a)).toEqual([]);
     expect(detectWidening(null, a).map((w) => w.field)).toEqual(['effects', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings']);
@@ -647,34 +659,34 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'one\n' });
     const s1 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s1.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'diff-lens', s1.cardId), authority: auth });
+    decideInstallCard(home, 'acme.diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s1.cardId), authority: auth });
     fs.writeFileSync(path.join(src, 'dist', 'index.js'), 'two\n');
     const s2 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s2.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', s2.cardId, 'install', { presenceToken: bound(home, 'diff-lens', s2.cardId), authority: auth });
+    decideInstallCard(home, 'acme.diff-lens', s2.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s2.cardId), authority: auth });
     const h1 = s1.record.detail.packageHash;
     const h2 = s2.record.detail.packageHash;
     expect(h1).not.toBe(h2);
-    expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
+    expect((loadMod({ home, name: 'acme.diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
 
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.install'), authority: auth })).manifestCode).toBe('GRANT');
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: mintTestPresence('mod.rollback', { ageMs: 61_000, bind: rollbackPresenceBinding('diff-lens', undefined) }), authority: auth })).detail.presence).toBe('stale');
+    expect(refusalOf(() => rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: presence('mod.install'), authority: auth })).manifestCode).toBe('GRANT');
+    expect(refusalOf(() => rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: mintTestPresence('mod.rollback', { ageMs: 61_000, bind: rollbackPresenceBinding('acme.diff-lens', undefined) }), authority: auth })).detail.presence).toBe('stale');
     // production (no root): the grant table resolves nothing and nothing can be signed — refused, the pin unchanged
-    expect(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbBound('diff-lens', undefined), authority: new UnprovisionedRootAuthority() })).toThrow(ManifestRefusal);
-    expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
+    expect(() => rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: rbBound('acme.diff-lens', undefined), authority: new UnprovisionedRootAuthority() })).toThrow(ManifestRefusal);
+    expect((loadMod({ home, name: 'acme.diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
     const ev = events();
-    const rbTok = rbBound('diff-lens', undefined);
-    const row = rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth, emit: ev.emit });
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth })).detail.presence).toBe('used');
+    const rbTok = rbBound('acme.diff-lens', undefined);
+    const row = rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: rbTok, authority: auth, emit: ev.emit });
+    expect(refusalOf(() => rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: rbTok, authority: auth })).detail.presence).toBe('used');
     expect(row.packageHash).toBe(h1);
-    expect(ev.seen).toEqual([{ kind: 'mod.rolled-back', payload: { name: 'diff-lens', toPackageHash: h1 } }]);
-    const back = loadMod({ home, name: 'diff-lens', trust: auth });
+    expect(ev.seen).toEqual([{ kind: 'mod.rolled-back', payload: { name: 'acme.diff-lens', toPackageHash: h1 } }]);
+    const back = loadMod({ home, name: 'acme.diff-lens', trust: auth });
     if (back.state !== 'ready') throw new Error('ready');
     expect(back.packageHash).toBe(h1);
     expect(fs.readFileSync(path.join(back.snapshotDir, 'dist', 'index.js'), 'utf8')).toBe('one\n');
     // explicit target, and never to an unapproved snapshot
-    expect(rollbackModSnapshot(home, 'diff-lens', h2, { presenceToken: rbBound('diff-lens', h2), authority: auth }).packageHash).toBe(h2);
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', `sha256:${'9'.repeat(64)}`, { presenceToken: rbBound('diff-lens', `sha256:${'9'.repeat(64)}`), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(rollbackModSnapshot(home, 'acme.diff-lens', h2, { presenceToken: rbBound('acme.diff-lens', h2), authority: auth }).packageHash).toBe(h2);
+    expect(refusalOf(() => rollbackModSnapshot(home, 'acme.diff-lens', `sha256:${'9'.repeat(64)}`, { presenceToken: rbBound('acme.diff-lens', `sha256:${'9'.repeat(64)}`), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 });
 
@@ -688,13 +700,14 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
       else process.env[k] = v;
     }
   });
-  const distro = (): ManifestV1 => ({
-    manifest: 1,
+  const distro = (): ManifestV2 => ({
+    manifest: 2,
+    publisher: 'gnomon',
     kind: 'distro',
     name: 'paradigm-distro',
     version: '8.0.0',
     description: 'test distro',
-    provides: { mcp: [{ name: 'paradigm', command: 'paradigm-mcp', args: ['.'] }], hooks: [{ event: 'Stop', command: 'gnomon hook stop' }, { event: 'PreToolUse', command: 'gnomon hook pre' }] },
+    provides: { mcp: [{ command: 'paradigm-mcp', args: ['.'] }], hooks: [{ event: 'Stop', command: 'gnomon hook stop' }, { event: 'PreToolUse', command: 'gnomon hook pre' }] },
   });
 
   function fixture() {
@@ -726,8 +739,8 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
     expect(second.written).toEqual([]);
     expect(treeBytes(repo)).toEqual(before);
     const mcp = JSON.parse(fs.readFileSync(path.join(repo, '.gnomon', 'generated', '.mcp.json'), 'utf8'));
-    expect(mcp._gnomon).toEqual({ generatedBy: 'gnomon', manifestHash: manifestHash(distro()), doNotEdit: true });
-    expect(mcp.mcpServers.paradigm).toEqual({ command: 'paradigm-mcp', args: ['.'] });
+    expect(mcp._gnomon).toEqual({ generatedBy: 'gnomon', manifestHash: canonicalManifestHash(distro()), doNotEdit: true });
+    expect(mcp.mcpServers['gm_gnomon_paradigm-distro']).toEqual({ command: 'paradigm-mcp', args: ['.'] });
   });
 
   it('G-HON-04: install → uninstall leaves ~/.claude and the repo byte-identical (no project.yaml written)', () => {
@@ -752,7 +765,7 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
     generateRepo(repo, distro(), { home, emit: ev.emit });
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
     if (st.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
     // uninstall
     uninstallRepo(repo, { home, emit: ev.emit });
     const after = treeBytes(repo);
@@ -972,5 +985,124 @@ describe('#manifest-loader emits only §9.1 registry kinds', () => {
     }
     expect(kinds.size).toBeGreaterThan(8);
     expect([...kinds].filter((k) => !EVENT_KIND_NAMES.includes(k))).toEqual([]);
+  });
+});
+
+/* ── Aegis S0b review fixes ───────────────────────────────────────────────── */
+
+describe('Aegis S0b M3: version class by packageHash history', () => {
+  it('re-staging earlier approved bytes that are not the current pin is a revert with the DOWNGRADE line, never first or update', () => {
+    const home = tmp();
+    const auth = root();
+    const v1 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.0.0' }));
+    const v2 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.1.0' }));
+    const stage = (src: string) => {
+      const st = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
+      if (st.state !== 'staged') throw new Error('staged');
+      return st;
+    };
+    const s1 = stage(v1);
+    expect(s1.record.detail.versionClass).toBe('first');
+    decideInstallCard(home, 'acme.diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s1.cardId), authority: auth });
+    const s2 = stage(v2);
+    expect(s2.record.detail.versionClass).toBe('update');
+    decideInstallCard(home, 'acme.diff-lens', s2.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s2.cardId), authority: auth });
+    // a plain downgrade by semver
+    const back = stage(v1);
+    expect(back.record.detail.versionClass).toBe('downgrade');
+    // roll back to 1.0.0, then re-stage the 1.1.0 bytes: approved before, not the current pin → revert
+    rollbackModSnapshot(home, 'acme.diff-lens', undefined, { presenceToken: rbBound('acme.diff-lens', undefined), authority: auth });
+    const again = stage(v2);
+    expect(again.record.detail.versionClass).toBe('revert');
+    const texts = (again.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+    expect(texts[0]).toMatch(/^Downgrade mod acme\.diff-lens/);
+    expect(texts[3]).toMatch(/^DOWNGRADE: revert to previously approved bytes, 1\.0\.0 → 1\.1\.0/);
+  });
+
+  it('a current pin whose manifest cannot be re-read is never classified first', () => {
+    const home = tmp();
+    const auth = root();
+    const v1 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.0.0' }));
+    const s1 = stageInstall({ home, source: v1, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (s1.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', s1.cardId), authority: auth });
+    const pinMf = path.join(pinnedDir(home, 'acme.diff-lens', s1.record.detail.packageHash), MANIFEST_FILE);
+    fs.chmodSync(path.dirname(pinMf), 0o700);
+    fs.chmodSync(pinMf, 0o600);
+    fs.writeFileSync(pinMf, 'not json');
+    const v2 = writeMod(path.join(tmp(), 'diff-lens'), baseManifest({ version: '1.1.0' }));
+    const s2 = stageInstall({ home, source: v2, via: 'package', requestedBy: HUMAN, trust: auth });
+    if (s2.state !== 'staged') throw new Error('staged');
+    expect(s2.record.detail.versionClass).not.toBe('first');
+  });
+});
+
+describe('Aegis S0b M6: grant.publisher replay rule', () => {
+  it('a re-appended older binding never replaces the newest one for that publisher; appends are strictly increasing', () => {
+    const home = tmp();
+    const auth = root();
+    const t0 = new Date('2026-10-20T10:00:00.000Z');
+    appendGrantRow(home, auth, { kind: 'grant.publisher', publisher: 'acme', host: 'gitlab.com', namespace: 'acme' }, t0);
+    // same createdAt requested: the writer bumps it so the reader accepts the newer binding
+    appendGrantRow(home, auth, { kind: 'grant.publisher', publisher: 'acme', host: 'codeberg.org', namespace: 'acme' }, t0);
+    expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
+    const lines = fs.readFileSync(grantsPath(home), 'utf8').split('\n').filter(Boolean);
+    fs.appendFileSync(grantsPath(home), `${lines[0]}\n`); // replay the first (older) binding
+    const g = readGrants(home, auth);
+    expect(g.publishers.get('acme')).toMatchObject({ host: 'codeberg.org', namespace: 'acme' });
+    expect(g.rejected.map((r) => r.reason)).toContain('replay');
+  });
+});
+
+describe('Aegis S0b M2: the TOFU binding race', () => {
+  const SHA40 = 'b'.repeat(40);
+  const stageGit = (home: string, auth: DevTestRootAuthority, name: string, host: string) => {
+    const src = writeMod(path.join(tmp(), name), baseManifest({ name, provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
+    const st = stageInstall({ home, source: src, via: 'git', git: { url: `https://${host}/acme/${name}`, commit: SHA40 }, requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    return st;
+  };
+  it('two first-binding cards for different hosts: approving one makes the other refuse PUBLISHER at decide', () => {
+    const home = tmp();
+    const auth = root();
+    const a = stageGit(home, auth, 'board-a', 'gitlab.com');
+    const b = stageGit(home, auth, 'board-b', 'codeberg.org');
+    const linesOf = (st: typeof a) => (st.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+    expect(a.record.detail.rebind).toEqual({ host: 'gitlab.com', namespace: 'acme', from: null });
+    expect(linesOf(a)).toContain('publisher acme: first binding to gitlab.com/acme');
+    expect(linesOf(a).some((t) => t.startsWith('PUBLISHER RE-BIND'))).toBe(false);
+    decideInstallCard(home, 'acme.board-a', a.cardId, 'install', { presenceToken: bound(home, 'acme.board-a', a.cardId), authority: auth });
+    expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com', namespace: 'acme' });
+    const r = refusalOf(() => decideInstallCard(home, 'acme.board-b', b.cardId, 'install', { presenceToken: bound(home, 'acme.board-b', b.cardId), authority: auth }));
+    expect(r.manifestCode).toBe('PUBLISHER');
+    expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'gitlab.com' });
+    // re-staged with an explicit re-bind, the card names what it replaces
+    const src = writeMod(path.join(tmp(), 'board-c'), baseManifest({ name: 'board-c', provides: { tools: [{ name: 'lens.diff', effects: ['read'] }] }, requires: { capabilities: [], egress: 'none' } }));
+    const c = stageInstall({ home, source: src, via: 'git', git: { url: 'https://codeberg.org/acme/board-c', commit: SHA40 }, rebindPublisher: true, requestedBy: HUMAN, trust: auth });
+    if (c.state !== 'staged') throw new Error('staged');
+    expect(linesOf(c as typeof a)).toContain('PUBLISHER RE-BIND from gitlab.com/acme: acme → codeberg.org/acme');
+    decideInstallCard(home, 'acme.board-c', c.cardId, 'install', { presenceToken: bound(home, 'acme.board-c', c.cardId), authority: auth });
+    expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
+  });
+});
+
+describe('Aegis S0b L2: the upgradedHash re-card keeps the original source', () => {
+  it('a pin whose upgradedHash no longer matches pauses and re-cards under its linked source, not as a package', () => {
+    const home = tmp();
+    const auth = root();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const { manifestHash: mh, packageHash: ph, source } = st.record.detail;
+    // a pin row that claims an upgrader output these bytes do not produce
+    appendGrantRow(home, auth, { kind: 'grant.install', name: 'acme.diff-lens', manifestHash: mh, packageHash: ph, cardId: st.cardId, source, upgradedHash: `sha256:${'0'.repeat(64)}` });
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth });
+    if (paused.state !== 'paused') throw new Error('paused');
+    expect(paused.cardId).not.toBeNull();
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
+    expect(rec.detail.source).toBe(source);
+    expect(rec.detail.source.startsWith('linked:')).toBe(true);
+    expect(rec.detail.tier).toBe('local');
   });
 });

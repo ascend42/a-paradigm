@@ -34,8 +34,9 @@
  * request) and, for uninstall, the root-key presence on the card.
  */
 import * as fs from 'node:fs';
+import os from 'node:os';
 import * as path from 'node:path';
-import { HSID_PATTERN } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, isModId } from '@a-company/gnomon-contracts';
 import { RootVerifier } from '../kernel/identity/root-authority.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
 import { readIdentity } from '../kernel/identity/provision.js';
@@ -44,11 +45,13 @@ import { resolveGnomonHome } from '../kernel/lifecycle/home.js';
 import { effectiveInstall, readGrants } from '../kernel/manifest/grants.js';
 import { rederiveInstallDetail, stageInstall } from '../kernel/manifest/install.js';
 import { ManifestRefusal } from '../kernel/manifest/refusal.js';
+import { userMcpServerNames } from '../kernel/manifest/user-mcp.js';
 import { modDir } from '../kernel/manifest/snapshot.js';
 import { isUserPaused, modNames, pendingStaged, requestStart, writePause, requestUninstall, uninstallRequested } from '../kernel/modhost/control.js';
 import { GNOMON_VERSION } from '../version.js';
 import { isDevHome, loadDevHome } from './dev-home.js';
 import { readout, refused, type Out } from './readout.js';
+import { runModConfig } from './desk-cli.js';
 
 export const MOD_EXIT_OK = 0;
 export const MOD_EXIT_REFUSED = 1;
@@ -60,13 +63,17 @@ usage: gnomon mod <verb> [--home <abs>] …
   link <folder>      stage a linked folder (tier local); prints the install card
   list               installed mods and pending cards
   status [<name>]    pin, source, tier, pause state, pending cards, snapshots
-  pause <name>       stop the mod and keep it stopped
+  pause <name>       stop the mod and keep it stopped (its Desk MCP server: applies to new sessions)
   start <name>       clear a pause and start the mod
   uninstall <name>   ask for the uninstall card (root key, decided in the GUI)
+  config <name> [--server <s>] [--command <abs>] [--args …] [--env NAME=value]
+                     ask to override how the mod's MCP server launches (only what
+                     its manifest lets you set; a card in the GUI decides it)
 Cards are raised by the running kernel (gnomon up) and decided in the GUI with Touch ID.
 `;
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name> (contracts isModId). */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const NO_TRUST: RowVerifier = Object.freeze({ rootKeyId: null, ns: null, verifyRow: () => false });
 
 export interface ModCliIo {
@@ -80,6 +87,10 @@ export interface ModCliDeps {
   trust?: RowVerifier;
   env?: NodeJS.ProcessEnv;
   now?: () => Date;
+  /** the user home whose .claude.json MCP servers a mod's derived server name may not collide with (default os.homedir()) */
+  userHome?: string;
+  /** the project whose .mcp.json is checked too (default the working directory) */
+  cwd?: string;
 }
 
 /** The root that signs this home's grant table, read from the home (never asserted by the caller). */
@@ -130,6 +141,11 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
     args.splice(hi, 2);
   }
   const [verb, target, ...extra] = args;
+  // TD-2026-10-20-812 (#mcp-passthrough): `gnomon mod config` takes flags, so it is parsed by desk-cli.ts
+  if (verb === 'config') {
+    const h = path.resolve(home ?? resolveGnomonHome());
+    return runModConfig(args.slice(1), io, { home: h, trust: deps.trust ?? homeTrust(h), env, ...(deps.now ? { now: deps.now } : {}) });
+  }
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') {
     // asked-for help goes to stdout; a missing verb is a usage error: stderr
     (verb ? io.stdout : io.stderr).write(MOD_USAGE);
@@ -178,6 +194,8 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
           ...(hsid && HSID_PATTERN.test(hsid) ? { hsid } : {}),
           attended: !hsid,
           trust,
+          // Aegis S0b M1: COLLISION against the user's MCP servers (user + local scope, and this project's .mcp.json)
+          userMcpServers: userMcpServerNames({ userHome: deps.userHome ?? os.homedir(), repo: deps.cwd ?? process.cwd() }),
           ...(deps.now ? { now: deps.now() } : {}),
         });
       } catch (err) {

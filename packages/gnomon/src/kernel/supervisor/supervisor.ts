@@ -241,6 +241,13 @@ export interface SupervisorOptions {
   platform?: string;
   /** whose hooks run (T-2026-10-18-010 L4, P8-D94): the root-signed `config.sessions.hooks` mode; default `audited` */
   hooksMode?: SessionHooksMode;
+  /**
+   * #mcp-passthrough (TD-2026-10-20-812): the session's mcp servers = the repo's VERIFIED GENERATED distro servers
+   * (`.gnomon/generated/.mcp.json`, kernel output checked against the kernel-held record; passed through, never
+   * subject to the reserved-prefix drop) + installed, granted mods' provides.mcp as gm_<pub>_<name>. Absent ⇒ the
+   * distro servers only.
+   */
+  deskMcp?: (distroServers: Record<string, unknown>, ctx: { hsid: string; cwd: string; worktree?: string }) => Record<string, unknown>;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -449,12 +456,20 @@ export class SessionSupervisor {
   /** woken at every turn boundary (a result line), session exit and settled open */
   readonly #boundaryWaiters = new Set<() => void>();
 
-  /** #gnomon-voice table talk (TD-2026-10-20-294): the per-turn guidance for an hsid (voice-control.guidanceFor), late-bound */
-  #voiceGuidance: (hsid: string) => string | null = () => null;
+  /**
+   * The per-turn guidance for an hsid, late-bound: table talk (TD-2026-10-20-294) and the Desk (TD-2026-10-20-812)
+   * composed into ONE block by desk-guidance.ts composeGuidance (trace-cli extrasAgree admits exactly one extra block).
+   */
+  #turnGuidance: (hsid: string) => string | null = () => null;
 
-  /** Wire the voice guidance source (the daemon builds VoiceControl after the supervisor). */
+  /** Wire the composite per-turn guidance source (the daemon builds VoiceControl and the offer router after the supervisor). */
+  setTurnGuidance(f: (hsid: string) => string | null): void {
+    this.#turnGuidance = f;
+  }
+
+  /** The voice-only form (table talk before the Desk): the same single-block source. */
   setVoiceGuidance(f: (hsid: string) => string | null): void {
-    this.#voiceGuidance = f;
+    this.setTurnGuidance(f);
   }
 
   constructor(o: SupervisorOptions) {
@@ -641,7 +656,9 @@ export class SessionSupervisor {
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
       fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
-      fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
+      const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
+      const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
+      fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
@@ -1372,7 +1389,7 @@ export class SessionSupervisor {
     await this.#release(u.permit.permitId, s, `uncertain-${why}`);
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution }): Promise<{ turn: string; steered?: boolean }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel' }): Promise<{ turn: string; steered?: boolean }> {
     this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
@@ -1408,10 +1425,11 @@ export class SessionSupervisor {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = turnContentHash(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
+    // origin kernel: a KERNEL-templated turn (#offer-router's open text), never model or client text
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: p.origin === 'kernel' ? 'kernel' : 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     // table talk: while voice is attached to this session, EVERY turn carries the guidance as a second text block;
     // contentHash stays the human's text alone (replay binds to it), turn.sent names the guidance by an opaque hash
-    const guidance = this.#voiceGuidance(s.hsid);
+    const guidance = this.#turnGuidance(s.hsid);
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
     this.#stdin(s, userMessageLine(p.text, guidance));
     return { turn: turnId(s.hsid, n) };

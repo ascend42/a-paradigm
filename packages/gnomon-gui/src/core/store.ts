@@ -30,6 +30,7 @@ import { projectHue, sha256Tagged } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
+import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
 
 export interface Row {
   seq: number;
@@ -175,6 +176,11 @@ export class GuiStore {
     return this.#transcripts.get(hsid) ?? [];
   }
 
+  /** #gui-offer-slip: the conversation's margin slips, folded ONLY from its kernel offer rows (core/offers.ts). */
+  offers(hsid: string): OfferBook {
+    return foldOffers(this.transcript(hsid), hsid);
+  }
+
   /** The resume cursor `{logId, seq}`, or undefined (read from the start). */
   cursor(): { logId: string; seq: number } | undefined {
     const seq = Math.max(this.position, this.head);
@@ -273,6 +279,8 @@ export class GuiStore {
     }
     // P8-D87: rows that change status.runModes — the page re-reads status on them (motion-on-events, no polling)
     if (MODE_ROW_KINDS.has(r.kind)) what.add('modes');
+    // #gui-offer-slip: an offer row (shown / decided / kept) changes that conversation's slips
+    if (hsid && OFFER_ROW_KINDS.has(r.kind)) what.add(`offers:${hsid}`);
     // V2d: an attachment row changes status.voice (the pill re-reads it); a turn row kicks the level meter; the
     // kernel's idle auto-off leaves a quiet note until the next attachment
     if (VOICE_ROW_KINDS.has(r.kind)) {
@@ -929,7 +937,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     if (it) push(r, 0, it);
     else hidden++;
   }
-  return { items, hidden };
+  // #gui-offer-slip: a reply's ```offer block is hidden only under a kernel offer.shown row for that reply
+  return { items: opts.raw ? items : stripOfferBlocks(items, rows), hidden };
 }
 
 /* ── S2 desk structure: pure helpers (critique 2026-10-20 §2 S2) ─────────────────────────────────────────────── */

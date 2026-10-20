@@ -36,7 +36,7 @@
  *   budget.pause / budget.resume / budget.breaker.open / budget.breaker.close  {dimension}
  *   permit.deny       {dimension}                                      (the refusal's dimension, e.g. api-billing-path)
  */
-import { projectHue } from '@a-company/gnomon-contracts';
+import { isModId, projectHue } from '@a-company/gnomon-contracts';
 
 export const FEED_KINDS: readonly string[] = Object.freeze([
   'session.open',
@@ -86,7 +86,8 @@ export const FEED_HUES = 6; // S5.6: the six pigments (gnomon-contracts PROJECT_
 
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;
-const MOD = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name>. */
+const MOD = { test: (s: string): boolean => isModId(s) };
 const REASON = /^[a-z][a-z0-9-]{0,31}$/;
 /** A chain timestamp (ISO 8601 UTC). */
 export const FEED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;

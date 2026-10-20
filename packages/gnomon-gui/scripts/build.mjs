@@ -47,6 +47,9 @@ export async function buildFiles() {
     minify: false,
     legalComments: 'none',
     charset: 'utf8',
+    // Aegis L1: preview-only paths (devArmOfferOnce) are dead code in the served bundle
+    define: { __GNOMON_PREVIEW__: 'false' },
+    minifySyntax: true, // drops the define's dead branches (whitespace and names stay readable)
     write: false,
     logLevel: 'silent',
   });

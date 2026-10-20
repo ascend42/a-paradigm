@@ -125,6 +125,8 @@ export const ID_PREFIXES = {
   brief: 'brief:',
   msg: 'msg:',
   ds: 'ds:',
+  /** the Desk (TD-2026-10-20-812): one offer.shown row and the decision on it */
+  offer: 'offer:',
 } as const;
 export type IdKind = keyof typeof ID_PREFIXES;
 
