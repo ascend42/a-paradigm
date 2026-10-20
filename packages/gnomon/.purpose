@@ -2870,7 +2870,7 @@ components:
       (feedCount), strings only ids or enum tokens (test/mod-feed-v2.test.ts
       property test); seq/at validated. status() lists views of running mods
       ({name, viewId, slot, placement, dev}) for the #gui mod panels.
-      FIRST_PARTY_PACKAGE_HASHES pins the Workshop. Still to come: spend from the caller permit,
+      FIRST_PARTY_PACKAGE_HASHES pins the Workshop and the Ledger. Still to come: spend from the caller permit,
       dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
     tags: [kernel, mods, sandbox, M1.11]
 

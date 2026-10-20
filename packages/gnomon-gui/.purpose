@@ -29,7 +29,7 @@ components:
       dev-linked (tier local) mod or a dev result; a refusal shows verbatim
       in the fence. ModPanelScheduler: re-render only on a LIVE store row of
       a MOD_FEED_KINDS kind (held equal to the kernel FEED_KINDS by test),
-      debounced 250 ms, one render in flight (rows during it queue exactly
+      debounced by MOD_PANEL_DEBOUNCE_MS, one render in flight (rows during it queue exactly
       one more), never on a timer. ui/mod-panels-mount.ts is the browser
       glue (creates the slot containers next to their panes, no index.html
       change, calls mod.view with input {hsid: focused} as display context);

@@ -52,7 +52,7 @@ components:
       the two views (no SDK import, echoes MOD_ABI_ID). State comes ONLY from
       the #mod-host feed projection v2 (numbers only, granted by log.read);
       a relayed render never replays fixtureEvents. requires log.read,
-      egress none, no tools or commands. Fixtures strip, strip-reduced,
+      egress none, no tools or commands; tier first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES). Fixtures strip, strip-reduced,
       over-budget, breaker, compacted with golden renders
       (test/ledger-mod.test.ts, light and dark); goldens regenerate with
       `npm run repin:first-party` in packages/gnomon.
