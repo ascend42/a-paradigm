@@ -15,6 +15,7 @@ import { main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-kernel.js';
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
+import { MOTION_KEY, THEME_KEY } from '../core/settings.js';
 
 const frames = (n: number): Promise<void> => new Promise((r) => (n <= 0 ? r() : requestAnimationFrame(() => void frames(n - 1).then(r))));
 
@@ -28,6 +29,10 @@ async function boot(): Promise<void> {
   // a fresh key per page: no pin or restart marker from an earlier preview load may apply
   localStorage.removeItem(PIN_KEY);
   sessionStorage.clear();
+  // #gui-settings: the stored theme choice is the fixture's (none: auto, which follows ?theme= as the OS)
+  if (fx.choice) localStorage.setItem(THEME_KEY, fx.choice);
+  else localStorage.removeItem(THEME_KEY);
+  localStorage.removeItem(MOTION_KEY);
   // S5: the Workshop placement the screenshot asks for, as the Layout the app restores
   const l = placeWorkshop(applyPreset('desk'), PREVIEW.workshop === 'hidden' ? 'footer' : PREVIEW.workshop);
   localStorage.setItem('gnomon.gui.layout', serializeLayout(PREVIEW.workshop === 'hidden' ? togglePane(l, 'workshop') : l));
@@ -44,6 +49,7 @@ async function boot(): Promise<void> {
   if (fx.focus) (document.querySelector(`#session-list [data-hsid="${fx.focus}"]`) as HTMLElement | null)?.click();
   // S3: ?fan=1 shows the stack pile fanned (what :hover / :focus-within does), for the screenshot
   if (new URLSearchParams(location.search).get('fan') === '1') document.getElementById('stack')?.classList.add('fan');
+  if (fx.open === 'settings') document.getElementById('settings-btn')?.click(); // opening needs no trust; its controls do
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

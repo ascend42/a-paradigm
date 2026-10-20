@@ -622,3 +622,33 @@ components:
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+  gui-settings:
+    description: >-
+      #gui-settings (founder UI-first rule) - the header Day / Night / Auto
+      theme switch and the Settings sheet (header gear key, Cmd-comma, the
+      palette's "Settings..."). core/settings.ts is PURE: parseTheme /
+      parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout),
+      themeSwitchEntries, unlockSeenOf (the cached unlock folded from
+      kernel-principal approval.unlock / .dropped rows; daemon.start clears)
+      and settingsModel (Appearance, Layout, Voice, Permissions, About). Every
+      control names an existing GUI command in SETTINGS_RUNS (theme, motion,
+      layout presets, pane toggles, workshop placement, mode.repo.*, voice app
+      start/stop, enrol, dictation delay) or the standing Revoke
+      (core/standing.ts revokeRequest); no new kernel verb. Kernel-owned values
+      (mode ceiling, unlock and bounds, connection, bundle pin, voice hotkeys,
+      the always-shown regions) are read-only rows with a how-to-change line,
+      never a terminal-only path. ui/settings-sheet.ts paints with render.ts
+      h() (text nodes, no inline style) and acts on trusted clicks only
+      (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are
+      pinned to the connected home's kernel principal (standing.ts
+      kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an
+      unseen unlock says only "no unlock seen since this page connected";
+      run(id, trusted) carries the gesture's isTrusted from every path and the
+      header switch checks it; the standing feed sits under overlays (hidden
+      while a dialog is open), its offer is not an ink key, and the stack pile
+      reserves bottom room so it never covers a card key.
+    path: src/core/settings.ts
+    type: module
+    tags: [gnomon, gui, settings, theme]
+    tests:
+      - test/settings.test.ts

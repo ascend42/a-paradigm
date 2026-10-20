@@ -722,3 +722,40 @@ html, body {
 .tone-hue-3 { background: var(--p-ochre-fill); }
 .tone-hue-4 { background: var(--p-rose-clay-fill); }
 .tone-hue-5 { background: var(--p-sea-grey-fill); }
+
+/* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
+.seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.seg-key.current, .seg-key[aria-checked="true"], .seg-key[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
+[data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key.current::after { color: var(--ink); }
+.seg-key[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); }
+.theme-switch { gap: 2px; }
+.theme-key { white-space: nowrap; }
+@media (max-width: 1200px) { .theme-word { display: none; } }
+.settings-btn { font-size: 14px; }
+.settings-card { width: min(720px, calc(100vw - 32px)); max-width: 720px; max-height: 78vh; padding: 0; gap: 0; }
+.settings-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+.settings-head .title { margin: 0; font-size: 17px; }
+.settings-head .key { margin-left: auto; }
+.settings-body { overflow: auto; padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.settings-sec { border-bottom: 1px solid var(--rule); padding: 8px 0; }
+.settings-sec:last-child { border-bottom: 0; }
+.settings-h { margin: 4px 0 6px; font-size: 14px; }
+.settings-row { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: center; padding: 4px 0; }
+.settings-label { color: var(--ink2); font-size: 12px; }
+.settings-row > .seg, .settings-row > .key, .settings-row > .settings-value { grid-column: 2; justify-self: start; }
+.settings-note, .settings-how { grid-column: 2; margin: 0; }
+.settings-value { font-size: 12px; color: var(--ink); }
+.settings-readonly .settings-label::after { content: " · kernel-owned"; color: var(--sec); font-size: 11px; }
+/* the standing-grant feed (ui/standing-feed.ts): classes only, the CSP refuses style attributes */
+/* Aegis M2: under every overlay (z 40) and gone while a dialog is open; the stack's pile reserves room below its last
+   card so the feed never covers a decision key; the offer is a plain sheet button, never an ink decision key */
+.overlay { z-index: 40; }
+.standing-feed { position: fixed; right: 12px; bottom: 12px; max-width: 320px; z-index: 15; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([hidden]) :focus) .standing-feed { display: none; }
+.pile { padding-bottom: 140px; }
+.standing-offer { font: inherit; font-size: 11.5px; text-align: left; color: var(--slate); background: var(--sheet); border: 1px dashed var(--slate); border-radius: var(--radius); padding: 4px 8px; cursor: pointer; }
+.standing-offer:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.standing-items { margin: 4px 0; padding-left: 16px; max-height: 200px; overflow: auto; }
+.standing-toast { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--key-edge); color: var(--ink); }
+.standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }

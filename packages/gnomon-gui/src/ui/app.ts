@@ -10,11 +10,13 @@
  * control (header menu, ⇧Tab, palette; core/modes.ts), the voice pill and
  * attach controls (core/voice.ts, V2d), the voice app's lifecycle, dev banner,
  * enrolment dialog and notices (core/voice-client.ts, V2e), the palette,
- * themes + auto + reduced motion, the Shuttle view and /diag. Every string
+ * themes + auto + reduced motion (the header Day / Night / Auto switch and the
+ * Settings sheet, #gui-settings: ui/settings-sheet.ts over core/settings.ts),
+ * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
 import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
-import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
+import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
@@ -25,6 +27,9 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { mountStandingFeed } from './standing-feed.js';
+import { mountSettings } from './settings-sheet.js';
+import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
+import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
@@ -90,9 +95,34 @@ const motionQ = matchMedia('(prefers-reduced-motion: reduce)');
 function applyLook(): void {
   document.documentElement.dataset.theme = resolveTheme(theme, darkQ.matches);
   document.documentElement.dataset.motion = resolveMotion(motion, motionQ.matches);
+  // #gui-settings: the header switch shows the choice (auto names what it resolves to now)
+  const sw = document.getElementById('theme-switch');
+  if (sw)
+    for (const e of themeSwitchEntries(theme, darkQ.matches)) {
+      const b = sw.querySelector(`[data-run="${e.run}"]`) as HTMLElement | null;
+      if (!b) continue;
+      b.setAttribute('aria-checked', String(e.current));
+      b.classList.toggle('current', e.current);
+      b.title = e.title;
+    }
 }
-darkQ.addEventListener('change', applyLook);
-motionQ.addEventListener('change', applyLook);
+/** #gui-settings: a presentation preference kept per browser (a private window may refuse storage: it still applies). */
+function keep(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* not kept; applied for this page */
+  }
+}
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+darkQ.addEventListener('change', () => (applyLook(), settings.repaint()));
+motionQ.addEventListener('change', () => (applyLook(), settings.repaint()));
 
 function applyLayout(): void {
   const d = document.querySelector('.desk')!;
@@ -633,8 +663,43 @@ const standingFeed = mountStandingFeed(document, {
   pendingKinds: () => [...store.cards.values()].map((c) => String(c.kind)),
   focusRepo: () => (focused ? (store.sessions.get(focused)?.repo ?? null) : null),
   notice,
+  kernelPrincipal: () => kernelPrincipalOf(session?.principal),
 });
 store.onChange(() => standingFeed.repaint());
+// #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
+const settings = mountSettings(document, {
+  model: () =>
+    settingsModel({
+      theme,
+      motion,
+      prefersDark: darkQ.matches,
+      prefersReduced: motionQ.matches,
+      layout,
+      status,
+      mode: currentMode(),
+      dictationDelayMs: dict.delayMs,
+      connection: session && client ? { principal: session.principal, connId: session.connId, surface: SURFACE, clientApiDrift: session.clientApiDrift } : null,
+      gui: GUI_CLIENT,
+      unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),
+    }),
+  run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
+  revoke: (grantId) => void revokeGrant(grantId),
+});
+store.onChange((w) => {
+  if (w.has('feed') || w.has('modes') || w.has('voice')) settings.repaint();
+});
+/** Settings → Revoke: the standing feed's own request (request.grant.standing.revoke, a tighten, no presence). */
+async function revokeGrant(grantId: string): Promise<void> {
+  if (!client) return notice('not connected: the grant was not revoked', true);
+  try {
+    await client.call('log.append', revokeRequest(grantId));
+    notice(null);
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the grant was not revoked', true);
+  } finally {
+    await refreshStatus();
+  }
+}
 
 /* ── connection ─────────────────────────────────────────────────── */
 /** Backlog + follow with the {logId, seq} cursor; a cursor-epoch refusal clears the store and re-reads (core/client.ts). */
@@ -976,6 +1041,7 @@ async function refreshStatus(): Promise<void> {
   paintVoice();
   paintSessions();
   standingFeed.repaint(); // F6: today's grant (status.standing)
+  settings.repaint(); // #gui-settings: the sheet re-reads the same status
   syncDictationContext();
   foldVoiceReports();
   syncSpeakPoll();
@@ -1568,11 +1634,12 @@ function paintPalette(): void {
   clear(l);
   palItems.forEach((c, i) => l.appendChild(h(doc, 'div', { class: `pal-row${i === palSel ? ' sel' : ''}${c.verb && !c.available ? ' unavailable' : ''}`, role: 'option', 'data-id': c.id }, h(doc, 'span', { class: 'pal-title' }, c.title), h(doc, 'kbd', { class: 'pal-kbd' }, c.keys ?? c.why ?? c.id)) as unknown as Node));
 }
-function run(id: string): void {
+/** Run a command; `trusted` is the gesture's isTrusted (Aegis L2/L3): a request-making command needs it. */
+function run(id: string, trusted: boolean): void {
   $('palette').hidden = true;
-  if (id.startsWith('theme.')) theme = id.slice(6) as ThemeChoice;
-  else if (id === 'motion.reduce') motion = 'reduce';
-  else if (id === 'motion.system') motion = 'system';
+  if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
+  else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
+  else if (id === 'settings.open') settings.open();
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
   else if (id === 'pane.sessions.toggle') layout = togglePane(layout, 'sessions');
   else if (id === 'pane.stack.toggle') layout = togglePane(layout, 'stack');
@@ -1595,19 +1662,23 @@ function run(id: string): void {
     paintSessions();
     void paintStack();
   }
-  else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', true);
-  else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', true);
-  else if (id === 'voice.client.start') void voiceClientOp('start', true);
-  else if (id === 'voice.client.stop') void voiceClientOp('stop', true);
-  else if (id === 'voice.enrol') openEnrol(true);
+  else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', trusted);
+  else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', trusted);
+  else if (id === 'voice.client.start') void voiceClientOp('start', trusted);
+  else if (id === 'voice.client.stop') void voiceClientOp('stop', trusted);
+  else if (id === 'voice.enrol') {
+    settings.close(); // the enrol dialog takes the screen (Esc then closes it, not a sheet under it)
+    openEnrol(trusted);
+  }
   else if (id.startsWith('voice.delay.')) setDictationDelay(parseDelay(id.slice(12)));
   else if (id === 'voice.dictation.hold') dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() });
-  else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), true);
-  else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
-  else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
+  else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), trusted);
+  else if (id === 'gui.reconnect' && trusted) void attach({ reconnect: true }, null);
+  else if (id === 'diag.send' && trusted && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
   else if (id === 'verb.status' && client) void client.call('status').then((s) => (status = s as Record<string, unknown>));
   applyLook();
   applyLayout();
+  settings.repaint();
 }
 
 /* ── events (every write verb hangs off a user gesture, G-GUI-04) ── */
@@ -1654,7 +1725,7 @@ function wire(): void {
       paintTranscript(true);
     } else paintTranscript();
   }).observe($('viewport'));
-  $('status-line').addEventListener('click', () => run('view.kernel-feed')); // S5.4: the readout links to the kernel feed
+  $('status-line').addEventListener('click', (e) => run('view.kernel-feed', e.isTrusted)); // S5.4: the readout links to the kernel feed
   $('jump-latest').addEventListener('click', () => {
     follow.jump();
     paintTranscript();
@@ -1677,13 +1748,13 @@ function wire(): void {
       toggleAct(e.target);
     }
   });
-  $('empty-new').addEventListener('click', () => run('session.new'));
+  $('empty-new').addEventListener('click', (e) => run('session.new', e.isTrusted));
   $('layout-btn').addEventListener('click', () => ($('layout-menu').hidden ? openLayoutMenu() : closeLayoutMenu()));
   $('layout-menu').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
     if (!b) return;
     closeLayoutMenu();
-    run(b.dataset.run!);
+    run(b.dataset.run!, e.isTrusted);
   });
   $('raw-toggle').addEventListener('click', () => {
     if (width) widths.save(transcriptId(), width, heights);
@@ -1713,7 +1784,7 @@ function wire(): void {
     const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
     if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
-    if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
+    if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!, e.isTrusted);
   };
   $('stack').addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('[data-pile-more]')) {
@@ -1723,7 +1794,7 @@ function wire(): void {
     onCard(e);
   });
   $('pinned').addEventListener('click', onCard);
-  $('stack-scope').addEventListener('click', () => run('stack.scope.toggle'));
+  $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $<HTMLTextAreaElement>('composer-text');
@@ -1753,7 +1824,7 @@ function wire(): void {
       $<HTMLFormElement>('composer').requestSubmit();
     }
   });
-  $('new-session').addEventListener('click', () => run('session.new'));
+  $('new-session').addEventListener('click', (e) => run('session.new', e.isTrusted));
   $('mode-btn').addEventListener('click', () => ($('mode-menu').hidden ? openModeMenu() : closeModeMenu()));
   $('mode-menu').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope]') as HTMLButtonElement | null;
@@ -1822,6 +1893,12 @@ function wire(): void {
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
   $('palette-btn').addEventListener('click', () => openPalette());
+  // #gui-settings: the header switch and the ⚙ key (presentation only: no request leaves the page)
+  $('theme-switch').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
+    if (b && e.isTrusted && b.dataset.run!.startsWith('theme.')) run(b.dataset.run!, true); // Aegis L2: the human's own press
+  });
+  $('settings-btn').addEventListener('click', () => (settings.isOpen() ? settings.close() : settings.open()));
   $('repin-ack').addEventListener('click', (e) => {
     if (e.isTrusted) $('repin').hidden = true; // only a user click clears the re-pin notice
   });
@@ -1832,7 +1909,7 @@ function wire(): void {
   $('palette-input').addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, palItems.length - 1);
     else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
-    else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id);
+    else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted);
     else if (e.key === 'Escape') return void ($('palette').hidden = true);
     else return;
     e.preventDefault();
@@ -1840,12 +1917,18 @@ function wire(): void {
   });
   $('palette-list').addEventListener('click', (e) => {
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
-    if (r) run(r.dataset.id!);
+    if (r) run(r.dataset.id!, e.isTrusted);
   });
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openPalette();
+    } else if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === ',') {
+      e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
+      $('palette').hidden = true;
+      settings.open();
+    } else if (e.key === 'Escape' && settings.isOpen()) {
+      settings.close();
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
     } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
@@ -1857,7 +1940,7 @@ function wire(): void {
       void stopSpeaking(e.isTrusted);
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
-      run('session.new');
+      run('session.new', e.isTrusted);
     }
   });
   window.addEventListener('error', (e) => {
@@ -1870,6 +1953,8 @@ export function main(raw?: string): void {
   const take = (globalThis as { gnomonTakeLaunch?: () => string }).gnomonTakeLaunch;
   const frag = parseLaunchFragment(raw ?? (take ? take() : ''));
   layout = parseLayout(localStorage.getItem(LAYOUT_KEY) ?? '') ?? layout; // S5.2: the saved Layout (read at start, not at import)
+  theme = parseTheme(stored(THEME_KEY)); // #gui-settings: the theme and motion choices, per browser
+  motion = parseMotion(stored(MOTION_KEY));
   applyLook();
   applyLayout();
   wire();

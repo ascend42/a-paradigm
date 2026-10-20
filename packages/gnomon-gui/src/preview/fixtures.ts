@@ -38,6 +38,10 @@ export interface Fixture {
   focus: string | null;
   /** mount the Workshop mod's strip (packages/gnomon-mods/workshop) at the foot of the sessions pane */
   workshop: boolean;
+  /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
+  choice?: 'day' | 'night' | 'auto';
+  /** #gui-settings: open the Settings sheet once painted */
+  open?: 'settings';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -310,9 +314,16 @@ const attached = (since: string): Record<string, unknown> => ({ attached: true, 
 /** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
 const WORKSHOP_VIEW = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
 
-function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false): Fixture {
-  return { name, title, rows: c.rows(), status, focus, workshop };
+function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false, extra: Pick<Fixture, 'choice' | 'open'> = {}): Fixture {
+  return { name, title, rows: c.rows(), status, focus, workshop, ...extra };
 }
+
+/** #gui-settings: what the sheet reads beyond the desk (today's grant, the served bundle, the kernel key). */
+const SETTINGS_STATUS = {
+  standing: { built: true, tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'], active: [{ grantId: 'sg:01JPREVIEWGRANT0000000001', tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen'], repos: ['billing'], expiresAt: '2026-10-20T22:00:00.000Z', uses: 3 }] },
+  web: { listening: true, port: 7311, bundleHash: 'sha256:53b2cd7a8d74c94306f388e48249f176d37de86a1246995c905d3486db63fc81' },
+  kernelKeyId: 'kk:7k2m9q4xa1b2c3d4',
+};
 
 function emptyChain(): Chain {
   const c = new Chain();
@@ -329,6 +340,8 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
   'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'workshop', why: 'user', cardId: null }] } }, BILLING, true),
+  settings: fixture('settings', 'The Settings sheet open (theme auto, today\'s grant on)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings' }),
+  'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
   'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
 });
 
