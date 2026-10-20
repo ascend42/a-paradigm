@@ -152,7 +152,8 @@ export interface ResolvedGrants {
   /** grant.install and grant.uninstall rows in file order (effectiveInstall reads this) */
   pins: Array<GrantInstallRow | GrantUninstallRow>;
   /** S0b: publisher → its TOFU (host, namespace) binding (last row wins) */
-  publishers: Map<string, { host: string; namespace: string }>;
+  /** publisher → its newest accepted binding (Aegis S0b M6: per-publisher strictly increasing createdAt) */
+  publishers: Map<string, { host: string; namespace: string; createdAt?: string }>;
   other: Array<{ line: number; kind: GrantRowKind }>;
   rejected: Array<{ line: number; reason: string }>;
 }
@@ -274,7 +275,11 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
         break;
       case 'grant.publisher': {
         const r = row as GrantPublisherRow;
-        out.publishers.set(r.publisher, { host: r.host, namespace: r.namespace });
+        // Aegis S0b M6: like pin rows, a binding not newer than the newest accepted one for that publisher is a replay
+        const t = Date.parse(r.createdAt);
+        const prev = out.publishers.get(r.publisher)?.createdAt;
+        if (!Number.isFinite(t) || (prev !== undefined && t <= Date.parse(prev))) return void out.rejected.push({ line, reason: 'replay' });
+        out.publishers.set(r.publisher, { host: r.host, namespace: r.namespace, createdAt: r.createdAt });
         break;
       }
       case 'grant.capability': {
@@ -363,6 +368,12 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
     const newest = newestPinMs(readGrants(home, authority), row.name);
     const t = Date.parse(row.createdAt);
     if (newest !== undefined && !(Number.isFinite(t) && t > newest)) row.createdAt = new Date(newest + 1).toISOString();
+  }
+  if (row.kind === 'grant.publisher') {
+    // Aegis S0b M6: the reader keeps only a strictly newer binding per publisher; never sign one it would reject
+    const prev = readGrants(home, authority).publishers.get(row.publisher)?.createdAt;
+    const t = Date.parse(row.createdAt);
+    if (prev !== undefined && !(Number.isFinite(t) && t > Date.parse(prev))) row.createdAt = new Date(Date.parse(prev) + 1).toISOString();
   }
   const bad = checkGrantRow(row);
   if (bad) {

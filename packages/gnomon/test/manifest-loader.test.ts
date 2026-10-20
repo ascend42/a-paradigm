@@ -1036,3 +1036,20 @@ describe('Aegis S0b M3: version class by packageHash history', () => {
     expect(s2.record.detail.versionClass).not.toBe('first');
   });
 });
+
+describe('Aegis S0b M6: grant.publisher replay rule', () => {
+  it('a re-appended older binding never replaces the newest one for that publisher; appends are strictly increasing', () => {
+    const home = tmp();
+    const auth = root();
+    const t0 = new Date('2026-10-20T10:00:00.000Z');
+    appendGrantRow(home, auth, { kind: 'grant.publisher', publisher: 'acme', host: 'gitlab.com', namespace: 'acme' }, t0);
+    // same createdAt requested: the writer bumps it so the reader accepts the newer binding
+    appendGrantRow(home, auth, { kind: 'grant.publisher', publisher: 'acme', host: 'codeberg.org', namespace: 'acme' }, t0);
+    expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
+    const lines = fs.readFileSync(grantsPath(home), 'utf8').split('\n').filter(Boolean);
+    fs.appendFileSync(grantsPath(home), `${lines[0]}\n`); // replay the first (older) binding
+    const g = readGrants(home, auth);
+    expect(g.publishers.get('acme')).toMatchObject({ host: 'codeberg.org', namespace: 'acme' });
+    expect(g.rejected.map((r) => r.reason)).toContain('replay');
+  });
+});
