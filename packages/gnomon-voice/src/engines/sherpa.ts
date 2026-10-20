@@ -12,6 +12,7 @@
  */
 import { loadManifest, modelFor, verifiedModelPaths, type ModelManifest } from '../manifest.js';
 import { wordsOfResult, type PartialWord } from '../partials.js';
+import { silentLogger, type ComponentLog } from '../types.js';
 import type { PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceEngines } from '../types.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -90,14 +91,21 @@ export class SherpaVad implements VadEngine {
 
 export class SherpaStt implements SttEngine {
   readonly model = 'parakeet-tdt-0.6b-v2-int8';
-  readonly #rec: Sherpa;
+  #rec: Sherpa;
+  readonly #make: () => Sherpa;
+  readonly #log: ComponentLog;
+  readonly #watchdogMs: number;
   /** decodes on the one recognizer handle are serialized (the final and a live partial never overlap on it) */
   #chain: Promise<unknown> = Promise.resolve();
-  constructor(sherpa: Sherpa, p: Record<string, string>) {
-    this.#rec = new sherpa.OfflineRecognizer({
-      featConfig: { sampleRate: SR, featureDim: 80 },
-      modelConfig: { transducer: { encoder: p.encoder, decoder: p.decoder, joiner: p.joiner }, tokens: p.tokens, numThreads: 2, provider: 'cpu', debug: 0, modelType: 'nemo_transducer' },
-    });
+  constructor(sherpa: Sherpa, p: Record<string, string>, o: { log?: ComponentLog; watchdogMs?: number } = {}) {
+    this.#make = () =>
+      new sherpa.OfflineRecognizer({
+        featConfig: { sampleRate: SR, featureDim: 80 },
+        modelConfig: { transducer: { encoder: p.encoder, decoder: p.decoder, joiner: p.joiner }, tokens: p.tokens, numThreads: 2, provider: 'cpu', debug: 0, modelType: 'nemo_transducer' },
+      });
+    this.#rec = this.#make();
+    this.#log = o.log ?? silentLogger.component('#gnomon-voice');
+    this.#watchdogMs = o.watchdogMs ?? STT_DECODE_WATCHDOG_MS;
   }
   /**
    * T-2026-10-20-005 (B0, PROBES.md): decodeAsync runs on the addon's worker thread, so the event loop keeps serving
@@ -116,7 +124,7 @@ export class SherpaStt implements SttEngine {
     const run = async (): Promise<SherpaResult> => {
       const s = this.#rec.createStream();
       s.acceptWaveform({ sampleRate, samples });
-      if (typeof this.#rec.decodeAsync === 'function') return ((await this.#rec.decodeAsync(s)) as SherpaResult | undefined) ?? {};
+      if (typeof this.#rec.decodeAsync === 'function') return (await this.#watchdog(this.#rec.decodeAsync(s) as Promise<SherpaResult>, samples.length / sampleRate)) ?? {};
       this.#rec.decode(s);
       return (this.#rec.getResult(s) as SherpaResult | undefined) ?? {};
     };
@@ -124,7 +132,32 @@ export class SherpaStt implements SttEngine {
     this.#chain = p.catch(() => undefined);
     return p;
   }
+  /**
+   * Aegis L2: a decodeAsync that never resolves would stall the serialized chain (every later final and partial). Past
+   * the watchdog bound (STT_DECODE_WATCHDOG_MS plus the audio's own length) the call is rejected, the recognizer is
+   * rebuilt from the same verified paths (the hung handle is abandoned, its late result ignored) and the event logged.
+   */
+  #watchdog(p: Promise<SherpaResult>, audioS: number): Promise<SherpaResult> {
+    const bound = this.#watchdogMs + Math.ceil(audioS * 1000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        this.#log.warn('stt decode watchdog fired; recognizer rebuilt', { boundMs: bound });
+        try {
+          this.#rec = this.#make();
+        } catch (err) {
+          this.#log.warn('stt recognizer rebuild failed', { error: err instanceof Error ? err.message : String(err) });
+        }
+        reject(new Error(`#gnomon-voice: the STT decode did not finish within the watchdog bound (${bound})`));
+      }, bound);
+    });
+    p.catch(() => undefined);
+    return Promise.race([p, late]).finally(() => clearTimeout(timer));
+  }
 }
+
+/** Aegis L2: the decode watchdog bound, beyond the audio's own length (a design constant, not a measurement) */
+export const STT_DECODE_WATCHDOG_MS = 15_000;
 
 /** Kokoro threads (T-2026-10-19-026 bench, Apple M4, warm: RTF 0.71/0.69/0.68 at 2/4/6 threads, speed 1.0; see the spec §14.4.1 note) */
 export const TTS_THREADS = 4;
@@ -184,7 +217,7 @@ export class SherpaSpeaker implements SpeakerEngine {
 }
 
 /** Build all four engines from VERIFIED model files (throws ModelVerifyError if any model is absent or altered). */
-export async function createSherpaEngines(home: string, o: { manifest?: ModelManifest; sherpa?: Sherpa; roles?: Array<keyof VoiceEngines> } = {}): Promise<Partial<VoiceEngines>> {
+export async function createSherpaEngines(home: string, o: { manifest?: ModelManifest; sherpa?: Sherpa; roles?: Array<keyof VoiceEngines>; log?: ComponentLog } = {}): Promise<Partial<VoiceEngines>> {
   const m = o.manifest ?? loadManifest();
   const roles = o.roles ?? ['vad', 'stt', 'tts', 'speaker'];
   // verify every requested model BEFORE loading the native module or any model
@@ -192,7 +225,7 @@ export async function createSherpaEngines(home: string, o: { manifest?: ModelMan
   const sherpa = o.sherpa ?? (await loadSherpa());
   const out: Partial<VoiceEngines> = {};
   if (paths.vad) out.vad = new SherpaVad(sherpa, paths.vad.model!);
-  if (paths.stt) out.stt = new SherpaStt(sherpa, paths.stt);
+  if (paths.stt) out.stt = new SherpaStt(sherpa, paths.stt, o.log ? { log: o.log } : {});
   if (paths.tts) out.tts = new SherpaTts(sherpa, paths.tts);
   if (paths.speaker) out.speaker = new SherpaSpeaker(sherpa, paths.speaker.model!);
   return out;

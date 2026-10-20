@@ -66,6 +66,8 @@ export function stripTrailingPunct(w: string): string {
 const HIDDEN_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0x0000, 0x001f], [0x007f, 0x009f], [0x00ad, 0x00ad], [0x061c, 0x061c], [0x180e, 0x180e], [0x200b, 0x200f],
   [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff], [0xfff9, 0xfffb],
+  // Aegis L3: variation selectors, Unicode tag characters, Hangul fillers
+  [0xfe00, 0xfe0f], [0xe0100, 0xe01ef], [0xe0000, 0xe007f], [0x115f, 0x115f], [0x3164, 0x3164], [0xffa0, 0xffa0],
 ];
 /** built from code points so no hidden character ever sits literally in this source file */
 const HIDDEN = new RegExp(`[${HIDDEN_RANGES.map(([a, b]) => `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`).join("")}]`, "gu");

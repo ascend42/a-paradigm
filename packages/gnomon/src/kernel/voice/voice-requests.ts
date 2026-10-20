@@ -142,7 +142,7 @@ const plain = (s: string, max: number): string => s.replace(/[\u0000-\u001f\u007
 /** B1: partial words: control, bidi, zero-width and line/paragraph separators become spaces; whitespace collapses */
 const words = (s: string): string =>
   s
-    .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb\ufe00-\ufe0f\u{e0100}-\u{e01ef}\u{e0000}-\u{e007f}\u115f\u3164\uffa0]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 /** B1: capture.text → {committed, tail}, sanitised and capped at CAPTURE_TEXT_MAX together (the committed words first). */

@@ -68,6 +68,10 @@ components:
       full-segment decode. SherpaStt decodes are serialized and async
       (decodeAsync; in the B0 bench on an Apple M4, n = 10, the sync decode
       blocked the loop for the whole decode, p50 202 to 232 ms).
+      Aegis L2: a decode past STT_DECODE_WATCHDOG_MS (plus the audio length)
+      is rejected, the recognizer rebuilt and the event logged. Aegis L3: the
+      sanitiser also strips tag characters, variation selectors and Hangul
+      fillers (client and kernel).
       Table talk system voice (TD-2026-10-20-294, src/earcon.ts): kernel
       speakable items with from:'kernel' (ask-waiting, edits) are said by a
       different Kokoro speaker (SherpaTts systemSidFor, never the model's

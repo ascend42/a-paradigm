@@ -300,6 +300,9 @@ describe('#gnomon-voice B1 live words: status.voice.capture.text', () => {
     const rep = new VoiceReports(() => 1_000_000);
     rep.report({ capture: { state: 'hearing', segId: 's1', text: T('run\u0000the‮  te​sts\n', '⁦now⁩') } }, 'conn:V');
     expect(rep.status().capture?.text).toEqual({ committed: 'run the te sts', tail: 'now' });
+    // Aegis L3: tag characters, variation selectors and Hangul fillers
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T('a\u{E0041}\u{E007F}b\uFE0Fc\u{E0100}d', '\u115Fe\u3164f\uFFA0g') } }, 'conn:V');
+    expect(rep.status().capture?.text).toEqual({ committed: 'a b c d', tail: 'e f g' });
     rep.report({ capture: { state: 'hearing', segId: 's1', text: T('a'.repeat(500), 'b'.repeat(500)) } }, 'conn:V');
     const t = rep.status().capture!.text!;
     expect(t.committed).toBe('a'.repeat(500));

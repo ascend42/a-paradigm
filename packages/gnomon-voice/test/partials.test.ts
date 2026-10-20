@@ -91,6 +91,8 @@ describe('LiveAgreement (LocalAgreement-2)', () => {
     expect(long.committed.endsWith('w199')).toBe(true);
     expect(long.committed.length + 1 + long.tail.length).toBeLessThanOrEqual(600);
     expect(sanitizeWords('  x \n\t y ')).toBe('x y');
+    // Aegis L3: tag characters, variation selectors and Hangul fillers
+    expect(sanitizeWords('a\u{E0041}\u{E007F}b\uFE0Fc\u{E0100}d\u115Fe\u3164f\uFFA0g')).toBe('a b c d e f g');
   });
 });
 

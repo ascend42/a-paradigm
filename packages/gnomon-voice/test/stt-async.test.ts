@@ -3,7 +3,7 @@
  * final transcription never blocks the voice client's event loop. A fake sherpa module stands in for the addon.
  */
 import { describe, expect, it } from 'vitest';
-import { SherpaStt } from '../src/engines/sherpa.js';
+import { SherpaStt, STT_DECODE_WATCHDOG_MS } from '../src/engines/sherpa.js';
 
 const PATHS = { encoder: 'e', decoder: 'd', joiner: 'j', tokens: 't' };
 
@@ -61,6 +61,32 @@ describe('SherpaStt (decodeAsync)', () => {
     await Promise.all([stt.transcribe(new Float32Array(1), 16_000), stt.transcribe(new Float32Array(1), 16_000), stt.transcribe(new Float32Array(1), 16_000)]);
     expect(calls.async).toBe(3);
     expect(calls.maxInFlight).toBe(1);
+  });
+
+  it('Aegis L2: a hung decodeAsync is rejected past the watchdog, the recognizer rebuilt and logged; the chain keeps going', async () => {
+    let built = 0;
+    let call = 0;
+    class OfflineRecognizer {
+      constructor() {
+        built++;
+      }
+      createStream() {
+        return { acceptWaveform: () => undefined };
+      }
+      decodeAsync() {
+        return ++call === 1 ? new Promise(() => undefined) : Promise.resolve({ text: 'after rebuild' });
+      }
+    }
+    const warns: string[] = [];
+    const log = { info: () => undefined, warn: (m: string) => void warns.push(m) };
+    const stt = new SherpaStt({ OfflineRecognizer }, PATHS, { log, watchdogMs: 30 });
+    const hung = stt.transcribe(new Float32Array(16), 16_000);
+    const next = stt.transcribe(new Float32Array(16), 16_000);
+    await expect(hung).rejects.toThrow(/watchdog/);
+    expect(await next).toBe('after rebuild');
+    expect(built).toBe(2);
+    expect(warns).toEqual(['stt decode watchdog fired; recognizer rebuilt']);
+    expect(STT_DECODE_WATCHDOG_MS).toBeGreaterThan(0);
   });
 
   it('falls back to the sync decode only for an addon without decodeAsync', async () => {
