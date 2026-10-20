@@ -30,6 +30,23 @@
  * symlink-free rest), the path `approval.auto` logs.
  * Paths compare case-folded on darwin and win32 (case-insensitive default
  * filesystems), as the denyWrite check does.
+ *
+ * READ-ONLY BASH (TD-2026-10-20-294 part 1, autoBashReadOnly): a `Bash`
+ * request also passes with no card under auto-edits — logged
+ * `approval.auto{modeRef:'mode:auto-edits:read-only'}` — only when ALL hold:
+ *   - its input keys are only `command`, `description`, `timeout` (any other
+ *     key — `run_in_background`, `dangerouslyDisableSandbox`, an unknown one
+ *     — is a card), the command is text and timeout (if any) a number;
+ *   - no session root is the user's home, an ancestor of it, or `/`;
+ *   - #shell-readonly classifyReadOnly proves the command read-only (it
+ *     fails closed: unparsed or unproven ⇒ a card). Since the Aegis re-check
+ *     it needs a KNOWN cwd for anything relative — the command starts with an
+ *     absolute `cd` into a session root, joined by `&&` — and reads only
+ *     inside the session roots or the system read roots, at realpath;
+ *   - the card carries no hidden or bidi characters (blockOf flags).
+ * The pass is never taken in `ask` or `manual` (the caller checks the
+ * effective mode). Permission requests come from the session's own claude
+ * child only, so no card on this path is peer-raised.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -37,6 +54,7 @@ import * as path from 'node:path';
 import { gateClassPathRule } from '../manifest/layers.js';
 import { blockOf } from '../broker/card.js';
 import { AUTO_EDIT_TOOLS, isHomeOrAbove } from '../broker/run-mode.js';
+import { classifyReadOnly } from './shell-readonly.js';
 
 export type AutoEditWhy = 'tool' | 'no-path' | 'relative' | 'home-root' | 'outside-root' | 'symlink' | 'gate-class' | 'flagged';
 export type AutoEditPass = { ok: true; path: string; root: string } | { ok: false; why: AutoEditWhy; rule?: string };
@@ -98,4 +116,20 @@ export function autoEditPass(tool: string, input: Record<string, unknown>, roots
     }
   }
   return { ok: false, why: 'outside-root' };
+}
+
+export const READ_ONLY_MODE_REF = 'mode:auto-edits:read-only';
+export const BASH_READ_ONLY_KEYS: readonly string[] = Object.freeze(['command', 'description', 'timeout']);
+export type AutoBashPass = { ok: true } | { ok: false; why: string };
+
+export function autoBashReadOnly(tool: string, input: Record<string, unknown>, roots: readonly string[], cardLines: readonly string[], gnomonHome: string, platform: string = process.platform, home: string = os.homedir()): AutoBashPass {
+  if (tool !== 'Bash') return { ok: false, why: 'tool' };
+  if (Object.keys(input).some((k) => !BASH_READ_ONLY_KEYS.includes(k))) return { ok: false, why: 'input-key' };
+  if (typeof input.command !== 'string') return { ok: false, why: 'bad-input' };
+  if (input.timeout !== undefined && typeof input.timeout !== 'number') return { ok: false, why: 'bad-input' };
+  if (input.description !== undefined && typeof input.description !== 'string') return { ok: false, why: 'bad-input' };
+  if (roots.length === 0 || roots.some((r) => isHomeOrAbove(r, home, platform))) return { ok: false, why: 'home-root' };
+  if (blockOf(cardLines).flags.length > 0) return { ok: false, why: 'flagged' };
+  const v = classifyReadOnly(input.command, { roots, home, gnomonHome, platform });
+  return v.ok ? { ok: true } : { ok: false, why: `not-read-only: ${v.why}` };
 }

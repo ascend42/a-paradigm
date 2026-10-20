@@ -1642,6 +1642,9 @@ components:
 
   approval-broker:
     description: >-
+      RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
+      mode:auto-edits:read-only (a Bash command #shell-readonly proves
+      read-only; TD-2026-10-20-294 part 1) or rule:<cardId>.
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
       Voice (TD-2026-10-19-194): whether voice may take a decision is
       gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
@@ -1845,7 +1848,9 @@ components:
       component lstat'd, the final one too; H1), not gate-class (layers.ts
       gateClassPathRule, incl. editor/toolchain dirs, lint/format configs,
       task/build files, other agents' steering files, non-ASCII and win32
-      alias names; H2) and whose card has no hidden/bidi flags, after
+      alias names; H2; TD-2026-10-20-294 re-check C2: .gitconfig,
+      .git-credentials, .netrc, curl/pip/conda config, interpreter and
+      toolchain pins, build entry points, shell rc files, .env/.env.*) and whose card has no hidden/bidi flags, after
       broker.auto ⇒ approval.auto{hsid, tool, path (real), inputHash,
       modeRef:'mode:auto-edits'} (a failed row falls through to the card);
       everything else cards as in ask. Tightening a REPO pulls every live
@@ -2192,6 +2197,12 @@ components:
 
   supervisor:
     description: >-
+      AUTO-EDITS READ-ONLY BASH (TD-2026-10-20-294 part 1):
+      auto-edits.ts autoBashReadOnly passes a Bash request with no card,
+      after approval.auto{modeRef:'mode:auto-edits:read-only'} (log before
+      effect), only when its input keys are command/description/timeout, no
+      root is home-or-above, the card is not flagged and #shell-readonly
+      proves the command read-only; never in ask or manual.
       session.send accepts source 'voice' from a human only, as a dictation
       attribution hint for #gnomon-voice (TD-2026-10-20-262).
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
@@ -2352,6 +2363,48 @@ components:
       - test/repo-context.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
 
+  shell-readonly:
+    description: >-
+      #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis
+      re-check C1 C2 H1-H4 M1-M3 + Low closed) in
+      src/kernel/supervisor/shell-readonly.ts. Side-effect free, fails closed;
+      reads the filesystem (realpath, readdir) only to check symlinks and
+      expand globs. parseShell is a real tokenizer/parser for a shell subset
+      (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
+      <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
+      loops, redirections with IO numbers, heredocs); it refuses $((...)),
+      $'...', $"...", >(...), |&, ;;, unquoted braces, ~user, zsh $= $~ $^
+      forms and every other compound. classifyReadOnly proves read-only:
+      allowlisted command names with per-command flag rules; C1 a $(...) or
+      backtick word is only echo/printf text or a <<< word, never a path, and
+      a for loop iterates only literal words and literal globs (expanded now,
+      each value one safe token), so every path a reader gets is concrete and
+      checked; C2 printf takes no flag (printf -v), echo only -n/-e/-E, test
+      only POSIX operators, pwd/which/basename/dirname/tr tight flags; H1 awk
+      runs one `[PATTERN] { print ITEMS }` program; H2 globs expanded against
+      the filesystem with a superset matcher, every match realpath-checked,
+      > 200 matches or a match starting with - refused, no recursive or
+      symlink-following reader flags (grep -r/-R/-S/-O/-d/-D, ls -L/-R, du -L,
+      stat -L, diff -r, find -L/-follow), rg removed, diff takes no directory
+      operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
+      path-checked; H3 cd only first, to an
+      ABSOLUTE path inside a session root, cwd = its realpath; H4 reads only
+      inside the session roots and /usr /opt/homebrew /etc /tmp /private/tmp
+      /private/etc (as given and at the deepest-existing-ancestor realpath;
+      ctx.readRoots may only narrow that system list),
+      plus the device/protected-root deny; M1 date display only; M2 the cwd
+      is known only along an unbroken && chain from that cd, else relative
+      paths, implicit-cwd reads and git raise the card; M3 no git remote -v,
+      no credential-bearing git config key; Low git branch NAME only after
+      the long --list. No background/negation/env assignment, output
+      redirection only to /dev/null. simpleArgv returns the argv of a single
+      literal simple command (prefix always rules; signature unchanged).
+    tags: [kernel, security]
+    signals: []
+    tests:
+      - test/shell-readonly.test.ts
+      - test/shell-readonly-fs.test.ts
+      - test/run-modes-session.test.ts
   always-rules:
     description: >-
       #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in

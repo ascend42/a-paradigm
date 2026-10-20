@@ -233,7 +233,9 @@ export function gitHash(repo: string): string {
  * `.gitattributes`) plus the rest of §15.7's list (`.gnomon/**`, test config, `package.json` and lockfiles,
  * pipeline files) and the files that run or route code at the repo's say (`.husky/**`, `.mcp.json`, npm/yarn rc;
  * Aegis H2: editor/devcontainer/toolchain dirs, lint/format configs, hook and task runners, build scripts, env
- * loaders, other agents' steering files). A non-ASCII name anywhere is gate-class (`non-ascii`).
+ * loaders, other agents' steering files; TD-2026-10-20-294 re-check C2: git/curl/pip config, credential files,
+ * interpreter and toolchain pins, build entry points, shell rc files, and `.env`/`.env.*` as `env-file`). A non-ASCII
+ * name anywhere is gate-class (`non-ascii`).
  * Case-folded and segment-wise, so `.Claude/x`, `sub/.git/hooks/y` and `docs/Claude-notes.md` all count; every
  * name the steering deny covers (`claude*.md`, any case, anywhere) counts. Returns the matched rule, or null.
  * Conservative on purpose: a false positive costs one card, a false negative an unasked write.
@@ -252,7 +254,18 @@ const GATE_FILES: ReadonlySet<string> = new Set([
   'makefile', 'gnumakefile', 'justfile', 'taskfile.yml', 'taskfile.yaml',
   'setup.py', 'setup.cfg', 'pyproject.toml', 'build.rs', 'cargo.toml', 'mise.toml', '.mise.toml', '.tool-versions', '.envrc',
   'agents.md', 'gemini.md', '.cursorrules', '.windsurfrules',
+  // TD-2026-10-20-294 re-check (Aegis C2): repo-level files that change what a tool RUNS or SENDS when a session (or a
+  // command it was allowed to run) points that tool at the repo — git (a planted HOME's .gitconfig: core.fsmonitor,
+  // credential helpers), curl/wget/pip/conda config, interpreter and toolchain pins that pick (or download) the binary,
+  // ruby/bun/deno/go/gradle/maven build entry points, babel/swc plugin configs, and shell rc files
+  '.gitconfig', '.git-credentials', '.netrc', '_netrc', '.curlrc', '.wgetrc', '.pypirc', 'pip.conf', '.condarc',
+  '.python-version', '.nvmrc', '.node-version', '.ruby-version', 'rust-toolchain', 'rust-toolchain.toml', 'go.mod', 'go.work',
+  'gemfile', 'gemfile.lock', 'rakefile', '.irbrc', '.gemrc', 'bunfig.toml', 'deno.json', 'deno.jsonc', '.babelrc', '.swcrc',
+  'build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'gradlew', 'pom.xml',
+  '.bashrc', '.bash_profile', '.profile', '.zshrc', '.zshenv', '.zprofile', '.inputrc',
 ]);
+/** `.env` and `.env.*`: loaded by bun, vite, dotenv and `node --env-file`, so `NODE_OPTIONS=--require …` in one runs code. */
+const GATE_ENV_FILE = /^\.env(\..+)?$/;
 const GATE_TEST_CONFIG = /^(vitest|vite|jest|playwright|cypress|karma|mocha|ava|wdio|nightwatch)\.(config|workspace)(\.[a-z0-9]+)+$|^\.mocharc(\.[a-z0-9]+)*$|^babel\.config(\.[a-z0-9]+)+$/;
 /** Aegis H2: config files that load and run code (lint/format plugins, staged-file hooks), any extension. */
 const GATE_CODE_CONFIG = /^(eslint\.config\..+|\.eslintrc.*|prettier\.config\..+|\.prettierrc.*|\.lintstagedrc.*|lint-staged\.config\..+|\.lefthook.*)$/;
@@ -275,6 +288,7 @@ export function gateClassPathRule(relPath: string): string | null {
   if (GATE_DIRS.has(base)) return `dir:${base}`;
   if (GATE_MEMORY_NAME.test(base)) return 'memory-file';
   if (GATE_FILES.has(base)) return `file:${base}`;
+  if (GATE_ENV_FILE.test(base)) return 'env-file';
   if (GATE_TEST_CONFIG.test(base)) return 'test-config';
   if (GATE_CODE_CONFIG.test(base)) return 'code-config';
   return null;

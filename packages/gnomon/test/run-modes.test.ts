@@ -36,10 +36,19 @@ describe('run modes: gate-class path rule (§15.7) and auto-edits eligibility (p
       'Makefile', 'makefile', 'MAKEFILE', 'GNUmakefile', 'sub/Makefile', 'justfile', 'Justfile', 'Taskfile.yml', 'taskfile.yaml',
       'setup.py', 'setup.cfg', 'pyproject.toml', 'build.rs', 'Cargo.toml', 'crates/a/cargo.toml', 'mise.toml', '.mise.toml', '.tool-versions', '.envrc',
       'AGENTS.md', 'agents.md', 'GEMINI.md', '.cursorrules', '.windsurfrules',
+      // TD-2026-10-20-294 re-check (Aegis C2): files that steer git, curl, interpreters, toolchains, build runners, shells
+      '.gitconfig', 'sub/.gitconfig', '.git-credentials', '.netrc', '_netrc', '.curlrc', '.wgetrc', '.pypirc', 'pip.conf', '.condarc',
+      '.python-version', '.nvmrc', '.node-version', '.ruby-version', 'rust-toolchain', 'rust-toolchain.toml', 'go.mod', 'go.work',
+      'Gemfile', 'Gemfile.lock', 'Rakefile', '.irbrc', '.gemrc', 'bunfig.toml', 'deno.json', 'deno.jsonc', '.babelrc', '.swcrc',
+      'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradlew', 'pom.xml', '.bashrc', '.bash_profile', '.profile', '.zshrc', '.zshenv', '.zprofile', '.inputrc',
+      '.env', '.env.local', 'web/.env.production',
     ];
     for (const p of [...dirs, ...files]) expect(gateClassPathRule(p), p).not.toBeNull();
     expect(gateClassPathRule('.VSCode/x')).toBe('dir:.vscode');
     expect(gateClassPathRule('Makefile')).toBe('file:makefile');
+    expect(gateClassPathRule('.gitconfig')).toBe('file:.gitconfig');
+    expect(gateClassPathRule('.env.local')).toBe('env-file');
+    for (const p of ['src/env.ts', 'docs/.envoy.md', 'gitconfig.md']) expect(gateClassPathRule(p), p).toBeNull();
     // a non-ASCII name anywhere (Cyrillic і in `.gіt`, fullwidth Ｍ, a combining mark, an accented dir) is never judged by the list
     for (const p of ['.g\u0456t/hooks/pre-commit', '\uff2dakefile', 'Make\u0301file', 'caf\u00e9/x.ts']) expect(gateClassPathRule(p), p).toBe('non-ascii');
     // win32 aliases: an 8.3 short name, an alternate data stream; trailing dots/spaces are dropped
