@@ -379,8 +379,11 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
  *   backend-refused  claude answered an error (e.g. an unknown model); nothing changed, the new permit was released
  *   timeout          claude did not answer within the kernel's wait; the kernel keeps `from` on record and released the new permit
  *   permit-refused   the fuse or law 7 refused the new spawn permit; nothing was sent (permitId null)
+ *   reconciled       after a `timeout`, the next main-chain assistant message's `message.model` (ground truth) said which
+ *                    model actually runs: `to` is the model now on record (`from` again when the switch never took;
+ *                    then `to` may be 'claude', Claude Code's default), `permitId` the spawn permit the session runs under
  */
-export const SESSION_MODEL_OUTCOMES = ['switched', 'backend-refused', 'timeout', 'permit-refused'] as const;
+export const SESSION_MODEL_OUTCOMES = ['switched', 'backend-refused', 'timeout', 'permit-refused', 'reconciled'] as const;
 export type SessionModelOutcome = (typeof SESSION_MODEL_OUTCOMES)[number];
 /**
  * The context guard of a switch (8.0:model-switch): a session on a 1M-context model (`[1m]` suffix) is not switched to a
@@ -540,7 +543,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'session.model':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('from' in v && v.from !== CLAUDE_DEFAULT_MODEL && !isClaudeModel(v.from)) c.fail('from', "must be 'claude' or a Claude model");
-      if ('to' in v && !isClaudeModel(v.to)) c.fail('to', 'must be a Claude model alias or a strict claude-… id');
+      if ('to' in v && !isClaudeModel(v.to) && !(v.outcome === 'reconciled' && v.to === CLAUDE_DEFAULT_MODEL)) c.fail('to', "must be a Claude model alias or a strict claude-… id ('claude' only when reconciled back to the default)");
       if ('permitId' in v && v.permitId !== null) c.str('permitId', v.permitId, ID_PATTERNS.permit, 'permit:v1:<ULID> or null');
       if ('outcome' in v) c.closedEnum('outcome', v.outcome, SESSION_MODEL_OUTCOMES);
       if (v.outcome === 'permit-refused' && v.permitId !== null) c.fail('permitId', 'is null when the permit was refused');
