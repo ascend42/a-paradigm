@@ -219,7 +219,7 @@ export function liveLine(s: DictationState, now: number): string {
   return note ?? '';
 }
 
-/** A stored delay (localStorage, per machine): '3000' | '5000' | '8000' | '15000' | 'off'; anything else ⇒ the default. */
+/** The auto-send setting as stored in localStorage, per machine: '3000' | '5000' | '8000' | '15000' | 'off'; anything else ⇒ the default. */
 export function parseDelay(v: string | null): number | null {
   if (v === 'off') return null;
   const n = v === null ? NaN : Number(v);
