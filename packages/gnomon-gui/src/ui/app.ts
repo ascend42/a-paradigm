@@ -334,6 +334,8 @@ function paintSessions(): void {
 
 /* ── decision stack ─────────────────────────────────────────────── */
 const PILE_MAX = 6;
+const RELAYOUT_GUARD_MS = 300;
+let stackLaidOutAt = -Infinity;
 let pileOpen = false;
 /** S3: a card's project line: its repo basename in the ONE project hue (the rail's group hue for that repo). */
 function projectOfCard(c: { repo: string | null; hsid: string | null }): { name: string; hue: number } | null {
@@ -430,6 +432,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   };
   const pile = $('stack');
   clear(pile);
+  stackLaidOutAt = performance.now();
   // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
   const shown = pileOpen ? cards : cards.slice(0, PILE_MAX);
   for (const c of shown) pile.appendChild(mk(c));
@@ -524,6 +527,8 @@ function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
 
 async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null, keyEl?: HTMLElement | null): Promise<void> {
   if (!client) return;
+  // Aegis S2/S3 M2: a key that moved under the pointer (the stack was just re-laid out) never takes the click
+  if (performance.now() - stackLaidOutAt < RELAYOUT_GUARD_MS) return;
   let note: string | null = null;
   if (decision === 'answer') {
     note = cardEl ? askNoteFrom(cardEl, cardId) : null;

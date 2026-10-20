@@ -219,11 +219,28 @@ export function raisedLine(raisedAt: string | null | undefined, now: number): st
 }
 
 /**
+ * Aegis S2/S3 M1: the card kinds whose FIRST line the kernel itself composes (a fixed template the kernel fills),
+ * checked at every broker.raise call site that builds `lines` (packages/gnomon/src/kernel):
+ *   permission, ask-user, plan    supervisor/permission.ts (the run-tool / question / plan templates) via supervisor.ts b.raise
+ *   gate-class                    supervisor/repo-hooks.ts repoHookCard (supervisor.ts), runner/repin-card.ts, broker/theft-card.ts
+ *   strictness                    broker/run-mode.ts (loosen), lifecycle/daemon.ts (voice widen), voice/voice-requests.ts (enrol)
+ *   daemon-stop                   broker/daemon-stop.ts (stop + upgrade)
+ *   api-token                     broker/api-token.ts
+ *   fallback                      supervisor/local-session.ts
+ *   install                       manifest/install.ts (kernel-composed lines first; the staged CLAIMS come after)
+ *   grant                         modhost/control.ts (uninstall)
+ * Only these get line 1 promoted to the title; any other kind (a mod's, a future one) keeps its block whole, is titled
+ * by its kind, and its first line reads as the requester's quoted text.
+ */
+export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+
+/**
  * S3: the card title is the block's first Text line (a Box whose first child is a Text), and the body is the block
  * without it. A claim-mismatch card keeps its block whole (its red first line stays the body's first line) and is
- * titled by its kind.
+ * titled by its kind; so is every kind outside KERNEL_TITLED_KINDS (Aegis M1).
  */
 export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean): { title: string; body: unknown } {
+  if (!KERNEL_TITLED_KINDS.has(kind)) keepWhole = true;
   const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
   const kids = b && Array.isArray(b.children) ? (b.children as unknown[]) : null;
   const first = kids?.[0] && typeof kids[0] === 'object' ? (kids[0] as Record<string, unknown>) : null;
@@ -419,6 +436,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
   // S3 anatomy: ■ project · kind · voice tag (requestedBy and the session in title=), the title, the body, raised · waiting
   const { title, body } = splitCardBlock(block, v.kind, loud);
+  const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   const tag = voiceTagOf(v.voice ?? null);
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
@@ -433,11 +451,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
       v.project ? ' · ' : null,
       h(doc, 'strong', { class: 'card-kind' }, v.kind),
+      // Aegis M1: who asked is VISIBLE text, never only a tooltip
+      ' · ',
+      h(doc, 'span', { class: 'card-requester' }, `by ${v.requestedBy}`),
       tag ? ' · ' : null,
       tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
     h(doc, 'p', { class: 'card-title' }, title),
-    h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, body)),
+    h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, renderBlock(ctx, body)),
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     h(

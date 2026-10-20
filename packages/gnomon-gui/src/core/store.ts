@@ -134,6 +134,8 @@ export class GuiStore {
   readonly sessions = new Map<string, SessionRow>();
   /** hsid → row seqs (indices into `rows`) in seq order. */
   readonly #transcripts = new Map<string, Row[]>();
+  /** Aegis L1: final voice-turn texts by seq, until a turn.sent cites them (bounded). */
+  readonly #voiceTexts = new Map<number, string>();
   /** Rows with no session, kept for the kernel feed. */
   readonly kernelFeed: Row[] = [];
   readonly cards = new Map<string, StackCard>();
@@ -249,7 +251,16 @@ export class GuiStore {
       if (!s.firstUser) {
         // S2 session names: the first thing the human said (claude's replay of it, or a sent voice turn)
         if (r.kind === 'turn.event' && r.view === 'full' && typeof p.line === 'string') s.firstUser = lineItems(p.line).find((it) => it.role === 'user' && it.text.trim())?.text ?? null;
-        else if (r.kind === 'voice.turn.user' && p.partial !== true && typeof p.text === 'string' && p.text.trim()) s.firstUser = p.text;
+        else if (r.kind === 'turn.sent' && p.source === 'voice') {
+          // Aegis L1: a voice turn names the session only once the kernel says it was SENT (turn.sent cites its seq)
+          const cited = (Array.isArray(p.voiceTurnSeqs) ? p.voiceTurnSeqs : [p.voiceTurnSeq]).filter((n): n is number => typeof n === 'number');
+          const t = cited.map((n) => this.#voiceTexts.get(n)).filter((x): x is string => !!x).join(' ');
+          if (t.trim()) s.firstUser = t;
+        }
+      }
+      if (r.kind === 'voice.turn.user' && p.partial !== true && typeof p.text === 'string' && p.text.trim()) {
+        this.#voiceTexts.set(r.seq, p.text);
+        if (this.#voiceTexts.size > 256) this.#voiceTexts.delete(this.#voiceTexts.keys().next().value!);
       }
       what.add('sessions');
     } else {

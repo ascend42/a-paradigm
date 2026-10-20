@@ -243,7 +243,9 @@ html, body {
 .trow.role-assistant .body { color: var(--ink); }
 .trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--slate); border-radius: 3px; padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
 .trow.role-assistant .said .said-tag { color: var(--sec); font-size: 11px; font-weight: 400; }
-.trow.role-assistant .body .chip { border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; margin: 3px 0; }
+/* Aegis L2: an agent's bold-label line is plain prose with a quiet rule, never a box that could pass for a kernel chip */
+.trow.role-assistant .body .chip { border: 0; border-left: 2px solid var(--rule); border-radius: 0; padding: 0 0 0 8px; margin: 3px 0; }
+.trow.role-assistant .body .chip-label { font-weight: 600; }
 .trow.role-assistant .body .chip-label { margin-right: 4px; }
 .trow.role-tool { color: var(--ink2); font-size: 12px; padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow.role-tool::before { content: "↳ "; color: var(--sec); }
@@ -311,6 +313,11 @@ html, body {
 .pile:hover .card + .card, .pile:focus-within .card + .card, .pile.fan .card + .card, .pile.open .card + .card { margin-top: 10px; }
 .pile:hover .card, .pile:focus-within .card, .pile.fan .card, .pile.open .card { --r: 0deg; }
 .pile-more { align-self: center; margin-top: 12px; }
+/* Aegis M2: a buried card's keys take no click until the pile is fanned (hover, keyboard focus, .fan, .open) */
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-keys { pointer-events: none; }
+.card-requester { color: var(--sec); }
+/* a card kind whose first line the kernel does not compose: its words read as the requester's quoted text */
+.card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
 .pinned .card { --r: 0deg; margin: 0; }
 .card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .card .refusal { color: var(--fail); font-size: 12px; white-space: pre-wrap; }

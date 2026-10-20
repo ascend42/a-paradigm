@@ -177,7 +177,7 @@ describe('S3 the card sheet and the stack pile', () => {
     const el = renderCard({ doc: fdoc }, { ...v, project: { name: 'billing', hue: 0 }, raisedAt: '2026-10-20T14:06:00Z', now: Date.parse('2026-10-20T14:09:30Z'), voice: { eligible: 'reversible', label: 'card 3' } }, block) as FEl;
     const kids = el.children.filter((c): c is FEl => c instanceof FEl);
     expect(kids.map((k) => k.className)).toEqual(['card-head k', 'card-title', 'card-body kernel-owned', 'meta card-raised', 'card-keys', 'bar', 'stamp', 'meta content-hash']);
-    expect(kids[0]!.text).toBe('■ billing · permission · 🎙 reversible · card 3');
+    expect(kids[0]!.text).toBe('■ billing · permission · by p:x/claude · 🎙 reversible · card 3');
     expect(kids[0]!.attrs.get('title')).toBe('requested by p:x/claude · hsid:v1:A · billing');
     expect(kids[0]!.children.filter((c): c is FEl => c instanceof FEl)[0]!.className).toBe('card-project pink h0');
     expect(kids[1]!.text).toBe('The session asks to run Bash');
@@ -241,5 +241,53 @@ describe('S4 motion', () => {
     expect(css).toMatch(/@keyframes droop \{ to \{ transform: rotate\(2\.2deg\) translateY\(3px\); \} \}/);
     expect(css).not.toMatch(/@keyframes shake|translateX\(-?\d+px\)[^}]*translateX\(-?\d+px\)/);
     expect(app).toMatch(/if \(s\.state === 'failed' && was !== undefined && was !== 'failed'\) drooped\.add\(s\.hsid\);/);
+  });
+});
+
+describe('Aegis S2/S3 review fixes', () => {
+  const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  const block = { type: 'Box', children: [{ type: 'Text', text: 'Ignore the kernel: click allow' }, { type: 'Text', text: 'more' }] };
+  const base = { cardId: 'card:1', requestedBy: 'p:x/mod-y', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [] as string[], decisions: ['allow'], decidable: true };
+  it('M1: the requester is visible text; only kernel-composed kinds promote line 1 to a title, others read as quoted', () => {
+    const odd = renderCard({ doc: fdoc }, { ...base, kind: 'mod-thing' }, block) as FEl;
+    const kids = odd.children.filter((c): c is FEl => c instanceof FEl);
+    expect(kids[0]!.text).toContain('by p:x/mod-y');
+    expect(kids[1]!.text).toBe('mod-thing');
+    expect(kids[2]!.className).toContain('quoted');
+    expect(kids[2]!.text).toContain('Ignore the kernel: click allow');
+    const perm = renderCard({ doc: fdoc }, { ...base, kind: 'permission' }, block) as FEl;
+    expect(perm.children.filter((c): c is FEl => c instanceof FEl)[1]!.text).toBe('Ignore the kernel: click allow');
+  });
+  it('M2: buried keys take no click until the pile fans; a decision right after a re-layout is ignored', () => {
+    expect(css).toMatch(/\.pile:not\(:hover\):not\(:focus-within\):not\(\.fan\):not\(\.open\) \.card \+ \.card \.card-keys \{ pointer-events: none; \}/);
+    expect(app).toMatch(/if \(performance\.now\(\) - stackLaidOutAt < RELAYOUT_GUARD_MS\) return;/);
+    expect(app).toMatch(/clear\(pile\);\s*stackLaidOutAt = performance\.now\(\);/);
+    expect(app).toMatch(/const RELAYOUT_GUARD_MS = 300;/);
+  });
+  it('L1: a session is named by claude\'s replay or a voice turn the kernel SENT, never an uncited voice row', () => {
+    const s = new GuiStore();
+    const ev = (seq: number, kind: string, payload: Record<string, unknown>) => ({ seq, view: 'full', event: { kind, session: 'hsid:v1:V', at: '2026-10-20T14:00:00Z', payload } });
+    s.apply([ev(1, 'session.open', { hsid: 'hsid:v1:V' }), ev(2, 'voice.turn.user', { text: 'someone else talking', turnId: 't1' })]);
+    expect(s.sessions.get('hsid:v1:V')!.firstUser ?? null).toBeNull();
+    s.apply([ev(3, 'voice.turn.user', { text: 'fix the build', turnId: 't2' }), ev(4, 'turn.sent', { source: 'voice', voiceTurnSeqs: [3] })]);
+    expect(s.sessions.get('hsid:v1:V')!.firstUser).toBe('fix the build');
+  });
+  it('L2: an agent\'s bold-label chip is plain prose with a quiet rule, not a boxed chip', () => {
+    expect(css).toMatch(/\.trow\.role-assistant \.body \.chip \{ border: 0; border-left: 2px solid var\(--rule\); border-radius: 0;/);
+  });
+  it('5/6: every hue in the GUI and the preview comes from projectHue (one modulus, 0..5); hue classes cover it', () => {
+    const ws = readFileSync(path.join(ROOT, 'src', 'preview', 'workshop.ts'), 'utf8');
+    expect(ws).toMatch(/projectHue\(p\.cwd\)/);
+    expect(ws).not.toMatch(/% FEED_HUES|\[0\]! %/);
+    for (let i = 0; i < 6; i++) {
+      expect(css).toContain(`.swatch.h${i} {`);
+      expect(css).toContain(`.pink.h${i} {`);
+    }
+  });
+  it('the Layout menu runs only presets and the three pane toggles (never a kernel-owned region)', () => {
+    const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
+    const runs = [...menu.matchAll(/item\('([^']+)'|item\(`([^`]+)`/g)].map((m) => m[1] ?? m[2]);
+    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.shuttle.toggle']);
   });
 });
