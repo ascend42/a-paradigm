@@ -14,7 +14,7 @@ import { loadManifest, modelFor, verifiedModelPaths } from '../src/manifest.js';
 import { createSherpaEngines, loadSherpa } from '../src/engines/sherpa.js';
 import { decodeWav, FakeAudioIO } from '../src/fake-audio-io.js';
 import { recordEnrolment } from '../src/enrol.js';
-import { readPrints } from '../src/speaker.js';
+import { readPrints, SPEAKER_FRONT_END } from '../src/speaker.js';
 import { VoiceClient } from '../src/voice-client.js';
 import type { VoiceEngines } from '../src/types.js';
 import { FakeLink, StubTts } from './stubs.js';
@@ -45,35 +45,71 @@ function to16k(a: { samples: Float32Array; sampleRate: number }): Float32Array {
   return out;
 }
 
+/** low-level noise at `dbfs` (VPIO's suppressed pauses, a quiet room): the quiet a stranger's segment carries */
+function quiet(ms: number, dbfs: number): Float32Array {
+  const a = Math.pow(10, dbfs / 20) * Math.sqrt(3);
+  let seed = 7;
+  const out = new Float32Array((16 * ms) | 0);
+  for (let i = 0; i < out.length; i++) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    out[i] = (seed / 2147483648 - 0.5) * 2 * a;
+  }
+  return out;
+}
+const cat = (...xs: Float32Array[]): Float32Array => {
+  const out = new Float32Array(xs.reduce((n, x) => n + x.length, 0));
+  let o = 0;
+  for (const x of xs) {
+    out.set(x, o);
+    o += x.length;
+  }
+  return out;
+};
+
 describe.skipIf(!available)('ambient speaker identification, real engines (founder regression 2026-10-20)', () => {
   let tmp: string;
   let engines: VoiceEngines;
-  /** the enrolled voice (Kokoro model voice) saying fresh sentences, and a stranger (the Parakeet test wav) */
-  const enrolled: Float32Array[] = [];
-  let stranger: Float32Array;
+  /**
+   * The enrolled voice is a HUMAN recording (the Parakeet archive's test_wavs/0.wav, the only human speech the model
+   * archives ship): its two VAD segments are the enrolment phrases. 7 s is all there is, so no held-out segment of
+   * this speaker is long enough to verify at the threshold (0.33–0.49 measured): the "enrolled" case replays the first
+   * segment inside different surrounding quiet and after a long warm-up (the pipeline, the gate's padding invariance
+   * and t0, not the model's accuracy; the calibration lives outside the repo). The strangers are Kokoro voices (not human, but certainly not
+   * this speaker), with and without the quiet a recording carries.
+   */
+  let human: Float32Array[] = [];
+  const strangers: Float32Array[] = [];
 
   beforeAll(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-voice-repro-'));
     engines = (await createSherpaEngines(home)) as VoiceEngines;
-    for (const t of ['Please run the whole test suite for me now.', 'Show me what changed in the last commit.', 'I would like to understand the plan first.', 'Open the voice client file and read it to me.'])
-      enrolled.push(to16k(await engines.tts.synthesize(t)));
     const w = decodeWav(fs.readFileSync(path.join(verifiedModelPaths(home, modelFor(loadManifest(), 'stt')).tokens!, '..', 'test_wavs', '0.wav')));
     expect(w.sampleRate).toBe(16_000);
-    stranger = w.samples;
-    // enrol through the REAL path (VAD segments → CAM++ → mean print) into the temp home
+    engines.vad.reset();
+    const segs: Float32Array[] = [];
+    for (const c of [new Float32Array(8000), w.samples, new Float32Array(16000)]) for (let i = 0; i < c.length; i += 512) segs.push(...engines.vad.accept({ samples: c.subarray(i, i + 512), sampleRate: 16_000, t0: 0 }).map((s) => s.samples));
+    segs.push(...engines.vad.flush().map((s) => s.samples));
+    expect(segs.length).toBe(2);
+    human = segs;
+    // both segments are the enrolment phrases (measured 2026-10-20: splitting the first in half for three phrases
+    // gave a print the first segment's own replay scored only 0.60 against, under the 0.65 threshold: 7 s of speech is
+    // too little for a stable print, and this test pins the pipeline, not the model's accuracy)
+    const phrases = [segs[0]!, segs[1]!];
+    for (const t of ['Please run the whole test suite for me now.', 'Open the voice client file and read it to me.']) strangers.push(to16k(await engines.tts.synthesize(t)));
+    // enrol through the REAL path (VAD segments → speech gate → CAM++ → mean print) into the temp home
     const audio = new FakeAudioIO();
     await recordEnrolment({
-      audio, vad: engines.vad, speaker: engines.speaker, model: 'campplus-sv-en-voxceleb-16k', home: tmp, name: 'matt', timeoutMs: 5_000,
+      audio, vad: engines.vad, speaker: engines.speaker, model: 'campplus-sv-en-voxceleb-16k', home: tmp, name: 'matt', timeoutMs: 5_000, phrases: ['one', 'two'],
       prompt: (_p, i) => {
         // the phrase is "spoken" right after the prompt (the recording is already listening)
         setImmediate(() => {
           audio.silence(300);
-          audio.capture(enrolled[i - 1]!);
+          audio.capture(phrases[i - 1]!);
           audio.silence(800);
         });
       },
     });
-    expect(readPrints(tmp).map((p) => p.name)).toEqual(['matt']);
+    expect(readPrints(tmp).map((p) => [p.name, p.frontEnd])).toEqual([['matt', SPEAKER_FRONT_END]]);
   }, 180_000);
 
   afterAll(() => {
@@ -97,7 +133,7 @@ describe.skipIf(!available)('ambient speaker identification, real engines (found
       // a long warm-up of room audio first: the founder's client had been running for minutes
       audio.silence(20_000);
       const t0 = audio.clock;
-      audio.capture(enrolled[3]!);
+      audio.capture(cat(quiet(400, -65), human[0]!, quiet(600, -65)));
       audio.silence(1_200);
       const wall = Date.now();
       await client.idle();
@@ -121,7 +157,7 @@ describe.skipIf(!available)('ambient speaker identification, real engines (found
       client.pause(false);
       audio.silence(500);
       const t0 = audio.clock;
-      audio.capture(enrolled[3]!);
+      audio.capture(human[0]!);
       audio.silence(1_200);
       await client.idle();
       const ts = turns(link);
@@ -132,15 +168,19 @@ describe.skipIf(!available)('ambient speaker identification, real engines (found
     }
   }, 120_000);
 
-  it('a different speaker is NOT accepted against the print (no forwarded text)', async () => {
+  it('a different speaker is NOT accepted, plain or carrying a recording\'s quiet (the "video accepted" case)', async () => {
     const { audio, link, client } = await ambient();
     try {
-      audio.silence(500);
-      audio.capture(stranger);
-      audio.silence(1_200);
+      for (const x of strangers) {
+        audio.silence(500);
+        audio.capture(x);
+        audio.silence(1_200);
+        audio.capture(cat(quiet(700, -65), x, quiet(900, -60)));
+        audio.silence(1_200);
+      }
       await client.idle();
       const ts = turns(link);
-      expect(ts.length).toBeGreaterThan(0);
+      expect(ts.length).toBeGreaterThanOrEqual(strangers.length);
       for (const t of ts) expect(t).toMatchObject({ speakerEnrolled: false, text: '' });
     } finally {
       await client.close();

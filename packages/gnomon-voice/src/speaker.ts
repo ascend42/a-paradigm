@@ -75,7 +75,7 @@ export const MIN_ENROL_SPEECH_MS = 1200;
  * enrolled from quiet-heavy phrases matched any quiet-heavy segment (a video was accepted as the founder).
  *
  * In 20 ms frames, a frame is QUIET below max(GATE_FLOOR_DBFS, loudest − GATE_REL_DB). Leading and trailing quiet is
- * cut; an inner quiet run of GATE_PAUSE_MS or longer (a pause) is cut but for GATE_KEEP_FRAMES at each side; shorter
+ * cut entirely; an inner quiet run of GATE_PAUSE_MS or longer (a pause) is cut but for GATE_KEEP_FRAMES at each side; shorter
  * dips (stops, fricatives) stay, so the speech stays continuous. The first version cut every quiet frame; that
  * chopped consonants and RAISED impostor scores on plain speech (calibration 2026-10-20: 11/68 human impostor trials
  * ≥ 0.6 against 0/68 with this pause-only cut). Gated, the embedding no longer depends on how much quiet surrounds
@@ -105,7 +105,9 @@ export function speechOnly(samples: Float32Array, sampleRate: number): Float32Ar
     while (j < n && db[j]! < thr) j++;
     const lead = i === 0;
     const trail = j === n;
-    if (lead || trail || j - i >= minRun) for (let k = lead ? i : i + GATE_KEEP_FRAMES; k < (trail ? j : j - GATE_KEEP_FRAMES); k++) keep[k] = 0;
+    // edge quiet goes entirely (so padding never changes the result); an inner pause keeps its edge frames
+    if (lead || trail) for (let k = i; k < j; k++) keep[k] = 0;
+    else if (j - i >= minRun) for (let k = i + GATE_KEEP_FRAMES; k < j - GATE_KEEP_FRAMES; k++) keep[k] = 0;
     i = j;
   }
   let m = 0;
