@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T05:35:55.273Z'
+generated: '2026-10-20T06:18:48.713Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -29556,12 +29556,93 @@ by_symbol:
       agent: []
   '#gnomon-voice':
     symbol: '#gnomon-voice'
-    total_changes: 15
-    last_modified: '2026-10-20T05:00:51Z'
+    total_changes: 19
+    last_modified: '2026-10-20T06:04:30Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_454
+      - &ref_431
+        id: h0817
+        ts: '2026-10-20T06:04:30Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-io'
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: f1b8e24251eec894cccd2eafce2f156a81c211b7
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon-voice/src/engines/sherpa.ts
+        description: 'docs(#gnomon-voice): Kokoro RTF bench, spec stop-speaking note, purposes — WIP 4/6'
+      - &ref_459
+        id: h0816
+        ts: '2026-10-20T06:00:19Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#kernel-dispatch'
+        author:
+          type: human
+          id: ascend
+        commit: dcb5f35e23a5808989d8e29c0fa9333f19128845
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/socket/status-numbers.ts
+          - packages/gnomon/test/voice-v2e-speak.test.ts
+          - packages/gnomon/test/voice-v2e.test.ts
+        description: 'test(#gnomon-voice): stop-speaking dispatch is human only; declare status counters — WIP 3/6'
+      - &ref_432
+        id: h0815
+        ts: '2026-10-20T05:59:11Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: b10750c8cfece3db3aaedeec546c2a40b1ff5a5d
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/voice-client.ts
+          - packages/gnomon-gui/src/core/voice.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/index.html
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/modes.test.ts
+          - packages/gnomon-gui/test/stop-speaking.test.ts
+          - packages/gnomon-gui/test/voice-client.test.ts
+          - packages/gnomon-gui/test/voice.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#gui): Stop speaking button, Esc, 300 ms poll while speaking — WIP 2/6'
+      - &ref_457
+        id: h0814
+        ts: '2026-10-20T05:56:36Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-io'
+        author:
+          type: human
+          id: ascend
+        commit: c757db2edf7dbcab2d3acf2892d4bf989dc126e7
+        intent: feature
+        files:
+          - packages/gnomon-voice/README.md
+          - packages/gnomon-voice/checksums.json
+          - packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Hotkey.swift
+          - packages/gnomon-voice/io-darwin/Sources/gnomon-voice-io/main.swift
+          - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
+          - packages/gnomon-voice/test/kernel-link.test.ts
+        description: 'feat(#gnomon-voice-io): stop-speaking hotkey (ctrl+alt+.) — WIP 1/6'
+      - &ref_455
         id: h0813
         ts: '2026-10-20T05:00:51Z'
         type: implement
@@ -29582,97 +29663,6 @@ by_symbol:
           - packages/gnomon-voice/test/stubs.ts
           - packages/gnomon-voice/test/v2e.test.ts
         description: 'feat(#gnomon-voice): composer delivery, dictation activity edges, hold-toggle counter (WIP C)'
-      - &ref_448
-        id: h0812
-        ts: '2026-10-20T04:57:25Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#supervisor'
-        author:
-          type: human
-          id: ascend
-        commit: 232aad6ce226b324a74de5e31dbf35fee9baee6a
-        intent: feature
-        files:
-          - packages/gnomon/src/kernel/lifecycle/daemon.ts
-          - packages/gnomon/src/kernel/socket/dispatch.ts
-          - packages/gnomon/src/kernel/supervisor/local-session.ts
-          - packages/gnomon/src/kernel/supervisor/port.ts
-          - packages/gnomon/src/kernel/supervisor/supervisor.ts
-          - packages/gnomon/src/kernel/voice/voice-control.ts
-          - packages/gnomon/src/kernel/voice/voice-requests.ts
-          - packages/gnomon/test/voice-dictation.test.ts
-          - packages/gnomon/test/voice-v2e-enrol.test.ts
-          - packages/gnomon/test/voice-v2e-speak.test.ts
-        description: 'feat(#gnomon-voice): dictation kernel side - forwardable stamp, human-send attribution, dictation reports (WIP K)'
-      - &ref_458
-        id: h0811
-        ts: '2026-10-20T04:47:18Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#gnomon-voice-io'
-        author:
-          type: human
-          id: ascend
-        commit: b6438ac8f30b83d77eec7f62faf3866c80e5810b
-        intent: feature
-        files:
-          - packages/gnomon-voice/README.md
-          - packages/gnomon-voice/checksums.json
-          - packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Hotkey.swift
-          - packages/gnomon-voice/io-darwin/Sources/gnomon-voice-io/main.swift
-          - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
-          - packages/gnomon-voice/src/audio-io.ts
-          - packages/gnomon-voice/src/fake-audio-io.ts
-          - packages/gnomon-voice/src/types.ts
-          - packages/gnomon-voice/test/kernel-link.test.ts
-        description: 'feat(#gnomon-voice-io): hold-toggle hotkey for dictation (WIP S)'
-      - &ref_455
-        id: h0810
-        ts: '2026-10-20T00:25:56Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: cbf090bba8d67efb241d4a0b8d94db381fa2717d
-        intent: feature
-        files:
-          - packages/gnomon-voice/test/fixtures/fake-voice-io.mjs
-          - packages/gnomon-voice/test/v2e.test.ts
-        description: 'test(#gnomon-voice): V2e fd link, run exit, speakable, hardening, member pins, hotkeys'
-      - &ref_456
-        id: h0809
-        ts: '2026-10-20T00:23:26Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: 0811043e8e678ce5b8f392b6f505571801dcbf92
-        intent: feature
-        files:
-          - packages/gnomon-voice/src/audio-io.ts
-          - packages/gnomon-voice/src/cli.ts
-          - packages/gnomon-voice/src/fake-audio-io.ts
-          - packages/gnomon-voice/src/index.ts
-          - packages/gnomon-voice/src/kernel-link.ts
-          - packages/gnomon-voice/src/manifest.ts
-          - packages/gnomon-voice/src/run.ts
-          - packages/gnomon-voice/src/speakable.ts
-          - packages/gnomon-voice/src/types.ts
-          - packages/gnomon-voice/src/voice-client.ts
-          - packages/gnomon-voice/test/kernel-link.test.ts
-          - packages/gnomon-voice/test/pipeline.test.ts
-          - packages/gnomon-voice/test/stubs.ts
-          - packages/gnomon-voice/voice-models.manifest.json
-        description: 'wip(#gnomon-voice): V2e client fd link, kernel-speakable, hardening, member-pinned manifest'
     contributors:
       human:
         - ascend
@@ -29684,7 +29674,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_449
+      - &ref_448
         id: h0801
         ts: '2026-10-19T22:49:02Z'
         type: implement
@@ -29716,7 +29706,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/claude-repin-card.test.ts
         description: 'fix(#session-runner): Aegis re-pin fixes M1, M3, L1, L4, L5 (TD-2026-10-19-063)'
-      - &ref_431
+      - &ref_449
         id: h0800
         ts: '2026-10-19T22:42:18Z'
         type: implement
@@ -29757,7 +29747,7 @@ by_symbol:
           - packages/gnomon/test/session-supervisor.test.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
-      - &ref_432
+      - &ref_450
         id: h0799
         ts: '2026-10-19T22:42:13Z'
         type: implement
@@ -29846,11 +29836,13 @@ by_symbol:
       agent: []
   '#gui':
     symbol: '#gui'
-    total_changes: 13
-    last_modified: '2026-10-19T23:19:36Z'
+    total_changes: 15
+    last_modified: '2026-10-20T06:04:30Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_431
+      - *ref_432
       - id: h0804
         ts: '2026-10-19T23:19:36Z'
         type: implement
@@ -29913,8 +29905,6 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'wip(#gui): voice pill, attach controls, voice transcript items (V2d)'
-      - *ref_431
-      - *ref_432
     contributors:
       human:
         - ascend
@@ -30060,7 +30050,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gui): re-embed the GUI bundle after the P8-D98 contracts move'
-      - &ref_453
+      - &ref_454
         id: h0781
         ts: '2026-10-19T15:02:49Z'
         type: implement
@@ -30214,7 +30204,7 @@ by_symbol:
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/SessionWatch.swift
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/main.swift
         description: 'wip(#gnomon-helper): helper 1.6.0 arm custody checkpoint'
-      - &ref_451
+      - &ref_452
         id: h0789
         ts: '2026-10-19T19:26:33Z'
         type: implement
@@ -31137,8 +31127,30 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_448
-      - &ref_457
+      - id: h0812
+        ts: '2026-10-20T04:57:25Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 232aad6ce226b324a74de5e31dbf35fee9baee6a
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/socket/dispatch.ts
+          - packages/gnomon/src/kernel/supervisor/local-session.ts
+          - packages/gnomon/src/kernel/supervisor/port.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/src/kernel/voice/voice-control.ts
+          - packages/gnomon/src/kernel/voice/voice-requests.ts
+          - packages/gnomon/test/voice-dictation.test.ts
+          - packages/gnomon/test/voice-v2e-enrol.test.ts
+          - packages/gnomon/test/voice-v2e-speak.test.ts
+        description: 'feat(#gnomon-voice): dictation kernel side - forwardable stamp, human-send attribution, dictation reports (WIP K)'
+      - &ref_456
         id: h0803
         ts: '2026-10-19T23:17:16Z'
         type: implement
@@ -31159,9 +31171,9 @@ by_symbol:
           - docs/specs/gnomon.md
           - packages/gnomon/.purpose
         description: 'feat(#gnomon-voice): V2a kernel side of ambient + push-to-talk (TD-2026-10-19-298)'
+      - *ref_448
       - *ref_449
-      - *ref_431
-      - *ref_432
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31185,7 +31197,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_450
+      - &ref_451
         id: h0769
         ts: '2026-10-19T01:23:13Z'
         type: implement
@@ -31210,7 +31222,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_450
+      - *ref_451
     contributors:
       human:
         - ascend
@@ -31284,7 +31296,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_451
+      - *ref_452
       - id: h0776
         ts: '2026-10-19T05:04:25Z'
         type: implement
@@ -31309,7 +31321,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_452
+      - &ref_453
         id: h0777
         ts: '2026-10-19T05:26:07Z'
         type: implement
@@ -31341,7 +31353,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_441
-      - *ref_452
+      - *ref_453
     contributors:
       human:
         - ascend
@@ -31381,7 +31393,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_453
+      - *ref_454
     contributors:
       human:
         - ascend
@@ -31442,10 +31454,50 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_454
       - *ref_455
+      - id: h0810
+        ts: '2026-10-20T00:25:56Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: cbf090bba8d67efb241d4a0b8d94db381fa2717d
+        intent: feature
+        files:
+          - packages/gnomon-voice/test/fixtures/fake-voice-io.mjs
+          - packages/gnomon-voice/test/v2e.test.ts
+        description: 'test(#gnomon-voice): V2e fd link, run exit, speakable, hardening, member pins, hotkeys'
+      - id: h0809
+        ts: '2026-10-20T00:23:26Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: 0811043e8e678ce5b8f392b6f505571801dcbf92
+        intent: feature
+        files:
+          - packages/gnomon-voice/src/audio-io.ts
+          - packages/gnomon-voice/src/cli.ts
+          - packages/gnomon-voice/src/fake-audio-io.ts
+          - packages/gnomon-voice/src/index.ts
+          - packages/gnomon-voice/src/kernel-link.ts
+          - packages/gnomon-voice/src/manifest.ts
+          - packages/gnomon-voice/src/run.ts
+          - packages/gnomon-voice/src/speakable.ts
+          - packages/gnomon-voice/src/types.ts
+          - packages/gnomon-voice/src/voice-client.ts
+          - packages/gnomon-voice/test/kernel-link.test.ts
+          - packages/gnomon-voice/test/pipeline.test.ts
+          - packages/gnomon-voice/test/stubs.ts
+          - packages/gnomon-voice/voice-models.manifest.json
+        description: 'wip(#gnomon-voice): V2e client fd link, kernel-speakable, hardening, member-pinned manifest'
       - *ref_456
-      - *ref_457
       - id: h0802
         ts: '2026-10-19T23:13:35Z'
         type: implement
@@ -31476,22 +31528,45 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_448
       - *ref_449
-      - *ref_431
-      - *ref_432
+      - *ref_450
     contributors:
       human:
         - ascend
       agent: []
   '#gnomon-voice-io':
     symbol: '#gnomon-voice-io'
-    total_changes: 3
-    last_modified: '2026-10-20T04:47:18Z'
+    total_changes: 5
+    last_modified: '2026-10-20T06:04:30Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_458
-      - &ref_459
+      - *ref_431
+      - *ref_457
+      - id: h0811
+        ts: '2026-10-20T04:47:18Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-io'
+        author:
+          type: human
+          id: ascend
+        commit: b6438ac8f30b83d77eec7f62faf3866c80e5810b
+        intent: feature
+        files:
+          - packages/gnomon-voice/README.md
+          - packages/gnomon-voice/checksums.json
+          - packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Hotkey.swift
+          - packages/gnomon-voice/io-darwin/Sources/gnomon-voice-io/main.swift
+          - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
+          - packages/gnomon-voice/src/audio-io.ts
+          - packages/gnomon-voice/src/fake-audio-io.ts
+          - packages/gnomon-voice/src/types.ts
+          - packages/gnomon-voice/test/kernel-link.test.ts
+        description: 'feat(#gnomon-voice-io): hold-toggle hotkey for dictation (WIP S)'
+      - &ref_458
         id: h0803
         ts: '2026-10-19T23:19:13Z'
         type: implement
@@ -31557,6 +31632,18 @@ by_symbol:
     symbol: '#gnomon-voice-io-build'
     total_changes: 1
     last_modified: '2026-10-19T23:19:13Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_458
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#kernel-dispatch':
+    symbol: '#kernel-dispatch'
+    total_changes: 1
+    last_modified: '2026-10-20T06:00:19Z'
     stability_score: 1
     fragility: low
     recent:
