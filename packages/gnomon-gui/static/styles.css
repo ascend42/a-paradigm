@@ -167,8 +167,9 @@ html, body {
 .notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: 12px; }
 .notice.fail { border-color: var(--fail-edge); color: var(--fail); background: var(--sheet); }
 
-/* S1 ink keys: a hard 2px ink offset (--key-shadow, none at night where the [ ] caps carry the key), a --key-edge
-   ring (>= 3:1 on both surfaces; never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
+/* S1 ink keys: a hard 2px ink offset (--key-shadow; none at night, where the --key-edge ring alone carries the key:
+   the comp's night keys have no [ ] caps, only + New session does), a --key-edge ring (>= 3:1 on both surfaces;
+   never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
 .key {
   font: inherit; font-size: 11.5px; font-weight: 500;
   color: var(--ink);
@@ -248,8 +249,9 @@ html, body {
 .trow.role-assistant .body .chip-label { font-weight: 600; }
 .trow.role-assistant .body .chip-label { margin-right: 4px; }
 /* #gui-table-talk choices: an agent's trailing A/B options as clickable replies. Built from MODEL text, so never a
-   kernel key: no .key class, no hard ink offset, a DASHED edge and a small ink keycap by day; at night a plain
-   letter (Aegis L1: no [ ] brackets, which are the kernel keys' night form) */
+   kernel key: no .key class, no hard ink offset, a DASHED edge AND a filled ink pill on the letter (.choice-k), by
+   day and at night alike (Aegis L3, fidelity 2: never the dashed border alone), plus the "reply with" hint on a live
+   group. No [ ] brackets (Aegis L1) */
 .trow.role-assistant .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
 .trow.role-assistant .choices-hint { flex-basis: 100%; color: var(--sec); font-size: 11px; }
 .choice {
@@ -271,7 +273,8 @@ html, body {
 .choice .choice-again { color: var(--warn-ink); font-size: 11px; }
 .choice.picked::after { content: "✓ sent"; color: var(--sec); font-size: 11px; }
 [data-theme="night"] .choice { border-color: var(--sec); border-radius: 3px; padding-left: 8px; }
-[data-theme="night"] .choice .choice-k { background: transparent; color: var(--ink); padding: 0; min-width: 0; text-decoration: underline; text-underline-offset: 3px; }
+/* Aegis L3: the night chip keeps its filled choice-k pill (the second cue besides the dashed edge) */
+[data-theme="night"] .choice .choice-k { background: var(--ink); color: var(--on-ink); }
 [data-theme="night"] .choice[disabled] { border-color: var(--rule); }
 [data-theme="night"] .choice[disabled] .choice-k { color: var(--sec); }
 [data-theme="night"] .choice.picked { border-color: var(--ink2); }
@@ -821,7 +824,8 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .theme-word { display: none; }
 .theme-switch .seg-key { min-width: 26px; padding: 1px 6px; text-align: center; }
 .voice-pill.voice-off:not(.voice-noclient):not(.voice-setup):not(.voice-crashed):not(.voice-nudge) { padding: 1px 7px; font-size: 10.5px; border-color: var(--rule); }
-/* night: the comp's keys carry no [ ] caps (only + New session does); the dashed edge still marks a model-text choice */
+/* night: the comp's keys carry no [ ] caps (only + New session does); a model-text choice is marked by its dashed
+   edge AND its filled choice-k pill (Aegis L3) */
 [data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
 [data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
