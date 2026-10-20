@@ -99,6 +99,14 @@ export function modeLabel(v: SessionModeView | null): string {
   return `mode: ${v.chosen}${dflt}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
 }
 
+/**
+ * fidelity 2: the compact run-mode chip in the chat header (`ask ▾`): modeLabel without its `mode: ` prefix, so a
+ * clamp, a config default or a pending Touch ID still shows (kernel-owned: never shortened past what is true).
+ */
+export function modeChip(v: SessionModeView | null): string {
+  return v ? modeLabel(v).replace(/^mode: /, '') : 'mode: —';
+}
+
 /** One line per mode for the menu: what it does, and why it is disabled when it is. */
 export const MODE_HELP: Readonly<Record<RunMode, string>> = Object.freeze({
   manual: 'writes and commands wait on an approved plan',

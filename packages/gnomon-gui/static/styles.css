@@ -817,3 +817,12 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 [data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
 [data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
+
+/* fidelity 2 chat header: "title  ■ project · claude · started 13:58 · 9m" (meta never squeezed out by the title), the
+   kernel-owned run mode as a small chip (`ask ▾`), and a ⋯ menu holding the counts and the raw toggle */
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
+.chead-meta { flex: 0 0 auto; }
+.chead .mode-btn { font-size: 10.5px; padding: 0 6px; line-height: 18px; border-color: var(--rule); }
+.more-wrap { position: relative; display: inline-flex; }
+.more-btn { font-size: 13px; line-height: 1; padding: 1px 7px; border-color: transparent; }
+.more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }

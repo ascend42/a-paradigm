@@ -31,7 +31,7 @@ import { mountStandingFeed } from './standing-feed.js';
 import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
-import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
+import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
@@ -202,6 +202,8 @@ function resetTranscript(): void {
   heights = widths.restore(transcriptId(), width, 0);
   paintChatHead();
   $('raw-toggle').hidden = !focused;
+  $('more-btn').hidden = !focused && !feedView;
+  closeMoreMenu();
   put($('raw-toggle'), rawMode ? 'chat' : 'raw');
   $('raw-toggle').title = rawMode ? 'Back to the chat view' : 'Show raw events (every row as its one-line summary)';
   paintTranscript();
@@ -1244,7 +1246,8 @@ function paintMode(): void {
   const v = currentMode();
   const btn = $('mode-btn');
   btn.hidden = !focused || !v; // the kernel feed and an exited session have no mode to set
-  put(btn, modeLabel(v));
+  put(btn, modeChip(v));
+  btn.title = `Run mode: ${modeLabel(v).replace(/ ▾$/, '')} (kernel-owned; ⇧Tab in the composer cycles it)`;
   btn.className = `key quiet mode-btn kernel-owned${v ? ` mode-${v.effective}` : ''}`;
   put($('composer-mode'), focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused');
   if (!$('mode-menu').hidden) paintModeMenu();
@@ -1263,6 +1266,15 @@ function paintModeMenu(): void {
     menu.appendChild(b);
   }
   if (sc.other) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-mode-scope': sc.other.scope }, sc.other.label) as unknown as Node);
+}
+
+function openMoreMenu(): void {
+  $('more-menu').hidden = false;
+  $('more-btn').setAttribute('aria-expanded', 'true');
+}
+function closeMoreMenu(): void {
+  $('more-menu').hidden = true;
+  $('more-btn').setAttribute('aria-expanded', 'false');
 }
 
 function openModeMenu(): void {
@@ -1963,6 +1975,11 @@ function wire(): void {
   });
   document.addEventListener('click', (e) => {
     if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
+  });
+  // fidelity 2: the ⋯ menu holds the item counts and the raw toggle (the comp's header has neither)
+  $('more-btn').addEventListener('click', () => ($('more-menu').hidden ? openMoreMenu() : closeMoreMenu()));
+  document.addEventListener('click', (e) => {
+    if (!$('more-menu').hidden && !(e.target as HTMLElement).closest('.more-wrap')) closeMoreMenu();
   });
   document.addEventListener('click', (e) => {
     if ($('mode-menu').hidden) return;

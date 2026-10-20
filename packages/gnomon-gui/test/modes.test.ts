@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries } from '../src/core/commands.js';
-import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planChange, planFor, scopeEntries, SCOPE_LABEL, sessionModeOf, type SessionModeView } from '../src/core/modes.js';
+import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planChange, planFor, scopeEntries, SCOPE_LABEL, sessionModeOf, type SessionModeView } from '../src/core/modes.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,6 +57,10 @@ describe('run modes: the ⇧Tab cycle and what a choice does', () => {
     expect(modeLabel(view({ chosen: 'auto-edits', effective: 'ask', ceiling: 'ask' }))).toBe('mode: auto-edits → ask (ceiling) ▾');
     expect(modeLabel(view({ pendingCardId: 'card:x' }))).toBe('mode: ask · Touch ID pending ▾');
     expect(modeLabel(null)).toBe('mode: —');
+    // fidelity 2: the header chip drops only the prefix (a clamp or a pending Touch ID still shows)
+    expect(modeChip(view())).toBe('ask ▾');
+    expect(modeChip(view({ chosen: 'auto-edits', effective: 'ask', ceiling: 'ask' }))).toBe('auto-edits → ask (ceiling) ▾');
+    expect(modeChip(null)).toBe('mode: —');
     // F3 (TD-2026-10-20-086): the folder runs the root-signed default
     expect(modeLabel(view({ chosen: 'auto-edits', effective: 'auto-edits', source: 'config' }))).toBe('mode: auto-edits (default) ▾');
   });
