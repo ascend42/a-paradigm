@@ -167,8 +167,9 @@ html, body {
 .notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: 12px; }
 .notice.fail { border-color: var(--fail-edge); color: var(--fail); background: var(--sheet); }
 
-/* S1 ink keys: a hard 2px ink offset (--key-shadow, none at night where the [ ] caps carry the key), a --key-edge
-   ring (>= 3:1 on both surfaces; never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
+/* S1 ink keys: a hard 2px ink offset (--key-shadow; none at night, where the --key-edge ring alone carries the key:
+   the comp's night keys have no [ ] caps, only + New session does), a --key-edge ring (>= 3:1 on both surfaces;
+   never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
 .key {
   font: inherit; font-size: 11.5px; font-weight: 500;
   color: var(--ink);
@@ -248,8 +249,9 @@ html, body {
 .trow.role-assistant .body .chip-label { font-weight: 600; }
 .trow.role-assistant .body .chip-label { margin-right: 4px; }
 /* #gui-table-talk choices: an agent's trailing A/B options as clickable replies. Built from MODEL text, so never a
-   kernel key: no .key class, no hard ink offset, a DASHED edge and a small ink keycap by day; at night a plain
-   letter (Aegis L1: no [ ] brackets, which are the kernel keys' night form) */
+   kernel key: no .key class, no hard ink offset, a DASHED edge AND a filled ink pill on the letter (.choice-k), by
+   day and at night alike (Aegis L3, fidelity 2: never the dashed border alone), plus the "reply with" hint on a live
+   group. No [ ] brackets (Aegis L1) */
 .trow.role-assistant .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
 .trow.role-assistant .choices-hint { flex-basis: 100%; color: var(--sec); font-size: 11px; }
 .choice {
@@ -271,7 +273,8 @@ html, body {
 .choice .choice-again { color: var(--warn-ink); font-size: 11px; }
 .choice.picked::after { content: "✓ sent"; color: var(--sec); font-size: 11px; }
 [data-theme="night"] .choice { border-color: var(--sec); border-radius: 3px; padding-left: 8px; }
-[data-theme="night"] .choice .choice-k { background: transparent; color: var(--ink); padding: 0; min-width: 0; text-decoration: underline; text-underline-offset: 3px; }
+/* Aegis L3: the night chip keeps its filled choice-k pill (the second cue besides the dashed edge) */
+[data-theme="night"] .choice .choice-k { background: var(--ink); color: var(--on-ink); }
 [data-theme="night"] .choice[disabled] { border-color: var(--rule); }
 [data-theme="night"] .choice[disabled] .choice-k { color: var(--sec); }
 [data-theme="night"] .choice.picked { border-color: var(--ink2); }
@@ -316,12 +319,34 @@ html, body {
 .card.kind-knot { --edge: var(--knot-edge); }
 .card.failed { --edge: var(--fail-edge); }
 .card.kind-gate-class, .card.held { --edge: var(--warn-edge); }
-.card-head { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; font-size: 10.5px; color: var(--sec); }
+.card-head { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: center; font-size: 10.5px; color: var(--sec); }
 .card-project { font-weight: 500; }
-.card-kind { color: var(--ink2); font-weight: 500; }
-.card-voice { color: var(--sec); }
+.card-kind { color: var(--sec); }
+/* fidelity 2: the kernel's voice handle as the comp's bordered chip (.mic) */
+.card-voice { color: var(--sec); border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; line-height: 1.4; }
 .card-voice .handle { display: inline-block; padding: 0 5px; border-radius: 2px; background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; letter-spacing: .04em; }
-.card-title { margin: 2px 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--ink); }
+.card-title { margin: 2px 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-title .card-arg { font: inherit; }
+/* Aegis H1: a composed permission title never hides a command's tail: it WRAPS (no ellipsis, no one-line clip), each
+   line of the command is its own line with a visible ⏎, and the shell separators are marked */
+.card-title.composed { white-space: normal; overflow: visible; text-overflow: clip; }
+.card-title.composed .card-arg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-title.composed .card-arg-line { white-space: pre-wrap; }
+.card-title.composed .card-nl { color: var(--warn-ink); font-weight: 600; }
+.card-title.composed .card-sep { color: var(--warn-ink); font-weight: 600; }
+.card-arg-capped { display: block; color: var(--warn-ink); }
+.card.kind-knot .card-title { text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+/* fidelity 2: the quiet single-line contentHash under the keys (on every card) and the details disclosure */
+.card-keys { margin-top: 8px; }
+.card-keys .key:not(.key-always) { text-transform: capitalize; }
+.card-details > summary { position: absolute; right: 12px; bottom: 9px; font-size: 10px; color: var(--sec); cursor: pointer; list-style: none; }
+.card-details > summary::-webkit-details-marker { display: none; }
+.card-details > summary::after { content: " ▸"; }
+.card-details[open] > summary::after { content: " ▾"; }
+.card-details[open] > summary { position: static; text-align: right; margin-bottom: 2px; }
+.card-details[open] { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--rule); }
+.card-details .card-who { margin: 0 0 4px; font-size: 10.5px; overflow-wrap: anywhere; }
+.card-quote-label { display: block; font-style: normal; font-size: 10.5px; margin-bottom: 2px; }
 .card.kind-knot .card-title { color: var(--knot); }
 .card.failed .card-title { color: var(--fail); }
 .card-body { margin: 4px 0 6px; font-size: 12px; color: var(--ink2); }
@@ -330,7 +355,7 @@ html, body {
 .card.held .bar { display: block; }
 .card .bar-i { display: block; height: 100%; background: var(--warn-edge); transform-origin: left; }
 .card .stamp { position: absolute; right: 12px; top: 8px; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--sec); border: 2px solid currentColor; border-radius: var(--radius); padding: 0 6px; opacity: 0; transform: rotate(-8deg); pointer-events: none; }
-.card .content-hash { display: block; margin-top: 6px; font-size: 10px; opacity: .8; }
+.card .content-hash { display: block; margin-top: 5px; padding-right: 64px; font-size: 9.5px; line-height: 1.3; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* the pile: overlap, a few degrees of rotation, z-order top-down; fanned flat on hover / focus-within / .fan / .open */
 .pile .card + .card { margin-top: -64px; }
 .pile .card:nth-child(1) { z-index: 4; }
@@ -342,7 +367,8 @@ html, body {
 .pile:hover .card, .pile:focus-within .card, .pile.fan .card, .pile.open .card { --r: 0deg; }
 .pile-more { align-self: center; margin-top: 12px; }
 /* Aegis M2: a buried card's keys take no click until the pile is fanned (hover, keyboard focus, .fan, .open) */
-.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-keys { pointer-events: none; }
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-keys,
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-details { pointer-events: none; }
 .card-requester { color: var(--sec); }
 /* a card kind whose first line the kernel does not compose: its words read as the requester's quoted text */
 .card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
@@ -761,7 +787,7 @@ html, body {
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .seg-key.current, .seg-key[aria-checked="true"], .seg-key[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
-[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); }
 [data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key.current::after { color: var(--ink); }
 .seg-key[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); }
 .theme-switch { gap: 2px; }
@@ -794,3 +820,59 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .standing-items { margin: 4px 0; padding-left: 16px; max-height: 200px; overflow: auto; }
 .standing-toast { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--key-edge); color: var(--ink); }
 .standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }
+
+/* ── fidelity 2 (comp direction.html): the header is wordmark · search · (kernel chips) · voice · ⊞ Layout · ☀/☾ · ⚙.
+   The connection readout and the browser risk badge stay VISIBLE (kernel-owned) as small quiet chips; who is connected
+   lives in the readout's title= and in Settings → About. The theme switch is glyphs only (☀ ☾ ◐, words in title=). */
+.chrome { gap: 10px; }
+.chip, #conn.chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font-size: 10.5px; line-height: 18px; color: var(--sec); border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; }
+#conn.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--sec); }
+.badge.risk { font-size: 10.5px; line-height: 18px; padding: 0 6px; }
+.theme-word { display: none; }
+.theme-switch .seg-key { min-width: 26px; padding: 1px 6px; text-align: center; }
+.voice-pill.voice-off:not(.voice-noclient):not(.voice-setup):not(.voice-crashed):not(.voice-nudge) { padding: 1px 7px; font-size: 10.5px; border-color: var(--rule); }
+/* night: the comp's keys carry no [ ] caps (only + New session does); a model-text choice is marked by its dashed
+   edge AND its filled choice-k pill (Aegis L3) */
+[data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
+[data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
+[data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
+
+/* fidelity 2 chat header: "title  ■ project · claude · started 13:58 · 9m" (meta never squeezed out by the title), the
+   kernel-owned run mode as a small chip (`ask ▾`), and a ⋯ menu holding the counts and the raw toggle */
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
+.chead-meta { flex: 0 0 auto; }
+.chead .mode-btn { font-size: 10.5px; padding: 0 6px; line-height: 18px; border-color: var(--rule); }
+.more-wrap { position: relative; display: inline-flex; }
+.more-btn { font-size: 13px; line-height: 1; padding: 1px 7px; border-color: transparent; }
+.more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
+
+/* fidelity 2 composer (comp): the input alone with "Reply to <name>…" and a small ⌘↵ hint; send is a small key. Who it
+   goes to and the run mode are in the textarea's title= (and the sr-only #composer-mode line). */
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+.composer > textarea { grid-column: 1; resize: none; min-height: 21px; line-height: 1.55; }
+.composer > .composer-ghost { grid-column: 1 / -1; }
+.composer > .composer-foot { grid-column: 2; grid-row: 1; margin-top: 0; justify-content: flex-end; }
+.composer-kbd { border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.composer-foot .key.pri { margin-left: 2px; min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
+
+/* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
+.pilehead { padding: 12px 14px 8px; align-items: baseline; }
+.pile-meta { display: inline-flex; align-items: baseline; gap: 6px; margin-left: auto; font-size: 10.5px; white-space: nowrap; }
+.pile-meta #inbox, .pile-meta #stack-hint { font-size: 10.5px; }
+.pilehead #stack-hint { margin-left: 0; }
+.stack-scope { font-size: 10.5px; padding: 0 5px; border-color: var(--rule); }
+.stack-scope[aria-pressed="true"] { color: var(--ink); border-color: var(--key-edge); }
+
+/* fidelity 2 footer: the Install Workshop key (disabled until install has a GUI request kind) and ONE quiet status line */
+.workshop-install { font-size: 11px; }
+.workshop-install[disabled] { border-style: dashed; }
+.status-line { gap: 0; }
+
+/* fidelity 2 colour: a card with no state edge takes its project's pigment on the edge (the INK of the pair, >= 3:1 on
+   the sheet in both themes; the fill is for swatches only). State edges (knot, failed, gate, held, claim-mismatch) win. */
+.card.pe-h0:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-terracotta-ink); }
+.card.pe-h1:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sage-ink); }
+.card.pe-h2:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-slate-ink); }
+.card.pe-h3:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-ochre-ink); }
+.card.pe-h4:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-rose-clay-ink); }
+.card.pe-h5:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sea-grey-ink); }

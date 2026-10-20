@@ -11,7 +11,7 @@
  */
 import type { GnomonClient } from '../core/client.js';
 import { RpcError } from '../core/client.js';
-import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, WORKSHOP_INSTALL_KEY, WORKSHOP_NOT_INSTALLED, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
 import type { MiniDoc } from '../core/render.js';
 
 const REGION_HOST: Record<ModRegion, { id: string; parent: string; after?: string }> = {
@@ -29,6 +29,17 @@ function paintWorkshopAbsence(line: string | null): void {
   if (!el) return;
   clear(el);
   el.hidden = false;
+  if (line === WORKSHOP_NOT_INSTALLED) {
+    // fidelity 2: UI-first key; disabled while install has no GUI request kind (WORKSHOP_INSTALL_KEY)
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'key quiet workshop-install';
+    b.textContent = WORKSHOP_INSTALL_KEY.label;
+    b.title = WORKSHOP_INSTALL_KEY.title;
+    b.disabled = !WORKSHOP_INSTALL_KEY.enabled;
+    el.appendChild(b);
+    return;
+  }
   const p = document.createElement('small');
   p.className = 'meta workshop-absent';
   p.textContent = line;

@@ -21,7 +21,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -31,7 +31,7 @@ import { mountStandingFeed } from './standing-feed.js';
 import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
-import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
+import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
@@ -206,6 +206,8 @@ function resetTranscript(): void {
   heights = widths.restore(transcriptId(), width, 0);
   paintChatHead();
   $('raw-toggle').hidden = !focused;
+  $('more-btn').hidden = !focused && !feedView;
+  closeMoreMenu();
   put($('raw-toggle'), rawMode ? 'chat' : 'raw');
   $('raw-toggle').title = rawMode ? 'Back to the chat view' : 'Show raw events (every row as its one-line summary)';
   paintTranscript();
@@ -420,8 +422,9 @@ function closeDrawers(): void {
 }
 
 /* ── sessions sidebar ───────────────────────────────────────────── */
-/** S2.2: the rail: ACTIVE n (grouped by project, swatch + project ink name), then ▸ PAST n (collapsed by default).
- * Rows: 12px swatch · name (sessionTitle) · right-aligned state note. The kernel feed is a palette view now. */
+/** S2.2 / fidelity 2: the rail as the comp: ACTIVE n, then ONE line per session (12px swatch in the project hue · name
+ * (sessionTitle) · right-aligned state note), grouped by project order but with no heading rows; then ▸ PAST n
+ * (collapsed by default). Voice attaches from the header pill's menu (never a rail row). The kernel feed is a palette view. */
 function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][number], hue: number): HTMLElement {
   const was = lastState.get(s.hsid);
   lastState.set(s.hsid, s.state);
@@ -448,15 +451,7 @@ function paintSessions(): void {
   const past = groups.flatMap((g) => splitActivePast(g.sessions).past.map((s) => ({ s, hue: g.hue }))).sort((a, b) => b.s.lastSeq - a.s.lastSeq);
   const nActive = active.reduce((n, g) => n + g.sessions.length, 0);
   list.appendChild(h(doc, 'div', { class: 'sec-head' }, h(doc, 'span', null, 'Active'), h(doc, 'span', null, String(nActive))) as unknown as Node);
-  const vv = voiceStatusOf(status);
-  for (const g of active) {
-    list.appendChild(h(doc, 'div', { class: 'group-head' }, h(doc, 'span', { class: `swatch h${g.hue}` }), h(doc, 'span', { class: `pink h${g.hue}` }, g.repo === UNSCOPED ? 'unscoped' : g.repo)) as unknown as Node);
-    for (const s of g.sessions) {
-      list.appendChild(sessionRowEl(s, g.hue));
-      // V2d: the focused live session gets [Voice ▾] (PTT | Ambient); only a human connection is offered it
-      if (focused === s.hsid && isLiveState(s.state) && canAttach(status)) list.appendChild(voiceRowEl(s.hsid, vv));
-    }
-  }
+  for (const g of active) for (const s of g.sessions) list.appendChild(sessionRowEl(s, g.hue));
   list.appendChild(h(doc, 'button', { class: 'sec-head sec-toggle', type: 'button', 'data-past-toggle': '1', 'aria-expanded': String(pastOpen) }, h(doc, 'span', null, `${pastOpen ? '▾' : '▸'} Past`), h(doc, 'span', null, String(past.length))) as unknown as Node);
   if (pastOpen) for (const { s, hue } of past) list.appendChild(sessionRowEl(s, hue));
 }
@@ -522,8 +517,12 @@ const drooped = new Set<string>();
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
   const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
-  put($('stack-scope'), stackScoped && focused ? 'this project' : 'all projects');
-  put($('inbox'), `${store.cards.size} pending`);
+  // fidelity 2: the comp's head ("Stack" · "4 · hover to fan"); the scope is a small filter key (named when it filters)
+  const scoped = stackScoped && !!focused;
+  put($('stack-scope'), scoped ? 'this project ▾' : '▾');
+  $('stack-scope').title = scoped ? 'Showing this session\'s project only (click: all projects)' : 'Showing all projects (click: only this session\'s project)';
+  $('stack-scope').setAttribute('aria-pressed', String(scoped));
+  put($('inbox'), `${store.cards.size}`);
   for (const c of cards) {
     const k = verifiedKey(c.cardId, String(c.card.contentHash ?? ''));
     if (!verified.has(k) && verifyKey && session) {
@@ -551,6 +550,8 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         raisedAt: c.raisedAt ?? null,
         now: Date.now(),
         voice: cardVoiceOf(c.card),
+        composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
+        localNs: localNsOf(session?.principal),
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -574,7 +575,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   for (const c of shown) pile.appendChild(mk(c));
   pile.classList.toggle('open', pileOpen);
   if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
-  put($('stack-hint'), cards.length > 1 ? 'hover to fan' : '');
+  put($('stack-hint'), cards.length > 1 ? ' · hover to fan' : '');
   const pinned = $('pinned');
   clear(pinned);
   const mine = focused ? store.stack(focusRepo).filter((c) => c.hsid === focused) : [];
@@ -604,7 +605,9 @@ function paintUpdateBanner(): void {
     return;
   }
   if (!el) {
-    el = h(doc, 'div', { id: 'update-banner', class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
+    // Aegis L4: h() never takes an `id` (ids would let display data clobber getElementById lookups); set it here
+    el = h(doc, 'div', { class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
+    el.id = 'update-banner';
     document.body.prepend(el);
   }
   clear(el);
@@ -619,6 +622,7 @@ function paintUpdateBanner(): void {
 /** The socket closed after this page accepted the upgrade: wait for the successor, then load its bundle. */
 async function awaitRestart(): Promise<void> {
   put($('conn'), 'restarting…');
+  $('conn').title = 'kernel connection: restarting';
   notice('Gnomon is restarting with the new version…');
   if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
     clearRestarting(sessionStorage);
@@ -696,11 +700,12 @@ function paintShuttle(): void {
   clear(s);
   const by = store.pendingByKind();
   const live = store.liveCount();
-  const kv = (k: string, v: string) => h(doc, 'span', null, `${k} `, h(doc, 'span', { class: 'v' }, v));
-  s.appendChild(kv('sessions', `${live} live · ${store.sessions.size} seen`) as unknown as Node);
-  s.appendChild(kv('inbox', Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear') as unknown as Node);
-  s.appendChild(kv('log', `head ${store.head} · ${store.rowsSeen} rows`) as unknown as Node);
-  if (session) s.appendChild(kv('api', `${session.hello.clientApi}${session.clientApiDrift ? ' · clientApiId drift' : ''}`) as unknown as Node);
+  // fidelity 2: one quiet line (the detail is in its title=); a clientApiId drift still shows in the line itself
+  const waiting = Object.values(by).reduce((n, x) => n + x, 0);
+  const parts = [`${live} live`, waiting ? `${waiting} waiting` : 'inbox clear', `log ${store.head}`];
+  if (session) parts.push(`${session.hello.clientApi}${session.clientApiDrift ? ' · clientApiId drift' : ''}`);
+  s.appendChild(h(doc, 'span', null, parts.join(' · ')) as unknown as Node);
+  s.title = `sessions ${live} live · ${store.sessions.size} seen\ninbox ${Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear'}\nlog head ${store.head} · ${store.rowsSeen} rows${session ? `\napi ${session.hello.clientApi}` : ''}\n(click: the kernel feed)`;
 }
 
 let paintQueued = false;
@@ -837,7 +842,10 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   staleStop = true;
   staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
-  put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
+  // fidelity 2: the readout is a small quiet chip (connected / not connected / restarting…); who and which connection
+  // are in its title= and in Settings → About (Kernel connection)
+  put($('conn'), 'connected');
+  $('conn').title = `kernel connection: ${out.session.principal} · ${out.session.connId.slice(-8)} (Settings → About)`;
   c.onNotification((method, params) => {
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
@@ -901,7 +909,8 @@ function paintStale(st: StaleState): void {
   showReconnect(v.text);
   let close = document.getElementById('reconnect-close');
   if (!close) {
-    close = h(doc, 'button', { id: 'reconnect-close', class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    close = h(doc, 'button', { class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    close.id = 'reconnect-close'; // Aegis L4: not through h()
     // a user click only; window.close() is allowed for a tab with one history entry, else the text says to continue there
     close.addEventListener('click', (e) => void (e.isTrusted && window.close()));
     reconnectBtn().after(close);
@@ -917,6 +926,7 @@ async function goStale(): Promise<void> {
 
 function showReconnect(why: string): void {
   put($('conn'), 'not connected');
+  $('conn').title = 'kernel connection: not connected';
   put($('reconnect-why'), why);
   $('reconnect').hidden = false;
 }
@@ -988,7 +998,6 @@ function focus(hsid: string | null): void {
   closeDrawers();
   closeModeMenu();
   closeVoiceMenu();
-  voiceRowOpen = false;
   paintMode();
   paintVoice();
   resetTranscript();
@@ -1257,9 +1266,13 @@ function paintMode(): void {
   const v = currentMode();
   const btn = $('mode-btn');
   btn.hidden = !focused || !v; // the kernel feed and an exited session have no mode to set
-  put(btn, modeLabel(v));
+  put(btn, modeChip(v));
+  btn.title = `Run mode: ${modeLabel(v).replace(/ ▾$/, '')} (kernel-owned; ⇧Tab in the composer cycles it)`;
   btn.className = `key quiet mode-btn kernel-owned${v ? ` mode-${v.effective}` : ''}`;
-  put($('composer-mode'), focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused');
+  const to = focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused';
+  put($('composer-mode'), to);
+  // fidelity 2: the comp's composer is the input alone; who it goes to and the mode live in its tooltip
+  $('composer-text').title = `${to}. Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode.`;
   if (!$('mode-menu').hidden) paintModeMenu();
 }
 
@@ -1276,6 +1289,15 @@ function paintModeMenu(): void {
     menu.appendChild(b);
   }
   if (sc.other) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-mode-scope': sc.other.scope }, sc.other.label) as unknown as Node);
+}
+
+function openMoreMenu(): void {
+  $('more-menu').hidden = false;
+  $('more-btn').setAttribute('aria-expanded', 'true');
+}
+function closeMoreMenu(): void {
+  $('more-menu').hidden = true;
+  $('more-btn').setAttribute('aria-expanded', 'false');
 }
 
 function openModeMenu(): void {
@@ -1340,7 +1362,6 @@ function cycleMode(trusted: boolean): void {
 /* ── voice (V2d, TD-2026-10-19-298; core/voice.ts) ───────────────── */
 let voicePresenceDone = false;
 let voiceBusy = false;
-let voiceRowOpen = false;
 
 /**
  * The pill is kernel-owned: its state is status.voice only, re-read on a voice.session.* / voice-app row (store
@@ -1485,22 +1506,6 @@ function closeVoiceMenu(): void {
   $('voice-pill').setAttribute('aria-expanded', 'false');
 }
 
-/** The focused session row's [Voice ▾] and, open, its two choices. */
-function voiceRowEl(hsid: string, v: ReturnType<typeof voiceStatusOf>): HTMLElement {
-  const here: VoiceState = v.state !== 'off' && v.hsid === hsid ? v.state : 'off';
-  const kids: Node[] = [h(doc, 'button', { class: `key quiet voice-row-btn voice-${here}`, type: 'button', 'data-voice-row': hsid, 'aria-expanded': String(voiceRowOpen), title: 'Attach voice to this session' }, here === 'off' ? 'Voice ▾' : `Voice: ${VOICE_TITLE[here]} ▾`) as unknown as Node];
-  if (voiceRowOpen)
-    for (const s of ['ptt', 'ambient'] as const) {
-      const pl = planVoice(v, s, hsid, voicePresenceDone);
-      const b = h(doc, 'button', { class: `key quiet voice-choice voice-${s}${pl.kind === 'same' ? ' current' : ''}`, type: 'button', 'data-voice-set': s, 'data-voice-hsid': hsid, title: pl.kind === 'presence' ? 'needs Touch ID' : pl.kind === 'blocked' ? pl.reason : VOICE_TITLE[s] }, `${VOICE_TITLE[s]}${pl.kind === 'presence' ? ' · Touch ID' : ''}`) as unknown as HTMLButtonElement;
-      b.disabled = pl.kind === 'blocked';
-      kids.push(b as unknown as Node);
-    }
-  const row = h(doc, 'div', { class: 'voice-attach' }) as unknown as HTMLElement;
-  for (const k of kids) row.appendChild(k);
-  return row;
-}
-
 /**
  * One gesture sets voice (G-GUI-04: trusted events only). Off and a narrowing apply on the kernel's answer; the
  * first widening to ambient in this GUI login comes back as a pending presence card this same gesture approves
@@ -1509,7 +1514,6 @@ function voiceRowEl(hsid: string, v: ReturnType<typeof voiceStatusOf>): HTMLElem
 async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
-  voiceRowOpen = false;
   if (!client) return notice('not connected: voice was not changed', true);
   if (!canAttach(status)) return notice('only a human connection attaches voice', true);
   const v = voiceStatusOf(status);
@@ -1882,12 +1886,6 @@ function wire(): void {
   $('toggle-stack').addEventListener('click', () => toggleDrawer('stack'));
   $('scrim').addEventListener('click', closeDrawers);
   $('session-list').addEventListener('click', (e) => {
-    const vr = (e.target as HTMLElement).closest('[data-voice-row], [data-voice-set]') as HTMLElement | null;
-    if (vr) {
-      if (vr.dataset.voiceSet) return void setVoice(vr.dataset.voiceSet as VoiceState, vr.dataset.voiceHsid ?? null, e.isTrusted);
-      voiceRowOpen = !voiceRowOpen;
-      return paintSessions();
-    }
     if ((e.target as HTMLElement).closest('[data-past-toggle]')) {
       pastOpen = !pastOpen;
       localStorage.setItem(PAST_KEY, pastOpen ? '1' : '0');
@@ -2001,6 +1999,11 @@ function wire(): void {
   });
   document.addEventListener('click', (e) => {
     if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
+  });
+  // fidelity 2: the ⋯ menu holds the item counts and the raw toggle (the comp's header has neither)
+  $('more-btn').addEventListener('click', () => ($('more-menu').hidden ? openMoreMenu() : closeMoreMenu()));
+  document.addEventListener('click', (e) => {
+    if (!$('more-menu').hidden && !(e.target as HTMLElement).closest('.more-wrap')) closeMoreMenu();
   });
   document.addEventListener('click', (e) => {
     if ($('mode-menu').hidden) return;

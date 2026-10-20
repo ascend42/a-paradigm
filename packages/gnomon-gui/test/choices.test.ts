@@ -171,6 +171,16 @@ describe('#gui-table-talk a pick (Aegis)', () => {
     expect(CSS).toMatch(/\.choice \{[^}]*border: 1px dashed/);
     expect(CSS).not.toMatch(/\.choice[^{]*\{[^}]*--key-shadow/);
   });
+  it('Aegis L3: at night a chip keeps a second cue, the filled choice-k pill, never the dashed border alone', () => {
+    const night = /\[data-theme="night"\] \.choice \.choice-k \{([^}]*)\}/.exec(CSS)!;
+    expect(night).not.toBeNull();
+    expect(night[1]).toMatch(/background: var\(--ink\);/);
+    expect(night[1]).toMatch(/color: var\(--on-ink\);/);
+    expect(night[1]).not.toMatch(/transparent|padding: 0/);
+    expect(CSS).toMatch(/\.choice \.choice-k \{[^}]*border-radius: 9px;[^}]*background: var\(--ink\);/);
+    // the stale comment (night [ ] caps carrying the key) is gone
+    expect(CSS).not.toContain('none at night where the [ ] caps carry the key');
+  });
   it('app.ts: picks run only from the live group, through the composer form submit; no hover, focus or voice trigger', () => {
     expect(APP).toContain("closest('.choices.live [data-choice]')");
     expect(APP).toContain("$<HTMLFormElement>('composer').requestSubmit()");

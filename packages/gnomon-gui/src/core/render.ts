@@ -23,7 +23,7 @@
  * block, flags as visible badges beside the decision keys, and the
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
-import { BIDI_GLYPHS, canonicalJson, checkCap, hex, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
+import { BIDI_GLYPHS, canonicalJson, checkCap, hex, PRINCIPAL_ID_PATTERN, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
 /** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
@@ -60,7 +60,7 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small', 'details', 'summary']);
 const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
@@ -250,6 +250,89 @@ export interface CardView {
   voice?: { eligible: string; label: string } | null;
   /** S4: a held voice decision the kernel reports (seconds left, the undo phrase): the amber countdown, kernel-owned */
   held?: { seconds: number; undo: string } | null;
+  /** fidelity 2: a permission card's one-line title the GUI composed from the kernel's STRUCTURED fields (permissionTitleOf) */
+  composedTitle?: ComposedTitle | null;
+  /** Aegis L2: the local trust set's namespace (localNsOf the connection's principal); null/absent => no shortening */
+  localNs?: string | null;
+}
+
+/** A permission card's composed title: the verb, the whole arg (lines kept), and whether the arg hit TITLE_ARG_MAX. */
+export interface ComposedTitle {
+  verb: string;
+  arg: string;
+  truncated?: boolean;
+}
+
+/**
+ * fidelity 2: the short requester mark a card shows. Aegis L2: only a principal of the LOCAL trust set shortens: a
+ * `p:<ns>/<name>` whose `<ns>` is the connected home's namespace (`localNs`, from the handshake's own principal, the
+ * one trust set, where the name is unique) shows its name (`claude` for `p:7k2m9q4x/claude`). Any other namespace, a
+ * foreign principal (`…@rootKeyId8`), anything odd, or no known local namespace shows WHOLE. The full principal stays
+ * in the card head's title= and in its details.
+ */
+export function shortRequester(requestedBy: string, localNs: string | null | undefined): string {
+  const m = PRINCIPAL_ID_PATTERN.exec(requestedBy);
+  return m && typeof localNs === 'string' && m[1] === localNs ? m[2]! : requestedBy;
+}
+
+/** Aegis L2: the local trust set's namespace from the connection's own principal (`p:<ns>/<name>`), else null. */
+export function localNsOf(principal: string | null | undefined): string | null {
+  const m = typeof principal === 'string' ? PRINCIPAL_ID_PATTERN.exec(principal) : null;
+  return m ? m[1]! : null;
+}
+
+/** inputHash exactly as the kernel's supervisor computes it (permission.ts inputHash): sha256 over canonical JSON. */
+export function toolInputHash(input: unknown): string | null {
+  try {
+    return `sha256:${hex(sha256(canonicalJson(input)))}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The path field a path tool names (permission.ts PATH_TOOLS). */
+const PATH_FIELDS: Readonly<Record<string, string>> = Object.freeze({ Edit: 'file_path', MultiEdit: 'file_path', Write: 'file_path', NotebookEdit: 'notebook_path', Read: 'file_path' });
+/**
+ * Aegis H1 (fidelity 2 pass 2): the composed arg is never cut to a one-liner. It WRAPS on the card face, keeps every
+ * line, and is capped only for huge commands; a capped arg says so and the card then shows the kernel's body VISIBLY.
+ */
+export const TITLE_ARG_MAX = 4000;
+/** Every line break a command can carry (the sanitizer already maps U+2028/2029 to \n): each is its own visible line. */
+const ARG_LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
+/** The shell's command separators and substitutions, marked visibly inside a line (quotes are not parsed: over-marking is safe). */
+const ARG_SEP = /(&&|\|\||;|\||&|`|\$\()/;
+
+/** The composed arg's lines, as the card shows them: split at every line break, never joined with a space. */
+export function argLines(arg: string): string[] {
+  return arg.split(ARG_LINE_BREAK);
+}
+
+/**
+ * fidelity 2: a permission card's composed title, e.g. `Allow Bash` + `pnpm test --filter billing`, composed ONLY from
+ * the kernel's structured fields: the approval.request row's `tool` and `tool_input` (broker.ts logs both), and only
+ * when the card's kernel-composed line 1 names that same tool (`The session asks to run <tool>`, permission.ts). When
+ * the card carries the kernel's contentHash-verified structured detail (the bash-prefix node), its tool and inputHash
+ * must match the row's too. Never display text, never requester prose; null => the kernel's line 1 stays the title.
+ */
+export function permissionTitleOf(card: Record<string, unknown>, tool: unknown, toolInput: unknown): ComposedTitle | null {
+  if (card.kind !== 'permission' || typeof tool !== 'string' || !/^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(tool)) return null;
+  if (splitCardBlock(card.block, 'permission', false).title !== `The session asks to run ${tool}`) return null;
+  const inp = toolInput && typeof toolInput === 'object' && !Array.isArray(toolInput) ? (toolInput as Record<string, unknown>) : null;
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'bash-prefix');
+  if (nodes.length) {
+    const detail = (nodes[0] as { detail?: unknown }).detail as Record<string, unknown> | undefined;
+    if (nodes.length !== 1 || !detail || typeof detail !== 'object' || typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+    if (detail.tool !== tool || !inp || detail.inputHash !== toolInputHash(inp)) return null;
+  }
+  const raw = !inp ? null : tool === 'Bash' ? inp.command : Object.hasOwn(PATH_FIELDS, tool) ? inp[PATH_FIELDS[tool]!] : null;
+  // Aegis H1: no whitespace collapse (`git status\nrm -rf ~` is two commands and reads as two lines)
+  let arg = typeof raw === 'string' ? raw.replace(/^\s+|\s+$/g, '') : '';
+  const cps = Array.from(arg);
+  const truncated = cps.length > TITLE_ARG_MAX;
+  if (truncated) arg = `${cps.slice(0, TITLE_ARG_MAX - 1).join('')}…`;
+  return { verb: `Allow ${tool}`, arg, truncated };
 }
 
 /** S3: the card's voice tag from the kernel's handle: `🎙 reversible · card 3`, `🎙 gate` + the handle word, or `hand-only`. */
@@ -501,7 +584,33 @@ export function shownPrefixWords(prefix: readonly string[]): string {
   return prefix.map((w) => `'${Array.from(w).map(esc).join('')}'`).join(' ');
 }
 
-/** The kernel-owned card region. Decision keys only for verified actions on a decidable card. */
+/**
+ * Aegis H1: the composed arg on the card face. Each line of the command is its own line (`.card-arg-line`), a line
+ * break is a visible ⏎ mark (never a space), and the shell's separators (; && || | & ` $( ) are marked (`.card-sep`)
+ * so a chained tail never reads as part of the first command. The CSS wraps it (pre-wrap, overflow-wrap: anywhere).
+ */
+function argEl(doc: MiniDoc, arg: string): MiniEl {
+  const lines = argLines(arg);
+  const kids: Array<MiniEl | string> = [];
+  lines.forEach((line, i) => {
+    // split() with the capturing ARG_SEP alternates text and separator: odd indices are the separators
+    const parts = line.split(ARG_SEP).map((x, j) => (j % 2 ? h(doc, 'span', { class: 'card-sep', title: 'command separator' }, x) : x)).filter((x) => x !== '');
+    kids.push(h(doc, 'span', { class: 'card-arg-line' }, ...parts, i < lines.length - 1 ? h(doc, 'span', { class: 'card-nl', title: 'a line break: what follows is another command' }, ' ⏎') : null));
+    if (i < lines.length - 1) kids.push('\n');
+  });
+  return h(doc, 'code', { class: 'card-arg', 'data-lines': String(lines.length) }, ...kids);
+}
+
+/**
+ * The kernel-owned card region. Decision keys only for verified actions on a decidable card.
+ *
+ * fidelity 2 (the comp's compact card): `■ project · kind · by <name>` + the bordered voice chip, ONE title line,
+ * `raised HH:MM · waiting Nm`, the keys, then the contentHash as a quiet single line, and a `details` disclosure
+ * holding the rest. What stays VISIBLE on every card (Aegis): the requester (the short mark; the full principal in the
+ * head's title= and in details), the contentHash line, the keys and flags, a held countdown, the ask picker, and a
+ * claim-mismatch card's whole body (its red warning is never collapsed). What the disclosure holds: the full requester
+ * and session, the kernel-composed body lines, and a requester's own words (labelled as theirs).
+ */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
   const keys = v.decidable && v.decisions.length ? v.decisions : [];
@@ -511,31 +620,40 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
   // where Deny stays the default focus and nothing is filled
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
-  // S3 anatomy: ■ project · kind · voice tag (requestedBy and the session in title=), the title, the body, raised · waiting
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   const tag = voiceTagOf(v.voice ?? null);
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
+  const who = `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`;
+  const ct = loud ? null : (v.composedTitle ?? null);
+  const titleText = ct ? `${ct.verb}${ct.arg ? ` ${ct.arg}` : ''}` : title;
+  const capped = !!ct?.truncated;
+  const bodyShown = loud || capped;
+  // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
+  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, body));
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(
       doc,
       'header',
-      { class: 'card-head k', title: `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}` },
+      { class: 'card-head k', title: who },
       v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
       v.project ? ' · ' : null,
-      h(doc, 'strong', { class: 'card-kind' }, v.kind),
-      // Aegis M1: who asked is VISIBLE text, never only a tooltip
+      h(doc, 'span', { class: 'card-kind' }, v.kind),
+      // Aegis M1: who asked is VISIBLE text, never only a tooltip (the short mark; the full principal in title= and details)
       ' · ',
-      h(doc, 'span', { class: 'card-requester' }, `by ${v.requestedBy}`),
-      tag ? ' · ' : null,
+      h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy, v.localNs)}`),
+      tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
-    h(doc, 'p', { class: 'card-title' }, title),
-    h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, renderBlock(ctx, body)),
+    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
+    capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
+    // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card
+    // whose composed arg was capped (the kernel's body is then the whole command, visibly)
+    bodyShown ? bodyEl : null,
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     h(
@@ -553,9 +671,11 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
+    // the contentHash line stays on every card: quiet, one line, the full hash in title=
+    h(doc, 'small', { class: 'meta content-hash', title: `contentHash ${v.contentHash}` }, `contentHash ${v.contentHash.slice(0, 23)}…`),
+    h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
     h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
-    h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
 }
 

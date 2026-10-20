@@ -156,9 +156,11 @@ describe.skipIf(!HAVE_CHROME)('#gui in headless Chrome (darwin smoke)', () => {
     const g = await next('launch');
     const cdp = await chrome();
     const url = `http://127.0.0.1:${String(g.port)}/#launch=${String(g.launchToken)}&k=${String(g.kernelPublicKey)}`;
-    const conn = await render(cdp, url, `(document.getElementById('conn')||{}).textContent||''`, (v) => v.includes('·'));
-    expect(conn).toContain('·'); // `<principal> · <connId>`: set only after the authed hello
-    expect(conn).not.toBe('connecting');
+    // fidelity 2: the readout is a quiet chip ("connected"); `<principal> · <connId>` moved to its title=, set only
+    // after the authed hello
+    const conn = await render(cdp, url, `(function(){const e=document.getElementById('conn');return e?e.textContent+'|'+(e.title||''):''})()`, (v) => v.split('|')[1]?.includes('·') ?? false);
+    expect(conn.split('|')[1]).toContain('·');
+    expect(conn.split('|')[0]).toBe('connected');
     // dogfood 2026-10-19: the app sat in the top ~290 px of a 2000×1030 window. The desk (three columns) must grow
     // to fill the viewport, and a narrow window must not scroll sideways.
     const measure = async (width: number, height: number): Promise<{ desk: number; vh: number; sw: number; vw: number }> => {
