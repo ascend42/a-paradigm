@@ -88,17 +88,33 @@ export class SherpaVad implements VadEngine {
 export class SherpaStt implements SttEngine {
   readonly model = 'parakeet-tdt-0.6b-v2-int8';
   readonly #rec: Sherpa;
+  /** decodes on the one recognizer handle are serialized (the final and a live partial never overlap on it) */
+  #chain: Promise<unknown> = Promise.resolve();
   constructor(sherpa: Sherpa, p: Record<string, string>) {
     this.#rec = new sherpa.OfflineRecognizer({
       featConfig: { sampleRate: SR, featureDim: 80 },
       modelConfig: { transducer: { encoder: p.encoder, decoder: p.decoder, joiner: p.joiner }, tokens: p.tokens, numThreads: 2, provider: 'cpu', debug: 0, modelType: 'nemo_transducer' },
     });
   }
-  async transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
-    const s = this.#rec.createStream();
-    s.acceptWaveform({ sampleRate, samples });
-    this.#rec.decode(s);
-    return String(this.#rec.getResult(s).text ?? '');
+  /**
+   * T-2026-10-20-005 (B0, PROBES.md): decodeAsync runs on the addon's worker thread, so the event loop keeps serving
+   * capture frames, level events and the stop hotkey (the sync decode() blocked it for the whole 200 to 400 ms
+   * decode). Same text as the sync path (B0 `sameText`). The sync decode is only a fallback for an addon without it.
+   */
+  transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
+    const run = async (): Promise<string> => {
+      const s = this.#rec.createStream();
+      s.acceptWaveform({ sampleRate, samples });
+      if (typeof this.#rec.decodeAsync === 'function') {
+        const r = (await this.#rec.decodeAsync(s)) as { text?: unknown } | undefined;
+        return String(r?.text ?? '');
+      }
+      this.#rec.decode(s);
+      return String(this.#rec.getResult(s).text ?? '');
+    };
+    const p = this.#chain.then(run);
+    this.#chain = p.catch(() => undefined);
+    return p;
   }
 }
 
