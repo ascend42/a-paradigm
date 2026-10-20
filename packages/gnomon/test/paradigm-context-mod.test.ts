@@ -18,7 +18,9 @@ import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
-import { removeTree } from '../src/kernel/manifest/index.js';
+import { effectiveInstall, readGrants, removeTree } from '../src/kernel/manifest/index.js';
+import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { StagedCardPickup } from '../src/kernel/modhost/control.js';
 import type { ModHost, ModHostOptions } from '../src/kernel/modhost/host.js';
 import { sanitizeModBlock } from '../src/kernel/modhost/block.js';
@@ -132,6 +134,19 @@ describe('#paradigm-context-mod model (pure)', () => {
 });
 
 describe('#paradigm-context-mod through the host', () => {
+  it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
+    const h = hashSourceTree(CTX, 'paradigm-context', () => undefined).packageHash;
+    // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
+    expect([...FIRST_PARTY_PACKAGE_HASHES], `the Paradigm Context tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
+  });
+
+  it('installs as tier first-party', async () => {
+    const w = await installed();
+    expect(w.out).toContain('│ Install mod paradigm-context 1.0.0 (mod) from package, tier first-party');
+    const g = readGrants(w.home, w.auth);
+    expect(g.trust.get(effectiveInstall(g, 'paradigm-context')!.manifestHash)).toBe('first-party');
+  });
+
   it('echoes the current modAbiId and declares only paradigm.read:summary, egress none, one sidebar view, no commands or tools', () => {
     expect(fs.readFileSync(path.join(CTX, 'index.mjs'), 'utf8')).toContain(`const MOD_ABI_ID = '${MOD_ABI_ID}'`);
     const m = JSON.parse(fs.readFileSync(path.join(CTX, 'gnomon-manifest.json'), 'utf8'));
