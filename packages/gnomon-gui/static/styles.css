@@ -167,19 +167,24 @@ html, body {
 .notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: 12px; }
 .notice.fail { border-color: var(--fail-edge); color: var(--fail); background: var(--sheet); }
 
+/* S1 ink keys: a hard 2px ink offset (--key-shadow, none at night where the [ ] caps carry the key), a --key-edge
+   ring (>= 3:1 on both surfaces; never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
 .key {
-  font: inherit; font-size: 12px;
+  font: inherit; font-size: 11.5px; font-weight: 500;
   color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--key-edge);
-  border-radius: 4px;
-  padding: 1px 8px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  padding: 3px 9px;
+  min-height: 28px;
+  box-shadow: var(--key-shadow);
   cursor: pointer;
 }
+.key.pri { background: var(--ink); color: var(--on-ink); }
+[data-theme="night"] .key.pri::before, [data-theme="night"] .key.pri::after { color: var(--on-ink); }
 [data-theme="night"] .key::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key::after { content: "]"; color: var(--sec); }
-.key:active { transform: translate(1px, 1px); box-shadow: none; }
+.key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled] { color: var(--sec); cursor: not-allowed; }
 
@@ -187,7 +192,7 @@ html, body {
   font: inherit; color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--key-edge);
-  border-radius: 4px;
+  border-radius: var(--radius);
   padding: 4px 8px;
   width: 100%;
 }
@@ -228,7 +233,7 @@ html, body {
 .feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
-.key.quiet { box-shadow: none; color: var(--ink2); font-size: 11px; }
+.key.quiet { box-shadow: none; color: var(--ink2); font-size: 11px; min-height: 0; padding: 1px 8px; }
 .spacer-v { width: 1px; }
 .trow { position: absolute; left: 0; right: 0; padding: 1px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
 /* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */

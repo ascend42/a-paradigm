@@ -363,6 +363,9 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
   const loud = v.flags.includes('claim-mismatch');
+  // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
+  // where Deny stays the default focus and nothing is filled
+  const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
   return h(
     doc,
     'section',
@@ -378,10 +381,10 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ...keys.flatMap((d) =>
         d === 'always' && v.prefixOptions?.length
           ? [
-              h(doc, 'button', { class: 'key key-always', type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
+              h(doc, 'button', { class: `key key-always${d === pri ? ' pri' : ''}`, type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
               ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${shownPrefixWords(p)} …`)),
             ]
-          : [h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
+          : [h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),

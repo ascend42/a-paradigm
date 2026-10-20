@@ -119,6 +119,14 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     expect(el.all().filter((e) => e.attrs.has('data-default')).map((e) => e.attrs.get('data-decision'))).toEqual(['deny']);
     const plain = renderCard({ doc: fdoc }, { ...v, flags: [] }, block) as FEl;
     expect(plain.all().filter((e) => e.attrs.has('data-default'))).toHaveLength(0);
+    // S1 ink keys: a plain card fills its first non-deny key; the claim-mismatch card fills none (Deny stays default, unfilled)
+    const priOf = (x: FEl): (string | undefined)[] => x.all().filter((e) => /(^| )pri( |$)/.test(e.className)).map((e) => e.attrs.get('data-decision'));
+    expect(priOf(plain)).toEqual(['allow']);
+    expect(priOf(el)).toEqual([]);
+    expect(priOf(renderCard({ doc: fdoc }, { ...v, flags: [], decisions: ['deny', 'allow'] }, block) as FEl)).toEqual(['allow']);
+    expect(priOf(renderCard({ doc: fdoc }, { ...v, flags: [], decisions: ['deny'] }, block) as FEl)).toEqual([]);
+    // the contentHash line stays on every card (GUI-core security summary)
+    expect(plain.all().some((e) => e.className.includes('content-hash') && e.text.startsWith('contentHash sha256:'))).toBe(true);
   });
   it('ask-user card (Aegis C1): the picker comes from the contentHash-verified structured detail, never from display text', () => {
     const t = (text: string) => ({ type: 'Text', text });
@@ -497,6 +505,18 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
     }
+  });
+  it('S1 ink keys: hard 2px ink offset on a --key-edge ring (>= 3:1), filled primary in on-ink; none at night; no card glow', () => {
+    const t = tokens('day');
+    expect(t['key-shadow']).toBe('2PX 2PX 0 VAR(--KEY-EDGE)');
+    expect(tokens('night')['key-shadow']).toBe('NONE');
+    const key = /\n\.key \{([^}]*)\}/.exec(css)![1]!;
+    expect(key).toMatch(/border: 1px solid var\(--key-edge\);/);
+    expect(key).toMatch(/box-shadow: var\(--key-shadow\);/);
+    expect(key).toMatch(/min-height: 28px;/);
+    expect(css).toMatch(/\.key\.pri \{ background: var\(--ink\); color: var\(--on-ink\); \}/);
+    expect(css).not.toMatch(/--glow\b/);
+    expect(css).toMatch(/\[data-theme="night"\] \.wordmark \{[^}]*text-shadow: var\(--wm-glow\);/);
   });
   it('check-contrast.mjs passes', () => {
     expect(execFileSync(process.execPath, [path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'check-contrast.mjs')], { encoding: 'utf8' })).toContain('all pairs pass');
