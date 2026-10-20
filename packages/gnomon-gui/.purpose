@@ -396,7 +396,7 @@ components:
       Playwright or Puppeteer when one is already installed (none is added),
       or an installed Chrome with --chrome; otherwise it skips.
     path: src/preview/
-    type: tool
+    type: module
     tags: [gnomon, gui, dev-tool, preview]
     tests:
       - test/preview.test.ts
