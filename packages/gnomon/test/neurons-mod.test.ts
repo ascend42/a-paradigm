@@ -15,5 +15,6 @@ deskModSuite({
   env: ['NEURONS_VAULT'],
   offerFixtures: ['search-the-brain', 'capture-a-learning', 'capture-a-decision'],
   negativeFixtures: ['undeclared-kind'],
-  override: { command: 'node', args: ['/opt/neurons/dist/cli/main.js', 'mcp'], env: { NEURONS_VAULT: '/opt/neurons-vault' } },
+  phases: ['diverge', 'synthesize', 'commit'],
+  override: { command: '/usr/local/bin/node', args: ['/opt/neurons/dist/cli/main.js', 'mcp'], env: { NEURONS_VAULT: '/opt/neurons-vault' } },
 });

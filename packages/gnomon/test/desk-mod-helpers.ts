@@ -12,7 +12,7 @@ import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
-import { RESERVED_MOD_NAMES, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestV1 } from '../src/kernel/manifest/manifest.js';
+import { FIRST_PARTY_MOD_NAMES, RESERVED_MOD_NAMES, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestV1 } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { runModCommand } from '../src/cli/mod-cli.js';
 import { privateTmpRoot } from './daemon-helpers.js';
@@ -32,6 +32,8 @@ export interface DeskModSpec {
   /** fixtures: offer replies (golden carries a `shown`) and negatives (golden `shown: null`) */
   offerFixtures: readonly string[];
   negativeFixtures: readonly string[];
+  /** the phases its offers cover, one offer each */
+  phases: readonly string[];
   /** a realistic per-user override that must validate */
   override: { command: string; args: string[]; env: Record<string, string> };
 }
@@ -48,11 +50,14 @@ export function deskModSuite(spec: DeskModSpec): void {
   });
 
   describe(`${spec.symbol} manifest`, () => {
-    it('validates at the first-party and the local tier; the name is its own, never reserved, and the reserved set is untouched', () => {
-      for (const tier of ['first-party', 'local'] as const) expect(validateManifest(raw, { tier }).name).toBe(spec.name);
+    it('validates at the first-party tier only: a first-party mod name, never reserved, with the reserved floor intact', () => {
+      expect(validateManifest(raw, { tier: 'first-party' }).name).toBe(spec.name);
       expect(raw.kind).toBe('mod');
+      expect(FIRST_PARTY_MOD_NAMES.has(spec.name)).toBe(true);
       expect(RESERVED_MOD_NAMES.has(spec.name)).toBe(false);
-      expect([...RESERVED_MOD_NAMES].sort()).toEqual(['gnomon', 'kernel', 'system']);
+      for (const n of ['kernel', 'gnomon', 'system']) expect(RESERVED_MOD_NAMES.has(n)).toBe(true);
+      // Aegis L5: a first-party name belongs to the first-party tier, so a local install of the same manifest is refused
+      expect(() => validateManifest(raw, { tier: 'local' })).toThrow(ManifestRefusal);
     });
 
     it('is view-less and effect-less: egress none, no capability, no view, tool, command, hook or keybinding', () => {
@@ -76,6 +81,11 @@ export function deskModSuite(spec: DeskModSpec): void {
       const launch = resolveMcpLaunch(s, spec.override);
       expect(launch).toEqual(spec.override);
       expect(resolveMcpLaunch(s)).toEqual({ command: s.command, args: s.args ?? [], env: {} });
+      // M1: the default is a placeholder that fails closed: it is not absolute, so it is never an acceptable launch command
+      expect(s.command).not.toMatch(/^(?:\/|[A-Za-z]:[\\/])/);
+      expect(() => validateMcpUserConfig(s, { command: s.command })).toThrow(ManifestRefusal);
+      // M2: an override command is an absolute path; a bare `node` (a PATH lookup) is refused
+      expect(() => validateMcpUserConfig(s, { command: 'node' })).toThrow(ManifestRefusal);
       expect(() => validateMcpUserConfig(s, { env: { NODE_OPTIONS: '--require x' } })).toThrow(ManifestRefusal);
       expect(() => validateMcpUserConfig(s, { env: { NOT_DECLARED: '1' } })).toThrow(ManifestRefusal);
     });
@@ -91,7 +101,10 @@ export function deskModSuite(spec: DeskModSpec): void {
         for (const r of o.related) expect(offers.map((x) => x.kind)).toContain(r);
         expect(o.restraint.length).toBeGreaterThan(20);
       }
-      expect(offers.map((o) => o.phase).sort()).toEqual([...OFFER_PHASES].sort());
+      const phases = offers.map((o) => o.phase);
+      expect(new Set(phases).size).toBe(phases.length);
+      for (const ph of phases) expect(OFFER_PHASES).toContain(ph);
+      expect([...phases].sort()).toEqual([...spec.phases].sort());
     });
 
     it('ships a playbook skill that degrades to plain suggestions outside Gnomon', () => {
@@ -102,6 +115,16 @@ export function deskModSuite(spec: DeskModSpec): void {
       expect(md).toContain('## Outside Gnomon');
       expect(md).toContain('## When NOT to offer');
       for (const o of offers) expect(md).toContain(`\`${o.kind}\``);
+      expect(md).toContain('end that reply with at most one offer block (never more than one per reply across all mods)');
+    });
+
+    it('every ```offer example in the playbook resolves to a declared offer of this mod', async () => {
+      const { offerGolden } = (await import(pathToFileURL(path.join(PKG_ROOT, 'scripts', 'offer-golden.mjs')).href)) as { offerGolden: (m: unknown, reply: string) => Golden };
+      const skills = raw.provides!.skills as Array<{ name: string; path: string }>;
+      const md = fs.readFileSync(path.join(DIR, skills[0]!.path), 'utf8');
+      const blocks = [...md.matchAll(/^```offer\n[^\n]*\n```$/gm)].map((m) => m[0]);
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const b of blocks) expect(offerGolden(raw, `An example reply.\n\n${b}\n`).shown, b).not.toBeNull();
     });
   });
 

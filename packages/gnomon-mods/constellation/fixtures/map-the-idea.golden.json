@@ -11,8 +11,7 @@
     "phase": "diverge",
     "title": "Map this on the board",
     "contextIn": [
-      "recent-messages",
-      "session-summary"
+      "recent-messages"
     ],
     "question": "Want me to map these four options on the Constellation board?",
     "handoffTool": "apply"

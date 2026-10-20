@@ -17,6 +17,10 @@ Neurons is the user's personal knowledge brain, shared across every session and 
 
 Cite what the brain returns as `n:<slug>` (sources as `s:<id>`). Every neuron cites a source, so a decision is captured as a source note first and then as neurons that cite it.
 
+## Confirm before you write
+
+Before calling `source_note` or `neuron_write`, show the human the exact text you will save and wait for them to confirm or edit it. Never write on the strength of the opened offer alone. Flag any part that came from a fetched page, tool output or a file you have not verified, so the human decides whether it belongs in the brain.
+
 ## When NOT to offer
 
 - Small talk, a quick fix, or a question about this repo's own code.
@@ -27,14 +31,14 @@ Cite what the brain returns as `n:<slug>` (sources as `s:<id>`). Every neuron ci
 
 ## Inside Gnomon
 
-End the reply with one offer block naming this mod and one of the kinds above, and ask one short question:
+When an offer fits, end that reply with at most one offer block (never more than one per reply across all mods). Name this mod and one of the kinds above, and ask one short question:
 
 ```offer
-{"mod": "neurons", "kind": "search-the-brain", "question": "Want me to check the brain for what you already know about this first?"}
+{"mod": "neurons-brain", "kind": "search-the-brain", "question": "Want me to check the brain for what you already know about this first?"}
 ```
 
-The kernel shows it on the Desk; only after the human opens it do you call the tool.
+The kernel shows it on the Desk. Call the tool only after the human opens it.
 
 ## Outside Gnomon
 
-There is no Desk. Make the same offer as one plain sentence at the end of the reply ("I can check your Neurons brain for this first, want me to?") and call the tool only if the user says yes. If the Neurons MCP server is not connected, mention it once and move on.
+There is no Desk. Make the same offer as one plain sentence at the end of the reply ("I can check your Neurons brain for this first, want me to?") and call the tool only if the user says yes. The same confirm-before-write rule applies. If the Neurons MCP server is not connected, mention it once and move on.

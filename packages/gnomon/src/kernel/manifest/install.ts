@@ -68,8 +68,8 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   'sha256:3c09d9cb5d22c3e75773baf547456bc4b2a2b0bebdaff9d67baaad159ff06e1d', // packages/gnomon-mods/workshop 1.0.0 (S5: structured caps, 6 hues)
   'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // packages/gnomon-mods/ledger 1.0.0 (#ledger-mod)
   'sha256:be0cce015b2db126206973adddd899060b6a3e6ff28fd7e53d5d0842530cfd71', // packages/gnomon-mods/paradigm-context 1.0.0 (#paradigm-context-mod)
-  'sha256:a6eb7b75b0905a6d2b233f8a416739d39c1899c8c6d1ced92a245dadc51fc65b', // packages/gnomon-mods/neurons-brain 1.0.0 (#neurons-mod, the Desk S2)
-  'sha256:c0aa5a3a6fdb8891dacce03705b8404f9c1142f397b00d7b4f564ee39c7b1fb8', // packages/gnomon-mods/constellation 1.0.0 (#constellation-mod, the Desk S2)
+  'sha256:7759e22cda86b37318d741c8371cb139ee25110739a1a45e0f154816a940e1f5', // packages/gnomon-mods/neurons-brain 1.0.0 (#neurons-mod, the Desk S2)
+  'sha256:1a9cccc2685527105d71e3e2e3003b9880f53c42a60d9f259dd0e1d56b9de1fb', // packages/gnomon-mods/constellation 1.0.0 (#constellation-mod, the Desk S2)
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();

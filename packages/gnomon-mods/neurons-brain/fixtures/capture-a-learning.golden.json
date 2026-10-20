@@ -11,8 +11,7 @@
     "phase": "synthesize",
     "title": "Note what we just learned",
     "contextIn": [
-      "recent-messages",
-      "repo-path"
+      "recent-messages"
     ],
     "question": "Should I save this measurement as a first-hand note in your brain?",
     "handoffTool": "source_note"

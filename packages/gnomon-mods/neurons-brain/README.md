@@ -1,4 +1,4 @@
-# neurons (first-party Gnomon mod)
+# neurons-brain (first-party Gnomon mod)
 
 Neurons puts the user's personal knowledge brain on the Desk. It has no view and no process of its own: it declares the Neurons MCP server, three offers and a playbook skill.
 
@@ -18,6 +18,14 @@ It requires no capability and lists no egress. The MCP server reads and writes t
 gnomon mod install packages/gnomon-mods/neurons-brain
 ```
 
-Approve the card in the GUI. The manifest's default launch is the generic `neurons mcp`. It declares `config: {command, args, env: [NEURONS_VAULT]}`, so point it at your own checkout and vault with the per-user override (`gnomon mod config`, from slice S1). For example, set the command to `node`, the args to `<your a-neurons checkout>/dist/cli/main.js mcp`, and `NEURONS_VAULT` to your vault folder. The override is per user and is never committed.
+Approve the card in the GUI. The manifest's default launch, `neurons mcp`, is generic and is not an absolute path, so the server fails closed (it is never launched) until you set a per-user override. The manifest declares `config: {command, args, env: [NEURONS_VAULT]}`. Set the override with `gnomon mod config` (slice S1):
+
+- the command: the absolute path of your node (`which node`)
+- the args: `<your a-neurons checkout>/dist/cli/main.js mcp`
+- `NEURONS_VAULT`: your vault folder
+
+An override command must be an absolute path; a bare `node` is refused. The override belongs to you and is never committed.
+
+Before the model saves anything with `source_note` or `neuron_write`, the playbook has it show you the exact text and wait for you to confirm or edit it. It also flags any part that came from fetched pages, tool output or unverified files.
 
 The packageHash is pinned in the kernel's first-party list, so editing any file here needs a new pin: run `npm run repin:first-party` in packages/gnomon (it also regenerates the offer goldens in `fixtures/`).

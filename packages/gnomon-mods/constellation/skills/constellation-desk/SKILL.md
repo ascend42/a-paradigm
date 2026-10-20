@@ -1,11 +1,11 @@
 ---
 name: constellation-desk
-description: When to offer the Constellation idea map during a conversation - map ideas on the board, write the session summary, turn a repeated step into an automation. Works inside Gnomon as Desk offers and anywhere else as plain suggestions.
+description: When to offer the Constellation idea map during a conversation - map ideas on the board and write the session summary. Works inside Gnomon as Desk offers and anywhere else as plain suggestions.
 ---
 
 # Constellation on the Desk
 
-Constellation is the user's local idea map: Spaces hold sessions, sessions hold a map of stars and beams, and automations run steps on a schedule or on map events. This playbook says when to offer it. It never acts on its own: every step is an offer the human accepts or declines.
+Constellation is the user's local idea map: Spaces hold sessions, and each session holds a map of stars and beams. This playbook says when to offer it. It never acts on its own: every step is an offer the human accepts or declines.
 
 ## The offers
 
@@ -13,24 +13,22 @@ Constellation is the user's local idea map: Spaces hold sessions, sessions hold 
 |---|---|---|---|
 | diverge | `map-the-idea` | `apply` | Several ideas or options are on the table and seeing them side by side would help. Read the map with `get` first. |
 | synthesize | `summarize-the-session` | `summarize` | The work reached a natural stopping point with real progress. Read `summary` (the outline) before writing one. |
-| commit | `automate-this` | `automation_save` | The user repeated a step by hand, or asked for it to happen again. Check `automation_list` first so you update instead of duplicating; start it with `automation_run` and follow it with `run_get`. |
 
 ## When NOT to offer
 
 - A single linear task, a quick fix, or a yes/no question.
-- Mid-task, or a summary already written in this stretch of work.
-- A one-off step, or anything that spends money or posts publicly without being asked.
+- Mid-task, or when a summary was already written in this stretch of work.
 - After the human said "not now" to Constellation in this conversation: stay quiet for the rest of it.
 
 ## Inside Gnomon
 
-End the reply with one offer block naming this mod and one of the kinds above, and ask one short question:
+When an offer fits, end that reply with at most one offer block (never more than one per reply across all mods). Name this mod and one of the kinds above, and ask one short question:
 
 ```offer
 {"mod": "constellation", "kind": "map-the-idea", "question": "Want me to map these options on the Constellation board?"}
 ```
 
-The kernel shows it on the Desk; only after the human opens it do you call the tool.
+The kernel shows it on the Desk. Call the tool only after the human opens it.
 
 ## Outside Gnomon
 

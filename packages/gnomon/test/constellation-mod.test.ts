@@ -8,12 +8,13 @@ import { deskModSuite } from './desk-mod-helpers.js';
 deskModSuite({
   name: 'constellation',
   dir: 'constellation',
-  server: 'constellation',
+  server: 'gnomon-constellation',
   symbol: '#constellation-mod',
   // registered by a-constellation mcp/server.ts
   serverTools: ['start', 'status', 'get', 'wait', 'apply', 'done', 'reply', 'say', 'summary', 'summarize', 'list_spaces', 'list_sessions', 'open', 'automation_list', 'automation_save', 'automation_run', 'automation_enable', 'run_get', 'follow', 'tasks', 'search'],
   env: ['CONSTELLATION_NO_AUTOSTART'],
-  offerFixtures: ['map-the-idea', 'summarize-the-session', 'automate-this'],
+  offerFixtures: ['map-the-idea', 'summarize-the-session'],
+  phases: ['diverge', 'synthesize'],
   negativeFixtures: ['two-blocks'],
-  override: { command: 'node', args: ['/opt/constellation/mcp/server.ts'], env: {} },
+  override: { command: '/usr/local/bin/node', args: ['/opt/constellation/mcp/server.ts'], env: {} },
 });
