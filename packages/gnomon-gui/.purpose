@@ -332,3 +332,17 @@ components:
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+  gui-table-talk:
+    description: >-
+      #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
+      (store.ts splitSpeak, mirroring the kernel projector) shows as a
+      highlighted "said aloud" line at the top of the reply and is removed
+      from the body; a reply without one (heuristic) gets no highlight. Lines
+      that start with a bold label, in whatever scheme the agent chose
+      (letters, numbers, short names), render as subtle chips (replyParts).
+      A replayed user message drops the <gnomon-voice> guidance block.
+    path: src/core/store.ts
+    type: module
+    tags: [gnomon, gui, voice, table-talk]
+    tests:
+      - test/table-talk.test.ts

@@ -10,7 +10,7 @@
 const NOTE_S = 0.07;
 const GAP_S = 0.12;
 const NOTES_HZ = [880, 1320];
-const GAIN = 0.18;
+const TONE_LEVEL = 0.18;
 
 /** The earcon at a sample rate: two short sine notes with a smooth envelope, then a short silence. */
 export function earcon(sampleRate: number): Float32Array {
@@ -20,7 +20,7 @@ export function earcon(sampleRate: number): Float32Array {
   NOTES_HZ.forEach((hz, n) => {
     for (let i = 0; i < note; i++) {
       const env = Math.sin((Math.PI * i) / note); // no clicks at either end
-      out[n * note + i] = GAIN * env * Math.sin((2 * Math.PI * hz * i) / sampleRate);
+      out[n * note + i] = TONE_LEVEL * env * Math.sin((2 * Math.PI * hz * i) / sampleRate);
     }
   });
   return out;
