@@ -58,6 +58,7 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
   }
   let client: VoiceClient | undefined;
   let watch: EnrolWatch | undefined;
+  let refresher: ReturnType<typeof setInterval> | undefined;
   const boot = (async () => {
     const principal = principalFromStatus(await o.link.status());
     if (!principal) throw new Error('the kernel did not say which voice principal this is (status.voice.principal)');
@@ -75,7 +76,6 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
     refresher.unref?.();
     o.started?.(client);
   })();
-  let refresher: ReturnType<typeof setInterval> | undefined;
   const cleanup = async (): Promise<void> => {
     if (refresher) clearInterval(refresher);
     await watch?.stop();
