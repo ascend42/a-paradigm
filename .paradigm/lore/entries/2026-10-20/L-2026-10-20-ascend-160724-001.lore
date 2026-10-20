@@ -1,0 +1,44 @@
+id: L-2026-10-20-ascend-160724-001
+type: review
+timestamp: '2026-10-20T16:07:24.835Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE model switch, with M1 (permit mis-attribution after timeout+reconcile) and M2 (context guard bypass on resume)
+summary: |-
+  Model picker plus in-process switch (branch worktree-agent-a1ec45f09003354bd; full gnomon 2503 green).
+  Verified:
+  - human-only at the dispatcher and kernel;
+  - law-7 re-run plus a new subscription permit per switch;
+  - a concurrent-switch latch;
+  - send blocked while switching;
+  - strict model validation, the argv token passed separately, no echo;
+  - reconcile writes only `to` or `from`, never the observed string.
+  M1: after a timeout followed by reconcile-to-new, the session runs the new model on the old model's permit, so per-model tracking is wrong and the confirm text ("budget keeps counting by model") is untrue. Fix: hold the fresh permit through the uncertainty and swap it on reconcile.
+  M2: the context guard reads 0 on a resumed session and only guards [1m] sources. Fix: compare against the target's window regardless of source, and refuse while usage is unknown.
+  L1: gate on a trusted click, not a form submit. L2: dead-session timeout rows. L3: sanitise Claude's error text. L4: log a failed release.
+  Fix builder launched.
+symbols_touched:
+  - '#session-runner'
+  - '#claude-adapter'
+  - '#gui-model-picker'
+  - $model-switch
+learnings:
+  - When a fallback path releases a resource and a later reconcile adopts the outcome, the resource must be held until reconcile, or accounting drifts.
+  - Guards keyed on the source model miss sources whose defaults change; guard on the target's capacity.
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    medium: 2
+    low: 4
+tags:
+  - gnomon
+  - model
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: 8a1a66693dc05a980ceeb72263346e32ade39175
+  branch: feat/gnomon
+  dirty: true

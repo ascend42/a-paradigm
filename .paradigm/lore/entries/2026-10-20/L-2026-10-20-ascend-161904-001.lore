@@ -1,0 +1,46 @@
+id: L-2026-10-20-ascend-161904-001
+type: milestone
+timestamp: '2026-10-20T16:19:04.153Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Model picker + in-process model switch merged into feat/gnomon; clientApiId now 69e8db86
+summary: |-
+  90f2c419 merges the model branch after the Aegis fixes:
+  - the fresh permit is held through the uncertainty and swapped on reconcile;
+  - the guard is target-based and refuses while context is unknown;
+  - the switch needs a trusted click/Enter gesture;
+  - dead-session rows are ignored;
+  - Claude's error text is sanitised;
+  - release failures are logged.
+  The kernel has no logger wired in production yet (an optional SupervisorOptions.logger), so a follow-up should pass one from the daemon.
+  Suites on the merge: gnomon 2511, gui 416 (+bundle check), contracts 471, voice 137.
+  clientApiId 795b3425 → 69e8db86.
+  The voice ceiling-stamp follow-up (T-2026-10-20-010) can proceed now.
+symbols_touched:
+  - '#session-runner'
+  - '#claude-adapter'
+  - '#gui-model-picker'
+  - $model-switch
+verification:
+  status: pass
+  details:
+    gnomon: 2511
+    gui: 416
+    contracts: 471
+    voice: 137
+tags:
+  - gnomon
+  - model
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - 90f2c419
+  - 3cbf4a8b
+  - 357b9c7a
+  - d16179c8
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

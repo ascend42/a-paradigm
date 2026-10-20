@@ -1,0 +1,31 @@
+id: L-2026-10-20-ascend-195307-001
+type: human-note
+timestamp: '2026-10-20T19:53:07.055Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 5: all 14 Desk decisions ratified (TD-2026-10-20-812); git-URL mods with in-GUI install; context meter = checkpoint then ask to restart+recover'
+summary: |-
+  The founder resolved the last two Desk decisions. A6: kept/shown with a 15% kill line. A8: changed from my recommendation. No registry now: mods are shared as git URLs following the package structure, with an easy in-GUI install flow for local and external-link mods (it also replaces the CLI-only Workshop install). Context meter: changed from my recommendation. At the threshold Gnomon checkpoints and then ASKS whether to restart the session and recover (a fresh context), no auto-compact.
+  feat/gnomon was pushed (3b5c7139..55df7dc3).
+  Next: O1 build (Constellation + Neurons + Claude Docs offers, the <gnomon-desk> note, the offer router, margin-slip chips, the git-URL install flow), then the context-meter build with the restart-and-recover prompt.
+symbols_touched:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#mod-host'
+  - '#context-meter'
+decisions:
+  - id: TD-2026-10-20-812
+    decision: The Desk ratified; git-URL mods with GUI install; context meter asks to restart and recover
+    rationale: Founder rulings
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - arc:paradigm-8
+git_context:
+  ref: 55df7dc31c8e0c5682cb500bcefee290412258fc
+  branch: feat/gnomon
+  dirty: true

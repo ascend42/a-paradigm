@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-175619-001
+type: agent-session
+timestamp: '2026-10-20T17:56:19.641Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 3: Luna''s invitation UX (margin slip → companion leaf → returned sheet → framed world)'
+summary: |-
+  Atelier session .atelier/sessions/2026-10-20-gnomon-mod-invitations, with comps refs/boards.html and refs/flow.html (day/night, reduced motion).
+  Recommendations:
+  (1) Invitation = a margin slip under the reply that offered: dashed, soft shadow, never key-styled; a GUI-drawn tab `offer · mod:<name>` plus a manifest "takes:" line; only the question is model text; Open (trusted click/↵) and "not now". Rejected: a Workshop cap walk (nagging), composer suggestions (next to kernel cards).
+  (2) Handoff = a companion leaf beside the chat inside the centre column only; a `↳ handed to mod:<name>` row; esc folds to an edge tab; "done" returns. A ⤢ sheet is optional; headless mods work through the cap.
+  (3) Results = a returned sheet labelled `↳ tool output · mod:<name>`, then synthesis prose and at most ONE next slip; a trail line `constellation ✓ → neurons ?`. Rejected: a tray of next steps (nagging).
+  (4) Local UI = a framed world: the GUI-owned fence (tab, hatched gutter, project-hue top edge); first-party mods may declare world: sky|loom (the GUI applies its palette; mods never ship CSS); identity = glyph plus name, no per-mod hue.
+  Aligns with Arky's design.
+  Luna's 4 founder questions (voice "open" path, mod identity, worlds, "not now" duration) plus Arky's 10 are pending.
+  Aegis calls: buttons inside the leaf/sheet (centre column, away from decision keys) and voice accept.
+symbols_touched:
+  - '#gui'
+  - '#mod-host'
+  - '#offer-router'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - design
+  - atelier
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-175436-001
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T07:06:38.279Z'
+generated: '2026-10-20T19:52:56.883Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -4120,11 +4120,62 @@ by_symbol:
       agent: []
   '#paradigm':
     symbol: '#paradigm'
-    total_changes: 17
-    last_modified: '2026-10-16T03:41:09Z'
+    total_changes: 18
+    last_modified: '2026-10-20T08:05:56Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_459
+        id: h0848
+        ts: '2026-10-20T08:05:56Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gui'
+          - '#paradigm'
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: bb29e6d19060ed146ef7367abab3b147e00ef4b4
+        intent: feature
+        files:
+          - .atelier/sessions/2026-10-20-gnomon-gui-fidelity/critique.md
+          - .atelier/sessions/2026-10-20-gnomon-gui-fidelity/session.yaml
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/decisions/TD-2026-10-20-086.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-072738-820.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074008-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074008-002.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074008-003.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074159-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074307-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074448-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-074719-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-075026-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-075156-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-075436-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-075609-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-075712-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-080032-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-080135-001.lore
+          - .paradigm/lore/entries/2026-10-20/L-2026-10-20-ascend-080326-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/gnomon-table-talk-voice-replies.protocol
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/session-breadcrumbs.prev.json
+          - .paradigm/university/index.yaml
+        description: 'chore(#paradigm): marathon 2026-10-20 lore, TD-2026-10-20-086, tasks, Atelier GUI fidelity session'
       - &ref_331
         id: h0709
         ts: '2026-10-16T03:41:09Z'
@@ -4202,50 +4253,6 @@ by_symbol:
           - CHANGELOG.md
           - CLAUDE.md
         description: 'docs(#paradigm): remove mis-scoped no-review PR section from CLAUDE.md'
-      - &ref_412
-        id: h0668
-        ts: '2026-08-12T08:17:53Z'
-        type: implement
-        symbols:
-          - '#branch'
-          - '#merge'
-          - '#paradigm'
-        author:
-          type: human
-          id: ascend
-        commit: f38445f0ab214d9a04d69dda104edf4054517d48
-        intent: feature
-        files:
-          - .paradigm/decisions/TD-2026-08-12-113.yaml
-          - .paradigm/decisions/TD-2026-08-12-218.yaml
-          - .paradigm/decisions/TD-2026-08-12-351.yaml
-          - .paradigm/decisions/TD-2026-08-12-813.yaml
-          - .paradigm/decisions/TD-2026-08-12-831.yaml
-          - .paradigm/events/.last-processed
-          - .paradigm/events/debates.jsonl
-          - .paradigm/events/nominations.jsonl
-          - .paradigm/events/stream.jsonl
-          - .paradigm/events/team-funnel.jsonl
-          - .paradigm/history/index.yaml
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-011153-001.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-013406-013.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-020618-001.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-022145-001.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-025504-823.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-034616-001.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-041703-629.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042418-718.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042909-715.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-055700-001.lore
-          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-072605-001.lore
-          - .paradigm/lore/timeline.yaml
-          - .paradigm/work-log/2026-08-11/WL-claude-opus-4-6-2026-08-11-095.yaml
-          - docs/guides/warpline-multi-instance-demo.md
-          - docs/warpline-overview.html
-          - packages/warpline/test/backup.test.ts
-          - packages/warpline/test/f4-rig.test.ts
-          - packages/warpline/test/status-carrier.test.ts
-        description: 'chore(#paradigm): session records — M2.5 decisions + lore, multi-instance runbook, overview doc, increment-7 test follow-ons'
     contributors:
       human:
         - ascend
@@ -26549,7 +26556,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_413
+      - &ref_412
         id: h0662
         ts: '2026-08-12T05:01:08Z'
         type: implement
@@ -28420,7 +28427,7 @@ by_symbol:
           - packages/warpline/src/fabric/protected.ts
           - packages/warpline/test/protected-branch.test.ts
         description: 'feat(#protected): M2.5 increment 5 — protected main (anti agent-self-merge gate)'
-      - &ref_415
+      - &ref_414
         id: h0665
         ts: '2026-08-12T05:56:08Z'
         type: implement
@@ -28529,10 +28536,53 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_412
+      - &ref_415
+        id: h0668
+        ts: '2026-08-12T08:17:53Z'
+        type: implement
+        symbols:
+          - '#branch'
+          - '#merge'
+          - '#paradigm'
+        author:
+          type: human
+          id: ascend
+        commit: f38445f0ab214d9a04d69dda104edf4054517d48
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-08-12-113.yaml
+          - .paradigm/decisions/TD-2026-08-12-218.yaml
+          - .paradigm/decisions/TD-2026-08-12-351.yaml
+          - .paradigm/decisions/TD-2026-08-12-813.yaml
+          - .paradigm/decisions/TD-2026-08-12-831.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-011153-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-013406-013.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-020618-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-022145-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-025504-823.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-034616-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-041703-629.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042418-718.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042909-715.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-055700-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-072605-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/work-log/2026-08-11/WL-claude-opus-4-6-2026-08-11-095.yaml
+          - docs/guides/warpline-multi-instance-demo.md
+          - docs/warpline-overview.html
+          - packages/warpline/test/backup.test.ts
+          - packages/warpline/test/f4-rig.test.ts
+          - packages/warpline/test/status-carrier.test.ts
+        description: 'chore(#paradigm): session records — M2.5 decisions + lore, multi-instance runbook, overview doc, increment-7 test follow-ons'
       - *ref_404
       - *ref_407
-      - &ref_414
+      - &ref_413
         id: h0663
         ts: '2026-08-12T05:14:12Z'
         type: implement
@@ -28551,7 +28601,7 @@ by_symbol:
           - packages/warpline/src/fabric/branch.ts
           - packages/warpline/test/branch-verbs.test.ts
         description: 'feat(#branch): M2.5 increment 2 — branch and switch/checkout verbs'
-      - *ref_413
+      - *ref_412
     contributors:
       human:
         - ascend
@@ -28564,8 +28614,8 @@ by_symbol:
     fragility: low
     recent:
       - *ref_407
-      - *ref_414
       - *ref_413
+      - *ref_412
     contributors:
       human:
         - ascend
@@ -28577,8 +28627,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_415
-      - *ref_413
+      - *ref_414
+      - *ref_412
     contributors:
       human:
         - ascend
@@ -28590,10 +28640,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_412
+      - *ref_415
       - *ref_404
       - *ref_416
-      - *ref_415
+      - *ref_414
     contributors:
       human:
         - ascend
@@ -29556,95 +29606,14 @@ by_symbol:
       agent: []
   '#gnomon-voice':
     symbol: '#gnomon-voice'
-    total_changes: 19
-    last_modified: '2026-10-20T06:04:30Z'
+    total_changes: 29
+    last_modified: '2026-10-20T09:07:44Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_431
-        id: h0817
-        ts: '2026-10-20T06:04:30Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#gnomon-voice-io'
-          - '#gui'
-        author:
-          type: human
-          id: ascend
-        commit: f1b8e24251eec894cccd2eafce2f156a81c211b7
-        intent: feature
-        files:
-          - docs/specs/gnomon.md
-          - packages/gnomon-gui/.purpose
-          - packages/gnomon-voice/.purpose
-          - packages/gnomon-voice/src/engines/sherpa.ts
-        description: 'docs(#gnomon-voice): Kokoro RTF bench, spec stop-speaking note, purposes — WIP 4/6'
-      - &ref_459
-        id: h0816
-        ts: '2026-10-20T06:00:19Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#kernel-dispatch'
-        author:
-          type: human
-          id: ascend
-        commit: dcb5f35e23a5808989d8e29c0fa9333f19128845
-        intent: feature
-        files:
-          - packages/gnomon/src/kernel/socket/status-numbers.ts
-          - packages/gnomon/test/voice-v2e-speak.test.ts
-          - packages/gnomon/test/voice-v2e.test.ts
-        description: 'test(#gnomon-voice): stop-speaking dispatch is human only; declare status counters — WIP 3/6'
-      - &ref_432
-        id: h0815
-        ts: '2026-10-20T05:59:11Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#gui'
-        author:
-          type: human
-          id: ascend
-        commit: b10750c8cfece3db3aaedeec546c2a40b1ff5a5d
-        intent: feature
-        files:
-          - packages/gnomon-gui/src/core/voice-client.ts
-          - packages/gnomon-gui/src/core/voice.ts
-          - packages/gnomon-gui/src/ui/app.ts
-          - packages/gnomon-gui/static/index.html
-          - packages/gnomon-gui/static/styles.css
-          - packages/gnomon-gui/test/modes.test.ts
-          - packages/gnomon-gui/test/stop-speaking.test.ts
-          - packages/gnomon-gui/test/voice-client.test.ts
-          - packages/gnomon-gui/test/voice.test.ts
-          - packages/gnomon/src/kernel/web/gui-bundle.ts
-          - packages/gnomon/test/web-units.test.ts
-        description: 'feat(#gui): Stop speaking button, Esc, 300 ms poll while speaking — WIP 2/6'
-      - &ref_457
-        id: h0814
-        ts: '2026-10-20T05:56:36Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#gnomon-voice-io'
-        author:
-          type: human
-          id: ascend
-        commit: c757db2edf7dbcab2d3acf2892d4bf989dc126e7
-        intent: feature
-        files:
-          - packages/gnomon-voice/README.md
-          - packages/gnomon-voice/checksums.json
-          - packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Hotkey.swift
-          - packages/gnomon-voice/io-darwin/Sources/gnomon-voice-io/main.swift
-          - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
-          - packages/gnomon-voice/test/kernel-link.test.ts
-        description: 'feat(#gnomon-voice-io): stop-speaking hotkey (ctrl+alt+.) — WIP 1/6'
-      - &ref_454
-        id: h0813
-        ts: '2026-10-20T05:00:51Z'
+      - &ref_452
+        id: h0858
+        ts: '2026-10-20T09:07:44Z'
         type: implement
         symbols:
           - '#gnomon-voice'
@@ -29652,29 +29621,134 @@ by_symbol:
         author:
           type: human
           id: ascend
-        commit: 6bca77556a7dc42610c8521bcbc194ae7f52d15d
+        commit: fe5fbecb0e5bb4155bbaacb1dfeb8c7c47994f2e
+        intent: fix
+        files:
+          - .paradigm/history/log.jsonl
+          - docs/specs/gnomon.md
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon-voice/src/engines/sherpa.ts
+          - packages/gnomon-voice/src/partials.ts
+          - packages/gnomon-voice/test/partials.test.ts
+          - packages/gnomon-voice/test/stt-async.test.ts
+          - packages/gnomon/src/kernel/voice/voice-requests.ts
+          - packages/gnomon/test/voice-capture.test.ts
+        description: 'fix(#gnomon-voice): B1 Aegis L1-L3: decode watchdog, wider sanitiser, liveness limit'
+      - &ref_453
+        id: h0857
+        ts: '2026-10-20T09:02:44Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-bench-partials'
+          - '#gui-voice-capture'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: 2ce14c98c08715349e28b2c02ca9f8a85309b82d
         intent: feature
         files:
-          - packages/gnomon-voice/src/cli.ts
-          - packages/gnomon-voice/src/run.ts
+          - .paradigm/history/log.jsonl
+          - docs/specs/gnomon.md
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon/.purpose
+          - packages/gnomon/test/symbol-allowlist.json
+        description: 'feat(#gnomon-voice): B1 live words: spec §14.7 prose, .purpose, $voice-turn'
+      - &ref_454
+        id: h0856
+        ts: '2026-10-20T08:54:31Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gui-voice-capture'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: 8ec7b284a6a2dbad27ba47effb28412dc443ec02
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/capture.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/capture.test.ts
+        description: 'feat(#gnomon-voice): B1 live words: GUI ghost line (#gui-voice-capture)'
+      - &ref_455
+        id: h0855
+        ts: '2026-10-20T08:52:40Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: e920fb3224aeae1d1fa0fec3597fd34d93e744e7
+        intent: feature
+        files:
+          - packages/gnomon-voice/src/partials.ts
+          - packages/gnomon-voice/test/partials.test.ts
+        description: 'feat(#gnomon-voice): B1 live words: client partial loop tests, anchored-window fragment fix'
+      - &ref_456
+        id: h0854
+        ts: '2026-10-20T08:50:05Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: c912156f79fe4b5ef8ed791eda7e852209096464
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon-voice/src/engines/sherpa.ts
+          - packages/gnomon-voice/src/index.ts
+          - packages/gnomon-voice/src/partials.ts
+          - packages/gnomon-voice/src/speaker.ts
+          - packages/gnomon-voice/src/types.ts
           - packages/gnomon-voice/src/voice-client.ts
-          - packages/gnomon-voice/test/dictation.test.ts
-          - packages/gnomon-voice/test/pipeline.test.ts
-          - packages/gnomon-voice/test/stubs.ts
-          - packages/gnomon-voice/test/v2e.test.ts
-        description: 'feat(#gnomon-voice): composer delivery, dictation activity edges, hold-toggle counter (WIP C)'
+          - packages/gnomon/src/kernel/socket/dispatch.ts
+          - packages/gnomon/src/kernel/voice/voice-requests.ts
+          - packages/gnomon/test/voice-capture.test.ts
+        description: 'feat(#gnomon-voice): B1 live words WIP: partials, V1 gate, kernel text'
     contributors:
       human:
         - ascend
       agent: []
   '#approval-broker':
     symbol: '#approval-broker'
-    total_changes: 11
-    last_modified: '2026-10-20T06:39:03Z'
+    total_changes: 12
+    last_modified: '2026-10-20T07:44:22Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_466
+      - &ref_446
+        id: h0837
+        ts: '2026-10-20T07:44:22Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#approval-broker'
+          - '#shell-readonly'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 4de4d97878cfdcb2f9ad67348646afd1828d2324
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/supervisor/auto-edits.ts
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+        description: 'docs(#shell-readonly): spec 3.4 and purposes for the anchored read-only pass (TD-2026-10-20-086)'
+      - &ref_464
         id: h0820
         ts: '2026-10-20T06:39:03Z'
         type: implement
@@ -29689,8 +29763,7 @@ by_symbol:
         files:
           - packages/gnomon/src/kernel/broker/broker.ts
         description: 'wip(#approval-broker): CLI presence prompt shows the quoted prefix words; prefix-policy tests (Aegis M1, L1, L5)'
-      - &ref_463
-        id: h0818
+      - id: h0818
         ts: '2026-10-20T06:34:43Z'
         type: implement
         symbols:
@@ -29710,8 +29783,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/rules.ts
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
         description: 'wip(#prefix-policy): kernel prefix policy at offer, accept, fold and match (Aegis H1, M2, M3)'
-      - &ref_448
-        id: h0815
+      - id: h0815
         ts: '2026-10-20T05:57:51Z'
         type: implement
         symbols:
@@ -29730,7 +29802,7 @@ by_symbol:
           - packages/gnomon/test/run-modes-session.test.ts
           - packages/gnomon/test/shell-readonly.test.ts
         description: 'wip(#supervisor): auto-edits read-only Bash auto-pass (mode:auto-edits:read-only)'
-      - &ref_449
+      - &ref_457
         id: h0801
         ts: '2026-10-19T22:49:02Z'
         type: implement
@@ -29762,114 +29834,85 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/claude-repin-card.test.ts
         description: 'fix(#session-runner): Aegis re-pin fixes M1, M3, L1, L4, L5 (TD-2026-10-19-063)'
-      - &ref_456
-        id: h0800
-        ts: '2026-10-19T22:42:18Z'
-        type: implement
-        symbols:
-          - '#approval-broker'
-          - '#gui'
-          - '#session-runner'
-          - '#supervisor'
-        author:
-          type: human
-          id: ascend
-        commit: 97856ce1c9fbb8b07a83fac3ef5d7cef4384ec56
-        intent: feature
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - docs/specs/gnomon.md
-          - packages/gnomon-gui/.purpose
-          - packages/gnomon-gui/src/core/render.ts
-          - packages/gnomon-gui/src/ui/app.ts
-          - packages/gnomon-gui/static/styles.css
-          - packages/gnomon-gui/test/gui.test.ts
-          - packages/gnomon/.purpose
-          - packages/gnomon/src/cli/session-cli.ts
-          - packages/gnomon/src/kernel/broker/broker.ts
-          - packages/gnomon/src/kernel/lifecycle/daemon.ts
-          - packages/gnomon/src/kernel/runner/binary.ts
-          - packages/gnomon/src/kernel/runner/preflight.ts
-          - packages/gnomon/src/kernel/runner/repin-card.ts
-          - packages/gnomon/src/kernel/supervisor/supervisor.ts
-          - packages/gnomon/src/kernel/web/gui-bundle.ts
-          - packages/gnomon/src/platform/claude-verifier.ts
-          - packages/gnomon/test/claude-repin-card.test.ts
-          - packages/gnomon/test/claude-verifier-darwin.test.ts
-          - packages/gnomon/test/platform-registry.ts
-          - packages/gnomon/test/session-supervisor.test.ts
-          - packages/gnomon/test/web-units.test.ts
-        description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
     contributors:
       human:
         - ascend
       agent: []
   '#gui':
     symbol: '#gui'
-    total_changes: 16
-    last_modified: '2026-10-20T06:53:46Z'
+    total_changes: 51
+    last_modified: '2026-10-20T19:20:09Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_460
-        id: h0828
-        ts: '2026-10-20T06:53:46Z'
+      - &ref_448
+        id: h0894
+        ts: '2026-10-20T19:20:09Z'
         type: implement
         symbols:
-          - '#always-rules'
           - '#gui'
-          - '#shell-readonly'
+          - '#mod-host'
+          - '#paradigm-context-mod'
         author:
           type: human
           id: ascend
-        commit: 3f146ba842d5205fdaf86c24fa3466c90849bd75
+        commit: 55df7dc31c8e0c5682cb500bcefee290412258fc
         intent: feature
         files: []
-        description: 'merge(#always-rules): bring feat/gnomon (gitOptBad hotfix, table talk) into prefix rules'
-      - *ref_431
-      - *ref_432
-      - id: h0804
-        ts: '2026-10-19T23:19:36Z'
+        description: 'merge(#paradigm-context-mod): Paradigm Context mod + K1/K3 (Aegis approved after the H1 ReDoS and M1 scope fixes); bundle re-embedded'
+      - id: h0880
+        ts: '2026-10-20T19:11:46Z'
         type: implement
         symbols:
           - '#gui'
         author:
           type: human
           id: ascend
-        commit: cacbf3a928a21711956fbe880fc33a19d3d2e187
-        intent: fix
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - packages/gnomon-gui/.purpose
-          - packages/gnomon-gui/src/core/store.ts
-          - packages/gnomon-gui/src/core/voice.ts
-          - packages/gnomon-gui/src/ui/app.ts
-          - packages/gnomon-gui/test/voice.test.ts
-          - packages/gnomon/src/kernel/web/gui-bundle.ts
-          - packages/gnomon/test/web-units.test.ts
-        description: 'fix(#gui): align the voice adapter with V2a status, widen card and refusals'
-      - id: h0803
-        ts: '2026-10-19T23:17:14Z'
-        type: implement
-        symbols:
-          - '#gui'
-        author:
-          type: human
-          id: ascend
-        commit: bb5e647c143503432e110703c8141c3547fbd992
+        commit: 4d78c3b3c1fa3737b066674c5297e0efa372c2f0
         intent: feature
         files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-        description: 'feat(#gui): voice controls V2d: kernel-owned mic pill, attach/switch, voice transcript tags (TD-2026-10-19-298)'
+          - packages/gnomon/test/gui-browser-darwin.test.ts
+        description: 'test(#gui): fidelity pass 2 Aegis — darwin smoke reads the connection identity from #conn''s title'
+      - id: h0879
+        ts: '2026-10-20T19:05:25Z'
+        type: implement
+        symbols:
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: d6c3b318b4e492ceb8b970393aaf7dbb102b980f
+        intent: feature
+        files: []
+        description: 'merge(#gui): feat/gnomon into fidelity pass 2 Aegis fixes'
+      - id: h0878
+        ts: '2026-10-20T19:04:41Z'
+        type: implement
+        symbols:
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: 4bf3e1a8d7f58304139334998c78ad5b29c18492
+        intent: feature
+        files:
+          - packages/gnomon-gui/test/modes.test.ts
+        description: 'test(#gui): fidelity pass 2 Aegis — approval.mode.set stays reachable after hiding system rows'
+      - id: h0877
+        ts: '2026-10-20T19:04:29Z'
+        type: implement
+        symbols:
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: aee79300be37face26830253fc44c52179f1c440
+        intent: fix
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/test/desk.test.ts
+        description: 'fix(#gui): fidelity pass 2 Aegis L4 — update banner no longer passes id through h()'
     contributors:
       human:
         - ascend
@@ -29898,7 +29941,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-10-17/L-2026-10-17-ascend-220955-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'docs(#gnomon-ci): lore — first all-green CI across macOS, Ubuntu, Windows'
-      - &ref_433
+      - &ref_431
         id: h0753
         ts: '2026-10-17T21:56:03Z'
         type: implement
@@ -29929,7 +29972,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/vitest.config.ts
         description: 'fix(#kernel-log): Windows parity hygiene — writable-handle fsync, platform markers enforced, CI-portable tests'
-      - &ref_441
+      - &ref_439
         id: h0751
         ts: '2026-10-17T21:34:05Z'
         type: implement
@@ -29978,12 +30021,54 @@ by_symbol:
       agent: []
   '#gnomon-contracts':
     symbol: '#gnomon-contracts'
-    total_changes: 6
-    last_modified: '2026-10-19T15:27:28Z'
+    total_changes: 8
+    last_modified: '2026-10-20T08:47:05Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_440
+      - &ref_449
+        id: h0858
+        ts: '2026-10-20T08:47:05Z'
+        type: implement
+        symbols:
+          - '#gnomon-contracts'
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: c31439573a8c1a1e8e4f07ca30747f50eef4bac3
+        intent: fix
+        files:
+          - packages/gnomon-mods/.purpose
+          - packages/gnomon-mods/paradigm-context/fixtures/empty.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full-dark.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/stale.golden.json
+          - packages/gnomon-mods/paradigm-context/model.mjs
+          - packages/gnomon/src/kernel/modhost/paradigm-slice.ts
+          - packages/gnomon/test/paradigm-context-mod.test.ts
+          - packages/gnomon/test/symbol-allowlist.json
+        description: 'fix(#paradigm-context-mod): align with feat/gnomon after the merge'
+      - id: h0853
+        ts: '2026-10-20T08:33:17Z'
+        type: implement
+        symbols:
+          - '#gnomon-contracts'
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 8f387409153ef4def8991226d1a8cbc975657894
+        intent: feature
+        files:
+          - packages/gnomon-contracts/.purpose
+          - packages/gnomon-contracts/src/principal.ts
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/modhost/paradigm-slice.ts
+        description: 'wip(#paradigm-context-mod): K1 paradigm-slice projector and paradigm.read:summary form'
+      - &ref_438
         id: h0784
         ts: '2026-10-19T15:27:28Z'
         type: implement
@@ -30015,7 +30100,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gui): re-embed the GUI bundle after the P8-D98 contracts move'
-      - &ref_453
+      - &ref_451
         id: h0781
         ts: '2026-10-19T15:02:49Z'
         type: implement
@@ -30034,92 +30119,6 @@ by_symbol:
           - packages/gnomon/test/honesty.test.ts
           - packages/gnomon/test/m112-conformance.test.ts
         description: 'test(#gnomon-contracts): reconcile the guide honesty falsifier and the TS client surface with P8-D98'
-      - &ref_437
-        id: h0761
-        ts: '2026-10-17T23:52:09Z'
-        type: implement
-        symbols:
-          - '#contract-card-v1'
-          - '#contract-client-api-id'
-          - '#contract-event-v1'
-          - '#contract-gnomon-rpc-v1'
-          - '#contract-refusal-v1'
-          - '#gnomon-contracts'
-        author:
-          type: human
-          id: ascend
-        commit: b096b271908abd8f7dd7f9870f77e0a9e9815b23
-        intent: feature
-        files:
-          - packages/gnomon-contracts/.purpose
-          - packages/gnomon-contracts/schemas/card.v1.schema.json
-          - packages/gnomon-contracts/schemas/change-note.v1.schema.json
-          - packages/gnomon-contracts/schemas/client-api.ids.json
-          - packages/gnomon-contracts/schemas/event.v1.schema.json
-          - packages/gnomon-contracts/schemas/refusal.v1.schema.json
-          - packages/gnomon-contracts/schemas/review-finding.v1.schema.json
-          - packages/gnomon-contracts/src/card.ts
-          - packages/gnomon-contracts/src/change-note.ts
-          - packages/gnomon-contracts/src/client-api.ts
-          - packages/gnomon-contracts/src/event.ts
-          - packages/gnomon-contracts/src/index.ts
-          - packages/gnomon-contracts/src/principal.ts
-          - packages/gnomon-contracts/src/refusal.ts
-          - packages/gnomon-contracts/src/review-finding.ts
-          - packages/gnomon-contracts/src/rpc.ts
-          - packages/gnomon-contracts/src/schemas.ts
-          - packages/gnomon-contracts/test/contracts.test.ts
-          - packages/gnomon-contracts/test/fixtures.ts
-          - packages/gnomon-contracts/test/helpers.ts
-          - packages/gnomon-contracts/test/m1-1-reservations.test.ts
-          - packages/gnomon-contracts/test/refusal-rpc.test.ts
-        description: 'feat(#gnomon-contracts): M1.1 reservations for spec v3.9 — strictness, convergence, change notes, socket reasons'
-      - &ref_438
-        id: h0737
-        ts: '2026-10-17T17:29:25Z'
-        type: implement
-        symbols:
-          - '#contract-card-v1'
-          - '#contract-client-api-id'
-          - '#contract-event-v1'
-          - '#contract-gnomon-rpc-v1'
-          - '#contract-ids'
-          - '#contract-principal'
-          - '#contract-ref-v1'
-          - '#contract-refusal-v1'
-          - '#gnomon-contracts'
-        author:
-          type: human
-          id: ascend
-        commit: 4718b7d1e65d106af62fab8d52f4a497eb65296f
-        intent: feature
-        files:
-          - packages/gnomon-contracts/.purpose
-          - packages/gnomon-contracts/package.json
-          - packages/gnomon-contracts/schemas/card.v1.schema.json
-          - packages/gnomon-contracts/schemas/client-api.ids.json
-          - packages/gnomon-contracts/schemas/event.v1.schema.json
-          - packages/gnomon-contracts/schemas/gnomon-rpc.v1.hello.schema.json
-          - packages/gnomon-contracts/schemas/ref.v1.schema.json
-          - packages/gnomon-contracts/schemas/refusal.v1.schema.json
-          - packages/gnomon-contracts/scripts/write-schemas.mjs
-          - packages/gnomon-contracts/src/card.ts
-          - packages/gnomon-contracts/src/client-api.ts
-          - packages/gnomon-contracts/src/event.ts
-          - packages/gnomon-contracts/src/ids.ts
-          - packages/gnomon-contracts/src/index.ts
-          - packages/gnomon-contracts/src/internal.ts
-          - packages/gnomon-contracts/src/principal.ts
-          - packages/gnomon-contracts/src/ref.ts
-          - packages/gnomon-contracts/src/refusal.ts
-          - packages/gnomon-contracts/src/rpc.ts
-          - packages/gnomon-contracts/src/schemas.ts
-          - packages/gnomon-contracts/test/contracts.test.ts
-          - packages/gnomon-contracts/test/fixtures.ts
-          - packages/gnomon-contracts/test/helpers.ts
-          - packages/gnomon-contracts/test/ids-principal-ref.test.ts
-          - packages/gnomon-contracts/test/refusal-rpc.test.ts
-        description: 'feat(#gnomon-contracts): PR-3 contracts core — event, ids, principal, ref, refusal, card, rpc, clientApiId'
     contributors:
       human:
         - ascend
@@ -30131,7 +30130,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_446
+      - &ref_444
         id: h0771
         ts: '2026-10-19T21:53:17Z'
         type: implement
@@ -30197,7 +30196,7 @@ by_symbol:
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/SessionWatch.swift
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/main.swift
         description: 'wip(#gnomon-helper): helper 1.6.0 arm custody checkpoint'
-      - &ref_451
+      - &ref_450
         id: h0789
         ts: '2026-10-19T19:26:33Z'
         type: implement
@@ -30216,7 +30215,7 @@ by_symbol:
           - packages/gnomon/src/kernel/identity/helper.ts
           - packages/gnomon/test/identity-helper-pin.test.ts
         description: 'fix(#gnomon-helper): root signs return the helper''s prompt line; helper 1.5.0'
-      - &ref_436
+      - &ref_434
         id: h0729
         ts: '2026-10-17T08:05:48Z'
         type: implement
@@ -30318,7 +30317,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_434
+      - &ref_432
         id: h0766
         ts: '2026-10-18T01:48:12Z'
         type: implement
@@ -30357,7 +30356,7 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/results/p14b-link-fdpass.darwin.json
         description: 'fix(#gnomon-probes): M1.0 probes round 2 — abort cleanups, live-capture gate, P14b link-fdpass pass'
-      - &ref_435
+      - &ref_433
         id: h0765
         ts: '2026-10-18T01:33:29Z'
         type: implement
@@ -30400,8 +30399,8 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/s29-10-voice-custody/README.md
         description: 'feat(#gnomon-probes): M1.0 probe batch 2 — P06, P09, P12, P14 run; P00/P04/P05/P07/P01-manual founder-run'
-      - *ref_433
-      - &ref_442
+      - *ref_431
+      - &ref_440
         id: h0739
         ts: '2026-10-17T18:03:13Z'
         type: implement
@@ -30503,8 +30502,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_434
-      - *ref_435
+      - *ref_432
+      - *ref_433
       - id: h0746
         ts: '2026-10-17T19:22:30Z'
         type: implement
@@ -30520,7 +30519,7 @@ by_symbol:
           - packages/gnomon/probes/p-log-fsync/probe.mjs
           - packages/gnomon/probes/results/p-log-fsync-human-cadence.darwin.json
         description: 'feat(#gnomon-probes): p-log-fsync human cadence — fullfsync fails critical budget, plain commit passes'
-      - &ref_439
+      - &ref_437
         id: h0743
         ts: '2026-10-17T19:05:26Z'
         type: implement
@@ -30592,7 +30591,7 @@ by_symbol:
         files:
           - packages/gnomon-wrapper/tests/live_kernel.rs
         description: 'docs(#gnomon-wrapper): live_kernel header matches CI behaviour (fails, not skips, under CI)'
-      - *ref_436
+      - *ref_434
     contributors:
       human:
         - ascend
@@ -30629,8 +30628,92 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - &ref_435
+        id: h0761
+        ts: '2026-10-17T23:52:09Z'
+        type: implement
+        symbols:
+          - '#contract-card-v1'
+          - '#contract-client-api-id'
+          - '#contract-event-v1'
+          - '#contract-gnomon-rpc-v1'
+          - '#contract-refusal-v1'
+          - '#gnomon-contracts'
+        author:
+          type: human
+          id: ascend
+        commit: b096b271908abd8f7dd7f9870f77e0a9e9815b23
+        intent: feature
+        files:
+          - packages/gnomon-contracts/.purpose
+          - packages/gnomon-contracts/schemas/card.v1.schema.json
+          - packages/gnomon-contracts/schemas/change-note.v1.schema.json
+          - packages/gnomon-contracts/schemas/client-api.ids.json
+          - packages/gnomon-contracts/schemas/event.v1.schema.json
+          - packages/gnomon-contracts/schemas/refusal.v1.schema.json
+          - packages/gnomon-contracts/schemas/review-finding.v1.schema.json
+          - packages/gnomon-contracts/src/card.ts
+          - packages/gnomon-contracts/src/change-note.ts
+          - packages/gnomon-contracts/src/client-api.ts
+          - packages/gnomon-contracts/src/event.ts
+          - packages/gnomon-contracts/src/index.ts
+          - packages/gnomon-contracts/src/principal.ts
+          - packages/gnomon-contracts/src/refusal.ts
+          - packages/gnomon-contracts/src/review-finding.ts
+          - packages/gnomon-contracts/src/rpc.ts
+          - packages/gnomon-contracts/src/schemas.ts
+          - packages/gnomon-contracts/test/contracts.test.ts
+          - packages/gnomon-contracts/test/fixtures.ts
+          - packages/gnomon-contracts/test/helpers.ts
+          - packages/gnomon-contracts/test/m1-1-reservations.test.ts
+          - packages/gnomon-contracts/test/refusal-rpc.test.ts
+        description: 'feat(#gnomon-contracts): M1.1 reservations for spec v3.9 — strictness, convergence, change notes, socket reasons'
+      - &ref_436
+        id: h0737
+        ts: '2026-10-17T17:29:25Z'
+        type: implement
+        symbols:
+          - '#contract-card-v1'
+          - '#contract-client-api-id'
+          - '#contract-event-v1'
+          - '#contract-gnomon-rpc-v1'
+          - '#contract-ids'
+          - '#contract-principal'
+          - '#contract-ref-v1'
+          - '#contract-refusal-v1'
+          - '#gnomon-contracts'
+        author:
+          type: human
+          id: ascend
+        commit: 4718b7d1e65d106af62fab8d52f4a497eb65296f
+        intent: feature
+        files:
+          - packages/gnomon-contracts/.purpose
+          - packages/gnomon-contracts/package.json
+          - packages/gnomon-contracts/schemas/card.v1.schema.json
+          - packages/gnomon-contracts/schemas/client-api.ids.json
+          - packages/gnomon-contracts/schemas/event.v1.schema.json
+          - packages/gnomon-contracts/schemas/gnomon-rpc.v1.hello.schema.json
+          - packages/gnomon-contracts/schemas/ref.v1.schema.json
+          - packages/gnomon-contracts/schemas/refusal.v1.schema.json
+          - packages/gnomon-contracts/scripts/write-schemas.mjs
+          - packages/gnomon-contracts/src/card.ts
+          - packages/gnomon-contracts/src/client-api.ts
+          - packages/gnomon-contracts/src/event.ts
+          - packages/gnomon-contracts/src/ids.ts
+          - packages/gnomon-contracts/src/index.ts
+          - packages/gnomon-contracts/src/internal.ts
+          - packages/gnomon-contracts/src/principal.ts
+          - packages/gnomon-contracts/src/ref.ts
+          - packages/gnomon-contracts/src/refusal.ts
+          - packages/gnomon-contracts/src/rpc.ts
+          - packages/gnomon-contracts/src/schemas.ts
+          - packages/gnomon-contracts/test/contracts.test.ts
+          - packages/gnomon-contracts/test/fixtures.ts
+          - packages/gnomon-contracts/test/helpers.ts
+          - packages/gnomon-contracts/test/ids-principal-ref.test.ts
+          - packages/gnomon-contracts/test/refusal-rpc.test.ts
+        description: 'feat(#gnomon-contracts): PR-3 contracts core — event, ids, principal, ref, refusal, card, rpc, clientApiId'
     contributors:
       human:
         - ascend
@@ -30642,8 +30725,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_435
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30655,7 +30738,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_444
+      - &ref_442
         id: h0764
         ts: '2026-10-18T00:43:52Z'
         type: implement
@@ -30693,7 +30776,7 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-log-read.test.ts
         description: 'feat(#socket): M1.4 slice 2 — log.read, subscriptions, ref.resolve, hash-free limited views, released head'
-      - *ref_437
+      - *ref_435
       - id: h0752
         ts: '2026-10-17T21:39:34Z'
         type: implement
@@ -30745,7 +30828,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-posix.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'feat(#kernel-log): D83 critical ordering-not-flush, boot-session classification, durable anchor faults'
-      - *ref_439
+      - *ref_437
     contributors:
       human:
         - ascend
@@ -30757,8 +30840,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_435
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30770,7 +30853,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30782,7 +30865,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30794,7 +30877,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_438
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30806,20 +30889,44 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_437
-      - *ref_438
+      - *ref_435
+      - *ref_436
     contributors:
       human:
         - ascend
       agent: []
   '#socket':
     symbol: '#socket'
-    total_changes: 9
-    last_modified: '2026-10-20T06:23:36Z'
+    total_changes: 10
+    last_modified: '2026-10-20T07:39:46Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_464
+      - &ref_469
+        id: h0830
+        ts: '2026-10-20T07:39:46Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gui-voice-capture'
+          - '#socket'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: 6ca8f0a332cb19267fbdd5a6fef80788ed7706e3
+        intent: feature
+        files:
+          - packages/gnomon-voice/src/fake-audio-io.ts
+          - packages/gnomon-voice/src/voice-client.ts
+          - packages/gnomon-voice/test/pipeline.test.ts
+          - packages/gnomon-voice/test/stubs.ts
+          - packages/gnomon/src/kernel/socket/dispatch.ts
+          - packages/gnomon/src/kernel/socket/status-numbers.ts
+          - packages/gnomon/src/kernel/voice/voice-requests.ts
+          - packages/gnomon/test/voice-capture.test.ts
+        description: 'feat(#gui-voice-capture): capture states in the voice client and the kernel relay (WIP, A1 part 1)'
+      - &ref_462
         id: h0817
         ts: '2026-10-20T06:23:36Z'
         type: implement
@@ -30848,7 +30955,7 @@ by_symbol:
           - packages/gnomon/test/voice-golden.test.ts
           - packages/gnomon/test/voice-v2a.test.ts
         description: 'wip(#always-rules): repin abiId, re-embed GUI, GUI scope params, untrack node_modules symlinks'
-      - &ref_443
+      - &ref_441
         id: h0769
         ts: '2026-10-19T22:03:26Z'
         type: implement
@@ -30901,20 +31008,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/test/socket-abi.test.ts
         description: 'test(#socket): CI fixes after the P8-D98 merge (linux gui.open, win32 key modes)'
-      - *ref_440
-      - id: h0780
-        ts: '2026-10-19T08:32:23Z'
-        type: implement
-        symbols:
-          - '#socket'
-        author:
-          type: human
-          id: ascend
-        commit: 6f3fce66dbacba481991607c6c6e330b0f20bdd4
-        intent: feature
-        files:
-          - packages/gnomon/test/socket-ownership.test.ts
-        description: 'test(#socket): the raw holder in socket-ownership tolerates the probe''s reset'
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -30954,7 +31048,7 @@ by_symbol:
           - packages/gnomon/.purpose
           - packages/gnomon/src/kernel/lifecycle/ready.ts
         description: 'fix($daemon-lifecycle): keep the ready fd on Linux, where a socketpair cannot be re-opened'
-      - &ref_445
+      - &ref_443
         id: h0762
         ts: '2026-10-18T00:00:00Z'
         type: implement
@@ -30994,8 +31088,8 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-server.test.ts
         description: 'feat(#socket): M1.4 slice 1 — hello negotiation, mutual auth, authenticated dispatch, status'
-      - *ref_441
-      - *ref_442
+      - *ref_439
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -31007,8 +31101,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_443
-      - *ref_444
+      - *ref_441
+      - *ref_442
       - id: h0763
         ts: '2026-10-18T00:04:32Z'
         type: implement
@@ -31023,7 +31117,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-crossboot.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'test(#kernel-log): ceiling timeout for the two 1024-commit tests (Windows fsync is slow)'
-      - *ref_445
+      - *ref_443
       - id: h0759
         ts: '2026-10-17T23:11:31Z'
         type: implement
@@ -31053,8 +31147,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_444
       - *ref_442
+      - *ref_440
     contributors:
       human:
         - ascend
@@ -31066,8 +31160,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_446
-      - *ref_445
+      - *ref_444
+      - *ref_443
     contributors:
       human:
         - ascend
@@ -31079,7 +31173,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_444
+      - *ref_442
     contributors:
       human:
         - ascend
@@ -31091,7 +31185,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_447
+      - &ref_445
         id: h0767
         ts: '2026-10-18T16:47:38Z'
         type: implement
@@ -31136,79 +31230,85 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_447
+      - *ref_445
     contributors:
       human:
         - ascend
       agent: []
   '#supervisor':
     symbol: '#supervisor'
-    total_changes: 11
-    last_modified: '2026-10-20T06:40:51Z'
+    total_changes: 18
+    last_modified: '2026-10-20T08:03:24Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_462
-        id: h0821
-        ts: '2026-10-20T06:40:51Z'
+      - &ref_460
+        id: h0847
+        ts: '2026-10-20T08:03:24Z'
         type: implement
         symbols:
-          - '#always-rules'
+          - '#shell-readonly'
           - '#supervisor'
         author:
           type: human
           id: ascend
-        commit: d5c8600f189a6e7527f34dcef0d420fc18c25aba
+        commit: c1afbaba7b48df7e3629c39bc759bfdd57f0fca0
         intent: feature
         files:
-          - packages/gnomon/test/permission-session.test.ts
-        description: 'wip(#supervisor): end-to-end prefix rule in ask vs manual mode and out-of-root path (Aegis M2, M3)'
-      - *ref_448
-      - id: h0812
-        ts: '2026-10-20T04:57:25Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#supervisor'
-        author:
-          type: human
-          id: ascend
-        commit: 232aad6ce226b324a74de5e31dbf35fee9baee6a
-        intent: feature
-        files:
-          - packages/gnomon/src/kernel/lifecycle/daemon.ts
-          - packages/gnomon/src/kernel/socket/dispatch.ts
-          - packages/gnomon/src/kernel/supervisor/local-session.ts
-          - packages/gnomon/src/kernel/supervisor/port.ts
-          - packages/gnomon/src/kernel/supervisor/supervisor.ts
-          - packages/gnomon/src/kernel/voice/voice-control.ts
-          - packages/gnomon/src/kernel/voice/voice-requests.ts
-          - packages/gnomon/test/voice-dictation.test.ts
-          - packages/gnomon/test/voice-v2e-enrol.test.ts
-          - packages/gnomon/test/voice-v2e-speak.test.ts
-        description: 'feat(#gnomon-voice): dictation kernel side - forwardable stamp, human-send attribution, dictation reports (WIP K)'
-      - &ref_455
-        id: h0803
-        ts: '2026-10-19T23:17:16Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - '#supervisor'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: f40a0abc50f9979e94f21a667502b832b68132ee
-        intent: feature
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
           - docs/specs/gnomon.md
+        description: 'docs(#shell-readonly): spec 3.4 says ask no longer cards every Bash command; Aegis round and residuals'
+      - &ref_461
+        id: h0844
+        ts: '2026-10-20T08:00:58Z'
+        type: implement
+        symbols:
+          - '#shell-readonly'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 3dd21946a30b70dad39628d94fe493ea3ff252ba
+        intent: fix
+        files:
           - packages/gnomon/.purpose
-        description: 'feat(#gnomon-voice): V2a kernel side of ambient + push-to-talk (TD-2026-10-19-298)'
-      - *ref_449
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/auto-edits-anchor.test.ts
+        description: 'fix(#shell-readonly): repo git config can no longer run a program on a passed read (Aegis H1, M1)'
+      - *ref_446
+      - &ref_447
+        id: h0836
+        ts: '2026-10-20T07:43:05Z'
+        type: implement
+        symbols:
+          - '#manifest-loader'
+          - '#shell-readonly'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: b8e082f1cf8aceaa08969483cfd8a098b097714d
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/manifest/policy.ts
+          - packages/gnomon/test/session-supervisor.test.ts
+        description: 'feat(#manifest-loader): CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 in the kernel-written policy.json (F7, TD-2026-10-20-086)'
+      - &ref_466
+        id: h0835
+        ts: '2026-10-20T07:42:55Z'
+        type: implement
+        symbols:
+          - '#session-policy'
+          - '#shell-readonly'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: fd0b3a019f06c6365ef2936638778f4a65de1ef5
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/manifest/policy.ts
+          - packages/gnomon/test/session-supervisor.test.ts
+        description: 'feat(#session-policy): CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 in the kernel-written policy.json (F7, TD-2026-10-20-086)'
     contributors:
       human:
         - ascend
@@ -31220,20 +31320,55 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_447
+      - *ref_445
     contributors:
       human:
         - ascend
       agent: []
   '#manifest-loader':
     symbol: '#manifest-loader'
-    total_changes: 1
-    last_modified: '2026-10-19T01:23:13Z'
+    total_changes: 4
+    last_modified: '2026-10-20T18:53:07Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_450
-        id: h0769
+      - id: h0861
+        ts: '2026-10-20T18:53:07Z'
+        type: implement
+        symbols:
+          - '#manifest-loader'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 1c986bd44d46bf61bb1747230f97ad54085e7012
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/gnomon-mods/.purpose
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/manifest/install.ts
+          - packages/gnomon/test/paradigm-context-mod.test.ts
+        description: 'feat(#paradigm-context-mod): pin the first-party packageHash'
+      - id: h0854
+        ts: '2026-10-20T08:35:49Z'
+        type: implement
+        symbols:
+          - '#manifest-loader'
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: dd406b265e19cae74aae9d107b8039bbae2cc6ff
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/manifest/manifest.ts
+          - packages/gnomon/src/kernel/modhost/paradigm-slice.ts
+          - packages/gnomon/test/paradigm-slice.test.ts
+        description: 'feat(#paradigm-context-mod): K1 paradigm-slice:v1 projector with tests'
+      - *ref_447
+      - id: h0769
         ts: '2026-10-19T01:23:13Z'
         type: implement
         symbols:
@@ -31252,12 +31387,86 @@ by_symbol:
       agent: []
   '#mod-host':
     symbol: '#mod-host'
-    total_changes: 1
-    last_modified: '2026-10-19T01:23:13Z'
+    total_changes: 10
+    last_modified: '2026-10-20T19:20:09Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_450
+      - *ref_448
+      - &ref_472
+        id: h0873
+        ts: '2026-10-20T19:09:58Z'
+        type: implement
+        symbols:
+          - '#mod-host'
+          - '#paradigm-context-mod'
+          - '#session-supervisor'
+          - '#socket-dispatch'
+        author:
+          type: human
+          id: ascend
+        commit: 023fe6e75ece2015a8e14e17308c614ab59ee307
+        intent: fix
+        files:
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/modhost/bridge.ts
+          - packages/gnomon/src/kernel/modhost/host.ts
+          - packages/gnomon/src/kernel/socket/dispatch.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/test/mod-capability-falsifier.test.ts
+          - packages/gnomon/test/mod-focus.test.ts
+          - packages/gnomon/test/paradigm-context-mod.test.ts
+          - packages/gnomon/test/web-endpoint.test.ts
+        description: 'fix(#paradigm-context-mod): Aegis M1 — the K3 focus join checks the caller''s class'
+      - &ref_473
+        id: h0872
+        ts: '2026-10-20T19:07:08Z'
+        type: implement
+        symbols:
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 907dc7f5abd42771cd03ae19c62a6514cc22deb3
+        intent: fix
+        files:
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/modhost/paradigm-slice.ts
+          - packages/gnomon/test/paradigm-slice.test.ts
+        description: 'fix(#paradigm-context-mod): Aegis H1/M2/M3/L1/L3 — linear YAML subset, realpath root walk, bounded slice'
+      - *ref_449
+      - id: h0857
+        ts: '2026-10-20T08:45:14Z'
+        type: implement
+        symbols:
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 6cfe919092aee31f740831dc71369c401c232472
+        intent: feature
+        files:
+          - packages/gnomon-mods/.purpose
+          - packages/gnomon-mods/paradigm-context/README.md
+          - packages/gnomon-mods/paradigm-context/fixtures/empty.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/empty.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full-dark.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full-dark.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full.json
+          - packages/gnomon-mods/paradigm-context/fixtures/stale.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/stale.json
+          - packages/gnomon-mods/paradigm-context/fixtures/unfocused.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/unfocused.json
+          - packages/gnomon-mods/paradigm-context/gnomon-manifest.json
+          - packages/gnomon-mods/paradigm-context/index.mjs
+          - packages/gnomon-mods/paradigm-context/model.mjs
+          - packages/gnomon/scripts/repin-first-party.mjs
+          - packages/gnomon/test/paradigm-context-mod.test.ts
+        description: 'feat(#paradigm-context-mod): the Paradigm Context mod package with goldens'
     contributors:
       human:
         - ascend
@@ -31331,7 +31540,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_451
+      - *ref_450
       - id: h0776
         ts: '2026-10-19T05:04:25Z'
         type: implement
@@ -31356,8 +31565,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_452
-        id: h0777
+      - id: h0777
         ts: '2026-10-19T05:26:07Z'
         type: implement
         symbols:
@@ -31382,13 +31590,96 @@ by_symbol:
       agent: []
   '#web-endpoint':
     symbol: '#web-endpoint'
-    total_changes: 2
-    last_modified: '2026-10-19T15:27:28Z'
+    total_changes: 6
+    last_modified: '2026-10-20T18:55:10Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
-      - *ref_452
+      - id: h0871
+        ts: '2026-10-20T18:55:10Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#web-endpoint'
+        author:
+          type: human
+          id: ascend
+        commit: 1d56d35d5cc08867acb760f7a427e2f7510bd660
+        intent: feature
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#gui): fidelity pass 2 — re-embed the bundle, repin G-WEB-08, .purpose'
+      - &ref_467
+        id: h0849
+        ts: '2026-10-20T08:07:34Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-relaunch'
+          - '#web-endpoint'
+        author:
+          type: human
+          id: ascend
+        commit: 47ab9c07ae9ecbfc0571b53d4670ca0f3450e562
+        intent: feature
+        files: []
+        description: 'merge(#gui-relaunch): stale-tab relaunch, no-TTY auto-open (Aegis approved after the H1 port-reuse fix); bundle re-embedded'
+      - &ref_468
+        id: h0831
+        ts: '2026-10-20T07:44:26Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-voice-capture'
+          - '#web-endpoint'
+          - $voice-turn
+        author:
+          type: human
+          id: ascend
+        commit: f06ac152f3593a426e998e0df062df928c005b64
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/capture.ts
+          - packages/gnomon-gui/src/core/store.ts
+          - packages/gnomon-gui/src/core/voice-client.ts
+          - packages/gnomon-gui/src/core/voice.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/index.html
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/capture.test.ts
+          - packages/gnomon-gui/test/stop-speaking.test.ts
+          - packages/gnomon-gui/test/voice-client.test.ts
+          - packages/gnomon-gui/test/voice.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#gui-voice-capture): capture pill states, V3 poll lifecycle, sanitised pill title (A1 part 2)'
+      - id: h0830
+        ts: '2026-10-20T07:19:42Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gui'
+          - '#web-endpoint'
+        author:
+          type: human
+          id: ascend
+        commit: 862ef85ad5cb01d150e72f097f0fa420e0eebdd7
+        intent: fix
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/voice-client.ts
+          - packages/gnomon-gui/src/core/voice.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/modes.test.ts
+          - packages/gnomon-gui/test/voice-client.test.ts
+          - packages/gnomon-gui/test/voice.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#gnomon-voice): attached pill shows the real voice-app condition, stale card notice clears, enrol nudge while attached'
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -31400,7 +31691,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_440
+      - *ref_438
       - id: h0778
         ts: '2026-10-19T05:43:39Z'
         type: implement
@@ -31428,7 +31719,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_453
+      - *ref_451
     contributors:
       human:
         - ascend
@@ -31465,7 +31756,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_446
+      - *ref_444
     contributors:
       human:
         - ascend
@@ -31477,81 +31768,23 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_446
+      - *ref_444
     contributors:
       human:
         - ascend
       agent: []
   $voice-turn:
     symbol: $voice-turn
-    total_changes: 6
-    last_modified: '2026-10-20T05:00:51Z'
+    total_changes: 15
+    last_modified: '2026-10-20T09:07:44Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_452
+      - *ref_453
       - *ref_454
-      - id: h0810
-        ts: '2026-10-20T00:25:56Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: cbf090bba8d67efb241d4a0b8d94db381fa2717d
-        intent: feature
-        files:
-          - packages/gnomon-voice/test/fixtures/fake-voice-io.mjs
-          - packages/gnomon-voice/test/v2e.test.ts
-        description: 'test(#gnomon-voice): V2e fd link, run exit, speakable, hardening, member pins, hotkeys'
-      - id: h0809
-        ts: '2026-10-20T00:23:26Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: 0811043e8e678ce5b8f392b6f505571801dcbf92
-        intent: feature
-        files:
-          - packages/gnomon-voice/src/audio-io.ts
-          - packages/gnomon-voice/src/cli.ts
-          - packages/gnomon-voice/src/fake-audio-io.ts
-          - packages/gnomon-voice/src/index.ts
-          - packages/gnomon-voice/src/kernel-link.ts
-          - packages/gnomon-voice/src/manifest.ts
-          - packages/gnomon-voice/src/run.ts
-          - packages/gnomon-voice/src/speakable.ts
-          - packages/gnomon-voice/src/types.ts
-          - packages/gnomon-voice/src/voice-client.ts
-          - packages/gnomon-voice/test/kernel-link.test.ts
-          - packages/gnomon-voice/test/pipeline.test.ts
-          - packages/gnomon-voice/test/stubs.ts
-          - packages/gnomon-voice/voice-models.manifest.json
-        description: 'wip(#gnomon-voice): V2e client fd link, kernel-speakable, hardening, member-pinned manifest'
       - *ref_455
-      - id: h0802
-        ts: '2026-10-19T23:13:35Z'
-        type: implement
-        symbols:
-          - '#gnomon-voice'
-          - $voice-turn
-        author:
-          type: human
-          id: ascend
-        commit: 58e7b9bc5d4b0e062a81f24578947e5c49cab376
-        intent: feature
-        files:
-          - packages/gnomon/src/kernel/lifecycle/daemon.ts
-          - packages/gnomon/src/kernel/socket/status-numbers.ts
-          - packages/gnomon/src/kernel/supervisor/local-session.ts
-          - packages/gnomon/src/kernel/supervisor/supervisor.ts
-          - packages/gnomon/src/kernel/voice/voice-control.ts
-          - packages/gnomon/test/voice-v1.test.ts
-        description: 'wip(#gnomon-voice): V2a ceiling, widening presence, ambient guards, idle auto-off, privacy'
+      - *ref_456
     contributors:
       human:
         - ascend
@@ -31563,8 +31796,47 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_449
-      - *ref_456
+      - *ref_457
+      - id: h0800
+        ts: '2026-10-19T22:42:18Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#gui'
+          - '#session-runner'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 97856ce1c9fbb8b07a83fac3ef5d7cef4384ec56
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/render.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/cli/session-cli.ts
+          - packages/gnomon/src/kernel/broker/broker.ts
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/runner/binary.ts
+          - packages/gnomon/src/kernel/runner/preflight.ts
+          - packages/gnomon/src/kernel/runner/repin-card.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/src/platform/claude-verifier.ts
+          - packages/gnomon/test/claude-repin-card.test.ts
+          - packages/gnomon/test/claude-verifier-darwin.test.ts
+          - packages/gnomon/test/platform-registry.ts
+          - packages/gnomon/test/session-supervisor.test.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
       - id: h0799
         ts: '2026-10-19T22:42:13Z'
         type: implement
@@ -31615,8 +31887,43 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_431
-      - *ref_457
+      - id: h0817
+        ts: '2026-10-20T06:04:30Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-io'
+          - '#gui'
+        author:
+          type: human
+          id: ascend
+        commit: f1b8e24251eec894cccd2eafce2f156a81c211b7
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon-voice/src/engines/sherpa.ts
+        description: 'docs(#gnomon-voice): Kokoro RTF bench, spec stop-speaking note, purposes — WIP 4/6'
+      - id: h0814
+        ts: '2026-10-20T05:56:36Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#gnomon-voice-io'
+        author:
+          type: human
+          id: ascend
+        commit: c757db2edf7dbcab2d3acf2892d4bf989dc126e7
+        intent: feature
+        files:
+          - packages/gnomon-voice/README.md
+          - packages/gnomon-voice/checksums.json
+          - packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Hotkey.swift
+          - packages/gnomon-voice/io-darwin/Sources/gnomon-voice-io/main.swift
+          - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
+          - packages/gnomon-voice/test/kernel-link.test.ts
+        description: 'feat(#gnomon-voice-io): stop-speaking hotkey (ctrl+alt+.) — WIP 1/6'
       - id: h0811
         ts: '2026-10-20T04:47:18Z'
         type: implement
@@ -31720,19 +32027,109 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_459
+      - id: h0816
+        ts: '2026-10-20T06:00:19Z'
+        type: implement
+        symbols:
+          - '#gnomon-voice'
+          - '#kernel-dispatch'
+        author:
+          type: human
+          id: ascend
+        commit: dcb5f35e23a5808989d8e29c0fa9333f19128845
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/socket/status-numbers.ts
+          - packages/gnomon/test/voice-v2e-speak.test.ts
+          - packages/gnomon/test/voice-v2e.test.ts
+        description: 'test(#gnomon-voice): stop-speaking dispatch is human only; declare status counters — WIP 3/6'
     contributors:
       human:
         - ascend
       agent: []
   '#shell-readonly':
     symbol: '#shell-readonly'
-    total_changes: 5
-    last_modified: '2026-10-20T06:57:44Z'
+    total_changes: 18
+    last_modified: '2026-10-20T08:05:56Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_461
+      - *ref_459
+      - *ref_460
+      - id: h0846
+        ts: '2026-10-20T08:02:46Z'
+        type: implement
+        symbols:
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 95207e2cc6b3f2f182708473c8341a7e7570cb6f
+        intent: fix
+        files:
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/shell-readonly-cwd.test.ts
+        description: 'fix(#shell-readonly): deny *_functions, mapfile and proxy names as locals and loop variables (Aegis L2)'
+      - id: h0845
+        ts: '2026-10-20T08:02:26Z'
+        type: implement
+        symbols:
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 478d2d91ca8f943008771b4b502320b49fb6abcf
+        intent: fix
+        files:
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/auto-edits-anchor.test.ts
+        description: 'fix(#shell-readonly): anchor prelude drops cd hooks and functions and guarantees brace expansion (Aegis M2, L1)'
+      - *ref_461
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#always-rules':
+    symbol: '#always-rules'
+    total_changes: 9
+    last_modified: '2026-10-20T07:49:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0840
+        ts: '2026-10-20T07:49:24Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 68f988a4901b16150e5d77425f5abe37984c58c3
+        intent: feature
+        files:
+          - packages/gnomon/test/platform-registry.ts
+          - packages/gnomon/test/rules-bash-hash.test.ts
+          - packages/gnomon/test/shell-readonly.test.ts
+        description: 'test(#shell-readonly): platform registry rows for the anchored tests; pure-table locals and git stash'
+      - *ref_446
+      - id: h0832
+        ts: '2026-10-20T07:39:30Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+        author:
+          type: human
+          id: ascend
+        commit: 32b4a08e6207f43a45ebe3f6bda36848d22f7ffc
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/supervisor/rules.ts
+          - packages/gnomon/test/rules-bash-hash.test.ts
+        description: 'feat(#always-rules): exact Bash rules also match by the {command} hash (RC5)'
+      - &ref_463
         id: h0829
         ts: '2026-10-20T06:57:44Z'
         type: implement
@@ -31752,51 +32149,76 @@ by_symbol:
           - packages/gnomon/test/approval-prefix-scope.test.ts
           - packages/gnomon/test/prefix-policy.test.ts
         description: 'fix(#prefix-policy): git option abbreviations and bundles; empty build-tool allowlist (WIP)'
-      - *ref_460
-      - id: h0816
-        ts: '2026-10-20T06:02:57Z'
+      - id: h0828
+        ts: '2026-10-20T06:53:46Z'
         type: implement
         symbols:
+          - '#always-rules'
+          - '#gui'
           - '#shell-readonly'
         author:
           type: human
           id: ascend
-        commit: ed12d149edb92eac7efcc54f3bacb4d959e58d17
+        commit: 3f146ba842d5205fdaf86c24fa3466c90849bd75
         intent: feature
-        files:
-          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
-          - packages/gnomon/test/symbol-allowlist.json
-        description: 'wip(#shell-readonly): scanner-safe parse helper, symbol allowlist entry'
-      - *ref_448
-      - id: h0814
-        ts: '2026-10-20T05:56:35Z'
-        type: implement
-        symbols:
-          - '#shell-readonly'
-        author:
-          type: human
-          id: ascend
-        commit: 74673d40a0fc9e1e2a2813dfc00218dcb72ad014
-        intent: feature
-        files:
-          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
-          - packages/gnomon/test/shell-readonly.test.ts
-        description: 'wip(#shell-readonly): read-only Bash classifier + table tests'
+        files: []
+        description: 'merge(#always-rules): bring feat/gnomon (gitOptBad hotfix, table talk) into prefix rules'
     contributors:
       human:
         - ascend
       agent: []
-  '#always-rules':
-    symbol: '#always-rules'
+  '#gui-cards':
+    symbol: '#gui-cards'
+    total_changes: 2
+    last_modified: '2026-10-20T06:35:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_465
+        id: h0819
+        ts: '2026-10-20T06:35:49Z'
+        type: implement
+        symbols:
+          - '#gui-cards'
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 097b2b3ce110c3cf1bf4361698c5488112e62be2
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/render.ts
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'wip(#gui-cards): prefix words quoted and escaped on the always keys (Aegis M1); GUI re-embedded'
+      - *ref_462
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#prefix-policy':
+    symbol: '#prefix-policy'
     total_changes: 6
     last_modified: '2026-10-20T06:57:44Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_461
-      - *ref_460
-      - &ref_465
-        id: h0822
+      - *ref_463
+      - id: h0823
+        ts: '2026-10-20T06:42:33Z'
+        type: implement
+        symbols:
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 3a1bc6a34e65031e79dae0a539e863e1a2ef75a5
+        intent: feature
+        files:
+          - .paradigm/.purpose-paths
+        description: 'chore(#prefix-policy): keep .paradigm/.purpose-paths'
+      - id: h0822
         ts: '2026-10-20T06:42:28Z'
         type: implement
         symbols:
@@ -31819,66 +32241,484 @@ by_symbol:
           - packages/gnomon/.purpose
           - packages/gnomon/test/symbol-allowlist.json
         description: 'wip(#prefix-policy): spec §3.4 prefix-rule bounds and npm-test note; .purpose; index'
-      - *ref_462
-      - *ref_463
+      - *ref_464
+      - *ref_465
     contributors:
       human:
         - ascend
       agent: []
-  '#gui-cards':
-    symbol: '#gui-cards'
-    total_changes: 2
-    last_modified: '2026-10-20T06:35:49Z'
+  '#session-policy':
+    symbol: '#session-policy'
+    total_changes: 1
+    last_modified: '2026-10-20T07:42:55Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_467
-        id: h0819
-        ts: '2026-10-20T06:35:49Z'
+      - *ref_466
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-preview':
+    symbol: '#gui-preview'
+    total_changes: 10
+    last_modified: '2026-10-20T19:00:25Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_474
+        id: h0871
+        ts: '2026-10-20T19:00:25Z'
         type: implement
         symbols:
-          - '#gui-cards'
-          - '#prefix-policy'
+          - '#gui'
+          - '#gui-preview'
+          - '#paradigm-context-mod'
         author:
           type: human
           id: ascend
-        commit: 097b2b3ce110c3cf1bf4361698c5488112e62be2
+        commit: e03a8a0cc30848f1710adb675a7216d007a4aff6
+        intent: feature
+        files: []
+        description: 'merge(#paradigm-context-mod): feat/gnomon into the Paradigm Context worktree'
+      - id: h0860
+        ts: '2026-10-20T18:49:37Z'
+        type: implement
+        symbols:
+          - '#gui-preview'
+        author:
+          type: human
+          id: ascend
+        commit: 7353bb57c36ea43864bd08cc3631ba389f678dcd
+        intent: fix
+        files:
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/log.jsonl
+          - packages/gnomon-gui/.purpose
+        description: 'fix(#gui-preview): .purpose fixture note under the description'
+      - id: h0859
+        ts: '2026-10-20T18:49:24Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-preview'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 342c786dbeedeb1e6373ed61a690443ce5fc25e3
+        intent: feature
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/mod-panels.ts
+          - packages/gnomon-gui/src/preview/fake-kernel.ts
+          - packages/gnomon-gui/src/preview/fixtures.ts
+          - packages/gnomon-gui/src/preview/paradigm-context.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/mod-panels.test.ts
+          - packages/gnomon-gui/test/preview.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#paradigm-context-mod): GUI preview fixture, chip and head tones, focus re-render fix'
+      - id: h0862
+        ts: '2026-10-20T18:47:01Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-preview'
+        author:
+          type: human
+          id: ascend
+        commit: afbbfa9bd329b8142385e0370c89d96174aeb42e
         intent: feature
         files:
           - packages/gnomon-gui/src/core/render.ts
-          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon-gui/src/core/store.ts
+          - packages/gnomon-gui/src/preview/env.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/desk.test.ts
+        description: 'feat(#gui): fidelity pass 2 — compact cards with a details disclosure'
+      - &ref_470
+        id: h0861
+        ts: '2026-10-20T15:28:22Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-preview'
+          - '#gui-table-talk'
+        author:
+          type: human
+          id: ascend
+        commit: 895193b2e09646f1ce9c44ec87883a3267a4a4ce
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/choices.ts
+          - packages/gnomon-gui/src/preview/fixtures.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/choices.test.ts
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
-        description: 'wip(#gui-cards): prefix words quoted and escaped on the always keys (Aegis M1); GUI re-embedded'
-      - *ref_464
+        description: 'feat(#gui-table-talk): clickable reply options'
     contributors:
       human:
         - ascend
       agent: []
-  '#prefix-policy':
-    symbol: '#prefix-policy'
-    total_changes: 6
-    last_modified: '2026-10-20T06:57:44Z'
+  '#gui-relaunch':
+    symbol: '#gui-relaunch'
+    total_changes: 1
+    last_modified: '2026-10-20T08:07:34Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_461
-      - id: h0823
-        ts: '2026-10-20T06:42:33Z'
+      - *ref_467
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-voice-capture':
+    symbol: '#gui-voice-capture'
+    total_changes: 5
+    last_modified: '2026-10-20T09:02:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_453
+      - *ref_454
+      - id: h0832
+        ts: '2026-10-20T07:51:02Z'
         type: implement
         symbols:
-          - '#prefix-policy'
+          - '#gnomon-voice'
+          - '#gui'
+          - '#gui-voice-capture'
+          - $voice-turn
         author:
           type: human
           id: ascend
-        commit: 3a1bc6a34e65031e79dae0a539e863e1a2ef75a5
+        commit: f55af625900a3c6cdbc466b6593368fc6025aa40
         intent: feature
         files:
-          - .paradigm/.purpose-paths
-        description: 'chore(#prefix-policy): keep .paradigm/.purpose-paths'
-      - *ref_465
-      - *ref_466
-      - *ref_467
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-voice/.purpose
+          - packages/gnomon/.purpose
+          - packages/gnomon/test/symbol-allowlist.json
+          - packages/gnomon/test/voice-v2e-speak.test.ts
+        description: 'feat(#gui-voice-capture): spec prose, symbol allowlist, purpose files (A1 part 3)'
+      - *ref_468
+      - *ref_469
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gnomon-voice-bench-partials':
+    symbol: '#gnomon-voice-bench-partials'
+    total_changes: 1
+    last_modified: '2026-10-20T09:02:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_453
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-table-talk':
+    symbol: '#gui-table-talk'
+    total_changes: 4
+    last_modified: '2026-10-20T19:03:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0876
+        ts: '2026-10-20T19:03:58Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-table-talk'
+        author:
+          type: human
+          id: ascend
+        commit: e79790820b6f53db0f034dd59018a4f8584f921a
+        intent: fix
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/choices.test.ts
+        description: 'fix(#gui): fidelity pass 2 Aegis L3 — night choice chips keep the filled pill'
+      - id: h0875
+        ts: '2026-10-20T19:03:50Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-table-talk'
+        author:
+          type: human
+          id: ascend
+        commit: 96b8fbcede89afbf49c487a2f85e5d8db6118c09
+        intent: fix
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/choices.test.ts
+        description: 'fix(#gui-table-talk): fidelity pass 2 Aegis L3 — night choice chips keep the filled pill'
+      - *ref_470
+      - id: h0860
+        ts: '2026-10-20T15:23:40Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-preview'
+          - '#gui-table-talk'
+        author:
+          type: human
+          id: ascend
+        commit: c54144af25f01ea4daa97898fa32805d53252879
+        intent: fix
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/store.ts
+          - packages/gnomon-gui/src/preview/fixtures.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/test/preview.test.ts
+          - packages/gnomon-gui/test/voice-client.test.ts
+          - packages/gnomon-gui/test/voice.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'fix(#gui-table-talk): one spoken-aloud marker per reply'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-modes':
+    symbol: '#gui-modes'
+    total_changes: 1
+    last_modified: '2026-10-20T18:49:35Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0865
+        ts: '2026-10-20T18:49:35Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-modes'
+        author:
+          type: human
+          id: ascend
+        commit: 9cfe26922d0101889c3ffd685947457014f59007
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/modes.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/index.html
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/modes.test.ts
+        description: 'feat(#gui): fidelity pass 2 — chat header: meta line, mode chip, ⋯ menu'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-dictation':
+    symbol: '#gui-dictation'
+    total_changes: 1
+    last_modified: '2026-10-20T18:51:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0867
+        ts: '2026-10-20T18:51:52Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-dictation'
+        author:
+          type: human
+          id: ascend
+        commit: 3124be02389e378e4244ace36a04dee8c0bac084
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/index.html
+          - packages/gnomon-gui/static/styles.css
+        description: 'feat(#gui): fidelity pass 2 — composer is the input, ⌘↵ and a small send'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-workshop':
+    symbol: '#gui-workshop'
+    total_changes: 1
+    last_modified: '2026-10-20T18:53:13Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_471
+        id: h0869
+        ts: '2026-10-20T18:53:13Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#gui-workshop'
+          - '#mod-cli'
+        author:
+          type: human
+          id: ascend
+        commit: e369e6b3563d9a5de294ed2784702af805883576
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/mod-panels.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/src/ui/mod-panels-mount.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/workshop.test.ts
+        description: 'feat(#gui): fidelity pass 2 — footer Install Workshop key, one status line'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mod-cli':
+    symbol: '#mod-cli'
+    total_changes: 1
+    last_modified: '2026-10-20T18:53:13Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_471
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-context-mod':
+    symbol: '#paradigm-context-mod'
+    total_changes: 13
+    last_modified: '2026-10-20T19:20:09Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_448
+      - &ref_475
+        id: h0874
+        ts: '2026-10-20T19:11:40Z'
+        type: implement
+        symbols:
+          - '#mod-install'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 50b0f8eb4320febc5acc964fc856195e6114d3b0
+        intent: fix
+        files:
+          - packages/gnomon-mods/.purpose
+          - packages/gnomon-mods/paradigm-context/fixtures/full-dark.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/full.golden.json
+          - packages/gnomon-mods/paradigm-context/fixtures/stale.golden.json
+          - packages/gnomon-mods/paradigm-context/model.mjs
+          - packages/gnomon/src/kernel/manifest/install.ts
+          - packages/gnomon/test/paradigm-context-mod.test.ts
+        description: 'fix(#paradigm-context-mod): Aegis L2 — fixed type prefix, quoted dim titles; packageHash repinned'
+      - *ref_472
+      - *ref_473
+      - *ref_474
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ledger-mod':
+    symbol: '#ledger-mod'
+    total_changes: 2
+    last_modified: '2026-10-20T08:41:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0856
+        ts: '2026-10-20T08:41:47Z'
+        type: implement
+        symbols:
+          - '#ledger-mod'
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: c5ea2b0b6e6fbe886e0926d2b44b44f09a48b707
+        intent: feature
+        files:
+          - packages/gnomon/.purpose
+          - packages/gnomon/test/mod-capability-falsifier.test.ts
+        description: 'test(#mod-host): host-level capability falsifiers (log.read:usage, paradigm.read:summary)'
+      - id: h0855
+        ts: '2026-10-20T08:40:57Z'
+        type: implement
+        symbols:
+          - '#gui'
+          - '#ledger-mod'
+          - '#mod-host'
+          - '#paradigm-context-mod'
+        author:
+          type: human
+          id: ascend
+        commit: 3f1be8911ac115abae6d8f4735c57a0bff2ecce3
+        intent: feature
+        files:
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/mod-panels.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/src/ui/mod-panels-mount.ts
+          - packages/gnomon-gui/test/mod-panels.test.ts
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/modhost/host.ts
+          - packages/gnomon/src/kernel/modhost/index.ts
+          - packages/gnomon/test/mod-focus.test.ts
+          - packages/gnomon/test/mod-helpers.ts
+        description: 'feat(#paradigm-context-mod): K3 server-side focus join and focus re-render'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#session-supervisor':
+    symbol: '#session-supervisor'
+    total_changes: 1
+    last_modified: '2026-10-20T19:09:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_472
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#socket-dispatch':
+    symbol: '#socket-dispatch'
+    total_changes: 1
+    last_modified: '2026-10-20T19:09:58Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_472
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#mod-install':
+    symbol: '#mod-install'
+    total_changes: 1
+    last_modified: '2026-10-20T19:11:40Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_475
     contributors:
       human:
         - ascend

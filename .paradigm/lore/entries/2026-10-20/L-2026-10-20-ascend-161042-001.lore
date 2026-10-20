@@ -1,0 +1,53 @@
+id: L-2026-10-20-ascend-161042-001
+type: agent-session
+timestamp: '2026-10-20T16:10:42.071Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice fix complete: pause-run speech gate, stale-print re-teach nudge, and ambient never sends itself (TD-2026-10-20-125)'
+summary: |-
+  Branch worktree-agent-a60d237b0d1e6923a.
+  - t0 skew fixed.
+  - Speech gate and thresholds.
+  - Stale-print nudge: the old voiceprint is ignored and the GUI says "Re-teach Gnomon your voice (the voice check was upgraded)".
+  - Ruling TD-2026-10-20-125: the voice client never session.sends ambient turns; the kernel refuses any non-ptt direct send (voice-off{cause:'composer'}); the GUI never auto-sends an ambient draft (Enter/⌘Enter only).
+  - Spec §14.4.2: speaker verification is a convenience filter, not a security boundary, with its residuals listed (−40 dBFS noise, <1.5 s, no liveness, client-asserted ptt).
+  - Tests: gnomon 2447, gui 388, contracts 463, voice 137; the real-model repro passes 3/3.
+  - No id moved.
+  Incident: two builders worked the same worktree at once (I resumed an older agent while a newer one was assigned). A WIP commit swept in the other's edits; the newer builder reconciled. Aegis review launched.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-dictation'
+  - $voice-turn
+decisions:
+  - id: TD-2026-10-20-125
+    decision: Ambient speech lands in the composer, never sends itself
+    rationale: Speaker verification can't be a security boundary
+errors_encountered:
+  - description: Two builder agents assigned to the same worktree concurrently (an older one resumed after a newer one took over)
+    resolution: 'Newer builder folded the swept commit; the older agent was not resumed again. Rule: never resume an agent whose worktree has been handed to another'
+verification:
+  status: pass
+  details:
+    gnomon: 2447
+    gui: 388
+    contracts: 463
+    voice: 137
+tags:
+  - gnomon
+  - voice
+  - marathon-2026-10-20
+linked_commits:
+  - 0ae93349
+  - '82014480'
+  - 51fd1586
+  - 8afb5066
+  - 70c37491
+  - 20d1e925
+  - 0175cc0a
+  - 5bf42b0a
+git_context:
+  ref: 8a1a66693dc05a980ceeb72263346e32ade39175
+  branch: feat/gnomon
+  dirty: true

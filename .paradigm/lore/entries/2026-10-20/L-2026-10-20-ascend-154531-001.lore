@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-154531-001
+type: insight
+timestamp: '2026-10-20T15:45:31.747Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Model switch is in-process: claude set_model probe PASS (haiku→sonnet, context recalled); contracts moved to d31e3284'
+summary: |-
+  The p-set-model probe on claude 2.1.304 ran turn 1 on haiku, then set_model sonnet (success), then turn 2 on sonnet recalled the codeword: context preserved with no restart (~$0.035). Unknown models are refused with catalog_unknown. So the switch needs no resume and no checkpoint; Arky's drain+resume design is unnecessary for this path.
+  Branch worktree-agent-a1ec45f09003354bd: picker (aef8f141, 8682929a), probe (9808a206), contracts (939e2fde): request.session.model / session.model, closed outcomes, six refusal reasons, the 1M→200k context guard; clientApiId 795b3425 → d31e3284 (unmerged).
+  Kernel switch is building: law-7 re-scan and a new permit per switch; timeout → modelUncertain, reconciled from the next assistant message's model field.
+  Also found: a contracts cap test on feat/gnomon pinned a stale id after independent merges. Repinned in 8a1a6669.
+symbols_touched:
+  - '#session-runner'
+  - '#claude-adapter'
+  - '#gui-model-picker'
+  - $model-switch
+learnings:
+  - Probe the host's native capability (set_model) before designing around a restart; it removed a whole checkpoint/resume flow.
+  - Independent branches that each pin a contract id will conflict silently; re-run the contracts suite after every merge.
+tags:
+  - gnomon
+  - model
+  - probe
+  - marathon-2026-10-20
+linked_commits:
+  - aef8f141
+  - 8682929a
+  - 9808a206
+  - 939e2fde
+  - 8a1a6669
+git_context:
+  ref: 8a1a66693dc05a980ceeb72263346e32ade39175
+  branch: feat/gnomon
+  dirty: true

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T09:12:10.489Z'
+generated: '2026-10-20T19:21:27.056Z'
 structure: {}
 key_files:
   config:
@@ -261,6 +261,7 @@ symbols:
   '#purpose-component-contract-gnomon-rpc-v1': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-client-api-id': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-voice-allowlist': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-component-gui-model-picker': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-setup': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-relaunch': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
@@ -269,12 +270,14 @@ symbols:
   '#purpose-component-gui-preview': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-voice-capture': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-table-talk': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-settings': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gnomon-helper': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-helper/.purpose
   '#purpose-component-gnomon-helper-build': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-helper/.purpose
   '#purpose-component-gnomon-local': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-local/.purpose
   '#purpose-component-gnomon-mod-sdk': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-mod-sdk/.purpose
   '#purpose-component-workshop-mod': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-mods/.purpose
   '#purpose-component-ledger-mod': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-mods/.purpose
+  '#purpose-component-paradigm-context-mod': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-mods/.purpose
   '#purpose-component-gnomon-voice': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-gnomon-voice-io': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-voice/.purpose
   '#purpose-component-gnomon-voice-io-build': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-voice/.purpose
@@ -1379,6 +1382,9 @@ symbols:
   ^purpose-ref-gate-peer-paired.: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-ref-component-web-endpoint.': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   $purpose-ref-flow-voice-approval: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-ref-component-ns-model': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-chead-meta': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-model-switch-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-ns-hint': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-ns-cwd': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-launch': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
@@ -2024,6 +2030,7 @@ symbolsByComponentType:
     - '#gui-preview'
     - '#gui-voice-capture'
     - '#gui-table-talk'
+    - '#gui-settings'
     - '#gnomon-helper'
     - '#gnomon-helper-build'
     - '#gnomon-local'

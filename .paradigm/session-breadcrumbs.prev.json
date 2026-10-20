@@ -1,307 +1,307 @@
 {
-  "sessionId": "smvbnouf9",
-  "startTime": 1792196780805,
-  "lastActivity": 1792480001256,
+  "sessionId": "smvgchejg",
+  "startTime": 1792480288732,
+  "lastActivity": 1792525980411,
   "breadcrumbs": [
     {
-      "timestamp": 1792401559421,
+      "timestamp": 1792483405067,
       "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-10-19-008"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
     },
     {
-      "timestamp": 1792401616308,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-10-19-015"
-    },
-    {
-      "timestamp": 1792401648560,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-006"
-    },
-    {
-      "timestamp": 1792401796920,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Low findings from the Aegis review of gnomon/remaining-b (20\""
-    },
-    {
-      "timestamp": 1792401892833,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-10-19-006"
-    },
-    {
-      "timestamp": 1792422001946,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Law 3: human-device verbs form a separate tier outside the 1"
-    },
-    {
-      "timestamp": 1792422006416,
-      "action": "tool-call",
-      "tool": "paradigm_decision_search",
-      "summary": "decision_search: 2026-10-19"
-    },
-    {
-      "timestamp": 1792422049142,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"FRAMEWORK BUG: paradigm_decision record silently overwrites \""
-    },
-    {
-      "timestamp": 1792422878549,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Follow-ups from the Aegis review of A1+A2 (2026-10-19):\n(1) \""
-    },
-    {
-      "timestamp": 1792423377942,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-021"
-    },
-    {
-      "timestamp": 1792423648690,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-001"
-    },
-    {
-      "timestamp": 1792425791225,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Drain/resume: sessions may write ~/.claude/projects; turns c"
-    },
-    {
-      "timestamp": 1792426663150,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: daemon.stop{reason?} is a third human-device verb in the unr"
-    },
-    {
-      "timestamp": 1792429282564,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Old-kernel pending cards with no session expire after an upg"
-    },
-    {
-      "timestamp": 1792429392162,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Resume carries a permit over with a fresh expiry when it was"
-    },
-    {
-      "timestamp": 1792430451678,
+      "timestamp": 1792483799245,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
       "summary": "lore_record: milestone"
     },
     {
-      "timestamp": 1792430452481,
+      "timestamp": 1792483951893,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-014"
+      "tool": "paradigm_lore",
+      "summary": "lore: review"
     },
     {
-      "timestamp": 1792430452750,
+      "timestamp": 1792483960381,
       "action": "tool-call",
-      "tool": "paradigm_task_list",
-      "summary": "Listed tasks (status: open)"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
     },
     {
-      "timestamp": 1792430820534,
+      "timestamp": 1792484539612,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, GNOMON Move 1. feat/gnomon is at 9285fd74 and pushed, with C"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
     },
     {
-      "timestamp": 1792431140401,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Trace capture is a core per-project audit mode, switched on "
-    },
-    {
-      "timestamp": 1792431704997,
+      "timestamp": 1792484653464,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"`gnomon replay` (verifyLog) writes into an idle home. Openin\""
+      "summary": "Created task: \"Mod host follow-ups (Aegis, Ledger re-check):\n(1) A host-lev\""
     },
     {
-      "timestamp": 1792432465154,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Trace captures live in the Gnomon home per project, not in t"
-    },
-    {
-      "timestamp": 1792432465250,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"SECURITY, profile-wide class (Aegis H2, trace review 2026-10\""
-    },
-    {
-      "timestamp": 1792433497229,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Low findings from the Aegis re-check of trace capture (2026-\""
-    },
-    {
-      "timestamp": 1792436046266,
-      "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, GNOMON Move 1. feat/gnomon is at 7124288d, pushed, with CI g"
-    },
-    {
-      "timestamp": 1792438074434,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-021"
-    },
-    {
-      "timestamp": 1792440357020,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"The Gnomon kernel's status.sessions is hard-coded to {n: 0} \""
-    },
-    {
-      "timestamp": 1792441789214,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"FOUNDER REQUEST (2026-10-19): pull voice forward from Move 4\""
-    },
-    {
-      "timestamp": 1792444085681,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Run-mode follow-ups (Aegis, 2026-10-19):\n- M2: the repo key \""
-    },
-    {
-      "timestamp": 1792444184415,
+      "timestamp": 1792484654030,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
       "summary": "lore_record: milestone"
     },
     {
-      "timestamp": 1792444184688,
+      "timestamp": 1792484985896,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, GNOMON Move 1, founder dogfooding. feat/gnomon is at 9cfb82f"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
     },
     {
-      "timestamp": 1792444331378,
+      "timestamp": 1792485163128,
       "action": "tool-call",
-      "tool": "paradigm_session_recover",
-      "summary": "session_recover"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
     },
     {
-      "timestamp": 1792444407225,
+      "timestamp": 1792485422429,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-026"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
     },
     {
-      "timestamp": 1792444734282,
+      "timestamp": 1792485490881,
       "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Voice pulled forward: slice plan V0–V9 and founder rulings ("
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
     },
     {
-      "timestamp": 1792445719771,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Voice V0 rulings: incident/daemon-stop are hand-only; reserv"
-    },
-    {
-      "timestamp": 1792446476696,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Voice V7 prerequisites from the Aegis review of helper 1.6 (\""
-    },
-    {
-      "timestamp": 1792447645444,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Voice: record voice.enrol and voice.forget in the kernel log\""
-    },
-    {
-      "timestamp": 1792449082934,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Seamless re-pin and self-update: GUI flows, no terminal step"
-    },
-    {
-      "timestamp": 1792449932648,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Claude re-pin follow-ups (Aegis review of 97856ce1):\n- L2: v\""
-    },
-    {
-      "timestamp": 1792450581497,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-19-026"
-    },
-    {
-      "timestamp": 1792451078430,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Ambient voice: founder rulings and the V2/V3 plan"
-    },
-    {
-      "timestamp": 1792451830532,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Self-update follow-ups (Aegis re-check of 1ceae39b, all low)\""
-    },
-    {
-      "timestamp": 1792466848257,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"UX seam (founder hit it 2026-10-19): when the kernel restart\""
-    },
-    {
-      "timestamp": 1792467181455,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Voice GUI bugs (founder dogfood 2026-10-19):\n(1) The pill sh\""
-    },
-    {
-      "timestamp": 1792471106935,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Voice dictation: speech goes to the composer and auto-sends "
-    },
-    {
-      "timestamp": 1792473306972,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Dictation lows (Aegis re-check of 9a9a44e8):\n- L8: a detach \""
-    },
-    {
-      "timestamp": 1792474549287,
+      "timestamp": 1792485622630,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
       "summary": "lore_record: milestone"
     },
     {
-      "timestamp": 1792475097218,
+      "timestamp": 1792485863988,
       "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Table-talk voice replies, and fewer approval prompts under a"
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
     },
     {
-      "timestamp": 1792480000648,
+      "timestamp": 1792486097614,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792486696487,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Prefix rules L1 (Aegis round 3): absolute paths attached to \""
+      "summary": "Created task: \"F2–F6 founder release steps plus one Aegis low.\n(1) Re-sign \""
     },
     {
-      "timestamp": 1792480015585,
+      "timestamp": 1792486697593,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792486949297,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792487006434,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792487161472,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792487316579,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792487530374,
+      "action": "tool-call",
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-10-20-005"
+    },
+    {
+      "timestamp": 1792487531188,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792509076747,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792510014751,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792510170931,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792510312552,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: incident"
+    },
+    {
+      "timestamp": 1792510423398,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792511130785,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792511664342,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792511787147,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Ambient voice lands in the composer and needs confirmation t"
+    },
+    {
+      "timestamp": 1792512435196,
+      "action": "tool-call",
+      "tool": "paradigm_lore",
+      "summary": "lore: review"
+    },
+    {
+      "timestamp": 1792512444772,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792512642030,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792512903580,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Voice follow-ups (Aegis, review of the voice speaker fix; me\""
+    },
+    {
+      "timestamp": 1792512904187,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792513143630,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792518518801,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792518658449,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792518876350,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792518979597,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792520678316,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792521744222,
       "action": "tool-call",
       "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, GNOMON dogfood, voice + approvals. feat/gnomon at eaa8777b, "
+      "summary": "Checkpoint: phase=implementing, GNOMON marathon 2026-10-20 (overnight + founder test round)."
+    },
+    {
+      "timestamp": 1792522461492,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792522684799,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792522740583,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
+    },
+    {
+      "timestamp": 1792523597698,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792524086868,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=validating, GNOMON marathon 2026-10-20: ALL builders done and merged int"
+    },
+    {
+      "timestamp": 1792524087534,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792525980348,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: The Desk (mod playbooks) ratified, plus the context-meter ch"
+    },
+    {
+      "timestamp": 1792525987014,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
     }
   ],
   "symbolsModified": [],

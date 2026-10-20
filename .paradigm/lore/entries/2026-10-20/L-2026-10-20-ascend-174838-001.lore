@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-174838-001
+type: insight
+timestamp: '2026-10-20T17:48:38.869Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Idea: integration mods as agent-readable playbooks that the agent offers at the right moment (diverge → synthesize → commit)'
+summary: |-
+  Founder ideation, 2026-10-20. Mods like Constellation, Neurons, Atelier, Docs and Paradigm become agent-readable playbooks ("when/where to use or suggest it… akin to how mcp is to cli") plus optional local UI in the Gnomon desk, plus handoff contracts. The agent offers the right tool as the conversation moves:
+  - diverge: open a Constellation session to mind-dump;
+  - synthesize: results come back;
+  - commit: Neurons / Docs / Atelier design or produce / tasks.
+  Goal: "like you're working with someone next to you and not through the screen". Users can author and share their own mods for other repos and flows.
+  My framing:
+  - offer cards plus per-turn active-tool guidance;
+  - invitation chips, never approval keys, accepted by a trusted gesture;
+  - consented handoff in; results labelled as tool output;
+  - restraint plus learning from acceptance (the calibration moat);
+  - prior art: Anthropic Agent Skills (SKILL.md descriptions) are the closest analogue.
+  Arky is designing the protocol, runtime, security and sharing; Luna is designing the invitation and handoff UX.
+symbols_touched:
+  - '#mod-host'
+  - '#gnomon-mod-sdk'
+  - '#gui'
+tags:
+  - gnomon
+  - mods
+  - ideation
+  - arc:paradigm-8
+  - marathon-2026-10-20
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

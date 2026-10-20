@@ -1,0 +1,41 @@
+id: L-2026-10-20-ascend-182438-001
+type: human-note
+timestamp: '2026-10-20T18:24:38.374Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 4: founder ruled 12 of 14 Desk decisions'
+summary: |-
+  Decision map artifact: https://claude.ai/artifact/Y5Bf5DZx4TdEaUAFjaCuar.
+  Ruled:
+  - A1: yes to the <gnomon-desk> frozen per-turn note.
+  - A5: two-step accept in phase 1.
+  - A10: keep the names "the Desk", playbook, offer.
+  - A2: Constellation is a local MCP server.
+  - A3: Neurons on in every repo, mute per repo.
+  - A4: Claude Docs NOW (against my recommendation of later): phase 1 must investigate reaching it despite --strict-mcp-config.
+  - A7: unsigned third-party playbooks are structured fields only.
+  - A9: voice "yes" accepts only with a standing grant, and fills the composer.
+  - L1: click/↵ now, voice later via readback.
+  - L2: identity is glyph plus name.
+  - L3: worlds for first-party only "for now".
+  - L4: "not now" quiets that mod for the rest of the conversation.
+  Pending: A6 (kept/shown metric plus 15% kill line) and A8 (nevr.land registry). The founder wants to clarify those two first.
+symbols_touched:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#constellation-mod'
+  - '#neurons-mod'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-175619-001
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true
