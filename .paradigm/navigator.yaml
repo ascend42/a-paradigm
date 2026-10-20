@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-19T23:46:53.175Z'
+generated: '2026-10-20T01:46:01.001Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -266,6 +265,9 @@ symbols:
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
   '#purpose-component-workshop-mod': packages/gnomon-mods/
+  '#purpose-component-gnomon-voice': packages/gnomon/
+  '#purpose-component-gnomon-voice-io': packages/gnomon-voice/
+  '#purpose-component-gnomon-voice-io-build': packages/gnomon-voice/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
@@ -289,7 +291,6 @@ symbols:
   '#purpose-component-gnomon-ts-client': packages/gnomon/
   '#purpose-component-client-conformance': packages/gnomon/
   '#purpose-component-approval-broker': packages/gnomon/
-  '#purpose-component-gnomon-voice': packages/gnomon/
   '#purpose-component-budget-fuse': packages/gnomon/
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
@@ -987,6 +988,7 @@ symbols:
   $purpose-flow-$agent-health-tracking: packages/conductor/
   $purpose-flow-$task-archive: packages/conductor/
   $purpose-flow-$sentinel-investigation: packages/conductor/
+  $purpose-flow-voice-turn: packages/gnomon-voice/
   $purpose-flow-first-run: packages/gnomon/
   $purpose-flow-daemon-lifecycle: packages/gnomon/
   $purpose-flow-mcp-startup: packages/paradigm-mcp/
@@ -1379,7 +1381,6 @@ symbols:
   '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
-  $purpose-ref-flow-voice-turn: packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/

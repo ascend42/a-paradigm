@@ -1,7 +1,24 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-19T23:46:53.189Z",
+  "generatedAt": "2026-10-20T01:46:01.021Z",
   "flows": {
+    "$voice-turn": {
+      "id": "$voice-turn",
+      "description": "One spoken turn (spec §14.2). User side: AudioIO frames, then the PTT held span or a VAD segment, then the gates (attached, mode within the ceiling, outside every playback window plus 750 ms), then STT, then speaker verification, then log.append voice.turn.user{turnId, speakerId, speakerEnrolled, forwarded, mode, aec, aecTransport, t0, t1, text}, then session.send content [{text}] for enrolled speakers only. Unknown speakers are logged with no text. A refusal is shown and never retried. Agent side: log.read follow, then the speakable rows the kernel writes (voice.turn.agent{source: kernel-speakable, turnSeq, items}), then Kokoro one sentence at a time, then play, then voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: speech past the barge-in threshold (configured), or the talk key, stops playback and drops the rest of the reply.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#gnomon-voice",
+          "symbol": "#gnomon-voice"
+        },
+        {
+          "id": "step-2",
+          "action": "#gnomon-voice-io",
+          "symbol": "#gnomon-voice-io"
+        }
+      ],
+      "definedIn": "packages/gnomon-voice/.purpose"
+    },
     "$first-run": {
       "id": "$first-run",
       "description": "$first-run (spec §2.4 rule 9): unprovisioned Mac → `gnomon` (or `gnomon setup`) → #setup-preflight → leftover purge (presence per key) → name → #provisioner init (lock, key.list, key.create ×2, root sign 1 of 2 and 2 of 2 with shown digests, commit identity.json then registry row) → summary → #gnomon-up runUp in the same process (TTY launch URL, folder hint). Resume: an identity whose registry row is missing is completed as its own root-signed step (I10).",
@@ -824,6 +841,12 @@
     }
   },
   "symbolToFlows": {
+    "#gnomon-voice": [
+      "$voice-turn"
+    ],
+    "#gnomon-voice-io": [
+      "$voice-turn"
+    ],
     "#first-run": [
       "$first-run"
     ],

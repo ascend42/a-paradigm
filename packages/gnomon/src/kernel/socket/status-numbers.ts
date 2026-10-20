@@ -63,6 +63,11 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'voice.ambientIdleMs': 'limit', // configured idle auto-off of a conversation ceiling (V2a, spec §14.7 config)
   'voice.turns.n': 'gauge', // voice.turn.user rows of the current attachment
   'voice.idleEndFailures.n': 'gauge', // every failed kernel idle end since start (a counter; the timer retries)
+  // V2e (#gnomon-voice): the kernel-spawned voice client and the client's relayed enrolment progress
+  'voice.client.restarts': 'gauge', // crash restarts of the voice child since its last human start (a counter)
+  'voice.client.downloadMb': 'gauge', // total size of the model download in progress, whole MB
+  'voice.enrolment.phrase': 'ordinal', // the enrolment phrase being recorded (1-based)
+  'voice.enrolment.of': 'limit', // how many phrases an enrolment records
 });
 
 export interface StatusNumberFinding {

@@ -21,6 +21,8 @@ export interface BuildStamp {
   commit: string;
   distHash: string;
   guiBundleHash: string | null;
+  /** Aegis V2e M2: sha256 of the gnomon-voice dist/voice-client.manifest.json this build was made with */
+  voiceClientManifest?: string | null;
 }
 
 export const KERNEL_BUILD_FILE = 'kernel-build.json';
@@ -41,7 +43,9 @@ export function parseBuildStamp(raw: unknown): BuildStamp | null {
   if (typeof o.distHash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(o.distHash)) return null;
   const g = o.guiBundleHash ?? null;
   if (g !== null && (typeof g !== 'string' || !SHORT.test(g))) return null;
-  return { schemaVersion: 'gnomon-build:v1', version: o.version, commit: o.commit, distHash: o.distHash, guiBundleHash: g };
+  const v = o.voiceClientManifest;
+  if (v !== undefined && v !== null && (typeof v !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(v))) return null;
+  return { schemaVersion: 'gnomon-build:v1', version: o.version, commit: o.commit, distHash: o.distHash, guiBundleHash: g, ...(typeof v === 'string' ? { voiceClientManifest: v } : {}) };
 }
 
 /** Read a stamp file; null when absent, oversized or malformed (never throws). */

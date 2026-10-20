@@ -96,6 +96,47 @@ components:
       voice-armed pair (warn-ink on warn-bg), push-to-talk text the
       fixture's slate token; the pulse and meter stop under reduced motion.
       Tests: test/voice.test.ts; bundle pin in gnomon test/web-units.test.ts.
+    voice-app-lifecycle: >-
+      Voice slice V2e GUI (T-2026-10-19-026), SEAMLESS: no terminal step.
+      core/voice-client.ts (PURE) is the one adapter over
+      status.voice.clientConnected + status.voice.client {phase idle |
+      installing | downloading | starting | running | crashed | unavailable,
+      downloadMb {n, of}, devUnsigned, lastError, unavailable} and the
+      enrolled list (status.voice.enrolled; absent = unknown, never a false
+      nudge). Unknown phases fail toward not running.
+      With nothing attached the pill shows "Voice app not running" [Start
+      voice], "Setting up voice…", "Downloading voice models · N of M MB" with
+      a progress bar, "Starting…", "Voice crashed" [Restart], "Voice
+      unavailable · <why>", or (running, no enrolled voice) "Teach Gnomon your
+      voice first" [Teach]; an attached live mic keeps its V2d state. The pill
+      menu adds Start / Restart / Stop voice and "Teach Gnomon your voice…";
+      palette voice.client.start / voice.client.stop / voice.enrol (never
+      block-safe). Gestures are trusted-only log.append rows from a human
+      connection: request.voice.client{op: start | stop};
+      attach or Ambient while the app is idle or crashed sends start first in
+      the same gesture. A LOUD role=alert banner "Voice is running an unsigned
+      development build" shows when devUnsigned is true. The enrolment dialog:
+      name (kernel rule [a-z0-9][a-z0-9._-]{0,63}, normalized), plain consent
+      text, request.voice.enrol{name, consent} (answer {pending, cardId} =
+      the Touch ID card, A4), Confirm with Touch ID (approve allow) FIRST,
+      then the three phrases one at a time with a recording indicator folded
+      from status.voice.enrolment (A3: requested, ready, recording, recorded,
+      done, failed; reports stamped before the allow are ignored), re-read on
+      every status read plus a light 1 s poll only while the dialog waits;
+      closing while the card is pending denies it; enrolled voices with a
+      two-click [Forget] sending request.voice.forget{name} (no card).
+      Notices are status.voice.notice{text, code?, at}: a new `at` is a
+      quiet toast prefixed "Voice app: ", never a decision or a backlog
+      replay (30 s). Aegis L2-L4: the dev-unsigned banner is a persistent
+      alert (no timer); "done" shows only once status.voice.enrolled lists
+      the name; during the phrases the dialog says "Recording <name> — only
+      <name> should speak"; isEnrolCard requires the card to name the voice.
+      The kernel's client phases (stopped, preparing, installing,
+      downloading-models, starting, running, backoff, failed, unavailable)
+      map onto the pill's (downloadMb may be a total in MB). Kernel
+      replies voice.turn.agent{source: kernel-speakable, items} show the
+      speaker marker and swallow the voice app's next playback row (never
+      shown twice). Tests: test/voice-client.test.ts.
     journal-cursor: >-
       Slice A4 (P8-D98): the hello offers journal.cursor; core/client.ts
       followLog pages then follows with the store's {logId, seq} cursor
@@ -231,6 +272,8 @@ components:
     tests:
       - test/gui.test.ts
       - test/modes.test.ts
+      - test/voice.test.ts
+      - test/voice-client.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:

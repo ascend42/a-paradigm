@@ -206,8 +206,12 @@ describe('#gnomon-voice V1 voice.* shape (§4.10, §14.4)', () => {
   it('speakerId known or unknown-N, monotone turn ids, text ≤ 16 KiB, t0 ≤ t1; enrol/forget/share are not the voice child\'s', async () => {
     const r = rig();
     await r.attach();
-    expect(await refusal(r.userTurn({ speakerId: 'spk:abcdefgh/stranger' }))).toMatchObject({ code: 'BAD_REQUEST' });
-    expect(await refusal(r.userTurn({ speakerId: 'spk:unknown-3', speakerEnrolled: true }))).toMatchObject({ code: 'BAD_REQUEST' });
+    // V2e item 4: an enrolled claim the root-signed registry does not hold is an UNKNOWN speaker (hash-only, not forwardable)
+    expect(await r.userTurn({ speakerId: 'spk:abcdefgh/stranger' })).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
+    expect(await r.userTurn({ speakerId: 'spk:unknown-3', speakerEnrolled: true })).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ speakerEnrolled: false, forwarded: false });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    expect(await refusal(r.userTurn({ speakerId: 'not-a-speaker' }))).toMatchObject({ code: 'BAD_REQUEST' });
     expect(await refusal(r.userTurn({ text: 'x'.repeat(16 * 1024 + 1) }))).toMatchObject({ code: 'BAD_REQUEST' });
     expect(await refusal(r.userTurn({ t0: 5, t1: 4 }))).toMatchObject({ code: 'BAD_REQUEST' });
     await r.userTurn({ turnId: '50' });
@@ -222,9 +226,9 @@ describe('#gnomon-voice V1 voice.* shape (§4.10, §14.4)', () => {
 describe('#gnomon-voice V1 read projection (own session + voice.*, redacted)', () => {
   const ev = (kind: string, session: string | undefined, sensitivity = 'normal') =>
     ({ seq: 1, kind, session, sensitivity, payload: { text: 'x' }, principal: VOICE, id: 'ev:1', ts: '2026-10-19T00:00:00Z', hash: 'h' }) as never;
-  it('sees only the attached session rows (its voice.* included); never another session, never a secret row; sensitive voice turns are stubs', () => {
+  it('sees only the attached session voice.* rows (V2e: narrowed, never turn.* or session rows); never another session, never a secret row; sensitive voice turns are stubs', () => {
     const reader = { class: 'voice' as const, hsid: HSID };
-    expect(projectForReader(ev('session.open', HSID), reader)?.view).toBe('full');
+    expect(projectForReader(ev('session.open', HSID), reader)).toBeUndefined();
     expect(projectForReader(ev('session.open', 'hs:other'), reader)).toBeUndefined();
     expect(projectForReader(ev('voice.focus', HSID), reader)?.view).toBe('full');
     expect(projectForReader(ev('voice.focus', 'hs:other'), reader)).toBeUndefined(); // L3: another session's voice rows

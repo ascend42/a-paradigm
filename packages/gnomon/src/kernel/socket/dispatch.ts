@@ -310,6 +310,8 @@ export interface DispatcherOptions {
   requests?: HumanRequestPort;
   /** #gnomon-voice (voice slice V1, talk-only). Absent ⇒ every voice cell keeps its refusal. */
   voice?: VoicePort;
+  /** V2e: the kernel-spawned voice client (request.voice.client from the human). */
+  voiceClient?: VoiceClientPort;
   /** The method registry (default KERNEL_METHODS: the 12 verbs + 2 relays). Test seam for the fail-closed check. */
   methods?: MethodRegistry;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
@@ -320,6 +322,33 @@ export interface DispatcherOptions {
 export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'>;
 
 /** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
+/** V2e: the kernel-spawned voice client, started and stopped only by the human (request.voice.client{op}). */
+export interface VoiceClientPort {
+  start(): Promise<unknown>;
+  stop(): Promise<unknown>;
+  connectionClosed(connId: string): void;
+  /**
+   * V2e: GUI enrolment (request.voice.enrol{name, consent}): raise a fresh-presence card whose allow effect writes
+   * the root-signed enrolment row. Resolves with the card. Absent ⇒ the request is refused like any unserved kind.
+   */
+  enrol?(asker: { connId: string; principal: string }, payload: { name: string; consent: string }): Promise<unknown>;
+  /** V2e: request.voice.forget{name} (human only, no card: a forget narrows). */
+  forget?(payload: { name: string }): Promise<unknown>;
+  /** V2e: request.voice.report{enrolment?, notice?} (voice principal only; relayed in status.voice, never logged). */
+  report?(payload: unknown): unknown;
+}
+
+/** V2e: the human's GUI enrolment request (dispatcher-only like request.voice.client; never written as a row). */
+export const VOICE_ENROL_REQUEST = 'request.voice.enrol' as const;
+export const VOICE_FORGET_REQUEST = 'request.voice.forget' as const;
+export const VOICE_REPORT_REQUEST = 'request.voice.report' as const;
+
+/**
+ * V2e: the human's start/stop of the voice app rides the §5 `request.*` append exception like request.mode.set. It
+ * is served here and never written as a row (it is not in the §9.1 registry, so no contract id moves).
+ */
+export const VOICE_CLIENT_REQUEST = 'request.voice.client' as const;
+
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
@@ -371,6 +400,13 @@ export interface KernelDispatcher {
   callAs(principal: string, verb: string, params: Record<string, unknown>): Promise<unknown>;
   onConnect(ctx: ConnectionContext): void;
   onDisconnect(ctx: ConnectionContext): void;
+  /**
+   * V2e (#gnomon-voice, Aegis V2c must-do 1): authenticate an ADOPTED connection (SocketServerHandle.adopt) as the
+   * voice principal without hello/auth. TRUSTED like callAs: called only by the daemon for the socketpair end of
+   * the voice child IT spawned, so the child holds no key, no socket path and no kernel pin. The connection is
+   * `credential:'device'`, principalKind `voice` (the matrix's voice column), logged socket.auth.ok{via:'spawn'}.
+   */
+  adoptPreauthenticated(ctx: ConnectionContext, who: { principal: string; client: { name: string; version: string } }): Promise<void>;
   /** Authenticated connections (status `clients`). */
   clients(): ConnAuthState[];
   /** Connections holding timers (tests: nothing outlives its connection). */
@@ -434,7 +470,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
-      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: o.voice.status() } : {}),
+      // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
+      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...o.voice.status(), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -614,6 +651,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           const grant = readerFor(s, voiceScope()); // explicit per-class policy: never the generic 'full' view
           const params = parseLogReadParams(frame.params, { features: s.features ?? [], logId: reads.log.logId });
           if (params.follow && !Object.hasOwn(frame, 'id')) throw new RpcRefusal('BAD_REQUEST', 'follow-needs-id', 'a subscription is opened by a request with an id (its reply names the subscription)');
+          // V2e: a voice follow with no `since` starts at the released head (voice speaks live rows only; never a
+          // backlog-too-large replay from seq 0). A cursor `since` still resumes as for every class.
+          const fp = frame.params as Record<string, unknown> | null;
+          if (params.follow && cls === 'voice' && (fp === null || typeof fp !== 'object' || fp.since === undefined)) params.since = reads.log.releasedHead();
           return params.follow ? reads.hub.subscribe(ctx, grant, params) : readOnePage(reads.log, grant, params);
         }
         const r = resolveRef(frame.params, reads.log, () => readerFor(s, voiceScope()).reader);
@@ -717,6 +758,48 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // V2e: the human starts / stops the kernel-spawned voice app (never the voice principal, never an agent)
+      if (pa?.kind === VOICE_CLIENT_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        const op = (pa.payload as { op?: unknown } | null | undefined)?.op;
+        if (extra.length || (op !== 'start' && op !== 'stop') || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'}}`);
+        return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };
+      }
+      if (pa?.kind === VOICE_ENROL_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.enrol && s.principal) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        const ep = pa.payload as { name?: unknown; consent?: unknown } | null | undefined;
+        const shape = `log.append{kind:'${VOICE_ENROL_REQUEST}', payload:{name, consent}}`;
+        if (extra.length || !ep || typeof ep !== 'object' || Object.keys(ep).some((k) => k !== 'name' && k !== 'consent') || typeof ep.name !== 'string' || typeof ep.consent !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', shape);
+        try {
+          return await o.voiceClient.enrol({ connId: s.connId, principal: s.principal }, { name: ep.name, consent: ep.consent }); // {pending, cardId}
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
+      // V2e: forget narrows ⇒ human only, no card (spec D62); the root-signed forget row is written at once
+      if (pa?.kind === VOICE_FORGET_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.forget) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        const fp = pa.payload as { name?: unknown } | null | undefined;
+        if (extra.length || !fp || typeof fp !== 'object' || Object.keys(fp).some((k) => k !== 'name') || typeof fp.name !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_FORGET_REQUEST}', payload:{name}}`);
+        try {
+          return await o.voiceClient.forget({ name: fp.name });
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
+      // V2e: the voice client's enrolment progress and notices, relayed in status.voice (never a row)
+      if (pa?.kind === VOICE_REPORT_REQUEST && cls === 'voice' && s.credential !== 'read-token' && o.voiceClient?.report) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?}}`);
+        try {
+          return o.voiceClient.report(pa.payload);
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
       // voice slice V1: the human's attach / detach gesture, and the voice principal's voice.* rows
       const vkind = typeof pa?.kind === 'string' ? pa.kind : '';
       if (o.voice && cls === 'human' && (vkind === 'voice.session.start' || vkind === 'voice.session.end') && (s.credential === 'gui' || s.credential === 'device')) {
@@ -784,10 +867,32 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         setTimeout(expire('pre-auth-timeout', () => s.phase !== 'authenticated'), preAuthMs).unref(),
       ]);
     },
+    adoptPreauthenticated: async (ctx, who) => {
+      if (!/^p:[0-9a-z]{8}\/voice$/.test(who.principal)) throw new TypeError('adoptPreauthenticated is for the spawned voice principal only');
+      const s = stateOf(ctx.connId);
+      if (s.phase !== 'new') throw new TypeError('adoptPreauthenticated: the connection already spoke');
+      clearTimers(ctx.connId);
+      s.phase = 'authenticated';
+      s.principal = who.principal;
+      s.principalKind = 'voice';
+      s.credential = 'device';
+      s.clientApi = 'gnomon-rpc:v1';
+      s.features = [...SERVER_FEATURES];
+      s.client = { name: who.client.name, version: who.client.version, surface: 'voice' } as ConnAuthState['client'];
+      ctx.authenticated();
+      try {
+        await o.log('socket.auth.ok', { principal: who.principal, principalKind: 'voice', credential: 'device', via: 'spawn', surface: 'voice' }, { connId: s.connId });
+      } catch {
+        s.phase = 'closed'; // never an authenticated connection the log does not hold
+        ctx.close();
+        throw new Error('the kernel log refused the voice auth row');
+      }
+    },
     onDisconnect: (ctx) => {
       o.reads?.hub.disconnect(ctx.connId);
       o.approvals?.connectionClosed(ctx.connId);
       o.voice?.connectionClosed(ctx.connId);
+      o.voiceClient?.connectionClosed(ctx.connId);
       clearTimers(ctx.connId);
       conns.delete(ctx.connId);
     },

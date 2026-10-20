@@ -136,6 +136,11 @@ import { UpdateWatch } from './update-watch.js';
 import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
 import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
+import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
+import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
+import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
+import { KernelSpeakable } from '../voice/speakable.js';
+import { spawn as spawnChild } from 'node:child_process';
 
 /**
  * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
@@ -207,7 +212,14 @@ export interface DaemonOptions {
   /** #web-endpoint timing seams (defaults: 2 min linger, 5 s auth deadline). */
   web?: { lingerMs?: number; authDeadlineMs?: number; /** the successor's `--prefer-port`: the web endpoint starts at boot on it (TD-2026-10-19-063) */ preferPort?: number; /** Aegis H: the predecessor's inherited listening socket fd */ inheritFd?: number };
   /** #gnomon-voice V2a config: voice.ambientIdleMs — a conversation ceiling's idle auto-off (clamped, never unbounded) */
-  voice?: { ambientIdleMs?: number };
+  voice?: {
+    ambientIdleMs?: number;
+    /**
+     * V2e: the kernel-spawned voice client. `entry` = gnomon-voice dist/cli.js (null ⇒ unavailable; default resolved
+     * from the workspace on darwin only). `prepare`/`spawn` are seams (tests: a fake voice-io + stub engines).
+     */
+    client?: { entry?: string | null; prepare?: VoiceChildOptions['prepare']; spawn?: VoiceChildOptions['spawn']; devUnsigned?: boolean; backoffMinMs?: number };
+  };
   /** #scheduler: raw `automation:v1` records (validated; refused ones are logged `schedule.dropped`). None by default (law 5). */
   automations?: readonly unknown[];
   /** #scheduler clock seam (default Date.now). */
@@ -293,6 +305,8 @@ export interface DaemonHandle {
   readonly dispatcher: Pick<KernelDispatcher, 'callAs' | 'clients'>;
   /** #scheduler (log-derived timers, automations). */
   readonly scheduler: Scheduler;
+  /** V2e (#gnomon-voice): the kernel-spawned voice client (tests; the human drives it with request.voice.client). */
+  readonly voiceClient: Pick<VoiceChildSupervisor, 'start' | 'stop' | 'status' | 'connId'>;
   /** The start-up orphan sweep's result (G-DMN-04). */
   readonly orphanSweep: { orphans: number; stopped: number };
   /** §2.4 rule 11 (T-2026-10-19-014 B2): the resume of the sessions an upgrade drained, and the old pending cards retired. */
@@ -574,6 +588,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           modPickup.stop();
         } catch {
           /* shutdown before the pickup existed */
+        }
+        try {
+          await voiceChild.close(); // V2e: the voice child dies with the kernel and never carries over (TD-908)
+        } catch {
+          /* shutdown before the voice child existed */
         }
         await mods.stopAll(reason).catch(() => undefined); // first: no mod restart can race the sweep
         liveChildren = await children.stopAll(reason).catch(() => children.live());
@@ -944,6 +963,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         return { seq: r.seq };
       },
   });
+  const voiceReports = new VoiceReports();
   // voice slice V1 (#gnomon-voice, talk-only): attachment by human gesture, forwarding guards, voice.* shape checks.
   // Voice rows are userland (voice.* is the voice principal's grant, A23-2): appended `as: 'userland'` under the
   // appending principal, kernel-key attested like modns rows. Enrolment is read from the root-signed file each check.
@@ -960,8 +980,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       return { seq: r.seq, hash: r.hash, id: r.event.id };
     },
     enrolled: () => readEnrolled(home, authority),
-    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under
-    onAttachmentChange: () => void hub.endReaderClass('voice'),
+    // Aegis M3: a voice follow subscription never outlives the attachment it was opened under; V2e: attaching
+    // (or re-attaching at a wider ceiling) auto-starts the kernel-spawned voice client when it is not running
+    onAttachmentChange: () => {
+      void hub.endReaderClass('voice');
+      if (voice.attachedHsid() !== null && !voiceChild.status().clientConnected) void voiceChild.start();
+    },
+    clientStatus: () => voiceChild.status(),
+    reportStatus: () => voiceReports.status(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
@@ -986,8 +1012,48 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // Aegis V2a M2: a failed idle end is counted in status.voice.idleEndFailures{n} and the timer re-armed (no new log
     // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
+  // TD-2026-10-19-063: the build stamp this kernel LOADED, read once at boot (Aegis V2e M2: it also pins the voice
+  // client manifest, so it is read before the voice client is verified and copied below)
+  const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
+  const buildStamp = stampPath ? readBuildStamp(stampPath) : null;
+  // V2e (#gnomon-voice): the voice client is the kernel's own supervised child, linked over an inherited socketpair
+  const voiceEntry = opts.voice?.client?.entry !== undefined ? { entry: opts.voice.client.entry } : resolveVoiceClientEntry();
+  const voiceChild: VoiceChildSupervisor = new VoiceChildSupervisor({
+    home,
+    clientEntry: voiceEntry.entry,
+    ...('reason' in voiceEntry && voiceEntry.reason ? { unavailableReason: voiceEntry.reason } : {}),
+    spawn: opts.voice?.client?.spawn ?? ((cmd, args, o) => spawnChild(cmd, args, o)),
+    // Aegis M2: the client runs from the kernel's pinned copy in <home>/bin/voice/client, never from the workspace
+    prepare: opts.voice?.client?.prepare ?? (voiceEntry.entry ? createVoicePrepare({ home, entry: voiceEntry.entry, devUnsigned: opts.voice?.client?.devUnsigned === true, expectedManifest: buildStamp?.voiceClientManifest ?? null }) : async () => Promise.reject(new Error('the voice client is not installed'))),
+    ...(opts.voice?.client?.backoffMinMs !== undefined ? { backoffMinMs: opts.voice.client.backoffMinMs } : {}),
+    attach: async (sock) => {
+      if (!server) throw new Error('the kernel socket is not up yet');
+      if (authority.ns === null) throw new Error('this home has no root identity yet (gnomon setup)');
+      const ctx = server.adopt(sock);
+      await dispatcher.adoptPreauthenticated(ctx, { principal: `p:${authority.ns}/voice`, client: { name: '@a-company/gnomon-voice', version: 'spawned' } });
+      return ctx.connId;
+    },
+  });
+  // V2e item 4 + GUI alignment: GUI enrolment (fresh-presence card → the root-signed row), forget (no card)
+  const voiceEnrol = new VoiceEnrolCards({ home, root: authority, broker: broker as never, onEnrolled: (name) => voiceReports.requested(name) });
+  // V2e item 3: the kernel's speakable reply row — watch the ATTACHED session's turn rows, append
+  // voice.turn.agent{source:'kernel-speakable'} as the kernel principal (userland kind, kernel-attested)
+  const speakable = new KernelSpeakable(() => voice.attachedHsid());
+  log.onCommit((e) => {
+    const row = speakable.observe(e);
+    if (!row) return;
+    setImmediate(() => void log.append({ kind: row.kind, principal: kernelPrincipal, payload: { ...row.payload }, session: row.session, as: 'userland' }).catch(() => undefined));
+  });
   const dispatcherCommon = {
     voice,
+    voiceClient: {
+      start: () => voiceChild.start(),
+      stop: () => voiceChild.stop(),
+      connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
+      enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
+      forget: (p: { name: string }) => voiceEnrol.forget(p),
+      report: (p: unknown) => voiceReports.report(p),
+    },
     mods: createModRelayPort(mods),
     sessions,
     approvals,
@@ -1132,8 +1198,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     throw err;
   }
   // TD-2026-10-19-063: record what this kernel LOADED (0600) for the launcher, and watch the on-disk stamp
-  const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
-  const buildStamp = stampPath ? readBuildStamp(stampPath) : null;
   try {
     writeKernelBuild(home, { stamp: buildStamp, pid: pidfile.pid, startedAt: pidfile.startedAt });
   } catch {
@@ -1178,6 +1242,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     mods,
     modPickup,
     modKernelCall,
+    voiceClient: voiceChild,
     dispatcher,
     scheduler,
     orphanSweep,

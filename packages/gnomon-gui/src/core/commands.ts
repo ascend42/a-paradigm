@@ -53,6 +53,10 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'voice.off', title: 'Voice: off — close the mic' },
   { id: 'voice.ptt', title: 'Voice: push-to-talk — hold the hotkey to talk', keys: 'hold ⌃⌥Space (voice app)' },
   { id: 'voice.ambient', title: 'Voice: ambient — the mic stays open (Touch ID the first time)' },
+  // V2e (T-2026-10-19-026): the voice app's lifecycle and enrolment, no terminal step
+  { id: 'voice.client.start', title: 'Voice: start the voice app' },
+  { id: 'voice.client.stop', title: 'Voice: stop the voice app' },
+  { id: 'voice.enrol', title: 'Voice: teach Gnomon your voice' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
 ]);

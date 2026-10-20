@@ -121,6 +121,7 @@ describe('run modes: the page wiring (source read; the browser smoke drives the 
   });
   it('the control is repainted from status on a mode row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
-    expect(app).not.toMatch(/setInterval\(|setTimeout\([^)]*refreshStatus/);
+    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll)
+    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(|setTimeout\([^)]*refreshStatus/);
   });
 });

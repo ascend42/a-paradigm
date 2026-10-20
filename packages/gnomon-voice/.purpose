@@ -1,0 +1,141 @@
+version: "2.0"
+description: >-
+  Gnomon voice (docs/specs/gnomon.md §14; the spec node #gnomon-voice is the
+  kernel-supervised voice child and is not built yet). This directory holds
+  its first native piece, the darwin audio I/O binary (TD-2026-10-19-298,
+  slice V2b, T-2026-10-19-026): io-darwin/ is a SwiftPM package (swift-tools
+  5.9, macOS 14), scripts/build-voice-io.mjs bundles and signs it as
+  GnomonVoiceIO.app (bin/, gitignored; checksums.json after a signed build).
+  PROBES.md holds the founder's P1 (TCC attribution) and P7 (AEC leak) steps.
+  macOS only: CI builds and tests it on the macOS runner of the native job,
+  never on Windows or Linux.
+
+components:
+  gnomon-voice:
+    description: >-
+      The voice client core in Node, @a-company/gnomon-voice (spec §14, slice
+      V2c, TD-2026-10-19-298, T-2026-10-19-026). V2e: the kernel spawns it
+      as `gnomon-voice run --fd 3 --home H --io P`; fd 3 is a socketpair
+      already authenticated as the talk-only voice principal p:<ns>/voice
+      (FdRpc speaks gnomon-rpc:v1 NDJSON over it; no hello, no key here), and
+      the run ends when stdin ends or the link closes. It reads the
+      attachment and the human's ceiling from status.voice, and runs modes
+      OFF, PTT and AMBIENT (it may narrow the mode locally, never widen it).
+      It speaks only the kernel's voice.turn.agent{source:'kernel-speakable'}
+      rows (never turn.event, never its own playback rows) and logs its
+      playback windows as voice.turn.agent{t0, t1, textPlanned, textSpoken}.
+      Ctrl-Alt-M toggles the mic locally; Ctrl-Alt-A switches ambient and
+      push-to-talk within the ceiling, and above it only relays a notice
+      for the GUI (request.voice.report{notice: {text, code}}, never a log
+      row). The principal comes from status.voice.principal (no flag).
+      Kernel-decided enrolment (src/enrol-watch.ts): while running it polls
+      status (1.5 s); on status.voice.enrolment phase 'requested' it pauses
+      the voice loop, turns the mic on for the recording if it was off,
+      records the three ENROL_PHRASES (shared with the GUI dialog; the report
+      carries no phrase text), stores the print (0700 dir, 0600 file) and
+      reports ready, recording, recorded (phrase 0-based, of 3), then done,
+      or failed with the reason (mic off and not turnable on, no speech).
+      Build: tsup (splitting off), then scripts/voice-manifest.mjs writes
+      dist/voice-client.manifest.json (sha256 of every dist file and
+      voice-models.manifest.json); the gnomon build stamp pins its hash.
+      Aegis M1: SpawnedAudioIO spawns gnomon-voice-io with IO_CHILD_STDIO
+      (pipe, pipe, inherit, ignore): fd 3, the kernel link, never reaches the
+      io binary (a test falsifies it against a real socket on fd 3).
+      Engines come
+      from sherpa-onnx-node 1.13.8, an optional native dependency: Silero VAD,
+      Parakeet TDT 0.6B v2 int8, Kokoro-82M int8 en and 3D-Speaker CAM++
+      speaker embeddings. Every engine is injected through the AudioIO,
+      VadEngine, SttEngine, TtsEngine, SpeakerEngine and KernelLink
+      interfaces. SpawnedAudioIO speaks gnomon-voice-io:v1 to the V2b binary.
+      It refuses to capture unless the binary says disclaimed === true
+      (fail closed), drops frames after mic off, spawns the binary with an
+      allow-list env, and takes the aec claim and the transport from the
+      route event. FakeAudioIO plays WAV fixtures. voice-models.manifest.json
+      pins each model's URL, sha256 and size, and the sha256 and size of
+      every archive member. `models fetch [--json] [--from <dir>]` verifies
+      every download into ~/.gnomon/voice/models (0700), extracts with
+      tar --no-same-owner, refuses symlinks, non-regular and unpinned
+      members, and every model file is re-hashed against the manifest
+      before it is loaded. Prints are embeddings only, stored in voice/prints/<name>/.
+      Audio is never written to disk (G-VOX-05).
+    path: src/
+    type: module
+    tags: [gnomon, voice, client, paradigm-8, v2c]
+    flows: [$voice-turn]
+  gnomon-voice-io:
+    description: >-
+      The voice child's audio I/O, mic only (no keychain group, no network,
+      writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same
+      framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON
+      (stdin commands, stdout replies and events), 0x02 capture (stdout:
+      hostTimeNs:u64le sampleRate:u32le s16le, 16 kHz mono after voice
+      processing), 0x03 playback (stdin: sampleRate:u32le s16le mono TTS,
+      8-48 kHz). Commands info, mic.on, mic.off, play.stop (barge-in flush),
+      play.end, route.get, hotkeys.set {bindings}, quit; each gets one reply
+      {type:'reply', id, op, ok}. Events (tUs monotonic µs, the capture
+      clock): ready, mic, route {route, aec: vpio|headphones|none}, level
+      {rmsDBFS, peakDBFS} ~15 Hz, playback.start {audibleAtUs},
+      playback.end {reason: drained|stopped|mic-switch|route-change|exit},
+      hotkey {action: talk|mic-toggle|mode-toggle, phase: down|up}, engine,
+      error, exit. Mic on = one AVAudioEngine with
+      inputNode.setVoiceProcessingEnabled(true) (VoiceProcessingIO AEC) and
+      a player node in the same engine, so TTS is the echo reference; mic
+      off stops and releases that engine (no orange dot) and TTS plays via an
+      output-only engine that never touches inputNode. Route from CoreAudio
+      (default output device transport + built-in data source, listeners
+      on both). Hotkeys via Carbon RegisterEventHotKey, press and release,
+      no Input Monitoring; defaults ctrl+alt+space (talk), ctrl+alt+m,
+      ctrl+alt+a; reported only, the controller acts. Mic modes re-spawn
+      with TCC responsibility disclaimed so the Microphone grant names
+      GnomonVoiceIO (probe P1; --no-disclaim is the control). Aegis V2b
+      fixes: MicGate (a mic.off during an open TCC prompt wins, generation
+      counter; mic.on refused not-disclaimed unless disclaimed or
+      --no-disclaim), DisclaimToken (disclaimed only when argv
+      --disclaim-token equals the env token; a stray env var is ignored),
+      ParentWatch (kqueue EVFILT_PROC NOTE_EXIT on the re-spawning and the
+      original parent: the child exits with either), re-spawn path from
+      _NSGetExecutablePath + realpath only, a tap generation so no capture or
+      level frame follows mic:false, a bounded stdout queue (one writer
+      thread, no lock held in write(2), capture frames dropped first with a
+      capture.dropped event), transport in mic and route events. --version,
+      --selftest (1 s smoke), --probe-aec <file> (P7); stdin EOF exits 0.
+      VoiceIOCore (frame codec, command parser, hotkey config, level and
+      route math, mic gate, disclaim token, parent watch) is pure or
+      Darwin-only and covered by swift test (37 XCTests).
+    path: io-darwin/
+    type: module
+    tags: [gnomon, voice, native, swift, paradigm-8, audio, v2b]
+  gnomon-voice-io-build:
+    description: >-
+      scripts/build-voice-io.mjs: swift build -c release → GnomonVoiceIO.app
+      (bundle id gnomon.voice-io, LSUIElement, NSMicrophoneUsageDescription
+      "Gnomon voice listens only while the mic is on."), codesign
+      --options runtime --timestamp with the one Developer ID Application
+      identity of team SW4BMQ8PNL (looked up via the helper's signing.mjs),
+      exactly one entitlement com.apple.security.device.audio-input, no
+      provisioning profile and no keychain group; verifies --strict, the
+      VOICE_IO_REQUIREMENT, the entitlement set and the runtime flag; sha256
+      into checksums.json (advisory). --unsigned for CI. No notarization
+      (founder-run).
+    path: scripts/
+    type: module
+    tags: [gnomon, voice, signing, build, v2b]
+
+flows:
+  voice-turn:
+    description: >-
+      One spoken turn (spec §14.2). User side: AudioIO frames, then the PTT
+      held span or a VAD segment, then the gates (attached, mode within the
+      ceiling, outside every playback window plus 750 ms), then STT, then
+      speaker verification, then log.append voice.turn.user{turnId,
+      speakerId, speakerEnrolled, forwarded, mode, aec, aecTransport, t0,
+      t1, text}, then session.send content [{text}] for enrolled speakers
+      only. Unknown speakers are logged with no text. A refusal is shown
+      and never retried. Agent side: log.read follow, then the speakable
+      rows the kernel writes (voice.turn.agent{source: kernel-speakable,
+      turnSeq, items}), then Kokoro one sentence at a time, then play, then
+      voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: speech
+      past the barge-in threshold (configured), or the talk key, stops
+      playback and drops the rest of the reply.
+    steps: ["#gnomon-voice", "#gnomon-voice-io"]
+

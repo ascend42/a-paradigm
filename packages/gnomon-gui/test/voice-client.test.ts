@@ -1,0 +1,303 @@
+/**
+ * #gui voice app lifecycle, dev banner, enrolment and notices (V2e GUI, T-2026-10-19-026): the pure adapter
+ * (core/voice-client.ts), the store's folding of enrolment / notice / kernel-speakable rows, the palette, and the
+ * page wiring read from the source (the app is browser glue; its decisions are the pure functions tested here).
+ */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
+import { chatItems, GuiStore, type Row } from '../src/core/store.js';
+import { canAttach, pillOf, voiceStatusOf } from '../src/core/voice.js';
+import {
+  clientMenuEntries,
+  clientOf,
+  clientPillOf,
+  clientRequest,
+  consentText,
+  devBannerOf,
+  enrolAllowed,
+  enrolLine,
+  ENROL_POLL_MS,
+  enrolRequest,
+  enrolSent,
+  enrolStart,
+  ENROL_PHRASES,
+  forgetRequest,
+  isClientRow,
+  isEnrolCard,
+  needsStart,
+  noticeOf,
+  reduceEnrolStatus,
+  toastFresh,
+} from '../src/core/voice-client.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const APP = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+const HTML = readFileSync(path.join(ROOT, 'static/index.html'), 'utf8');
+const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+const human = (voice: unknown) => ({ principalKind: 'human', voice });
+const voiceConn = (voice: unknown) => ({ principalKind: 'voice', voice });
+const st = (client: Record<string, unknown> | null, more: Record<string, unknown> = {}) => human({ attached: false, hsid: null, ceiling: null, clientConnected: client?.phase === 'running', ...(client ? { client } : {}), ...more });
+const pill = (status: unknown) => clientPillOf(clientOf(status), voiceStatusOf(status).state !== 'off', canAttach(status));
+
+describe('the pill shows every voice-app phase while nothing is attached', () => {
+  it('idle: "Voice app not running" with [Start voice]', () => {
+    expect(pill(st({ phase: 'idle' }))).toMatchObject({ label: 'Voice app not running', action: 'start', actionLabel: 'Start voice', progress: null });
+    // the kernel's connection word alone (no client block) reads the same
+    expect(pill(human({ attached: null, clientConnected: false }))).toMatchObject({ label: 'Voice app not running', action: 'start' });
+  });
+  it('installing: "Setting up voice…", no action', () => {
+    expect(pill(st({ phase: 'installing' }))).toMatchObject({ label: 'Setting up voice…', action: null });
+  });
+  it('downloading: "Downloading voice models · N of M MB" with a progress fraction', () => {
+    const p = pill(st({ phase: 'downloading', downloadMb: { n: 120, of: 480 } }));
+    expect(p).toMatchObject({ label: 'Downloading voice models · 120 of 480 MB', action: null });
+    expect(p.progress).toBeCloseTo(0.25);
+    expect(pill(st({ phase: 'downloading', downloadMb: { n: 12.34, of: 48 } })).label).toBe('Downloading voice models · 12.3 of 48 MB');
+    expect(pill(st({ phase: 'downloading' }))).toMatchObject({ label: 'Downloading voice models…', progress: null });
+    expect(pill(st({ phase: 'downloading', downloadMb: { n: 900, of: 480 } })).progress).toBe(1); // clamped
+  });
+  it('starting: "Starting…"', () => {
+    expect(pill(st({ phase: 'starting' }))).toMatchObject({ label: 'Starting…', action: null });
+  });
+  it('crashed: "Voice crashed" with [Restart] and the last error in the title', () => {
+    expect(pill(st({ phase: 'crashed', lastError: 'exit 6' }))).toMatchObject({ label: 'Voice crashed', action: 'restart', actionLabel: 'Restart', title: expect.stringContaining('exit 6') });
+  });
+  it('unavailable: names why, offers nothing', () => {
+    expect(pill(st({ phase: 'unavailable', unavailable: 'needs Apple silicon' }))).toMatchObject({ label: 'Voice unavailable · needs Apple silicon', action: null });
+  });
+  it('running with no enrolled voice nudges "Teach Gnomon your voice first"; enrolled or unknown list: the V2d pill stands', () => {
+    expect(pill(st({ phase: 'running' }, { enrolled: [] }))).toMatchObject({ label: 'Teach Gnomon your voice first', action: 'enrol' });
+    expect(pill(st({ phase: 'running' }, { enrolled: ['spk:m/matt'] })).label).toBeNull();
+    expect(pill(st({ phase: 'running' })).label).toBeNull(); // A1: no list ⇒ never a false nudge
+  });
+  it('an attached live mic always keeps its louder V2d state (never under-reports)', () => {
+    const s = human({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', clientConnected: false, client: { phase: 'crashed' } });
+    expect(pill(s).label).toBeNull();
+    expect(pillOf(voiceStatusOf(s)).label).toContain('Listening');
+  });
+  it('unknown phases and stale claims fail toward "not running"', () => {
+    expect(clientOf(st({ phase: 'warp-drive' })).phase).toBe('idle');
+    // the kernel's own phase words (voice-child.ts VoiceChildPhase)
+    const k = (phase: string, more: Record<string, unknown> = {}) => clientOf(human({ clientConnected: false, client: { phase, ...more } }));
+    expect(['stopped', 'preparing', 'installing', 'downloading-models', 'starting', 'backoff', 'failed'].map((p) => k(p).phase)).toEqual(['idle', 'installing', 'installing', 'downloading', 'starting', 'crashed', 'crashed']);
+    expect(k('unavailable', { unavailable: 'the installed voice client changed since the kernel copied it' })).toMatchObject({ phase: 'unavailable', unavailable: expect.stringMatching(/changed/) });
+    expect(k('failed', { unavailable: 'voice runs on macOS only for now' }).phase).toBe('unavailable');
+    expect(clientPillOf(k('downloading-models', { downloadMb: 412 }), false, true).label).toBe('Downloading voice models (412 MB)…');
+    expect(clientOf(human({ clientConnected: false, client: { phase: 'running' } })).phase).toBe('idle');
+    expect(clientOf(human({ clientConnected: true, client: { phase: 'idle' } })).phase).toBe('running');
+    expect(clientOf(human({ attached: null })).known).toBe(false); // an older kernel: no lifecycle UI at all
+    expect(pill(human({ attached: null })).label).toBeNull();
+  });
+});
+
+describe('start / stop / auto-start send the right appends', () => {
+  it('request.voice.client{op}', () => {
+    expect(clientRequest('start')).toEqual({ kind: 'request.voice.client', payload: { op: 'start' } });
+    expect(clientRequest('stop')).toEqual({ kind: 'request.voice.client', payload: { op: 'stop' } });
+  });
+  it('the pill menu offers Stop while the app is up (or coming up), Start/Restart otherwise, and the enrol entry', () => {
+    const ids = (s: unknown) => clientMenuEntries(clientOf(s), canAttach(s)).map((e) => `${e.id}:${e.label}`);
+    expect(ids(st({ phase: 'running' }))).toEqual(['voice.client.stop:Stop voice', 'voice.enrol:Teach Gnomon your voice…']);
+    expect(ids(st({ phase: 'downloading' }))[0]).toBe('voice.client.stop:Stop voice');
+    expect(ids(st({ phase: 'idle' }))[0]).toBe('voice.client.start:Start voice');
+    expect(ids(st({ phase: 'crashed' }))[0]).toBe('voice.client.start:Restart voice');
+    expect(ids(st({ phase: 'unavailable' }))).toEqual(['voice.enrol:Teach Gnomon your voice…']);
+  });
+  it('auto-start applies only when the app is idle or crashed', () => {
+    expect(needsStart(clientOf(st({ phase: 'idle' })))).toBe(true);
+    expect(needsStart(clientOf(st({ phase: 'crashed' })))).toBe(true);
+    for (const phase of ['installing', 'downloading', 'starting', 'running', 'unavailable']) expect(needsStart(clientOf(st({ phase })))).toBe(false);
+    expect(needsStart(clientOf(human({ attached: null })))).toBe(false); // unknown: do not send requests an older kernel cannot read
+  });
+  it('the page: attach / Ambient start the app in the same gesture, before the voice.session.start append', () => {
+    const fn = APP.slice(APP.indexOf('async function setVoice('), APP.indexOf('/* ── voice app lifecycle'));
+    const auto = fn.indexOf("to !== 'off' && needsStart(clientOf(status))");
+    expect(auto).toBeGreaterThan(0);
+    expect(fn.indexOf("clientRequest('start')")).toBeGreaterThan(auto);
+    expect(fn.indexOf("client.call<Record<string, unknown>>('log.append', req)")).toBeGreaterThan(fn.indexOf("clientRequest('start')"));
+  });
+  it('the page: Start / Stop are trusted gestures from a human connection only; the pill action and menu route to them', () => {
+    const fn = APP.slice(APP.indexOf('async function voiceClientOp('), APP.indexOf('function openEnrol('));
+    expect(fn).toMatch(/if \(!trusted\) return;/);
+    expect(fn).toMatch(/if \(!canAttach\(status\)\) return notice/);
+    expect(fn).toContain("client.call('log.append', clientRequest(op))");
+    expect(APP).toContain("void voiceClientOp(id === 'voice.client.stop' ? 'stop' : 'start', e.isTrusted)");
+    expect(APP).toContain("if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted)");
+  });
+  it('palette: voice.client.start / stop / enrol exist and are never block-safe', () => {
+    const ids = paletteEntries(null).map((c) => c.id);
+    for (const id of ['voice.client.start', 'voice.client.stop', 'voice.enrol']) {
+      expect(ids).toContain(id);
+      expect(BLOCK_SAFE_COMMANDS.has(id)).toBe(false);
+    }
+  });
+});
+
+describe('the dev-unsigned banner', () => {
+  it('is loud when status.voice.client.devUnsigned is set, absent otherwise', () => {
+    expect(devBannerOf(clientOf(st({ phase: 'running', devUnsigned: true })))).toBe('Voice is running an unsigned development build');
+    expect(devBannerOf(clientOf(st({ phase: 'running', devUnsigned: 'yes' })))).toBeNull(); // only an explicit true
+    expect(devBannerOf(clientOf(st({ phase: 'running' })))).toBeNull();
+  });
+  it('the page: a role=alert, kernel-owned banner painted from status', () => {
+    expect(HTML).toMatch(/id="voice-dev" class="notice voice-dev kernel-owned" role="alert" hidden/);
+    expect(APP).toContain("$('voice-dev').hidden = dev === null;");
+  });
+});
+
+describe('"Teach Gnomon your voice"', () => {
+  it('validates the name (the kernel rule) and the consent, then builds request.voice.enrol{name, consent}', () => {
+    expect(enrolRequest('', true)).toMatchObject({ ok: false });
+    expect(enrolRequest('matt', false)).toEqual({ ok: false, reason: 'tick the consent box to continue' });
+    const r = enrolRequest('  Matt C ', true);
+    expect(r).toEqual({ ok: true, req: { kind: 'request.voice.enrol', payload: { name: 'matt-c', consent: consentText('matt-c') } } });
+    expect(consentText('matt')).toMatch(/three short phrases.*stays on this Mac.*forget it at any time/);
+    expect(forgetRequest('matt')).toEqual({ kind: 'request.voice.forget', payload: { name: 'matt' } });
+  });
+  it('form → confirm (Touch ID) → waiting → three phrases with a recording indicator → done (A3: status.voice.enrolment)', () => {
+    const T = Date.parse('2026-10-19T10:00:00Z');
+    const at = (sec: number) => new Date(T + sec * 1000).toISOString();
+    const en = (e: Record<string, unknown>) => ({ voice: { enrolment: e } });
+    let s = enrolStart();
+    expect(s.step).toBe('form');
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', at: at(1) }))).toBe(s); // nothing sent yet
+    s = enrolSent(s, 'matt', 'card:1');
+    expect(s).toMatchObject({ step: 'confirm', name: 'matt', cardId: 'card:1' });
+    expect(enrolLine(s)).toBe('Confirm with Touch ID, then read three short phrases aloud.');
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'ready', at: at(1) }))).toBe(s); // not allowed yet
+    s = enrolAllowed(s, T);
+    expect(s).toMatchObject({ step: 'waiting', since: T });
+    expect(enrolLine(s)).toContain('Waiting for the voice app');
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'requested', at: at(0) }))).toBe(s);
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'ready', phrase: 0, of: 3, at: at(1) }));
+    expect(s).toMatchObject({ step: 'phrase', index: 0, recording: false });
+    expect(s.phrases).toBe(ENROL_PHRASES);
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 0, of: 3, at: at(2) }));
+    expect(s).toMatchObject({ step: 'phrase', index: 0, recording: true });
+    expect(enrolLine(s)).toBe('Recording matt — only matt should speak. Phrase 1 of 3: recording, read it aloud');
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 0, of: 3, at: at(3) }));
+    expect(s).toMatchObject({ step: 'phrase', index: 1, recorded: 1, recording: false });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 1, of: 3, at: at(4) }));
+    expect(s).toMatchObject({ index: 2, recorded: 2 });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 2, of: 3, at: at(5) }));
+    expect(s.recording).toBe(true);
+    // Aegis L3: the client's "done" alone is not done: the kernel's registry must list the name
+    const notYet = reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) }));
+    expect(notYet).toMatchObject({ step: 'phrase', recorded: 3 });
+    expect(reduceEnrolStatus(s, { voice: { enrolled: ['dana'], enrolment: { name: 'matt', phase: 'done', of: 3, at: at(6) } } }).step).toBe('phrase');
+    s = reduceEnrolStatus(s, { voice: { enrolled: ['matt'], enrolment: { name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) } } });
+    expect(s).toMatchObject({ step: 'done', recorded: 3 });
+    expect(enrolLine(s)).toBe("Gnomon knows matt's voice now.");
+  });
+  it('another name, a previous attempt (stamped before the allow) and no enrolment change nothing; a failure says why', () => {
+    const T = Date.parse('2026-10-19T10:00:00Z');
+    const s = enrolAllowed(enrolSent(enrolStart(), 'matt', null), T);
+    const en = (e: Record<string, unknown>) => ({ voice: { enrolment: e } });
+    expect(reduceEnrolStatus(s, en({ name: 'dana', phase: 'ready', at: '2026-10-19T10:00:01Z' }))).toBe(s);
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', at: '2026-10-19T09:00:00Z' }))).toBe(s);
+    expect(reduceEnrolStatus(s, { voice: { enrolment: null } })).toBe(s);
+    expect(reduceEnrolStatus(s, null)).toBe(s);
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'failed', error: 'the mic is off', at: '2026-10-19T10:00:02Z' }))).toMatchObject({ step: 'failed', error: 'the mic is off' });
+    expect(enrolLine(reduceEnrolStatus(s, en({ name: 'matt', phase: 'cancelled', at: '2026-10-19T10:00:02Z' })))).toBe('Not enrolled: the voice app cancelled the recording');
+  });
+  it('the store no longer folds enrolment or notice rows (they are status.voice, A3/A5)', () => {
+    const store = new GuiStore();
+    store.enrol = enrolAllowed(enrolSent(enrolStart(), 'matt', 'card:1'), Date.now());
+    const before = store.enrol;
+    store.apply([{ seq: 1, kind: 'voice.enrol.progress', connId: 'v', payload: { name: 'matt', phase: 'recording', phrase: 0 } }]);
+    store.apply([{ seq: 2, kind: 'voice.client.notice', connId: 'v', payload: { text: 'old' } }]);
+    expect(store.enrol).toBe(before);
+    expect(store.voiceToast).toBeNull();
+  });
+  it('the page folds status.voice on every status read and polls lightly only while the dialog waits', () => {
+    expect(APP).toContain('function foldVoiceReports(');
+    expect(APP).toMatch(/foldVoiceReports\(\);\n\}/);
+    const poll = APP.slice(APP.indexOf('function syncEnrolPoll('), APP.indexOf('function syncEnrolPoll(') + 600);
+    expect(poll).toContain("s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase'");
+    expect(poll).toContain('ENROL_POLL_MS');
+    expect(ENROL_POLL_MS).toBeGreaterThanOrEqual(500);
+  });
+  it('the Touch ID card is recognised by its op and name (A4)', () => {
+    const card = (detail: unknown) => ({ kind: 'strictness', card: { detail } });
+    expect(isEnrolCard(card({ op: 'voice.enrol', name: 'matt' }), 'matt')).toBe(true);
+    expect(isEnrolCard(card({ op: 'voice.enrol', speakerId: 'spk:m/dana' }), 'matt')).toBe(false);
+    expect(isEnrolCard(card({ op: 'voice.widen' }), 'matt')).toBe(false);
+    // Aegis L4: a nameless card is never taken for this voice; the legacy op is not accepted
+    expect(isEnrolCard(card({ op: 'voice.enrol' }), 'matt')).toBe(false);
+    expect(isEnrolCard(card({ op: 'request.voice.enrol', name: 'matt' }), 'matt')).toBe(false);
+  });
+  it('the page: send / confirm / forget are trusted gestures; confirm approves allow; close denies a card still pending', () => {
+    const submit = APP.slice(APP.indexOf('async function submitEnrol('), APP.indexOf('async function closeEnrol('));
+    expect(submit).toMatch(/if \(!trusted \|\| !s\) return;/);
+    expect(submit).toContain("client.call<Record<string, unknown>>('log.append', v.req)");
+    expect(submit).toContain("client.call('approve', { cardId, decision: 'allow' })");
+    expect(submit).toContain('enrolAllowed(');
+    const close = APP.slice(APP.indexOf('async function closeEnrol('), APP.indexOf('let forgetArmed'));
+    expect(close).toContain("decision: 'deny'");
+    expect(close).toContain("s.step === 'confirm'");
+    const forget = APP.slice(APP.indexOf('async function forgetVoice('), APP.indexOf('let toastTimer'));
+    expect(forget).toMatch(/if \(!trusted \|\| !client \|\| !canAttach\(status\)\) return;/);
+    expect(forget).toContain('forgetRequest(name)');
+    expect(HTML).toContain('id="enrol-dialog"');
+    // Aegis L2: the dev-unsigned banner is persistent (an alert repainted from status, never a timed toast)
+    expect(HTML).toMatch(/id="voice-dev"[^>]*role="alert"/);
+    expect(APP).toContain("$('voice-dev').hidden = dev === null;");
+    expect(APP).not.toMatch(/setTimeout\([^)]*voice-dev/);
+  });
+});
+
+describe('client notices are quiet toasts', () => {
+  it('status.voice.notice is the toast (A5): text and at, capped and one line; absent is null', () => {
+    // Aegis L6: attributed to the voice app, always
+    expect(noticeOf({ voice: { notice: { text: 'open Gnomon to turn on ambient', code: 'ambient-above-ceiling', at: '2026-10-19T10:00:00Z' } } })).toEqual({ text: 'Voice app: open Gnomon to turn on ambient', at: '2026-10-19T10:00:00Z' });
+    expect(noticeOf({ voice: { notice: { text: 'mic\n busy' } } })).toEqual({ text: 'Voice app: mic busy', at: null });
+    expect(noticeOf({ voice: { notice: null } })).toBeNull();
+    expect(noticeOf({ voice: {} })).toBeNull();
+    expect(noticeOf(null)).toBeNull();
+    expect(noticeOf({ voice: { notice: { text: 'x'.repeat(500) } } })!.text.length).toBe(140);
+  });
+  it('a stale notice is not toasted', () => {
+    expect(toastFresh('2026-10-19T10:00:00Z', Date.parse('2026-10-19T10:00:10Z'))).toBe(true);
+    expect(toastFresh('2026-10-19T10:00:00Z', Date.parse('2026-10-19T10:05:00Z'))).toBe(false);
+  });
+  it('lifecycle rows make the page re-read status', () => {
+    for (const k of ['voice.client.start', 'voice.enrol', 'voice.forget']) expect(isClientRow(k)).toBe(true);
+    // request.voice.* are dispatcher-only (never a row under their own name)
+    for (const k of ['voice.turn.user', 'request.voice.client']) expect(isClientRow(k)).toBe(false);
+    const store = new GuiStore();
+    const seen: string[] = [];
+    store.onChange((w) => seen.push(...w));
+    store.apply([{ seq: 1, kind: 'voice.client.crashed', connId: 'k', payload: {} }]);
+    expect(seen).toContain('voice');
+  });
+});
+
+describe('spoken replies: the kernel row carries 🔊, the voice app playback is not shown twice', () => {
+  const row = (seq: number, kind: string, payload: unknown): Row => ({ seq, kind, connId: 'k', session: A, payload, view: 'full' } as Row);
+  it('kernel-speakable shows 🔊 and swallows the matching playback row', () => {
+    const { items } = chatItems([row(1, 'voice.turn.agent', { source: 'kernel-speakable', items: [{ text: 'Done.' }] }), row(2, 'voice.turn.agent', { textSpoken: 'Done.', textPlanned: 'Done.' })]);
+    expect(items.filter((i) => i.role === 'spoken').map((i) => i.text)).toEqual(['🔊 spoken aloud']);
+  });
+  it('an older kernel (playback only) keeps the V2d marker; an empty speakable shows nothing', () => {
+    expect(chatItems([row(1, 'voice.turn.agent', { textSpoken: 'Hi', textPlanned: 'Hi there' })]).items.map((i) => i.text)).toEqual(['🔊 spoken aloud (in part)']);
+    expect(chatItems([row(1, 'voice.turn.agent', { source: 'kernel-speakable', items: [] })]).items).toEqual([]);
+  });
+});
+
+describe('a voice connection never gets these controls', () => {
+  it('no pill action, no menu items', () => {
+    for (const phase of ['idle', 'crashed', 'running']) {
+      const s = voiceConn({ attached: null, clientConnected: phase === 'running', client: { phase }, enrolled: [] });
+      expect(canAttach(s)).toBe(false);
+      expect(pill(s).action).toBeNull();
+      expect(clientMenuEntries(clientOf(s), canAttach(s))).toEqual([]);
+    }
+  });
+  it('the page refuses enrol / start from a non-human connection', () => {
+    expect(APP.slice(APP.indexOf('function openEnrol('), APP.indexOf('function paintEnrol(')).match(/canAttach\(status\)/)).not.toBeNull();
+    expect(APP.slice(APP.indexOf('async function submitEnrol('), APP.indexOf('async function closeEnrol(')).match(/canAttach\(status\)/)).not.toBeNull();
+  });
+});

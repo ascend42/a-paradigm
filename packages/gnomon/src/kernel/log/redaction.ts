@@ -40,6 +40,7 @@
  * of that payload (plus the visible envelope fields) would confirm against
  * it. Full views (human with first-party proof, own-hsid session) keep them.
  */
+import { isKernelSpeakable } from '../voice/speakable.js';
 import {
   EVENT_KINDS,
   type EventV1,
@@ -146,7 +147,8 @@ export function mayBeVisible(e: Pick<EventV1, 'kind' | 'sensitivity' | 'session'
     case 'mod':
       return !columnKind && sens === 'normal' && (e.kind.startsWith(`modns.${reader.name}.`) || (reader.grantedKinds ?? []).includes(e.kind));
     case 'voice':
-      return sens !== 'secret' && reader.hsid != null && e.session === reader.hsid;
+      // V2e: voice.* rows of the attached session only (never turn.*, never secret)
+      return sens !== 'secret' && reader.hsid != null && e.session === reader.hsid && e.kind.startsWith('voice.');
     default:
       return false;
   }
@@ -196,7 +198,11 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
       // voice slice V1 (#gnomon-voice): own attached session + voice.*, REDACTED — the read-token row restricted to that
       // scope (secret hidden, a sensitive-column kind a stub, a sensitive-labelled row hidden, never-fields limited)
       // Aegis L3: only rows of the CURRENT attachment's session (its voice.* rows carry that hsid); never another session's
-      if (reader.hsid == null || e.session !== reader.hsid || sens === 'secret') return undefined;
+      // V2e (TD-2026-10-19-298): NARROWED to voice.* rows only — never turn.event / turn.result / approval rows (the
+      // kernel's speakable row is what voice says); the kernel's own voice.turn.agent{source:'kernel-speakable'} is shown
+      // in FULL (it carries only the projected summary: never a diff, tool input or tool output)
+      if (reader.hsid == null || e.session !== reader.hsid || sens === 'secret' || !e.kind.startsWith('voice.')) return undefined;
+      if (isKernelSpeakable(e)) return { seq, view: 'full', event: e };
       if (columnKind) return { seq, view: 'stub', stub: stubOf(e) };
       if (sens === 'sensitive') return undefined;
       return { seq, view: 'full', event: limitedView(e) };

@@ -28,6 +28,7 @@
  */
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
+import { isClientRow, type EnrolState } from './voice-client.js';
 
 export interface Row {
   seq: number;
@@ -127,6 +128,10 @@ export class GuiStore {
   voiceNote: string | null = null;
   /** V2d: the kernel's ambient idle auto-off (status.voice.ambientIdleMs), set by the page; names the note's minutes */
   voiceIdleMs: number | null = null;
+  /** V2e: the "Teach Gnomon your voice" flow while its dialog is open (the page opens it; status.voice.enrolment folds into it). */
+  enrol: EnrolState | null = null;
+  /** V2e: the latest quiet notice from the voice app (A5: status.voice.notice, set by the page), until it is shown. */
+  voiceToast: { text: string; at: string | null } | null = null;
   /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
   position = 0;
   readonly #listeners = new Set<(what: Set<string>) => void>();
@@ -174,6 +179,7 @@ export class GuiStore {
     this.position = 0;
     this.logId = null;
     this.voiceNote = null;
+    this.voiceToast = null;
     this.#emit(new Set(['reset', 'sessions', 'cards', 'feed']));
   }
 
@@ -232,6 +238,9 @@ export class GuiStore {
       else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload, this.voiceIdleMs);
     }
     if (VOICE_ACTIVITY_KINDS.has(r.kind)) what.add('voice-activity');
+    // V2e: the voice app's lifecycle, the enrolled list, enrolment progress and the app's notices are all
+    // status.voice (A1/A3/A5): the page re-reads status on these rows (and polls lightly while enrolling)
+    if (isClientRow(r.kind)) what.add('voice');
     if (r.kind === 'daemon.start') {
       // a kernel (re)start: a session the old kernel neither exited nor drained into a resume is gone with it (a
       // Ctrl-C leaves no session.exited, and the sweep only logs the spawns it found). A resume in this boot logs its
@@ -479,7 +488,7 @@ function reasonWithCause(p: Record<string, unknown>, reason: string): string {
  * A sent voice turn is the user's message with a 🎙 <speaker> tag; turn.sent{source:'voice'} adds one only when the
  * page cannot see the voice.turn.user row it cites (a stub view); a refusal shows its reason inline.
  */
-function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number> }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number }) | null | undefined {
+function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; speakable: { n: number } }): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
   if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
   if (r.kind === 'turn.sent') {
@@ -514,6 +523,18 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: { lastPartial
       return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
     }
     case 'voice.turn.agent': {
+      // V2e: the kernel's own speakable reply (source kernel-speakable, items) carries the 🔊; the voice app's playback
+      // row for that same reply then shows nothing more (never shown twice). A playback row with no kernel row before
+      // it (an older kernel) keeps the V2d marker.
+      if (p.source === 'kernel-speakable') {
+        if (!Array.isArray(p.items) || !p.items.length) return null;
+        ctx.speakable.n++;
+        return { role: 'spoken', text: '🔊 spoken aloud' };
+      }
+      if (ctx.speakable.n > 0) {
+        ctx.speakable.n--;
+        return null;
+      }
       const spoken = typeof p.textSpoken === 'string' ? p.textSpoken : '';
       const planned = typeof p.textPlanned === 'string' ? p.textPlanned : '';
       if (!spoken.trim()) return null;
@@ -596,6 +617,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const shownVoiceSeqs = new Set<number>();
   // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
   const sentSeqs = new Set<number>();
+  const speakable = { n: 0 }; // V2e: kernel-speakable replies not yet matched by the voice app's playback row
   for (const r of rows) {
     const p = objOf(r.payload);
     if (r.kind === 'turn.sent' && p?.source === 'voice' && typeof p.voiceTurnSeq === 'number') sentSeqs.add(p.voiceTurnSeq);
@@ -630,7 +652,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       its.forEach((it, i) => push(r, i, it));
       continue;
     }
-    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs });
+    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs, speakable });
     if (v !== undefined) {
       if (v === null) hidden++;
       else {
