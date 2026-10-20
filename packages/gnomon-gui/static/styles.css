@@ -686,7 +686,7 @@ html, body {
 .chead .head-right { flex: none; }
 .chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-theme="night"] .chead #transcript-title { font-size: 13px; }
-.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 0.2; } /* the title gives way first: the model chip stays readable */
 .chead #transcript-title { flex: 0 1 auto; min-width: 8ch; }
 #transcript-count, .head-right .key { white-space: nowrap; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
