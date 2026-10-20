@@ -187,6 +187,27 @@ export interface CardView {
  * `{type:'bash-prefix', detail}` node whose detail hashes to the card's contentHash (the kernel derived them with
  * its simple-command rule); display only — the broker re-checks any prefix against the shown command.
  */
+export type ApproveScopeParam = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] };
+
+/**
+ * TD-2026-10-20-294: the `approve` params a decision key sends. An `always` key carries its scope in
+ * `data-scope` / `data-prefix` (renderCard); any other decision, or a malformed key, sends no scope (the kernel
+ * then learns the exact rule, never a wider one).
+ */
+export function approveParamsOf(cardId: string, decision: string, note: string | null, key: { scope?: string; prefix?: string } | null): { cardId: string; decision: string; note?: string; scope?: ApproveScopeParam } {
+  const out: { cardId: string; decision: string; note?: string; scope?: ApproveScopeParam } = { cardId, decision, ...(note !== null ? { note } : {}) };
+  if (decision !== 'always' || !key) return out;
+  if (key.scope === 'exact') return { ...out, scope: { kind: 'exact' } };
+  if (key.scope !== 'prefix') return out;
+  try {
+    const p = JSON.parse(key.prefix ?? '') as unknown;
+    if (Array.isArray(p) && p.length > 0 && p.every((w) => typeof w === 'string')) return { ...out, scope: { kind: 'prefix', prefix: [...(p as string[])] } };
+  } catch {
+    /* a malformed key sends no scope */
+  }
+  return out;
+}
+
 export function prefixOptionsOf(card: Record<string, unknown>): string[][] | null {
   if (card.kind !== 'permission') return null;
   const block = card.block;

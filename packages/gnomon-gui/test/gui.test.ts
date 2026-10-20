@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, refusalFromError, RpcError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
-import { askDetailOf, askNote, prefixOptionsOf, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { Follow, isAtBottom } from '../src/core/follow.js';
 import { chatItems, GuiStore, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
@@ -192,6 +192,16 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const plain = (renderCard({ doc: fdoc }, { ...v, prefixOptions: null }, block) as FEl).all().filter((e) => e.attrs.get('data-decision') === 'always');
     expect(plain.map((e) => e.text)).toEqual(['always']);
     expect(plain[0]!.attrs.has('data-scope')).toBe(false);
+    // the choice SENDS its scope: the approve params come from the clicked key's data-scope / data-prefix
+    const keyOf = (e: FEl): { scope?: string; prefix?: string } => ({ ...(e.attrs.has('data-scope') ? { scope: e.attrs.get('data-scope')! } : {}), ...(e.attrs.has('data-prefix') ? { prefix: e.attrs.get('data-prefix')! } : {}) });
+    expect(approveParamsOf('card:01J', 'always', null, keyOf(always[2]!))).toEqual({ cardId: 'card:01J', decision: 'always', scope: { kind: 'prefix', prefix: ['git', 'log'] } });
+    expect(approveParamsOf('card:01J', 'always', null, keyOf(always[1]!))).toEqual({ cardId: 'card:01J', decision: 'always', scope: { kind: 'prefix', prefix: ['git'] } });
+    expect(approveParamsOf('card:01J', 'always', null, keyOf(always[0]!))).toEqual({ cardId: 'card:01J', decision: 'always', scope: { kind: 'exact' } });
+    expect(approveParamsOf('card:01J', 'always', null, keyOf(plain[0]!))).toEqual({ cardId: 'card:01J', decision: 'always' });
+    // only always carries a scope; a malformed prefix sends none (the kernel learns the exact rule)
+    expect(approveParamsOf('card:01J', 'allow', null, { scope: 'prefix', prefix: '["git"]' })).toEqual({ cardId: 'card:01J', decision: 'allow' });
+    expect(approveParamsOf('card:01J', 'always', null, { scope: 'prefix', prefix: '{bad' })).toEqual({ cardId: 'card:01J', decision: 'always' });
+    expect(approveParamsOf('card:01J', 'always', null, { scope: 'prefix', prefix: '[]' })).toEqual({ cardId: 'card:01J', decision: 'always' });
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];

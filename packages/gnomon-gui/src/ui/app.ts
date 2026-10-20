@@ -18,7 +18,7 @@ import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
@@ -384,20 +384,6 @@ function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
   return askNote(qs, picks);
 }
 
-/** TD-2026-10-20-294: the approve scope a decision key carries (data-scope / data-prefix), else none. */
-function scopeOfKey(el: HTMLElement | null): { scope: { kind: 'exact' } | { kind: 'prefix'; prefix: string[] } } | Record<string, never> {
-  const kind = el?.dataset.scope;
-  if (kind === 'exact') return { scope: { kind: 'exact' } };
-  if (kind !== 'prefix') return {};
-  try {
-    const p = JSON.parse(el!.dataset.prefix ?? '') as unknown;
-    if (Array.isArray(p) && p.every((w) => typeof w === 'string')) return { scope: { kind: 'prefix', prefix: p as string[] } };
-  } catch {
-    /* a malformed key sends no scope: the kernel takes the exact rule */
-  }
-  return {};
-}
-
 async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null, keyEl?: HTMLElement | null): Promise<void> {
   if (!client) return;
   let note: string | null = null;
@@ -413,7 +399,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   const upgrade = decision === 'accept' && !!c0 && upgradeBannerOf([{ cardId, kind: c0.kind, card: c0.card as Record<string, unknown> }]) !== null;
   if (upgrade) markRestarting(sessionStorage, cardId);
   try {
-    await client.call('approve', { cardId, decision, ...(note !== null ? { note } : {}), ...(decision === 'always' ? scopeOfKey(keyEl ?? null) : {}) });
+    await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
