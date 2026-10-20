@@ -273,6 +273,11 @@ const REFUSE: Array<[string, RegExp]> = [
   [`${C}stat -L a`, /stat: flag -L/],
   [`${C}diff -r a b`, /diff: flag -r/],
   [`${C}file -f names`, /file: flag -f/],
+  // an attached FILE value of a short flag is checked as a path
+  [`${C}grep -f../home/.ssh/id_rsa x a`, /protected path/],
+  [`${C}grep -nf../../etc/../w/home/.aws/credentials x a`, /protected path/],
+  [`${C}diff -X../home/.netrc a b`, /protected path/],
+  [`${C}file -m../home/.ssh/id_rsa a`, /protected path/],
   // Aegis H3: a relative cd is refused (the cwd it starts from is unknown); a cd outside a root too
   ['cd src && ls', /cd: a relative path/],
   [`cd ${REPO}/../home && ls`, /cd: outside/],

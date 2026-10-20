@@ -105,13 +105,14 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
   it('TD-2026-10-20-294: auto-edits passes a PROVABLY read-only Bash command with no card (mode:auto-edits:read-only); a writing one still cards', async () => {
     const r = sessionRig();
     await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
-    const s = await r.open([r.req('ro-1', 'Bash', { command: 'ls -la && git status 2>/dev/null | head -5', description: 'look' }), r.req('ro-2', 'Bash', { command: 'ls > listing.txt' }), r.req('ro-3', 'Bash', { command: 'ls', run_in_background: true })]);
-    expect(await waitFor(() => r.answers().some((a) => a.id === 'ro-1') && r.pending().length >= 2, 10_000)).toBe(true);
+    const s = await r.open([r.req('ro-1', 'Bash', { command: `cd '${w.cwd}' && ls -la && git status 2>/dev/null | head -5`, description: 'look' }), r.req('ro-2', 'Bash', { command: `cd '${w.cwd}' && ls > listing.txt` }), r.req('ro-3', 'Bash', { command: 'ls', run_in_background: true }), r.req('ro-4', 'Bash', { command: 'ls -la unknown-cwd' })]);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'ro-1') && r.pending().length >= 3, 10_000)).toBe(true);
     expect(r.answers().find((a) => a.id === 'ro-1')).toMatchObject({ behavior: 'allow' });
     expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', inputHash: expect.stringMatching(/^sha256:/), modeRef: 'mode:auto-edits:read-only' }]);
     const carded = r.pending().map((c) => JSON.stringify(c.block));
     expect(carded.some((t) => t.includes('listing.txt'))).toBe(true);
     expect(carded.some((t) => t.includes('run_in_background'))).toBe(true);
+    expect(carded.some((t) => t.includes('unknown-cwd'))).toBe(true); // Aegis M2: a relative path with no `cd ABS &&` cards
   }, 30_000);
 
   it('auto-edits still cards Bash, a Write outside the worktree, .claude/settings.json, CLAUDE.md and package.json — never auto-approved', async () => {

@@ -2,7 +2,8 @@
  * @symbol #shell-readonly
  *
  * #shell-readonly (spec §3.4 "Run modes (D87)", TD-2026-10-20-294 part 1):
- * PURE — is this Bash command PROVABLY read-only? Under `auto-edits` a command
+ * Is this Bash command PROVABLY read-only? (No side effects; it READS the
+ * filesystem — realpath and readdir — to check symlinks and expand globs.) Under `auto-edits` a command
  * this classifier accepts passes with no card, after
  * `approval.auto{modeRef:'mode:auto-edits:read-only'}`. It FAILS CLOSED:
  * anything it cannot parse, or parses but cannot prove, is `{ok:false}` and
@@ -19,60 +20,89 @@
  * `${…}` forms, and every other compound (if, while, until, case, function,
  * select, `{ …; }`, `[[ ]]`, `for ((…))`, `for` without `in`).
  *
- * PROVE (classifyReadOnly) — read-only ONLY if ALL hold:
+ * PROVE (classifyReadOnly) — read-only ONLY if ALL hold (TD-2026-10-20-294
+ * as re-checked by Aegis: C1 C2 H1–H4 M1–M3 and the Low item are closed here):
  *   - no backgrounding (`&`), no `!` negation, no env assignment (`X=1 cmd`
  *     or a bare `X=1`: env changes what a command does — GIT_*, PAGER, LD_*);
  *   - redirections: only `>/dev/null`, `>>/dev/null`, `&>/dev/null`,
  *     `&>>/dev/null` (fd 1 or 2), the dups `2>&1` / `1>&2` / `>&2`, `< FILE`
- *     and `<<<WORD` (the file / word checked like an argument), and heredocs
- *     (an unquoted delimiter's body may hold no `$` or backtick);
+ *     (one literal path, checked) and `<<<WORD` (data), and heredocs (an
+ *     unquoted delimiter's body may hold no `$` or backtick);
  *   - every substitution (`$(…)`, backticks, `<(…)`) is itself read-only;
- *   - `$NAME` only names an enclosing `for` loop's variable (never $HOME, $1,
- *     $@, …), so a dynamic value always comes from a checked word list;
- *   - the command name is a literal word in the allowlist below, each with
- *     its flag rules; `cd` is allowed ONLY as the first command of the
- *     top-level list, alone in its pipeline, with one literal path inside a
- *     session root (cwd / worktree);
- *   - PATHS: every literal operand of a reader (and every value after `=` or
- *     a path-looking attached flag value) is resolved (tilde, cwd, realpath
- *     when it exists) and refused when it is a device path (/dev/…, /proc/…,
- *     `\\…` on win32) or lies inside — or is an ANCESTOR of (a recursive read
- *     would reach it) — a protected root: the Gnomon home, ~/.ssh, ~/.aws,
- *     ~/.config/gh, ~/.config/gcloud, ~/.azure, ~/.kube, ~/.docker,
- *     ~/.gnupg, ~/.netrc, ~/.npmrc, ~/.git-credentials, ~/.pypirc,
- *     ~/Library/Keychains, /Library/Keychains. A glob is checked at its
- *     literal directory prefix. Relative paths with `..` are refused until a
- *     `cd` to an absolute path makes the cwd known (Claude's Bash keeps its
- *     cwd between calls; the kernel knows only that it is inside a root);
- *   - DYNAMIC words (holding a loop variable or a substitution) are allowed
- *     only for commands with no writing or executing flag (FLAG_SAFE), and
- *     only when their literal text has no `..` segment and does not start
- *     with `/` or `~`. RESIDUAL (documented, accepted): a dynamic value comes
- *     from a read-only command's output, so a planted file NAME inside the
- *     repo can steer which file a reader reads.
+ *   - C1 NO DYNAMIC PATHS: a word holding `$(…)` or a backtick may be an
+ *     argument only of `echo`, of `printf` after its literal format, or a
+ *     `<<<` word — its output is TEXT, never a path. A `for` loop iterates only
+ *     LITERAL words and literal globs (expanded now); every value must be one
+ *     safe token (`[A-Za-z0-9._+,:@%=/-]`, not starting with `-`), so `$f`
+ *     neither splits nor globs again. `$NAME` names only an enclosing loop's
+ *     variable and is substituted with each of its values (cartesian, at most
+ *     200), so every path that reaches a reader is CONCRETE and checked.
+ *     `<(…)` is a whole-word pipe argument of a reader (its content comes from
+ *     a proven read-only command);
+ *   - M2 KNOWN CWD: the cwd is known only after a first command `cd ABS` (an
+ *     absolute literal path or `~/…`, inside a session root, at its realpath;
+ *     H3: a relative cd is refused) and only along an unbroken `&&` chain from
+ *     it (after `;`, a newline or `||` the cd may have failed). With an
+ *     unknown cwd every relative path, relative glob, implicit-cwd read (`ls`,
+ *     `du`, `find` with no operand) and every `git` command raises the card;
+ *     all-absolute paths still pass. Every operand of a path-taking command is
+ *     treated as a path, patterns included (`grep x` needs a known cwd);
+ *   - H4 READABLE ROOTS (an allowlist): every path, as given and at its
+ *     realpath (or, when it does not exist, its deepest existing ancestor's
+ *     realpath plus the rest), lies inside a session root or a system read
+ *     root (`/usr`, `/opt/homebrew`, `/etc`, `/tmp`, `/private/tmp`,
+ *     `/private/etc`; posix only). On top, the deny stays: no device path
+ *     (/dev/…, /proc/…, `\\…` on win32), nothing inside — or an ANCESTOR of —
+ *     a protected root (the Gnomon home, ~/.ssh, ~/.aws, ~/.config/gh,
+ *     ~/.config/gcloud, ~/.azure, ~/.kube, ~/.docker, ~/.gnupg, ~/.netrc,
+ *     ~/.npmrc, ~/.git-credentials, ~/.pypirc, ~/Library/Keychains,
+ *     /Library/Keychains). Repo-local files (a repo's own `.env`) stay readable;
+ *   - H2 GLOBS AND SYMLINKS: an unquoted glob is expanded NOW against the
+ *     filesystem with a superset matcher (any case, dotfiles, `.`/`..` for a
+ *     `.`-led segment, every bracket class as one char; `**` refused) and every
+ *     match is checked at its realpath; more than 200 matches, or a match
+ *     starting with `-` (a planted `-r`), is refused; no match passes the
+ *     pattern literally. No reader flag that recurses or follows symlinks:
+ *     grep -r -R -S -O -d -D --recursive --dereference-recursive
+ *     --directories --devices (and every abbreviation), ls -L -R, du -L, stat
+ *     -L, diff -r, find -L/-follow; `rg` is gone (it recurses by default);
+ *   - the command name is a literal word in the allowlist below.
  *
  * ALLOWLIST:
- *   FLAG_SAFE readers (no flag of theirs writes or executes, GNU or BSD; any
- *   flag): cat head tail wc ls grep egrep fgrep stat du df cut diff cmp
- *   realpath; and with no path check: echo printf basename dirname tr which
- *   test [ true false pwd.
+ *   Readers (any flag but the denied ones; every operand path-checked; a
+ *   short flag's attached FILE value — grep -fF, diff/du -XF, file -mF — too):
+ *   cat head tail wc(no --files0-from) ls grep egrep fgrep stat du(no
+ *   --files0-from) df cut diff cmp realpath.
+ *   Text (no path; C2 tight flags): echo (-n -e -E only), printf (NO flag:
+ *   `printf -v HOME …` assigns; the format is literal and never starts with
+ *   `-`), basename (-a -z -s), dirname (-z), tr (-c -d -s -C -u), which (-a
+ *   -s), pwd (-L -P, no operand), true, false; test / [ (only the POSIX
+ *   operators; the operand of a file test is path-checked).
  *   Restricted (literal arguments only): sort (no -o/--output/-T/
  *   --compress-program, allowlisted flags), uniq (at most one operand: a
- *   second is an OUTPUT file), file (no -C/--compile), date (display only:
- *   `+FORMAT` and -u -R -j -I… -r/-d/-v VALUE), rg (no --pre*, -z /
- *   --search-zip, --hostname-bin), jq (no -f/--from-file, -L; the filter has
- *   no env/$ENV/import/include; --rawfile/--slurpfile paths checked), find
- *   (allowlisted predicates only: never -exec -execdir -ok -okdir -delete
- *   -fprint* -fls), awk (only -F / -v; one literal program with none of
- *   system getline close fflush ENVIRON PROCINFO | > @), sed (only -n -E -r
- *   and scripts `Np`, `N,Mp`, `$p`, `/re/p`), git (no global option at all —
- *   no -c, -C, --exec-path, --git-dir; subcommands status log diff show
- *   blame rev-parse ls-files describe, never with --output*, --ext-diff,
+ *   second is an OUTPUT file), file (no -C, no -f), date (M1: display only —
+ *   `+FORMAT`, -u -R -j -I, -v ADJUST; never -f -r -d -s), jq (no
+ *   -f/--from-file, -L; the filter has no env/$ENV/import/include;
+ *   --rawfile/--slurpfile paths checked), find (allowlisted predicates only:
+ *   never -exec -execdir -ok -okdir -delete -fprint* -fls -L -follow), awk
+ *   (H1: only -F, and ONE program of the shape `[PATTERN] { print ITEMS }`
+ *   where ITEMS are $N $NF NF NR or plain strings — no ARGV, ARGC, FILENAME,
+ *   ENVIRON, getline, system, redirection), sed (only -n -E -r and scripts
+ *   `Np`, `N,Mp`, `$p`, `/re/p`), git (a known cwd; no global option at all —
+ *   no -c, -C, --exec-path, --git-dir; subcommands status log diff show blame
+ *   rev-parse ls-files describe, never with --output*, --ext-diff,
  *   --textconv, -O/--open-files-in-pager; `branch` with only listing flags
- *   and operands only after --list; `remote` bare or `-v`; `config` only
- *   --get/--get-all with one key). RESIDUAL (documented): git runs programs
- *   the repo's OWN git config names (core.fsmonitor, diff.external, textconv
- *   drivers); `.git/**` is gate-class, so a session cannot set them unseen.
+ *   and a pattern only after the long --list (Low: `-l NAME` created NAME in
+ *   older git); `remote` bare only (M3: `-v` prints URLs that may hold
+ *   credentials); `config` only --get/--get-all with one key that names no
+ *   remote/credential/http/url/token/password/secret/auth/header/key).
+ *   RESIDUAL (documented, accepted): git runs programs the repo's OWN git
+ *   config names (core.fsmonitor, diff.external, textconv drivers); `.git/**`
+ *   and (C2) `.gitconfig`, `.git-credentials`, `.netrc` and the other
+ *   tool-steering files are gate-class, so a session cannot set them unseen.
+ *   A glob is expanded at classification time: a file planted between the
+ *   check and the run (by a concurrent process) is not seen. The user's own
+ *   shell aliases and functions are trusted.
  *
  * simpleArgv: for prefix `always` rules (#always-rules) — the argv of a
  * command that is ONE simple command with only literal words (no ; && || |
@@ -865,7 +895,7 @@ const staticOnly = (args: readonly Arg[], name: string): void => {
  * (`denyShort` letters in any cluster; `denyLong` names and every abbreviation of them). `implicitCwd`: with no
  * operand it reads the cwd, which must be known.
  */
-function reader(denyShort = '', denyLong: readonly string[] = [], implicitCwd = false): Rule {
+function reader(denyShort = '', denyLong: readonly string[] = [], implicitCwd = false, fileShort = ''): Rule {
   return (args, env, name) => {
     for (const a of args) {
       if (!isFlag(a) || a.lit === '--') continue;
@@ -875,11 +905,29 @@ function reader(denyShort = '', denyLong: readonly string[] = [], implicitCwd = 
         if (denyLong.some((d) => d.startsWith(k))) no(`${name}: flag ${k}`);
         continue;
       }
-      for (const ch of s.slice(1)) if (denyShort.includes(ch)) no(`${name}: flag -${ch}`);
+      for (const ch of s.slice(1)) {
+        if (fileShort.includes(ch)) break; // the rest of the word is that flag's FILE value (attachedFiles)
+        if (denyShort.includes(ch)) no(`${name}: flag -${ch}`);
+      }
     }
+    attachedFiles(args, fileShort, env);
     if (implicitCwd && !args.some((a) => !isFlag(a))) checkPath('.', env);
     pathArgs(args, env, name);
   };
+}
+
+/**
+ * A short flag that takes a FILE (`grep -f`, `diff -X`, `du -X`, `file -m`): its value attached in the same word
+ * (`-fFILE`, `-nfFILE`) is checked as a path (a separate value is an operand, checked anyway).
+ */
+function attachedFiles(args: readonly Arg[], letters: string, env: Env): void {
+  if (letters === '') return;
+  for (const a of args) {
+    if (!isFlag(a) || a.lit!.startsWith('--')) continue;
+    const s = a.lit!;
+    const i = [...letters].map((l) => s.indexOf(l, 1)).filter((x) => x > 0).sort((x, y) => x - y)[0];
+    if (i !== undefined && i < s.length - 1) checkPath(s.slice(i + 1), env);
+  }
 }
 
 /** A literal flag check: `short` letters (cluster ok), `withValue` letters/longs consuming the next arg, `long` names. */
@@ -968,6 +1016,7 @@ const uniqRule: Rule = (args, env, name) => {
 const fileRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   // no -f (a list of names read from a file), no -C (compile)
+  attachedFiles(args, 'm', env);
   flags(args, name, { short: 'bihLNkzZ0p', shortValue: 'mFe', long: ['--brief', '--mime', '--mime-type', '--mime-encoding', '--dereference', '--no-dereference', '--keep-going'] });
   pathArgs(args, env, name);
 };
@@ -1113,12 +1162,12 @@ export const COMMANDS: Readonly<Record<string, Rule>> = Object.freeze({
   cat: reader(), head: reader(), tail: reader(), cut: reader(), cmp: reader(), realpath: reader(), df: reader(),
   wc: reader('', ['--files0-from']),
   ls: reader('LR', ['--dereference', '--recursive'], true),
-  grep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
-  egrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
-  fgrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices']),
+  grep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
+  egrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
+  fgrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
   stat: reader('L', ['--dereference']),
-  du: reader('L', ['--dereference', '--files0-from'], true),
-  diff: reader('r', ['--recursive']),
+  du: reader('L', ['--dereference', '--files0-from'], true, 'X'),
+  diff: reader('r', ['--recursive'], false, 'X'),
   echo: echoRule, printf: printfRule,
   basename: textRule({ short: 'az', shortValue: 's', long: ['--multiple', '--zero'], longValue: ['--suffix'] }),
   dirname: textRule({ short: 'z', long: ['--zero'] }),

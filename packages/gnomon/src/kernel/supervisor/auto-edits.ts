@@ -39,7 +39,10 @@
  *     — is a card), the command is text and timeout (if any) a number;
  *   - no session root is the user's home, an ancestor of it, or `/`;
  *   - #shell-readonly classifyReadOnly proves the command read-only (it
- *     fails closed: unparsed or unproven ⇒ a card);
+ *     fails closed: unparsed or unproven ⇒ a card). Since the Aegis re-check
+ *     it needs a KNOWN cwd for anything relative — the command starts with an
+ *     absolute `cd` into a session root, joined by `&&` — and reads only
+ *     inside the session roots or the system read roots, at realpath;
  *   - the card carries no hidden or bidi characters (blockOf flags).
  * The pass is never taken in `ask` or `manual` (the caller checks the
  * effective mode). Permission requests come from the session's own claude
