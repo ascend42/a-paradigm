@@ -137,10 +137,17 @@ export class LiveAgreement {
   #lastSplit = 0;
   #lastOk = false;
   #tail: string[] = [];
+  /**
+   * The anchored head starts PARTIAL_ANCHOR_MARGIN_MS before its first word, so a window's decodes may begin with a
+   * fragment (or a repeat) of the last frozen word. Decided on the window's first decode, kept for the window.
+   */
+  #lead: 'undecided' | 'drop' | 'keep' = 'keep';
 
   /** Fold one decode of the current window in; returns the live line. */
   push(hyp: readonly PartialWord[]): PartialText {
-    const words = hyp.filter((w) => normWord(w.text) !== '');
+    let words = hyp.filter((w) => normWord(w.text) !== '');
+    if (this.#lead === 'undecided') this.#lead = words.length > 1 && this.#isFragment(normWord(words[0]!.text)) ? 'drop' : 'keep';
+    if (this.#lead === 'drop' && words.length && this.#isFragment(normWord(words[0]!.text))) words = words.slice(1);
     const { i, ok } = this.#split(words);
     const rest = words.slice(i);
     const restN = rest.map((w) => normWord(w.text));
@@ -205,6 +212,13 @@ export class LiveAgreement {
     this.#last = this.#last.slice(b.word).map((w) => ({ text: w.text }));
     this.#lastSplit = Math.max(0, this.#lastSplit - b.word);
     this.#lastOk = false; // timings are in the old window's coordinates: no further anchoring until the next decode
+    this.#lead = 'undecided';
+  }
+
+  /** the last frozen word, or a piece of it (equal, prefix or suffix) */
+  #isFragment(w: string): boolean {
+    const f = this.#frozen.length ? normWord(this.#frozen[this.#frozen.length - 1]!) : '';
+    return !!f && !!w && (f === w || f.startsWith(w) || f.endsWith(w));
   }
 
   /** Where the uncommitted rest starts: the shortest prefix whose normalised characters cover the committed key. */
