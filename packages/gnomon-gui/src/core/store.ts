@@ -56,6 +56,10 @@ export interface StackCard {
   arrivedSeq: number;
   /** S3: the approval.request row's at ("raised HH:MM · waiting Nm"). */
   raisedAt?: string | null;
+  /** fidelity 2: the kernel's STRUCTURED tool fields of the approval.request row (broker.ts logs `tool`, `tool_input`);
+   * the permission card's one-line title is composed from these (permissionTitleOf), never from display text */
+  tool?: string | null;
+  toolInput?: Record<string, unknown> | null;
 }
 
 export interface SessionRow {
@@ -309,6 +313,8 @@ export class GuiStore {
           flags: Array.isArray(p.flags) ? p.flags.filter((f): f is string => typeof f === 'string') : Array.isArray(card.flags) ? (card.flags as unknown[]).filter((f): f is string => typeof f === 'string') : [],
           arrivedSeq: ++this.#cardSeq,
           raisedAt: typeof r.at === 'string' ? r.at : null,
+          tool: typeof p.tool === 'string' ? p.tool : null,
+          toolInput: p.tool_input && typeof p.tool_input === 'object' && !Array.isArray(p.tool_input) ? (p.tool_input as Record<string, unknown>) : null,
         });
         what.add('cards');
         what.add(`card-in:${card.cardId}`);

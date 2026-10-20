@@ -34,7 +34,10 @@ export function previewParams(search: string): PreviewParams {
 const fakeQuery = (media: string, matches: boolean): MediaQueryList =>
   ({ media, matches, onchange: null, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false }) as unknown as MediaQueryList;
 
-export const PREVIEW: PreviewParams = previewParams(typeof location === 'undefined' ? '' : location.search);
+/** fidelity 2: the preview's "now" at page load (2026-10-20 14:07:10Z). */
+export const PREVIEW_NOW = Date.parse('2026-10-20T14:07:10.000Z');
+
+export const PREVIEW: PreviewParams =previewParams(typeof location === 'undefined' ? '' : location.search);
 
 if (typeof window !== 'undefined') {
   const real = window.matchMedia.bind(window);
@@ -44,4 +47,9 @@ if (typeof window !== 'undefined') {
     return real(q);
   };
   if (PREVIEW.surface === 'wrapper') Object.defineProperty(globalThis, 'gnomonSurface', { value: 'wrapper', writable: false, configurable: false, enumerable: false });
+  // fidelity 2: the clock reads the fixtures' afternoon (14:07:10, the comp's "waiting 1m"), advancing in real time
+  // from page load, so "raised · waiting" and the chat header's elapsed are stable in the shots
+  const realNow = Date.now.bind(Date);
+  const offset = PREVIEW_NOW - realNow();
+  Date.now = (): number => realNow() + offset;
 }

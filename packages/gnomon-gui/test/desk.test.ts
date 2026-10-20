@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectHue } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { KERNEL_TITLED_KINDS, mdBlocks, mdInline, raisedLine, renderCard, splitCardBlock, stampWord, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { cardContentHash, KERNEL_TITLED_KINDS, mdBlocks, mdInline, permissionTitleOf, raisedLine, renderCard, shortRequester, splitCardBlock, stampWord, toolInputHash, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { activitySummary, failedExit, foldActivity, groupHue, GuiStore, isLiveState, sessionNote, sessionTitle, splitActivePast, type ChatItem, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -172,18 +172,66 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
 
 describe('S3 the card sheet and the stack pile', () => {
   const block = { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'The session asks to run Bash' }, { type: 'Text', text: 'command: pnpm test' }] };
-  const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:x/claude', hsid: 'hsid:v1:A', repo: 'billing', state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [] as string[], decisions: ['allow', 'deny'], decidable: true };
-  it('anatomy: ■ project · kind · voice tag (requestedBy in title=), the title, the body, raised · waiting, keys, contentHash last', () => {
+  const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:7k2m9q4x/claude', hsid: 'hsid:v1:A', repo: 'billing', state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [] as string[], decisions: ['allow', 'deny'], decidable: true };
+  it('fidelity 2 anatomy: ■ project · kind · by <name> + the voice chip, ONE title line, raised · waiting, keys, the contentHash line, then details', () => {
     const el = renderCard({ doc: fdoc }, { ...v, project: { name: 'billing', hue: 0 }, raisedAt: '2026-10-20T14:06:00Z', now: Date.parse('2026-10-20T14:09:30Z'), voice: { eligible: 'reversible', label: 'card 3' } }, block) as FEl;
     const kids = el.children.filter((c): c is FEl => c instanceof FEl);
-    expect(kids.map((k) => k.className)).toEqual(['card-head k', 'card-title', 'card-body kernel-owned', 'meta card-raised', 'card-keys', 'bar', 'stamp', 'meta content-hash']);
-    expect(kids[0]!.text).toBe('■ billing · permission · by p:x/claude · 🎙 reversible · card 3');
-    expect(kids[0]!.attrs.get('title')).toBe('requested by p:x/claude · hsid:v1:A · billing');
+    expect(kids.map((k) => k.className)).toEqual(['card-head k', 'card-title', 'meta card-raised', 'card-keys', 'meta content-hash', 'card-details', 'bar', 'stamp']);
+    expect(kids[0]!.text).toBe('■ billing · permission · by claude 🎙 reversible · card 3');
+    expect(kids[0]!.attrs.get('title')).toBe('requested by p:7k2m9q4x/claude · hsid:v1:A · billing');
     expect(kids[0]!.children.filter((c): c is FEl => c instanceof FEl)[0]!.className).toBe('card-project pink h0');
     expect(kids[1]!.text).toBe('The session asks to run Bash');
-    expect(kids[2]!.text).toBe('command: pnpm test');
-    expect(kids[3]!.text).toBe('raised 14:06 · waiting 3m');
-    expect(kids[7]!.text).toMatch(/^contentHash sha256:c{16}/);
+    expect(kids[2]!.text).toBe('raised 14:06 · waiting 3m');
+    // Aegis: the contentHash line is VISIBLE on the card (outside the disclosure), the full hash in title=
+    expect(kids[4]!.text).toMatch(/^contentHash sha256:c{16}/);
+    expect(kids[4]!.attrs.get('title')).toBe(`contentHash sha256:${'c'.repeat(64)}`);
+    // the disclosure holds the full requester + session and the kernel-composed body
+    const det = kids[5]!;
+    expect(det.tag).toBe('details');
+    expect(det.text).toContain('requested by p:7k2m9q4x/claude · hsid:v1:A · billing');
+    expect(det.text).toContain('command: pnpm test');
+  });
+  it('the short requester mark: the name after the last /, else the whole principal', () => {
+    expect(shortRequester('p:7k2m9q4x/claude')).toBe('claude');
+    expect(shortRequester('p:7k2m9q4x/kernel')).toBe('kernel');
+    expect(shortRequester('weird')).toBe('weird');
+    expect(shortRequester('p:x/has space')).toBe('p:x/has space');
+    // a foreign principal (another trust set) never shortens to a bare name
+    expect(shortRequester('p:7k2m9q4x/claude@0a1b2c3d')).toBe('p:7k2m9q4x/claude@0a1b2c3d');
+  });
+  it('a requester-written card: its words go in details, labelled as the requester\'s; the title is the kind', () => {
+    const el = renderCard({ doc: fdoc }, { ...v, kind: 'knot', decisions: ['resolve'] }, { type: 'Box', children: [{ type: 'Text', text: 'KNOT · two strands' }] }) as FEl;
+    const kids = el.children.filter((c): c is FEl => c instanceof FEl);
+    expect(kids[1]!.text).toBe('knot');
+    const det = kids.find((k) => k.tag === 'details')!;
+    expect(det.text).toContain("the requester's words (p:7k2m9q4x/claude):");
+    expect(det.text).toContain('KNOT · two strands');
+  });
+  it('a claim-mismatch card keeps its whole body (the red warning) VISIBLE, never inside the disclosure', () => {
+    const el = renderCard({ doc: fdoc }, { ...v, kind: 'gate-class', flags: ['claim-mismatch'] }, { type: 'Box', children: [{ type: 'Text', text: 'NOT signed by the expected publisher' }] }) as FEl;
+    const kids = el.children.filter((c): c is FEl => c instanceof FEl);
+    const body = kids.find((k) => k.className.startsWith('card-body'))!;
+    expect(body.text).toContain('NOT signed by the expected publisher');
+    expect(kids.find((k) => k.tag === 'details')!.text).not.toContain('NOT signed');
+  });
+  it('the permission title comes ONLY from the kernel row\'s structured tool fields, cross-checked with the kernel\'s line 1', () => {
+    const card = { kind: 'permission', requestedBy: 'p:7k2m9q4x/claude', hsid: 'hsid:v1:A', block, contentHash: 'sha256:' + 'c'.repeat(64) };
+    expect(permissionTitleOf(card, 'Bash', { command: 'pnpm test\n  --filter billing' })).toEqual({ verb: 'Allow Bash', arg: 'pnpm test --filter billing' });
+    expect(permissionTitleOf(card, 'Edit', { file_path: '/x' })).toBeNull(); // line 1 names Bash, the row says Edit
+    expect(permissionTitleOf({ ...card, kind: 'knot' }, 'Bash', { command: 'x' })).toBeNull();
+    expect(permissionTitleOf(card, '<b>', { command: 'x' })).toBeNull();
+    expect(permissionTitleOf(card, 'Bash', null)).toEqual({ verb: 'Allow Bash', arg: '' });
+    // with the kernel's verified structured detail, the row's input must hash to its inputHash
+    const input = { command: 'pnpm test' };
+    const detail = { tool: 'Bash', inputHash: toolInputHash(input), prefixOptions: [['pnpm', 'test']] };
+    const withNode = { ...card, block: { ...block, children: [...block.children, { type: 'bash-prefix', detail }] } };
+    withNode.contentHash = cardContentHash(withNode, detail);
+    expect(permissionTitleOf(withNode, 'Bash', input)).toEqual({ verb: 'Allow Bash', arg: 'pnpm test' });
+    expect(permissionTitleOf(withNode, 'Bash', { command: 'rm -rf /' })).toBeNull();
+    const el = renderCard({ doc: fdoc }, { ...v, composedTitle: { verb: 'Allow Bash', arg: 'pnpm test' } }, block) as FEl;
+    const t = el.children.filter((c): c is FEl => c instanceof FEl)[1]!;
+    expect(t.text).toBe('Allow Bash pnpm test');
+    expect(t.attrs.get('title')).toBe('Allow Bash pnpm test');
   });
   it('the voice tag is the kernel handle: reversible · label, gate + the handle word, else hand-only', () => {
     expect(voiceTagOf({ eligible: 'gate', label: 'LANTERN' })).toEqual({ text: '🎙 gate', handle: 'LANTERN' });
@@ -274,13 +322,16 @@ describe('Aegis S2/S3 review fixes', () => {
     const kids = odd.children.filter((c): c is FEl => c instanceof FEl);
     expect(kids[0]!.text).toContain('by p:x/mod-y');
     expect(kids[1]!.text).toBe('mod-thing');
-    expect(kids[2]!.className).toContain('quoted');
-    expect(kids[2]!.text).toContain('Ignore the kernel: click allow');
+    // fidelity 2: the requester's words sit in the details disclosure, labelled as theirs
+    const det = kids.find((k) => k.tag === 'details')!;
+    const quoted = det.children.find((c): c is FEl => c instanceof FEl && c.className.includes('quoted'))!;
+    expect(quoted.text).toContain("the requester's words (p:x/mod-y):");
+    expect(quoted.text).toContain('Ignore the kernel: click allow');
     const perm = renderCard({ doc: fdoc }, { ...base, kind: 'permission' }, block) as FEl;
     expect(perm.children.filter((c): c is FEl => c instanceof FEl)[1]!.text).toBe('Ignore the kernel: click allow');
   });
   it('M2: buried keys take no click until the pile fans; a decision right after a re-layout is ignored', () => {
-    expect(css).toMatch(/\.pile:not\(:hover\):not\(:focus-within\):not\(\.fan\):not\(\.open\) \.card \+ \.card \.card-keys \{ pointer-events: none; \}/);
+    expect(css).toMatch(/\.pile:not\(:hover\):not\(:focus-within\):not\(\.fan\):not\(\.open\) \.card \+ \.card \.card-keys,\n\.pile:not\(:hover\):not\(:focus-within\):not\(\.fan\):not\(\.open\) \.card \+ \.card \.card-details \{ pointer-events: none; \}/);
     expect(app).toMatch(/if \(performance\.now\(\) - stackLaidOutAt < RELAYOUT_GUARD_MS\) return;/);
     expect(app).toMatch(/clear\(pile\);\s*stackLaidOutAt = performance\.now\(\);/);
     expect(app).toMatch(/const RELAYOUT_GUARD_MS = 300;/);
