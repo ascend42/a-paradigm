@@ -1,11 +1,11 @@
 // #gui S2 desk structure (critique 2026-10-20 §2 S2): the pure helpers behind the sessions rail, the chat fold and
 // the safe markdown subset. The page wiring is checked by source scans at the end.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectHue } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { cardContentHash, KERNEL_TITLED_KINDS, localNsOf, mdBlocks, mdInline, permissionTitleOf, raisedLine, renderCard, shortRequester, splitCardBlock, stampWord, TITLE_ARG_MAX, toolInputHash, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { cardContentHash, h, KERNEL_TITLED_KINDS, localNsOf, mdBlocks, mdInline, permissionTitleOf, raisedLine, renderCard, shortRequester, splitCardBlock, stampWord, TITLE_ARG_MAX, toolInputHash, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { activitySummary, failedExit, foldActivity, groupHue, GuiStore, isLiveState, sessionNote, sessionTitle, splitActivePast, type ChatItem, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -167,6 +167,18 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
     expect(css).toMatch(/\.snote\.tone-fail \{ color: var\(--fail\);/);
     expect(css).toMatch(/\.snote\.tone-need \{ color: var\(--warn-ink\);/);
     expect(css).toMatch(/\.trow\.role-user \{ display: flex; flex-direction: column; align-items: flex-end; \}/);
+  });
+});
+
+describe('Aegis L4: h() and ids', () => {
+  it('h() refuses an id attribute, and no h() call in the source passes one (the update banner and reconnect key set it after)', () => {
+    expect(() => h(fdoc, 'div', { id: 'update-banner' })).toThrow(/attribute id is not allowed/);
+    for (const f of readdirSync(path.join(ROOT, 'src'), { recursive: true }) as string[]) {
+      if (f.endsWith('.ts')) expect(readFileSync(path.join(ROOT, 'src', f), 'utf8'), f).not.toMatch(/\bh\([^)]*\{[^}]*\bid:/);
+    }
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toContain("el.id = 'update-banner';");
+    expect(app).toContain("close.id = 'reconnect-close';");
   });
 });
 

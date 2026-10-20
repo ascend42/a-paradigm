@@ -51,6 +51,9 @@ components:
       whole.
       L3: a model-text choice chip keeps its filled choice-k pill at night too (two cues: dashed edge +
       pill), never the dashed border alone.
+      L4: h() keeps `id` OFF its attribute allowlist (display data must not clobber getElementById); the
+      update banner and the reconnect close key set .id after h(). approval.mode.set rows stay visible as a
+      system line ("run mode a → b") and in the raw view.
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
       SVG caps. core/render.ts renderCap draws a Text node's `cap` only after

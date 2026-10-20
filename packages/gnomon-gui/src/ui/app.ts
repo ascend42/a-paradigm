@@ -599,7 +599,9 @@ function paintUpdateBanner(): void {
     return;
   }
   if (!el) {
-    el = h(doc, 'div', { id: 'update-banner', class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
+    // Aegis L4: h() never takes an `id` (ids would let display data clobber getElementById lookups); set it here
+    el = h(doc, 'div', { class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
+    el.id = 'update-banner';
     document.body.prepend(el);
   }
   clear(el);
@@ -897,7 +899,8 @@ function paintStale(st: StaleState): void {
   showReconnect(v.text);
   let close = document.getElementById('reconnect-close');
   if (!close) {
-    close = h(doc, 'button', { id: 'reconnect-close', class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    close = h(doc, 'button', { class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    close.id = 'reconnect-close'; // Aegis L4: not through h()
     // a user click only; window.close() is allowed for a tab with one history entry, else the text says to continue there
     close.addEventListener('click', (e) => void (e.isTrusted && window.close()));
     reconnectBtn().after(close);
