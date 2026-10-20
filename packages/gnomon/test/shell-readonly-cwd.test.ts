@@ -122,3 +122,36 @@ describe('#shell-readonly anchored cwd: refusals', () => {
     expect(ro('echo {1..3}')).toEqual({ ok: true });
   });
 });
+
+describe('#shell-readonly RC3: git read-only subcommands (at the root, after the GIT_BAD checks)', () => {
+  it.each([
+    'git worktree list', 'git worktree list --porcelain', 'git stash list', 'git stash list --oneline', 'git show-ref --heads', 'git ls-tree HEAD',
+    'git cat-file -t HEAD', 'git cat-file -s HEAD', 'git cat-file -p HEAD', 'git rev-list --count HEAD', 'git shortlog -sn HEAD',
+    'git merge-base HEAD HEAD', "git for-each-ref --format='%(refname)' refs/heads", 'git tag -l', 'git tag --list "v*"', 'git tag -l -n3 --sort=-v:refname', 'git reflog show -5',
+  ])('passes %s', (c) => {
+    expect(ro(c)).toEqual({ ok: true });
+  });
+  it.each([
+    ['git worktree add x', /only list/],
+    ['git worktree list --expire now', /worktree list/],
+    ['git stash', /only list/],
+    ['git stash list stash@{0}', /brace|stash list/],
+    ['git stash pop', /only list/],
+    ['git reflog expire --all', /only show/],
+    ['git reflog', /only show/],
+    ['git cat-file --batch', /cat-file/],
+    ['git cat-file -p HEAD --textconv', /cat-file|--textconv/],
+    ['git cat-file --textconv HEAD:a', /--textconv|cat-file/],
+    ['git tag v1', /only -l/],
+    ['git tag -l -d v1', /git tag: -d/],
+    ['git tag -a v1 -l', /git tag: -a/],
+    ['git rev-list --output=x HEAD', /--output/],
+    ['git for-each-ref --outp=x', /--outp/],
+    ['git ls-tree -O HEAD', /git: -O/],
+    ['cd sub && git ls-tree HEAD', /only with the cwd at a session root/],
+  ])('refuses %s', (c, why) => {
+    const v = ro(c);
+    expect(v.ok).toBe(false);
+    expect((v as { why: string }).why).toMatch(why);
+  });
+});

@@ -95,7 +95,9 @@
  *   ENVIRON, getline, system, redirection), sed (only -n -E -r and scripts
  *   `Np`, `N,Mp`, `$p`, `/re/p`), git (a known cwd; no global option at all —
  *   no -c, -C, --exec-path, --git-dir; subcommands status log diff show blame
- *   rev-parse ls-files describe, never with --output*, --ext-diff,
+ *   rev-parse ls-files describe show-ref ls-tree rev-list shortlog merge-base
+ *   for-each-ref, `worktree list`, `stash list`, `reflog show`, `cat-file -t|-s|-p OBJ`, `tag -l/--list` (listing
+ *   flags only), never with --output*, --ext-diff,
  *   --textconv, -O/--open-files-in-pager; `branch` with only listing flags
  *   and a pattern only after the long --list (Low: `-l NAME` created NAME in
  *   older git); `remote` bare only (M3: `-v` prints URLs that may hold
@@ -1335,6 +1337,8 @@ const sedRule: Rule = (args, env, name) => {
   pathArgs(ops, env, name);
 };
 const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'blame', 'rev-parse', 'ls-files', 'describe']);
+/** RC3: read-only plumbing/porcelain whose every option reads (any argument, after the GIT_BAD check). */
+const GIT_READ_MORE = new Set(['show-ref', 'ls-tree', 'rev-list', 'shortlog', 'merge-base', 'for-each-ref']);
 /**
  * Long options that write, run a program or redirect git. git accepts any unambiguous ABBREVIATION of a long option
  * (`--outp=f` is `--output=f`) and bundles short options (`-iOsh` carries `-O`), so a literal match is not enough
@@ -1372,6 +1376,35 @@ const gitRule: Rule = (args, env, name) => {
     // Low: `-l NAME` was --create-reflog in older git (it created NAME); a pattern only after the long --list
     if (names.length && !rest.some((a) => a.lit === '--list')) no('git branch: a name (only with --list)');
     return;
+  }
+  // RC3 (TD-2026-10-20-086): more read-only subcommands; every argument already passed GIT_BAD above
+  if (GIT_READ_MORE.has(sub!)) return pathArgs(rest, env, name);
+  const flagsOnly = (re: RegExp, what: string): void => {
+    for (const a of rest.slice(1)) if (!re.test(a.lit!)) no(`git ${what}: ${a.lit}`);
+  };
+  if (sub === 'worktree') {
+    if (rest[0]?.lit !== 'list') no('git worktree: only list');
+    return flagsOnly(/^(--porcelain|-v|--verbose|-z)$/, 'worktree list');
+  }
+  if (sub === 'stash') {
+    if (rest[0]?.lit !== 'list') no('git stash: only list');
+    return flagsOnly(/^-/, 'stash list'); // log options only, no operand
+  }
+  if (sub === 'reflog') {
+    if (rest[0]?.lit !== 'show') no('git reflog: only show');
+    return pathArgs(rest.slice(1), env, name);
+  }
+  if (sub === 'cat-file') {
+    if (rest.length === 2 && ['-t', '-s', '-p'].includes(rest[0]!.lit!) && !rest[1]!.lit!.startsWith('-')) return pathArgs(rest.slice(1), env, name);
+    no('git cat-file: only -t, -s or -p OBJECT');
+  }
+  if (sub === 'tag') {
+    // `git tag NAME` creates a tag: only the listing form, with -l/--list and listing flags
+    if (!rest.some((a) => a.lit === '-l' || a.lit === '--list')) no('git tag: only -l/--list');
+    for (const a of rest) {
+      if (isFlag(a) && !/^(-l|-i|-n\d*|--list|--ignore-case|--sort=.*|--format=.*|--contains|--no-contains|--merged|--no-merged|--points-at|--column|--no-column|--color|--color=.*|--no-color)$/.test(a.lit!)) no(`git tag: ${a.lit}`);
+    }
+    return pathArgs(rest, env, name);
   }
   if (sub === 'remote') {
     if (rest.length === 0) return;
