@@ -4,7 +4,8 @@
  * and is skipped in manual mode. Pure tests (no POSIX fixtures).
  */
 import { describe, expect, it } from 'vitest';
-import { ALLOW_NPM_TEST_PREFIX, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
+import { ALLOW_NPM_TEST_PREFIX, BUILD_TOOL_PREFIX_ALLOW, BUILD_TOOLS, GIT_SUBCOMMAND_ALLOW, gitPrefixOptBad, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
+import { gateClassPathRule } from '../src/kernel/manifest/layers.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
 
@@ -43,11 +44,15 @@ describe('#prefix-policy H1: prefixes that equal code execution', () => {
     }
   });
 
-  it('package managers and build tools: default deny, a small read-only allowlist; npm test stays off', () => {
-    for (const p of [['npm', 'run'], ['npm', 'exec'], ['npm', 'x'], ['npm', 'test'], ['npm', 'start'], ['npm', 'install'], ['npm', 'i'], ['npm', 'ci'], ['npm', 'build'], ['pnpm', 'dlx'], ['pnpm', 'add'], ['yarn', 'test'], ['yarn', 'build'], ['bun', 'ls'], ['cargo', 'build'], ['cargo', 'run'], ['cargo', 'test'], ['go', 'run'], ['go', 'test'], ['go', 'generate'], ['go', 'build'], ['make', 'all'], ['make', 'test'], ['gradle', 'tasks'], ['mvn', 'dependency:tree']]) {
+  it('package managers and build tools: the allowlist is EMPTY (second BLOCK H2–H4/M1/M2); npm test stays off', () => {
+    for (const p of [['npm', 'run'], ['npm', 'exec'], ['npm', 'x'], ['npm', 'test'], ['npm', 'start'], ['npm', 'install'], ['npm', 'i'], ['npm', 'ci'], ['npm', 'build'], ['pnpm', 'dlx'], ['pnpm', 'add'], ['yarn', 'test'], ['yarn', 'build'], ['bun', 'ls'], ['cargo', 'build'], ['cargo', 'run'], ['cargo', 'test'], ['go', 'run'], ['go', 'test'], ['go', 'generate'], ['go', 'build'], ['make', 'all'], ['make', 'test'], ['gradle', 'tasks'], ['mvn', 'dependency:tree'],
+      // the former "read-only" allowlist: each runs or routes repo-controlled code (yarnPath, rustc-wrapper, go env -w, .pnpmfile, npm view --registry)
+      ['npm', 'ls'], ['npm', 'list'], ['npm', 'view'], ['npm', 'outdated'], ['npm', 'explain'], ['pnpm', 'ls'], ['pnpm', 'why'], ['yarn', 'why'], ['yarn', 'info'], ['yarn', 'list'], ['cargo', 'tree'], ['go', 'list'], ['go', 'env'], ['go', 'version'],
+      ['npm', 'ls', 'x'], ['swift', 'build'], ['pip', 'list'], ['uv', 'tree'], ['tsc', 'x'], ['vitest', 'run'], ['corepack', 'yarn'], ['gmake', 'x'], ['mvnw', 'x'], ['gradlew', 'x']]) {
       expect(prefixRefusal(p), p.join(' ')).not.toBeNull();
     }
-    for (const p of [['npm', 'ls'], ['npm', 'view'], ['npm', 'outdated'], ['cargo', 'tree'], ['go', 'list'], ['go', 'env']]) expect(prefixRefusal(p), p.join(' ')).toBeNull();
+    expect(BUILD_TOOL_PREFIX_ALLOW).toEqual({});
+    for (const t of BUILD_TOOLS) expect(prefixRefusal([t, 'ls']), t).not.toBeNull();
     expect(ALLOW_NPM_TEST_PREFIX).toBe(false);
   });
 
@@ -65,6 +70,10 @@ describe('#prefix-policy H1: prefixes that equal code execution', () => {
     expect(book(rows(card(2), ['bash', 'x.sh'], 'bash x.sh')).list()).toEqual([]);
     expect(book(rows(card(3), ['git'], 'git log')).list()).toEqual([]);
     expect(book(rows(card(4), ['gіt', 'log'], 'gіt log')).list()).toEqual([]); // a homoglyph argv0
+    // second BLOCK: a build-tool row learned while the "read-only" allowlist existed forms no rule
+    for (const [i, p] of [['npm', 'ls'], ['npm', 'view'], ['cargo', 'tree'], ['go', 'env'], ['pnpm', 'ls'], ['yarn', 'why']].entries()) {
+      expect(book(rows(card(20 + i), p, `${p.join(' ')} x`)).list(), p.join(' ')).toEqual([]);
+    }
     expect(book(rows(card(5), ['git', 'log'], 'git log -n 5')).list()).toHaveLength(1);
   });
 });
@@ -94,6 +103,42 @@ describe('#prefix-policy match time: git options, location (M3), manual mode (M2
       'git log -u',
       'git log -O order',
     ]) expect(m(b, c), c).toBeNull();
+  });
+
+  it('second BLOCK H1: git long-option ABBREVIATIONS and short-option BUNDLES are refused under every [git, <sub>] rule', () => {
+    const bad = [
+      'grep --open=sh x', 'log --outp=f', 'diff --ext-d', "grep -iOsh -c x y", 'show --textc', 'log --o=f', 'diff --ext', 'show --tex',
+      'log --exec-p=/x', 'log --git=x', 'log --work=x', 'log --upload=x', 'log --pag', 'grep --open-files', 'blame --cont=x', 'log --conf=a',
+      'grep -Osh x', 'grep -inO x', 'log -nc', 'log -ic', 'log -iC', 'log -vp', 'diff -wu', 'grep -iOless x',
+    ];
+    for (const sub of GIT_SUBCOMMAND_ALLOW) {
+      const r = book(rows(card(30), ['git', sub], `git ${sub}`));
+      for (const tail of bad) {
+        const c = `git ${sub} ${tail.split(' ').slice(1).join(' ')}`;
+        expect(m(r, c), c).toBeNull();
+      }
+    }
+    // the exact Aegis repros, through simpleArgv (quoting) and the rule book
+    const g = book(rows(card(31), ['git', 'grep'], 'git grep x'));
+    expect(m(g, "git grep -iO'sh -c x' y")).toBeNull();
+    expect(m(g, 'git grep --open=sh x')).toBeNull();
+    expect(m(g, 'git grep -n TODO')).not.toBeNull();
+    expect(m(b, 'git log --outp=f')).toBeNull();
+    expect(m(book(rows(card(32), ['git', 'diff'], 'git diff')), 'git diff --ext-d')).toBeNull();
+    expect(m(book(rows(card(33), ['git', 'show'], 'git show')), 'git show --textc')).toBeNull();
+    // harmless options and negations still match
+    for (const c of ['git log --oneline', 'git log --no-ext-diff', 'git log --stat -n 5', 'git log --pretty=format:%h', 'git log --output-indicator-new=+', 'git log -- src']) expect(m(b, c), c).not.toBeNull();
+    for (const a of ['--', '-n', '--stat', '--no-textconv']) expect(gitPrefixOptBad(a), a).toBe(false);
+  });
+
+  it('a prefix-ruled argument never names a gate-class path (.git/** needs a card)', () => {
+    expect(gateClassPathRule('.git/config')).not.toBeNull();
+    expect(gateClassPathRule('.git/hooks/pre-commit')).not.toBeNull();
+    const cp = book(rows(card(34), ['cp', 'a.txt'], 'cp a.txt b.txt'));
+    expect(m(cp, 'cp a.txt b.txt')).not.toBeNull();
+    for (const c of ['cp a.txt .git/config', `cp a.txt ${ROOT}/.git/hooks/pre-commit`, 'cp a.txt package.json', 'cp a.txt .claude/settings.json', 'cp a.txt sub/.git/config', 'cp a.txt --target=.git']) expect(m(cp, c), c).toBeNull();
+    expect(m(b, 'git log -- .git/config')).toBeNull();
+    expect(m(b, 'git log HEAD~3')).not.toBeNull(); // a rev, not a win32 short name (off win32)
   });
 
   it('binds the match to the session roots: .., ~, \\ and absolute paths outside the roots refuse it', () => {

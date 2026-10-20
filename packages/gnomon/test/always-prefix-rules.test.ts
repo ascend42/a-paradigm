@@ -121,7 +121,7 @@ describe('#always-rules prefix rules (TD-2026-10-20-294)', () => {
     expect(p.block.children.filter((c) => c.type === 'bash-prefix').map((c) => c.detail)).toEqual([p.detail]);
     expect(plan('ls').detail.prefixOptions).toBeUndefined();
     expect(plan('rg foo').detail.prefixOptions).toEqual([['rg', 'foo']]);
-    for (const c of ['ls -la', 'bash x.sh', 'python3 x.py', 'npm test', 'npm run build', 'git push origin', 'git -c x=y log', 'cargo build', 'make all', './run.sh go', 'g\u0456t log']) expect(plan(c).detail.prefixOptions, c).toBeUndefined();
+    for (const c of ['ls -la', 'bash x.sh', 'python3 x.py', 'npm test', 'npm run build', 'git push origin', 'git -c x=y log', 'cargo build', 'make all', 'npm ls', 'npm view x', 'cargo tree', 'go env', 'go list ./...', 'pnpm ls', 'yarn why x', './run.sh go', 'g\u0456t log']) expect(plan(c).detail.prefixOptions, c).toBeUndefined();
     for (const c of ['git log | sh', 'git log; rm x', 'FOO=1 git log', 'git log $(x)', 'git log > f']) {
       const q = plan(c);
       expect(q.detail.prefixOptions, c).toBeUndefined();

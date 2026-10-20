@@ -131,7 +131,7 @@ describe('#approval-broker prefix-scoped always (TD-2026-10-20-294)', () => {
   });
   it('Aegis H1: the broker refuses a prefix the policy refuses, even when it is a true prefix of the shown command', async () => {
     const r = rig();
-    for (const [command, prefix] of [['npm test', ['npm', 'test']], ['bash x.sh', ['bash', 'x.sh']], ['git push origin', ['git', 'push']], ['git log -n 5', ['git']], ['g\u0456t log', ['g\u0456t', 'log']], ['python3 -m http.server', ['python3', '-m']], ['cargo build', ['cargo', 'build']]] as Array<[string, string[]]>) {
+    for (const [command, prefix] of [['npm test', ['npm', 'test']], ['bash x.sh', ['bash', 'x.sh']], ['git push origin', ['git', 'push']], ['git log -n 5', ['git']], ['g\u0456t log', ['g\u0456t', 'log']], ['python3 -m http.server', ['python3', '-m']], ['cargo build', ['cargo', 'build']], ['npm ls', ['npm', 'ls']], ['npm view x --registry=https://evil.example', ['npm', 'view']], ['cargo tree', ['cargo', 'tree']], ['go env -w GOFLAGS=-toolexec=x', ['go', 'env']], ['pnpm ls', ['pnpm', 'ls']], ['yarn why x', ['yarn', 'why']], ['make all', ['make', 'all']]] as Array<[string, string[]]>) {
       const c = await r.raise(command);
       const e = await refusal(r.broker.approve(H, { cardId: c.cardId, decision: 'always', scope: { kind: 'prefix', prefix }, decisionSig: r.scoped(c.cardId, c.contentHash, prefix) }));
       expect(e, command).toMatchObject({ code: 'BAD_REQUEST' });
