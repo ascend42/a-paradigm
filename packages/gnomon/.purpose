@@ -1159,6 +1159,12 @@ components:
 
   manifest-loader:
     description: >-
+      S0b user-mcp.ts: userMcpServerNames(home, {repo?}) reads ONLY server NAMES
+      (never commands, args or env) from ~/.claude.json (user scope mcpServers and
+      local scope projects.<path>.mcpServers) and <repo>/.mcp.json (project scope,
+      when a repo is given), fail-soft on a missing or unparseable file; fed to the
+      install/decide/load COLLISION check so a mod's gm_<pub>_<name> server never
+      collides with a server the user already has (Aegis S0b M1).
       #manifest-loader, the Desk (TD-2026-10-20-812). manifest.ts: provides.offers
       (offer-spec:v1 from gnomon-contracts, at most 6, unique kinds, needs a
       provides.mcp server since reach is mcp) and 'offers' in WIDENING_FIELDS (key
@@ -2188,7 +2194,14 @@ components:
       POSIX /… or a Windows drive path; // and UNC refused) is never added
       (skipped needs-config, daemon diag daemon.desk.mcp.unconfigured with
       the gnomon mod config hint); both shipped first-party defaults fail it
-      until configured. Names come from ONE helper, serverNameOf: an entry
+      until configured. S0b regression fix: the session base is the repo's
+      VERIFIED GENERATED distro mcp.json (.gnomon/generated/.mcp.json, named
+      gm_<pub>_<distro> by renderGenerated) and is passed as opts.distro /
+      repoServersOnly(repo, distro): kernel output, so it bypasses the
+      reserved-prefix drop that still applies to repo-authored names; a mod
+      deriving the same name wins it (PassthroughResult.shadowed, diag
+      mcp.distro-shadowed) and a distro server is never in `added` (H1/H1b
+      intact). Names come from ONE helper, serverNameOf: an entry
       named <mod> or gnomon-<mod> is gnomon-<mod>, else gnomon-<mod>-<entry>
       (gnomon-neurons-brain); #offer-router's kept check uses the same helper.
       Aegis S1 fixes: repo servers named with a reserved desk prefix
@@ -3117,6 +3130,11 @@ components:
 
   mod-host:
     description: >-
+      S0b (Aegis L1): status.mods.publishers maps each RUNNING mod id to its
+      publisher display {host, verified} (publisherDisplayOf(publisher, source)
+      from the install row's source), so GUI panel headers and offer chips render
+      'name (pub @ host)' or 'name (pub, unverified)'. A status sub-field: not in
+      STATUS_RESERVED_FIELDS, so clientApiId does not move.
       #mod-host (spec §3.8, §12.1-§12.3, §15.5 row mod; §19.1 M1.11 slice 1)
       in src/kernel/modhost/. host.ts ModHost - one child per mod, started
       ONLY via #manifest-loader loadMod (root-signed grant.install, snapshot
