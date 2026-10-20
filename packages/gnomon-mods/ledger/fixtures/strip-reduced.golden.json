@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Ledger · this session",
+  "direction": "row",
+  "children": [
+    {
+      "type": "Text",
+      "text": "●",
+      "tone": "hue-2"
+    },
+    {
+      "type": "Text",
+      "text": "182k in · 9k out · 71% cache · $0.42 · ⇣ 2 compactions (190k → 41k)",
+      "tone": "warn"
+    },
+    {
+      "type": "Text",
+      "text": "▮ tokens 75 of 100% (session daily cap)",
+      "tone": "warn"
+    }
+  ]
+}
