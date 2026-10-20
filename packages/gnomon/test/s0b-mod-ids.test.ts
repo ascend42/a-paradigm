@@ -191,3 +191,68 @@ describe('S0b install card', () => {
     expect(looks).toContain('publisher acme looks like acrne (installed)');
   });
 });
+
+describe('S0b reservations, skeletons and boundaries (tester additions)', () => {
+  const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
+  const gh = (owner: string) => `git:https://github.com/${owner}/board#${SHA}`;
+  it('founder brands: a-company, warpline, nevr, nevrland, conductor refused at validation, so from every source', () => {
+    for (const p of ['a-company', 'warpline', 'nevr', 'nevrland', 'conductor']) {
+      expect(code(() => validateManifest(base({ publisher: p }), local)), p).toBe('PUBLISHER');
+      expect(code(() => validateManifest(base({ publisher: p }), { tier: `signed:gkey-p256:v1:${'a'.repeat(64)}` })), p).toBe('PUBLISHER');
+      // and the source check refuses too (defence in depth: github.com/a-company belongs to someone else)
+      expect(code(() => checkPublisherSource({ ...m('acme'), publisher: p }, gh(p), grants())), p).toBe('PUBLISHER');
+    }
+  });
+
+  it('ascend42 and its skeletons: github.com/ascend42 only; folder, other host and look-alike owners refused', () => {
+    expect(validateManifest(base({ publisher: 'ascend42' }), local).publisher).toBe('ascend42');
+    expect(code(() => checkPublisherSource(m('ascend42'), 'linked:/src/board', grants()))).toBe('PUBLISHER');
+    for (const p of ['a5cend42', 'ascencl42', 'ascend-42']) {
+      const c = code(() => checkPublisherSource(m(p), gh(p), grants()));
+      const v = code(() => validateManifest(base({ publisher: p }), local));
+      expect(c === 'PUBLISHER' || v === 'PUBLISHER', p).toBe(true);
+    }
+  });
+
+  it('skeletons of reserved publishers and first-party names are refused; an unrelated publisher passes', () => {
+    for (const p of ['gn0mon', 'cIaude', 'anthr0pic', 'paradlgm', 'w0rkshop', 'ledg3r', 'neur0ns', 'warp1ine', 'nevr-land']) {
+      expect(code(() => validateManifest(base({ publisher: p.toLowerCase() }), local)), p).toBe('PUBLISHER');
+    }
+    expect(validateManifest(base({ publisher: 'zebra-labs' }), local).publisher).toBe('zebra-labs');
+  });
+
+  it('Windows device names in both segments', () => {
+    for (const d of ['con', 'prn', 'aux', 'nul', 'com0', 'com9', 'lpt0', 'lpt9']) {
+      expect(code(() => validateManifest(base({ publisher: d }), local)), `publisher ${d}`).toBe('PUBLISHER');
+      expect(code(() => validateManifest(base({ name: d }), local)), `name ${d}`).toBe('NAME');
+    }
+    expect(validateManifest(base({ name: 'console' }), local).name).toBe('console'); // whole segment only
+  });
+
+  it('segment regexes: 39/24 chars, no leading/trailing/double hyphen, ASCII only; 39+1+24 = 64 > 60 refused', () => {
+    expect(code(() => validateManifest(base({ publisher: 'p'.repeat(40) }), local))).toBe('SCHEMA');
+    expect(code(() => validateManifest(base({ name: 'n'.repeat(25) }), local))).toBe('SCHEMA');
+    for (const p of ['-acme', 'acme-', 'ac--me', 'Acme', 'acmé', 'ac_me']) expect(code(() => validateManifest(base({ publisher: p }), local)), p).toBe('SCHEMA');
+    expect(code(() => validateManifest(base({ name: '1board' }), local))).toBe('SCHEMA');
+    expect(code(() => validateManifest(base({ publisher: 'p'.repeat(39), name: 'n'.repeat(24) }), local))).toBe('SCHEMA');
+    expect(validateManifest(base({ publisher: 'p'.repeat(36), name: 'n'.repeat(23) }), local).name).toHaveLength(23);
+  });
+
+  it('env prefix: hyphens become a single _, so a forged __ cannot reach another mod', () => {
+    const mcp = (pub: string, name: string, env: string[]) => base({ publisher: pub, name, provides: { mcp: [{ command: '/bin/x', config: { env } }] } });
+    expect(() => validateManifest(mcp('my-co', 'dash-board', ['MY_CO__DASH_BOARD__URL']), local)).not.toThrow();
+    // my.co-x / my-co.x style splits cannot produce each other's prefix
+    expect(code(() => validateManifest(mcp('my', 'co-dash', ['MY__CO__DASH__URL']), local))).toBe('SCHEMA');
+  });
+
+  it('a FORMAT refusal for a future major names the Gnomon it needs', () => {
+    try {
+      readManifest(JSON.stringify(base({ manifest: 3, engines: { gnomon: '>=9.1.0' } })), local);
+      throw new Error('expected FORMAT');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ManifestRefusal);
+      expect((e as ManifestRefusal).message).toMatch(/needs Gnomon ≥ 9\.1\.0/);
+    }
+    expect(code(() => validateManifest(base({ engines: { gnomon: `>=${'1'.repeat(70)}.0.0` } }), local))).toBe('SCHEMA');
+  });
+});
