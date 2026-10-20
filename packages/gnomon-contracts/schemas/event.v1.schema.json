@@ -165,6 +165,7 @@
     "request.incident",
     "request.link.revoke",
     "request.mode.set",
+    "request.session.model",
     "request.strictness.set",
     "request.voice.arm",
     "request.voice.narrow",
@@ -181,6 +182,7 @@
     "session.idle",
     "session.inject",
     "session.layers.changed",
+    "session.model",
     "session.open",
     "session.orphaned",
     "session.refused",
@@ -304,10 +306,12 @@
     "request.incident": "M1.1:P8-D86-D88",
     "request.link.revoke": "M1.1:P8-R9",
     "request.mode.set": "M1.1:P8-D86-D88",
+    "request.session.model": "8.0:model-switch",
     "request.strictness.set": "M1.1:P8-D86-D88",
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
     "session.drained": "8.0:P8-D98",
+    "session.model": "8.0:model-switch",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -554,6 +558,17 @@
       "decision",
       "effect",
       "reason"
+    ],
+    "request.session.model": [
+      "hsid",
+      "model"
+    ],
+    "session.model": [
+      "hsid",
+      "from",
+      "to",
+      "permitId",
+      "outcome"
     ]
   },
   "x-gnomon-compaction-reasons": [

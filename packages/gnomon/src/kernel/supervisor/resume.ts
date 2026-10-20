@@ -14,6 +14,8 @@
  *     is also told the candidates' hsids (children.ts `resuming`) so a spawn of this boot is never swept.
  *   - a `session.drained` with no matching exit is NOT a candidate: the drain did not finish and its open
  *     spawn is swept as an orphan, never resumed.
+ *   - a `session.model{outcome: switched | reconciled}` (8.0:model-switch) moves the session's model to `to` and its
+ *     spawn permit to `permitId`: a switched session resumes on the model it ran, under the permit that switch reserved.
  *   - every `approval.request` with no later `approval.decide` / `approval.expire` is a card an earlier kernel
  *     left pending. This broker never held it, so a decision against its id is refused NOT_FOUND{not-found}.
  * resumeAfterUpgrade() first RETIRES every old pending card with `approval.expire{why:'cancelled'}` (deny;
@@ -111,6 +113,14 @@ export function planResume(rows: Iterable<ResumeRow>, trust: ResumeTrust): Resum
         break;
       case 'session.sandbox':
         if (hsid && typeof p.layersHash === 'string' && typeof p.permitId === 'string') t(hsid).sandbox = { layersHash: p.layersHash, gitHash: typeof p.gitHash === 'string' ? p.gitHash : null, permitId: p.permitId };
+        break;
+      case 'session.model':
+        // 8.0:model-switch: a switched (or reconciled) session resumes on the model on record, under the permit it ran with
+        if (hsid && (p.outcome === 'switched' || p.outcome === 'reconciled') && typeof p.to === 'string' && typeof p.permitId === 'string') {
+          const x = t(hsid);
+          if (x.open) x.open.model = p.to;
+          if (x.sandbox) x.sandbox.permitId = p.permitId;
+        }
         break;
       case 'session.drained':
         if (hsid && typeof p.uuid === 'string' && p.reason === 'upgrade') {

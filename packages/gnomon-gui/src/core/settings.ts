@@ -70,7 +70,7 @@ export type SettingRow =
   | { kind: 'toggle'; id: string; label: string; run: string; on: boolean; note?: string }
   | { kind: 'action'; id: string; label: string; run: string; note?: string }
   | { kind: 'revoke'; id: string; label: string; grantId: string; note?: string }
-  | { kind: 'readonly'; id: string; label: string; value: string; how: string };
+  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string };
 
 export type SectionId = 'appearance' | 'layout' | 'voice' | 'permissions' | 'about';
 export interface SettingsSection {
@@ -139,6 +139,8 @@ export interface SettingsInput {
   /** the focused session's run mode (status.runModes), or null */
   mode: SessionModeView | null;
   dictationDelayMs: number | null;
+  /** #gui-model-picker: the focused session's model text (core/model-picker.ts sessionModelText); absent = no row */
+  sessionModel?: string;
   /** this page's connection, or null when not connected */
   connection: { principal: string; connId: string; surface: string; clientApiDrift: boolean } | null;
   gui: { name: string; version: string };
@@ -242,6 +244,10 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
       note: own ? `this session runs its own mode (${m.chosen}); the folder’s applies to new sessions here` : `new sessions in this folder start in it${m.source === 'config' ? ' · now the signed default' : ''}`,
     });
     permissions.push({ kind: 'readonly', id: 'mode-ceiling', label: 'Mode ceiling', value: `${m.ceiling}${m.level ? ` at ${m.level}` : ''}`, how: 'Kernel-owned (§3.4 strictness): strictness levels are not built yet, so the ceiling allows all three modes. A choice above it shows disabled with its reason.' });
+  }
+  if (i.sessionModel !== undefined) {
+    // #gui-model-picker: read-only here (the slot repaints live); the switch is the chat header's model ▾
+    permissions.push({ kind: 'readonly', id: 'session-model', label: 'Session model', value: i.sessionModel, how: 'Switch it from the chat header’s model ▾: the conversation continues, the prompt cache restarts. Claude Code checks the model; a running turn finishes first.', slot: 'session-model' });
   }
   const st = standingStatusOf(s);
   const g = st.active[0] ?? null;

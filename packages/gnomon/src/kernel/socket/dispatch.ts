@@ -770,6 +770,17 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // 8.0:model-switch: the human switches a live Claude session's model (GUI launch token or human device only)
+      if (pa?.kind === 'request.session.model' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.sessions?.model) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [], connId: s.connId, ...(s.credential ? { credential: s.credential } : {}) };
+        try {
+          return await o.sessions.model(sctx, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // TD-2026-10-20-086 F6: the daily standing grant (mint: the GUI only; revoke: the GUI or this home's device)
       if ((pa?.kind === 'request.grant.standing' || pa?.kind === 'request.grant.standing.revoke') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.standing) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');

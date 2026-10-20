@@ -40,8 +40,8 @@ export interface Fixture {
   workshop: boolean;
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
-  /** #gui-settings: open the Settings sheet once painted */
-  open?: 'settings';
+  /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
+  open?: 'settings' | 'model-switch';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -219,7 +219,7 @@ const EXTRA_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'billing loosen', kind: 'strictness', hsid: BILLING, lines: ['Loosen billing to auto-edits', 'the session would edit files without a card; Bash still asks'], detail: { op: 'mode.loosen', from: 'ask', to: 'auto-edits' }, decisions: ['allow', 'deny'], strictness: { level: 'L1', mode: 'auto-edits', reason: 'requested from the GUI' } }),
 ];
 
-function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices' } = {}): Chain {
+function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -233,7 +233,7 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
   // today's boot
   c.add(T('13:00'), 'daemon.start', { version: '8.0.0', pid: 4242 });
   c.add(T('13:00:01'), 'socket.web.listen', { port: 7311 });
-  for (const a of ACTIVE) c.add(a.key === 'atelier' ? T('13:30') : a.key === 'warpline' ? T('13:40') : a.key === 'billing' ? T('13:58') : a.key === 'ledgerette' ? T('14:02') : T('14:03'), 'session.open', { hsid: a.hsid, backend: 'claude', model: 'claude', cwd: a.cwd }, { session: a.hsid, repo: a.repo });
+  for (const a of ACTIVE) c.add(a.key === 'atelier' ? T('13:30') : a.key === 'warpline' ? T('13:40') : a.key === 'billing' ? T('13:58') : a.key === 'ledgerette' ? T('14:02') : T('14:03'), 'session.open', { hsid: a.hsid, backend: 'claude', model: o.model && a.key === 'billing' ? 'haiku' : 'claude', cwd: a.cwd }, { session: a.hsid, repo: a.repo });
   const on = (key: string, at: string, kind: string, payload: Record<string, unknown>, principal?: string): void => {
     const a = A(key);
     c.add(at, kind, { hsid: a.hsid, ...payload }, { session: a.hsid, repo: a.repo, ...(principal ? { principal } : {}) });
@@ -262,6 +262,13 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
   ev('billing', T('14:05:27'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
   ev('billing', T('14:05:35'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
   ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
+
+  // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)
+  if (o.model) {
+    const fresh = `permit:v1:${ulid('model switch permit')}`;
+    on('billing', T('14:05:50'), 'request.session.model', { model: 'sonnet' });
+    on('billing', T('14:05:51'), 'session.model', { from: 'haiku', to: 'sonnet', permitId: fresh, outcome: o.model === 'switched' ? 'switched' : 'timeout' });
+  }
 
   // ledgerette: tsc failed, the session exited
   ask('ledgerette', T('14:02:10'), 'Run CI for packages/ledger.');
@@ -369,6 +376,8 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
   spoken: talkFixture('spoken', 'Table talk: one reply spoken sentence by sentence, the last cut off (one 🔊 marker)', 'spoken'),
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
+  'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
+  'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
   'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
 });
 

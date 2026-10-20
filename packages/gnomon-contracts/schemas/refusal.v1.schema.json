@@ -322,7 +322,13 @@
             "cursor-epoch",
             "draining",
             "cwd-hint-too-long",
-            "connection-gone"
+            "connection-gone",
+            "turn-running",
+            "model-switching",
+            "local-session",
+            "context-too-large",
+            "model-switch-failed",
+            "model-switch-timeout"
           ],
           "x-gnomon-additive": true
         },

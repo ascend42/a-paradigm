@@ -15,6 +15,38 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-model-picker:
+    description: >-
+      Founder ask 2026-10-20 ("is there no way to change the model of what
+      claude is in the tool?"). core/model-picker.ts (PURE): MODEL_CHOICES
+      (contracts CLAUDE_MODEL_ALIASES + custom), openModelOf (route claude
+      sends the alias/id or 'claude' for default; local/any unchanged),
+      pickerProblem (contracts claudeModelProblem), the per-folder memory
+      (localStorage gnomon.model.byFolder <= 64 folders + gnomon.model.last;
+      a stored value failing the check is never restored), sessionModelOf
+      (kernel rows only: the last session.model{outcome:switched}.to, else
+      session.open.model), switchRequest = log.append{kind:
+      request.session.model, payload:{hsid, model}}, switchConfirmText (the
+      conversation continues, the prompt cache restarts, a larger model uses
+      the plan faster; never says context is lost). ui/model-picker.ts (DOM,
+      mounted once by app.ts): the "claude model" select + custom id field
+      injected after #ns-model (hidden for the local route), the header chip
+      (model + ▾ menu) after the backend in #chead-meta, the confirm sheet
+      #model-switch-dialog that sends only once armed by a trusted click on
+      its Switch key or a trusted Enter in its id field, recorded before the
+      submit (Aegis L1; never the submit event's isTrusted), and the
+      read-only Settings slot [data-gnomon-slot="session-model"]. Tests:
+      test/model-picker.test.ts.
+      8.0:model-switch wiring: sessionModelOf also folds
+      session.model{reconciled} (model = to) and {timeout} (uncertain = to,
+      kept until reconciled, never after the session ended: a timeout before
+      or after session.exited is not shown unconfirmed, Aegis L2); modelChipText shows "model: switching…
+      (unconfirmed)" and disables the ▾ meanwhile; sessionModelText feeds the
+      Settings Permissions row `session-model` (readonly, slot
+      session-model, settings.ts SettingsInput.sessionModel); store.ts
+      sessionModelLine writes one transcript line per outcome. Preview
+      fixture `model-switch` (preview/fixtures.ts).
+    tags: [gui, model]
   gui:
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
