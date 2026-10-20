@@ -263,6 +263,12 @@ components:
       (aria-label, maxlength = detail.maxAnswerChars), askNote (null-
       prototype answers) builds the
       approve note: plain text for one question, JSON {answers} for several;
+      a Bash permission card (TD-2026-10-20-294) splits `always` into
+      "Always: this exact command" and one key per prefix choice, taken ONLY
+      from prefixOptionsOf (the one {type:'bash-prefix', detail} node whose
+      detail recomputes to the contentHash); approveParamsOf turns the
+      clicked key's data-scope/data-prefix into approve{scope} (only for
+      always; a malformed key sends no scope, so the exact rule);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
