@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { anchorCommand, parseShell, shellFlavour, shQuote } from '../src/kernel/supervisor/shell-readonly.js';
+import { anchorCommand, classifyReadOnly, parseShell, shellFlavour, shQuote } from '../src/kernel/supervisor/shell-readonly.js';
 import { autoBashReadOnly } from '../src/kernel/supervisor/auto-edits.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 
@@ -82,4 +82,32 @@ describe('K1 autoBashReadOnly with an anchor', () => {
   it('win32 is never anchored (the unanchored rules apply)', () => {
     expect(autoBashReadOnly('Bash', { command: 'pwd' }, ['C:\\w\\repo'], ['x'], 'C:\\g', 'win32', 'C:\\Users\\me', { root: 'C:\\w\\repo' })).toEqual({ ok: true, command: 'pwd', root: null });
   });
+});
+
+describe('Aegis C1: an unquoted heredoc line ending in a backslash (bash/zsh join it before the delimiter match)', () => {
+  const ctx = () => ({ roots: [root], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform, readRoots: [], cwd: real });
+  const attack = (op: string) => `cat ${op}EOF\nEO\\\nF\ntouch PWNED\nEOF`;
+  it.each(['<<', '<<-'])('refuses the split delimiter (%s)', (op) => {
+    expect(classifyReadOnly(attack(op), ctx())).toMatchObject({ ok: false, why: 'unparsed: heredoc: a line ending in a backslash' });
+    expect(classifyReadOnly(`cat ${op}EOF\nbody \\\nEOF\\\nEOF`, ctx()).ok).toBe(false);
+  });
+  it('a quoted heredoc keeps backslashes literal (no join): still passes; an even run passes unquoted', () => {
+    expect(classifyReadOnly("cat <<'EOF'\nEO\\\nF\nEOF", ctx())).toEqual({ ok: true });
+    expect(classifyReadOnly('cat <<EOF\nx \\\\\nEOF', ctx())).toEqual({ ok: true });
+  });
+  for (const [sh, flavour] of [['/bin/zsh', 'zsh'], ['/bin/bash', 'bash']] as const) {
+    it.skipIf(!have(sh))(`under ${sh}: the attack WOULD run touch (why it is refused), the passing forms run with no side effect`, () => {
+      const dir = fs.mkdtempSync(path.join(base, 'c1-'));
+      const raw = spawnSync(sh, ['-c', attack('<<')], { cwd: dir, encoding: 'utf8' });
+      expect(raw.status).toBe(127); // the trailing `EOF` line then runs as a command
+      expect(fs.existsSync(path.join(dir, 'PWNED'))).toBe(true); // the shell joined EO\⏎F into EOF
+      const realDir = fs.realpathSync(dir);
+      for (const ok of ["cat <<'EOF'\nEO\\\nF\nEOF", 'cat <<EOF\nx \\\\\nEOF']) {
+        expect(classifyReadOnly(ok, { ...ctx(), roots: [dir], cwd: realDir })).toEqual({ ok: true });
+        const r = spawnSync(sh, ['-c', anchorCommand(ok, realDir, flavour)], { cwd: elsewhere, encoding: 'utf8' });
+        expect(r.status).toBe(0);
+        expect(fs.readdirSync(dir).filter((n) => n !== 'PWNED')).toEqual([]);
+      }
+    });
+  }
 });

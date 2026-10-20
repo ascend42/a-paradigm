@@ -2398,7 +2398,9 @@ components:
       (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
       <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
       loops, redirections with IO numbers, heredocs); it refuses $((...)),
-      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, braces
+      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, (Aegis C1)
+      any line of an UNQUOTED heredoc (<< or <<-) ending in an odd run of
+      backslashes (the shell joins it before the delimiter match), braces
       other than the safe brace expansion, ~user, zsh $= $~ $^ forms and every
       other compound. TD-2026-10-20-086 grammar (each fail-closed): brace
       expansion {a,b} (two or more safe literal items, no nesting, no $, = or ~)

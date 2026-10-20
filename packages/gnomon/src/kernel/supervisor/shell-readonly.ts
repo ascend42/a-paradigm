@@ -388,6 +388,9 @@ class Lexer {
         const raw = nl < 0 ? this.s.slice(this.pos) : this.s.slice(this.pos, nl);
         this.pos = nl < 0 ? this.s.length : nl + 1;
         const line = h.strip ? raw.replace(/^\t+/, '') : raw;
+        // Aegis C1: in an UNQUOTED heredoc bash and zsh join backslash-newline before matching the delimiter, so
+        // `EO\⏎F` ends the body there and the rest RUNS. Refuse any such line (an odd run of trailing backslashes)
+        if (!h.quoted && /(^|[^\\])(\\\\)*\\$/.test(raw)) parseFail('heredoc: a line ending in a backslash');
         if (line === h.delim) break;
         lines.push(line);
       }
