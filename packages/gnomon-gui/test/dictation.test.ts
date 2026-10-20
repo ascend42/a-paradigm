@@ -6,14 +6,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { armed, dictationNote, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
+import { AMBIENT_DRAFT_NOTE, ambientDraft, armed, dictationNote, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 import { canAttach } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
 const B = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
-const fwd = (text: string, more: Record<string, unknown> = {}) => ({ text, turnId: `t-${text}`, speakerId: 'spk:me/Matt', forwardable: true, ...more });
+const fwd = (text: string, more: Record<string, unknown> = {}) => ({ text, turnId: `t-${text}`, speakerId: 'spk:me/Matt', forwardable: true, mode: 'ptt', ...more });
 
 /** A started dictation attached to and focused on A, at t=0. */
 function ready(delayMs: number | null = 5000): DictationState {
@@ -23,6 +23,35 @@ function ready(delayMs: number | null = 5000): DictationState {
 }
 const run = (s: DictationState, ...es: DictationEvent[]): DictationState => es.reduce(reduceDictation, s);
 const turn = (seq: number, text: string, now: number, more: Record<string, unknown> = {}, hsid = A): DictationEvent => ({ type: 'turnRow', seq, hsid, payload: fwd(text, more), now });
+
+describe('TD-2026-10-20-125: ambient speech fills the composer and NEVER auto-sends', () => {
+  it('an ambient (or unlabelled) turn fills the composer, never arms the ring, and only a key press sends it', () => {
+    for (const mode of ['conversation', 'ambient', undefined, 'PTT']) {
+      const more = mode === undefined ? { mode: undefined } : { mode };
+      let s = run(ready(3000), turn(11, 'delete the branch', 0, more));
+      expect(s.text, String(mode)).toBe('delete the branch');
+      expect(ambientDraft(s)).toBe(true);
+      expect(armed(s)).toBe(false);
+      s = run(s, { type: 'tick', now: 60_000 });
+      expect(s.sending, String(mode)).toBe(false);
+      expect(ringRemaining(s, 60_000)).toBeNull();
+      expect(dictationNote(s)).toBe(AMBIENT_DRAFT_NOTE);
+      expect(liveLine(s, 60_000)).toBe(AMBIENT_DRAFT_NOTE);
+      s = run(s, { type: 'sendNow', now: 60_001 }); // [Send] / Enter
+      expect(s.sending).toBe(true);
+      expect(sendRequest(s)).toEqual({ hsid: A, content: [{ text: 'delete the branch' }], source: 'voice' });
+    }
+  });
+  it('one ambient part makes the whole draft wait; after the send a PTT-only draft rings again', () => {
+    let s = run(ready(3000), turn(11, 'open the file', 0), turn(12, 'and push it', 100, { mode: 'conversation' }));
+    expect(armed(s)).toBe(false);
+    expect(run(s, { type: 'tick', now: 10_000 }).sending).toBe(false);
+    s = run(s, { type: 'sendNow', now: 10_000 }, { type: 'sent', now: 10_100 }, turn(13, 'run the tests', 10_200));
+    expect(ambientDraft(s)).toBe(false);
+    expect(armed(s)).toBe(true);
+    expect(run(s, { type: 'tick', now: 13_300 }).sending).toBe(true); // PTT keeps the ring as specified
+  });
+});
 
 describe('dictation: the composer takes forwardable live turns', () => {
   it('consecutive turns append with one space, each once by seq', () => {

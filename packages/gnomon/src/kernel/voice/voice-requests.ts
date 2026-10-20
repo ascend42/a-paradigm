@@ -30,6 +30,11 @@
  *                                       CAPTURE_TEXT_MAX together, kept in memory with the same capture TTL, NEVER a
  *                                       row, never voice.turn.user, never sent to a session. voiceStatusFor projects
  *                                       it to a HUMAN-class connection on the gui credential only (V2).
+ *   request.voice.report{prints}        2026-10-20 (founder regression): {stale: [names]} = the speakers whose voice
+ *                                       print predates the client's speech-gated front end (the client ignores it,
+ *                                       so they count as NOT enrolled). Held per voice connection with NO TTL (a
+ *                                       state, re-sent when it changes), cleared when that connection closes,
+ *                                       relayed as status.voice.prints{stale, at}. The GUI nudges a re-enrolment.
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
@@ -125,6 +130,14 @@ export const VOICE_REPORT_TTL_MS = 10 * 60_000;
 /** an enrolment card waits this long for the human (TTL) */
 export const VOICE_ENROL_CARD_TTL_MS = 5 * 60_000;
 
+/** the client's stale voice prints (status.voice.prints) */
+export interface PrintsReport {
+  stale: string[];
+  at: string;
+}
+/** at most this many stale names are held */
+export const PRINTS_STALE_MAX = 16;
+
 export interface EnrolmentReport {
   name: string;
   phase: EnrolPhase;
@@ -164,6 +177,9 @@ export class VoiceReports {
   #dictation: DictationReport | null = null;
   #playback: PlaybackReport | null = null;
   #capture: CaptureReport | null = null;
+  #prints: PrintsReport | null = null;
+  /** the voice connection that reported #prints (cleared when it closes) */
+  #printsConn: string | undefined;
   /** Aegis L3: the voice connection that reported the capture slot (cleared when it closes) */
   #captureConn: string | undefined;
   /** Aegis M1: the kernel's acceptances on each voice connection, not yet matched to a terminal capture report */
@@ -180,10 +196,10 @@ export class VoiceReports {
 
   /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
   report(p: unknown, connId?: string): { ok: true } {
-    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?}`;
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?, prints?}`;
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture'];
+    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture', 'prints'];
     if (Object.keys(o).some((k) => !keys.includes(k)) || keys.every((k) => o[k] === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
@@ -232,6 +248,17 @@ export class VoiceReports {
       capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), ...(text && (text.committed || text.tail) ? { text } : {}), at };
       capture = this.#crossCheck(capture, connId);
     }
+    let prints: PrintsReport | undefined;
+    if (o.prints !== undefined) {
+      const r = o.prints as Record<string, unknown> | null;
+      if (!r || typeof r !== 'object' || Array.isArray(r) || Object.keys(r).some((k) => k !== 'stale') || !Array.isArray(r.stale)) throw bad('prints is {stale: [names]}');
+      if (r.stale.length > PRINTS_STALE_MAX || r.stale.some((n) => typeof n !== 'string' || !NAME.test(n))) throw bad(`prints.stale is at most ${PRINTS_STALE_MAX} speaker names`);
+      prints = { stale: [...new Set(r.stale as string[])].sort(), at };
+    }
+    if (prints) {
+      this.#prints = prints;
+      this.#printsConn = connId;
+    }
     if (capture) {
       this.#capture = capture;
       this.#captureConn = connId;
@@ -262,6 +289,10 @@ export class VoiceReports {
       this.#captureConn = undefined;
     }
     this.#accepted = this.#accepted.filter((a) => a.connId !== connId);
+    if (this.#printsConn === connId) {
+      this.#prints = null;
+      this.#printsConn = undefined;
+    }
   }
 
   /** Take (consume) this connection's freshest unmatched acceptance of `kinds` inside the window. */
@@ -307,9 +338,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; stopSpeakingSeq: number } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), stopSpeakingSeq: this.#stopSpeakingSeq };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq };
   }
 }
 

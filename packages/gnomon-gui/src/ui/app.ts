@@ -1037,7 +1037,8 @@ function setDictationDelay(d: number | null): void {
   localStorage.setItem(DELAY_KEY, serializeDelay(d));
   dispatchDictation({ type: 'setDelay', delayMs: d, now: Date.now() });
   if (!$('voice-menu').hidden) paintVoiceMenu();
-  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: auto-send after ${delayLabel(d)} of silence`);
+  // TD-2026-10-20-125: the delay applies to push-to-talk only; ambient speech always waits for Enter / Send
+  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: push-to-talk auto-sends after ${delayLabel(d)} of silence; ambient speech waits for Enter`);
 }
 
 /** While a draft exists: tick the ring (100 ms) and re-read status about every 300 ms (the ENROL_POLL_MS precedent). */
@@ -1457,7 +1458,7 @@ function paintVoiceMenu(): void {
     menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-client': e.id }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as Node);
   if (canAttach(status)) {
     // dictation: the auto-send delay after silence (per machine)
-    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'auto-send after silence' }, h(doc, 'span', { class: 'mode-name' }, 'Auto-send after')) as unknown as HTMLElement;
+    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'push-to-talk auto-send after silence (ambient speech waits for Enter)' }, h(doc, 'span', { class: 'mode-name' }, 'Push-to-talk auto-send after')) as unknown as HTMLElement;
     for (const d of DELAY_CHOICES)
       picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
     menu.appendChild(picks);

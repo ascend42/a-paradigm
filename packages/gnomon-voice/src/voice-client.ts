@@ -12,7 +12,10 @@
  *   DICTATION (TD-2026-10-20-262, the default `delivery: 'composer'`): the client NEVER calls session.send. It appends
  *   voice.turn.user{forwarded: false}; the kernel stamps `forwardable` and the GUI puts the text into its composer and
  *   sends it after a countdown (the human's send, attributed by the kernel). `delivery: 'direct'` keeps the old
- *   forward for headless use (`gnomon-voice run --delivery direct`). Activity edges go to the kernel as
+ *   forward for headless use (`gnomon-voice run --delivery direct`) for PUSH-TO-TALK turns only: TD-2026-10-20-125
+ *   (founder ruling), ambient speech NEVER sends itself, so an ambient turn is dictated (composer) under either
+ *   delivery, the GUI never auto-sends it (a key press does), and the kernel refuses a direct send of a non-ptt
+ *   turn voice-off{cause: 'composer'}. Activity edges go to the kernel as
  *   `request.voice.report{dictation: {activity: speaking | transcribing | idle, holdToggles}}` (edges only); the
  *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
  *   CAPTURE (T-2026-10-20-005 A1, TD-2026-10-20-086): every segment runs `idle → hearing → transcribing → captured |
@@ -202,6 +205,11 @@ export interface VoiceClientOptions {
   partials?: boolean;
 }
 
+/** The one notice for a print from an older speaker front end (it is ignored until the speaker enrols again). */
+export const STALE_PRINT_NOTICE = 'Re-teach Gnomon your voice (the voice check was upgraded)';
+/** The drop notice when the speaker went unrecognised while a stale print exists (distinct from the plain "not enrolled"). */
+export const STALE_DROP_NOTICE = 'Nothing was sent: your voice print is from the older voice check. Re-teach Gnomon your voice.';
+
 export function toRefusal(err: unknown): KernelRefusal {
   const e = err as { code?: unknown; reason?: unknown; message?: unknown; refusal?: { code?: unknown; data?: { reason?: unknown } }; data?: { reason?: unknown } };
   const code = typeof e?.refusal?.code === 'string' ? e.refusal.code : typeof e?.code === 'string' ? e.code : 'ERROR';
@@ -271,6 +279,9 @@ export class VoiceClient {
   readonly #delivery: Delivery;
   #activity: DictationActivity = 'idle';
   #holdToggles = 0;
+  /** the stale-print names last reported (JSON; null before the first report) */
+  #staleReported: string | null = null;
+  #staleNoticed = false;
   #pending = 0;
   #vadSpeaking = false;
   #vadLastSpeech = 0;
@@ -599,6 +610,7 @@ export class VoiceClient {
       a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
+    await this.#reportPrints();
     // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
     const tts = this.#o.engines.tts;
     if (tts.warmUp) {
@@ -756,10 +768,43 @@ export class VoiceClient {
     }
   }
 
+  /**
+   * Stale prints (founder regression 2026-10-20): a print made before the speech gate (no or another frontEnd) is never
+   * compared, so its speaker counts as NOT enrolled until they enrol again. The names go to the kernel as
+   * `request.voice.report{prints: {stale}}` when the list changes (status.voice.prints; the GUI nudges "Re-teach Gnomon
+   * your voice"), and ONE notice says so per run. Returns the current stale names.
+   */
+  async #reportPrints(): Promise<string[]> {
+    let stale: string[];
+    try {
+      stale = this.#verifier.stalePrints();
+    } catch {
+      return [];
+    }
+    const key = JSON.stringify(stale);
+    if (key !== this.#staleReported) {
+      this.#staleReported = key;
+      try {
+        await this.#o.link.append('request.voice.report', { prints: { stale } });
+      } catch (err) {
+        // not retried until the list changes (an older kernel refuses the key; the notice below still shows)
+        this.#log.warn('prints report not relayed', { reason: toRefusal(err).reason });
+      }
+    }
+    if (stale.length && !this.#staleNoticed) {
+      this.#staleNoticed = true;
+      this.#log.info('stale voice prints', { names: stale.length });
+      this.#notice('warn', STALE_PRINT_NOTICE);
+      await this.relayNotice(STALE_PRINT_NOTICE, 'voice.print-stale');
+    }
+    return stale;
+  }
+
   /** V2e: pause the voice loop (an enrolment is recording: its phrases are never turns). */
   pause(on: boolean): void {
     this.#paused = on;
     if (on) this.#abandonLive();
+    else void this.#reportPrints(); // an enrolment just ended: a fresh print may replace a stale one
     this.#pttHeld = false;
     this.#pttFrames = [];
     this.#o.engines.vad.reset();
@@ -929,6 +974,8 @@ export class VoiceClient {
     }
     if (!text) return end('dropped', 'no-words');
     const who = await this.#verifier.identify(seg.samples, seg.sampleRate);
+    // the stale list is re-read after every identify (reported only when it changed)
+    const stale = await this.#reportPrints();
     // the samples are not kept past this point (G-VOX-05)
     if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return end('dropped', 'not-attached'); // attachment moved under us
     const enrolled = who.name !== undefined;
@@ -939,8 +986,9 @@ export class VoiceClient {
     const ri = this.#o.audio.routeInfo();
     // the aec claim from the binary's route/mic event (kind when known), plus its transport (V2b Aegis duty 4)
     const aec = ri.aecKind ?? ri.aec;
-    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262)
-    const direct = this.#delivery === 'direct';
+    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262). TD-2026-10-20-125:
+    // an ambient turn is never sent by the client, whatever the delivery (it fills the composer; a human sends it)
+    const direct = this.#delivery === 'direct' && mode === 'ptt';
     const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
     try {
       await this.#o.link.append('voice.turn.user', payload);
@@ -950,7 +998,7 @@ export class VoiceClient {
     }
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
     if (!enrolled) {
-      this.#notice('info', 'I heard someone who is not enrolled; nothing was sent.');
+      this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');
     }
     if (!direct) {

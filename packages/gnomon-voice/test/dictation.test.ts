@@ -99,4 +99,16 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
     expect(link.appends[0]!.payload).toMatchObject({ forwarded: true });
     expect(link.sends).toEqual([{ hsid: 'hs:01TEST', text: 'ship it' }]);
   });
+
+  it('TD-2026-10-20-125: ambient speech never auto-sends, under either delivery; it is dictated for the composer', async () => {
+    for (const delivery of ['composer', 'direct'] as const) {
+      const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', delivery, texts: ['delete the branch'] });
+      audio.captureWav(toneWav(700, 0.5));
+      audio.silence(3_500); // well past any silence countdown
+      await client.idle();
+      const turns = link.appends.filter((a) => a.kind === 'voice.turn.user');
+      expect(turns.map((t) => t.payload), delivery).toEqual([expect.objectContaining({ mode: 'conversation', speakerEnrolled: true, forwarded: false, text: 'delete the branch' })]);
+      expect(link.sends, delivery).toEqual([]); // (a PTT turn under direct still sends: the test above)
+    }
+  });
 });
