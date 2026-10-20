@@ -36,6 +36,8 @@ import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCap
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { mountModPanels } from './mod-panels-mount.js';
+import { mountModelPicker, type ModelPicker } from './model-picker.js';
+import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -78,6 +80,8 @@ const shortKeyId = (spki: string): string => {
 
 /** The pending card a "decide the pending card in the stack" notice names (core/voice.ts cardNoticeStep, T-2026-10-20-002). */
 let noticeCard: { cardId: string; seen: boolean } | null = null;
+/** #gui-model-picker (ui/model-picker.ts), mounted below; null until then */
+let modelPicker: ModelPicker | null = null;
 function notice(msg: string | null, fail = false): void {
   noticeCard = null; // any new notice (or a clear) replaces the card's
   const n = $('notice');
@@ -224,7 +228,9 @@ function paintChatHead(): void {
     const started = s.openedAt ? s.openedAt.slice(11, 16) : '';
     const mins = s.openedAt ? Math.max(0, Math.round((Date.now() - Date.parse(s.openedAt)) / 60_000)) : null;
     meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
-    meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
+    meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}`));
+    modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
+    meta.appendChild(document.createTextNode(`${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
   }
   const t = s ? sessionTitle(s) : '';
   $<HTMLTextAreaElement>('composer-text').placeholder = s ? `Reply to ${t}${t.endsWith('…') ? '' : '…'}` : 'Open a session to write to it';
@@ -741,6 +747,9 @@ const standingFeed = mountStandingFeed(document, {
   kernelPrincipal: () => kernelPrincipalOf(session?.principal),
 });
 store.onChange(() => standingFeed.repaint());
+// #gui-model-picker: the New-session model select, the header chip + switch, the Settings slot; its own module
+modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice });
+store.onChange(() => modelPicker?.repaint());
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 const settings = mountSettings(document, {
   model: () =>
@@ -753,6 +762,7 @@ const settings = mountSettings(document, {
       status,
       mode: currentMode(),
       dictationDelayMs: dict.delayMs,
+      sessionModel: sessionModelText(focused ? sessionModelOf(store.transcript(focused)) : null),
       connection: session && client ? { principal: session.principal, connId: session.connId, surface: SURFACE, clientApiDrift: session.clientApiDrift } : null,
       gui: GUI_CLIENT,
       unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),
@@ -1046,7 +1056,8 @@ function setDictationDelay(d: number | null): void {
   localStorage.setItem(DELAY_KEY, serializeDelay(d));
   dispatchDictation({ type: 'setDelay', delayMs: d, now: Date.now() });
   if (!$('voice-menu').hidden) paintVoiceMenu();
-  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: auto-send after ${delayLabel(d)} of silence`);
+  // TD-2026-10-20-125: the delay applies to push-to-talk only; ambient speech always waits for Enter / Send
+  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: push-to-talk auto-sends after ${delayLabel(d)} of silence; ambient speech waits for Enter`);
 }
 
 /** While a draft exists: tick the ring (100 ms) and re-read status about every 300 ms (the ENROL_POLL_MS precedent). */
@@ -1478,7 +1489,7 @@ function paintVoiceMenu(): void {
     menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-client': e.id }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as Node);
   if (canAttach(status)) {
     // dictation: the auto-send delay after silence (per machine)
-    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'auto-send after silence' }, h(doc, 'span', { class: 'mode-name' }, 'Auto-send after')) as unknown as HTMLElement;
+    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'push-to-talk auto-send after silence (ambient speech waits for Enter)' }, h(doc, 'span', { class: 'mode-name' }, 'Push-to-talk auto-send after')) as unknown as HTMLElement;
     for (const d of DELAY_CHOICES)
       picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
     menu.appendChild(picks);
@@ -1738,6 +1749,7 @@ function run(id: string, trusted: boolean): void {
   } else if (id === 'session.new') {
     clearCwdHint(hintTarget()); // Aegis L2: a hint belongs to the launch that verified it, not to a later "+ new"
     $('new-session-dialog').hidden = false;
+    modelPicker?.onDialogOpen();
   }
   else if (id === 'composer.focus') $('composer-text').focus();
   else if (id === 'view.kernel-feed') {
@@ -2004,9 +2016,13 @@ function wire(): void {
   $('new-session-form').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!e.isTrusted) return; // Aegis L2: a session opens on the human's own submit only, like the card handlers
+    const cwd = $<HTMLInputElement>('ns-cwd').value;
+    const model = modelPicker ? modelPicker.openModel($<HTMLSelectElement>('ns-model').value) : $<HTMLSelectElement>('ns-model').value;
+    if (model === null) return; // #gui-model-picker: an invalid custom id stays in the sheet with its reason
+    modelPicker?.remember(cwd, model);
     $('new-session-dialog').hidden = true;
     clearCwdHint(hintTarget());
-    void openSession($<HTMLInputElement>('ns-cwd').value, $<HTMLSelectElement>('ns-model').value);
+    void openSession(cwd, model);
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
   $('palette-btn').addEventListener('click', () => openPalette());

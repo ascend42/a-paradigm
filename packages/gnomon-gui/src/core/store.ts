@@ -464,6 +464,25 @@ export function toolSummary(name: string, input: unknown): string {
 }
 
 /** Text parts of a stream-json message content (a string, or an array of {type:'text', text}); tool results and thinking are not text. */
+/** #gui-model-picker: the transcript line of a session.model row (the kernel's record of a switch), per outcome. */
+export function sessionModelLine(p: Record<string, unknown>): string {
+  const lbl = (v: unknown): string => (v === 'claude' || v === 'default' ? 'default' : String(v));
+  switch (p.outcome) {
+    case 'switched':
+      return `model switched · ${lbl(p.from)} → ${lbl(p.to)} · the conversation continues; the prompt cache restarts`;
+    case 'backend-refused':
+      return `model switch refused by Claude Code · stays ${lbl(p.from)}`;
+    case 'permit-refused':
+      return `model switch refused by the budget · stays ${lbl(p.from)}`;
+    case 'timeout':
+      return `model: switching… (unconfirmed) · Claude did not answer; the next reply shows whether ${lbl(p.to)} answered`;
+    case 'reconciled':
+      return p.to === p.from ? `model confirmed · the switch did not take · stays ${lbl(p.from)}` : `model confirmed · ${lbl(p.from)} → ${lbl(p.to)} · the conversation continues`;
+    default:
+      return `model · ${lbl(p.to)}`;
+  }
+}
+
 function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -756,6 +775,8 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
   switch (r.kind) {
     case 'session.open':
       return { role: 'system', text: `${objOf(p.resume) ? 'session resumed' : 'session opened'}${typeof p.model === 'string' ? ` · ${p.model}` : ''}${typeof p.cwd === 'string' ? ` · ${p.cwd}` : ''}` };
+    case 'session.model': // #gui-model-picker: the kernel's record of a mid-session switch
+      return { role: 'system', text: sessionModelLine(p) };
     case 'session.exited':
       return { role: 'system', text: `session ended${typeof p.reason === 'string' ? ` · ${p.reason}` : ''}${typeof p.code === 'number' ? ` · exit ${p.code}` : ''}${typeof p.signal === 'string' ? ` · ${p.signal}` : ''}` };
     case 'session.orphaned':

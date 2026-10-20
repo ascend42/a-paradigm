@@ -33,7 +33,9 @@
  * on a first-party connection (credential `gui`, the launch-token GUI session,
  * or `device`, this home's human device) goes to the run-mode control BEFORE
  * this gate (dispatch.ts `requests`; broker/run-mode.ts), which validates it
- * and writes the KERNEL-signed request row itself. Every other caller and
+ * and writes the KERNEL-signed request row itself. `request.session.model`
+ * (8.0:model-switch) from the same human on the same connections goes to the
+ * session port (SessionPort.model), which writes its request row. Every other caller and
  * kind still lands here.
  *
  * So in M1.4 NO principal can append through the socket: every outcome is a
@@ -56,6 +58,7 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.mode.set',
   'request.incident',
   'request.voice.arm',
+  'request.session.model',
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);

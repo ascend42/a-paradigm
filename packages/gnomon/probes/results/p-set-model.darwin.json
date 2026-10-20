@@ -1,0 +1,51 @@
+{
+  "probe": "p-set-model",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "claude": "2.1.304 (Claude Code)",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "initModel": "claude-haiku-5-5",
+    "t1": {
+      "model": "claude-haiku-5-5",
+      "text": "ok",
+      "isError": false,
+      "subtype": "success",
+      "cost": 0.0015474900000000003
+    },
+    "setModelSonnet": {
+      "subtype": "success",
+      "error": null,
+      "errorCode": null
+    },
+    "t2": {
+      "model": "claude-sonnet-5-5",
+      "text": "QUINCE-5521",
+      "isError": false,
+      "subtype": "success",
+      "cost": 0.03331039
+    },
+    "recall": true,
+    "switched": true,
+    "setModelUnknown": {
+      "subtype": "error",
+      "error": "Model 'not-a-real-model-xyz' not found",
+      "errorCode": "catalog_unknown"
+    },
+    "setModelDefault": {
+      "subtype": "success",
+      "error": null,
+      "errorCode": null
+    },
+    "oneProcess": true
+  },
+  "specRefs": [
+    "§3.3 stream-json control channel",
+    "model picker (2026-10-20)"
+  ],
+  "at": "2026-10-20T15:38:11.881Z"
+}

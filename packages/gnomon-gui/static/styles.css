@@ -712,7 +712,7 @@ html, body {
 .chead .head-right { flex: none; }
 .chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-theme="night"] .chead #transcript-title { font-size: 13px; }
-.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 0.2; } /* the title gives way first: the model chip stays readable */
 .chead #transcript-title { flex: 0 1 auto; min-width: 8ch; }
 #transcript-count, .head-right .key { white-space: nowrap; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -776,6 +776,13 @@ html, body {
 .tone-hue-3 { background: var(--p-ochre-fill); }
 .tone-hue-4 { background: var(--p-rose-clay-fill); }
 .tone-hue-5 { background: var(--p-sea-grey-fill); }
+/* #gui-model-picker: the New-session "claude model" select and the header model chip (ui/model-picker.ts) */
+.ns-claude { display: flex; flex-direction: column; gap: 6px; }
+.ns-claude[hidden], #ns-model-id[hidden], #ns-model-why[hidden] { display: none; }
+.model-wrap { vertical-align: baseline; }
+.model-btn { white-space: nowrap; padding: 0 6px; font-size: 12px; }
+.model-menu { left: 0; right: auto; min-width: 240px; }
+.model-switch-lines p { margin: 0 0 4px; }
 
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }

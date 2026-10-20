@@ -16,7 +16,7 @@ const base = { uuid: '11111111-1111-4111-8111-111111111111', policyPath: '/s/pol
 
 describe('G-RUN-01 argv and forbidden flags', () => {
   it('builds the §3.3 argv with an explicit --setting-sources and strict MCP', () => {
-    const a = buildClaudeArgv({ ...base, appendSystemPrompt: 'x', model: 'm' });
+    const a = buildClaudeArgv({ ...base, appendSystemPrompt: 'x', model: 'opus' });
     expect(a.slice(0, 1)).toEqual(['-p']);
     for (const f of ['--input-format', '--output-format', '--verbose', '--replay-user-messages', '--include-partial-messages', '--strict-mcp-config']) expect(a).toContain(f);
     expect(a[a.indexOf('--permission-mode') + 1]).toBe('default');
@@ -88,7 +88,7 @@ describe('Q6 (Aegis): extra is an allow-list; every kernel-owned flag appears on
     expect(() => buildClaudeArgv({ ...base, extra })).toThrow(TypeError);
   });
   it('assertArgv: a duplicated, missing or =-form duplicate kernel flag throws; the built argv passes', () => {
-    const a = buildClaudeArgv({ ...base, pluginDirs: ['/c'], addDirs: ['/r'], appendSystemPrompt: '--settings /evil.json', model: 'm' });
+    const a = buildClaudeArgv({ ...base, pluginDirs: ['/c'], addDirs: ['/r'], appendSystemPrompt: '--settings /evil.json', model: 'opus' });
     expect(() => assertArgv(a)).not.toThrow();
     const counts = assertArgv(a);
     expect(counts.get('--settings')).toBe(1); // the system prompt VALUE is not counted as a flag
@@ -159,5 +159,23 @@ describe('G-ADP-01 transcript replay (Claude Code 2.1.302 shapes, p10m-claude-co
     s.push('xyz\n{"b":2}\n', (l) => got.push(l), (b) => dropped.push(b));
     expect(got).toEqual(['{"a":1}', '{"b":2}']);
     expect(dropped).toEqual([19]); // reported once, with the whole line's size
+  });
+});
+
+describe('8.0:model-switch control_response (Aegis L3)', () => {
+  it("claude's set_model error text is sanitised: no control or hidden characters, bidi made visible, one line, bounded", () => {
+    const raw = 'bad\u001b[31m model‮ evil⁦\nnext\u0007line​' + 'x'.repeat(400);
+    const ev = parseStreamLine(JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: 'set-model-1', error: raw, error_code: 'cat‮alog\u0000' } }));
+    expect(ev.kind).toBe('control');
+    const e = ev as Extract<typeof ev, { kind: 'control' }>;
+    expect(e.error).not.toBeNull();
+    // eslint-disable-next-line no-control-regex
+    expect(e.error!).not.toMatch(/[\u0000-\u001f\u007f-\u009f​‪-‮⁦-⁩]/);
+    expect(e.error!.startsWith('bad model')).toBe(true);
+    expect(Array.from(e.error!).length).toBeLessThanOrEqual(256);
+    // eslint-disable-next-line no-control-regex
+    expect(e.errorCode!).not.toMatch(/[\u0000-\u001f‪-‮]/);
+    expect(e.errorCode!.length).toBeLessThanOrEqual(64);
+    expect(parseStreamLine(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'set-model-2' } }))).toMatchObject({ error: null, errorCode: null });
   });
 });

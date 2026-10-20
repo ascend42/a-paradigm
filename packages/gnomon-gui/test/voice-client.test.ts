@@ -21,6 +21,7 @@ import {
   consentText,
   devBannerOf,
   enrolAllowed,
+  enrolNudgeOf,
   enrolLine,
   ENROL_POLL_MS,
   enrolRequest,
@@ -33,6 +34,7 @@ import {
   needsStart,
   noticeOf,
   reduceEnrolStatus,
+  REENROL_LABEL,
   toastFresh,
 } from '../src/core/voice-client.js';
 
@@ -75,6 +77,18 @@ describe('the pill shows every voice-app phase while nothing is attached', () =>
     expect(pill(st({ phase: 'running' }, { enrolled: [] }))).toMatchObject({ label: 'Teach Gnomon your voice first', action: 'enrol' });
     expect(pill(st({ phase: 'running' }, { enrolled: ['spk:m/matt'] })).label).toBeNull();
     expect(pill(st({ phase: 'running' })).label).toBeNull(); // A1: no list ⇒ never a false nudge
+  });
+  it('2026-10-20: every enrolled name with only a stale print nudges "Re-teach Gnomon your voice (the voice check was upgraded)"', () => {
+    const stale = (enrolled: string[], names: unknown) => st({ phase: 'running' }, { enrolled, prints: { stale: names } });
+    expect(pill(stale(['matt'], ['matt']))).toMatchObject({ label: REENROL_LABEL, action: 'enrol', actionLabel: 'Re-teach' });
+    expect(pill(stale(['matt', 'dana'], ['matt'])).label).toBeNull(); // dana is still recognised
+    expect(pill(stale([], ['matt'])).label).toBe('Teach Gnomon your voice first'); // not enrolled with the kernel at all
+    expect(pill(stale(['matt'], 'garbage')).label).toBeNull(); // a malformed report never nudges
+    expect(clientOf(stale(['matt'], ['spk:m/matt', 'matt'])).stale).toEqual(['matt']);
+    expect(enrolNudgeOf(clientOf(st({ phase: 'running' }, { prints: { stale: ['matt'] } })))).toBeNull(); // list unknown
+    const a = human({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', clientConnected: true, client: { phase: 'running' }, enrolled: ['matt'], prints: { stale: ['matt'] } });
+    expect(pill(a)).toMatchObject({ label: null, tail: ' · re-teach Gnomon your voice (the voice check was upgraded)', action: 'enrol' });
+    expect(clientMenuEntries(clientOf(stale(['matt'], ['matt'])), true).find((e) => e.id === 'voice.enrol')!.note).toMatch(/upgraded/);
   });
   it('an attached live mic always keeps its louder V2d state (never under-reports)', () => {
     const s = human({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', clientConnected: false, client: { phase: 'crashed' } });

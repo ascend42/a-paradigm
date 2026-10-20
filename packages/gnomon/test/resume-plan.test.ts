@@ -67,4 +67,27 @@ describe('§2.4 rule 4 amended (G-DMN-04): drained-without-exit is swept, never 
     const noClass = rows.map((x) => (x.kind === 'session.open' ? { ...x, payload: { ...x.payload, principalClass: undefined } } : x));
     expect(planResume(noClass, TRUST).resume[0]!.principalClass).toBe('');
   });
+
+  it('8.0:model-switch: a switched (or reconciled) session resumes on `to` under its permit; a timeout or a forged row changes nothing', () => {
+    const p2 = { ...permit, permitId: 'permit:v1:01HZZZZZZZZZZZZZZZZZZZZZZY', hsid: hsidB };
+    const head: Row[] = [
+      k('session.open', { hsid: hsidB, by: HUMAN, principalClass: 'human', cwd: '/x', backend: 'claude-code', uuid, model: 'haiku' }, hsidB),
+      k('permit.grant', { permit: { ...permit, hsid: hsidB } }),
+      k('session.sandbox', { hsid: hsidB, layersHash: 'sha256:aa', gitHash: 'sha256:bb', permitId: permit.permitId }, hsidB),
+      k('permit.grant', { permit: p2 }),
+    ];
+    const tail: Row[] = [k('session.drained', { uuid, reason: 'upgrade' }, hsidB), k('session.exited', { hsid: hsidB, reason: 'drain-clean' })];
+    const sw = (outcome: string, to = 'sonnet', permitId: string | null = p2.permitId) => k('session.model', { hsid: hsidB, from: 'haiku', to, permitId, outcome }, hsidB);
+    const switched = planResume([...head, sw('switched'), ...tail], TRUST).resume[0]!;
+    expect(switched).toMatchObject({ model: 'sonnet' });
+    expect(switched.permit?.permitId).toBe(p2.permitId);
+    const timedOut = planResume([...head, sw('timeout'), ...tail], TRUST).resume[0]!;
+    expect(timedOut).toMatchObject({ model: 'haiku' });
+    expect(timedOut.permit?.permitId).toBe(permit.permitId);
+    expect(planResume([...head, sw('permit-refused', 'sonnet', null), ...tail], TRUST).resume[0]!.model).toBe('haiku');
+    const reconciled = planResume([...head, sw('timeout'), sw('reconciled', 'sonnet', permit.permitId), ...tail], TRUST).resume[0]!;
+    expect(reconciled).toMatchObject({ model: 'sonnet' });
+    expect(reconciled.permit?.permitId).toBe(permit.permitId);
+    expect(planResume([...head, { ...sw('switched'), keyId: 'key:other' }, ...tail], TRUST).resume[0]!.model).toBe('haiku');
+  });
 });

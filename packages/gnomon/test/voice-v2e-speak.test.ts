@@ -77,11 +77,11 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
   it('validates and relays enrolment progress and notices; stale past the TTL', () => {
     let t = 1_000_000;
     const r = new VoiceReports(() => t);
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, stopSpeakingSeq: 0 });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0 });
     r.report({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5 } });
     r.report({ notice: { text: 'Microphone access is off.‮' } });
     const at = new Date(t).toISOString();
-    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, stopSpeakingSeq: 0 });
+    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0 });
     for (const bad of [null, {}, { x: 1 }, { enrolment: { name: 'Bad Name', phase: 'ready' } }, { enrolment: { name: 'a', phase: 'nope' } }, { enrolment: { name: 'a', phase: 'ready', phrase: -1 } }, { enrolment: { name: 'a', phase: 'ready', extra: 1 } }, { notice: { text: '' } }, { notice: { text: 'x', y: 1 } }]) {
       expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
     }
@@ -94,7 +94,7 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     r.report({ notice: { text: 'x'.repeat(1000) } });
     expect(r.status().notice!.text).toHaveLength(280);
     t += VOICE_REPORT_TTL_MS + 1;
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, stopSpeakingSeq: 0 });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0 });
   });
 
   it('T-2026-10-19-026: playback edges relay as status.voice.playback; stop-speaking bumps a declared counter', () => {
@@ -108,5 +108,27 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(checkStatusNumbers({ voice: r.status() })).toEqual([]);
     t += VOICE_REPORT_TTL_MS + 1;
     expect(r.status()).toMatchObject({ playback: null, stopSpeakingSeq: 2 });
+  });
+});
+
+describe('#gnomon-voice 2026-10-20: request.voice.report{prints} (stale voice prints)', () => {
+  it('relays the stale names as status.voice.prints with no TTL, validates, and clears with the reporting connection', () => {
+    let t = 1_000_000;
+    const r = new VoiceReports(() => t);
+    r.report({ prints: { stale: ['matt', 'founder', 'matt'] } }, 'c1');
+    const at = new Date(t).toISOString();
+    expect(r.status().prints).toEqual({ stale: ['founder', 'matt'], at });
+    t += VOICE_REPORT_TTL_MS * 10; // a state, not an event: no TTL
+    expect(r.status().prints).toEqual({ stale: ['founder', 'matt'], at });
+    for (const bad of [{ prints: null }, { prints: {} }, { prints: { stale: 'matt' } }, { prints: { stale: ['Bad Name'] } }, { prints: { stale: [], x: 1 } }, { prints: { stale: Array.from({ length: 17 }, (_, i) => `n${i}`) } }]) {
+      expect(() => r.report(bad, 'c1'), JSON.stringify(bad)).toThrow(TypeError);
+    }
+    r.report({ prints: { stale: [] } }, 'c1');
+    expect(r.status().prints!.stale).toEqual([]);
+    r.report({ prints: { stale: ['matt'] } }, 'c2');
+    r.connectionClosed('c1'); // not the reporter: kept
+    expect(r.status().prints!.stale).toEqual(['matt']);
+    r.connectionClosed('c2');
+    expect(r.status().prints).toBeNull();
   });
 });

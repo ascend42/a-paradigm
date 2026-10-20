@@ -64,8 +64,9 @@ describe('$voice-turn user side', () => {
     audio.captureWav(toneWav(700, 0.5));
     audio.silence(400);
     await client.idle();
-    expect(link.appends[0]!.payload).toMatchObject({ mode: 'conversation', text: 'what changed' });
-    expect(link.sends).toHaveLength(1);
+    // TD-2026-10-20-125: an ambient turn never sends itself, even under --delivery direct; it is dictated (composer)
+    expect(link.appends[0]!.payload).toMatchObject({ mode: 'conversation', text: 'what changed', speakerEnrolled: true, forwarded: false });
+    expect(link.sends).toHaveLength(0);
   });
 
   it('turn ids are monotone (the kernel order: length, then lexical)', async () => {
@@ -178,8 +179,8 @@ describe('$voice-turn agent side + half-duplex', () => {
     audio.captureWav(toneWav(500, 0.5)); // after the tail
     audio.silence(400);
     await client.idle();
-    expect(link.appends.filter((a) => a.kind === 'voice.turn.user')).toHaveLength(1);
-    expect(link.sends).toEqual([{ hsid: 'hs:01TEST', text: 'late enough' }]);
+    expect(link.appends.filter((a) => a.kind === 'voice.turn.user').map((a) => a.payload.text)).toEqual(['late enough']);
+    expect(link.sends).toEqual([]); // TD-2026-10-20-125: ambient fills the composer, never a direct send
   });
 
   it('barge-in: VAD speech ≥ 300 ms during playback stops it and drops the rest; the speech is not forwarded', async () => {

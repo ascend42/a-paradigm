@@ -337,7 +337,7 @@ export interface VoiceClientPort {
   forget?(payload: { name: string }): Promise<unknown>;
   /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
   stopSpeaking?(): unknown;
-  /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
+  /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?, prints?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
   report?(payload: unknown, connId?: string): unknown;
 }
 
@@ -770,6 +770,17 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // 8.0:model-switch: the human switches a live Claude session's model (GUI launch token or human device only)
+      if (pa?.kind === 'request.session.model' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.sessions?.model) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const sctx = { principal: s.principal!, principalClass: cls, features: s.features ?? [], connId: s.connId, ...(s.credential ? { credential: s.credential } : {}) };
+        try {
+          return await o.sessions.model(sctx, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // TD-2026-10-20-086 F6: the daily standing grant (mint: the GUI only; revoke: the GUI or this home's device)
       if ((pa?.kind === 'request.grant.standing' || pa?.kind === 'request.grant.standing.revoke') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.standing) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
@@ -818,7 +829,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // V2e: the voice client's enrolment progress and notices, relayed in status.voice (never a row)
       if (pa?.kind === VOICE_REPORT_REQUEST && cls === 'voice' && s.credential !== 'read-token' && o.voiceClient?.report) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
-        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?, dictation?, playback?, capture?}}`);
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_REPORT_REQUEST}', payload:{enrolment?, notice?, dictation?, playback?, capture?, prints?}}`);
         try {
           return o.voiceClient.report(pa.payload, s.connId);
         } catch (err) {

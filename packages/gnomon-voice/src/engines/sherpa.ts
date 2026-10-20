@@ -12,6 +12,7 @@
  */
 import { loadManifest, modelFor, verifiedModelPaths, type ModelManifest } from '../manifest.js';
 import { wordsOfResult, type PartialWord } from '../partials.js';
+import { SPEAKER_FRONT_END, speechMsOf, speechOnly } from '../speaker.js';
 import { silentLogger, type ComponentLog } from '../types.js';
 import type { PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceEngines } from '../types.js';
 
@@ -77,10 +78,18 @@ export class SherpaVad implements VadEngine {
   speaking(): boolean {
     return this.#speaking;
   }
+  /**
+   * sherpa's reset() restarts the detector's sample index (a segment's `start` counts from the reset), so the
+   * fed-samples counter restarts with it. Before 2026-10-20 it did not: every reset (an enrolment phrase, a pause, a
+   * barge-in, a mode change) shifted each later segment's t0 into the past by all the audio fed before it (the
+   * founder's "turns arrive 60 s late" was this skew, not a backlog; test/ambient-speaker-repro.test.ts).
+   */
   reset(): void {
     this.#vad.reset?.();
     this.#vad.clear?.();
     this.#pending = new Float32Array(0);
+    this.#fed = 0;
+    this.#anchor = { fed: 0, t0: 0 };
     this.#speaking = false;
   }
   flush(): VadSegment[] {
@@ -97,6 +106,8 @@ export class SherpaStt implements SttEngine {
   readonly #watchdogMs: number;
   /** decodes on the one recognizer handle are serialized (the final and a live partial never overlap on it) */
   #chain: Promise<unknown> = Promise.resolve();
+  /** finals queued on the chain and not yet started: a partial whose turn comes while one waits is skipped */
+  #finalsWaiting = 0;
   constructor(sherpa: Sherpa, p: Record<string, string>, o: { log?: ComponentLog; watchdogMs?: number } = {}) {
     this.#make = () =>
       new sherpa.OfflineRecognizer({
@@ -113,15 +124,23 @@ export class SherpaStt implements SttEngine {
    * decode). Same text as the sync path (B0 `sameText`). The sync decode is only a fallback for an addon without it.
    */
   async transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
-    return String((await this.#decode(samples, sampleRate)).text ?? '');
+    return String((await this.#decode(samples, sampleRate, 'final')).text ?? '');
   }
-  /** B1: a live-words window → words with start times (the result's `tokens` + `timestamps`). decodeAsync only. */
+  /**
+   * B1: a live-words window → words with start times (the result's `tokens` + `timestamps`). decodeAsync only.
+   * Decode priority (2026-10-20): a partial that has not started when a final is waiting returns [] without decoding,
+   * so a final never queues behind live words (the next window's partial catches up).
+   */
   async transcribeWords(samples: Float32Array, sampleRate: number): Promise<PartialWord[]> {
     if (typeof this.#rec.decodeAsync !== 'function') return []; // never a sync decode for a partial
-    return wordsOfResult(await this.#decode(samples, sampleRate));
+    const r = await this.#decode(samples, sampleRate, 'partial');
+    return r === SKIPPED ? [] : wordsOfResult(r);
   }
-  #decode(samples: Float32Array, sampleRate: number): Promise<SherpaResult> {
+  #decode(samples: Float32Array, sampleRate: number, kind: 'final' | 'partial'): Promise<SherpaResult> {
+    if (kind === 'final') this.#finalsWaiting++;
     const run = async (): Promise<SherpaResult> => {
+      if (kind === 'final') this.#finalsWaiting--;
+      else if (this.#finalsWaiting > 0) return SKIPPED;
       const s = this.#rec.createStream();
       s.acceptWaveform({ sampleRate, samples });
       if (typeof this.#rec.decodeAsync === 'function') return (await this.#watchdog(this.#rec.decodeAsync(s) as Promise<SherpaResult>, samples.length / sampleRate)) ?? {};
@@ -155,6 +174,9 @@ export class SherpaStt implements SttEngine {
     return Promise.race([p, late]).finally(() => clearTimeout(timer));
   }
 }
+
+/** a partial decode skipped for a waiting final (never decoded) */
+const SKIPPED: SherpaResult = Object.freeze({});
 
 /** Aegis L2: the decode watchdog bound, beyond the audio's own length (a design constant, not a measurement) */
 export const STT_DECODE_WATCHDOG_MS = 15_000;
@@ -204,13 +226,19 @@ export class SherpaTts implements TtsEngine {
 export class SherpaSpeaker implements SpeakerEngine {
   readonly #ex: Sherpa;
   readonly dim: number;
+  /** every embedding goes through the speech gate (speaker.ts speechOnly; founder regression 2026-10-20) */
+  readonly frontEnd = SPEAKER_FRONT_END;
   constructor(sherpa: Sherpa, model: string) {
     this.#ex = new sherpa.SpeakerEmbeddingExtractor({ model, numThreads: 1, debug: false });
     this.dim = Number(this.#ex.dim);
   }
+  speechMs(samples: Float32Array, sampleRate: number): number {
+    return speechMsOf(samples, sampleRate);
+  }
   async embed(samples: Float32Array, sampleRate: number): Promise<Float32Array> {
+    const gated = speechOnly(samples, sampleRate);
     const s = this.#ex.createStream();
-    s.acceptWaveform({ sampleRate, samples });
+    s.acceptWaveform({ sampleRate, samples: gated.length ? gated : samples });
     s.inputFinished?.();
     return Float32Array.from(this.#ex.compute(s) as Float32Array);
   }

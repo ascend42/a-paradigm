@@ -120,6 +120,13 @@ export interface TtsEngine {
 
 export interface SpeakerEngine {
   readonly dim: number;
+  /**
+   * The front end's id (sherpa: speech-gate:v1, speaker.ts speechOnly). Stored in each print it makes; a print made
+   * by another front end is never compared (its embeddings live in a different space). Absent: no check (stubs).
+   */
+  readonly frontEnd?: string;
+  /** ms of speech the front end keeps from `samples` (below MIN_VERIFY_SPEECH_MS nothing is verified). Optional. */
+  speechMs?(samples: Float32Array, sampleRate: number): number;
   embed(samples: Float32Array, sampleRate: number): Promise<Float32Array>;
 }
 

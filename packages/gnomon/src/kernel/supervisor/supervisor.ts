@@ -72,6 +72,25 @@
  *   resume), every stdin line (#stdin) and every stdout line is teed, as sent and received, with kernel notes
  *   (spawn argv redacted, exit, drain interrupt) to `<home>/trace/<project key>/` (TD-2026-10-19-057: never the project); the session.sandbox row says
  *   `traced: true` (or `traced: false, traceRefused`). The tee never blocks the session (bounded queue, counted drops).
+ * Model switch (8.0:model-switch; probe p-set-model, claude 2.1.304): switchModel() serves the HUMAN's
+ *   request.session.model{hsid, model} (the dispatcher routes it from a first-party gui/device connection only;
+ *   any other class is refused FORBIDDEN here too). Refused before any row: a local session (local-session), a
+ *   running turn (turn-running), a switch in flight (model-switching), and ANY session above
+ *   MODEL_SWITCH_CONTEXT_GUARD.maxTokens moving to a 200k model (a target without `[1m]`, whatever the source:
+ *   context-too-large; the context is the LAST main-chain assistant message's in+cacheRead+cacheWrite+out, never
+ *   result totals or a subagent's message). A resumed session's context is unknown until its first main-chain
+ *   message: a 200k target is refused context-too-large ("send one message first") meanwhile (Aegis M2).
+ *   Then: the request row → law 7 re-run → a NEW session.spawn permit for the new model (assertClaudePermit,
+ *   subscription billing only; a refusal is session.model{permit-refused}) → session.inject{channel:'model'} →
+ *   control_request{set_model} → wait for its control_response by request id (modelSwitchTimeoutMs, default
+ *   MODEL_SWITCH_TIMEOUT_MS). success ⇒ the new permit replaces the spawn permit (the old one is released) and
+ *   the model is on record; error ⇒ the new permit is released, nothing changed (MODEL_UNAVAILABLE{model-switch-
+ *   failed}); timeout ⇒ the new permit is HELD (Aegis M1: claude may already run the new model), the old model
+ *   stays on record and the session is marked modelUncertain (status) until the next main-chain assistant
+ *   message's `message.model` (ground truth) RECONCILES it: session.model{outcome:'reconciled'}. Reconciled to the
+ *   new model ⇒ the held permit replaces the spawn permit exactly as on success (the row cites it); to the old ⇒
+ *   the held permit is released; the session exiting (or a later switch) meanwhile ⇒ released. session.send is
+ *   refused model-switching while a switch is in flight. A failed permit release goes to the injected logger.
  * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
  *   ~/.claude.json only through its law-7 projection, so Claude's routine
  *   rewrites never fire — a change logs session.layers.changed{which} and a
@@ -83,7 +102,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal } from '@a-company/gnomon-contracts';
+import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MODEL_SWITCH_REASON_ROUTES, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal, type SessionModelOutcome } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -96,7 +115,7 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
 import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -166,6 +185,9 @@ export interface DrainReport {
   /** every live Claude session, each with a session.drained row before its session.exited{reason: DRAIN_EXIT_REASONS[outcome]} */
   sessions: DrainRecord[];
 }
+
+/** How long a model switch waits for claude's set_model control_response before it records `timeout` (8.0:model-switch). */
+export const MODEL_SWITCH_TIMEOUT_MS = 15_000;
 
 /** The note row a drain-interrupted session resumes with (TD-2026-10-19-814 item 2): it is idle and never continued. */
 export const INTERRUPTED_NOTE = 'turn interrupted by update';
@@ -248,6 +270,18 @@ export interface SupervisorOptions {
   traceMode?: (cwd: string) => boolean;
   /** TEST RIG ONLY: #trace-capture writer bounds and a stub sink (a slow disk) */
   traceOptions?: TraceOpenOptions;
+  /** 8.0:model-switch: how long a switch waits for set_model's answer (default MODEL_SWITCH_TIMEOUT_MS) */
+  modelSwitchTimeoutMs?: number;
+  /**
+   * A Paradigm-logger-shaped port (`logger.component('#session-runner').warn(…)`) for failures the kernel log has no
+   * row for (e.g. a permit release that failed). The kernel takes no logger dependency (G-SEC-01); omitted ⇒ silent.
+   */
+  logger?: SupervisorLogger;
+}
+
+/** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
+export interface SupervisorLogger {
+  component(id: string): { warn(message: string, data?: Record<string, unknown>): void };
 }
 
 export interface OpenRequest {
@@ -304,6 +338,25 @@ interface Session {
   /** P8-D87 manual: the effective mode seen at the last permission request, and whether a plan was approved since manual began */
   lastMode: RunMode | null;
   planApproved: boolean;
+  /** model picker: the Claude model this session runs now ('claude' = Claude Code's default); a switch updates it */
+  model: string;
+  /**
+   * 8.0:model-switch: the context in use — the LAST main-chain assistant message's in+cacheRead+cacheWrite+out; null
+   * while unknown (a resumed session before its first main-chain message: the guard refuses until one arrives)
+   */
+  contextTokens: number | null;
+  /** the model the stream last said ran (system.init, then each main-chain assistant message's message.model) */
+  seenModel: string | null;
+  /** a switch in flight (send and a second switch are refused model-switching) */
+  switching: { requestId: string; from: string; to: string } | null;
+  /** control_response waiters by request id (resolved in #onLine; null on exit) */
+  controlWaiters: Map<string, (r: { subtype: string | null; error: string | null; errorCode: string | null } | null) => void>;
+  /**
+   * after a timeout: which model runs is unknown until the next main-chain message.model reconciles it. `permit` is the
+   * switch's fresh spawn permit, HELD meanwhile (Aegis M1): reconcile-to-new swaps it in, reconcile-to-old or the
+   * session's exit releases it
+   */
+  modelUncertain: { from: string; to: string; baseline: string | null; permit: PermitV1 } | null;
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -466,6 +519,11 @@ export class SessionSupervisor {
     }
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
+    }
+    // model picker (Aegis): a Claude model is an allow-listed alias or a strict id; refused before any row or spawn
+    if (req.model !== undefined && req.model !== 'claude' && req.model !== 'any') {
+      const why = claudeModelProblem(req.model);
+      if (why !== null) throw refused('BAD_REQUEST', `session.open: ${why}`, { reason: 'bad-params', field: 'model' });
     }
     return this.#spawnClaude(req);
   }
@@ -634,7 +692,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -671,7 +729,8 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
+        contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -813,8 +872,11 @@ export class SessionSupervisor {
     if (s.watch) clearInterval(s.watch);
     s.watch = null;
     await this.#expirePending(s, 'session-exited');
+    for (const w of [...s.controlWaiters.values()]) w(null); // a switch in flight learns the session is gone
+    s.controlWaiters.clear();
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
+    await this.#dropUncertain(s, 'session-exited'); // Aegis M1: a timed-out switch's held permit ends with the session
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
     if (s.trace) {
@@ -843,6 +905,7 @@ export class SessionSupervisor {
     };
     switch (ev.kind) {
       case 'init':
+        if (ev.model !== null) s.seenModel = ev.model;
         if (ev.apiKeySource !== null && ev.apiKeySource !== 'none') {
           await this.#o.log('billing.api.refused', { hsid: s.hsid, where: ['init.apiKeySource'], keys: [ev.apiKeySource] }, { session: s.hsid });
           await this.#stopSession(s, 'api-key-source');
@@ -862,6 +925,11 @@ export class SessionSupervisor {
           if (t.name === 'Write' && typeof inp.file_path === 'string' && PLAN_FILE.test(inp.file_path) && typeof inp.content === 'string' && inp.content.length <= MAX_ATTACHED_PLAN_CHARS) s.lastPlanFile = inp.content;
         }
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
+        if (ev.parentToolUseId === null) {
+          // 8.0:model-switch: the main chain's context (a subagent's message is not) and the model that actually ran
+          if (ev.tokens !== null) s.contextTokens = ev.tokens;
+          if (ev.model !== null) await this.#reconcileModel(s, ev.model);
+        }
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       case 'result': {
@@ -909,6 +977,15 @@ export class SessionSupervisor {
         s.pending.delete(ev.requestId);
         e.closedWhy = 'cancelled';
         if (e.cardId) await this.#o.broker?.expire?.(e.cardId, 'cancelled').catch(() => false);
+        return;
+      }
+      case 'control': {
+        // 8.0:model-switch: the set_model answer, matched by request id (any other control_response is only logged)
+        const w = ev.requestId !== null ? s.controlWaiters.get(ev.requestId) : undefined;
+        if (w) {
+          s.controlWaiters.delete(ev.requestId!);
+          w({ subtype: ev.subtype, error: ev.error, errorCode: ev.errorCode });
+        }
         return;
       }
       case 'control-request-unknown':
@@ -1139,6 +1216,162 @@ export class SessionSupervisor {
     return this.#local.ownerOf(hsid);
   }
 
+  /** 8.0:model-switch: a refusal on its MODEL_SWITCH_REASON_ROUTES code. */
+  #switchRefusal(reason: keyof typeof MODEL_SWITCH_REASON_ROUTES & string, message: string, data: Record<string, unknown> = {}): RefusedError {
+    return refused(MODEL_SWITCH_REASON_ROUTES[reason]!.code, message, { reason, ...data });
+  }
+
+  async #modelRow(s: Session, from: string, to: string, permitId: string | null, outcome: SessionModelOutcome): Promise<void> {
+    const payload = { hsid: s.hsid, from, to, permitId, outcome };
+    const errors = validateKindPayload('session.model', payload);
+    if (errors.length) throw new Error(`#supervisor: session.model payload: ${errors.join('; ')}`);
+    await this.#o.log('session.model', payload, { session: s.hsid });
+  }
+
+  /**
+   * 8.0:model-switch, the human's request.session.model{hsid, model}: switch a live Claude session's model in the
+   * same process (the conversation continues; the prompt cache restarts). See the header for the order and outcomes.
+   */
+  async switchModel(principal: string, p: { hsid: string; model: string }, principalClass: string): Promise<{ hsid: string; from: string; to: string; outcome: 'switched'; permitId: string }> {
+    if (principalClass !== 'human') throw refused('FORBIDDEN', 'only the human switches a session\'s model', { principalClass });
+    if (typeof p?.hsid !== 'string') throw refused('BAD_REQUEST', 'request.session.model needs an hsid', { reason: 'bad-params' });
+    const why = claudeModelProblem(p.model);
+    if (why !== null) throw refused('BAD_REQUEST', `request.session.model: ${why}`, { reason: 'bad-params', field: 'model' });
+    this.#refuseIfDraining('request.session.model');
+    if (this.#local.has(p.hsid)) throw this.#switchRefusal('local-session', 'a gnomon-local session has no Claude model to switch');
+    const s = this.#get(principal, p.hsid);
+    if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (s.switching) throw this.#switchRefusal('model-switching', 'a model switch of this session is already in flight');
+    if (s.turnPermits.length > 0) throw this.#switchRefusal('turn-running', 'a turn is running: switch the model at a turn boundary');
+    // Aegis M2: toward ANY 200k target (no `[1m]`), whatever the source model ('opus' may itself run 1M by default)
+    const g = MODEL_SWITCH_CONTEXT_GUARD;
+    if (!p.model.endsWith(g.fromSuffix)) {
+      if (s.contextTokens === null) {
+        throw this.#switchRefusal('context-too-large', 'the session\'s context size is not known yet (it was resumed): send one message first, then switch', { contextTokens: null, maxTokens: g.maxTokens });
+      }
+      if (s.contextTokens > g.maxTokens) {
+        throw this.#switchRefusal('context-too-large', `the session uses ${s.contextTokens} tokens of context, more than a 200k model takes (${g.maxTokens}); checkpoint and compact first`, { contextTokens: s.contextTokens, maxTokens: g.maxTokens });
+      }
+    }
+    const from = s.model;
+    const to = p.model;
+    const requestId = `set-model-${randomUUID()}`;
+    s.switching = { requestId, from, to }; // synchronously, before any await: a concurrent switch or send is refused
+    let fresh: PermitV1 | null = null;
+    try {
+      const req = { hsid: s.hsid, model: to };
+      const errs = validateKindPayload('request.session.model', req);
+      if (errs.length) throw refused('BAD_REQUEST', `request.session.model: ${errs.join('; ')}`, { reason: 'bad-params' });
+      await this.#o.log('request.session.model', req, { session: s.hsid });
+      // budget re-check: law 7 over the session's layers, then a new spawn permit for the new model (subscription only)
+      const hits = law7Scan(s.env, law7Layers(s.layerInput));
+      if (hits.length) {
+        await this.#o.log('billing.api.refused', { hsid: s.hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: s.hsid });
+        await this.#modelRow(s, from, to, null, 'permit-refused');
+        throw refused('BILLING_REFUSED', 'an API-billing path appeared in a layer this session reads (law 7)', { session: 'api_billing_refused' });
+      }
+      try {
+        fresh = await this.#o.fuse.reserve({ principal: s.owner, principalClass: 'human', attended: true, kind: 'session.spawn', backend: 'claude-code', model: to, scope: { user: s.owner, session: s.hsid }, kernelSpawn: { hsid: s.hsid } });
+        this.assertClaudePermit(fresh, s.hsid);
+        if (fresh.billing !== 'subscription') throw refused('BILLING_REFUSED', 'a model switch runs on the subscription only (law 7)', { billing: fresh.billing });
+      } catch (err) {
+        if (fresh) await this.#release(fresh.permitId, s, 'permit-refused');
+        fresh = null;
+        await this.#modelRow(s, from, to, null, 'permit-refused');
+        throw err;
+      }
+      const permitId = fresh.permitId;
+      const line = controlSetModelLine(requestId, to);
+      const answer = new Promise<{ subtype: string | null; error: string | null; errorCode: string | null } | null | 'timeout'>((resolve) => {
+        const t = setTimeout(() => {
+          s.controlWaiters.delete(requestId);
+          resolve('timeout');
+        }, this.#o.modelSwitchTimeoutMs ?? MODEL_SWITCH_TIMEOUT_MS);
+        s.controlWaiters.set(requestId, (r) => {
+          clearTimeout(t);
+          resolve(r);
+        });
+      });
+      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', hash: sha(line), bytes: Buffer.byteLength(line, 'utf8'), channel: 'model', requestId, to }, { session: s.hsid });
+      if (s.state === 'running' && s.child.exitCode === null && s.child.signalCode === null) this.#stdin(s, line);
+      const r = await answer;
+      if (r !== null && r !== 'timeout' && r.subtype === 'success') {
+        const old = s.spawnPermit;
+        s.spawnPermit = fresh;
+        s.model = to;
+        fresh = null;
+        await this.#dropUncertain(s, 'superseded'); // an earlier timed-out switch's held permit is moot now
+        await this.#release(old.permitId, s, 'switched');
+        await this.#modelRow(s, from, to, permitId, 'switched');
+        return { hsid: s.hsid, from, to, outcome: 'switched', permitId };
+      }
+      if (r !== null && r !== 'timeout') {
+        await this.#release(permitId, s, 'backend-refused');
+        fresh = null;
+        await this.#modelRow(s, from, to, permitId, 'backend-refused');
+        throw this.#switchRefusal('model-switch-failed', `claude refused the model${r.error ? `: ${r.error}` : ''}`, { ...(r.errorCode ? { errorCode: r.errorCode } : {}) });
+      }
+      // timeout: the old model stays on record and the fresh permit is HELD until ground truth reconciles (Aegis M1:
+      // claude may already run `to`, so its usage must not land on a released permit). The session exited first ⇒ released.
+      if (r === 'timeout' && s.state === 'running') {
+        await this.#dropUncertain(s, 'superseded');
+        s.modelUncertain = { from, to, baseline: s.seenModel, permit: fresh };
+        fresh = null;
+      } else {
+        await this.#release(permitId, s, 'session-exited');
+        fresh = null;
+      }
+      await this.#modelRow(s, from, to, permitId, 'timeout');
+      throw this.#switchRefusal('model-switch-timeout', r === null ? 'the session exited before claude answered the switch' : 'claude did not answer the switch in time; the next reply will show which model runs', { uncertain: r === 'timeout' });
+    } finally {
+      if (fresh) await this.#release(fresh.permitId, s, 'switch-aborted');
+      s.controlWaiters.delete(requestId);
+      s.switching = null;
+    }
+  }
+
+  /**
+   * 8.0:model-switch timeout reconcile: a main-chain assistant message's `message.model` is what actually ran. After a
+   * timed-out switch it decides the model on record — switched when it differs from the model the stream showed
+   * before the switch (with no baseline: when it names the target's family) — and writes session.model{reconciled}.
+   */
+  async #reconcileModel(s: Session, seen: string): Promise<void> {
+    const u = s.modelUncertain;
+    s.seenModel = seen;
+    if (!u) return;
+    s.modelUncertain = null;
+    const family = u.to.replace(/\[1m\]$/, '').replace(/^claude-/, '');
+    const took = u.baseline !== null ? seen !== u.baseline : seen === u.to || (family !== 'default' && seen.includes(family));
+    if (took) {
+      // Aegis M1: exactly the success path — the held permit becomes the spawn permit, the old one is released
+      const old = s.spawnPermit;
+      s.spawnPermit = u.permit;
+      s.model = u.to;
+      await this.#release(old.permitId, s, 'reconciled');
+    } else {
+      s.model = u.from;
+      await this.#release(u.permit.permitId, s, 'reconciled-old');
+    }
+    await this.#modelRow(s, u.from, s.model, s.spawnPermit.permitId, 'reconciled');
+  }
+
+  /** Release a permit; a failure is logged (Aegis L4), never thrown and never silently swallowed. */
+  async #release(permitId: string, s: Session, why: string): Promise<void> {
+    try {
+      await this.#o.fuse.release(permitId, s.owner);
+    } catch (err) {
+      this.#o.logger?.component('#session-runner').warn('permit release failed', { hsid: s.hsid, permitId, why, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** Release a timed-out switch's held permit and clear the uncertainty (exit, or a later switch supersedes it). */
+  async #dropUncertain(s: Session, why: string): Promise<void> {
+    const u = s.modelUncertain;
+    if (!u) return;
+    s.modelUncertain = null;
+    await this.#release(u.permit.permitId, s, `uncertain-${why}`);
+  }
+
   async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution }): Promise<{ turn: string; steered?: boolean }> {
     this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
@@ -1147,6 +1380,7 @@ export class SessionSupervisor {
     if (p.steer === true) throw refused('BAD_REQUEST', 'session.send{steer} is served for local sessions only', { reason: 'bad-params' });
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
+    if (s.switching) throw this.#switchRefusal('model-switching', 'the session\'s model is switching: send once the switch answers');
     const hits = law7Scan(s.env, law7Layers(s.layerInput));
     if (hits.length) {
       await this.#o.log('billing.api.refused', { hsid: s.hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: s.hsid });
@@ -1319,7 +1553,7 @@ export class SessionSupervisor {
   /** status.sessions: live sessions + a bounded history of exited ones */
   status(): Array<Record<string, unknown>> {
     return [
-      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) })),
+      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId, model: s.model, ...(s.switching ? { modelSwitching: s.switching.to } : {}), ...(s.modelUncertain ? { modelUncertain: true, modelTarget: s.modelUncertain.to } : {}), ...(s.drained ? { drained: s.drained } : {}), ...(s.trace ? { traced: true } : {}) })),
       ...this.#history,
       ...this.#local.status(),
     ];
@@ -1365,6 +1599,11 @@ export class SessionSupervisor {
   /** P8-D87: every live Claude session's mode scope (status.runModes). */
   liveScopes(): Array<{ hsid: string; repoKey: string; cwd: string }> {
     return [...this.#sessions.keys()].map((h) => this.scopeOf(h)).filter((x): x is { hsid: string; repoKey: string; cwd: string } => x !== null);
+  }
+
+  /** model picker: the Claude model a live Claude session runs now ('claude' = Claude Code's default), or null. */
+  modelOf(hsid: string): string | null {
+    return this.#sessions.get(hsid)?.model ?? null;
   }
 
   /** One session's state (tests, status): running | stopping | exited | null. */

@@ -55,6 +55,11 @@ export interface ClientView {
   unavailable: string | null;
   /** enrolled voice names, or null when the kernel does not say (A1) */
   enrolled: string[] | null;
+  /**
+   * status.voice.prints.stale (2026-10-20): enrolled names whose voice print predates the voice app's speech-gated
+   * check. The app ignores such a print, so for the nudge those names count as NOT enrolled. [] when none or unknown.
+   */
+  stale: string[];
   /** status.voice.clientConnected, or null when the status does not tell */
   connected: boolean | null;
   /** the crash is the kernel's `backoff` (a restart is scheduled), not a terminal `failed` */
@@ -116,9 +121,22 @@ export function clientOf(status: unknown): ClientView {
     lastError: str(c?.lastError),
     unavailable: str(c?.unavailable),
     enrolled: list ? [...new Set(list.map(nameOf).filter((x): x is string => x !== null))] : null,
+    stale: Array.isArray(obj(v?.prints)?.stale) ? [...new Set((obj(v?.prints)!.stale as unknown[]).map(nameOf).filter((x): x is string => x !== null))] : [],
     connected,
     backoff: phase === 'crashed' && raw === 'backoff',
   };
+}
+
+/** The re-enrolment nudge's words (a print from an older voice check is ignored until the speaker enrols again). */
+export const REENROL_LABEL = 'Re-teach Gnomon your voice (the voice check was upgraded)';
+/**
+ * The nudge (A1 + 2026-10-20): 'teach' when the kernel's list is known and empty; 'reteach' when every enrolled name
+ * (the kernel's root-signed list) has only a stale print (they count as not enrolled); null otherwise (or when the list is unknown: never a false nudge).
+ */
+export function enrolNudgeOf(c: ClientView): 'teach' | 'reteach' | null {
+  if (c.enrolled === null) return null;
+  if (c.enrolled.length === 0) return 'teach'; // nobody is enrolled with the kernel: a stale print alone enrols no one
+  return c.enrolled.every((n) => c.stale.includes(n)) ? 'reteach' : null;
 }
 
 /** The voice app is up (or coming up): Stop is offered, Start is not. */
@@ -186,7 +204,9 @@ export function clientPillOf(c: ClientView, attached: boolean, attachable: boole
     case 'unavailable':
       return { label: `Voice unavailable${c.unavailable ? ` · ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, tail: null, className: 'voice-noclient voice-unavailable', title: c.unavailable ? oneLine(c.unavailable, ERROR_TITLE_MAX) : 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
     case 'running':
-      if (c.enrolled !== null && c.enrolled.length === 0)
+      if (enrolNudgeOf(c) === 'reteach')
+        return { label: REENROL_LABEL, tail: null, className: 'voice-off voice-nudge', title: 'Gnomon upgraded its voice check, so your old voice print is no longer used and your speech is dropped. Teach it your voice again (about a minute).', action: act('enrol'), actionLabel: 'Re-teach', progress: null };
+      if (enrolNudgeOf(c) === 'teach')
         return { label: 'Teach Gnomon your voice first', tail: null, className: 'voice-off voice-nudge', title: 'Gnomon only forwards speech from an enrolled voice. Teach it yours (about a minute).', action: act('enrol'), actionLabel: 'Teach', progress: null };
       return none;
   }
@@ -212,7 +232,8 @@ function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none:
       return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
     case 'running':
       if (c.connected === false) return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
-      if (c.enrolled !== null && c.enrolled.length === 0) return t('teach Gnomon your voice first', 'voice-nudge', 'No voice is enrolled, so Gnomon drops what it hears. Teach it yours (about a minute).', act('enrol'), 'Teach');
+      if (enrolNudgeOf(c) === 'reteach') return t('re-teach Gnomon your voice (the voice check was upgraded)', 'voice-nudge', 'Gnomon upgraded its voice check, so your old voice print is no longer used and what it hears is dropped. Teach it your voice again (about a minute).', act('enrol'), 'Re-teach');
+      if (enrolNudgeOf(c) === 'teach') return t('teach Gnomon your voice first', 'voice-nudge', 'No voice is enrolled, so Gnomon drops what it hears. Teach it yours (about a minute).', act('enrol'), 'Teach');
       return none;
   }
 }
@@ -241,7 +262,7 @@ export function clientMenuEntries(c: ClientView, attachable: boolean): ClientMen
   const out: ClientMenuEntry[] = [];
   if (clientBusy(c)) out.push({ id: 'voice.client.stop', label: 'Stop voice', note: 'quit the voice app; the mic closes' });
   else if (c.phase !== 'unavailable') out.push({ id: 'voice.client.start', label: c.phase === 'crashed' ? 'Restart voice' : 'Start voice', note: 'start the voice app' });
-  out.push({ id: 'voice.enrol', label: 'Teach Gnomon your voice…', note: c.enrolled && c.enrolled.length ? `enrolled: ${c.enrolled.join(', ')}` : 'only enrolled voices are heard' });
+  out.push({ id: 'voice.enrol', label: 'Teach Gnomon your voice…', note: enrolNudgeOf(c) === 'reteach' ? 'the voice check was upgraded: teach it again' : c.enrolled && c.enrolled.length ? `enrolled: ${c.enrolled.join(', ')}` : 'only enrolled voices are heard' });
   return out;
 }
 

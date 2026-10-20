@@ -55,6 +55,21 @@ describe('SherpaStt (decodeAsync)', () => {
     expect(ticks).toBeGreaterThanOrEqual(5);
   });
 
+  it('2026-10-20 decode priority: a queued partial yields to a waiting final (returns [] undecoded); alone, it decodes', async () => {
+    const { sherpa, calls } = fakeSherpa({ async: true, ms: 20, text: 'words here' });
+    const stt = new SherpaStt(sherpa, PATHS);
+    const first = stt.transcribe(new Float32Array(1), 16_000); // a final in flight
+    const partial = stt.transcribeWords(new Float32Array(1), 16_000); // a live-words partial queued behind it
+    const final2 = stt.transcribe(new Float32Array(1), 16_000); // a final now waiting: the partial must not run first
+    expect(await partial).toEqual([]);
+    expect(await Promise.all([first, final2])).toEqual(['words here', 'words here']);
+    expect(calls.async).toBe(2); // the skipped partial never reached the recognizer
+    expect(calls.maxInFlight).toBe(1);
+    const alone = await stt.transcribeWords(new Float32Array(1), 16_000);
+    expect(calls.async).toBe(3);
+    expect(Array.isArray(alone)).toBe(true);
+  });
+
   it('serializes decodes on the one recognizer handle', async () => {
     const { sherpa, calls } = fakeSherpa({ async: true, ms: 20 });
     const stt = new SherpaStt(sherpa, PATHS);

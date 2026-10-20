@@ -66,12 +66,13 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'voice.client.start', title: 'Voice: start the voice app' },
   { id: 'voice.client.stop', title: 'Voice: stop the voice app' },
   { id: 'voice.enrol', title: 'Voice: teach Gnomon your voice' },
-  // dictation (TD-2026-10-20-262): the auto-send delay after silence, per machine (the pill menu has the same picks)
-  { id: 'voice.delay.3000', title: 'Dictation: auto-send after 3 s of silence' },
-  { id: 'voice.delay.5000', title: 'Dictation: auto-send after 5 s of silence (default)' },
-  { id: 'voice.delay.8000', title: 'Dictation: auto-send after 8 s of silence' },
-  { id: 'voice.delay.15000', title: 'Dictation: auto-send after 15 s of silence' },
-  { id: 'voice.delay.off', title: 'Dictation: never auto-send (Send or Enter only)' },
+  // dictation (TD-2026-10-20-262): the PUSH-TO-TALK auto-send delay after silence, per machine (the pill menu has the
+  // same picks). TD-2026-10-20-125: ambient speech never auto-sends; it waits in the composer for Enter / Send
+  { id: 'voice.delay.3000', title: 'Dictation: auto-send push-to-talk after 3 s of silence' },
+  { id: 'voice.delay.5000', title: 'Dictation: auto-send push-to-talk after 5 s of silence (default)' },
+  { id: 'voice.delay.8000', title: 'Dictation: auto-send push-to-talk after 8 s of silence' },
+  { id: 'voice.delay.15000', title: 'Dictation: auto-send push-to-talk after 15 s of silence' },
+  { id: 'voice.delay.off', title: 'Dictation: never auto-send push-to-talk (Send or Enter only)' },
   { id: 'voice.dictation.hold', title: 'Dictation: hold / resume the auto-send', keys: '⌃⌥H (voice app)' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },

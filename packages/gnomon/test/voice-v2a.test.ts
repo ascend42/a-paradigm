@@ -92,16 +92,29 @@ describe('#gnomon-voice V2a ceiling', () => {
     expect(await refusal(r.send())).toMatchObject({ gate: 'voice', reason: 'voice-off', mode: 'conversation', ceiling: 'ptt' });
     expect(r.cards).toHaveLength(1);
   });
-  it('ambient + auto-edits behaves like typed: the forward is exactly the owner\'s send, no clamp and no extra field', async () => {
+  it('a ptt forward is exactly the owner\'s send, no clamp and no extra field', async () => {
     const r = rig();
     await r.widen();
     r.clock.t += 2000;
-    await r.userTurn();
+    await r.userTurn({ mode: 'ptt' });
     await r.send();
     const vs = r.v.status().voiceSessionId as string;
     expect(r.sends).toEqual([{ owner: HUMAN, p: { hsid: HSID, text: 'run the tests', source: 'voice', voice: { voiceSessionId: vs, turnId: '1', turnSeq: 2 } } }]);
     // a forwarded turn keeps its full text (the kind default sensitivity applies in the log)
     expect(r.rows.at(-1)!.payload).toMatchObject({ text: 'run the tests' });
+  });
+  it('TD-2026-10-20-125: an ambient turn NEVER sends itself; it stays forwardable for the composer and only the human\'s send carries it', async () => {
+    const r = rig();
+    await r.widen();
+    r.clock.t += 2000;
+    const out = (await r.userTurn()) as Record<string, unknown>; // mode: conversation (ambient), enrolled, aec, not busy
+    expect(out).toMatchObject({ forwardable: true });
+    expect(await refusal(r.send())).toMatchObject({ code: 'FORBIDDEN', gate: 'voice', reason: 'voice-off', cause: 'composer', mode: 'conversation', ceiling: 'conversation' });
+    expect(r.sends).toHaveLength(0);
+    // the composer path: the human's own send (a key press in the GUI) is attributed to the turn
+    expect(r.v.attributeHumanSend(HUMAN, HSID, ['run the tests'])).toMatchObject({ source: 'voice', turnSeqs: [2] });
+    // a refused direct send never claimed the turn, and a claimed one cannot be sent again directly
+    expect(await refusal(r.send())).toMatchObject({ reason: 'voice-stale-utterance' });
   });
 });
 
@@ -178,7 +191,7 @@ describe('#gnomon-voice V2a ambient guards', () => {
     await r.userTurn();
     expect(await refusal(r.send())).toMatchObject({ reason: 'voice-playback', clock: 'kernel' });
     r.clock.t += 2000;
-    await r.userTurn();
+    await r.userTurn({ mode: 'ptt' }); // the busy guard binds every turn under a conversation ceiling; only ptt may send itself
     await r.send();
     expect(r.sends).toHaveLength(1);
     expect(r.rows.filter((x) => x.kind === 'voice.turn.agent')).toHaveLength(0);
@@ -232,7 +245,7 @@ describe('#gnomon-voice V2a idle auto-off and status', () => {
     const r = rig({ ambientIdleMs: 60_000 });
     await r.widen();
     r.clock.t += 50_000;
-    await r.userTurn();
+    await r.userTurn({ mode: 'ptt' });
     await r.send();
     r.clock.t += 20_000;
     expect(await r.v.checkIdle()).toBe(false);
@@ -254,7 +267,7 @@ describe('#gnomon-voice V2a idle auto-off and status', () => {
   it('the voice goldens stay put', () => {
     expect(ABI_ID).toBe('sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35');
     // moved once by TD-2026-10-19-063 (gui.resume, merged before V2e; m1-1-reservations.test.ts records it), never by voice
-    expect(CLIENT_API_ID).toBe('sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f');
+    expect(CLIENT_API_ID).toBe('sha256:69e8db86c16575e54014e8fa00779e607b3ad34f575ca607c9958e9c0a48cc0e');
   });
 });
 
