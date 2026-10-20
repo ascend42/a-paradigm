@@ -18,8 +18,8 @@ components:
   gui:
     fidelity-2: >-
       Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
-      Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, ONE title
-      line, "raised HH:MM · waiting Nm", the keys, a quiet single-line contentHash (full hash in title=),
+      Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, a title
+      (one line for a kernel line 1; a composed permission title wraps, see fidelity-2-aegis), "raised HH:MM · waiting Nm", the keys, a quiet single-line contentHash (full hash in title=),
       then a `details` disclosure (details/summary allowlisted in h()) with the full requester + session,
       the kernel-composed body, and a requester's own words labelled as theirs. Always VISIBLE: the short
       requester (shortRequester: a local p:<ns>/<name> shows its name, a foreign or odd principal shows
@@ -38,6 +38,14 @@ components:
       DISABLED with the CLI command in its tooltip because install has no GUI request kind
       (mod-panels.ts WORKSHOP_INSTALL_KEY; modhost/control.ts), and ONE quiet status line (detail in
       title=). Preview clock pinned to 14:07:10 (src/preview/env.ts PREVIEW_NOW).
+    fidelity-2-aegis: >-
+      Aegis BLOCK on fidelity pass 2 (2026-10-20). H1: a composed permission title never hides a
+      command's tail. permissionTitleOf keeps the command's lines (no whitespace collapse; only the ends
+      trimmed) and caps only at TITLE_ARG_MAX (4000 code points, `truncated: true`); renderCard's argEl
+      puts each line in its own .card-arg-line with a visible ⏎ (.card-nl), marks ; && || | & ` $( as
+      .card-sep, and the CSS wraps the composed title (pre-wrap, overflow-wrap: anywhere, no ellipsis).
+      A capped arg adds a "longer than N characters" note and shows the kernel body VISIBLY, outside
+      details (like a claim-mismatch card).
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
       SVG caps. core/render.ts renderCap draws a Text node's `cap` only after

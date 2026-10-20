@@ -324,6 +324,14 @@ html, body {
 .card-voice .handle { display: inline-block; padding: 0 5px; border-radius: 2px; background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; letter-spacing: .04em; }
 .card-title { margin: 2px 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-title .card-arg { font: inherit; }
+/* Aegis H1: a composed permission title never hides a command's tail: it WRAPS (no ellipsis, no one-line clip), each
+   line of the command is its own line with a visible ⏎, and the shell separators are marked */
+.card-title.composed { white-space: normal; overflow: visible; text-overflow: clip; }
+.card-title.composed .card-arg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-title.composed .card-arg-line { white-space: pre-wrap; }
+.card-title.composed .card-nl { color: var(--warn-ink); font-weight: 600; }
+.card-title.composed .card-sep { color: var(--warn-ink); font-weight: 600; }
+.card-arg-capped { display: block; color: var(--warn-ink); }
 .card.kind-knot .card-title { text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 /* fidelity 2: the quiet single-line contentHash under the keys (on every card) and the details disclosure */
 .card-keys { margin-top: 8px; }
