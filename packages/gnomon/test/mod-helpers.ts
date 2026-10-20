@@ -128,3 +128,25 @@ export function host(r: Rig, seams: ModHostSeams = {}, over: Partial<ModHostOpti
   const h = createModHostForTest({ home: r.home, trust: r.auth, children, emit: (kind, payload) => r.events.push({ kind, payload }), callTimeoutMs: 3_000, cancelGraceMs: 500, ...over }, seams);
   return { h, children };
 }
+
+/** A stub mod for the capability falsifiers and K3: it keeps the last view input and every fed event, and returns them from `<name>.seen`. */
+export const ECHO_SOURCE = (name: string): string => `
+import { serveMod } from './gnomon-mod-sdk.mjs';
+const seen = [];
+let last = null;
+serveMod({
+  onEvent: (e) => { if (seen.length < 1000) seen.push(e); },
+  views: { '${name}.echo': async (input) => { last = input === undefined ? null : input; return { schemaVersion: 'display-block:v1', type: 'Text', text: 'echo' }; } },
+  commands: { '${name}.seen': async () => ({ seen, last }) },
+});
+`;
+
+/** Install (stage + decide the card, the human path) a stub mod `name` requiring `capabilities`; no egress. */
+export function installStub(r: Rig, name: string, capabilities: string[]): void {
+  const m = { manifest: 1, kind: 'mod', name, version: '1.0.0', abi: 'mod-abi:v1', provides: { views: [{ id: `${name}.echo`, slot: 'sidebar', placement: 'append' }], commands: [{ id: `${name}.seen`, title: 'What it saw' }] }, requires: { capabilities, egress: 'none' } };
+  const src = writeModFolder(path.join(r.root, 'src', name), m, ECHO_SOURCE(name));
+  const st = stageInstall({ home: r.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: r.auth });
+  if (st.state !== 'staged') throw new Error(`expected staged, got ${JSON.stringify(st)}`);
+  const bind = installPresenceBinding(st.cardId, readStaged(r.home, name, st.cardId)!.card.contentHash, 'install');
+  decideInstallCard(r.home, name, st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: r.auth });
+}

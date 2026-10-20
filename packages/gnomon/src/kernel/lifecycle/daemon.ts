@@ -931,6 +931,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(opts.platform ? { platform: opts.platform } : {}),
     kernelCall: (req) => modKernelCall(req),
     onCallEnd: (name, callId) => modKernelCall.endCall(name, callId),
+    // K3 (#paradigm-context-mod): the focused hsid → its LIVE session cwd, joined here (never from client input)
+    focusCwd: (hsid) => supervisor.scopeOf(hsid)?.cwd ?? null,
+    ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
   });
   // M1.11 slice 3 (#mod-cli): what `gnomon mod install|link` staged on disk reaches the human only through the broker
   const kernelStaged = new Set<string>();

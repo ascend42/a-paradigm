@@ -5,7 +5,7 @@
  * launcher and the egress dialer are NOT here: they are test seams only
  * (kernel/testing.ts createModHostForTest).
  */
-export { ModHost, MOD_ENTRIES, DEFAULT_CALL_TIMEOUT_MS, DEFAULT_CANCEL_GRACE_MS, RESTART_CAP, FOLDER_DEBOUNCE_MS, MAX_MOD_HOST_INFLIGHT, RELAY_MISS_ROWS_PER_WINDOW, RELAY_MISS_WINDOW_MS, EFFECT_REFUSED_ROWS_PER_WINDOW, EFFECT_REFUSED_WINDOW_MS } from './host.js';
+export { ModHost, HOST_INPUT_KEYS, MOD_ENTRIES, DEFAULT_CALL_TIMEOUT_MS, DEFAULT_CANCEL_GRACE_MS, RESTART_CAP, FOLDER_DEBOUNCE_MS, MAX_MOD_HOST_INFLIGHT, RELAY_MISS_ROWS_PER_WINDOW, RELAY_MISS_WINDOW_MS, EFFECT_REFUSED_ROWS_PER_WINDOW, EFFECT_REFUSED_WINDOW_MS } from './host.js';
 export { createModKernelCall, createModRelayPort, clampModAppend, MOD_APPEND_MAX_BYTES, MOD_APPEND_FIELDS, MOD_APPEND_ROWS_PER_SEC, MOD_APPEND_BYTES_PER_CALL } from './bridge.js';
 export type { ModKernelPorts, ModRelays, ModAppendRow, ModKernelCall } from './bridge.js';
 export { RowFold, FOLD_MAX_KEYS, FOLD_DISTINCT_CAP, FOLD_KEY_MAX } from './fold.js';
@@ -22,3 +22,5 @@ export { StagedCardPickup, pendingStaged, listStaged, readStagedEntry, claimLine
 export type { PendingStaged, StagedEntry, PickupHost, PickupOptions } from './control.js';
 export { projectFeedEvent, FEED_KINDS, FEED_CAPABILITY, FEED_USAGE_CAPABILITY, FEED_USAGE_KINDS, FEED_HUES } from './feed.js';
 export type { FeedEvent } from './feed.js';
+export { paradigmSlice, paradigmRootOf, readYamlSubset, displayTitle, redactPaths, ParadigmSliceCache, unfocusedSlice, PARADIGM_SLICE_V1, PARADIGM_SUMMARY_CAPABILITY, SLICE_TOP, TITLE_MAX } from './paradigm-slice.js';
+export type { ParadigmSlice, SliceItem } from './paradigm-slice.js';

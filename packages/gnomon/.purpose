@@ -2979,7 +2979,16 @@ components:
       and counted), symlinks and realpath escapes refused, files capped,
       titles §4.5-sanitised, path-redacted, ≤120 chars; sensitivity secret
       dropped; no absolute path in the slice (hue + basename only). Granted
-      by paradigm.read:summary (CAPABILITY_FORMS; not an id input).
+      by paradigm.read:summary (CAPABILITY_FORMS; not an id input; a
+      manifest holding it may list no egress, any tier).
+      K3: a RELAYED render's input is host-composed (host.ts
+      composeRelayedInput, HOST_INPUT_KEYS focus/hsid/paradigm): the client
+      names only {focus:{hsid}} (or the K0 {hsid}); the host joins that hsid
+      SERVER-SIDE to the live session cwd (ModHostOptions.focusCwd; daemon:
+      supervisor.scopeOf) and gives a paradigm.read:summary mod exactly
+      {hsid?, paradigm: slice | unfocused}; a forged repo/path/cwd/paradigm is
+      ignored (test/mod-focus.test.ts). Other mods get their non-host keys +
+      {hsid}. Local-lane sessions are not joined yet (unfocused).
     tags: [kernel, mods, sandbox, M1.11]
 
   mod-cli:
