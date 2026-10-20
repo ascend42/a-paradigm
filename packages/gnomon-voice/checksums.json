@@ -3,7 +3,7 @@
   "note": "sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel pins the voice binary by the manifest of spec §14.7 (TD-2026-10-19-194 item 5), not by this file. A timestamped signature changes the sha on every build.",
   "binaries": {
     "bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io": {
-      "sha256": "4fc0d00081096f62d98b9558736d93bd014366be3fbf84a48e6db2b75ffd5332",
+      "sha256": "6b344e188fd104d4b4be3d5c7229ce95ad8b07726d1741f493cc93bbae693131",
       "version": "0.1.0",
       "signed": true,
       "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",

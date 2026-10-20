@@ -41,12 +41,15 @@ export interface PlaybackResult {
   completed: boolean;
 }
 
+/** The local control hotkeys the controller acts on (key down only). */
+export type ControlAction = 'mic-toggle' | 'mode-toggle' | 'hold-toggle';
+
 export interface AudioIOEvents {
   frame(f: PcmFrame): void;
   /** the push-to-talk hotkey */
   hotkey(down: boolean, atMs: number): void;
-  /** a local control hotkey: ⌃⌥M mic-toggle, ⌃⌥A mode-toggle (gnomon-voice-io default bindings) */
-  control(action: 'mic-toggle' | 'mode-toggle', atMs: number): void;
+  /** a local control hotkey: ⌃⌥M mic-toggle, ⌃⌥A mode-toggle, ⌃⌥H hold-toggle (gnomon-voice-io default bindings) */
+  control(action: ControlAction, atMs: number): void;
   /** the human muted or unmuted the mic (hardware/menu) */
   mic(muted: boolean): void;
   route(r: RouteInfo): void;

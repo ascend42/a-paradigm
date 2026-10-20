@@ -8,7 +8,8 @@
 //
 // At least one of ctrl/alt/cmd is required (F-keys excepted), so a binding can
 // never swallow plain typing. Actions: talk (hold: press and release), mic-toggle,
-// mode-toggle (ambient vs push-to-talk). The binary only REPORTS hotkeys; the
+// mode-toggle (ambient vs push-to-talk), hold-toggle (dictation: hold the composer's
+// countdown; TD-2026-10-20-262). The binary only REPORTS hotkeys; the
 // controller decides what they do (it sends mic.on / mic.off itself).
 
 import Foundation
@@ -17,6 +18,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
     case talk
     case micToggle = "mic-toggle"
     case modeToggle = "mode-toggle"
+    case holdToggle = "hold-toggle"
 
     /// Carbon EventHotKeyID.id (1-based, stable).
     public var carbonId: UInt32 {
@@ -24,6 +26,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
         case .talk: return 1
         case .micToggle: return 2
         case .modeToggle: return 3
+        case .holdToggle: return 4
         }
     }
 
@@ -129,6 +132,7 @@ public struct HotkeyConfig: Equatable, Sendable {
         b[.talk] = try! HotkeySpec.parse("ctrl+alt+space")!
         b[.micToggle] = try! HotkeySpec.parse("ctrl+alt+m")!
         b[.modeToggle] = try! HotkeySpec.parse("ctrl+alt+a")!
+        b[.holdToggle] = try! HotkeySpec.parse("ctrl+alt+h")!
         return HotkeyConfig(bindings: b)
     }()
 

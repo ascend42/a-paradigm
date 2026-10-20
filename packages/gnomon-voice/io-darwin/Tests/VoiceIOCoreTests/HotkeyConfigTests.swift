@@ -4,11 +4,13 @@ import XCTest
 final class HotkeyConfigTests: XCTestCase {
     func testDefaults() {
         let d = HotkeyConfig.defaults
-        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+alt+m", "mode-toggle": "ctrl+alt+a"])
+        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+alt+m", "mode-toggle": "ctrl+alt+a", "hold-toggle": "ctrl+alt+h"])
         XCTAssertEqual(d.bindings[.talk]?.keyCode, 0x31)
         XCTAssertEqual(d.bindings[.talk]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
         XCTAssertEqual(d.bindings[.micToggle]?.keyCode, 0x2E)
         XCTAssertEqual(d.bindings[.modeToggle]?.keyCode, 0x00)
+        XCTAssertEqual(d.bindings[.holdToggle]?.keyCode, 0x04)
+        XCTAssertEqual(d.bindings[.holdToggle]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
     }
 
     func testParseSynonymsAndCanonicalOrder() throws {
@@ -49,5 +51,7 @@ final class HotkeyConfigTests: XCTestCase {
     func testCarbonIds() {
         for a in HotkeyAction.allCases { XCTAssertEqual(HotkeyAction(carbonId: a.carbonId), a) }
         XCTAssertNil(HotkeyAction(carbonId: 99))
+        XCTAssertEqual(HotkeyAction.holdToggle.carbonId, 4)
+        XCTAssertEqual(HotkeyAction(rawValue: "hold-toggle"), .holdToggle)
     }
 }
