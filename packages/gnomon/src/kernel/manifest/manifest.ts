@@ -118,6 +118,8 @@ export interface ManifestMcpConfig {
   args?: true;
   /** env var NAMES the user may set (never a launch-critical name, MCP_ENV_DENY) */
   env?: string[];
+  /** env names (a subset of env) that hold SECRETS; refused in a per-user override until a secret store exists (Aegis S1 M2) */
+  secret?: string[];
 }
 /** A per-user override of a provides.mcp server's launch (validateMcpUserConfig); only what config permits. */
 export interface McpUserConfig {
@@ -341,7 +343,7 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
     if (o.config !== undefined) {
       const w = `provides.mcp[${i}].config`;
       const cfg = obj(o.config, w);
-      closed(cfg, ['command', 'args', 'env'], w);
+      closed(cfg, ['command', 'args', 'env', 'secret'], w);
       for (const k of ['command', 'args'] as const) if (cfg[k] !== undefined && cfg[k] !== true) fail('SCHEMA', `${w}.${k} must be true when present`, { field: `${w}.${k}` });
       const names = arr(cfg.env, `${w}.env`);
       if (names.length > MCP_CONFIG_LIMITS.env) fail('SCHEMA', `${w}.env lists at most ${MCP_CONFIG_LIMITS.env} names`, { field: `${w}.env` });
@@ -354,6 +356,9 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
         }
         if (seen.has(name)) fail('SCHEMA', `${w}.env: duplicate ${name}`, { field: `${w}.env[${j}]` });
         seen.add(name);
+      });
+      arr(cfg.secret, `${w}.secret`).forEach((n, j) => {
+        if (typeof n !== 'string' || !seen.has(n)) fail('SCHEMA', `${w}.secret[${j}] must name an env entry of this config`, { field: `${w}.secret[${j}]` });
       });
     }
   });
@@ -526,6 +531,8 @@ export function validateMcpUserConfig(entry: ManifestMcp, value: unknown): McpUs
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(e)) {
       if (!declared.includes(k) || mcpEnvDenied(k)) fail('SCHEMA', `${w}.env: ${k} is not a user-settable name of this server`, { field: `env.${k}` });
+      // Aegis S1 M2: an override's env values land in the session's mcp.json (readable by the session); no secrets there
+      if (allow.secret?.includes(k)) fail('SCHEMA', `${w}.env: ${k} is marked secret; secrets cannot be set through an override yet`, { field: `env.${k}` });
       if (typeof v !== 'string' || v.length > MCP_CONFIG_LIMITS.value || COMMAND_UNSAFE.test(v)) fail('SCHEMA', `${w}.env.${k} must be a string without line separator, format or control characters`, { field: `env.${k}` });
       env[k] = v as string;
     }

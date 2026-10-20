@@ -276,3 +276,16 @@ describe('8.0:TD-2026-10-20-812 kinds', () => {
     expect(validateKindPayload('session.context.threshold', { hsid, usedTokens: 1, windowTokens: 2, ratio: Number.NaN }).length).toBeGreaterThan(0);
   });
 });
+
+describe('isOfferTitle (Aegis S1 M1)', () => {
+  it('refuses < > " ` in a title, on the spec and on offer.shown', async () => {
+    const { isOfferTitle, validateOfferSpecV1 } = await import('../src/offer.js');
+    const { validateKindPayload } = await import('../src/event.js');
+    expect(isOfferTitle('Map it on the board')).toBe(true);
+    for (const t of ['<b>x', 'a > b', 'say "hi"', 'run `rm`']) expect(isOfferTitle(t), t).toBe(false);
+    const spec = { kind: 'map', phase: 'diverge', title: 'Map <it>', summary: 's', contextIn: [], resultOut: 'r', reach: 'mcp', handoffTool: 'open', related: [], restraint: 'r' };
+    expect(validateOfferSpecV1(spec).some((e) => e.includes('title'))).toBe(true);
+    const shown = { offerId: 'offer:01J00000000000000000000001', hsid: 'hsid:v1:01J00000000000000000000000', mod: 'm', kind: 'map', phase: 'diverge', title: 'a "b"', contextIn: [], question: 'q?', replyTurnId: 'turn:hsid:v1:01J00000000000000000000000/1' };
+    expect(validateKindPayload('offer.shown', shown).some((e) => e.includes('title'))).toBe(true);
+  });
+});

@@ -21,7 +21,7 @@ import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.
 import { readKernelPubs } from '../kernel/identity/index.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
 import { daemonState } from '../kernel/lifecycle/pidfile.js';
-import { launchCardLines, readDeskMods, requestMcpConfig } from '../kernel/desk/mcp-passthrough.js';
+import { deskLaunchKey, launchCardLines, readDeskMods, requestMcpConfig } from '../kernel/desk/mcp-passthrough.js';
 import { resolveMcpLaunch } from '../kernel/manifest/manifest.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
 import { GNOMON_VERSION } from '../version.js';
@@ -197,7 +197,7 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
     return DESK_EXIT_REFUSED;
   }
   io.stdout.write(`REQUESTED  ${name} ${entry.name}\n`);
-  for (const l of launchCardLines(name, entry.name, resolveMcpLaunch(entry, config))) io.stdout.write(`  │ ${l}\n`);
+  for (const l of launchCardLines(name, entry.name, resolveMcpLaunch(entry, config), deskLaunchKey(ctx.home))) io.stdout.write(`  │ ${l}\n`);
   readout(io.stdout, [
     ['signed', 'nothing (the request takes no effect until the card is allowed)'],
     ['decide', daemonState(ctx.home).state === 'running' ? 'in the GUI: the running kernel raises this card' : 'start the kernel (gnomon up); it raises this card in the GUI'],

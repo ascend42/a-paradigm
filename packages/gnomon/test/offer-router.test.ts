@@ -9,11 +9,13 @@ import { HSID, HSID2, HUMAN, KERNEL, assistantLine, deskMod, offerReply, toolRes
 const GUI: OfferAsker = { connId: 'conn-1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
 const REPO = 'repo:0123456789abcdef';
 
-function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undefined } = {}) {
+function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undefined; served?: string[]; failDecidedRow?: boolean } = {}) {
   let n = 0;
   const written: Array<{ kind: string; payload: Record<string, unknown>; ids: Record<string, unknown> }> = [];
   const sent: Array<{ principal: string; hsid: string; text: string }> = [];
+  const diags: Array<{ event: string; data: Record<string, unknown> }> = [];
   let mods = opts.mods ?? [deskMod('constellation')];
+  let failDecided = opts.failDecidedRow === true;
   const r = new OfferRouter({
     kernelPrincipal: KERNEL,
     mods: () => mods,
@@ -21,8 +23,15 @@ function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undef
     ownerOf: () => ('owner' in opts ? opts.owner : HUMAN),
     pendingCard: () => opts.pending === true,
     append: async (kind, payload, ids) => {
+      if (kind === 'offer.decided' && failDecided) {
+        failDecided = false;
+        throw new Error('disk full');
+      }
       written.push({ kind, payload, ids });
     },
+    // H1b: by default every fixture mod's server was added to the session
+    sessionServers: () => new Set(opts.served ?? mods.map((m) => `gnomon-${m.name}`)),
+    diag: (event, data) => diags.push({ event, data }),
     send: async (principal, hsid, text) => {
       sent.push({ principal, hsid, text });
       return { turn: `turn:${hsid}/2` };
@@ -40,7 +49,7 @@ function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undef
     if (text !== null) commit({ kind: 'turn.event', session: hsid, payload: { hsid, type: 'assistant', line: assistantLine(text) } });
     return commit({ kind: 'turn.result', session: hsid, payload: { hsid } });
   };
-  return { r, written, sent, commit, turn, setMods: (m: DeskMod[]) => (mods = m) };
+  return { r, written, sent, diags, commit, turn, setMods: (m: DeskMod[]) => (mods = m) };
 }
 
 const BLOCK = { mod: 'constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' };
@@ -104,6 +113,18 @@ describe('#offer-router: offer.shown', () => {
     expect(t.commit({ kind: 'turn.result', session: HSID, payload: {} })).toEqual([]);
   });
 
+  it('H1b: a mod whose server was not added to THIS session (needs-config, muted at spawn, name taken) is never offered', () => {
+    const t = rig({ served: [] });
+    expect(t.turn(HSID, 1, offerReply('a', BLOCK))).toEqual([]);
+    expect(t.r.guidanceFor(HSID)).toBeNull();
+  });
+
+  it('L4: a row with no principal is not folded either', async () => {
+    const t = rig();
+    t.r.observe({ kind: 'offer.shown', session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
+    await expect(t.r.decide(GUI, { offerId: 'offer:01J00000000000000000000009', decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
+  });
+
   it('a row by a non-kernel principal is not folded as an offer', () => {
     const t = rig();
     t.r.observe({ kind: 'offer.shown', principal: HUMAN, session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
@@ -155,8 +176,8 @@ describe('#offer-router: ^offer-accept (Aegis D1)', () => {
     expect(res).toMatchObject({ offerId: id, decision: 'open' });
     expect(t.written.map((w) => w.kind)).toEqual(['request.offer.decide', 'offer.decided']);
     expect(t.written[1]!.payload).toEqual({ offerId: id, hsid: HSID, decision: 'open' });
-    expect(t.sent).toEqual([{ principal: HUMAN, hsid: HSID, text: openText('Map it on constellation', 'open_board') }]);
-    expect(t.sent[0]!.text).toBe('Open Map it on constellation: use the open_board tool.');
+    expect(t.sent).toEqual([{ principal: HUMAN, hsid: HSID, text: openText('Map it on constellation', 'mcp__gnomon-constellation__open_board') }]);
+    expect(t.sent[0]!.text).toBe('Open Map it on constellation: use the mcp__gnomon-constellation__open_board tool.');
   });
 
   it('exactly one decision per offer: a replay is refused', async () => {
@@ -186,6 +207,36 @@ describe('#offer-router: ^offer-accept (Aegis D1)', () => {
     const foreign = rig({ owner: 'p:abcdefgh/someone' });
     const [f] = foreign.turn(HSID, 1, offerReply('a', BLOCK));
     await expect(foreign.r.decide(GUI, { offerId: f!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
+  });
+
+  it('L1: the next turn.sent retires the shown offer', async () => {
+    const t = rig();
+    const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
+    t.commit({ kind: 'turn.sent', session: HSID, payload: { turn: `turn:${HSID}/2` } });
+    await expect(t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
+  });
+
+  it('L5: decided once the request row commits; a retry after a failed offer.decided row is a replay with no second request row', async () => {
+    const t = rig({ failDecidedRow: true });
+    const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
+    const p = { offerId: shown!.payload.offerId, decision: 'open' };
+    await expect(t.r.decide(GUI, p)).rejects.toThrow('disk full');
+    await expect(t.r.decide(GUI, p)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
+    expect(t.written.filter((w) => w.kind === 'request.offer.decide')).toHaveLength(1);
+    expect(t.sent).toEqual([]);
+  });
+
+  it('L5: a failed open send is reported on the diag channel', async () => {
+    const t = rig();
+    const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
+    const r2 = new OfferRouter({
+      kernelPrincipal: KERNEL, mods: () => [deskMod('constellation')], repoScopeOf: () => REPO, ownerOf: () => HUMAN, pendingCard: () => false,
+      append: async () => undefined, send: async () => Promise.reject(new Error('not running')), sessionServers: () => new Set(['gnomon-constellation']),
+      diag: (event, data) => t.diags.push({ event, data }),
+    });
+    r2.observe({ kind: 'offer.shown', principal: KERNEL, session: HSID, payload: shown!.payload });
+    await expect(r2.decide(GUI, { offerId: shown!.payload.offerId, decision: 'open' })).rejects.toThrow('not running');
+    expect(t.diags.map((d) => d.event)).toEqual(['send.failed']);
   });
 
   it('human gui/device only: an agent, or a human without a first-party credential, is refused', async () => {
@@ -219,6 +270,24 @@ describe('#offer-router: offer.kept (D3)', () => {
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t3') } })).toEqual([{ kind: 'offer.kept', session: HSID, payload: { offerId: id, hsid: HSID, mod: 'constellation', tool: 'open_board' } }]);
     t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t4', 'mcp__gnomon-constellation__open_board') } });
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t4') } })).toEqual([]);
+  });
+
+  it('M3: a mod muted after the open never counts as kept (diag kept.refused); the server not added to the session is not watched', async () => {
+    const t = rig();
+    const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
+    await t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'open' });
+    await t.r.mute(GUI, { mod: 'constellation', scope: 'repo', repo: REPO, muted: true });
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gnomon-constellation__open_board') } });
+    expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t1') } })).toEqual([]);
+    expect(t.diags.map((d) => d.event)).toEqual(['kept.refused']);
+  });
+
+  it('L7: mutes survive session.exited (kept until the state is evicted)', async () => {
+    const t = rig();
+    const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
+    await t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'not-now' });
+    t.commit({ kind: 'session.exited', session: HSID, payload: { hsid: HSID } });
+    expect(t.turn(HSID, 2, offerReply('b', BLOCK))).toEqual([]);
   });
 
   it('without open, the handoff tool running is not kept', () => {

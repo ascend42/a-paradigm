@@ -10,7 +10,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   McpConfigCards,
   checkMcpOverride,
+  deskLaunchKey,
   isAbsoluteCommand,
+  isReservedDeskName,
+  repoServersOnly,
+  launchCardLines,
   launchHashOf,
   mcpOverridesPath,
   mergeDeskMcp,
@@ -31,7 +35,8 @@ function tmpHome(): string {
   homes.push(h);
   return h;
 }
-const ABS = path.resolve('/opt/node/bin/node');
+const ABS = '/opt/node/bin/node';
+const KEY = Buffer.alloc(32, 7);
 
 describe('#mcp-passthrough: merge', () => {
   it('namespaces gnomon-<mod> (and gnomon-<mod>-<entry> for extra entries); repo servers come first', () => {
@@ -43,11 +48,19 @@ describe('#mcp-passthrough: merge', () => {
     expect(serverNameOf('constellation', { name: 'gnomon-constellation', command: 'x' })).toBe('gnomon-constellation');
   });
 
-  it('never overrides a repo server name, nor an earlier mod\'s', () => {
-    const repo = { 'gnomon-neurons': { command: 'repo-owned' } };
+  it('H1a: a repo server using a reserved desk prefix (gnomon-, gm_, gx_) is dropped; the mod\'s own server is added', () => {
+    const repo = { 'gnomon-neurons': { command: 'repo-owned' }, gm_x_y: { command: 'a' }, gx_z: { command: 'b' }, github: { command: 'gh' } };
     const r = mergeDeskMcp(repo, [deskMod('neurons')]);
-    expect(r.servers['gnomon-neurons']).toEqual({ command: 'repo-owned' });
-    expect(r.skipped).toEqual([{ mod: 'neurons', server: 'gnomon-neurons', why: 'name-taken' }]);
+    expect(r.dropped).toEqual(['gnomon-neurons', 'gm_x_y', 'gx_z']);
+    expect(Object.keys(r.servers)).toEqual(['github', 'gnomon-neurons']);
+    expect(r.servers['gnomon-neurons']).toMatchObject({ command: '/usr/local/bin/npx' });
+    expect(repoServersOnly(repo)).toEqual({ servers: { github: { command: 'gh' } }, dropped: ['gnomon-neurons', 'gm_x_y', 'gx_z'] });
+    for (const n of ['gnomon-a', 'gm_a', 'gx_a']) expect(isReservedDeskName(n)).toBe(true);
+    expect(isReservedDeskName('github')).toBe(false);
+    // two mods deriving the same name: the later is skipped, never overriding
+    const a = deskMod('a', { entries: ['b-x'] });
+    const b = deskMod('a-b', { entries: ['x'] });
+    expect(mergeDeskMcp({}, [a, b]).skipped).toEqual([{ mod: 'a-b', server: 'gnomon-a-b-x', why: 'name-taken' }]);
   });
 
   it('fails closed on a non-absolute resolved command (needs-config); an absolute override makes it launch', () => {
@@ -88,6 +101,28 @@ describe('#mcp-passthrough: merge', () => {
   });
 });
 
+describe('#mcp-passthrough: Aegis S1 M2 / L6', () => {
+  it('the launch hash is an HMAC under the kernel key (another key, another hash)', () => {
+    const l = { command: ABS, args: [], env: { A_TOKEN: 'v' } };
+    expect(launchHashOf(l, KEY)).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
+    expect(launchHashOf(l, Buffer.alloc(32, 8))).not.toBe(launchHashOf(l, KEY));
+    const home = tmpHome();
+    expect(deskLaunchKey(home).equals(deskLaunchKey(home))).toBe(true);
+  });
+
+  it('refuses a secret-marked env name, a non-.exe command on win32, and args the card would truncate', () => {
+    const m = deskMod('neurons', { config: { command: true, args: true, env: ['NEURONS_TOKEN', 'NEURONS_VAULT'] } });
+    const entry = m.manifest.provides!.mcp![0]!;
+    (entry.config as { secret?: string[] }).secret = ['NEURONS_TOKEN'];
+    expect(() => checkMcpOverride(entry, { env: { NEURONS_TOKEN: 'x' } })).toThrow(/secret/);
+    expect(checkMcpOverride(entry, { env: { NEURONS_VAULT: '/v' } })).toEqual({ env: { NEURONS_VAULT: '/v' } });
+    expect(() => checkMcpOverride(entry, { command: 'C:\\tools\\node.cmd' }, 'win32')).toThrow(/\.exe/);
+    expect(checkMcpOverride(entry, { command: 'C:\\tools\\node.exe' }, 'win32')).toEqual({ command: 'C:\\tools\\node.exe' });
+    expect(() => checkMcpOverride(entry, { args: ['x'.repeat(301)] })).toThrow(/card/);
+    expect(launchCardLines('neurons', 'gnomon-neurons', { command: ABS, args: ['a'], env: {} }, KEY).join('\n')).not.toContain('…');
+  });
+});
+
 describe('#mcp-passthrough: the override store (kernel state, human card)', () => {
   it('lives under the Gnomon home only, 0600; a malformed store reads as empty', () => {
     const home = tmpHome();
@@ -115,7 +150,7 @@ describe('#mcp-passthrough: the override store (kernel state, human card)', () =
       },
       card: () => ({ state: 'pending' }) as never,
     };
-    const cards = new McpConfigCards({ home, broker: broker as never, mods: () => [mod], requestedBy: 'p:abcdefgh/cli' });
+    const cards = new McpConfigCards({ home, broker: broker as never, mods: () => [mod], requestedBy: 'p:abcdefgh/cli', launchKey: KEY });
     await cards.scan();
     await cards.scan(); // not raised twice
     expect(raised).toHaveLength(1);
@@ -125,7 +160,9 @@ describe('#mcp-passthrough: the override store (kernel state, human card)', () =
     expect(text).toContain('args /src/mcp.js');
     expect(text).toContain('env names NEURONS_TOKEN');
     expect(text).not.toContain('s3cret-value');
-    expect(text).toContain(launchHashOf({ command: ABS, args: ['/src/mcp.js'], env: { NEURONS_TOKEN: 's3cret-value' } }));
+    expect(text).toContain(launchHashOf({ command: ABS, args: ['/src/mcp.js'], env: { NEURONS_TOKEN: 's3cret-value' } }, KEY));
+    expect(text).toContain("env values are written to this session's mcp.json and readable by the session");
+    expect(text).toContain('requested by: a request file under the Gnomon home');
     expect(readMcpOverrides(home)).toEqual({});
     await raised[0]!.effect('allow');
     expect(readMcpOverrides(home)).toEqual({ neurons: { neurons: { command: ABS, args: ['/src/mcp.js'], env: { NEURONS_TOKEN: 's3cret-value' } } } });
@@ -138,12 +175,12 @@ describe('#mcp-passthrough: the override store (kernel state, human card)', () =
     requestMcpConfig(home, mod, 'neurons', { command: ABS });
     const raised: Array<{ effect: (d: string) => Promise<void> }> = [];
     const broker = { raise: async (i: { effect: (d: string) => Promise<void> }) => (raised.push(i), { cardId: 'card:y' } as never), card: () => undefined };
-    await new McpConfigCards({ home, broker: broker as never, mods: () => [mod], requestedBy: 'p:abcdefgh/cli' }).scan();
+    await new McpConfigCards({ home, broker: broker as never, mods: () => [mod], requestedBy: 'p:abcdefgh/cli', launchKey: KEY }).scan();
     await raised[0]!.effect('deny');
     expect(readMcpOverrides(home)).toEqual({});
     requestMcpConfig(home, mod, 'neurons', { command: ABS });
     const narrowed = deskMod('neurons');
-    await new McpConfigCards({ home, broker: broker as never, mods: () => [narrowed], requestedBy: 'p:abcdefgh/cli' }).scan();
+    await new McpConfigCards({ home, broker: broker as never, mods: () => [narrowed], requestedBy: 'p:abcdefgh/cli', launchKey: KEY }).scan();
     expect(raised).toHaveLength(1);
     expect(readMcpConfigRequest(home, 'neurons')).toBeNull();
   });

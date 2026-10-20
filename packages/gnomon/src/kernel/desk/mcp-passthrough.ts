@@ -20,10 +20,14 @@
  * mod's home dir (a session's sandbox cannot write the home), and the kernel (McpConfigCards) raises a root-class
  * `grant` card showing the effective launch — command, args and env NAMES, never values — plus its launch hash. Only
  * `allow` writes the store. Only what the manifest entry's `config` declares is accepted (validateMcpUserConfig), and
- * an overridden command must be an absolute path. Claude Code spawns stdio MCP servers directly (no shell).
+ * an overridden command must be an absolute path (an .exe on Windows), args must fit the card unshortened, and
+ * secret-marked env names are refused. WRITE LIMITS (confirmed): the request file lives under <home>/mods/<mod>/, which
+ * the `session` sandbox profile write-denies (modhost/control.ts "WHO MAY WRITE"), so a session cannot plant one; any
+ * process of the OS user can, which is why the card labels it unverified and shows the full effective launch.
+ * Claude Code spawns stdio MCP servers itself (its own spawn, outside the kernel's control).
  */
 
-import { createHash } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { mintId } from '@a-company/gnomon-contracts';
@@ -40,7 +44,14 @@ export interface DeskMod {
   manifest: ManifestV1;
 }
 
-const sha = (s: string): string => `sha256:${createHash('sha256').update(s, 'utf8').digest('hex')}`;
+/**
+ * Desk server-name prefixes the kernel reserves (Aegis S1 H1a): `gnomon-` now, `gm_` and `gx_` for the coming
+ * gm_<pub>_<name> rename. A repo .mcp.json entry with such a name is dropped (it could receive a mod's handoff).
+ */
+export const RESERVED_DESK_PREFIXES = Object.freeze(['gnomon-', 'gm_', 'gx_']);
+export function isReservedDeskName(name: string): boolean {
+  return RESERVED_DESK_PREFIXES.some((p) => name.startsWith(p));
+}
 
 /**
  * Every installed mod whose pinned snapshot verifies, whose manifest matches its grant, whose capabilities and egress
@@ -134,11 +145,17 @@ export function writeMcpOverride(home: string, mod: string, server: string, conf
 }
 
 /** An override after the S0 check, with D2's extra rule: an overridden command is an absolute path. Throws. */
-export function checkMcpOverride(entry: ManifestMcp, override: unknown): McpUserConfig {
+export function checkMcpOverride(entry: ManifestMcp, override: unknown, platform: string = process.platform): McpUserConfig {
   const u = validateMcpUserConfig(entry, override);
-  if (u.command !== undefined && !path.isAbsolute(u.command)) throw new TypeError(`mcp config ${entry.name}: command must be an absolute path`);
+  if (u.command !== undefined && !isAbsoluteCommand(u.command)) throw new TypeError(`mcp config ${entry.name}: command must be an absolute path`);
+  // Aegis S1 M2: on Windows only an .exe runs (never a .cmd/.bat that a shell would interpret)
+  if (u.command !== undefined && platform === 'win32' && !/\.exe$/i.test(u.command)) throw new TypeError(`mcp config ${entry.name}: on Windows the command must be an .exe`);
+  if ((u.args ?? []).join(' ').length > MCP_CARD_ARGS_MAX) throw new TypeError(`mcp config ${entry.name}: args are longer than the card can show (${MCP_CARD_ARGS_MAX} characters)`);
   return u;
 }
+
+/** The card shows args in full (Aegis S1 L6): a request whose args would not fit is refused, never truncated. */
+export const MCP_CARD_ARGS_MAX = 300;
 
 export interface McpLaunch {
   command: string;
@@ -147,10 +164,10 @@ export interface McpLaunch {
 }
 
 /** The effective launch of one server under the store (an override that fails the checks is ignored: fail closed). */
-export function effectiveLaunch(entry: ManifestMcp, override: unknown): { launch: McpLaunch; overridden: boolean } {
+export function effectiveLaunch(entry: ManifestMcp, override: unknown, platform: string = process.platform): { launch: McpLaunch; overridden: boolean } {
   if (override !== undefined) {
     try {
-      checkMcpOverride(entry, override);
+      checkMcpOverride(entry, override, platform);
       return { launch: resolveMcpLaunch(entry, override), overridden: true };
     } catch {
       /* fall through to the manifest's own launch */
@@ -159,11 +176,30 @@ export function effectiveLaunch(entry: ManifestMcp, override: unknown): { launch
   return { launch: resolveMcpLaunch(entry), overridden: false };
 }
 
-/** The launch hash (logged on the config card; values hashed, never shown). */
-export function launchHashOf(l: McpLaunch): string {
+/**
+ * The launch hash (Aegis S1 M2): an HMAC under a kernel-held key, so a logged hash never lets anyone confirm a guessed
+ * env value. Logged on the config card and per added server at spawn; values are never shown.
+ */
+export function launchHashOf(l: McpLaunch, key: Buffer): string {
   const env = Object.keys(l.env).sort().map((k) => [k, l.env[k]]);
-  return sha(JSON.stringify([l.command, l.args, env]));
+  return `hmac-sha256:${createHmac('sha256', key).update(JSON.stringify([l.command, l.args, env]), 'utf8').digest('hex')}`;
 }
+
+/** The kernel-held launch-hash key (<home>/desk/launch-hash.key, 32 random bytes, 0600; created on first use). */
+export function deskLaunchKey(home: string): Buffer {
+  const p = path.join(home, 'desk', 'launch-hash.key');
+  try {
+    const b = fs.readFileSync(p);
+    if (b.length === 32) return b;
+  } catch {
+    /* first use */
+  }
+  fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
+  const k = randomBytes(32);
+  fs.writeFileSync(p, k, { mode: 0o600 });
+  return k;
+}
+const PROCESS_KEY = randomBytes(32);
 
 /** The namespaced server name of one mod entry. */
 export function serverNameOf(mod: string, entry: ManifestMcp, _entries?: readonly ManifestMcp[]): string {
@@ -185,6 +221,8 @@ export const UNCONFIGURED_HINT = 'set it with gnomon mod config <mod> --command 
 
 export interface PassthroughResult {
   servers: Record<string, unknown>;
+  /** repo server names dropped for using a reserved desk prefix (H1a) */
+  dropped: string[];
   added: Array<{ mod: string; server: string; launchHash: string; overridden: boolean }>;
   skipped: Array<{ mod: string; server?: string; why: 'repo-muted' | 'name-taken' | 'needs-config' }>;
 }
@@ -193,8 +231,8 @@ export interface PassthroughResult {
  * Merge mods' provides.mcp into the repo's mcp servers. Pure (overrides passed in). The repo's entries come first and
  * are never replaced.
  */
-export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskMod[], opts: { overrides?: McpOverrides; repoMuted?: (mod: string) => boolean } = {}): PassthroughResult {
-  const servers: Record<string, unknown> = { ...repo };
+export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskMod[], opts: { overrides?: McpOverrides; repoMuted?: (mod: string) => boolean; launchKey?: Buffer; platform?: string } = {}): PassthroughResult {
+  const { servers, dropped } = repoServersOnly(repo);
   const added: PassthroughResult['added'] = [];
   const skipped: PassthroughResult['skipped'] = [];
   for (const m of [...mods].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
@@ -210,17 +248,28 @@ export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskM
         skipped.push({ mod: m.name, server, why: 'name-taken' });
         continue;
       }
-      const { launch, overridden } = effectiveLaunch(e, opts.overrides?.[m.name]?.[e.name]);
+      const { launch, overridden } = effectiveLaunch(e, opts.overrides?.[m.name]?.[e.name], opts.platform);
       // fail closed: a relative command (e.g. `neurons`, `constellation-mcp`) never launches
       if (!isAbsoluteCommand(launch.command)) {
         skipped.push({ mod: m.name, server, why: 'needs-config' });
         continue;
       }
       servers[server] = { type: 'stdio', command: launch.command, args: launch.args, ...(Object.keys(launch.env).length ? { env: launch.env } : {}) };
-      added.push({ mod: m.name, server, launchHash: launchHashOf(launch), overridden });
+      added.push({ mod: m.name, server, launchHash: launchHashOf(launch, opts.launchKey ?? PROCESS_KEY), overridden });
     }
   }
-  return { servers, added, skipped };
+  return { servers, dropped, added, skipped };
+}
+
+/** The repo's servers minus any using a reserved desk prefix (H1a; also the fail-closed result when the Desk is not bound). */
+export function repoServersOnly(repo: Record<string, unknown>): { servers: Record<string, unknown>; dropped: string[] } {
+  const servers: Record<string, unknown> = {};
+  const dropped: string[] = [];
+  for (const [k, v] of Object.entries(repo)) {
+    if (isReservedDeskName(k)) dropped.push(k);
+    else servers[k] = v;
+  }
+  return { servers, dropped };
 }
 
 /* ── the human-only config request → card → store ────────────────────────── */
@@ -236,10 +285,10 @@ function requestPath(home: string, mod: string): string {
 }
 
 /** The CLI half: write the request (the kernel raises the card). Validates against the installed manifest first. */
-export function requestMcpConfig(home: string, mod: DeskMod, server: string, config: unknown, at = new Date()): McpConfigRequest {
+export function requestMcpConfig(home: string, mod: DeskMod, server: string, config: unknown, at = new Date(), platform: string = process.platform): McpConfigRequest {
   const entry = (mod.manifest.provides?.mcp ?? []).find((e) => e.name === server);
   if (!entry) throw new TypeError(`${mod.name} declares no mcp server ${server}`);
-  const checked = checkMcpOverride(entry, config);
+  const checked = checkMcpOverride(entry, config, platform);
   const req: McpConfigRequest = { server, config: checked, at: at.toISOString() };
   const p = requestPath(home, mod.name);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
@@ -269,25 +318,27 @@ function dropRequest(home: string, mod: string): void {
 }
 
 /** The card lines of an effective launch: command, args, env NAMES (never values), the launch hash. */
-export function launchCardLines(mod: string, server: string, launch: McpLaunch): string[] {
-  const args = launch.args.join(' ');
+export function launchCardLines(mod: string, server: string, launch: McpLaunch, key: Buffer): string[] {
+  const args = launch.args.join(' '); // never truncated: checkMcpOverride refuses args over MCP_CARD_ARGS_MAX
   return [
     `Set how mod ${mod} launches its MCP server ${server}`,
     `command ${launch.command}`,
-    `args ${args.length > 300 ? `${args.slice(0, 299)}…` : args || '(none)'}`,
+    `args ${args || '(none)'}`,
     `env names ${Object.keys(launch.env).sort().join(', ') || '(none)'} (values not shown)`,
-    `launch ${launchHashOf(launch)}`,
+    ...(Object.keys(launch.env).length ? ["env values are written to this session's mcp.json and readable by the session"] : []),
+    `launch ${launchHashOf(launch, key)}`,
+    'requested by: a request file under the Gnomon home (unverified; a session sandbox cannot write there)',
     'every new session in every repo starts this command as you, under the session sandbox',
   ];
 }
 
 /** The kernel half: raise a root-class card per pending request; `allow` writes the store. */
 export class McpConfigCards {
-  readonly #o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string };
+  readonly #o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string };
   readonly #raised = new Map<string, string>();
   #seen = new Map<string, string>();
 
-  constructor(o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string }) {
+  constructor(o: { home: string; broker: Pick<ApprovalBroker, 'raise' | 'card'>; mods: () => readonly DeskMod[]; requestedBy: string; launchKey: Buffer; platform?: string }) {
     this.#o = o;
   }
 
@@ -309,7 +360,7 @@ export class McpConfigCards {
       let launch: McpLaunch;
       try {
         if (!mod || !entry) throw new TypeError('not an installed server');
-        checkMcpOverride(entry, req.config);
+        checkMcpOverride(entry, req.config, this.#o.platform);
         launch = resolveMcpLaunch(entry, req.config);
       } catch {
         dropRequest(home, name); // refused: nothing the request says reaches a card
@@ -324,8 +375,8 @@ export class McpConfigCards {
           cardId,
           requestedBy: this.#o.requestedBy,
           attended: true,
-          detail: { action: 'mod.mcp.config', name, server: req.server, launchHash: launchHashOf(launch), envNames: Object.keys(launch.env).sort() },
-          lines: launchCardLines(name, server, launch),
+          detail: { action: 'mod.mcp.config', name, server: req.server, launchHash: launchHashOf(launch, this.#o.launchKey), envNames: Object.keys(launch.env).sort(), requestedVia: 'request-file' },
+          lines: launchCardLines(name, server, launch, this.#o.launchKey),
           decisions: ['allow', 'deny'],
           effect: async (decision) => {
             dropRequest(home, name);

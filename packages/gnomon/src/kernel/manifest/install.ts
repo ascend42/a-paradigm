@@ -197,7 +197,8 @@ function surfaceOf(m: ManifestV1): Surface {
 function mcpConfigSuffix(c: ManifestMcpConfig | undefined): string {
   if (!c) return '';
   const parts = [...(c.command ? ['command'] : []), ...(c.args ? ['args'] : []), ...(c.env?.length ? [`env ${c.env.join(', ')}`] : [])];
-  return parts.length ? ` · user may set: ${parts.join('; ')}` : '';
+  // Aegis S1 M2: say where env values go (the session's mcp.json, which the session can read)
+  return parts.length ? ` · user may set: ${parts.join('; ')}${c.env?.length ? " · env values are written to this session's mcp.json and readable by the session" : ''}` : '';
 }
 
 /** Middle-truncate by code points for DISPLAY only (the detail, inside contentHash, keeps the full value). */

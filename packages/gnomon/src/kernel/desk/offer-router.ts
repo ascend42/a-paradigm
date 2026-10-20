@@ -25,6 +25,8 @@
  *
  * MUTES: offer.decided{not-now} quiets that mod for the rest of the hsid (L4); {stop-here} quiets every mod for the
  * hsid; request.offer.mute{mod, scope:'repo', repo, muted} (A3) is folded per repo and survives restarts (seed()).
+ * A mute (and a mod pause) stops offers at once and refuses offer.kept, but the mod's MCP server stays in a running
+ * session's mcp.json: removing it applies to new sessions.
  */
 
 import {
@@ -47,9 +49,9 @@ export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
 export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'request.offer.mute']);
 
-/** The kernel template of an `open` turn (manifest fields only). */
-export function openText(title: string, handoffTool: string): string {
-  return `Open ${title}: use the ${handoffTool} tool.`;
+/** The kernel template of an `open` turn (manifest fields only; the tool fully qualified, mcp__<server>__<tool>, H1c). */
+export function openText(title: string, qualifiedTool: string): string {
+  return `Open ${title}: use the ${qualifiedTool} tool.`;
 }
 
 /** The repo scope of a session (`repo:<16 hex>`) from its repoKey (`sha256:<64 hex>`, repo-hooks.ts repoKeyOf). */
@@ -93,6 +95,14 @@ export interface OfferRouterOptions {
   /** send a kernel-templated turn as the human (session.inject origin kernel) */
   send: (principal: string, hsid: string, text: string) => Promise<unknown>;
   mintOfferId?: () => string;
+  /**
+   * Aegis S1 H1b: the desk servers mergeDeskMcp actually ADDED to this session's mcp.json at spawn (undefined = none).
+   * A mod is offered, and kept is counted, only through a server in this set (needs-config, muted-at-spawn and
+   * name-taken mods never are).
+   */
+  sessionServers: (hsid: string) => ReadonlySet<string> | undefined;
+  /** kernel diagnostics (the daemon's diag channel): kept refused, send failed */
+  diag?: (event: string, data: Record<string, unknown>) => void;
 }
 
 interface OfferState {
@@ -107,6 +117,8 @@ interface OfferState {
 }
 
 interface SessionState {
+  /** the session exited; its mutes stay until the state is evicted (L7) */
+  exited: boolean;
   turns: string[];
   texts: string[];
   muted: Set<string>;
@@ -157,14 +169,32 @@ export class OfferRouter {
     let s = this.#sessions.get(hsid);
     if (!s) {
       if (this.#sessions.size >= MAX_SESSIONS) this.#sessions.delete(this.#sessions.keys().next().value!);
-      s = { turns: [], texts: [], muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      s = { exited: false, turns: [], texts: [], muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      this.#sessions.set(hsid, s);
+    } else {
+      // LRU: a touched session moves to the back of the eviction order
+      this.#sessions.delete(hsid);
       this.#sessions.set(hsid, s);
     }
     return s;
   }
 
+  /** Aegis S1 L4: only the kernel principal's rows are folded. */
   #kernel(e: CommittedRow): boolean {
-    return e.principal === undefined || e.principal === this.#o.kernelPrincipal;
+    return e.principal === this.#o.kernelPrincipal;
+  }
+
+  /** The mod's servers added to THIS session (H1b), as names from serverNameOf. */
+  #servedNames(hsid: string, mod: DeskMod): string[] {
+    const set = this.#o.sessionServers(hsid);
+    if (!set) return [];
+    return (mod.manifest.provides?.mcp ?? []).map((e) => serverNameOf(mod.name, e)).filter((n) => set.has(n));
+  }
+
+  /** Muted for the hsid (not-now / stop-here) or its repo. */
+  #muted(hsid: string, mod: string): boolean {
+    const s = this.#sessions.get(hsid);
+    return s?.stopped === true || s?.muted.has(mod) === true || this.repoMuted(this.#o.repoScopeOf(hsid), mod);
   }
 
   /** Boot: fold the persistent rows (OFFER_SEED_KINDS) read from the log. */
@@ -181,7 +211,7 @@ export class OfferRouter {
     const s = this.#sessions.get(hsid);
     if (s?.stopped) return [];
     const repo = this.#o.repoScopeOf(hsid);
-    return this.#o.mods().filter((m) => (m.manifest.provides?.offers?.length ?? 0) > 0 && (m.manifest.provides?.mcp?.length ?? 0) > 0 && !s?.muted.has(m.name) && !this.repoMuted(repo, m.name));
+    return this.#o.mods().filter((m) => (m.manifest.provides?.offers?.length ?? 0) > 0 && this.#servedNames(hsid, m).length > 0 && !s?.muted.has(m.name) && !this.repoMuted(repo, m.name));
   }
 
   /** The `<gnomon-desk>` note for a session, or null (composeGuidance joins it with the voice note). */
@@ -220,7 +250,7 @@ export class OfferRouter {
         const d = p.decision as OfferDecision;
         if (o) {
           o.decided = d;
-          if (d === 'open') o.watchTool = this.#handoffOf(o);
+          if (d === 'open') o.watchTool = this.#handoffOf(o.hsid, o);
         }
         if (d === 'not-now' && o) s.muted.add(o.mod);
         if (d === 'stop-here') s.stopped = true;
@@ -232,13 +262,15 @@ export class OfferRouter {
         return [];
       }
       case 'session.exited':
-        if (hsid) this.#sessions.delete(hsid);
+        // L7: mutes and stop-here stay until the state is evicted (bounded LRU), not dropped at exit
+        if (hsid && this.#sessions.has(hsid)) this.#s(hsid).exited = true;
         return [];
     }
     if (!hsid) return [];
     const s = this.#s(hsid);
     if (e.kind === 'turn.sent') {
       if (typeof p.turn === 'string') s.turns.push(p.turn);
+      s.latest = null; // L1: a new turn retires the shown offer (the kernel is as strict as the GUI)
       return [];
     }
     if (e.kind === 'turn.event') {
@@ -256,11 +288,13 @@ export class OfferRouter {
     return row ? [row] : [];
   }
 
-  /** The handoff tool's full names on the mod's OWN servers (serverNameOf, the one naming helper). */
-  #handoffOf(o: OfferState): string[] | null {
+  /** The handoff tool's full names on the mod's OWN servers added to THIS session (serverNameOf; H1b). */
+  #handoffOf(hsid: string, o: { mod: string; kind: string }): string[] | null {
     const spec = this.#specOf(o.mod, o.kind);
-    const entries = this.#o.mods().find((x) => x.name === o.mod)?.manifest.provides?.mcp ?? [];
-    return spec ? entries.map((e) => `mcp__${serverNameOf(o.mod, e)}__${spec.handoffTool}`) : null;
+    const mod = this.#o.mods().find((x) => x.name === o.mod);
+    if (!spec || !mod) return null;
+    const names = this.#servedNames(hsid, mod).map((n) => `mcp__${n}__${spec.handoffTool}`);
+    return names.length ? names : null;
   }
 
   #specOf(mod: string, kind: string): OfferSpecV1 | null {
@@ -287,9 +321,13 @@ export class OfferRouter {
       s.calls.delete(r.toolUseId);
       const o = this.#offers.get(id);
       if (!o || o.kept || r.isError || r.decision === 'deny') continue;
-      o.kept = true; // once per offer, even before the row commits
       const spec = this.#specOf(o.mod, o.kind);
-      if (!spec) continue;
+      // M3: a mod paused, uninstalled or muted since the open never counts as kept (its server may still run until a new session)
+      if (!spec || this.#muted(hsid, o.mod)) {
+        this.#o.diag?.('kept.refused', { hsid, offerId: o.offerId, name: o.mod, why: spec ? 'muted' : 'paused-or-uninstalled' });
+        continue;
+      }
+      o.kept = true; // once per offer, even before the row commits
       const payload = { offerId: o.offerId, hsid, mod: o.mod, tool: spec.handoffTool };
       if (validateKindPayload('offer.kept', payload).length) continue;
       out.push({ kind: 'offer.kept', payload, session: hsid });
@@ -338,19 +376,26 @@ export class OfferRouter {
     if (owner !== asker.principal) throw new RpcRefusal('FORBIDDEN', 'not-owner', 'the offer belongs to another human\'s session', { offerId: o.offerId });
     if (this.#sessions.get(o.hsid)?.latest !== o.offerId) throw new RpcRefusal('BAD_REQUEST', 'superseded', 'a newer offer was shown in this session', { offerId: o.offerId });
     const spec = this.#specOf(o.mod, o.kind);
-    if (p.decision === 'open' && !spec) throw new RpcRefusal('NOT_FOUND', 'not-found', `${o.mod} no longer offers ${o.kind}`, { offerId: o.offerId });
+    const tools = this.#handoffOf(o.hsid, o);
+    if (p.decision === 'open' && (!spec || !tools)) throw new RpcRefusal('NOT_FOUND', 'not-found', `${o.mod} no longer offers ${o.kind} in this session`, { offerId: o.offerId });
     this.#deciding.add(o.offerId);
     try {
       await this.#o.append('request.offer.decide', { offerId: o.offerId, decision: p.decision }, { session: o.hsid, connId: asker.connId });
+      // L5: decided once the request row commits, so a retry is a replay and never writes a second request row
+      o.decided = p.decision;
       await this.#o.append('offer.decided', { offerId: o.offerId, hsid: o.hsid, decision: p.decision }, { session: o.hsid, connId: asker.connId });
-      // the row's fold may run on commit; set it here too so the decision is final before any await below
       this.observe({ kind: 'offer.decided', principal: this.#o.kernelPrincipal, session: o.hsid, payload: { offerId: o.offerId, hsid: o.hsid, decision: p.decision } });
     } finally {
       this.#deciding.delete(o.offerId);
     }
     if (p.decision !== 'open') return { offerId: o.offerId, decision: p.decision };
-    const turn = await this.#o.send(owner, o.hsid, openText(spec!.title, spec!.handoffTool));
-    return { offerId: o.offerId, decision: p.decision, turn };
+    try {
+      const turn = await this.#o.send(owner, o.hsid, openText(spec!.title, tools![0]!));
+      return { offerId: o.offerId, decision: p.decision, turn };
+    } catch (err) {
+      this.#o.diag?.('send.failed', { hsid: o.hsid, offerId: o.offerId, name: o.mod, error: err instanceof Error ? err.message.slice(0, 200) : String(err) });
+      throw err;
+    }
   }
 
   /** request.offer.mute from the human (gui/device): the kernel writes the request row; the fold applies it. */

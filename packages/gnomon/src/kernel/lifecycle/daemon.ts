@@ -144,7 +144,7 @@ import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
-import { DeskMods, McpConfigCards, mergeDeskMcp, readMcpOverrides, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
+import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { spawn as spawnChild } from 'node:child_process';
 
@@ -170,8 +170,12 @@ export type DaemonEvent =
   | { kind: 'daemon.fuse.clock.skew'; chainAt: string; wall: string }
   /** TD-2026-10-19-063: #update-watch saw a new build stamp and raised (or found) the upgrade card. */
   | { kind: 'daemon.update.detected'; from: string | null; to: string; cardId: string | null }
-  /** TD-2026-10-20-812 (Aegis S2): a mod MCP server whose resolved command is not absolute was left out (needs-config) */
-  | { kind: 'daemon.desk.mcp.unconfigured'; hsid: string; name: string; server: string | null; next: string }
+  /**
+   * TD-2026-10-20-812 (the Desk): mcp.added {hsid, server, launchHash, overridden} per desk server at spawn (L2);
+   * mcp.needs-config (a non-absolute command, not launched); mcp.reserved (a repo server using a reserved desk prefix,
+   * dropped, H1a); mcp.unbound (the router not bound yet: no desk servers, L3); kept.refused (M3); send.failed (L5)
+   */
+  | { kind: 'daemon.desk'; event: string; hsid?: string; name?: string; server?: string | null; [k: string]: unknown }
   | SocketEvent;
 
 export interface DaemonOptions {
@@ -896,13 +900,27 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // TD-2026-10-20-812 (the Desk): installed, granted, unpaused mods (cached on the grant table); the router is late-bound
   const deskMods = new DeskMods(home, authority);
   let offerRouter: OfferRouter | null = null;
+  const deskAdded = new Map<string, Set<string>>();
   const supervisor: SessionSupervisor = new SessionSupervisor({
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     deskMcp: (repoServers, ctx) => {
+      const router = offerRouter;
+      if (!router) {
+        // L3: fail closed until the router is bound (no desk server, reserved repo names still dropped)
+        const only = repoServersOnly(repoServers);
+        for (const server of only.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
+        emit({ kind: 'daemon.desk', event: 'mcp.unbound', hsid: ctx.hsid });
+        return only.servers;
+      }
       const repo = deskRepoScope(repoKeyOf([ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])]));
-      const r = mergeDeskMcp(repoServers, deskMods.list(), { overrides: readMcpOverrides(home), repoMuted: (mod) => offerRouter?.repoMuted(repo, mod) ?? false });
-      // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config on the diag channel
-      for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk.mcp.unconfigured', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });
+      const r = mergeDeskMcp(repoServers, deskMods.list(), { overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
+      // H1b: the servers actually added to THIS session (offers and kept go only through them)
+      if (deskAdded.size >= 512) deskAdded.delete(deskAdded.keys().next().value!);
+      deskAdded.set(ctx.hsid, new Set(r.added.map((a) => a.server)));
+      for (const server of r.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
+      for (const a of r.added) emit({ kind: 'daemon.desk', event: 'mcp.added', hsid: ctx.hsid, name: a.mod, server: a.server, launchHash: a.launchHash, overridden: a.overridden });
+      // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config
+      for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk', event: 'mcp.needs-config', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });
       return r.servers;
     },
     onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),
@@ -1115,6 +1133,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     pendingCard: (hsid) => broker.cards().some((c) => c.state === 'pending' && c.hsid === hsid),
     append: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload: { ...payload }, ...(ids.session ? { session: ids.session } : {}), ...(ids.connId ? { connId: ids.connId } : {}) }).then(() => undefined),
     send: (principal, hsid, text) => supervisor.send(principal, { hsid, text, origin: 'kernel' }),
+    sessionServers: (hsid) => deskAdded.get(hsid),
+    diag: (event, data) => emit({ kind: 'daemon.desk', event, ...data }),
   });
   try {
     const seed: CommittedRow[] = [];
@@ -1132,7 +1152,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
   let mcpCardsTimer: NodeJS.Timeout | null = null;
-  const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli` });
+  const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home) });
   const dispatcherCommon = {
     voice,
     voiceClient: {

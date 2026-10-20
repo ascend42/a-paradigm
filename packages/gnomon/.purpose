@@ -2146,7 +2146,15 @@ components:
       template "Open <title>: use the <handoffTool> tool." as the human
       (session.inject origin kernel). offer.kept once per offer when the
       declared handoffTool on mcp__gnomon-<mod>__ completes without error
-      after open. mute(): request.offer.mute row as the kernel. CLI
+      after open. mute(): request.offer.mute row as the kernel. Aegis S1
+      fixes: open names the fully qualified tool mcp__<server>__<handoffTool>;
+      only kernel-principal rows fold; the next turn.sent retires the shown
+      offer; decided once the request row commits (a retry is a replay, no
+      second request row), send failures reported (diag send.failed); a mod
+      paused or muted after open never counts as kept (diag kept.refused);
+      mutes survive session exit until the bounded state is evicted. Pause
+      and mute stop offers at once; removing the server applies to new
+      sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/open/not-now/
       stop-here/kept per mod from the verified log.
     path: src/kernel/desk/
@@ -2183,6 +2191,17 @@ components:
       until configured. Names come from ONE helper, serverNameOf: an entry
       named <mod> or gnomon-<mod> is gnomon-<mod>, else gnomon-<mod>-<entry>
       (gnomon-neurons-brain); #offer-router's kept check uses the same helper.
+      Aegis S1 fixes: repo servers named with a reserved desk prefix
+      (RESERVED_DESK_PREFIXES gnomon-, gm_, gx_) are dropped (diag
+      mcp.reserved); the daemon records the servers added per hsid and the
+      router offers and counts kept only through them; no desk server before
+      the router is bound (mcp.unbound); per added server a diag mcp.added
+      {server, launchHash, overridden}; launchHashOf is an HMAC under the
+      kernel key <home>/desk/launch-hash.key; overrides refuse secret-marked
+      env names (manifest provides.mcp[].config.secret), non-.exe commands on
+      win32 and args the card would truncate (MCP_CARD_ARGS_MAX); the card
+      says env values land in the session's mcp.json and labels the requester
+      "a request file under the Gnomon home".
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, mod-playbooks, paradigm-8]

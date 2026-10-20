@@ -61,7 +61,7 @@ usage: gnomon mod <verb> [--home <abs>] …
   link <folder>      stage a linked folder (tier local); prints the install card
   list               installed mods and pending cards
   status [<name>]    pin, source, tier, pause state, pending cards, snapshots
-  pause <name>       stop the mod and keep it stopped
+  pause <name>       stop the mod and keep it stopped (its Desk MCP server: applies to new sessions)
   start <name>       clear a pause and start the mod
   uninstall <name>   ask for the uninstall card (root key, decided in the GUI)
   config <name> [--server <s>] [--command <abs>] [--args …] [--env NAME=value]

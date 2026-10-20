@@ -77,6 +77,17 @@ export function isOfferText(v: unknown, max: number): v is string {
   return Array.from(v).length <= max;
 }
 
+/** Characters an offer TITLE never carries (Aegis S1 M1): markup and quoting the roster or a GUI could misread. */
+const TITLE_UNSAFE = /[<>"`]/;
+
+/**
+ * THE offer title rule (offer-spec:v1 `title` and offer.shown `title`), shared by the kernel and the GUI: isOfferText at
+ * OFFER_LIMITS.title and none of < > " ` (the kernel quotes the title in the model-visible roster and the open turn).
+ */
+export function isOfferTitle(v: unknown): v is string {
+  return isOfferText(v, OFFER_LIMITS.title) && !TITLE_UNSAFE.test(v);
+}
+
 /** The offer question rule (offer.shown{question} and the ```offer block): isOfferText at OFFER_QUESTION_MAX. */
 export function isOfferQuestion(v: unknown): v is string {
   return isOfferText(v, OFFER_QUESTION_MAX);
@@ -135,7 +146,7 @@ export function validateOfferSpecV1(value: unknown, _opts: ValidateOptions = {})
   c.required('', v, OFFER_SPEC_V1_KEYS);
   if ('kind' in v) c.str('kind', v.kind, OFFER_TOKEN_PATTERN, 'a kebab token (≤ 64)');
   if ('phase' in v) c.closedEnum('phase', v.phase, OFFER_PHASES);
-  if ('title' in v) text(c, 'title', v.title, OFFER_LIMITS.title);
+  if ('title' in v && !isOfferTitle(v.title)) c.fail('title', `must be single-line text of 1..${OFFER_LIMITS.title} code points, no control, format or separator character, no edge whitespace, none of < > " \``);
   if ('summary' in v) text(c, 'summary', v.summary, OFFER_LIMITS.summary);
   if ('contextIn' in v) for (const e of contextInProblems(v.contextIn)) c.errors.push(e);
   if ('resultOut' in v) c.str('resultOut', v.resultOut, OFFER_TOKEN_PATTERN, 'a kebab token (≤ 64)');

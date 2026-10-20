@@ -109,10 +109,12 @@ describe('provides.offers (offer-spec:v1)', () => {
     const st = stageInstall({ home, source: src, via: 'package', requestedBy: 'p:abcdefgh/matt', trust: new DevTestRootAuthority(DEV_TEST_ROOT_ACK) });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(st.record.detail.offers).toEqual(['map-the-idea (diverge) → constellation_open: Map it on the board · takes: recent-messages']);
-    expect(st.record.detail.mcp).toEqual(['constellation: node server.js · user may set: args; env STARBOARD_HOME']);
+    expect(st.record.detail.mcp).toEqual(["constellation: node server.js · user may set: args; env STARBOARD_HOME · env values are written to this session's mcp.json and readable by the session"]);
     const lines = (blockFor(st.record.detail).block.children as Array<{ text: string }>).map((c) => c.text);
     expect(lines).toContain('offer: map-the-idea (diverge) → constellation_open: Map it on the board · takes: recent-messages');
-    expect(lines).toContain('mcp: constellation: node server.js · user may set: args; env STARBOARD_HOME');
+    // the long line may wrap on the card (INSTALL_CONTINUATION); its start and the env note both show
+    expect(lines.some((l) => l.startsWith('mcp: constellation: node server.js · user may set: args; env STARBOARD_HOME'))).toBe(true);
+    expect(lines.join(' ')).toContain('readable by the session');
   });
   it('a manifest without offers has no offers detail (pre-812 cards hash the same)', () => {
     const home = tmp();

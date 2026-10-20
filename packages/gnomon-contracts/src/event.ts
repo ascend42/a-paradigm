@@ -17,7 +17,7 @@ import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
 import { isClaudeModel } from './claude-model.js';
-import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferText } from './offer.js';
+import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferTitle } from './offer.js';
 
 export const EVENT_V1 = 'event:v1' as const;
 
@@ -609,7 +609,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('mod' in v) c.str('mod', v.mod, OFFER_MOD_PATTERN, 'a mod name');
       if ('kind' in v) c.str('kind', v.kind, OFFER_TOKEN_PATTERN, 'an offer kind (kebab, ≤ 64)');
       if ('phase' in v) c.closedEnum('phase', v.phase, OFFER_PHASES);
-      if ('title' in v && !isOfferText(v.title, OFFER_LIMITS.title)) c.fail('title', `must be the declared single-line title (≤ ${OFFER_LIMITS.title})`);
+      if ('title' in v && !isOfferTitle(v.title)) c.fail('title', `must be the declared single-line title (≤ ${OFFER_LIMITS.title}, none of < > " \`)`);
       if ('contextIn' in v) for (const e of contextInProblems(v.contextIn)) c.fail('', e);
       if ('question' in v && !isOfferQuestion(v.question)) c.fail('question', `must be single-line text of 1..${OFFER_QUESTION_MAX} code points, no control, format or separator character`);
       if ('replyTurnId' in v) c.str('replyTurnId', v.replyTurnId, TURN_ID_PATTERN, 'turn:<hsid>/<n>');
