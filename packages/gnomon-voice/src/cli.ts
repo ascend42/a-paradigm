@@ -21,7 +21,7 @@ import type { VoiceEngines, VoiceLogger } from './types.js';
 import type { ClientMode } from './voice-client.js';
 
 export const VOICE_CLIENT_VERSION = '0.1.0';
-const USAGE = `usage: gnomon-voice run --fd <n> [--home <abs>] [--io <gnomon-voice-io>] [--mode ptt|ambient|off]
+const USAGE = `usage: gnomon-voice run --fd <n> [--home <abs>] [--io <gnomon-voice-io>] [--mode ptt|ambient|off] [--delivery composer|direct]
        gnomon-voice models fetch [--force] [--json] [--from <dir>]
        gnomon-voice enrol <name> [--io <gnomon-voice-io>]
        gnomon-voice status
@@ -53,7 +53,7 @@ function homeOf(flag: string | undefined): string {
   return env && path.isAbsolute(env) ? env : path.join(os.homedir(), '.gnomon');
 }
 
-const VALUED = ['mode', 'io', 'home', 'fd', 'from'];
+const VALUED = ['mode', 'io', 'home', 'fd', 'from', 'delivery'];
 export function parse(argv: string[]): { pos: string[]; flags: Record<string, string | true> } {
   const pos: string[] = [];
   const flags: Record<string, string | true> = {};
@@ -166,6 +166,9 @@ async function cmdRun(home: string, flags: Record<string, string | true>): Promi
   if (!Number.isInteger(fd) || fd < 3) return err('gnomon-voice run is started by Gnomon with --fd <n> (an inherited, authenticated descriptor).'), 64;
   const mode = (typeof flags.mode === 'string' ? flags.mode : 'ptt') as ClientMode;
   if (!['ptt', 'ambient', 'off'].includes(mode)) return err('--mode is ptt, ambient or off'), 64;
+  // TD-2026-10-20-262: dictation goes to the Gnomon composer by default; --delivery direct sends each turn itself (headless)
+  const delivery = (typeof flags.delivery === 'string' ? flags.delivery : 'composer') as 'composer' | 'direct';
+  if (delivery !== 'composer' && delivery !== 'direct') return err('--delivery is composer or direct'), 64;
   const link = GnomonKernelLink.fromFd(fd);
   const ac = new AbortController();
   process.once('SIGINT', () => ac.abort());
@@ -173,7 +176,7 @@ async function cmdRun(home: string, flags: Record<string, string | true>): Promi
   const eng = await engines(home);
   const audio = new SpawnedAudioIO({ binary: typeof flags.io === 'string' ? flags.io : defaultIoBinary() });
   const r = await runVoice({
-    link, audio, engines: eng, prints: () => readPrints(home), stdin: process.stdin, mode, signal: ac.signal,
+    link, audio, engines: eng, prints: () => readPrints(home), stdin: process.stdin, mode, delivery, signal: ac.signal,
     enrol: { home, model: loadManifest().models.find((m) => m.role === 'speaker')!.id },
     log: stderrLogger(flags.verbose === true),
     notice: (n) => (n.level === 'warn' ? err(n.text) : out(n.text)),

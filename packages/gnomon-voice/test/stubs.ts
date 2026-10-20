@@ -113,8 +113,14 @@ export class FakeLink implements KernelLink {
   async attachment(): Promise<VoiceAttachment | null> {
     return this.att;
   }
+  /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */
+  readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     if (this.appendError) throw this.appendError;
+    if (kind === 'request.voice.report' && payload.dictation) {
+      this.dictation.push(payload.dictation as { activity: string; holdToggles: number });
+      return { seq: 0 };
+    }
     this.appends.push({ kind, payload });
     return { seq: ++this.#seq };
   }
