@@ -511,8 +511,12 @@ const drooped = new Set<string>();
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
   const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
-  put($('stack-scope'), stackScoped && focused ? 'this project' : 'all projects');
-  put($('inbox'), `${store.cards.size} pending`);
+  // fidelity 2: the comp's head ("Stack" · "4 · hover to fan"); the scope is a small filter key (named when it filters)
+  const scoped = stackScoped && !!focused;
+  put($('stack-scope'), scoped ? 'this project ▾' : '▾');
+  $('stack-scope').title = scoped ? 'Showing this session\'s project only (click: all projects)' : 'Showing all projects (click: only this session\'s project)';
+  $('stack-scope').setAttribute('aria-pressed', String(scoped));
+  put($('inbox'), `${store.cards.size}`);
   for (const c of cards) {
     const k = verifiedKey(c.cardId, String(c.card.contentHash ?? ''));
     if (!verified.has(k) && verifyKey && session) {
@@ -564,7 +568,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   for (const c of shown) pile.appendChild(mk(c));
   pile.classList.toggle('open', pileOpen);
   if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
-  put($('stack-hint'), cards.length > 1 ? 'hover to fan' : '');
+  put($('stack-hint'), cards.length > 1 ? ' · hover to fan' : '');
   const pinned = $('pinned');
   clear(pinned);
   const mine = focused ? store.stack(focusRepo).filter((c) => c.hsid === focused) : [];

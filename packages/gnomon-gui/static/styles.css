@@ -835,3 +835,11 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .composer > .composer-foot { grid-column: 2; grid-row: 1; margin-top: 0; justify-content: flex-end; }
 .composer-kbd { border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
 .composer-foot .key.pri { margin-left: 2px; min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
+
+/* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
+.pilehead { padding: 12px 14px 8px; align-items: baseline; }
+.pile-meta { display: inline-flex; align-items: baseline; gap: 6px; margin-left: auto; font-size: 10.5px; white-space: nowrap; }
+.pile-meta #inbox, .pile-meta #stack-hint { font-size: 10.5px; }
+.pilehead #stack-hint { margin-left: 0; }
+.stack-scope { font-size: 10.5px; padding: 0 5px; border-color: var(--rule); }
+.stack-scope[aria-pressed="true"] { color: var(--ink); border-color: var(--key-edge); }
