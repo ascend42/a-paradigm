@@ -1,0 +1,41 @@
+id: L-2026-10-20-ascend-214718-001
+type: human-note
+timestamp: '2026-10-20T21:47:18.101Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 12: Aegis rules on naming and versioning; founder allows non-GitHub hosts and reserves brand publishers'
+summary: |-
+  Aegis gave APPROVE-WITH-FIXES on the naming and versioning design:
+  - H1: the env prefix was ambiguous → double underscore `<PUB>__<NAME>__`.
+  - H2: legacy modns overlap → only alias-table mods keep legacy kinds.
+  - H3: MCP server hash collision → hash10 plus COLLISION refusal at install and load.
+  - M items: an upgradedHash on the grant; no fresh v1 installs; canonical git URLs with followRedirects=false; downgrade decided by packageHash history; folder-replaces-git gets a full card; principal labels and row schema carry the publisher.
+
+  Founder rulings:
+  (1) Non-GitHub git hosts ARE allowed in 8.0, overriding Aegis's github-only recommendation. Implemented as publisher identity (host, namespace), a root-signed TOFU grant.publisher binding, and display "acme @ gitlab.com".
+  (2) github.com/a-company is owned by an unrelated person, so `a-company` is refused from every source.
+  (3) Reserved publishers: ascend42 (github owner only), warpline, nevr, nevrland, conductor, constellation, neurons.
+
+  The consolidated spec is in .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md and lands as S0b on feat/gnomon-desk-o1.
+symbols_touched:
+  - '#manifest-loader'
+  - '#gnomon-contracts'
+  - '#mod-host'
+  - '#mcp-passthrough'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - naming
+  - versioning
+  - aegis
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-213931-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true
