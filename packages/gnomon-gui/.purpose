@@ -691,6 +691,37 @@ components:
     flows: [$voice-turn]
     tests:
       - test/capture.test.ts
+  gui-offer-slip:
+    description: >-
+      The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp
+      .atelier/sessions/2026-10-20-gnomon-mod-invitations refs/flow.html).
+      core/offers.ts (PURE): foldOffers folds ONLY the kernel's offer.shown /
+      offer.decided / offer.kept rows of one conversation (principal
+      p:<ns>/kernel, payload hsid = the conversation, offer:<ULID>, a
+      turn:<hsid>/<n> replyTurnId, single-line question <= 240 code points),
+      never reply text; slipViews mounts each slip under the last assistant
+      item before its offer.shown row and makes only the newest undecided slip
+      live, only while its reply is the latest and no human message follows;
+      openStep is the two-step open (A5: first trusted click/Enter arms and
+      shows "takes: <manifest contextIn> · ↵ to open", the second sends);
+      decideRequest = log.append{kind:request.offer.decide,
+      payload:{offerId, decision}}; offer.decided closes the slip, not-now
+      quiets that mod for the rest of the conversation (L4), stop-here
+      quiets all; voiceOfferIntent: a heard "not now" dismisses (one request
+      per offer, live rows only), a heard "open" only shows "click or ↵ to
+      open" (L1). offerSpecsOf reads status.mods.offers [{mod, kind,
+      contextIn}] (assumed host field, TODO). The offer contract types are
+      local mirrors marked TODO(S0 integration). ui/offer-slip.ts:
+      renderOfferSlip (dashed, soft shadow, never .key / data-decision; tab =
+      glyph + offer · mod:<name>, no per-mod hue, L2; the question a text
+      node) and wireOfferSlips (trusted click / Enter only). ui/app.ts mounts
+      the slips in itemEl and syncs them in paintTranscript; styles.css
+      .slip* (-0.7deg by day via --slip-tilt, flat at night, 320ms slide-in,
+      instant under reduced motion). Preview fixtures offer-slip,
+      offer-armed (devArmOfferOnce, DEV ONLY), offer-muted; the fake kernel
+      answers request.offer.decide with offer.decided. Tests:
+      test/offers.test.ts.
+    signals: []
   gui-table-talk:
     description: >-
       #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block

@@ -176,7 +176,15 @@ export class FakeKernel implements Transport {
         this.append('approval.decide', { cardId, decision: String(p.decision ?? ''), presence: 'fresh', via: 'gui' }, req.event.session);
         return { cardId, decided: true };
       }
-      case 'log.append':
+      case 'log.append': {
+        // #gui-offer-slip: the kernel decides the offer (offer.decided on the offer's own conversation)
+        const pl = (p.payload ?? {}) as { offerId?: unknown; decision?: unknown };
+        if (p.kind === 'request.offer.decide' && typeof pl.offerId === 'string') {
+          const shown = this.rows.find((r) => r.view === 'full' && r.event.kind === 'offer.shown' && (r.event.payload as { offerId?: string }).offerId === pl.offerId);
+          if (shown && shown.view === 'full') this.append('offer.decided', { offerId: pl.offerId, hsid: shown.event.session, decision: String(pl.decision) }, shown.event.session);
+        }
+        return { ok: true };
+      }
       case 'session.send':
         return { ok: true };
       case 'mod.view': {

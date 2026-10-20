@@ -25,6 +25,8 @@ import { approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, pr
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
+import { decideRequest, offerSpecsOf, openStep, slipViews, type SlipView } from '../core/offers.js';
+import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { mountStandingFeed } from './standing-feed.js';
@@ -317,7 +319,84 @@ function itemEl(it: FoldedItem): HTMLElement {
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}` }, ...body) as unknown as HTMLElement;
+  const slips = slipsAt.get(it.key) ?? [];
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+}
+
+/* ── #gui-offer-slip (TD-2026-10-20-812 O1): the margin slips under the reply that offered (core/offers.ts) ── */
+/** the slips by the reply item they mount under; the live slip; the slip armed by a first trusted press (A5) */
+let slipsAt = new Map<string, SlipView[]>();
+const slipSig = new Map<string, string>();
+let liveOffer: string | null = null;
+let armedOffer: string | null = null;
+/** L1: a heard "open" shows a hint; a heard "not now" dismisses once (this page's request) */
+const voiceDismissed = new Set<string>();
+/** rows up to here were backlog: their slips paint without the slide-in */
+let offerLiveSince = Number.POSITIVE_INFINITY;
+/** DEV ONLY (#gui-preview offer-armed): devArmOfferOnce() asked for the live slip painted armed; the served main.ts never does */
+let devArmOffer = false;
+function slipEl(v: SlipView): MiniEl {
+  const contextIn = offerSpecsOf(status).get(`${v.slip.mod}/${v.slip.kind}`) ?? null;
+  return renderOfferSlip(doc, v, { armed: armedOffer === v.slip.offerId, contextIn, voiceHint: v.slip.openHint, arrive: v.live && v.slip.seq > offerLiveSince });
+}
+/** Recompute the slips from the store (never from reply text) and remount the replies whose slips changed. */
+function syncSlips(cur: readonly ChatItem[]): void {
+  const views = focused && !rawMode ? slipViews(store.offers(focused), cur) : [];
+  const next = new Map<string, SlipView[]>();
+  for (const v of views) next.set(v.itemKey, [...(next.get(v.itemKey) ?? []), v]);
+  const live = views.find((v) => v.live)?.slip.offerId ?? null;
+  if (live !== liveOffer) armedOffer = null; // a newer reply, a human message or a decision: the arm is gone
+  liveOffer = live;
+  if (devArmOffer && live) {
+    armedOffer = live;
+    devArmOffer = false;
+  }
+  slipsAt = next;
+  const keys = new Set([...next.keys(), ...slipSig.keys()]);
+  for (const k of keys) {
+    const sig = (next.get(k) ?? []).map((v) => `${v.slip.offerId}:${v.slip.decided}:${v.live}:${armedOffer === v.slip.offerId}:${v.slip.openHint}`).join('|');
+    if ((slipSig.get(k) ?? '') !== sig) remountItem(k);
+    if (sig) slipSig.set(k, sig);
+    else slipSig.delete(k);
+  }
+}
+/** Open / not now on the live slip: trusted only (wireOfferSlips), liveness from the current store. */
+function onOfferAct(act: 'open' | 'not-now', offerId: string, e: Event): void {
+  syncSlips(currentItems().items);
+  if (act === 'not-now') {
+    if (!e.isTrusted || offerId !== liveOffer) return;
+    return void sendOfferDecision(offerId, 'not-now');
+  }
+  const step = openStep(e, offerId, liveOffer, armedOffer);
+  if (step === 'refused') return;
+  if (step === 'armed') {
+    armedOffer = offerId;
+    paintTranscript();
+    ($('viewport').querySelector(`.slip.live[data-offer="${CSS.escape(offerId)}"] .slip-open`) as HTMLElement | null)?.focus();
+    return;
+  }
+  armedOffer = null;
+  void sendOfferDecision(offerId, 'open');
+}
+async function sendOfferDecision(offerId: string, decision: 'open' | 'not-now'): Promise<void> {
+  if (!client) return notice('not connected: nothing was sent', true);
+  try {
+    await client.call('log.append', decideRequest(offerId, decision));
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the offer decision was not sent', true);
+  }
+  paintTranscript();
+}
+/** L1 voice: a LIVE heard "not now" dismisses the newest open slip of its conversation (once per offer). */
+function offerVoiceRow(r: Row): void {
+  if (r.kind !== 'voice.turn.user') return;
+  const hsid = r.session ?? null;
+  if (!hsid) return;
+  const s = store.offers(hsid).slips.find((x) => x.voiceDismiss === r.seq && x.decided === null);
+  if (s && !voiceDismissed.has(s.offerId)) {
+    voiceDismissed.add(s.offerId);
+    void sendOfferDecision(s.offerId, 'not-now');
+  }
 }
 
 const sameKeys = (a: readonly ChatItem[], b: readonly ChatItem[]): boolean => {
@@ -366,6 +445,7 @@ function paintTranscript(remeasure = false): void {
     liveChoice = live;
     remountItem(live);
   }
+  syncSlips(items);
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
     $('spacer').style.height = `${heights.total()}px`;
@@ -855,6 +935,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
       const r = rowOf(p.row);
       if (r) {
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
+        offerVoiceRow(r); // #gui-offer-slip L1: only a LIVE heard "not now" dismisses (never a backlog replay)
         standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
@@ -885,6 +966,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', true);
   }
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
+  offerLiveSince = store.head; // #gui-offer-slip: a slip shown after this slides in
   syncDictationContext();
 }
 
@@ -1840,6 +1922,7 @@ function wire(): void {
     else expandedActs.add(k);
     paintTranscript();
   };
+  wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);
@@ -2083,6 +2166,12 @@ function wire(): void {
 }
 
 /* ── boot ───────────────────────────────────────────────────────── */
+/** DEV ONLY (#gui-preview offer-armed): paint the next live slip armed. src/main.ts never calls it; in-page code could
+ * already call the kernel client directly, so this widens nothing (the send still needs a trusted press). */
+export function devArmOfferOnce(): void {
+  devArmOffer = true;
+}
+
 export function main(raw?: string): void {
   const take = (globalThis as { gnomonTakeLaunch?: () => string }).gnomonTakeLaunch;
   const frag = parseLaunchFragment(raw ?? (take ? take() : ''));
