@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:28:12.090Z'
+generated: '2026-10-20T06:42:19.128Z'
 structure: {}
 key_files:
   config:
@@ -298,6 +298,7 @@ symbols:
   '#purpose-component-supervisor': packages/gnomon/
   '#purpose-component-shell-readonly': packages/gnomon/
   '#purpose-component-always-rules': packages/gnomon/
+  '#purpose-component-prefix-policy': packages/gnomon/
   '#purpose-component-trace-capture': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
   '#purpose-component-mode-cli': packages/gnomon/

@@ -2420,7 +2420,12 @@ components:
       tilde, redirection or assignment) whose argv starts with the prefix word
       for word, same repoKey and tool, input keys within command/description/
       timeout. A prefix rule widens only within a single literal simple
-      command. gnomon rules list shows match + prefix.
+      command. gnomon rules list shows match + prefix. Aegis H1/M2/M3: the
+      fold forms no rule from a prefix #prefix-policy refuses, and
+      match(..., ctx{prefixRules, roots}) answers a prefix rule only with a
+      context (none => no prefix match), never in manual mode
+      (prefixRules:false; exact rules still match) and only when
+      #prefix-policy passes the argv against the session roots.
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]
@@ -2430,6 +2435,34 @@ components:
       - test/approval-prefix-scope.test.ts
       - test/permission-session.test.ts
     oracles: [G-BRK-05]
+
+  prefix-policy:
+    description: >-
+      #prefix-policy (TD-2026-10-20-294, Aegis H1/M1/M3) in
+      src/kernel/supervisor/prefix-policy.ts. Which prefixes may be a
+      prefix-scoped always rule, enforced at the card offer (permission.ts),
+      the broker accept (approve scope, bad-params before presence), the rule
+      fold and every match. Default deny: 2-3 printable-ASCII words, never
+      one; argv0 no path, never a shell/interpreter/runner; package managers
+      and build tools only with an allowlisted read-only subcommand
+      (npm ls/view/outdated, cargo tree, go list/env ...; npm test refused,
+      ALLOW_NPM_TEST_PREFIX default off); git exactly two words with a
+      read-ish subcommand. prefixMatchRefusal re-checks at match time: git
+      options that run programs or redirect git (-c -C --exec-path
+      --ext-diff --textconv --output --upload-pack ...), non-listing git
+      branch args, -C-style directory/config options, and paths that leave
+      the session roots (.., ~, \, out-of-root absolute). shownPrefixWords
+      renders each word quoted with non-ASCII escaped \uXXXX for the
+      presence prompt (M1; the GUI mirrors it). Residual: Claude's persistent
+      Bash cwd is unknown to the kernel.
+    path: src/kernel/supervisor/prefix-policy.ts
+    type: module
+    tags: [gnomon, kernel, approvals, security, paradigm-8, move-1]
+    tests:
+      - test/prefix-policy.test.ts
+      - test/approval-prefix-scope.test.ts
+      - test/always-prefix-rules.test.ts
+      - test/permission-session.test.ts
 
   trace-capture:
     description: >-
