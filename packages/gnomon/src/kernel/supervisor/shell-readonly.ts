@@ -39,6 +39,11 @@
  *     200), so every path that reaches a reader is CONCRETE and checked.
  *     `<(…)` is a whole-word pipe argument of a reader (its content comes from
  *     a proven read-only command);
+ *   - K1 ANCHORED CWD (TD-2026-10-20-086): with ctx.cwd (the realpath of a session root the caller anchors the run
+ *     in, anchorCommand) the cwd is known from the start; a cd is any whole top-level item (absolute, or relative to
+ *     an existing in-root directory; no `..`); the top-level list tracks the SET of possible cwds and walks each item
+ *     once per member; git only while the cwd is a session root. Brace expansion, `case` and tainted locals: see
+ *     the parser and walkList. Without ctx.cwd the old rule below holds;
  *   - M2 KNOWN CWD: the cwd is known only after a first command `cd ABS` (an
  *     absolute literal path or `~/…`, inside a session root, at its realpath;
  *     H3: a relative cd is refused) and only along an unbroken `&&` chain from

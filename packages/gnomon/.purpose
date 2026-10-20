@@ -1643,8 +1643,11 @@ components:
   approval-broker:
     description: >-
       RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
-      mode:auto-edits:read-only (a Bash command #shell-readonly proves
-      read-only; TD-2026-10-20-294 part 1) or rule:<cardId>.
+      mode:auto-edits:read-only / mode:ask:read-only (a Bash command
+      #shell-readonly proves read-only; TD-2026-10-20-294 part 1, F1
+      TD-2026-10-20-086; path = the anchored root's realpath, inputHash the
+      request's) or rule:<cardId>. Not built (would move clientApiId, founder
+      gate): approval.auto.miss and an anchoredInputHash field.
       PREFIX SCOPE (TD-2026-10-20-294 part 3): approve{decision:'always',
       scope} — {kind:'exact'} is the v1 exact rule; {kind:'prefix', prefix}
       (1-3 words) is accepted only on a Bash permission card whose SHOWN
@@ -2215,7 +2218,16 @@ components:
       after approval.auto{modeRef:'mode:auto-edits:read-only'} (log before
       effect), only when its input keys are command/description/timeout, no
       root is home-or-above, the card is not flagged and #shell-readonly
-      proves the command read-only; never in ask or manual.
+      proves the command read-only; in auto-edits and (F1, TD-2026-10-20-086)
+      ask (modeRef mode:ask:read-only), never in manual. K1 ANCHOR: classified
+      with ctx.cwd = realpath(s.cwd); the allow sends updatedInput.command =
+      anchorCommand(command, root, shellFlavour(session env SHELL));
+      approval.auto{path: root, inputHash: the request's}; the session.inject
+      row of the allow carries inputHash and anchoredInputHash. F7: the
+      kernel-written policy.json carries env
+      CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 (manifest/policy.ts
+      CLAUDE_SESSION_ENV). Misses are not logged yet (approval.auto.miss needs
+      a clientApiId move).
       session.send accepts source 'voice' from a human only, as a dictation
       attribution hint for #gnomon-voice (TD-2026-10-20-262).
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
@@ -2386,8 +2398,18 @@ components:
       (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
       <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
       loops, redirections with IO numbers, heredocs); it refuses $((...)),
-      $'...', $"...", >(...), |&, ;;, unquoted braces, ~user, zsh $= $~ $^
-      forms and every other compound. classifyReadOnly proves read-only:
+      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, braces
+      other than the safe brace expansion, ~user, zsh $= $~ $^ forms and every
+      other compound. TD-2026-10-20-086 grammar (each fail-closed): brace
+      expansion {a,b} (two or more safe literal items, no nesting, no $, = or ~)
+      and {N..M} (non-negative integers, at most 200), never right after a
+      $NAME; case WORD in pat) list ;; esac (patterns literal + glob chars
+      only, bodies walked, the subject is text); a local assignment name=$(...)
+      or name=lit with no command word (lowercase, not LOOP_VAR_DENY, not a
+      loop variable) makes name TAINTED text for the later items of its list
+      when it ran unconditionally (first or after ; / newline): "$name" only
+      where a substitution may be (echo/printf args, <<<), unquoted only as
+      the case subject; X=1 cmd and uppercase/special names stay refused. classifyReadOnly proves read-only:
       allowlisted command names with per-command flag rules; C1 a $(...) or
       backtick word is only echo/printf text or a <<< word, never a path, and
       a for loop iterates only literal words and literal globs (expanded now,
@@ -2400,8 +2422,15 @@ components:
       symlink-following reader flags (grep -r/-R/-S/-O/-d/-D, ls -L/-R, du -L,
       stat -L, diff -r, find -L/-follow), rg removed, diff takes no directory
       operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
-      path-checked; H3 cd only first, to an
-      ABSOLUTE path inside a session root, cwd = its realpath; H4 reads only
+      path-checked; H3 + K1 (TD-2026-10-20-086) ctx.cwd is the anchored
+      root's realpath (the caller runs anchorCommand: builtin cd [-q] --
+      'root' && builtin unset CDPATH && {\n<cmd>\n}); a cd is a whole
+      top-level item to an absolute path or (with a known cwd) a relative
+      existing directory, no .. segment, never -, + or = led, inside a session
+      root as given and at realpath; the top-level list tracks the SET of
+      possible cwds (only the cd target along an unbroken && run, every cwd
+      seen after ; newline or ||; at most 8) and walks each item once per cwd;
+      git only while the cwd is a session root; H4 reads only
       inside the session roots and /usr /opt/homebrew /etc /tmp /private/tmp
       /private/etc (as given and at the deepest-existing-ancestor realpath;
       ctx.readRoots may only narrow that system list),
@@ -2409,7 +2438,10 @@ components:
       is known only along an unbroken && chain from that cd, else relative
       paths, implicit-cwd reads and git raise the card; M3 no git remote -v,
       no credential-bearing git config key; Low git branch NAME only after
-      the long --list. No background/negation/env assignment, output
+      the long --list. RC3 git also: show-ref ls-tree rev-list shortlog
+      merge-base for-each-ref, worktree list, stash list (flags only), reflog
+      show, cat-file -t/-s/-p OBJECT, tag -l/--list (listing flags only); all
+      through gitOptBad. No background/negation/env assignment, output
       redirection only to /dev/null. simpleArgv returns the argv of a single
       literal simple command (prefix always rules; signature unchanged).
     tags: [kernel, security]
@@ -2417,6 +2449,8 @@ components:
     tests:
       - test/shell-readonly.test.ts
       - test/shell-readonly-fs.test.ts
+      - test/shell-readonly-cwd.test.ts
+      - test/auto-edits-anchor.test.ts
       - test/run-modes-session.test.ts
   always-rules:
     description: >-
@@ -2461,6 +2495,12 @@ components:
       context (none => no prefix match), never in manual mode
       (prefixRules:false; exact rules still match) and only when
       #prefix-policy passes the argv against the session roots.
+      RC5 (TD-2026-10-20-086): an exact Bash rule also matches by
+      bashCommandHash = sha256 over canonical {command} (no description or
+      timeout), folded from the kernel-signed request (so older rules match
+      too), when both the learned and the later input have only command,
+      description, timeout keys; run_in_background or any other key on either
+      side leaves only the whole-input hash.
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]
@@ -2468,6 +2508,7 @@ components:
       - test/always-rules.test.ts
       - test/always-prefix-rules.test.ts
       - test/approval-prefix-scope.test.ts
+      - test/rules-bash-hash.test.ts
       - test/permission-session.test.ts
     oracles: [G-BRK-05]
 
