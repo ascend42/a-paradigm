@@ -177,10 +177,10 @@ describe('voice in the transcript', () => {
     expect(chatItems([p1, p2, user(3, '7', 'run the tests'), sent(4, 3)]).items.map((i) => [i.role, i.text])).toEqual([['user', 'run the tests']]);
     expect(VOICE_ACTIVITY_KINDS.has('voice.turn.partial')).toBe(false);
   });
-  it('a reply the voice app spoke gets a 🔊 marker (in part when it stopped early)', () => {
+  it('a reply the voice app spoke gets a 🔊 marker (· stopped when it stopped early)', () => {
     const agent = (spoken: string): Row => ({ seq: 9, kind: 'voice.turn.agent', session: A, view: 'full', payload: { turnId: '1', t0: 1, t1: 2, textPlanned: 'all tests pass', textSpoken: spoken } });
     expect(chatItems([agent('all tests pass')]).items.map((i) => [i.role, i.text])).toEqual([['spoken', '🔊 spoken aloud']]);
-    expect(chatItems([agent('all')]).items[0]?.text).toBe('🔊 spoken aloud (in part)');
+    expect(chatItems([agent('all')]).items[0]?.text).toBe('🔊 spoken aloud · stopped');
   });
   it('a refused voice turn shows the refusal reason inline, subtly: the kernel\'s refusal as fact, the app\'s as an attributed hint', () => {
     expect(chatItems([user(1, '1', 'deploy it', { forwarded: false, refusal: { reason: 'voice-stale-utterance' } })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “deploy it” · voice app says: not sent · voice-stale-utterance' });

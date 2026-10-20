@@ -648,7 +648,7 @@ function citedSeqs(p: Record<string, unknown> | null): number[] {
   return typeof p.voiceTurnSeq === 'number' ? [p.voiceTurnSeq] : [];
 }
 
-type VoiceCtx = { shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; editedSeqs: Set<number>; speakable: { n: number } };
+type VoiceCtx = { shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; editedSeqs: Set<number> };
 function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number; voice?: ChatItem['voice'] }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
   if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
@@ -685,26 +685,6 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
               : 'not sent to the session';
       return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
     }
-    case 'voice.turn.agent': {
-      // V2e: the kernel's own speakable reply (source kernel-speakable, items) carries the 🔊; the voice app's playback
-      // row for that same reply then shows nothing more (never shown twice). A playback row with no kernel row before
-      // it (an older kernel) keeps the V2d marker.
-      if (p.source === 'kernel-speakable') {
-        if (!Array.isArray(p.items) || !p.items.length) return null;
-        ctx.speakable.n++;
-        return { role: 'spoken', text: '🔊 spoken aloud' };
-      }
-      if (ctx.speakable.n > 0) {
-        ctx.speakable.n--;
-        return null;
-      }
-      const spoken = typeof p.textSpoken === 'string' ? p.textSpoken : '';
-      const planned = typeof p.textPlanned === 'string' ? p.textPlanned : '';
-      if (!spoken.trim()) return null;
-      return { role: 'spoken', text: `🔊 spoken aloud${planned && spoken.length < planned.length ? ' (in part)' : ''}` };
-    }
-    case 'voice.bargein':
-      return { role: 'spoken', text: '🔊 interrupted' };
     case 'voice.session.start':
       return { role: 'system', text: `voice attached · ${p.mode === 'ptt' ? 'push-to-talk' : 'ambient'}` };
     case 'voice.session.end': {
@@ -714,6 +694,53 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
     default:
       return null;
   }
+}
+
+/**
+ * One 🔊 marker per spoken reply (founder bug 2026-10-20). Pipelined TTS logs one playback row per sentence
+ * (voice.turn.agent{t0, t1, textPlanned, textSpoken, interrupted?}), after the kernel's one speakable row
+ * (source kernel-speakable). The kernel row opens the marker; every later playback row and a voice.bargein fold into
+ * it (played seconds, `stopped` when any chunk was cut off) until the next reply. A playback row with no open marker
+ * (an older kernel with no speakable row) opens one itself; a barge-in with none is the lone `🔊 interrupted` line.
+ */
+interface SpokenGroup {
+  item: ChatItem;
+  ms: number;
+  stopped: boolean;
+  /** the lone `🔊 interrupted` line: never folds anything */
+  solo?: boolean;
+}
+
+/** The marker's text: `🔊 spoken aloud · 6s · stopped`. */
+export function spokenText(g: Pick<SpokenGroup, 'ms' | 'stopped' | 'solo'>): string {
+  if (g.solo) return '🔊 interrupted';
+  const s = Math.round(g.ms / 1000);
+  return `🔊 spoken aloud${s >= 1 ? ` · ${s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}` : ''}${g.stopped ? ' · stopped' : ''}`;
+}
+
+/** Fold one voice.turn.agent / voice.bargein row: 'folded' into the open marker, a new group to show, or null (hidden). */
+function spokenFold(r: Row, p: Record<string, unknown> | null, open: SpokenGroup | null): SpokenGroup | 'folded' | null {
+  if (r.view === 'stub' || r.view === 'oversize' || !p) return null;
+  const blank = null as unknown as ChatItem; // set by the caller once the item is pushed
+  if (r.kind === 'voice.bargein') {
+    if (open) {
+      open.stopped = true;
+      return 'folded';
+    }
+    return { item: blank, ms: 0, stopped: true, solo: true };
+  }
+  if (p.source === 'kernel-speakable') return Array.isArray(p.items) && p.items.length ? { item: blank, ms: 0, stopped: false } : null;
+  const said = typeof p.textSpoken === 'string' ? p.textSpoken : '';
+  const planned = typeof p.textPlanned === 'string' ? p.textPlanned : '';
+  const cut = p.interrupted === true || (!!planned && said.length < planned.length);
+  const ms = typeof p.t0 === 'number' && typeof p.t1 === 'number' && p.t1 > p.t0 ? Math.min(p.t1 - p.t0, 600_000) : 0;
+  if (open) {
+    open.ms += ms;
+    if (cut) open.stopped = true;
+    return 'folded';
+  }
+  if (!said.trim()) return null;
+  return { item: blank, ms, stopped: cut };
 }
 
 /** A kernel row's chat item, or null when it is noise in the chat view. */
@@ -772,6 +799,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
   const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }): void => {
+    if (it.role === 'assistant') spoken = null; // a new reply closes the previous reply's 🔊 marker
     items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}) });
   };
   // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
@@ -781,7 +809,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
   const sentSeqs = new Set<number>();
   const editedSeqs = new Set<number>();
-  const speakable = { n: 0 }; // V2e: kernel-speakable replies not yet matched by the voice app's playback row
+  // one 🔊 marker per spoken reply (founder bug 2026-10-20: pipelined TTS logs one playback row per sentence)
+  let spoken: SpokenGroup | null = null;
   // Aegis L3: the kernel's speakable reply per source row (turnSeq): the said-aloud line is the kernel's words
   const kernelReply = new Map<number, { text: string; from: string }>();
   let turnGuidance: string | null = null; // Aegis M1: the guidanceHash of the latest turn.sent
@@ -839,7 +868,18 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
         echoes.push(oneLine(cited.map((n) => voiceEcho.get(n)!).join(' ')));
       }
     }
-    const v = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs, speakable });
+    if ((r.kind === 'voice.turn.agent' || r.kind === 'voice.bargein') && !isPartial(r, p)) {
+      const f = spokenFold(r, p, spoken);
+      if (f === 'folded' || f === null) hidden++;
+      else {
+        push(r, 0, { role: 'spoken', text: spokenText(f) });
+        f.item = items[items.length - 1]!;
+        spoken = f.solo ? null : f;
+      }
+      if (spoken) spoken.item.text = spokenText(spoken);
+      continue;
+    }
+    const v = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs });
     if (v !== undefined) {
       if (v === null) hidden++;
       else {

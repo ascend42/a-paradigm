@@ -255,6 +255,12 @@ function paintTranscript(remeasure = false): void {
   } else {
     appended = next.length - items.length;
     if (appended > 0) heights.push(appended);
+    // an item that grew in place (the one 🔊 marker per reply folding its later sentences) is repainted
+    for (const [i, el] of mounted)
+      if (items[i] && next[i] && items[i]!.text !== next[i]!.text) {
+        el.remove();
+        mounted.delete(i);
+      }
   }
   items = next;
   hiddenRows = hidden;

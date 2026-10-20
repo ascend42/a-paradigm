@@ -548,7 +548,8 @@ components:
       Card actions are signed with the same key, so the real GUI verifies
       and renders the decision keys. Fixtures (src/preview/fixtures.ts:
       contracts LogRow chains of registered kinds plus the status result;
-      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop) are
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop, spoken,
+      choices) are
       chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
       src/preview/env.ts stubs only the colour-scheme and reduced-motion
       media queries and the wrapper surface marker. The workshop fixture runs
@@ -617,8 +618,19 @@ components:
       block is hidden only when its sha256 is the kernel guidance hash
       (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
       guidanceHash; a human-typed <gnomon-voice> stays visible.
+      One spoken-aloud marker per reply (founder bug 2026-10-20): pipelined
+      TTS logs one playback voice.turn.agent per sentence; chatItems
+      (spokenFold/spokenText) opens ONE 🔊 marker at the kernel's speakable
+      row (or the first playback row on an older kernel) and folds every
+      later playback row and voice.bargein into it until the next assistant
+      reply: "🔊 spoken aloud · 5s", "· stopped" when any chunk was cut off
+      (interrupted, shorter than planned, or a barge-in); a barge-in with no
+      marker stays the lone "🔊 interrupted". app.ts paintTranscript
+      repaints a mounted row whose text changed in place. Preview fixture
+      `spoken`.
     path: src/core/store.ts
     type: module
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+      - test/voice-client.test.ts
