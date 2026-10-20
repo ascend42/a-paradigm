@@ -18,7 +18,7 @@ import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
@@ -301,6 +301,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         decisions: verified.get(verifiedKey(c.cardId, String(c.card.contentHash ?? ''))) ?? [],
         decidable: isCardDecidable(c.card as never),
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
+        prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -389,7 +390,7 @@ function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
   return askNote(qs, picks);
 }
 
-async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null): Promise<void> {
+async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null, keyEl?: HTMLElement | null): Promise<void> {
   if (!client) return;
   let note: string | null = null;
   if (decision === 'answer') {
@@ -404,7 +405,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   const upgrade = decision === 'accept' && !!c0 && upgradeBannerOf([{ cardId, kind: c0.kind, card: c0.card as Record<string, unknown> }]) !== null;
   if (upgrade) markRestarting(sessionStorage, cardId);
   try {
-    await client.call('approve', { cardId, decision, ...(note !== null ? { note } : {}) });
+    await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
@@ -1321,7 +1322,7 @@ function wire(): void {
   $('session-search').addEventListener('input', paintSessions);
   const onCard = (e: Event): void => {
     const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
-    if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null);
+    if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
     if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
   };

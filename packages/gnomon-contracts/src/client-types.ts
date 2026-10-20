@@ -8,7 +8,7 @@
  * compatible-additive rule (§4.9) lets the kernel add fields at any time.
  */
 
-import type { CardV1 } from './card.js';
+import type { ApproveScope, CardV1 } from './card.js';
 import type { ChangeNoteV1 } from './change-note.js';
 import type { EventV1 } from './event.js';
 import type { LogReadCursor } from './rpc.js';
@@ -143,6 +143,8 @@ export interface ApproveParams {
   decision: string;
   note?: string;
   decisionSig: string;
+  /** TD-2026-10-20-294: only with decision `always` on a Bash permission card; a prefix scope is bound by decisionSig (v2). */
+  scope?: ApproveScope;
 }
 
 export interface ContractRegisterParams {

@@ -63,6 +63,7 @@ export function renderClientApiDoc(): string {
   L.push(`- hello features: ${RESERVED_HELLO_FEATURES.map((f) => `\`${f}\``).join(', ')} — the kernel advertises none until it builds them; a missing feature refuses the dependent operation, never degrades it.`);
   L.push(`- \`log.read\` cursor: \`{${LOG_READ_CURSOR_KEYS.join(', ')}}\`; a cursor from another log is \`BAD_REQUEST{reason:'cursor-epoch'}\`.`);
   L.push(`- decisionSig v2: first line \`${DECISION_SIG_V2_MARKER}\`, used for \`answer\` decisions, carrying the answer digest.`);
+  L.push('- approve `scope` (TD-2026-10-20-294): `{kind:\'exact\'}` or `{kind:\'prefix\', prefix:[1-3 words]}`, only with `always` on a Bash permission card; a prefix scope signs the v2 layout whose last line is the scope digest (sha256 over canonicalJson of the scope).');
   L.push('');
   L.push('## Refusals (`refusal:v1`)');
   L.push('');

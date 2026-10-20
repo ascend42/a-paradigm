@@ -1148,7 +1148,7 @@ const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'blame', 'rev-parse',
  * any short bundle containing `O`.
  */
 const GIT_BAD_LONG = ['output', 'output-directory', 'ext-diff', 'textconv', 'open-files-in-pager', 'exec', 'exec-path', 'upload-pack', 'receive-pack', 'paginate', 'git-dir', 'work-tree', 'config-env', 'namespace', 'filters'];
-function gitOptBad(s: string): boolean {
+export function gitOptBad(s: string): boolean {
   if (s.startsWith('--')) {
     const name = s.slice(2).split('=')[0]!;
     if (!name) return false; // `--` (end of options)

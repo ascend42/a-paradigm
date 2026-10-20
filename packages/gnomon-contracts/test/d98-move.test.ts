@@ -68,15 +68,17 @@ describe('P8-D98 kinds: registered, kernel-owned, closed payload checks', () => 
   });
   it('claimGen, match and expire.why are reserved payload fields', () => {
     expect(RESERVED_PAYLOAD_FIELDS['contract.claimed']).toEqual({ claimGen: '8.0:P8-D98' });
-    expect(RESERVED_PAYLOAD_FIELDS['approval.rule.learned']).toEqual({ match: '8.0:P8-D98' });
+    expect(RESERVED_PAYLOAD_FIELDS['approval.rule.learned']).toEqual({ match: '8.0:P8-D98', prefix: '8.0:TD-2026-10-20-294' });
+    expect(RESERVED_PAYLOAD_FIELDS['approval.decide']).toEqual({ scope: '8.0:TD-2026-10-20-294' });
     expect(RESERVED_PAYLOAD_FIELDS['approval.expire']).toEqual({ why: '8.0:P8-D98' });
   });
 });
 
-describe('F2: the always-rule match field accepts only exact', () => {
-  it('exact passes; anything else is refused', () => {
+describe('F2 (amended TD-2026-10-20-294): the always-rule match field is closed to exact | prefix', () => {
+  it('exact and prefix pass; anything else is refused', () => {
     expect(validateAlwaysRuleMatch('exact')).toEqual([]);
-    for (const bad of ['prefix', 'glob', 'regex', 'EXACT', '', null, undefined, 1, ['exact']]) expect(validateAlwaysRuleMatch(bad).length, String(bad)).toBeGreaterThan(0);
+    expect(validateAlwaysRuleMatch('prefix')).toEqual([]);
+    for (const bad of ['PREFIX', 'glob', 'regex', 'EXACT', '', null, undefined, 1, ['exact']]) expect(validateAlwaysRuleMatch(bad).length, String(bad)).toBeGreaterThan(0);
   });
 });
 

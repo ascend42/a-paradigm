@@ -47,7 +47,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -68,6 +68,8 @@ const D86 = 'M1.1:P8-D86-D88' as const;
 const D89 = 'M1.4:P8-D89' as const;
 /** P8-D98 (T-2026-10-19-001, the batched clientApiId move of TD-2026-10-19-528/-648/-908): reserved for 8.0, built by later slices. */
 const D98 = '8.0:P8-D98' as const;
+/** TD-2026-10-20-294 part 3 (prefix-scoped always rules, a deliberate clientApiId move). */
+const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -255,7 +257,9 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // P8-D98 (TD-2026-10-19-648 item 11, §7.4): the per-node claim generation; built in M2.2.
   'contract.claimed': Object.freeze({ claimGen: D98 }),
   // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
-  'approval.rule.learned': Object.freeze({ match: D98 }),
+  // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
+  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES }),
+  'approval.decide': Object.freeze({ scope: PREFIX_RULES }),
   // P8-D98 (TD-2026-10-19-528 F4, §2.4 rule 11): approval.expire{why:'session-drained'} (CARD_EXPIRY_WHYS).
   'approval.expire': Object.freeze({ why: D98 }),
   // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
@@ -370,13 +374,17 @@ export const VOICE_DISARM_REASONS = [
 ] as const;
 export type VoiceDisarmReason = (typeof VOICE_DISARM_REASONS)[number];
 
-/** Always-rule match modes (TD-2026-10-19-528 F2): closed; only an exact match of (repoKey, tool, inputHash). */
-export const ALWAYS_RULE_MATCHES = ['exact'] as const;
+/**
+ * Always-rule match modes (TD-2026-10-19-528 F2, amended TD-2026-10-20-294): closed. `exact` = (repoKey, tool,
+ * inputHash); `prefix` = a Bash rule that widens ONLY within a single literal simple command whose argv starts with
+ * the learned words (approval.rule.learned{match:'prefix', prefix}).
+ */
+export const ALWAYS_RULE_MATCHES = ['exact', 'prefix'] as const;
 export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];
 
-/** F2: the always-rule `match` field accepts only 'exact' (absent = 'exact', the v1 `matchExact:true` reading). */
+/** F2: the always-rule `match` field is closed (absent = 'exact', the v1 `matchExact:true` reading). */
 export function validateAlwaysRuleMatch(value: unknown): string[] {
-  return value === 'exact' ? [] : [`match: must be ${ALWAYS_RULE_MATCHES.join('|')} (an always-rule never widens past an exact match)`];
+  return (ALWAYS_RULE_MATCHES as readonly unknown[]).includes(value) ? [] : [`match: must be ${ALWAYS_RULE_MATCHES.join('|')} (a prefix rule widens only within one literal simple command)`];
 }
 
 /** A standing rule's id is the cardId whose `always` decision learned it (#always-rules; approval.auto's modeRef is `rule:<ruleId>`). */

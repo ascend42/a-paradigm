@@ -342,7 +342,11 @@
       "claimGen": "8.0:P8-D98"
     },
     "approval.rule.learned": {
-      "match": "8.0:P8-D98"
+      "match": "8.0:P8-D98",
+      "prefix": "8.0:TD-2026-10-20-294"
+    },
+    "approval.decide": {
+      "scope": "8.0:TD-2026-10-20-294"
     },
     "approval.expire": {
       "why": "8.0:P8-D98"

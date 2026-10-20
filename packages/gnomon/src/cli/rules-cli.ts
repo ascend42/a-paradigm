@@ -41,7 +41,7 @@ export const RULES_USAGE = `usage: gnomon rules list [<home>] [--json]
 
   list    Verifies the kernel log of <home> (default: the Gnomon home) and lists
           the standing "always allow" rules derived from kernel-signed rows:
-          id (the card it was learned on), tool, repoKey, inputHash. Read-only.
+          id (the card it was learned on), tool, repoKey, match (exact, or prefix: the literal argv words), inputHash. Read-only.
   revoke  Asks the running daemon of the home to revoke the rule, as this
           home's human device (no Touch ID: revoking only narrows). The kernel
           logs approval.rule.revoked; the next exact match raises the card.
@@ -116,7 +116,7 @@ export async function runRulesCommand(argv: readonly string[], io: { stdout: Out
     return RULES_EXIT_OK;
   }
   heading(io.stdout, 'rules', `${r.rules.length} standing always-allow rule(s) · ${r.rows} rows verified`);
-  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['tool', x.tool], ['repoKey', x.repoKey], ['inputHash', x.inputHash], ['presence', x.presence]]);
+  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['tool', x.tool], ['repoKey', x.repoKey], ['match', x.match === 'prefix' ? `prefix: ${(x.prefix ?? []).join(' ')} …` : 'exact'], ...(x.match === 'prefix' ? [] : [['inputHash', x.inputHash] as [string, string]]), ['presence', x.presence]]);
   return RULES_EXIT_OK;
 }
 

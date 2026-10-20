@@ -62,7 +62,7 @@
  *
  * Read-only: databases are opened `readOnly` exactly as verifyLog opens them.
  */
-import { canonicalJson, EVENT_KINDS, isPlainObject, sha256Tagged } from '@a-company/gnomon-contracts';
+import { canonicalJson, EVENT_KINDS, isPlainObject, parseApproveScope, scopeDigest, sha256Tagged } from '@a-company/gnomon-contracts';
 import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
 import { answerDigest, approveMessage, decisionMessage, usesDecisionV2, type KeyRing } from './signer.js';
 
@@ -206,6 +206,20 @@ export function checkDecisionSigs(rows: Iterable<Row>, keyRing: KeyRing, keys: D
     const sig = Buffer.from(sigB64, 'base64');
     const verifies = (message: string): boolean => keyIds.some((k) => keyRing.verify(k, 'approve', message, sig) === 'ok');
     const v1 = verifies(approveMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: by }));
+    // TD-2026-10-20-294: a prefix-scoped always verifies ONLY over the v2 layout whose last line is its scope digest
+    const sc = decision === 'always' && pl.scope !== undefined ? parseApproveScope(pl.scope) : null;
+    if (decision === 'always' && pl.scope !== undefined) {
+      let ok = false;
+      if (sc && sc.kind === 'prefix') {
+        try {
+          ok = verifies(decisionMessage({ cardId, decision, cardContentHash: contentHash, approverPrincipalId: by, scopeDigest: scopeDigest(sc) }));
+        } catch {
+          ok = false;
+        }
+      }
+      if (!ok) div('decision-sig-bad', 'a scoped always decisionSig does not verify over the v2 scope layout');
+      continue;
+    }
     if (!usesDecisionV2(decision)) {
       if (!v1) div('decision-sig-bad', `${decision} decisionSig does not verify over the v1 message`);
       continue;

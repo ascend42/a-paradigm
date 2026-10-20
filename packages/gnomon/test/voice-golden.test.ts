@@ -13,8 +13,8 @@ import { ABI_ID } from '../src/kernel/socket/dispatch.js';
 import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
 
 const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop'];
-const GOLDEN_ABI_ID = 'sha256:18357f4420e34c2959102ff01f8279736ba69f2d9f011421895fd1ce39cfa3fa';
-const GOLDEN_CLIENT_API_ID = 'sha256:fe45ab09a8a9cf2a1a82090e837c8d0dbe9b5f7a2d38ee6fb4bb772ae9013fb8';
+const GOLDEN_ABI_ID = 'sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35';
+const GOLDEN_CLIENT_API_ID = 'sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4';
 
 describe('voice golden: abiId and clientApiId are unchanged by every voice slice', () => {
   it('ABI_ID and CLIENT_API_ID equal the pre-voice literals', () => {

@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+# a node_modules SYMLINK (worktrees link the main checkout's) is a file, not a dir: ignore it too
+node_modules
 .pnp
 .pnp.js
 .yarn/cache
