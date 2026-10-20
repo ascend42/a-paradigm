@@ -28,7 +28,7 @@
  */
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
-import { isClientRow, isEnrolRow, noticeOf, reduceEnrol, type EnrolState } from './voice-client.js';
+import { isClientRow, type EnrolState } from './voice-client.js';
 
 export interface Row {
   seq: number;
@@ -128,9 +128,9 @@ export class GuiStore {
   voiceNote: string | null = null;
   /** V2d: the kernel's ambient idle auto-off (status.voice.ambientIdleMs), set by the page; names the note's minutes */
   voiceIdleMs: number | null = null;
-  /** V2e: the "Teach Gnomon your voice" flow while its dialog is open (the page opens it; rows fold into it). */
+  /** V2e: the "Teach Gnomon your voice" flow while its dialog is open (the page opens it; status.voice.enrolment folds into it). */
   enrol: EnrolState | null = null;
-  /** V2e: the latest quiet notice from the voice app (A5), until the page shows it. */
+  /** V2e: the latest quiet notice from the voice app (A5: status.voice.notice, set by the page), until it is shown. */
   voiceToast: { text: string; at: string | null } | null = null;
   /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
   position = 0;
@@ -238,21 +238,9 @@ export class GuiStore {
       else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload, this.voiceIdleMs);
     }
     if (VOICE_ACTIVITY_KINDS.has(r.kind)) what.add('voice-activity');
-    // V2e: the voice app's lifecycle and the enrolled list are status.voice (re-read); enrolment progress folds into
-    // the open flow; a client notice becomes a quiet toast
+    // V2e: the voice app's lifecycle, the enrolled list, enrolment progress and the app's notices are all
+    // status.voice (A1/A3/A5): the page re-reads status on these rows (and polls lightly while enrolling)
     if (isClientRow(r.kind)) what.add('voice');
-    if (this.enrol && isEnrolRow(r.kind)) {
-      const next = reduceEnrol(this.enrol, r.kind, r.payload);
-      if (next !== this.enrol) {
-        this.enrol = next;
-        what.add('voice-enrol');
-      }
-    }
-    const toast = noticeOf(r.kind, r.payload);
-    if (toast) {
-      this.voiceToast = { text: toast, at: r.at ?? null };
-      what.add('voice-toast');
-    }
     if (r.kind === 'daemon.start') {
       // a kernel (re)start: a session the old kernel neither exited nor drained into a resume is gone with it (a
       // Ctrl-C leaves no session.exited, and the sweep only logs the spawns it found). A resume in this boot logs its

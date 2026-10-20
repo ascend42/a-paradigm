@@ -17,7 +17,9 @@ import {
   clientRequest,
   consentText,
   devBannerOf,
+  enrolAllowed,
   enrolLine,
+  ENROL_POLL_MS,
   enrolRequest,
   enrolSent,
   enrolStart,
@@ -27,7 +29,7 @@ import {
   isEnrolCard,
   needsStart,
   noticeOf,
-  reduceEnrol,
+  reduceEnrolStatus,
   toastFresh,
 } from '../src/core/voice-client.js';
 
@@ -149,50 +151,64 @@ describe('"Teach Gnomon your voice"', () => {
     expect(consentText('matt')).toMatch(/three short phrases.*stays on this Mac.*forget it at any time/);
     expect(forgetRequest('matt')).toEqual({ kind: 'request.voice.forget', payload: { name: 'matt' } });
   });
-  it('form → waiting → three phrases with a recording indicator → confirm (Touch ID) → done', () => {
+  it('form → confirm (Touch ID) → waiting → three phrases with a recording indicator → done (A3: status.voice.enrolment)', () => {
+    const T = Date.parse('2026-10-19T10:00:00Z');
+    const at = (sec: number) => new Date(T + sec * 1000).toISOString();
+    const en = (e: Record<string, unknown>) => ({ voice: { enrolment: e } });
     let s = enrolStart();
     expect(s.step).toBe('form');
-    expect(reduceEnrol(s, 'voice.enrol.progress', { phase: 'recording' })).toBe(s); // nothing sent yet
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', at: at(1) }))).toBe(s); // nothing sent yet
     s = enrolSent(s, 'matt', 'card:1');
-    expect(s).toMatchObject({ step: 'waiting', name: 'matt', cardId: 'card:1' });
+    expect(s).toMatchObject({ step: 'confirm', name: 'matt', cardId: 'card:1' });
+    expect(enrolLine(s)).toBe('Confirm with Touch ID, then read three short phrases aloud.');
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'ready', at: at(1) }))).toBe(s); // not allowed yet
+    s = enrolAllowed(s, T);
+    expect(s).toMatchObject({ step: 'waiting', since: T });
     expect(enrolLine(s)).toContain('Waiting for the voice app');
-    s = reduceEnrol(s, 'voice.enrol.ready', { name: 'matt', phrase: 0 });
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'requested', at: at(0) }))).toBe(s);
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'ready', phrase: 0, of: 3, at: at(1) }));
     expect(s).toMatchObject({ step: 'phrase', index: 0, recording: false });
     expect(s.phrases).toBe(ENROL_PHRASES);
-    s = reduceEnrol(s, 'voice.enrol.progress', { name: 'matt', phase: 'recording', phrase: 0 });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 0, of: 3, at: at(2) }));
     expect(s).toMatchObject({ step: 'phrase', index: 0, recording: true });
     expect(enrolLine(s)).toBe('Phrase 1 of 3: recording, read it aloud');
-    s = reduceEnrol(s, 'voice.enrol.progress', { name: 'matt', phase: 'recorded', phrase: 0 });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 0, of: 3, at: at(3) }));
     expect(s).toMatchObject({ step: 'phrase', index: 1, recorded: 1, recording: false });
-    s = reduceEnrol(s, 'voice.enrol.recorded', { name: 'matt', phrase: 1 });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 1, of: 3, at: at(4) }));
     expect(s).toMatchObject({ index: 2, recorded: 2 });
-    s = reduceEnrol(s, 'voice.enrol.recording', { phrase: 2 });
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 2, of: 3, at: at(5) }));
     expect(s.recording).toBe(true);
-    s = reduceEnrol(s, 'voice.enrol.recorded', { phrase: 2 });
-    expect(s).toMatchObject({ step: 'confirm', recorded: 3 });
-    expect(enrolLine(s)).toBe('All phrases recorded. Finish with Touch ID.');
-    s = reduceEnrol(s, 'voice.enrol', { speakerId: 'spk:m/matt', consent: 'x' });
-    expect(s.step).toBe('done');
+    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) }));
+    expect(s).toMatchObject({ step: 'done', recorded: 3 });
+    expect(enrolLine(s)).toBe("Gnomon knows matt's voice now.");
   });
-  it('the client may name its own phrases; another name and unrelated rows change nothing; a failure says why', () => {
-    const s = enrolSent(enrolStart(), 'matt', null);
-    const named = reduceEnrol(s, 'voice.enrolment.ready', { phrases: ['one', 'two'], phrase: 0 });
-    expect(named).toMatchObject({ step: 'phrase', phrases: ['one', 'two'] });
-    expect(reduceEnrol(s, 'voice.enrol.ready', { name: 'dana' })).toBe(s);
-    expect(reduceEnrol(s, 'voice.turn.user', { name: 'matt' })).toBe(s);
-    expect(reduceEnrol(s, 'voice.enrol.failed', { error: 'too quiet' })).toMatchObject({ step: 'failed', error: 'too quiet' });
-    expect(enrolLine(reduceEnrol(s, 'voice.enrol.cancelled', {}))).toBe('Not enrolled: the voice app cancelled the recording');
+  it('another name, a previous attempt (stamped before the allow) and no enrolment change nothing; a failure says why', () => {
+    const T = Date.parse('2026-10-19T10:00:00Z');
+    const s = enrolAllowed(enrolSent(enrolStart(), 'matt', null), T);
+    const en = (e: Record<string, unknown>) => ({ voice: { enrolment: e } });
+    expect(reduceEnrolStatus(s, en({ name: 'dana', phase: 'ready', at: '2026-10-19T10:00:01Z' }))).toBe(s);
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', at: '2026-10-19T09:00:00Z' }))).toBe(s);
+    expect(reduceEnrolStatus(s, { voice: { enrolment: null } })).toBe(s);
+    expect(reduceEnrolStatus(s, null)).toBe(s);
+    expect(reduceEnrolStatus(s, en({ name: 'matt', phase: 'failed', error: 'the mic is off', at: '2026-10-19T10:00:02Z' }))).toMatchObject({ step: 'failed', error: 'the mic is off' });
+    expect(enrolLine(reduceEnrolStatus(s, en({ name: 'matt', phase: 'cancelled', at: '2026-10-19T10:00:02Z' })))).toBe('Not enrolled: the voice app cancelled the recording');
   });
-  it('the store folds enrolment rows into the open flow only', () => {
+  it('the store no longer folds enrolment or notice rows (they are status.voice, A3/A5)', () => {
     const store = new GuiStore();
-    const seen: string[] = [];
-    store.onChange((w) => seen.push(...w));
-    store.apply([{ seq: 1, kind: 'voice.enrol.ready', connId: 'v', payload: { name: 'matt' } }]);
-    expect(store.enrol).toBeNull();
-    store.enrol = enrolSent(enrolStart(), 'matt', 'card:1');
-    store.apply([{ seq: 2, kind: 'voice.enrol.progress', connId: 'v', payload: { name: 'matt', phase: 'recording', phrase: 0 } }]);
-    expect(store.enrol).toMatchObject({ step: 'phrase', recording: true });
-    expect(seen).toContain('voice-enrol');
+    store.enrol = enrolAllowed(enrolSent(enrolStart(), 'matt', 'card:1'), Date.now());
+    const before = store.enrol;
+    store.apply([{ seq: 1, kind: 'voice.enrol.progress', connId: 'v', payload: { name: 'matt', phase: 'recording', phrase: 0 } }]);
+    store.apply([{ seq: 2, kind: 'voice.client.notice', connId: 'v', payload: { text: 'old' } }]);
+    expect(store.enrol).toBe(before);
+    expect(store.voiceToast).toBeNull();
+  });
+  it('the page folds status.voice on every status read and polls lightly only while the dialog waits', () => {
+    expect(APP).toContain('function foldVoiceReports(');
+    expect(APP).toMatch(/foldVoiceReports\(\);\n\}/);
+    const poll = APP.slice(APP.indexOf('function syncEnrolPoll('), APP.indexOf('function syncEnrolPoll(') + 600);
+    expect(poll).toContain("s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase'");
+    expect(poll).toContain('ENROL_POLL_MS');
+    expect(ENROL_POLL_MS).toBeGreaterThanOrEqual(500);
   });
   it('the Touch ID card is recognised by its op and name (A4)', () => {
     const card = (detail: unknown) => ({ kind: 'strictness', card: { detail } });
@@ -200,13 +216,15 @@ describe('"Teach Gnomon your voice"', () => {
     expect(isEnrolCard(card({ op: 'voice.enrol', speakerId: 'spk:m/dana' }), 'matt')).toBe(false);
     expect(isEnrolCard(card({ op: 'voice.widen' }), 'matt')).toBe(false);
   });
-  it('the page: send / finish / forget are trusted gestures; finish approves allow; close denies a card in flight', () => {
+  it('the page: send / confirm / forget are trusted gestures; confirm approves allow; close denies a card still pending', () => {
     const submit = APP.slice(APP.indexOf('async function submitEnrol('), APP.indexOf('async function closeEnrol('));
     expect(submit).toMatch(/if \(!trusted \|\| !s\) return;/);
     expect(submit).toContain("client.call<Record<string, unknown>>('log.append', v.req)");
     expect(submit).toContain("client.call('approve', { cardId, decision: 'allow' })");
+    expect(submit).toContain('enrolAllowed(');
     const close = APP.slice(APP.indexOf('async function closeEnrol('), APP.indexOf('let forgetArmed'));
     expect(close).toContain("decision: 'deny'");
+    expect(close).toContain("s.step === 'confirm'");
     const forget = APP.slice(APP.indexOf('async function forgetVoice('), APP.indexOf('let toastTimer'));
     expect(forget).toMatch(/if \(!trusted \|\| !client \|\| !canAttach\(status\)\) return;/);
     expect(forget).toContain('forgetRequest(name)');
@@ -215,24 +233,22 @@ describe('"Teach Gnomon your voice"', () => {
 });
 
 describe('client notices are quiet toasts', () => {
-  it('voice.notice / voice.client.notice text, or any voice.* row with a notice; capped and one line', () => {
-    expect(noticeOf('voice.notice', { text: 'open Gnomon to turn on ambient' })).toBe('open Gnomon to turn on ambient');
-    expect(noticeOf('voice.client.notice', { message: 'mic\n busy' })).toBe('mic busy');
-    expect(noticeOf('voice.deck', { notice: 'hotkey ignored' })).toBe('hotkey ignored');
-    expect(noticeOf('voice.deck', { text: 'not a notice' })).toBeNull();
-    expect(noticeOf('session.open', { notice: 'x' })).toBeNull();
-    expect(noticeOf('voice.notice', { text: 'x'.repeat(500) })!.length).toBe(140);
+  it('status.voice.notice is the toast (A5): text and at, capped and one line; absent is null', () => {
+    expect(noticeOf({ voice: { notice: { text: 'open Gnomon to turn on ambient', code: 'ambient-above-ceiling', at: '2026-10-19T10:00:00Z' } } })).toEqual({ text: 'open Gnomon to turn on ambient', at: '2026-10-19T10:00:00Z' });
+    expect(noticeOf({ voice: { notice: { text: 'mic\n busy' } } })).toEqual({ text: 'mic busy', at: null });
+    expect(noticeOf({ voice: { notice: null } })).toBeNull();
+    expect(noticeOf({ voice: {} })).toBeNull();
+    expect(noticeOf(null)).toBeNull();
+    expect(noticeOf({ voice: { notice: { text: 'x'.repeat(500) } } })!.text.length).toBe(140);
   });
-  it('the store keeps the latest one; a stale backlog notice is not toasted', () => {
-    const store = new GuiStore();
-    store.apply([{ seq: 1, kind: 'voice.notice', connId: 'v', payload: { text: 'open Gnomon to turn on ambient' }, at: '2026-10-19T10:00:00Z' }]);
-    expect(store.voiceToast).toEqual({ text: 'open Gnomon to turn on ambient', at: '2026-10-19T10:00:00Z' });
+  it('a stale notice is not toasted', () => {
     expect(toastFresh('2026-10-19T10:00:00Z', Date.parse('2026-10-19T10:00:10Z'))).toBe(true);
     expect(toastFresh('2026-10-19T10:00:00Z', Date.parse('2026-10-19T10:05:00Z'))).toBe(false);
   });
   it('lifecycle rows make the page re-read status', () => {
-    for (const k of ['voice.client.start', 'request.voice.client', 'voice.enrol', 'voice.forget']) expect(isClientRow(k)).toBe(true);
-    expect(isClientRow('voice.turn.user')).toBe(false);
+    for (const k of ['voice.client.start', 'voice.enrol', 'voice.forget']) expect(isClientRow(k)).toBe(true);
+    // request.voice.* are dispatcher-only (never a row under their own name)
+    for (const k of ['voice.turn.user', 'request.voice.client']) expect(isClientRow(k)).toBe(false);
     const store = new GuiStore();
     const seen: string[] = [];
     store.onChange((w) => seen.push(...w));

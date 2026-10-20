@@ -71,7 +71,7 @@ async function fakeKernel(h: Handler): Promise<{ client: net.Socket; server: net
 }
 const ok = (id: number, result: unknown) => ({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id, result });
 const ev = (params: unknown) => ({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: 'event', params });
-const STATUS = { principal: 'p:abcd1234/voice', voice: { attached: true, hsid: 'hs:01TEST', voiceSessionId: 'vs:01TEST', ceiling: 'ambient' } };
+const STATUS = { voice: { principal: 'p:abcd1234/voice', attached: true, hsid: 'hs:01TEST', voiceSessionId: 'vs:01TEST', ceiling: 'ambient' } };
 
 describe('the fd link: gnomon-rpc:v1 over the authenticated socket', () => {
   it('calls verbs with the kernel framing, maps refusals, and follows from the head (backlog never spoken)', async () => {
@@ -225,15 +225,16 @@ describe('hotkeys: ⌃⌥M mic, ⌃⌥A ambient within the ceiling', () => {
     audio.control('mode-toggle');
     await settle();
     expect(client.mode).toBe('ambient');
-    expect(link.appends.filter((a) => a.kind === 'voice.client.notice')).toHaveLength(0);
+    expect(link.appends.filter((a) => a.kind === 'request.voice.report')).toHaveLength(0);
   });
-  it('⌃⌥A above a ptt ceiling does nothing but say so and log a client notice for the GUI', async () => {
+  it('⌃⌥A above a ptt ceiling does nothing but say so and relay a notice for the GUI (request.voice.report)', async () => {
     const { audio, client, link, notices } = await setup({ mode: 'ptt', attachMode: 'ptt' });
     audio.control('mode-toggle');
     await settle();
     expect(client.mode).toBe('ptt');
     expect(notices.at(-1)!.text).toMatch(/Open Gnomon to turn on ambient/);
-    expect(link.appends.filter((a) => a.kind === 'voice.client.notice')[0]!.payload).toMatchObject({ code: 'ambient-above-ceiling', ceiling: 'ptt' });
+    expect(link.appends.filter((a) => a.kind === 'request.voice.report')[0]!.payload).toEqual({ notice: { text: expect.stringMatching(/Open Gnomon to turn on ambient/), code: 'ambient-above-ceiling' } });
+    expect(link.appends.some((a) => a.kind === 'voice.client.notice')).toBe(false);
     expect(link.appends.some((a) => a.kind.startsWith('voice.session'))).toBe(false);
   });
 });

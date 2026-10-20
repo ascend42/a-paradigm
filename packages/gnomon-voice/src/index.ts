@@ -9,6 +9,7 @@ export * from './voice-client.js';
 export * from './speakable.js';
 export * from './speaker.js';
 export * from './enrol.js';
+export * from './enrol-watch.js';
 export * from './manifest.js';
 export * from './audio-io.js';
 export * from './fake-audio-io.js';

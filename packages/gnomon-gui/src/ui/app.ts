@@ -24,7 +24,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -436,8 +436,6 @@ function schedule(what: Set<string>): void {
     if (w.has('cards')) void paintStack(w);
     if (w.has('modes') || w.has('voice')) void refreshStatus();
     if (w.has('voice-activity')) kickMeter();
-    if (w.has('voice-enrol')) paintEnrol();
-    if (w.has('voice-toast')) showToast();
     paintShuttle();
   });
 }
@@ -602,6 +600,37 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  foldVoiceReports();
+}
+
+let lastNoticeAt: string | null | undefined;
+/** V2e (A3/A5): the voice app's relayed enrolment progress and notice live in status.voice; fold them in. */
+function foldVoiceReports(): void {
+  const n = noticeOf(status);
+  if (n && n.at !== lastNoticeAt) {
+    lastNoticeAt = n.at;
+    store.voiceToast = n;
+    showToast();
+  }
+  if (store.enrol) {
+    const next = reduceEnrolStatus(store.enrol, status);
+    if (next !== store.enrol) {
+      store.enrol = next;
+      paintEnrol();
+    }
+  }
+}
+
+let enrolPoll: ReturnType<typeof setInterval> | null = null;
+/** A light status poll only while the enrol dialog waits on the Touch ID card or the voice app. */
+function syncEnrolPoll(): void {
+  const s = store.enrol;
+  const want = !!s && !$('enrol-dialog').hidden && (s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase');
+  if (want && !enrolPoll) enrolPoll = setInterval(() => void refreshStatus(), ENROL_POLL_MS);
+  else if (!want && enrolPoll) {
+    clearInterval(enrolPoll);
+    enrolPoll = null;
+  }
 }
 
 const currentMode = () => sessionModeOf(status, focused);
@@ -872,6 +901,7 @@ function openEnrol(trusted: boolean): void {
 }
 
 function paintEnrol(): void {
+  syncEnrolPoll();
   const s = store.enrol;
   if (!s || $('enrol-dialog').hidden) return;
   const raw = $<HTMLInputElement>('enrol-name').value;
@@ -891,8 +921,8 @@ function paintEnrol(): void {
   }
   const go = $<HTMLButtonElement>('enrol-go');
   go.hidden = !(formStep || s.step === 'confirm');
-  put(go, s.step === 'confirm' ? 'Finish with Touch ID' : s.step === 'failed' ? 'Try again' : 'Start recording');
-  put($('enrol-cancel'), s.step === 'done' ? 'done' : phraseStep || s.step === 'confirm' ? 'cancel' : 'close');
+  put(go, s.step === 'confirm' ? 'Confirm with Touch ID' : s.step === 'failed' ? 'Try again' : 'Continue');
+  put($('enrol-cancel'), s.step === 'done' ? 'done' : s.step === 'confirm' ? 'cancel' : 'close');
   const list = $('enrol-list');
   clear(list);
   const enrolled = clientOf(status).enrolled;
@@ -928,7 +958,8 @@ async function submitEnrol(trusted: boolean): Promise<void> {
   put($('enrol-line'), 'Confirm with Touch ID…');
   try {
     await client.call('approve', { cardId, decision: 'allow' });
-    store.enrol = { ...s, cardId, step: 'done' };
+    // allowed: the kernel asks the voice app to record (status.voice.enrolment 'requested'); progress folds in
+    store.enrol = enrolAllowed({ ...s, cardId }, Date.now());
   } catch (err) {
     focusCard(cardId);
     return void put($('enrol-line'), err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet');
@@ -937,18 +968,19 @@ async function submitEnrol(trusted: boolean): Promise<void> {
   await refreshStatus();
 }
 
-/** Close the dialog; an enrolment in flight is cancelled by denying its card (no Touch ID needed to say no). */
+/** Close the dialog; an enrolment whose card is still pending is cancelled by denying it (no Touch ID to say no). */
 async function closeEnrol(trusted: boolean): Promise<void> {
   if (!trusted) return;
   const s = store.enrol;
   $('enrol-dialog').hidden = true;
   forgetArmed = null;
   store.enrol = null;
-  if (client && s?.cardId && (s.step === 'waiting' || s.step === 'phrase' || s.step === 'confirm')) await client.call('approve', { cardId: s.cardId, decision: 'deny' }).catch(() => undefined);
+  syncEnrolPoll();
+  if (client && s?.cardId && s.step === 'confirm') await client.call('approve', { cardId: s.cardId, decision: 'deny' }).catch(() => undefined);
 }
 
 let forgetArmed: string | null = null;
-/** [Forget] asks once more in place, then sends request.voice.forget{name} (assumed name, A2). */
+/** [Forget] asks once more in place, then sends request.voice.forget{name} (A2: no card; a forget narrows). */
 async function forgetVoice(name: string, trusted: boolean): Promise<void> {
   if (!trusted || !client || !canAttach(status)) return;
   if (forgetArmed !== name) {

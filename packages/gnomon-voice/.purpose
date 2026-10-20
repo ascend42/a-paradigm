@@ -117,10 +117,10 @@ flows:
       t1, text}, then session.send content [{text}] for enrolled speakers
       only. Unknown speakers are logged with no text. A refusal is shown
       and never retried. Agent side: log.read follow, then the speakable
-      summary (the gnome line or the first paragraph; edits are said as
-      "edited N files"; ask-user questions are always read), then Kokoro
-      one sentence at a time, then play, then voice.turn.agent{t0, t1,
-      textPlanned, textSpoken}. Barge-in: 300 ms of speech, or the talk key,
-      stops playback and drops the rest of the reply.
+      rows the kernel writes (voice.turn.agent{source: kernel-speakable,
+      turnSeq, items}), then Kokoro one sentence at a time, then play, then
+      voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: speech
+      past the barge-in threshold (configured), or the talk key, stops
+      playback and drops the rest of the reply.
     steps: ["#gnomon-voice", "#gnomon-voice-io"]
 

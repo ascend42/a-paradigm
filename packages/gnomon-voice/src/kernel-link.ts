@@ -217,11 +217,10 @@ export function nsOf(principalId: string): string {
   return m[1]!;
 }
 
-/** The principal this connection is authenticated as, when status reports it (`principal` or `voice.principal`). */
+/** The principal this connection is authenticated as: `status.voice.principal` (V2e; the kernel reports it to the voice connection only). */
 export function principalFromStatus(status: unknown): string | undefined {
-  const s = status as { principal?: unknown; voice?: { principal?: unknown } } | undefined;
-  const p = typeof s?.principal === 'string' ? s.principal : typeof s?.voice?.principal === 'string' ? s.voice.principal : undefined;
-  return p && /^p:[0-9a-z]{8}\/voice$/.test(p) ? p : undefined;
+  const p = (status as { voice?: { principal?: unknown } } | undefined)?.voice?.principal;
+  return typeof p === 'string' ? p : undefined;
 }
 
 /**

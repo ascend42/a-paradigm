@@ -10,11 +10,16 @@
 import { meanEmbedding, PRINT_SCHEMA, writePrint, type VoicePrint } from './speaker.js';
 import type { AudioIO, SpeakerEngine, VadEngine, VadSegment } from './types.js';
 
-export const ENROL_PHRASES = [
+/**
+ * The three enrolment phrases (short, varied; none sounds like a decision, which voice never makes). SHARED with the
+ * GUI's enrol dialog (packages/gnomon-gui/src/core/voice-client.ts ENROL_PHRASES; the kernel's report carries no
+ * phrase text) — test/enrol-watch.test.ts pins the two lists equal.
+ */
+export const ENROL_PHRASES: readonly string[] = Object.freeze([
   'The quick brown fox jumps over the lazy dog.',
   'Gnomon, please run the tests and tell me what failed.',
   'I enrol my voice on this computer, and it stays here.',
-];
+]);
 const MIN_PHRASE_MS = 1200;
 
 export interface EnrolOptions {
@@ -27,6 +32,8 @@ export interface EnrolOptions {
   phrases?: readonly string[];
   /** shows the phrase to read; resolves when the human is ready */
   prompt: (phrase: string, i: number, n: number) => Promise<void> | void;
+  /** called after phrase i (1-based) of n was captured and embedded */
+  recorded?: (i: number, n: number) => Promise<void> | void;
   /** per-phrase timeout (ms) */
   timeoutMs?: number;
 }
@@ -56,6 +63,7 @@ export async function recordEnrolment(o: EnrolOptions): Promise<{ file: string; 
     await o.prompt(phrases[i]!, i + 1, phrases.length);
     const s = await seg;
     es.push(await o.speaker.embed(s.samples, s.sampleRate));
+    await o.recorded?.(i + 1, phrases.length);
   }
   const mean = meanEmbedding(es);
   const print: VoicePrint = { schemaVersion: PRINT_SCHEMA, name: o.name, model: o.model, dim: mean.length, phrases: es.length, embedding: Array.from(mean), createdAt: new Date().toISOString() };

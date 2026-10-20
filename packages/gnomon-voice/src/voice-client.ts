@@ -127,6 +127,7 @@ export class VoiceClient {
   #lastAgentMs = 0;
   #closed = false;
   #refreshed = false;
+  #paused = false;
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -227,14 +228,16 @@ export class VoiceClient {
       this.#o.engines.vad.reset();
     }
     this.#flow.info('mic toggled', { on });
-    this.#notice('info', on ? 'Mic on.' : 'Mic off. Press ⌃⌥M to turn it back on.');
+    const said = on ? 'Mic on.' : 'Mic off. Press ⌃⌥M to turn it back on.';
+    this.#notice('info', said);
+    await this.relayNotice(said, on ? 'mic-on' : 'mic-off');
     return on;
   }
 
   /**
    * ⌃⌥A: ambient ↔ push-to-talk, LOCAL and only within the human's ceiling. Ambient → ptt narrows; ptt → ambient
    * re-widens only when the ceiling is ambient. The voice principal cannot change the attachment mode (the kernel
-   * refuses it), so above the ceiling this does nothing but say so and log a client notice the GUI can show.
+   * refuses it), so above the ceiling this does nothing but say so and relay a notice the GUI can show.
    */
   async toggleAmbient(): Promise<ClientMode> {
     const eff = this.mode;
@@ -243,12 +246,28 @@ export class VoiceClient {
     if (eff === 'ptt' && ceiling === 'ambient') return this.setMode('ambient');
     const text = ceiling === 'off' ? 'Voice is not attached. Open Gnomon to attach it.' : 'Ambient listening is off for this session. Open Gnomon to turn on ambient.';
     this.#notice('info', text);
-    try {
-      await this.#o.link.append('voice.client.notice', { code: 'ambient-above-ceiling', ceiling, mode: eff, text });
-    } catch (err) {
-      this.#log.warn('client notice not logged', { reason: toRefusal(err).reason });
-    }
+    await this.relayNotice(text, 'ambient-above-ceiling');
     return eff;
+  }
+
+  /**
+   * V2e: a notice for the GUI's quiet toast, relayed with `request.voice.report{notice: {text, code}}` (the kernel
+   * holds it in memory as status.voice.notice; never a log row). A refusal is logged here and otherwise ignored.
+   */
+  async relayNotice(text: string, code: string): Promise<void> {
+    try {
+      await this.#o.link.append('request.voice.report', { notice: { text, code } });
+    } catch (err) {
+      this.#log.warn('client notice not relayed', { code, reason: toRefusal(err).reason });
+    }
+  }
+
+  /** V2e: pause the voice loop (an enrolment is recording: its phrases are never turns). */
+  pause(on: boolean): void {
+    this.#paused = on;
+    this.#pttHeld = false;
+    this.#pttFrames = [];
+    this.#o.engines.vad.reset();
   }
 
   /** Wait until queued utterances and speech are done (tests, shutdown). */
@@ -274,7 +293,7 @@ export class VoiceClient {
   // ---- capture -------------------------------------------------------------------------------------------------
 
   #onHotkey(down: boolean, at: number): void {
-    if (this.mode === 'off') return;
+    if (this.mode === 'off' || this.#paused) return;
     if (down) {
       if (this.#playing) this.#bargeIn('hotkey');
       this.#pttHeld = true;
@@ -301,7 +320,7 @@ export class VoiceClient {
 
   #onFrame(f: PcmFrame): void {
     const mode = this.mode;
-    if (mode === 'off') return;
+    if (mode === 'off' || this.#paused) return;
     if (mode === 'ptt' && this.#pttHeld) this.#pttFrames.push(f);
     // VAD runs in AMBIENT (segmentation) and during playback in any mode (barge-in)
     if (mode !== 'ambient' && !this.#playing) return;

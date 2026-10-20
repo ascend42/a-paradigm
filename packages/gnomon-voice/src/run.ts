@@ -4,9 +4,10 @@
  * `gnomon-voice run --fd N` (V2e): the kernel-spawned client lifetime. The kernel hands over an already
  * authenticated socketpair fd (GnomonKernelLink.fromFd) and keeps the child's stdin open; the client runs until the
  * FIRST of: stdin ends (the kernel or its pipe went away), the link closes (fd EOF / error), or an abort (signal).
- * Then it closes the voice loop (mic.off, quit to gnomon-voice-io) and the link, and returns why.
+ * While running it polls status for a kernel-decided enrolment (enrol-watch.ts). Then it closes the voice loop (mic.off, quit to gnomon-voice-io) and the link, and returns why.
  */
 import type { Readable } from 'node:stream';
+import { EnrolWatch } from './enrol-watch.js';
 import { nsOf, principalFromStatus } from './kernel-link.js';
 import type { AudioIO, KernelLink, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
@@ -25,8 +26,8 @@ export interface RunOptions {
   prints: () => readonly VoicePrint[];
   /** the kernel's stdin pipe: its end means the kernel is gone */
   stdin: Readable;
-  /** `p:<ns>/voice` when status does not report it (`--principal`) */
-  principal?: string;
+  /** kernel-decided enrolment (status.voice.enrolment 'requested' → record → request.voice.report); omitted ⇒ off */
+  enrol?: { home: string; model: string; pollMs?: number; timeoutMs?: number };
   mode?: ClientMode;
   signal?: AbortSignal;
   log?: VoiceLogger;
@@ -51,14 +52,21 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
     else o.signal.addEventListener('abort', () => finish({ reason: 'aborted' }), { once: true });
   }
   let client: VoiceClient | undefined;
+  let watch: EnrolWatch | undefined;
   const boot = (async () => {
-    const principal = principalFromStatus(await o.link.status()) ?? o.principal;
-    if (!principal) throw new Error('the kernel did not say which voice principal this is (status.principal) and no --principal was given');
+    const principal = principalFromStatus(await o.link.status());
+    if (!principal) throw new Error('the kernel did not say which voice principal this is (status.voice.principal)');
     client = new VoiceClient({ audio: o.audio, engines: o.engines, link: o.link, ns: nsOf(principal), prints: o.prints, mode: o.mode ?? 'ptt', ...(o.log ? { log: o.log } : {}), ...(o.notice ? { notice: o.notice } : {}) });
     await client.start();
+    const c = client;
+    if (o.enrol && o.engines.vad && o.engines.speaker) {
+      watch = new EnrolWatch({ link: o.link, audio: o.audio, vad: o.engines.vad, speaker: o.engines.speaker, home: o.enrol.home, model: o.enrol.model, pause: (on) => c.pause(on), ...(o.enrol.pollMs !== undefined ? { pollMs: o.enrol.pollMs } : {}), ...(o.enrol.timeoutMs !== undefined ? { timeoutMs: o.enrol.timeoutMs } : {}), ...(o.log ? { log: o.log } : {}) });
+      watch.start();
+    }
     o.started?.(client);
   })();
   const cleanup = async (): Promise<void> => {
+    await watch?.stop();
     if (client) await client.close().catch(() => undefined);
     else await o.audio.close().catch(() => undefined);
     await o.link.close().catch(() => undefined);

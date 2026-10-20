@@ -13,25 +13,27 @@
  *     "not running" (the human is offered Start, never told a dead app is listening).
  *   - The human's gestures are `log.append` rows: `request.voice.client{op: 'start' | 'stop'}`,
  *     `request.voice.enrol{name, consent}` (the kernel raises a fresh-presence Touch ID card whose effect writes the
- *     root-signed enrolment row), and `request.voice.forget{name}` (ASSUMED name).
+ *     root-signed enrolment row), and `request.voice.forget{name}` (no card).
  *   - The pill (core/voice.ts pillOf) is kernel-owned; `clientPillOf` only overrides it while NOTHING is attached (an
  *     attached live mic always keeps its louder state: never under-report).
  *   - Only a human-class connection gets any of these controls (`canAttach`); a voice connection never does.
  *
- * ASSUMPTIONS (the kernel/client contract is being built in parallel; adjust here only):
- *   A1 enrolled voices: `status.voice.enrolled` (string[] of names or speakerIds, or [{name | speakerId}]), else
- *      `status.voice.speakers`. Absent ⇒ unknown (no "teach your voice" nudge; never a false nudge).
- *   A2 forget: `request.voice.forget{name}` (request.voice.enrol is enrol-only).
- *   A3 enrolment progress: the voice client logs rows of kind `voice.enrol.<step>` or `voice.enrolment.<step>`
- *      (any suffix) with payload `{name?, phase?: 'ready' | 'recording' | 'recorded' | 'done' | 'failed' |
- *      'cancelled', phrase?: number (0-based), of?: number, phrases?: string[], error?: string}`; the step suffix
- *      stands in for `phase` when absent. The root-signed `voice.enrol` row for the name means done.
- *   A4 the request.voice.enrol answer is `{pending: true, cardId}` (the Touch ID card); without one the GUI looks
- *      for a pending card whose detail.op is `voice.enrol` and offers to focus it.
- *   A5 client notices: rows `voice.notice` / `voice.client.notice` (or any voice.* row whose payload has a string
- *      `notice`) with `{text | message | notice}`; shown as a quiet toast, never as a decision.
- *   A6 lifecycle rows: `voice.client.*` and `request.voice.*` rows change status.voice.client (the page re-reads
- *      status on them; motion-on-events, no polling).
+ * THE CONTRACT (the kernel's final V2e shapes, formerly "assumptions"; adjust here only):
+ *   A1 enrolled voices: `status.voice.enrolled` (sorted names). Absent ⇒ unknown (no "teach your voice" nudge).
+ *   A2 forget: `request.voice.forget{name}` → {forgotten: true, speakerId}; NO card (a forget narrows).
+ *   A3 enrolment: the Touch ID card comes FIRST. `request.voice.enrol{name, consent}` → {pending: true, cardId}; the
+ *      human allows the strictness card (detail.op 'voice.enrol'); its effect writes the root-signed enrolment row
+ *      and sets `status.voice.enrolment = {name, phase: 'requested', at}`. The voice app then records the phrases
+ *      and relays `ready | recording | recorded | done | failed | cancelled` (`phrase` 0-based, `of`, `error?`) into
+ *      the same status field. The GUI re-reads status on the relevant rows and polls lightly while the dialog waits.
+ *      The report carries no phrase text: ENROL_PHRASES below is the client's list (gnomon-voice enrol.ts; a
+ *      gnomon-voice test pins the two equal).
+ *   A4 the request.voice.enrol answer is `{pending: true, cardId}`; without one the GUI looks for a pending card
+ *      whose detail.op is `voice.enrol` and offers to focus it.
+ *   A5 notices: `status.voice.notice = {text, code?, at} | null` (relayed by the voice app, never a log row); a new
+ *      `at` becomes a quiet toast, never a decision.
+ *   A6 lifecycle rows: `voice.client.*`, `voice.enrol` and `voice.forget` rows change status.voice (the page
+ *      re-reads status on them).
  */
 
 export type ClientPhase = 'idle' | 'installing' | 'downloading' | 'starting' | 'running' | 'crashed' | 'unavailable';
@@ -75,7 +77,7 @@ export function clientOf(status: unknown): ClientView {
   const d = obj(c?.downloadMb);
   const n = num(d?.n);
   const of = num(d?.of);
-  const list = Array.isArray(v?.enrolled) ? v!.enrolled : Array.isArray(v?.speakers) ? v!.speakers : null;
+  const list = Array.isArray(v?.enrolled) ? v!.enrolled : null;
   return {
     known: c !== null || connected !== null,
     phase,
@@ -178,17 +180,18 @@ export function enrolRequest(rawName: string, agreed: boolean): { ok: true; req:
   return { ok: true, req: { kind: 'request.voice.enrol', payload: { name, consent: consentText(name) } } };
 }
 
-/** A2 (assumed): forget is its own request. */
+/** A2: forget is its own request (no card). */
 export const forgetRequest = (name: string): ClientRequest => ({ kind: 'request.voice.forget', payload: { name } });
 
-/** Shown when the voice client does not name its own phrases (A3 `phrases`). */
+/** The three phrases the voice app records (A3; the same list as gnomon-voice enrol.ts ENROL_PHRASES). */
 export const ENROL_PHRASES: readonly string[] = Object.freeze([
-  'Gnomon, open the latest session and tell me what changed.',
-  'The quick brown fox jumps over the lazy dog near the riverbank.',
-  'Approve that change, then read the next decision aloud.',
+  'The quick brown fox jumps over the lazy dog.',
+  'Gnomon, please run the tests and tell me what failed.',
+  'I enrol my voice on this computer, and it stays here.',
 ]);
 
-export type EnrolStep = 'form' | 'waiting' | 'phrase' | 'confirm' | 'done' | 'failed';
+/** form → confirm (the Touch ID card) → waiting (the voice app) → phrase … → done | failed */
+export type EnrolStep = 'form' | 'confirm' | 'waiting' | 'phrase' | 'done' | 'failed';
 export interface EnrolState {
   step: EnrolStep;
   name: string | null;
@@ -201,53 +204,66 @@ export interface EnrolState {
   /** phrases recorded so far */
   recorded: number;
   error: string | null;
+  /** when the card was allowed (ms): an enrolment report stamped before it is a previous attempt's */
+  since: number | null;
 }
 
-export const enrolStart = (): EnrolState => ({ step: 'form', name: null, cardId: null, phrases: ENROL_PHRASES, index: 0, recording: false, recorded: 0, error: null });
+export const enrolStart = (): EnrolState => ({ step: 'form', name: null, cardId: null, phrases: ENROL_PHRASES, index: 0, recording: false, recorded: 0, error: null, since: null });
 
-/** The request was accepted: wait for the voice client to begin the phrases. */
+/** The request was accepted: the Touch ID card is next (A3/A4). */
 export function enrolSent(s: EnrolState, name: string, cardId: string | null): EnrolState {
-  return { ...s, step: 'waiting', name, cardId, index: 0, recorded: 0, recording: false, error: null };
+  return { ...s, step: 'confirm', name, cardId, index: 0, recorded: 0, recording: false, error: null, since: null };
 }
 
-const ENROL_KIND = /^voice\.enrol(?:ment)?\.([a-z.-]+)$/;
-const ENROL_PHASES: ReadonlySet<string> = new Set(['ready', 'recording', 'recorded', 'done', 'failed', 'cancelled']);
+/** The card was allowed: the voice app records next. */
+export function enrolAllowed(s: EnrolState, now: number): EnrolState {
+  return { ...s, step: 'waiting', since: now, error: null };
+}
 
-/** Is this row part of an enrolment (progress from the client, or the root-signed result)? */
-export const isEnrolRow = (kind: string): boolean => kind === 'voice.enrol' || kind === 'voice.forget' || ENROL_KIND.test(kind);
+/** Clock slack between the page and the kernel's `at` stamp (same Mac; generous). */
+const AT_SLACK_MS = 5000;
 
-/** Fold one row into the flow (A3). Rows for another name, or before the request was sent, change nothing. */
-export function reduceEnrol(s: EnrolState, kind: string, payload: unknown): EnrolState {
-  if (s.step === 'form' || s.step === 'done' || !s.name) return s;
-  const p = obj(payload) ?? {};
-  const rowName = nameOf(p.name ?? p.speakerId);
-  if (rowName !== null && rowName !== s.name) return s;
-  if (kind === 'voice.enrol') return rowName === s.name ? { ...s, step: 'done', recording: false, error: null } : s;
-  const m = ENROL_KIND.exec(kind);
-  if (!m) return s;
-  const phrases = Array.isArray(p.phrases) && p.phrases.length && p.phrases.every((x) => typeof x === 'string') ? (p.phrases as string[]).slice(0, 8) : s.phrases;
-  const of = num(p.of) ?? phrases.length;
-  const idx = num(p.phrase);
-  const step = m[1]!.split('.').pop()!;
-  const phase = str(p.phase) ?? (ENROL_PHASES.has(step) ? step : step === 'start' || step === 'begin' ? 'ready' : step === 'progress' ? 'recorded' : step === 'error' ? 'failed' : null);
-  const at = idx !== null ? Math.min(idx, Math.max(0, of - 1)) : s.index;
-  switch (phase) {
+/**
+ * Fold `status.voice.enrolment` into the flow (A3). Only after the card was allowed; a report for another name, or
+ * stamped before the allow (a previous attempt), changes nothing. Returns `s` itself when nothing changed.
+ */
+export function reduceEnrolStatus(s: EnrolState, status: unknown): EnrolState {
+  if (s.step !== 'waiting' && s.step !== 'phrase') return s;
+  if (!s.name || s.since === null) return s;
+  const e = obj(obj(obj(status)?.voice)?.enrolment);
+  if (!e || str(e.name) !== s.name) return s;
+  const at = Date.parse(str(e.at) ?? '');
+  if (Number.isFinite(at) && at < s.since - AT_SLACK_MS) return s;
+  const of = num(e.of) ?? s.phrases.length;
+  const idx = num(e.phrase);
+  const here = idx !== null ? Math.min(idx, Math.max(0, of - 1)) : s.index;
+  let next: EnrolState;
+  switch (str(e.phase)) {
+    case 'requested':
+      next = { ...s, step: 'waiting', recording: false };
+      break;
     case 'ready':
-      return { ...s, step: 'phrase', phrases, index: at, recording: false };
+      next = { ...s, step: 'phrase', index: here, recording: false };
+      break;
     case 'recording':
-      return { ...s, step: 'phrase', phrases, index: at, recording: true };
+      next = { ...s, step: 'phrase', index: here, recording: true };
+      break;
     case 'recorded': {
       const recorded = Math.max(s.recorded, (idx ?? s.index) + 1);
-      return recorded >= of ? { ...s, step: 'confirm', phrases, recorded, recording: false } : { ...s, step: 'phrase', phrases, index: Math.min(recorded, of - 1), recorded, recording: false };
+      next = { ...s, step: 'phrase', index: Math.min(recorded, of - 1), recorded, recording: false };
+      break;
     }
     case 'done':
-      return { ...s, step: 'confirm', recorded: of, recording: false };
+      next = { ...s, step: 'done', recorded: of, recording: false, error: null };
+      break;
     case 'failed':
     case 'cancelled':
-      return { ...s, step: 'failed', recording: false, error: str(p.error) ?? str(p.reason) ?? (phase === 'cancelled' ? 'the voice app cancelled the recording' : 'the recording failed') };
+      next = { ...s, step: 'failed', recording: false, error: str(e.error) ?? (e.phase === 'cancelled' ? 'the voice app cancelled the recording' : 'the recording failed') };
+      break;
     default:
       return s;
   }
+  return next.step === s.step && next.index === s.index && next.recording === s.recording && next.recorded === s.recorded && next.error === s.error ? s : next;
 }
 
 /** The one-line status of the flow, for the dialog and screen readers. */
@@ -260,7 +276,7 @@ export function enrolLine(s: EnrolState): string {
     case 'phrase':
       return `Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
     case 'confirm':
-      return 'All phrases recorded. Finish with Touch ID.';
+      return 'Confirm with Touch ID, then read three short phrases aloud.';
     case 'done':
       return `Gnomon knows ${s.name}'s voice now.`;
     case 'failed':
@@ -277,16 +293,13 @@ export function isEnrolCard(card: { kind: string; card: Record<string, unknown> 
   return n === null || n === name;
 }
 
-/** A5: the toast text of a client notice row, or null. */
-export function noticeOf(kind: string, payload: unknown): string | null {
-  if (!kind.startsWith('voice.')) return null;
-  const p = obj(payload);
-  if (!p) return null;
-  const explicit = kind === 'voice.notice' || kind === 'voice.client.notice';
-  const t = explicit ? (str(p.text) ?? str(p.message) ?? str(p.notice)) : str(p.notice);
+/** A5: `status.voice.notice` as {text, at} (one line, bounded), or null. */
+export function noticeOf(status: unknown): { text: string; at: string | null } | null {
+  const n = obj(obj(obj(status)?.voice)?.notice);
+  const t = str(n?.text);
   if (!t) return null;
   const one = t.replace(/\s+/g, ' ').trim();
-  return one.length > NOTICE_MAX ? `${one.slice(0, NOTICE_MAX - 1)}…` : one;
+  return { text: one.length > NOTICE_MAX ? `${one.slice(0, NOTICE_MAX - 1)}…` : one, at: str(n?.at) };
 }
 export const NOTICE_MAX = 140;
 /** How long a quiet toast stays (ms). */
@@ -300,7 +313,10 @@ export function toastFresh(at: string | null, now: number): boolean {
 }
 
 /** A6: rows whose arrival changes status.voice.client or the enrolled list (the page re-reads status). */
-export const isClientRow = (kind: string): boolean => kind.startsWith('voice.client.') || kind.startsWith('request.voice.') || kind === 'voice.enrol' || kind === 'voice.forget';
+export const isClientRow = (kind: string): boolean => kind.startsWith('voice.client.') || kind === 'voice.enrol' || kind === 'voice.forget';
+
+/** The light status poll while the enrol dialog waits on the voice app (A3: progress is status, not rows). */
+export const ENROL_POLL_MS = 1000;
 
 /** The LOUD dev-build banner text, or null. */
 export const devBannerOf = (c: ClientView): string | null => (c.devUnsigned ? 'Voice is running an unsigned development build' : null);

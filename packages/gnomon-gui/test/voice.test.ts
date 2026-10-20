@@ -239,7 +239,8 @@ describe('voice: palette, blocks and page wiring', () => {
   });
   it('the pill is repainted from status on a voice row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
-    expect(app).not.toMatch(/setInterval\(/);
+    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll)
+    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
   });
   it('contrast and motion: ambient uses the fixture voice-armed pair, the pulse stops under reduced motion', () => {
     const fx = JSON.parse(readFileSync(path.join(ROOT, '..', '..', 'docs', 'specs', 'gnomon-fixtures', 'contrast.json'), 'utf8'));
