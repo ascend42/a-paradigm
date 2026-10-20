@@ -874,11 +874,12 @@ export function sessionNote(s: Pick<SessionRow, 'state'> & { pending: number; kn
   return { text: s.state, tone: 'plain' };
 }
 
-/** S2.2: Active (live) and Past (ended | failed | refused | orphaned | seen) sessions. */
+/** S2.2: Active (live, and FAILED: a failure still needs the human, so it stays in Active as "failed" until it is
+ * dismissed) and Past (ended | refused | orphaned | seen) sessions. */
 export function splitActivePast<T extends Pick<SessionRow, 'state'>>(ss: readonly T[]): { active: T[]; past: T[] } {
   const active: T[] = [];
   const past: T[] = [];
-  for (const s of ss) (isLiveState(s.state) ? active : past).push(s);
+  for (const s of ss) (isLiveState(s.state) || s.state === 'failed' ? active : past).push(s);
   return { active, past };
 }
 

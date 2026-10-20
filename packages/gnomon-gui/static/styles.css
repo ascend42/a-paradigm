@@ -502,10 +502,12 @@ html, body {
 
 /* chat header and the quiet empty centre */
 .pane-head.chead { padding: 10px 20px 8px; align-items: baseline; }
-.chead-l { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.chead-l { display: flex; flex: 1 1 auto; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
+.chead .head-right { flex: none; }
 .chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-theme="night"] .chead #transcript-title { font-size: 13px; }
-.chead-meta { font-size: 11px; white-space: nowrap; }
+.chead-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; }
 #transcript-count, .head-right .key { white-space: nowrap; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .empty-sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 36px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--sheet-shadow); text-align: center; }

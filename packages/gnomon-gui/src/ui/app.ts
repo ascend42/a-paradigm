@@ -146,7 +146,8 @@ function resetTranscript(): void {
   heights = widths.restore(transcriptId(), width, 0);
   paintChatHead();
   $('raw-toggle').hidden = !focused;
-  put($('raw-toggle'), rawMode ? 'chat view' : 'show raw events');
+  put($('raw-toggle'), rawMode ? 'chat' : 'raw');
+  $('raw-toggle').title = rawMode ? 'Back to the chat view' : 'Show raw events (every row as its one-line summary)';
   paintTranscript();
 }
 

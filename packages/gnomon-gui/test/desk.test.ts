@@ -76,10 +76,10 @@ describe('S2.2 sessions: names, notes, Active / Past, failed', () => {
     expect([a.state, a.cwd, a.firstUser, a.openedAt]).toEqual(['failed', '/c/billing', 'Find the rounding bug', '2026-10-20T14:01:00Z']);
     expect(s.sessions.get('hsid:v1:B')!.state).toBe('ended');
   });
-  it('Active holds the live sessions; Past the ended, failed, refused, orphaned and seen ones', () => {
+  it('Active holds the live sessions and the failed ones (they still need you); Past the ended, refused, orphaned and seen', () => {
     const { active, past } = splitActivePast(['open', 'streaming', 'idle', 'ended', 'failed', 'refused', 'orphaned', 'seen'].map((state) => ({ state })));
-    expect(active.map((s) => s.state)).toEqual(['open', 'streaming', 'idle']);
-    expect(past.map((s) => s.state)).toEqual(['ended', 'failed', 'refused', 'orphaned', 'seen']);
+    expect(active.map((s) => s.state)).toEqual(['open', 'streaming', 'idle', 'failed']);
+    expect(past.map((s) => s.state)).toEqual(['ended', 'refused', 'orphaned', 'seen']);
   });
 });
 

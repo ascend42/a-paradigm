@@ -215,7 +215,7 @@ components:
       numbered lists, fenced code) built as DOM nodes through h(); no HTML
       passthrough, no links, no images. ui/app.ts: the rail is ACTIVE n
       (project groups: swatch + project ink name) and ▸ PAST n (collapsed by
-      default, toggle kept in localStorage gnomon.gui.pastOpen); the kernel
+      default, toggle kept in localStorage gnomon.gui.pastOpen; a failed session stays in ACTIVE); the kernel
       feed is a palette view (view.kernel-feed), the default centre is a
       quiet "No session open" sheet with + New session; the chat header is
       the session name plus ■ project · backend · started · elapsed; pinned
