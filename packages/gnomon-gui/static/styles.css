@@ -506,7 +506,7 @@ html, body {
 .chead #transcript-title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-theme="night"] .chead #transcript-title { font-size: 13px; }
 .chead-meta { font-size: 11px; white-space: nowrap; }
-#transcript-count { white-space: nowrap; }
+#transcript-count, .head-right .key { white-space: nowrap; }
 .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .empty-sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 36px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--sheet-shadow); text-align: center; }
 .empty-title { font-size: 20px; margin: 0; }

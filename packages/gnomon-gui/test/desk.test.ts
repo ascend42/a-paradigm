@@ -128,3 +128,43 @@ describe('S2.5 safe markdown subset (DOM only, no HTML passthrough)', () => {
     expect(out.map((e) => e.shape)).toEqual(['p("<img src=x onerror=alert(1)> [link](https://evil.example) ![i](x.png) <script>1</script>")']);
   });
 });
+
+describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
+  const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+  const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  it('the kernel feed is a palette view, not a rail row or the default centre', async () => {
+    const { GUI_COMMANDS } = await import('../src/core/commands.js');
+    expect(GUI_COMMANDS.map((c) => c.id)).toContain('view.kernel-feed');
+    const rail = app.slice(app.indexOf('function paintSessions('), app.indexOf('/* ── decision stack'));
+    expect(rail).not.toMatch(/kernel feed/);
+    expect(app).toMatch(/if \(!focused && !feedView\) return \{ items: \[\], hidden: 0 \};/);
+    expect(html).toMatch(/<div id="empty" class="empty">[\s\S]*No session open[\s\S]*id="empty-new" class="key pri"/);
+  });
+  it('the header: wordmark, palette field, risk, spacer, conn, voice, ⊞ Layout; the inbox sits in the stack head', () => {
+    const head = html.slice(html.indexOf('<header class="chrome">'), html.indexOf('</header>'));
+    const order = ['class="wordmark"', 'id="palette-btn" class="palfield"', 'id="risk"', 'class="spacer"', 'id="conn"', 'id="voice-pill"', 'id="layout-btn"'].map((x) => head.indexOf(x));
+    expect(order.every((x) => x >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(head).toContain('Search, run, jump… <kbd>⌘K</kbd>');
+    expect(head).not.toContain('id="inbox"');
+    expect(html).toMatch(/<aside id="pane-stack"[\s\S]*id="inbox"/);
+  });
+  it('the layout menu lists presets and panes, never kernel-owned chrome', () => {
+    const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
+    expect(menu).toMatch(/PRESETS/);
+    expect(menu).not.toMatch(/conn|risk|voice|mode-btn|repin|dictation/);
+  });
+  it('pinned cards carry "Pending in this session"; the composer names the session and keeps the ⇧Tab hint in title=', () => {
+    expect(app).toMatch(/if \(mine\.length\) pinned\.appendChild\(h\(doc, 'span', \{ class: 'lbl' \}, 'Pending in this session'\)/);
+    expect(app).toMatch(/placeholder = s \? `Reply to \$\{t\}/);
+    expect(html).toMatch(/id="composer-text"[^>]*title="[^"]*Shift\+Tab cycles the run mode/);
+    expect(html).toMatch(/id="composer-send" class="key pri"/);
+  });
+  it('project names use the ink pair, failed notes vermilion, KNOT / cards warn ink (text tokens only)', () => {
+    for (const [i, n] of ['terracotta', 'sage', 'slate', 'ochre', 'rose-clay', 'sea-grey'].entries()) expect(css).toContain(`.pink.h${i} { color: var(--p-${n}-ink); }`);
+    expect(css).toMatch(/\.snote\.tone-fail \{ color: var\(--fail\);/);
+    expect(css).toMatch(/\.snote\.tone-need \{ color: var\(--warn-ink\);/);
+    expect(css).toMatch(/\.trow\.role-user \{ display: flex; flex-direction: column; align-items: flex-end; \}/);
+  });
+});

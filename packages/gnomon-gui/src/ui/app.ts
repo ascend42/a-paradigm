@@ -264,7 +264,7 @@ function paintTranscript(remeasure = false): void {
     for (const [i, el] of mounted) el.style.top = `${heights.offsetOf(i)}px`;
     if (!changed) break;
   }
-  put($('transcript-count'), focused && !rawMode ? `${items.length} items${hiddenRows ? ` · ${hiddenRows} raw hidden` : ''}` : `${items.length} rows`);
+  put($('transcript-count'), !focused && !feedView ? '' : focused && !rawMode ? `${items.length} items${hiddenRows ? ` · ${hiddenRows} raw hidden` : ''}` : `${items.length} rows`);
   const jump = $('jump-latest');
   jump.hidden = !follow.showJump;
   put(jump, follow.unseen ? `↓ latest · ${follow.unseen} new` : '↓ latest');
@@ -1707,6 +1707,7 @@ export function main(raw?: string): void {
   applyLayout();
   wire();
   paintChatHead(); // S2.3: the quiet empty centre until a session is focused
+  paintSessions(); // the ACTIVE / PAST heads show before the first row arrives
   // #bare-entry: the folder hint is decoded here but applied by attach only after the token verified (Aegis M1)
   // TD-2026-10-19-063: the page that accepted an upgrade reloads once and reattaches with the single-use resume form
   const resumed = frag ? (clearRestarting(sessionStorage), null) : takeRestart(sessionStorage);
