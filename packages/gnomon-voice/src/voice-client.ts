@@ -12,7 +12,10 @@
  *   DICTATION (TD-2026-10-20-262, the default `delivery: 'composer'`): the client NEVER calls session.send. It appends
  *   voice.turn.user{forwarded: false}; the kernel stamps `forwardable` and the GUI puts the text into its composer and
  *   sends it after a countdown (the human's send, attributed by the kernel). `delivery: 'direct'` keeps the old
- *   forward for headless use (`gnomon-voice run --delivery direct`). Activity edges go to the kernel as
+ *   forward for headless use (`gnomon-voice run --delivery direct`) for PUSH-TO-TALK turns only: TD-2026-10-20-125
+ *   (founder ruling), ambient speech NEVER sends itself, so an ambient turn is dictated (composer) under either
+ *   delivery, the GUI never auto-sends it (a key press does), and the kernel refuses a direct send of a non-ptt
+ *   turn voice-off{cause: 'composer'}. Activity edges go to the kernel as
  *   `request.voice.report{dictation: {activity: speaking | transcribing | idle, holdToggles}}` (edges only); the
  *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
  *   CAPTURE (T-2026-10-20-005 A1, TD-2026-10-20-086): every segment runs `idle → hearing → transcribing → captured |
@@ -983,8 +986,9 @@ export class VoiceClient {
     const ri = this.#o.audio.routeInfo();
     // the aec claim from the binary's route/mic event (kind when known), plus its transport (V2b Aegis duty 4)
     const aec = ri.aecKind ?? ri.aec;
-    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262)
-    const direct = this.#delivery === 'direct';
+    // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262). TD-2026-10-20-125:
+    // an ambient turn is never sent by the client, whatever the delivery (it fills the composer; a human sends it)
+    const direct = this.#delivery === 'direct' && mode === 'ptt';
     const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
     try {
       await this.#o.link.append('voice.turn.user', payload);
