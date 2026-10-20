@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T07:06:37.165Z'
+generated: '2026-10-20T07:50:53.964Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -263,6 +262,7 @@ symbols:
   '#purpose-component-gui-setup': packages/gnomon-gui/
   '#purpose-component-gui-stop-speaking': packages/gnomon-gui/
   '#purpose-component-gui-dictation': packages/gnomon-gui/
+  '#purpose-component-gui-voice-capture': packages/gnomon-gui/
   '#purpose-component-gui-table-talk': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
@@ -1377,6 +1377,8 @@ symbols:
   '#purpose-ref-component-client-ts': packages/gnomon-gui/
   '#purpose-ref-component-setup': packages/gnomon-gui/
   '#purpose-ref-component-voice-stop': packages/gnomon-gui/
+  '#purpose-ref-component-composer-ghost': packages/gnomon-gui/
+  '#purpose-ref-component-voice-caption': packages/gnomon-gui/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/

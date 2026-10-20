@@ -1947,7 +1947,13 @@ components:
       its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol
       (fresh-presence strictness card, detail.op voice.enrol, writes the
       root-signed row), request.voice.forget (no card), request.voice.report
-      (client progress + notices relayed in status.voice); request.voice.client
+      (client progress + notices relayed in status.voice; T-2026-10-20-005
+      A1 capture{state idle|hearing|transcribing|captured|dropped, segId,
+      reason? closed too-short|echo|not-attached|no-words|not-enrolled|
+      barge-in|refused on dropped only, level? 0..1 on hearing only} relayed
+      as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor
+      is the V2 seam that keeps a later capture.text for the gui credential
+      only; voice.capture.level declared in status-numbers.ts); request.voice.client
       start|stop is human only. speakable.ts KernelSpeakable appends
       voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
       session; the voice reader is narrowed to voice.* rows. speakerEnrolled is

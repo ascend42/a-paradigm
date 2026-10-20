@@ -36,6 +36,16 @@ components:
       request.voice.report{dictation: {activity speaking|transcribing|idle,
       holdToggles}}; the Ctrl-Alt-H hold-toggle hotkey increments
       holdToggles.
+      Capture (T-2026-10-20-005 A1/A2, TD-2026-10-20-086): one state machine
+      per segment, idle -> hearing (PTT key-down; AMBIENT VAD start) ->
+      transcribing -> captured | dropped{reason}, the closed reasons
+      too-short, echo, not-attached, no-words, not-enrolled, barge-in,
+      refused set at each drop site; reported as
+      request.voice.report{capture: {state, segId, reason?, level?}} on the
+      serialized reports chain, non-terminal at most 5 Hz (latest wins),
+      terminal always, hearing re-reported every second (the kernel TTL is
+      5 s). level is 0..1 from the binary's level events (levelOf: -60..0
+      dBFS), sent on hearing reports only. No words in A1.
       Table talk system voice (TD-2026-10-20-294, src/earcon.ts): kernel
       speakable items with from:'kernel' (ask-waiting, edits) are said by a
       different Kokoro speaker (SherpaTts systemSidFor, never the model's
