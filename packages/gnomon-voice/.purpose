@@ -25,8 +25,17 @@ components:
       rows (never turn.event, never its own playback rows) and logs its
       playback windows as voice.turn.agent{t0, t1, textPlanned, textSpoken}.
       Ctrl-Alt-M toggles the mic locally; Ctrl-Alt-A switches ambient and
-      push-to-talk within the ceiling, and above it only logs a
-      voice.client.notice for the GUI. Engines come
+      push-to-talk within the ceiling, and above it only relays a notice
+      for the GUI (request.voice.report{notice: {text, code}}, never a log
+      row). The principal comes from status.voice.principal (no flag).
+      Kernel-decided enrolment (src/enrol-watch.ts): while running it polls
+      status (1.5 s); on status.voice.enrolment phase 'requested' it pauses
+      the voice loop, turns the mic on for the recording if it was off,
+      records the three ENROL_PHRASES (shared with the GUI dialog; the report
+      carries no phrase text), stores the print (0700 dir, 0600 file) and
+      reports ready, recording, recorded (phrase 0-based, of 3), then done,
+      or failed with the reason (mic off and not turnable on, no speech).
+      Engines come
       from sherpa-onnx-node 1.13.8, an optional native dependency: Silero VAD,
       Parakeet TDT 0.6B v2 int8, Kokoro-82M int8 en and 3D-Speaker CAM++
       speaker embeddings. Every engine is injected through the AudioIO,

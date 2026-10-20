@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-20T00:56:36.963Z",
+  "generatedAt": "2026-10-20T01:26:51.692Z",
   "flows": {
     "$voice-turn": {
       "id": "$voice-turn",
-      "description": "One spoken turn (spec §14.2). User side: AudioIO frames, then the PTT held span or a VAD segment, then the gates (attached, mode within the ceiling, outside every playback window plus 750 ms), then STT, then speaker verification, then log.append voice.turn.user{turnId, speakerId, speakerEnrolled, forwarded, mode, aec, aecTransport, t0, t1, text}, then session.send content [{text}] for enrolled speakers only. Unknown speakers are logged with no text. A refusal is shown and never retried. Agent side: log.read follow, then the speakable summary (the gnome line or the first paragraph; edits are said as \"edited N files\"; ask-user questions are always read), then Kokoro one sentence at a time, then play, then voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: 300 ms of speech, or the talk key, stops playback and drops the rest of the reply.",
+      "description": "One spoken turn (spec §14.2). User side: AudioIO frames, then the PTT held span or a VAD segment, then the gates (attached, mode within the ceiling, outside every playback window plus 750 ms), then STT, then speaker verification, then log.append voice.turn.user{turnId, speakerId, speakerEnrolled, forwarded, mode, aec, aecTransport, t0, t1, text}, then session.send content [{text}] for enrolled speakers only. Unknown speakers are logged with no text. A refusal is shown and never retried. Agent side: log.read follow, then the speakable rows the kernel writes (voice.turn.agent{source: kernel-speakable, turnSeq, items}), then Kokoro one sentence at a time, then play, then voice.turn.agent{t0, t1, textPlanned, textSpoken}. Barge-in: speech past the barge-in threshold (configured), or the talk key, stops playback and drops the rest of the reply.",
       "steps": [
         {
           "id": "step-1",
