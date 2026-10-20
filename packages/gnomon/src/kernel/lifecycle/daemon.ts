@@ -876,7 +876,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         setHash,
       ),
     // S-L1: standing `always` rules, folded incrementally from KERNEL-signed approval.* rows only (rules.ts)
-    alwaysRule: (repoKey, tool, hash) => syncRuleBook().match(repoKey, tool, hash),
+    alwaysRule: (repoKey, tool, hash, input) => syncRuleBook().match(repoKey, tool, hash, input),
     // P8-D87: the effective run mode at each permission request
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
     ...(seams.supervisor ?? {}),
