@@ -13,7 +13,7 @@
  * nothing is in flight — no card. An unsigned or unverifiable helper fails
  * closed (provision.ts helperRepin). A tick never throws.
  */
-import { readBuildStamp, sameBuild, type BuildStamp } from './build-stamp.js';
+import { buildKey, readBuildStamp, sameBuild, type BuildStamp } from './build-stamp.js';
 
 /** The configured poll cadence of the stamp and the helper binary. */
 export const UPDATE_POLL_MS = 30_000;
@@ -65,16 +65,16 @@ export class UpdateWatch {
       /* the helper re-pin fails closed on its own; the stamp is still read */
     }
     const next = readBuildStamp(this.#o.stampPath);
-    if (!next || this.#o.loaded === null || sameBuild(next, this.#o.loaded) || this.#announced.has(next.distHash)) return;
+    if (!next || this.#o.loaded === null || sameBuild(next, this.#o.loaded) || this.#announced.has(buildKey(next))) return;
     const now = (this.#o.now ?? Date.now)();
     if (now - this.#lastRaised < (this.#o.cooldownMs ?? UPGRADE_CARD_COOLDOWN_MS)) return; // tried again after the cooldown
-    this.#announced.add(next.distHash);
+    this.#announced.add(buildKey(next));
     this.#lastRaised = now;
     try {
       await this.#o.onKernelUpdate(next);
     } catch {
       this.#lastRaised = -Infinity;
-      this.#announced.delete(next.distHash); // a raise that failed is tried again on the next tick
+      this.#announced.delete(buildKey(next)); // a raise that failed is tried again on the next tick
     }
   }
 }

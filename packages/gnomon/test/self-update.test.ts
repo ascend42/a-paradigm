@@ -26,6 +26,15 @@ afterEach(() => {
 });
 
 describe('build stamp', () => {
+  it('a rebuilt voice client or GUI bundle alone is a different build (the kernel pins the client at boot)', () => {
+    const base = parseBuildStamp({ schemaVersion: 'gnomon-build:v1', version: '8.0.0', commit: 'a', distHash: `sha256:${'1'.repeat(64)}`, guiBundleHash: `sha256:${'2'.repeat(64)}`, voiceClientManifest: `sha256:${'3'.repeat(64)}` });
+    const voice = parseBuildStamp({ schemaVersion: 'gnomon-build:v1', version: '8.0.0', commit: 'b', distHash: `sha256:${'1'.repeat(64)}`, guiBundleHash: `sha256:${'2'.repeat(64)}`, voiceClientManifest: `sha256:${'4'.repeat(64)}` });
+    const gui = parseBuildStamp({ schemaVersion: 'gnomon-build:v1', version: '8.0.0', commit: 'c', distHash: `sha256:${'1'.repeat(64)}`, guiBundleHash: `sha256:${'5'.repeat(64)}`, voiceClientManifest: `sha256:${'3'.repeat(64)}` });
+    expect(sameBuild(base, base)).toBe(true);
+    expect(sameBuild(base, voice)).toBe(false);
+    expect(sameBuild(base, gui)).toBe(false);
+  });
+
   it('parses only the closed shape; sameBuild compares distHash; the summary reads v→v′ (commit)', () => {
     expect(parseBuildStamp(stamp('a'))).toEqual(stamp('a'));
     expect(parseBuildStamp({ ...stamp('a'), distHash: 'nope' })).toBeNull();

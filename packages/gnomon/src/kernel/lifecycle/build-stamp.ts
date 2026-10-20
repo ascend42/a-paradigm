@@ -59,9 +59,16 @@ export function readBuildStamp(file: string): BuildStamp | null {
   }
 }
 
-/** Two stamps name the same build (the shipped bytes are equal). null never equals anything. */
+/** Two stamps name the same build (the shipped bytes are equal). null never equals anything. The voice client's
+ * manifest counts too: the kernel pins the client at boot, so a rebuilt client is picked up only by a restart
+ * (founder dogfood 2026-10-19: a voice-only fix raised no upgrade card). */
 export function sameBuild(a: BuildStamp | null, b: BuildStamp | null): boolean {
-  return a !== null && b !== null && a.distHash === b.distHash;
+  return a !== null && b !== null && buildKey(a) === buildKey(b);
+}
+
+/** The identity of a build for change detection: kernel dist, GUI bundle and voice client manifest. */
+export function buildKey(s: BuildStamp): string {
+  return `${s.distHash}|${s.guiBundleHash ?? '-'}|${s.voiceClientManifest ?? '-'}`;
 }
 
 /** The card line's summary: `v→v′ (commit)`. */
