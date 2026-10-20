@@ -241,6 +241,18 @@ function sourceIdentity(source: string): string {
   return g ? `git:${g.host}/${g.namespace}` : source;
 }
 
+/**
+ * The structured publisher display carried in status.mods (Aegis S0b L1): `host` for a non-GitHub git publisher
+ * (shown "acme @ host"), and whether the publisher is verified by its source (gnomon; a github.com owner; a
+ * TOFU-bound git namespace). A folder or package install is unverified.
+ */
+export function publisherDisplayOf(publisher: string, source: string): { host: string | null; verified: boolean } {
+  if (publisher === 'gnomon') return { host: null, verified: true };
+  const g = parseGitSource(source);
+  if (!g) return { host: null, verified: false };
+  return { host: g.host === 'github.com' ? null : g.host, verified: true };
+}
+
 /** How a publisher is shown for this source (S0b §1 Display). */
 export function publisherDisplay(publisher: string, source: string): string {
   if (publisher === 'gnomon') return publisher;
@@ -848,7 +860,7 @@ export function rollbackMod(home: string, name: string, toPackageHash: string | 
 }
 
 export type LoadResult =
-  | { state: 'ready'; name: string; snapshotDir: string; manifest: ManifestV2; packageHash: string; manifestHash: string; tier: TrustTier | undefined; readPaths: string[] }
+  | { state: 'ready'; name: string; snapshotDir: string; manifest: ManifestV2; packageHash: string; manifestHash: string; tier: TrustTier | undefined; readPaths: string[]; source: InstallSource }
   | { state: 'paused'; name: string; reason: 'changed'; cardId: string | null; files: TreeDiff; snapshotDir: string };
 
 export interface LoadOptions {
@@ -946,7 +958,7 @@ export function loadMod(opts: LoadOptions): LoadResult {
     }
   }
   emit('manifest.load', { name: row.name, packageHash: row.packageHash, manifestHash: row.manifestHash });
-  return { state: 'ready', name: row.name, snapshotDir: dir, manifest, packageHash: row.packageHash, manifestHash: row.manifestHash, tier, readPaths: check.read };
+  return { state: 'ready', name: row.name, snapshotDir: dir, manifest, packageHash: row.packageHash, manifestHash: row.manifestHash, tier, readPaths: check.read, source: row.source };
 }
 
 /** Linked folders of every effective install (the session profile's write denies, regenerated per spawn). */

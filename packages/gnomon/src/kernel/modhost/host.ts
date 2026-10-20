@@ -89,7 +89,7 @@ import { registerSeams } from '../internal-seams.js';
 import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import type { TrackInput } from '../lifecycle/children.js';
 import { effectiveInstall, readGrants } from '../manifest/grants.js';
-import { loadMod } from '../manifest/install.js';
+import { loadMod, publisherDisplayOf } from '../manifest/install.js';
 import { userMcpServerNames } from '../manifest/user-mcp.js';
 import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { noEvents, type ManifestEventSink } from '../manifest/refusal.js';
@@ -200,6 +200,8 @@ interface Running {
   channel: ModChannel;
   manifest: ManifestV2;
   packageHash: string;
+  /** Aegis S0b L1: the publisher display status.mods carries for the GUI */
+  publisherDisplay: { host: string | null; verified: boolean };
   dev: boolean;
   effects: Set<ToolEffect>;
   proxy: EgressProxy | null;
@@ -313,6 +315,8 @@ export class ModHost {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
       paused: this.#pausedView(),
+      // Aegis S0b L1: per running mod id, {host, verified}, so GUI panel headers and offer chips show the publisher
+      publishers: Object.fromEntries([...this.#running.values()].map((r) => [r.name, r.publisherDisplay]).sort(([a], [b]) => String(a).localeCompare(String(b)))),
       // #gui mod panels: the declared views of RUNNING mods (manifest ids/slots only; the GUI maps slot → region)
       views: [...this.#running.values()]
         .filter((r) => !r.stopping)
@@ -551,7 +555,7 @@ export class ModHost {
         await this.#o.children.stop(child, 'shutdown');
         throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
       }
-      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, callId: null, stopping: false };
+      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, publisherDisplay: publisherDisplayOf(m.publisher, loaded.source), dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, callId: null, stopping: false };
       const r = running;
       this.#running.set(name, r);
       child.once('exit', (code, signal) => void this.#onExit(r, code, signal));

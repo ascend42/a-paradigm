@@ -26,6 +26,7 @@ import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
+import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -338,7 +339,7 @@ let offerLiveSince = Number.POSITIVE_INFINITY;
 /** DEV ONLY (#gui-preview offer-armed): devArmOfferOnce() asked for the live slip painted armed; the served main.ts never does */
 let devArmOffer = false;
 function slipEl(v: SlipView): MiniEl {
-  return renderOfferSlip(doc, v, { armed: armStanding(armedOffer, v.slip.offerId, Date.now()), voiceHint: v.slip.openHint, ambientHint: v.slip.ambientHint, arrive: v.live && v.slip.seq > offerLiveSince });
+  return renderOfferSlip(doc, v, { armed: armStanding(armedOffer, v.slip.offerId, Date.now()), voiceHint: v.slip.openHint, ambientHint: v.slip.ambientHint, arrive: v.live && v.slip.seq > offerLiveSince, publisher: publisherDisplayOf(status, v.slip.mod) });
 }
 /** Recompute the slips from the store (never from reply text) and remount the replies whose slips changed. */
 function syncSlips(cur: readonly ChatItem[]): void {

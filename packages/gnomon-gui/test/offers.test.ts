@@ -264,3 +264,15 @@ describe('#gui-offer-slip Aegis L1: the preview arm is not in the served bundle'
     expect(app).not.toContain('devArmOffer');
   });
 });
+
+describe('Aegis S0b L1: the publisher display on offer chips', () => {
+  const third = views([reply(1), shown(2, 1, 'acme.board')])[0]!;
+  const tab = (st: Partial<{ publisher: { host: string | null; verified: boolean } | null }>) =>
+    (renderOfferSlip(fdoc, third, { armed: false, voiceHint: false, ambientHint: false, arrive: false, ...st }) as FEl).all().find((e) => e.className === 'slip-tab')!.text;
+  it('folder/package installs say unverified; a non-GitHub host shows "pub @ host"; a github owner shows the publisher', () => {
+    expect(tab({ publisher: { host: null, verified: false } })).toMatch(/offer · mod:board \(acme, unverified\)$/);
+    expect(tab({ publisher: { host: 'gitlab.com', verified: true } })).toMatch(/offer · mod:board \(acme @ gitlab\.com\)$/);
+    expect(tab({ publisher: { host: null, verified: true } })).toMatch(/offer · mod:board \(acme\)$/);
+    expect(tab({})).toMatch(/offer · mod:board \(acme\)$/);
+  });
+});

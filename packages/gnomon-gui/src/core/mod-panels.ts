@@ -31,7 +31,7 @@
  *     exactly one more), never on a timer.
  */
 import { isModId } from '@a-company/gnomon-contracts';
-import { modLabel } from './mod-label.js';
+import { modLabel, publisherDisplayOf, type PublisherDisplay } from './mod-label.js';
 import { h, renderBlock, type MiniEl, type RenderCtx } from './render.js';
 
 /** The #mod-host feed kinds (packages/gnomon/src/kernel/modhost/feed.ts FEED_KINDS; test/mod-panels.test.ts holds them equal). */
@@ -75,6 +75,8 @@ export interface ModPanelView {
   slot: string;
   region: ModRegion;
   dev: boolean;
+  /** Aegis S0b L1: status.mods.publishers[name] (null when absent or malformed) */
+  publisherDisplay?: PublisherDisplay | null;
 }
 
 /** The mod views to show, from status.mods.views (malformed entries and slots with no region are dropped; bounded). */
@@ -90,7 +92,7 @@ export function modPanelsOf(status: unknown): ModPanelView[] {
     const isWorkshop = name === WORKSHOP_VIEW.name && viewId === WORKSHOP_VIEW.viewId && slot === WORKSHOP_VIEW.slot;
     const region = isWorkshop ? 'workshop' : Object.hasOwn(SLOT_REGIONS, slot) ? SLOT_REGIONS[slot]! : null;
     if (!region) continue;
-    out.push({ name, viewId, slot, region, dev: dev === true });
+    out.push({ name, viewId, slot, region, dev: dev === true, publisherDisplay: publisherDisplayOf(status, name) });
     if (out.length >= MAX_MOD_PANELS) break;
   }
   return out;
@@ -171,7 +173,7 @@ export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?
     doc,
     'section',
     { class: `mod-fence mod-region-${v.region}`, role: 'group', 'aria-label': `${fenceLabel(v.name)} ${v.viewId}`, 'data-mod': v.name, 'data-view': v.viewId },
-    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, fenceLabel(v.name)), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
+    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, `mod:${modLabel(v.name, v.publisherDisplay)}`), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
     h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true }, result?.block ?? null)),
   );
 }

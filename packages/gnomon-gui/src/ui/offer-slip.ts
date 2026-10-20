@@ -9,7 +9,7 @@
  */
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { takesLine, traceText, type SlipView } from '../core/offers.js';
-import { firstPartyName, modLabel } from '../core/mod-label.js';
+import { firstPartyName, modLabel, type PublisherDisplay } from '../core/mod-label.js';
 
 /** First-party glyphs (ink only, never a hue), keyed by the name of a gnomon.* mod id; any other mod gets the generic ◇. */
 const GLYPHS: Readonly<Record<string, string>> = Object.freeze({ constellation: '⁂', neurons: '◎', docs: '▤', atelier: '✎', paradigm: '≡', 'paradigm-context': '≡' });
@@ -26,12 +26,14 @@ export interface SlipState {
   ambientHint: boolean;
   /** first paint of this slip (slide-in) */
   arrive: boolean;
+  /** Aegis S0b L1: the kernel's publisher display for the slip's mod (status.mods.publishers) */
+  publisher?: PublisherDisplay | null;
 }
 
 export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniEl {
   const s = v.slip;
   const tab = (label: string): MiniEl => h(doc, 'div', { class: 'slip-tab' }, h(doc, 'span', { class: 'slip-g', 'aria-hidden': 'true' }, glyphOf(s.mod)), ' ', label);
-  if (s.decided !== null) return h(doc, 'div', { class: 'slip gone', 'data-offer': s.offerId }, tab(traceText(s)));
+  if (s.decided !== null) return h(doc, 'div', { class: 'slip gone', 'data-offer': s.offerId }, tab(traceText(s, st.publisher)));
   const on = v.live;
   const attrs: Record<string, string> = { class: `slip${on ? ' live' : ' inert'}${st.armed && on ? ' armed' : ''}${st.arrive ? ' arrive' : ''}`, role: 'group', 'aria-label': `offer from mod:${s.mod}`, 'data-offer': s.offerId };
   const btn = (cls: string, act: string, ...kids: Array<MiniEl | string>): MiniEl => {
@@ -45,7 +47,7 @@ export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniE
     doc,
     'div',
     attrs,
-    tab(`offer · mod:${modLabel(s.mod)}`),
+    tab(`offer · mod:${modLabel(s.mod, st.publisher)}`),
     h(doc, 'div', { class: 'slip-q' }, s.question),
     st.armed && on ? h(doc, 'div', { class: 'slip-ctx' }, takesLine(s.contextIn)) : null,
     on && st.voiceHint ? h(doc, 'div', { class: 'slip-hint' }, 'click or ↵ to open') : null,

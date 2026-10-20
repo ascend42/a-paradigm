@@ -7,8 +7,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readStaged, stageInstall } from '../src/kernel/manifest/index.js';
 import { installPresenceBinding } from '../src/kernel/manifest/install.js';
-import { decideInstallCard, mintTestPresence } from '../src/kernel/testing.js';
-import { ECHO_SOURCE, host, rig, writeModFolder } from './mod-helpers.js';
+import { decideInstallCard, mintTestPresence, unsandboxedModLauncher } from '../src/kernel/testing.js';
+import { publisherDisplayOf } from '../src/kernel/manifest/install.js';
+import { ECHO_SOURCE, host, installStub, rig, writeModFolder } from './mod-helpers.js';
 
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
@@ -31,5 +32,26 @@ describe('Aegis S0b M1: the host passes the user MCP servers to loadMod', () => 
     const { h } = host(r, {}, { userHome: uh });
     cleanups.push(() => h.stopAll());
     await expect(h.start('acme.srv')).rejects.toMatchObject({ manifestCode: 'COLLISION' });
+  });
+});
+
+describe('Aegis S0b L1: status.mods.publishers', () => {
+  it('publisherDisplayOf: folder/package unverified, github owner verified, other host shown, gnomon verified', () => {
+    const sha = 'c'.repeat(40);
+    expect(publisherDisplayOf('acme', 'package')).toEqual({ host: null, verified: false });
+    expect(publisherDisplayOf('acme', 'linked:/x')).toEqual({ host: null, verified: false });
+    expect(publisherDisplayOf('acme', `git:https://github.com/acme/b#${sha}`)).toEqual({ host: null, verified: true });
+    expect(publisherDisplayOf('acme', `git:https://gitlab.com/acme/b#${sha}`)).toEqual({ host: 'gitlab.com', verified: true });
+    expect(publisherDisplayOf('gnomon', 'package')).toEqual({ host: null, verified: true });
+  });
+
+  it('a running mod is listed with its publisher display', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    installStub(r, 'acme.bare', []);
+    const { h } = host(r, { launcher: unsandboxedModLauncher }, { userHome: path.join(r.root, 'nohome') });
+    cleanups.push(() => h.stopAll());
+    await h.start('acme.bare');
+    expect((h.status() as { publishers: Record<string, unknown> }).publishers).toEqual({ 'acme.bare': { host: null, verified: false } });
   });
 });

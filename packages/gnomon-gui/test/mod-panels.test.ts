@@ -241,3 +241,19 @@ describe('#gui mod panels: the scheduler', () => {
     expect(maxOpen).toBe(1);
   });
 });
+
+describe('Aegis S0b L1: status.mods.publishers in the panel header', () => {
+  it('modPanelsOf carries the validated publisher display; malformed entries fall back to null', async () => {
+    const { publisherDisplayOf, modLabel } = await import('../src/core/mod-label.js');
+    const status = { mods: { views: [{ name: 'acme.board', viewId: 'board.v', slot: 'sidebar' }], publishers: { 'acme.board': { host: 'gitlab.com', verified: true }, 'evil.x': { host: 'a b\n', verified: true } } } };
+    const [v] = modPanelsOf(status);
+    expect(v?.publisherDisplay).toEqual({ host: 'gitlab.com', verified: true });
+    expect(publisherDisplayOf(status, 'evil.x')).toBeNull();
+    expect(publisherDisplayOf(status, 'nope.y')).toBeNull();
+    expect(publisherDisplayOf({ mods: { publishers: { 'acme.board': { host: null, verified: 'yes' } } } }, 'acme.board')).toBeNull();
+    expect(modLabel('gnomon.workshop', { host: null, verified: false })).toBe('workshop');
+    expect(modLabel('acme.board', { host: null, verified: false })).toBe('board (acme, unverified)');
+    const head = (renderModFence({ doc: fdoc }, v!, { block: { type: 'Text', text: 'hi' } }) as FEl).all().find((e) => e.className === 'mod-label')!;
+    expect(head.text).toBe('mod:board (acme @ gitlab.com)');
+  });
+});
