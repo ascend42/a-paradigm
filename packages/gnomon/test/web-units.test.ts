@@ -21,6 +21,11 @@ import {
   staticContentType,
   treeHashOf,
 } from '../src/kernel/web/index.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { hashBundleDir } from '../src/kernel/web/bundle.js';
+import { materializeGuiBundle } from '../src/kernel/web/gui-pin.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/index.js';
 import { validateChildRecord } from '../src/kernel/web/protocol.js';
 import { acceptKey, encodeClientFrame, FrameDecoder, OP, validCloseCode } from '../src/transport/ws-codec.js';
@@ -256,6 +261,16 @@ describe('G-WEB-08 bundle pin', () => {
     }
     expect(staticContentType('grain.svg')).toBe('image/svg+xml'); // the bundle's own grain (static only; /blob refuses SVG)
   });
+  it('Aegis S1 L1: materializeGuiBundle writes the pinned tree (sub-directories included) and it re-hashes to the pin', () => {
+    const home = mkdtempSync(path.join(tmpdir(), 'gnomon-gui-pin-'));
+    try {
+      const dir = materializeGuiBundle(home);
+      expect(hashBundleDir(dir).hash).toBe(GUI_BUNDLE_HASH);
+      expect(materializeGuiBundle(home)).toBe(dir); // a second start replaces the tree (rmSync then wx writes)
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
   it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
     const files = guiBundleFiles();
     const html = files.get('index.html')!.toString();
@@ -270,6 +285,7 @@ describe('G-WEB-08 bundle pin', () => {
         expect(s, n).not.toMatch(/data:[a-z]+\//);
         continue;
       }
+      if (n.endsWith('.svg')) expect(s, n).not.toMatch(/<script|foreignObject|\son[a-z]+=|href/i); // Aegis S1 L2: an SVG is an image, never active
       expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
       expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
     }

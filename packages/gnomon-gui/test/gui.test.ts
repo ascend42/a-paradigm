@@ -231,7 +231,7 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
       for (const n of readdirSync(d)) {
         const p = path.join(d, n);
         if (statSync(p).isDirectory()) walk(p);
-        else if (/\.(ts|js|html|css|svg)$/.test(n)) files.push(p); // code only: the fonts are binary, the OFL texts carry upstream URLs (test/fonts.test.ts)
+        else if (/\.(ts|js|mjs|html|css|svg)$/.test(n)) files.push(p); // code only: the fonts are binary, the OFL texts carry upstream URLs (test/fonts.test.ts)
       }
     };
     walk(path.join(ROOT, 'src'));

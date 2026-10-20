@@ -6,7 +6,7 @@
 //   --check  fails when that generated file is not byte-identical to a fresh build (the pin cannot drift)
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,16 +15,20 @@ const OUT = path.join(ROOT, 'dist', 'bundle');
 const EMBED = path.resolve(ROOT, '..', 'gnomon', 'src', 'kernel', 'web', 'gui-bundle.ts');
 // Text files get LF on every OS (B3); everything else (the bundled woff2 fonts) is carried as raw bytes, never
 // decoded: a utf8 round-trip or a CRLF strip would corrupt a binary (S1, critique §2 S1.1).
-export const TEXT_EXT = new Set(['.html', '.css', '.js', '.svg', '.txt']);
+export const TEXT_EXT = new Set(['.html', '.css', '.js', '.mjs', '.json', '.map', '.svg', '.txt']);
 
 /** Every regular file under static/, relative POSIX path → bytes (text LF-normalized, binaries raw). */
 export function staticFiles(dir = path.join(ROOT, 'static')) {
   const out = new Map();
   const visit = (abs, rel) => {
     for (const name of readdirSync(abs).sort()) {
+      if (name.startsWith('.')) continue; // dotfiles (.DS_Store, editor droppings) never enter the pinned bundle
       const full = path.join(abs, name);
       const r = rel ? `${rel}/${name}` : name;
-      if (statSync(full).isDirectory()) visit(full, r);
+      const st = lstatSync(full);
+      if (st.isSymbolicLink()) continue; // never follow a link out of static/ (the kernel refuses symlinks too)
+      if (st.isDirectory()) visit(full, r);
+      else if (!st.isFile()) continue;
       else if (TEXT_EXT.has(path.extname(name).toLowerCase())) out.set(r, Buffer.from(readFileSync(full, 'utf8').replace(/\r\n/g, '\n'), 'utf8'));
       else out.set(r, readFileSync(full));
     }
