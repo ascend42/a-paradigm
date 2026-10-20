@@ -187,7 +187,9 @@ export function checkGrantRow(row: unknown): string | null {
     }
     case 'grant.publisher':
       if (typeof row.publisher !== 'string' || !PUBLISHER_PATTERN.test(row.publisher)) return 'publisher';
-      if (typeof row.host !== 'string' || !/^[a-z0-9.-]{1,253}$/.test(row.host) || row.host === 'github.com') return 'host';
+      if (typeof row.host !== 'string' || !/^[a-z0-9.-]{1,253}$/.test(row.host)) return 'host';
+      // Aegis S0b M4: a github.com binding (written by a re-bind back to GitHub) names the owner, which is the publisher
+      if (row.host === 'github.com' && row.namespace !== row.publisher) return 'host';
       if (typeof row.namespace !== 'string' || !/^[a-z0-9._/-]{1,512}$/.test(row.namespace)) return 'namespace';
       return null;
     case 'grant.capability': {

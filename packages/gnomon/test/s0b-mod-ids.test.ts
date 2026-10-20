@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { MANIFEST_FORMAT } from '@a-company/gnomon-contracts';
-import { aliasOf, FORMAT_1_SUPPORTED, HISTORICAL_FIRST_PARTY_PINS, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
+import { aliasOf, checkGrantRow, FORMAT_1_SUPPORTED, HISTORICAL_FIRST_PARTY_PINS, LEGACY_ALIASES, ownsModKind, type ResolvedGrants } from '../src/kernel/manifest/grants.js';
 import { blockFor, checkPublisherSource, checkServerCollision, publisherDisplay, type InstallCardDetail } from '../src/kernel/manifest/install.js';
 import { canonicalManifestHash, enginesAdmit, manifestHash, readManifest, upgradeManifestV1, validateManifest, type ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
@@ -254,5 +254,25 @@ describe('S0b reservations, skeletons and boundaries (tester additions)', () => 
       expect((e as ManifestRefusal).message).toMatch(/needs Gnomon ≥ 9\.1\.0/);
     }
     expect(code(() => validateManifest(base({ engines: { gnomon: `>=${'1'.repeat(70)}.0.0` } }), local))).toBe('SCHEMA');
+  });
+});
+
+describe('Aegis S0b M4: re-binding back to github.com', () => {
+  const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
+  const gh = (owner: string) => `git:https://github.com/${owner}/board#${SHA}`;
+  it('a GitHub re-bind returns a github.com binding; that binding is then the same identity', () => {
+    const onGitlab = grants({ publishers: new Map([['acme', { host: 'gitlab.com', namespace: 'acme' }]]) });
+    expect(code(() => checkPublisherSource(m('acme'), gh('acme'), onGitlab))).toBe('PUBLISHER');
+    expect(checkPublisherSource(m('acme'), gh('acme'), onGitlab, { rebind: true })).toEqual({ host: 'github.com', namespace: 'acme', rebind: true });
+    const onGithub = grants({ publishers: new Map([['acme', { host: 'github.com', namespace: 'acme' }]]) });
+    expect(checkPublisherSource(m('acme'), gh('acme'), onGithub)).toBeNull();
+    // and leaving GitHub again needs a re-bind
+    expect(code(() => checkPublisherSource(m('acme'), `git:https://gitlab.com/acme/board#${SHA}`, onGithub))).toBe('PUBLISHER');
+  });
+
+  it('grant.publisher on github.com is valid only when the namespace is the publisher', () => {
+    const row = (namespace: string) => ({ schemaVersion: 'grantRow:v2', kind: 'grant.publisher', createdAt: '2026-10-20T00:00:00.000Z', publisher: 'acme', host: 'github.com', namespace });
+    expect(checkGrantRow(row('acme'))).toBeNull();
+    expect(checkGrantRow(row('evil'))).toBe('host');
   });
 });

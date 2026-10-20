@@ -255,8 +255,11 @@ export function checkPublisherSource(manifest: ManifestV2, source: string, grant
     if (g.owner !== pub) refuse(`publisher ${pub} does not match the github.com owner ${g.owner}`, { owner: g.owner });
     if (ascendLike && (pub !== ascendLike[0] || g.owner !== ascendLike[1]!.githubOwner)) refuse(`publisher ${pub} looks like the founder brand ${ascendLike[0]}`);
     const bound = grants.publishers.get(pub);
-    if (bound && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound.host}/${bound.namespace}; re-bind it through a full card`, { boundHost: bound.host });
-    return null;
+    // Aegis S0b M4: a github.com binding for this owner is the same identity; any other binding needs a re-bind,
+    // which records grant.publisher{github.com, <owner>} so the binding table follows the move back to GitHub
+    const here = bound !== undefined && bound.host === 'github.com' && bound.namespace === pub;
+    if (bound && !here && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound.host}/${bound.namespace}; re-bind it through a full card`, { boundHost: bound.host });
+    return bound && !here ? { host: 'github.com', namespace: pub, rebind: true } : null;
   }
   if (ascendLike) refuse(`publisher ${pub} is accepted only from github.com/${ascendLike[1]!.githubOwner}`);
   const bound = grants.publishers.get(pub);
