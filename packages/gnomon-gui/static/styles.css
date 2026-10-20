@@ -248,7 +248,8 @@ html, body {
 .trow.role-assistant .body .chip-label { font-weight: 600; }
 .trow.role-assistant .body .chip-label { margin-right: 4px; }
 /* #gui-table-talk choices: an agent's trailing A/B options as clickable replies. Built from MODEL text, so never a
-   kernel key: no .key class, no hard ink offset, a DASHED edge and a small ink keycap (by day; [A] at night) */
+   kernel key: no .key class, no hard ink offset, a DASHED edge and a small ink keycap by day; at night a plain
+   letter (Aegis L1: no [ ] brackets, which are the kernel keys' night form) */
 .trow.role-assistant .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
 .trow.role-assistant .choices-hint { flex-basis: 100%; color: var(--sec); font-size: 11px; }
 .choice {
@@ -266,11 +267,11 @@ html, body {
 .choice[disabled] .choice-k { background: transparent; color: var(--sec); }
 .choice.picked { color: var(--ink); border: 1px solid var(--ink2); }
 .choice.picked .choice-k { background: var(--ink2); color: var(--on-ink); }
+.choice.armed { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); }
+.choice .choice-again { color: var(--warn-ink); font-size: 11px; }
 .choice.picked::after { content: "✓ sent"; color: var(--sec); font-size: 11px; }
 [data-theme="night"] .choice { border-color: var(--sec); border-radius: 3px; padding-left: 8px; }
-[data-theme="night"] .choice .choice-k { background: transparent; color: var(--ink); padding: 0; min-width: 0; }
-[data-theme="night"] .choice .choice-k::before { content: "["; color: var(--sec); }
-[data-theme="night"] .choice .choice-k::after { content: "]"; color: var(--sec); }
+[data-theme="night"] .choice .choice-k { background: transparent; color: var(--ink); padding: 0; min-width: 0; text-decoration: underline; text-underline-offset: 3px; }
 [data-theme="night"] .choice[disabled] { border-color: var(--rule); }
 [data-theme="night"] .choice[disabled] .choice-k { color: var(--sec); }
 [data-theme="night"] .choice.picked { border-color: var(--ink2); }

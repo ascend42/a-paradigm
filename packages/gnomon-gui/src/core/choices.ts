@@ -21,16 +21,24 @@
  * Voice: saying the letter is out of scope here (a voice pick would need the kernel's readback/echo path, like a
  * card's voice decision); this module never listens to voice rows.
  */
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { displayText, h, type MiniDoc, type MiniEl } from './render.js';
 
 export const CHOICE_MAX = 6;
 export const CHOICE_LABEL_MAX = 120;
+/** Aegis M1: a label longer than this, or with a backtick or shell-like text, needs a confirming second activation. */
+export const CHOICE_CONFIRM_LEN = 60;
+const SHELL_LIKE = /[|;&$<>]|&&|\b(?:rm|sudo|curl|wget|bash|sh|zsh|chmod|chown|eval|exec|npm|npx|git|ssh|scp)\b/;
+/** Aegis L4: more than two combining marks on one base character (zalgo) ⇒ no chips. */
+const MARK_PILE = /\p{M}{3,}/u;
 
 export interface Choice {
   /** `A`..`F` or `1`..`6`, as the agent wrote it */
   key: string;
   /** the sanitised option text: what the chip shows and what a pick sends */
   label: string;
+  /** Aegis M1: a pick needs a confirming second click / Enter (long, a backtick, or shell-like text) */
+  confirm: boolean;
 }
 
 export interface ReplyChoices {
@@ -78,9 +86,13 @@ export function replyChoices(text: string, said: string | null = null): ReplyCho
     const m = OPTION_LINE.exec(run[i]!)!;
     const key = m[2]!;
     if (key !== scheme[i]) return null;
-    const label = cleanLabel(m[3]!);
+    const raw = m[3]!;
+    // Aegis M2: anything the display sanitizer flags (bidi, controls, invisibles, …) ⇒ plain text only, no chips
+    if (sanitizeDisplayText(raw).flags.length) return null;
+    if (MARK_PILE.test(raw)) return null;
+    const label = cleanLabel(raw);
     if (!label || label.length > CHOICE_LABEL_MAX) return null;
-    choices.push({ key, label });
+    choices.push({ key, label, confirm: label.length > CHOICE_CONFIRM_LEN || raw.includes('`') || SHELL_LIKE.test(raw) });
   }
   return { body: before.trimEnd(), choices };
 }
@@ -112,22 +124,25 @@ export interface ChoiceComposer {
   focus(): void;
 }
 
-export type PickOutcome = 'sent' | 'inserted' | 'refused';
+export type PickOutcome = 'sent' | 'inserted' | 'refused' | 'confirm';
 
 /**
  * A pick. Refused unless the gesture is trusted, the reply is the live one and the choice is one of its own (the sent
  * text is rebuilt from the reply's parsed choices, never from the element). No draft ⇒ the option text goes into the
  * composer and the composer submits (an ordinary human message). A draft ⇒ the option is appended after it on its own
- * line and nothing is sent.
+ * line and nothing is sent. A `confirm` choice (Aegis M1) answers 'confirm' until the same chip is activated again
+ * (`armed` true): the caller marks it armed and asks for a second click / Enter.
  */
 export function pickChoice(
   e: { isTrusted: boolean },
   at: { itemKey: string; liveKey: string | null; replyText: string; said?: string | null; choiceKey: string },
   composer: ChoiceComposer,
+  armed = false,
 ): PickOutcome {
   if (!e.isTrusted || at.liveKey === null || at.itemKey !== at.liveKey) return 'refused';
   const c = replyChoices(at.replyText, at.said ?? null)?.choices.find((x) => x.key === at.choiceKey);
   if (!c) return 'refused';
+  if (c.confirm && !armed) return 'confirm';
   const msg = choiceMessage(c);
   if (composer.value.trim() || composer.dictationDraft) {
     composer.value = `${composer.value.replace(/\s+$/, '')}${composer.value.trim() ? '\n' : ''}${msg}`;
@@ -139,8 +154,9 @@ export function pickChoice(
   return 'sent';
 }
 
-/** The choice a key press names in a live group (`a`/`A`, `1`), or null. Only when the composer is empty. */
-export function choiceForKey(key: string, choices: readonly Choice[], composerEmpty: boolean): Choice | null {
+/** The chip a key press names in a live group (`a`/`A`, `1`), or null; Aegis M1: it only MOVES focus there (Enter or
+ * Space confirms). Only when the composer is empty. */
+export function choiceForKey<T extends { key: string }>(key: string, choices: readonly T[], composerEmpty: boolean): T | null {
   if (!composerEmpty || key.length !== 1) return null;
   const k = key.toUpperCase();
   return choices.find((c) => c.key === k) ?? null;
@@ -150,7 +166,7 @@ export function choiceForKey(key: string, choices: readonly Choice[], composerEm
  * The chips. Live: focusable buttons with data-choice / data-choice-item (never data-decision, never the `key` class).
  * Inert (an older reply) or picked: disabled; the picked one is marked. The text is the sanitised label, as sent.
  */
-export function renderChoices(doc: MiniDoc, itemKey: string, choices: readonly Choice[], state: { live: boolean; picked: string | null }): MiniEl {
+export function renderChoices(doc: MiniDoc, itemKey: string, choices: readonly Choice[], state: { live: boolean; picked: string | null; armed?: string | null }): MiniEl {
   const on = state.live && state.picked === null;
   return h(
     doc,
@@ -159,11 +175,12 @@ export function renderChoices(doc: MiniDoc, itemKey: string, choices: readonly C
     h(doc, 'small', { class: 'choices-hint' }, on ? 'reply with' : state.picked !== null ? 'you replied' : 'options'),
     ...choices.map((c) => {
       const picked = state.picked === c.key;
-      const attrs: Record<string, string> = { class: `choice${picked ? ' picked' : ''}`, type: 'button', 'data-choice': c.key, 'data-choice-item': itemKey, 'aria-label': `Reply ${choiceMessage(c)}`, title: on ? `Send “${choiceMessage(c)}” as your reply` : '' };
+      const armed = on && state.armed === c.key;
+      const attrs: Record<string, string> = { class: `choice${picked ? ' picked' : ''}${armed ? ' armed' : ''}`, type: 'button', 'data-choice': c.key, 'data-choice-item': itemKey, 'aria-label': `${armed ? 'Press again to send: ' : 'Reply '}${choiceMessage(c)}`, title: on ? (armed ? 'Click or press Enter again to send it' : `Send “${choiceMessage(c)}” as your reply`) : '' };
       if (!on) attrs['aria-disabled'] = 'true';
       if (!on) attrs.tabindex = '-1';
       if (picked) attrs['aria-pressed'] = 'true';
-      const el = h(doc, 'button', attrs, h(doc, 'kbd', { class: 'choice-k' }, c.key), ' ', h(doc, 'span', { class: 'choice-t' }, c.label));
+      const el = h(doc, 'button', attrs, h(doc, 'kbd', { class: 'choice-k' }, c.key), ' ', h(doc, 'span', { class: 'choice-t' }, c.label), armed ? h(doc, 'small', { class: 'choice-again' }, 'again to send') : null);
       if (!on) el.setAttribute('disabled', '');
       return el;
     }),

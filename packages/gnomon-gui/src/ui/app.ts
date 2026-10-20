@@ -210,13 +210,16 @@ function replyBody(it: ChatItem): MiniEl {
   const ch = replyChoices(it.text, it.said ?? null);
   const text = ch ? ch.body : it.text;
   const parts = replyParts(text);
-  const chips = ch ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null }) : null;
+  const chips = ch ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null }) : null;
   if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, text), chips);
   return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
 }
 /** #gui-table-talk choices: the live reply's item key, and each reply's picked option (this page only). */
 let liveChoice: string | null = null;
 const pickedChoices = new Map<string, string>();
+/** Aegis M1: the chip waiting for its confirming second activation; L2: the pick riding the composer submit */
+let armedChoice: { item: string; key: string } | null = null;
+let pendingPick: { item: string; key: string } | null = null;
 /** Repaint one transcript item (its chips changed state). */
 function remountItem(key: string | null): void {
   if (key === null) return;
@@ -230,10 +233,14 @@ function remountItem(key: string | null): void {
 function onChoice(e: Event, b: HTMLElement): void {
   const itemKey = b.dataset.choiceItem ?? '';
   const pick = b.dataset.choice ?? '';
-  const it = items.find((x) => x.key === itemKey);
-  if (!it || b.hasAttribute('disabled')) return;
+  if (b.hasAttribute('disabled')) return;
+  // Aegis L3: liveness from the current store, never a cached paint
+  const cur = currentItems().items;
+  const it = cur.find((x) => x.key === itemKey);
+  if (!it) return;
   const ta = $<HTMLTextAreaElement>('composer-text');
-  const out = pickChoice(e, { itemKey, liveKey: liveChoice, replyText: it.text, said: it.said ?? null, choiceKey: pick }, {
+  const armed = armedChoice?.item === itemKey && armedChoice.key === pick;
+  const out = pickChoice(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null, choiceKey: pick }, {
     get value() {
       return ta.value;
     },
@@ -243,19 +250,22 @@ function onChoice(e: Event, b: HTMLElement): void {
     dictationDraft: dictationOn() && dict.focusedHere && hasDraft(dict),
     // THE send path: the composer form's submit, exactly as typing and pressing send
     submit: () => {
-      pickedChoices.set(itemKey, pick);
+      pendingPick = { item: itemKey, key: pick };
       $<HTMLFormElement>('composer').requestSubmit();
     },
     focus: () => ta.focus(),
-  });
+  }, armed);
+  if (out === 'refused') return;
+  const was = armedChoice?.item ?? null;
+  armedChoice = out === 'confirm' ? { item: itemKey, key: pick } : null;
   if (out === 'inserted') {
     if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: ta.value, now: Date.now() });
     notice('the option is in the composer after your draft; nothing was sent');
   }
-  if (out === 'sent') {
-    remountItem(itemKey);
-    paintTranscript();
-  }
+  remountItem(was);
+  remountItem(itemKey);
+  paintTranscript();
+  if (out === 'confirm') ($('viewport').querySelector(`.choices.live [data-choice-item="${CSS.escape(itemKey)}"][data-choice="${CSS.escape(pick)}"]`) as HTMLElement | null)?.focus();
 }
 function itemEl(it: FoldedItem): HTMLElement {
   if (it.role === 'activity') {
@@ -837,21 +847,34 @@ function showReconnect(why: string): void {
 }
 
 /* ── composer / new session ─────────────────────────────────────── */
-async function send(textValue: string): Promise<void> {
-  if (!textValue.trim()) return;
+/** true once the kernel took the message; `accepted` runs as the message goes out (never on an early return). */
+async function send(textValue: string, accepted?: () => void): Promise<boolean> {
+  if (!textValue.trim()) return false;
   // dictation: a draft with dictated turns for the focused session goes through the dictation send (one part per turn)
-  if (dictationOn() && dict.focusedHere && dict.parts.length && hasDraft(dict)) return dispatchDictation({ type: 'sendNow', now: Date.now() });
+  if (dictationOn() && dict.focusedHere && dict.parts.length && hasDraft(dict)) {
+    dispatchDictation({ type: 'sendNow', now: Date.now() });
+    return false;
+  }
   if (hasDraft(dict)) dispatchDictation({ type: 'sent', now: Date.now() }); // a typed message clears hold
   // never swallow a message silently: say why nothing was sent (dogfood: Enter on the kernel feed "did nothing")
-  if (!client) return notice('not connected: nothing was sent', true);
-  if (!focused) return notice('no session focused: pick a session on the left or open a new one; nothing was sent', true);
+  if (!client) {
+    notice('not connected: nothing was sent', true);
+    return false;
+  }
+  if (!focused) {
+    notice('no session focused: pick a session on the left or open a new one; nothing was sent', true);
+    return false;
+  }
+  accepted?.();
   local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: focused, payload: textValue, at: new Date().toISOString() });
   schedule(new Set([`transcript:${focused}`]));
   try {
     await client.call('session.send', { hsid: focused, content: [{ text: textValue }] });
+    return true;
   } catch (err) {
     if (err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: focused, payload: refusalText(err.refusal) });
     schedule(new Set([`transcript:${focused}`]));
+    return false;
   }
 }
 
@@ -1749,7 +1772,7 @@ function wire(): void {
     const b = c ? bs.find((x) => x.dataset.choice === c.key) : undefined;
     if (b) {
       e.preventDefault();
-      onChoice(e, b);
+      b.focus(); // Aegis M1: a key only moves focus; Enter or Space confirms
     }
   });
   $('viewport').addEventListener('keydown', (e) => {
@@ -1811,8 +1834,17 @@ function wire(): void {
     const t = $<HTMLTextAreaElement>('composer-text');
     // Aegis M3: a dictated draft stays shown until the kernel took it (the reducer then sets what remains)
     const viaDictation = dictationOn() && dict.focusedHere && dict.parts.length > 0 && hasDraft(dict);
-    void send(t.value);
-    if (!viaDictation) t.value = '';
+    // L2: a chip pick is marked picked only once the kernel took it; the composer clears only when the message went out
+    const pp = pendingPick;
+    pendingPick = null;
+    void send(t.value, () => {
+      if (!viaDictation) t.value = '';
+    }).then((ok) => {
+      if (!pp || !ok) return;
+      pickedChoices.set(pp.item, pp.key);
+      remountItem(pp.item);
+      paintTranscript();
+    });
   });
   // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
   $('composer-text').addEventListener('input', () => {

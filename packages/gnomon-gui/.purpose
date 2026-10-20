@@ -645,6 +645,15 @@ components:
       Keys: letter/number pick inside the live group when the composer is
       empty, arrows move, Enter activates. Voice picking is out of scope.
       Preview fixture `choices`. Tests: test/choices.test.ts.
+      Aegis review folded in: M1 a letter/number key only moves focus to its
+      chip (Enter/Space confirms); a label over 60 chars, with a backtick or
+      shell-like text needs a confirming second click/Enter (.choice.armed,
+      "again to send"). M2 any option the contracts sanitizer flags ⇒ no
+      chips. L1 night chips show a plain underlined letter, no [ ] brackets.
+      L2 send() returns whether the kernel took the message; a chip is marked
+      picked only then, and the composer clears only when the message went
+      out (never on an early return). L3 onChoice recomputes liveness from
+      currentItems(). L4 more than two combining marks on a base ⇒ no chips.
     path: src/core/store.ts
     type: module
     tags: [gnomon, gui, voice, table-talk]

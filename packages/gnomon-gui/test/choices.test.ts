@@ -46,11 +46,11 @@ describe('#gui-table-talk replyChoices: detection', () => {
     const r = replyChoices(REPLY)!;
     expect(r.body).toBe('Was that meant for me?');
     expect(r.choices).toEqual([
-      { key: 'A', label: 'Yes, keep going and finish the thought.' },
-      { key: 'B', label: 'No, that was someone else talking.' },
+      { key: 'A', label: 'Yes, keep going and finish the thought.', confirm: false },
+      { key: 'B', label: 'No, that was someone else talking.', confirm: false },
     ]);
     for (const sep of [') ', '. ', ': ', ' ']) expect(replyChoices(`Which?\nA${sep}one\nB${sep}two\nC${sep}three`)?.choices.map((c) => c.key)).toEqual(['A', 'B', 'C']);
-    expect(replyChoices('Which?\n1. one\n2. two')?.choices).toEqual([{ key: '1', label: 'one' }, { key: '2', label: 'two' }]);
+    expect(replyChoices('Which?\n1. one\n2. two')?.choices.map((c) => [c.key, c.label])).toEqual([['1', 'one'], ['2', 'two']]);
     expect(replyChoices('Which?\n**A.** Patch the `check`\n**B** Rewrite *the* parser')?.choices.map((c) => c.label)).toEqual(['Patch the check', 'Rewrite the parser']);
   });
   it('the question may sit in the said-aloud line (the body is then only the options)', () => {
@@ -71,10 +71,16 @@ describe('#gui-table-talk replyChoices: detection', () => {
     expect(replyChoices(`Which?\nA  ${'x'.repeat(CHOICE_LABEL_MAX)}\nB  no`)).not.toBeNull();
     expect(replyChoices('Which?\na  lower\nb  case')).toBeNull();
   });
-  it('labels go through the contracts sanitizer (a bidi override is shown, never hidden)', () => {
-    const r = replyChoices('Which?\nA  yes‮gnp.exe\nB  no')!;
-    expect(r.choices[0]!.label).not.toContain('‮');
-    expect(choiceMessage(r.choices[1]!)).toBe('B — no');
+  it('Aegis M2/L4: an option the sanitizer flags (bidi, invisibles) or with piled combining marks ⇒ no chips', () => {
+    expect(replyChoices('Which?\nA  yes\u202Egnp.exe\nB  no')).toBeNull();
+    expect(replyChoices('Which?\nA  ye\u200Bs\nB  no')).toBeNull();
+    expect(replyChoices('Which?\nA  ye\u0301\u0302\u0303s\nB  no')).toBeNull();
+    expect(replyChoices('Which?\nA  cafe\u0301\nB  no')).not.toBeNull();
+    expect(choiceMessage(replyChoices('Which?\nA  yes\nB  no')!.choices[1]!)).toBe('B \u2014 no');
+  });
+  it('Aegis M1: a long, backticked or shell-like option needs a confirming second activation', () => {
+    const r = replyChoices(`Which?\nA  ${'x'.repeat(61)}\nB  run \`ls\`\nC  rm -rf build && npm i\nD  short`)!;
+    expect(r.choices.map((c) => c.confirm)).toEqual([true, true, true, false]);
   });
 });
 
@@ -137,7 +143,18 @@ describe('#gui-table-talk a pick (Aegis)', () => {
     expect(pickChoice({ isTrusted: true }, at, d)).toBe('inserted');
     expect(d.submits).toBe(0);
   });
-  it('letter and number keys pick only with an empty composer', () => {
+  it('Aegis M1: a confirm option answers confirm first, sends only when armed', () => {
+    const text = 'Which?\nA  rm -rf build\nB  keep it';
+    const c = composer();
+    const a = { itemKey: '7', liveKey: '7', replyText: text, choiceKey: 'A' };
+    expect(pickChoice({ isTrusted: true }, a, c)).toBe('confirm');
+    expect([c.value, c.submits]).toEqual(['', 0]);
+    expect(pickChoice({ isTrusted: true }, a, c, true)).toBe('sent');
+    expect(c.value).toBe('A \u2014 rm -rf build');
+    const g = renderChoices(fdoc, '7', replyChoices(text)!.choices, { live: true, picked: null, armed: 'A' }) as FEl;
+    expect(g.all().find((e) => e.attrs.get('data-choice') === 'A')!.className).toBe('choice armed');
+  });
+  it('letter and number keys name a chip only with an empty composer (app.ts only moves focus to it)', () => {
     const ch = replyChoices(REPLY)!.choices;
     expect(choiceForKey('b', ch, true)?.key).toBe('B');
     expect(choiceForKey('B', ch, false)).toBeNull();
@@ -161,5 +178,10 @@ describe('#gui-table-talk a pick (Aegis)', () => {
     expect(wiring).toContain('pickChoice(e,');
     expect(APP).not.toMatch(/(mouseover|mouseenter|pointerenter|focusin)[^\n]*choice/i);
     expect(APP).not.toMatch(/voice[^\n]*pickChoice|pickChoice[^\n]*voice/i);
+    // M1: a key moves focus only; L2: picked only after send() resolved true; L3: liveness from currentItems()
+    expect(APP).toContain('b.focus(); // Aegis M1');
+    expect(APP).toMatch(/if \(!pp \|\| !ok\) return;\s*pickedChoices\.set/);
+    expect(APP).toContain('liveChoiceKey(cur)');
+    expect(CSS).not.toMatch(/\.choice[^{]*::before \{ content: "\["/);
   });
 });
