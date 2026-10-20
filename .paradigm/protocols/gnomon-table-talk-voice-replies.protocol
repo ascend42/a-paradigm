@@ -20,7 +20,7 @@ symbols:
 exemplar: docs/guides/table-talk.md
 steps:
   - action: verify
-    notes: 'Voice is attached when the user message carries a second text block wrapped in <gnomon-voice>. The guidance applies to that turn only; it stops when voice detaches.'
+    notes: Voice is attached when the user message carries a second text block wrapped in <gnomon-voice>. The guidance applies to that turn only; it stops when voice detaches.
   - action: create
     notes: 'Open the reply with a ```speak fenced block: 1-3 sentences, at most 300 characters, second person, plain words, pointing at what is on screen, ending with ONE question answerable in a word or two (or with what happens next when nothing is needed).'
   - action: create
@@ -33,4 +33,4 @@ recorded_from: TD-2026-10-20-294
 recorded_at: '2026-10-20T06:00:00Z'
 last_verified: '2026-10-20T06:00:00Z'
 verified_by: claude-opus-5-5
-status: current
+status: stale

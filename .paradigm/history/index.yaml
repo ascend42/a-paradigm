@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:48:24.126Z'
+generated: '2026-10-20T07:06:38.279Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -29580,7 +29580,7 @@ by_symbol:
           - packages/gnomon-voice/.purpose
           - packages/gnomon-voice/src/engines/sherpa.ts
         description: 'docs(#gnomon-voice): Kokoro RTF bench, spec stop-speaking note, purposes — WIP 4/6'
-      - &ref_460
+      - &ref_459
         id: h0816
         ts: '2026-10-20T06:00:19Z'
         type: implement
@@ -29622,7 +29622,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#gui): Stop speaking button, Esc, 300 ms poll while speaking — WIP 2/6'
-      - &ref_458
+      - &ref_457
         id: h0814
         ts: '2026-10-20T05:56:36Z'
         type: implement
@@ -29642,7 +29642,7 @@ by_symbol:
           - packages/gnomon-voice/io-darwin/Tests/VoiceIOCoreTests/HotkeyConfigTests.swift
           - packages/gnomon-voice/test/kernel-link.test.ts
         description: 'feat(#gnomon-voice-io): stop-speaking hotkey (ctrl+alt+.) — WIP 1/6'
-      - &ref_455
+      - &ref_454
         id: h0813
         ts: '2026-10-20T05:00:51Z'
         type: implement
@@ -29669,11 +29669,47 @@ by_symbol:
       agent: []
   '#approval-broker':
     symbol: '#approval-broker'
-    total_changes: 9
-    last_modified: '2026-10-20T05:57:51Z'
+    total_changes: 11
+    last_modified: '2026-10-20T06:39:03Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_466
+        id: h0820
+        ts: '2026-10-20T06:39:03Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: ac1cbe007236209bee3970bd2b198392b2021817
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/broker/broker.ts
+        description: 'wip(#approval-broker): CLI presence prompt shows the quoted prefix words; prefix-policy tests (Aegis M1, L1, L5)'
+      - &ref_463
+        id: h0818
+        ts: '2026-10-20T06:34:43Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#approval-broker'
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 020d5f1eb5f8dfbd704ae0b9cef8e3aa564ac07d
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/broker/broker.ts
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/supervisor/permission.ts
+          - packages/gnomon/src/kernel/supervisor/prefix-policy.ts
+          - packages/gnomon/src/kernel/supervisor/rules.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+        description: 'wip(#prefix-policy): kernel prefix policy at offer, accept, fold and match (Aegis H1, M2, M3)'
       - &ref_448
         id: h0815
         ts: '2026-10-20T05:57:51Z'
@@ -29726,7 +29762,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/claude-repin-card.test.ts
         description: 'fix(#session-runner): Aegis re-pin fixes M1, M3, L1, L4, L5 (TD-2026-10-19-063)'
-      - &ref_450
+      - &ref_456
         id: h0800
         ts: '2026-10-19T22:42:18Z'
         type: implement
@@ -29767,86 +29803,32 @@ by_symbol:
           - packages/gnomon/test/session-supervisor.test.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
-      - &ref_457
-        id: h0799
-        ts: '2026-10-19T22:42:13Z'
-        type: implement
-        symbols:
-          - '#approval-broker'
-          - '#gui'
-          - '#session-runner'
-          - '#supervisor'
-        author:
-          type: human
-          id: ascend
-        commit: 92c2cea23a0b7e85361bc8a3a8515849b1a387e0
-        intent: feature
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - docs/specs/gnomon.md
-          - packages/gnomon-gui/.purpose
-          - packages/gnomon-gui/src/core/render.ts
-          - packages/gnomon-gui/src/ui/app.ts
-          - packages/gnomon-gui/static/styles.css
-          - packages/gnomon-gui/test/gui.test.ts
-          - packages/gnomon/.purpose
-          - packages/gnomon/src/cli/session-cli.ts
-          - packages/gnomon/src/kernel/broker/broker.ts
-          - packages/gnomon/src/kernel/lifecycle/daemon.ts
-          - packages/gnomon/src/kernel/runner/binary.ts
-          - packages/gnomon/src/kernel/runner/preflight.ts
-          - packages/gnomon/src/kernel/runner/repin-card.ts
-          - packages/gnomon/src/kernel/supervisor/supervisor.ts
-          - packages/gnomon/src/kernel/web/gui-bundle.ts
-          - packages/gnomon/src/platform/claude-verifier.ts
-          - packages/gnomon/test/claude-repin-card.test.ts
-          - packages/gnomon/test/claude-verifier-darwin.test.ts
-          - packages/gnomon/test/platform-registry.ts
-          - packages/gnomon/test/session-supervisor.test.ts
-          - packages/gnomon/test/web-units.test.ts
-        description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
-      - &ref_433
-        id: h0771
-        ts: '2026-10-19T21:53:17Z'
-        type: implement
-        symbols:
-          - '#approval-broker'
-          - '#gnomon-helper'
-          - '#identity'
-          - ^voice-armed
-          - $voice-approval
-        author:
-          type: human
-          id: ascend
-        commit: ff5239b0ddb8b53a992bb9ff37784a44cbdac966
-        intent: fix
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/log.jsonl
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - docs/specs/gnomon.md
-          - packages/gnomon-contracts/test/voice-decision.test.ts
-          - packages/gnomon-helper/.purpose
-          - packages/gnomon-helper/README.md
-          - packages/gnomon/src/kernel/broker/arm-custody.ts
-          - packages/gnomon/src/kernel/broker/broker.ts
-          - packages/gnomon/src/kernel/broker/index.ts
-          - packages/gnomon/test/voice-arm-custody.test.ts
-        description: 'fix(#gnomon-helper): Aegis V5 fixes: voice preimage binding, fail-closed session, required cap, prompt order'
     contributors:
       human:
         - ascend
       agent: []
   '#gui':
     symbol: '#gui'
-    total_changes: 15
-    last_modified: '2026-10-20T06:04:30Z'
+    total_changes: 16
+    last_modified: '2026-10-20T06:53:46Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_460
+        id: h0828
+        ts: '2026-10-20T06:53:46Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#gui'
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 3f146ba842d5205fdaf86c24fa3466c90849bd75
+        intent: feature
+        files: []
+        description: 'merge(#always-rules): bring feat/gnomon (gitOptBad hotfix, table talk) into prefix rules'
       - *ref_431
       - *ref_432
       - id: h0804
@@ -29888,29 +29870,6 @@ by_symbol:
           - .paradigm/navigator.yaml
           - .paradigm/scan-index.json
         description: 'feat(#gui): voice controls V2d: kernel-owned mic pill, attach/switch, voice transcript tags (TD-2026-10-19-298)'
-      - id: h0802
-        ts: '2026-10-19T23:14:34Z'
-        type: implement
-        symbols:
-          - '#gui'
-        author:
-          type: human
-          id: ascend
-        commit: 49bbed5b0bd96be9393eae4977666e1dc4eb2d72
-        intent: feature
-        files:
-          - packages/gnomon-gui/src/core/commands.ts
-          - packages/gnomon-gui/src/core/store.ts
-          - packages/gnomon-gui/src/core/voice.ts
-          - packages/gnomon-gui/src/ui/app.ts
-          - packages/gnomon-gui/static/index.html
-          - packages/gnomon-gui/static/styles.css
-          - packages/gnomon-gui/test/gui.test.ts
-          - packages/gnomon-gui/test/modes.test.ts
-          - packages/gnomon-gui/test/voice.test.ts
-          - packages/gnomon/src/kernel/web/gui-bundle.ts
-          - packages/gnomon/test/web-units.test.ts
-        description: 'wip(#gui): voice pill, attach controls, voice transcript items (V2d)'
     contributors:
       human:
         - ascend
@@ -29939,7 +29898,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-10-17/L-2026-10-17-ascend-220955-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'docs(#gnomon-ci): lore — first all-green CI across macOS, Ubuntu, Windows'
-      - &ref_434
+      - &ref_433
         id: h0753
         ts: '2026-10-17T21:56:03Z'
         type: implement
@@ -29970,7 +29929,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/vitest.config.ts
         description: 'fix(#kernel-log): Windows parity hygiene — writable-handle fsync, platform markers enforced, CI-portable tests'
-      - &ref_443
+      - &ref_441
         id: h0751
         ts: '2026-10-17T21:34:05Z'
         type: implement
@@ -30024,7 +29983,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_441
+      - &ref_440
         id: h0784
         ts: '2026-10-19T15:27:28Z'
         type: implement
@@ -30056,7 +30015,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gui): re-embed the GUI bundle after the P8-D98 contracts move'
-      - &ref_454
+      - &ref_453
         id: h0781
         ts: '2026-10-19T15:02:49Z'
         type: implement
@@ -30075,7 +30034,7 @@ by_symbol:
           - packages/gnomon/test/honesty.test.ts
           - packages/gnomon/test/m112-conformance.test.ts
         description: 'test(#gnomon-contracts): reconcile the guide honesty falsifier and the TS client surface with P8-D98'
-      - &ref_438
+      - &ref_437
         id: h0761
         ts: '2026-10-17T23:52:09Z'
         type: implement
@@ -30115,7 +30074,7 @@ by_symbol:
           - packages/gnomon-contracts/test/m1-1-reservations.test.ts
           - packages/gnomon-contracts/test/refusal-rpc.test.ts
         description: 'feat(#gnomon-contracts): M1.1 reservations for spec v3.9 — strictness, convergence, change notes, socket reasons'
-      - &ref_439
+      - &ref_438
         id: h0737
         ts: '2026-10-17T17:29:25Z'
         type: implement
@@ -30172,7 +30131,35 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_433
+      - &ref_446
+        id: h0771
+        ts: '2026-10-19T21:53:17Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#gnomon-helper'
+          - '#identity'
+          - ^voice-armed
+          - $voice-approval
+        author:
+          type: human
+          id: ascend
+        commit: ff5239b0ddb8b53a992bb9ff37784a44cbdac966
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - docs/specs/gnomon.md
+          - packages/gnomon-contracts/test/voice-decision.test.ts
+          - packages/gnomon-helper/.purpose
+          - packages/gnomon-helper/README.md
+          - packages/gnomon/src/kernel/broker/arm-custody.ts
+          - packages/gnomon/src/kernel/broker/broker.ts
+          - packages/gnomon/src/kernel/broker/index.ts
+          - packages/gnomon/test/voice-arm-custody.test.ts
+        description: 'fix(#gnomon-helper): Aegis V5 fixes: voice preimage binding, fail-closed session, required cap, prompt order'
       - id: h0770
         ts: '2026-10-19T21:51:19Z'
         type: implement
@@ -30210,7 +30197,7 @@ by_symbol:
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/SessionWatch.swift
           - packages/gnomon-helper/darwin/Sources/gnomon-helper/main.swift
         description: 'wip(#gnomon-helper): helper 1.6.0 arm custody checkpoint'
-      - &ref_452
+      - &ref_451
         id: h0789
         ts: '2026-10-19T19:26:33Z'
         type: implement
@@ -30229,7 +30216,7 @@ by_symbol:
           - packages/gnomon/src/kernel/identity/helper.ts
           - packages/gnomon/test/identity-helper-pin.test.ts
         description: 'fix(#gnomon-helper): root signs return the helper''s prompt line; helper 1.5.0'
-      - &ref_437
+      - &ref_436
         id: h0729
         ts: '2026-10-17T08:05:48Z'
         type: implement
@@ -30331,7 +30318,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_435
+      - &ref_434
         id: h0766
         ts: '2026-10-18T01:48:12Z'
         type: implement
@@ -30370,7 +30357,7 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/results/p14b-link-fdpass.darwin.json
         description: 'fix(#gnomon-probes): M1.0 probes round 2 — abort cleanups, live-capture gate, P14b link-fdpass pass'
-      - &ref_436
+      - &ref_435
         id: h0765
         ts: '2026-10-18T01:33:29Z'
         type: implement
@@ -30413,8 +30400,8 @@ by_symbol:
           - packages/gnomon/probes/results/p14-link-outbound.darwin.json
           - packages/gnomon/probes/s29-10-voice-custody/README.md
         description: 'feat(#gnomon-probes): M1.0 probe batch 2 — P06, P09, P12, P14 run; P00/P04/P05/P07/P01-manual founder-run'
-      - *ref_434
-      - &ref_444
+      - *ref_433
+      - &ref_442
         id: h0739
         ts: '2026-10-17T18:03:13Z'
         type: implement
@@ -30516,8 +30503,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_434
       - *ref_435
-      - *ref_436
       - id: h0746
         ts: '2026-10-17T19:22:30Z'
         type: implement
@@ -30533,7 +30520,7 @@ by_symbol:
           - packages/gnomon/probes/p-log-fsync/probe.mjs
           - packages/gnomon/probes/results/p-log-fsync-human-cadence.darwin.json
         description: 'feat(#gnomon-probes): p-log-fsync human cadence — fullfsync fails critical budget, plain commit passes'
-      - &ref_440
+      - &ref_439
         id: h0743
         ts: '2026-10-17T19:05:26Z'
         type: implement
@@ -30605,7 +30592,7 @@ by_symbol:
         files:
           - packages/gnomon-wrapper/tests/live_kernel.rs
         description: 'docs(#gnomon-wrapper): live_kernel header matches CI behaviour (fails, not skips, under CI)'
-      - *ref_437
+      - *ref_436
     contributors:
       human:
         - ascend
@@ -30642,8 +30629,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_437
       - *ref_438
-      - *ref_439
     contributors:
       human:
         - ascend
@@ -30655,8 +30642,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_437
       - *ref_438
-      - *ref_439
     contributors:
       human:
         - ascend
@@ -30668,7 +30655,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_442
+      - &ref_444
         id: h0764
         ts: '2026-10-18T00:43:52Z'
         type: implement
@@ -30706,7 +30693,7 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-log-read.test.ts
         description: 'feat(#socket): M1.4 slice 2 — log.read, subscriptions, ref.resolve, hash-free limited views, released head'
-      - *ref_438
+      - *ref_437
       - id: h0752
         ts: '2026-10-17T21:39:34Z'
         type: implement
@@ -30758,7 +30745,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-posix.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'feat(#kernel-log): D83 critical ordering-not-flush, boot-session classification, durable anchor faults'
-      - *ref_440
+      - *ref_439
     contributors:
       human:
         - ascend
@@ -30770,8 +30757,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_437
       - *ref_438
-      - *ref_439
     contributors:
       human:
         - ascend
@@ -30783,7 +30770,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_439
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -30795,7 +30782,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_439
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -30807,7 +30794,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_439
+      - *ref_438
     contributors:
       human:
         - ascend
@@ -30819,20 +30806,49 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_437
       - *ref_438
-      - *ref_439
     contributors:
       human:
         - ascend
       agent: []
   '#socket':
     symbol: '#socket'
-    total_changes: 8
-    last_modified: '2026-10-19T22:03:26Z'
+    total_changes: 9
+    last_modified: '2026-10-20T06:23:36Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_445
+      - &ref_464
+        id: h0817
+        ts: '2026-10-20T06:23:36Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#gui-cards'
+          - '#socket'
+        author:
+          type: human
+          id: ascend
+        commit: e528d3a44bafaa213b3dbfd900f111fd7e487a34
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-contracts/node_modules
+          - packages/gnomon-gui/node_modules
+          - packages/gnomon-gui/src/core/render.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon-local/node_modules
+          - packages/gnomon-mod-sdk/node_modules
+          - packages/gnomon-voice/node_modules
+          - packages/gnomon/node_modules
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/abi.ids.json
+          - packages/gnomon/test/voice-golden.test.ts
+          - packages/gnomon/test/voice-v2a.test.ts
+        description: 'wip(#always-rules): repin abiId, re-embed GUI, GUI scope params, untrack node_modules symlinks'
+      - &ref_443
         id: h0769
         ts: '2026-10-19T22:03:26Z'
         type: implement
@@ -30885,7 +30901,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/test/socket-abi.test.ts
         description: 'test(#socket): CI fixes after the P8-D98 merge (linux gui.open, win32 key modes)'
-      - *ref_441
+      - *ref_440
       - id: h0780
         ts: '2026-10-19T08:32:23Z'
         type: implement
@@ -30899,7 +30915,6 @@ by_symbol:
         files:
           - packages/gnomon/test/socket-ownership.test.ts
         description: 'test(#socket): the raw holder in socket-ownership tolerates the probe''s reset'
-      - *ref_442
     contributors:
       human:
         - ascend
@@ -30939,7 +30954,7 @@ by_symbol:
           - packages/gnomon/.purpose
           - packages/gnomon/src/kernel/lifecycle/ready.ts
         description: 'fix($daemon-lifecycle): keep the ready fd on Linux, where a socketpair cannot be re-opened'
-      - &ref_446
+      - &ref_445
         id: h0762
         ts: '2026-10-18T00:00:00Z'
         type: implement
@@ -30979,8 +30994,8 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-server.test.ts
         description: 'feat(#socket): M1.4 slice 1 — hello negotiation, mutual auth, authenticated dispatch, status'
-      - *ref_443
-      - *ref_444
+      - *ref_441
+      - *ref_442
     contributors:
       human:
         - ascend
@@ -30992,8 +31007,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_445
-      - *ref_442
+      - *ref_443
+      - *ref_444
       - id: h0763
         ts: '2026-10-18T00:04:32Z'
         type: implement
@@ -31008,7 +31023,7 @@ by_symbol:
           - packages/gnomon/test/kernel-log-crossboot.test.ts
           - packages/gnomon/test/kernel-log.test.ts
         description: 'test(#kernel-log): ceiling timeout for the two 1024-commit tests (Windows fsync is slow)'
-      - *ref_446
+      - *ref_445
       - id: h0759
         ts: '2026-10-17T23:11:31Z'
         type: implement
@@ -31038,8 +31053,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_442
       - *ref_444
+      - *ref_442
     contributors:
       human:
         - ascend
@@ -31051,8 +31066,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_433
       - *ref_446
+      - *ref_445
     contributors:
       human:
         - ascend
@@ -31064,7 +31079,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_442
+      - *ref_444
     contributors:
       human:
         - ascend
@@ -31128,11 +31143,26 @@ by_symbol:
       agent: []
   '#supervisor':
     symbol: '#supervisor'
-    total_changes: 10
-    last_modified: '2026-10-20T05:57:51Z'
+    total_changes: 11
+    last_modified: '2026-10-20T06:40:51Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_462
+        id: h0821
+        ts: '2026-10-20T06:40:51Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: d5c8600f189a6e7527f34dcef0d420fc18c25aba
+        intent: feature
+        files:
+          - packages/gnomon/test/permission-session.test.ts
+        description: 'wip(#supervisor): end-to-end prefix rule in ask vs manual mode and out-of-root path (Aegis M2, M3)'
       - *ref_448
       - id: h0812
         ts: '2026-10-20T04:57:25Z'
@@ -31157,7 +31187,7 @@ by_symbol:
           - packages/gnomon/test/voice-v2e-enrol.test.ts
           - packages/gnomon/test/voice-v2e-speak.test.ts
         description: 'feat(#gnomon-voice): dictation kernel side - forwardable stamp, human-send attribution, dictation reports (WIP K)'
-      - &ref_456
+      - &ref_455
         id: h0803
         ts: '2026-10-19T23:17:16Z'
         type: implement
@@ -31179,7 +31209,6 @@ by_symbol:
           - packages/gnomon/.purpose
         description: 'feat(#gnomon-voice): V2a kernel side of ambient + push-to-talk (TD-2026-10-19-298)'
       - *ref_449
-      - *ref_450
     contributors:
       human:
         - ascend
@@ -31203,7 +31232,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_451
+      - &ref_450
         id: h0769
         ts: '2026-10-19T01:23:13Z'
         type: implement
@@ -31228,7 +31257,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_451
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31302,7 +31331,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_452
+      - *ref_451
       - id: h0776
         ts: '2026-10-19T05:04:25Z'
         type: implement
@@ -31327,7 +31356,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_453
+      - &ref_452
         id: h0777
         ts: '2026-10-19T05:26:07Z'
         type: implement
@@ -31358,8 +31387,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_441
-      - *ref_453
+      - *ref_440
+      - *ref_452
     contributors:
       human:
         - ascend
@@ -31371,7 +31400,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_441
+      - *ref_440
       - id: h0778
         ts: '2026-10-19T05:43:39Z'
         type: implement
@@ -31399,7 +31428,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_454
+      - *ref_453
     contributors:
       human:
         - ascend
@@ -31436,7 +31465,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_433
+      - *ref_446
     contributors:
       human:
         - ascend
@@ -31448,7 +31477,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_433
+      - *ref_446
     contributors:
       human:
         - ascend
@@ -31460,7 +31489,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_455
+      - *ref_454
       - id: h0810
         ts: '2026-10-20T00:25:56Z'
         type: implement
@@ -31503,7 +31532,7 @@ by_symbol:
           - packages/gnomon-voice/test/stubs.ts
           - packages/gnomon-voice/voice-models.manifest.json
         description: 'wip(#gnomon-voice): V2e client fd link, kernel-speakable, hardening, member-pinned manifest'
-      - *ref_456
+      - *ref_455
       - id: h0802
         ts: '2026-10-19T23:13:35Z'
         type: implement
@@ -31535,8 +31564,46 @@ by_symbol:
     fragility: low
     recent:
       - *ref_449
-      - *ref_450
-      - *ref_457
+      - *ref_456
+      - id: h0799
+        ts: '2026-10-19T22:42:13Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#gui'
+          - '#session-runner'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 92c2cea23a0b7e85361bc8a3a8515849b1a387e0
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - docs/specs/gnomon.md
+          - packages/gnomon-gui/.purpose
+          - packages/gnomon-gui/src/core/render.ts
+          - packages/gnomon-gui/src/ui/app.ts
+          - packages/gnomon-gui/static/styles.css
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/cli/session-cli.ts
+          - packages/gnomon/src/kernel/broker/broker.ts
+          - packages/gnomon/src/kernel/lifecycle/daemon.ts
+          - packages/gnomon/src/kernel/runner/binary.ts
+          - packages/gnomon/src/kernel/runner/preflight.ts
+          - packages/gnomon/src/kernel/runner/repin-card.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/src/platform/claude-verifier.ts
+          - packages/gnomon/test/claude-repin-card.test.ts
+          - packages/gnomon/test/claude-verifier-darwin.test.ts
+          - packages/gnomon/test/platform-registry.ts
+          - packages/gnomon/test/session-supervisor.test.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
     contributors:
       human:
         - ascend
@@ -31549,7 +31616,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_431
-      - *ref_458
+      - *ref_457
       - id: h0811
         ts: '2026-10-20T04:47:18Z'
         type: implement
@@ -31572,7 +31639,7 @@ by_symbol:
           - packages/gnomon-voice/src/types.ts
           - packages/gnomon-voice/test/kernel-link.test.ts
         description: 'feat(#gnomon-voice-io): hold-toggle hotkey for dictation (WIP S)'
-      - &ref_459
+      - &ref_458
         id: h0803
         ts: '2026-10-19T23:19:13Z'
         type: implement
@@ -31641,7 +31708,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_459
+      - *ref_458
     contributors:
       human:
         - ascend
@@ -31653,18 +31720,39 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_460
+      - *ref_459
     contributors:
       human:
         - ascend
       agent: []
   '#shell-readonly':
     symbol: '#shell-readonly'
-    total_changes: 3
-    last_modified: '2026-10-20T06:02:57Z'
+    total_changes: 5
+    last_modified: '2026-10-20T06:57:44Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_461
+        id: h0829
+        ts: '2026-10-20T06:57:44Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#prefix-policy'
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 3a01243b402f4d6e4e6157c7d3bd6e80342a503c
+        intent: fix
+        files:
+          - packages/gnomon/src/kernel/supervisor/prefix-policy.ts
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/always-prefix-rules.test.ts
+          - packages/gnomon/test/approval-prefix-scope.test.ts
+          - packages/gnomon/test/prefix-policy.test.ts
+        description: 'fix(#prefix-policy): git option abbreviations and bundles; empty build-tool allowlist (WIP)'
+      - *ref_460
       - id: h0816
         ts: '2026-10-20T06:02:57Z'
         type: implement
@@ -31694,6 +31782,103 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
           - packages/gnomon/test/shell-readonly.test.ts
         description: 'wip(#shell-readonly): read-only Bash classifier + table tests'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#always-rules':
+    symbol: '#always-rules'
+    total_changes: 6
+    last_modified: '2026-10-20T06:57:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_461
+      - *ref_460
+      - &ref_465
+        id: h0822
+        ts: '2026-10-20T06:42:28Z'
+        type: implement
+        symbols:
+          - '#always-rules'
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 48553efae888222ca50993b36c85ade94dc53c52
+        intent: feature
+        files:
+          - .paradigm/.purpose-paths
+          - .paradigm/events/compliance-history.jsonl
+          - .paradigm/events/postflight-liveness.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - docs/specs/gnomon.md
+          - packages/gnomon/.purpose
+          - packages/gnomon/test/symbol-allowlist.json
+        description: 'wip(#prefix-policy): spec §3.4 prefix-rule bounds and npm-test note; .purpose; index'
+      - *ref_462
+      - *ref_463
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-cards':
+    symbol: '#gui-cards'
+    total_changes: 2
+    last_modified: '2026-10-20T06:35:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_467
+        id: h0819
+        ts: '2026-10-20T06:35:49Z'
+        type: implement
+        symbols:
+          - '#gui-cards'
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 097b2b3ce110c3cf1bf4361698c5488112e62be2
+        intent: feature
+        files:
+          - packages/gnomon-gui/src/core/render.ts
+          - packages/gnomon-gui/test/gui.test.ts
+          - packages/gnomon/src/kernel/web/gui-bundle.ts
+          - packages/gnomon/test/web-units.test.ts
+        description: 'wip(#gui-cards): prefix words quoted and escaped on the always keys (Aegis M1); GUI re-embedded'
+      - *ref_464
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#prefix-policy':
+    symbol: '#prefix-policy'
+    total_changes: 6
+    last_modified: '2026-10-20T06:57:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_461
+      - id: h0823
+        ts: '2026-10-20T06:42:33Z'
+        type: implement
+        symbols:
+          - '#prefix-policy'
+        author:
+          type: human
+          id: ascend
+        commit: 3a1bc6a34e65031e79dae0a539e863e1a2ef75a5
+        intent: feature
+        files:
+          - .paradigm/.purpose-paths
+        description: 'chore(#prefix-policy): keep .paradigm/.purpose-paths'
+      - *ref_465
+      - *ref_466
+      - *ref_467
     contributors:
       human:
         - ascend

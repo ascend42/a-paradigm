@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-075436-001
+type: review
+timestamp: '2026-10-20T07:54:36.876Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE voice capture A1/A2; the kernel trusts the client's account of how a turn ended (M1)
+summary: |-
+  Aegis approved 6ca8f0a3, f06ac152 and f55af625:
+  - the voice principal only;
+  - closed enums;
+  - a 5 s TTL;
+  - visibility limited to human and voice (gui-only text seam);
+  - no words on drops;
+  - the L1 and L2 fixes verified;
+  - the 175 ms poll is fine.
+  A compromised voice client cannot inject text into the GUI, but it can mislead state: keep "hearing" lit, fake "Got it", or report dropped/refused for a turn that was actually delivered. That is M1: the kernel should cross-check terminal states against its own send/append outcome. L1: the text seam should also check the class. L2: GUI-side staleness on failed reads. L3: the capture slot is not keyed to connId. L4: the client report queue is unbounded if the kernel hangs. All five were sent to the builder before merge.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+learnings:
+  - Status relayed from a semi-trusted client should be cross-checked against what the kernel itself observed whenever the kernel has ground truth (send accepted or refused).
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    medium: 1
+    low: 4
+tags:
+  - gnomon
+  - voice
+  - aegis
+  - marathon-2026-10-20
+linked_commits:
+  - 6ca8f0a3
+  - f06ac152
+  - f55af625
+git_context:
+  ref: 961910034f1eb4f1a60e77103c99a2eadb79356d
+  branch: feat/gnomon
+  dirty: true
