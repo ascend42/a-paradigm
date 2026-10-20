@@ -24,6 +24,7 @@ import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
+import { mountStandingFeed } from './standing-feed.js';
 import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
@@ -458,6 +459,16 @@ function schedule(what: Set<string>): void {
   });
 }
 store.onChange(schedule);
+// TD-2026-10-20-086 F6: the standing-grant feed (toasts, today's list + Revoke, the once-a-day offer); its own module
+const standingFeed = mountStandingFeed(document, {
+  client: () => client,
+  status: () => status,
+  refresh: () => refreshStatus(),
+  pendingKinds: () => [...store.cards.values()].map((c) => String(c.kind)),
+  focusRepo: () => (focused ? (store.sessions.get(focused)?.repo ?? null) : null),
+  notice,
+});
+store.onChange(() => standingFeed.repaint());
 
 /* ── connection ─────────────────────────────────────────────────── */
 /** Backlog + follow with the {logId, seq} cursor; a cursor-epoch refusal clears the store and re-reads (core/client.ts). */
@@ -523,7 +534,10 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     if (p.row) {
       store.apply([p.row]);
       const r = rowOf(p.row);
-      if (r) dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
+      if (r) {
+        dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
+        standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
+      }
     } else if (p.end) void followLog(c, store).catch(() => undefined);
   });
   c.onClose(() => {
@@ -792,6 +806,7 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  standingFeed.repaint(); // F6: today's grant (status.standing)
   syncDictationContext();
   foldVoiceReports();
   syncSpeakPoll();
