@@ -12,7 +12,7 @@
  */
 import { loadManifest, modelFor, verifiedModelPaths, type ModelManifest } from '../manifest.js';
 import { wordsOfResult, type PartialWord } from '../partials.js';
-import { SPEAKER_FRONT_END, speechOnly } from '../speaker.js';
+import { SPEAKER_FRONT_END, speechMsOf, speechOnly } from '../speaker.js';
 import { silentLogger, type ComponentLog } from '../types.js';
 import type { PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceEngines } from '../types.js';
 
@@ -106,6 +106,8 @@ export class SherpaStt implements SttEngine {
   readonly #watchdogMs: number;
   /** decodes on the one recognizer handle are serialized (the final and a live partial never overlap on it) */
   #chain: Promise<unknown> = Promise.resolve();
+  /** finals queued on the chain and not yet started: a partial whose turn comes while one waits is skipped */
+  #finalsWaiting = 0;
   constructor(sherpa: Sherpa, p: Record<string, string>, o: { log?: ComponentLog; watchdogMs?: number } = {}) {
     this.#make = () =>
       new sherpa.OfflineRecognizer({
@@ -122,15 +124,23 @@ export class SherpaStt implements SttEngine {
    * decode). Same text as the sync path (B0 `sameText`). The sync decode is only a fallback for an addon without it.
    */
   async transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
-    return String((await this.#decode(samples, sampleRate)).text ?? '');
+    return String((await this.#decode(samples, sampleRate, 'final')).text ?? '');
   }
-  /** B1: a live-words window → words with start times (the result's `tokens` + `timestamps`). decodeAsync only. */
+  /**
+   * B1: a live-words window → words with start times (the result's `tokens` + `timestamps`). decodeAsync only.
+   * Decode priority (2026-10-20): a partial that has not started when a final is waiting returns [] without decoding,
+   * so a final never queues behind live words (the next window's partial catches up).
+   */
   async transcribeWords(samples: Float32Array, sampleRate: number): Promise<PartialWord[]> {
     if (typeof this.#rec.decodeAsync !== 'function') return []; // never a sync decode for a partial
-    return wordsOfResult(await this.#decode(samples, sampleRate));
+    const r = await this.#decode(samples, sampleRate, 'partial');
+    return r === SKIPPED ? [] : wordsOfResult(r);
   }
-  #decode(samples: Float32Array, sampleRate: number): Promise<SherpaResult> {
+  #decode(samples: Float32Array, sampleRate: number, kind: 'final' | 'partial'): Promise<SherpaResult> {
+    if (kind === 'final') this.#finalsWaiting++;
     const run = async (): Promise<SherpaResult> => {
+      if (kind === 'final') this.#finalsWaiting--;
+      else if (this.#finalsWaiting > 0) return SKIPPED;
       const s = this.#rec.createStream();
       s.acceptWaveform({ sampleRate, samples });
       if (typeof this.#rec.decodeAsync === 'function') return (await this.#watchdog(this.#rec.decodeAsync(s) as Promise<SherpaResult>, samples.length / sampleRate)) ?? {};
@@ -164,6 +174,9 @@ export class SherpaStt implements SttEngine {
     return Promise.race([p, late]).finally(() => clearTimeout(timer));
   }
 }
+
+/** a partial decode skipped for a waiting final (never decoded) */
+const SKIPPED: SherpaResult = Object.freeze({});
 
 /** Aegis L2: the decode watchdog bound, beyond the audio's own length (a design constant, not a measurement) */
 export const STT_DECODE_WATCHDOG_MS = 15_000;
@@ -220,7 +233,7 @@ export class SherpaSpeaker implements SpeakerEngine {
     this.dim = Number(this.#ex.dim);
   }
   speechMs(samples: Float32Array, sampleRate: number): number {
-    return (speechOnly(samples, sampleRate).length / sampleRate) * 1000;
+    return speechMsOf(samples, sampleRate);
   }
   async embed(samples: Float32Array, sampleRate: number): Promise<Float32Array> {
     const gated = speechOnly(samples, sampleRate);

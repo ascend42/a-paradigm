@@ -13,8 +13,12 @@ import * as path from 'node:path';
 import type { SpeakerEngine } from './types.js';
 
 export const PRINT_SCHEMA = 'voicePrint:v1' as const;
-/** CAM++ / VoxCeleb cosine threshold (EER region ≈ 0.5–0.6 on clean speech; tuned conservative). Unverified on-device. */
-export const VERIFY_THRESHOLD = 0.6;
+/**
+ * CAM++ / VoxCeleb cosine threshold, on speech-gated embeddings (speechOnly). Raised 0.6 → 0.65 by the 2026-10-20
+ * calibration (a small sample, two human speakers): with MIN_VERIFY_SPEECH_MS it was the lowest threshold with no
+ * human impostor accepted (0/284 trials); it costs same-speaker acceptance on short utterances (fail closed).
+ */
+export const VERIFY_THRESHOLD = 0.65;
 const NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 export interface VoicePrint {
@@ -48,20 +52,34 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
 
 /** the speaker front end's id, stored in every print it made (a print from another front end is not compared) */
 export const SPEAKER_FRONT_END = 'speech-gate:v1' as const;
-/** speech-gate frame (ms), the gate below the loudest frame (dB) and the absolute floor (dBFS) */
+/** speech-gate frame (ms) */
 export const GATE_FRAME_MS = 20;
-export const GATE_REL_DB = 30;
+/** a frame is quiet below max(GATE_FLOOR_DBFS, loudest frame − GATE_REL_DB) */
+export const GATE_REL_DB = 25;
 export const GATE_FLOOR_DBFS = -55;
-/** below this much gated speech an utterance is not verified (fail closed: unknown) */
-export const MIN_VERIFY_SPEECH_MS = 500;
+/** an inner quiet run this long or longer is a pause and is cut (shorter dips are consonants and stay) */
+export const GATE_PAUSE_MS = 200;
+/** frames kept at each side of a cut pause (the word's own decay and onset) */
+export const GATE_KEEP_FRAMES = 1;
+/** below this much gated speech an utterance is not verified (fail closed: unknown; calibration 2026-10-20) */
+export const MIN_VERIFY_SPEECH_MS = 1500;
+/** the live-words provisional match (display only, never forwarding) needs this much gated speech */
+export const MIN_PROVISIONAL_SPEECH_MS = 750;
+/** an enrolment phrase with less gated speech than this is not used (the recorder keeps listening) */
+export const MIN_ENROL_SPEECH_MS = 1200;
 
 /**
- * The speech gate (founder regression 2026-10-20): keep only the 20 ms frames within GATE_REL_DB of the segment's
- * loudest frame and above GATE_FLOOR_DBFS (plus one frame either side), concatenated. CAM++ normalizes its features
- * over the whole input, so near-silent frames (VPIO's suppressed pauses, VAD edges) dominate an ungated embedding:
- * measured with the real model, padding a stranger's speech with 0.5 s of quiet moved its score against an enrolled
- * print from 0.52 to 0.82, and a print enrolled from quiet-heavy phrases matched any quiet-heavy segment (a video
- * was accepted as the founder). Gated, the embedding no longer depends on how much silence the segment carries.
+ * The speech gate (founder regression 2026-10-20). CAM++ normalizes its features over the whole input, so quiet
+ * frames (VPIO's suppressed pauses, VAD edges) dominate an ungated embedding: measured with the real model, padding a
+ * stranger's speech with 0.5 s of quiet moved its score against an enrolled print from 0.52 to 0.82, and a print
+ * enrolled from quiet-heavy phrases matched any quiet-heavy segment (a video was accepted as the founder).
+ *
+ * In 20 ms frames, a frame is QUIET below max(GATE_FLOOR_DBFS, loudest − GATE_REL_DB). Leading and trailing quiet is
+ * cut; an inner quiet run of GATE_PAUSE_MS or longer (a pause) is cut but for GATE_KEEP_FRAMES at each side; shorter
+ * dips (stops, fricatives) stay, so the speech stays continuous. The first version cut every quiet frame; that
+ * chopped consonants and RAISED impostor scores on plain speech (calibration 2026-10-20: 11/68 human impostor trials
+ * ≥ 0.6 against 0/68 with this pause-only cut). Gated, the embedding no longer depends on how much quiet surrounds
+ * the speech (cosine 1.000 with and without 0.5 s of −65 dBFS padding; 0.94–0.99 with 300 ms inner gaps).
  */
 export function speechOnly(samples: Float32Array, sampleRate: number): Float32Array {
   const F = Math.max(1, Math.round((sampleRate * GATE_FRAME_MS) / 1000));
@@ -76,11 +94,30 @@ export function speechOnly(samples: Float32Array, sampleRate: number): Float32Ar
     if (db[i]! > top) top = db[i]!;
   }
   const thr = Math.max(GATE_FLOOR_DBFS, top - GATE_REL_DB);
-  const keep: number[] = [];
-  for (let i = 0; i < n; i++) if (db[i]! >= thr || (i > 0 && db[i - 1]! >= thr) || (i + 1 < n && db[i + 1]! >= thr)) keep.push(i);
-  const out = new Float32Array(keep.length * F);
-  keep.forEach((k, m) => out.set(samples.subarray(k * F, (k + 1) * F), m * F));
+  const minRun = Math.max(1, Math.round(GATE_PAUSE_MS / GATE_FRAME_MS));
+  const keep = new Uint8Array(n).fill(1);
+  for (let i = 0; i < n; ) {
+    if (db[i]! >= thr) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < n && db[j]! < thr) j++;
+    const lead = i === 0;
+    const trail = j === n;
+    if (lead || trail || j - i >= minRun) for (let k = lead ? i : i + GATE_KEEP_FRAMES; k < (trail ? j : j - GATE_KEEP_FRAMES); k++) keep[k] = 0;
+    i = j;
+  }
+  let m = 0;
+  for (let i = 0; i < n; i++) m += keep[i]!;
+  const out = new Float32Array(m * F);
+  for (let i = 0, o = 0; i < n; i++) if (keep[i]) out.set(samples.subarray(i * F, (i + 1) * F), F * o++);
   return out;
+}
+
+/** ms of speech the gate keeps */
+export function speechMsOf(samples: Float32Array, sampleRate: number): number {
+  return (speechOnly(samples, sampleRate).length / sampleRate) * 1000;
 }
 
 export function meanEmbedding(es: readonly Float32Array[]): Float32Array {
@@ -124,6 +161,13 @@ export function readPrints(home: string): VoicePrint[] {
   return out;
 }
 
+/** The names among `prints` with no print from front end `fe` (an engine without a front end: none). */
+export function staleNames(prints: readonly VoicePrint[], fe: string | undefined): string[] {
+  if (fe === undefined) return [];
+  const fresh = new Set(prints.filter((p) => p.frontEnd === fe).map((p) => p.name));
+  return [...new Set(prints.filter((p) => p.frontEnd !== fe && !fresh.has(p.name)).map((p) => p.name))].sort();
+}
+
 export interface SpeakerVerdict {
   /** the enrolled name, or undefined for an unknown voice */
   name?: string;
@@ -151,15 +195,17 @@ export class SpeakerVerifier {
     return this.#prints().filter((p) => fe === undefined || p.frontEnd === fe);
   }
 
-  /** Names of prints made by another (older) front end: never compared, so those speakers must enrol again. */
+  /**
+   * Names whose print was made by another (older) front end and who have no current one: never compared, so they
+   * are not recognised until they enrol again (the GUI's "Re-teach Gnomon your voice"). Sorted, unique.
+   */
   stalePrints(): string[] {
-    const fe = this.#engine.frontEnd;
-    return fe === undefined ? [] : this.#prints().filter((p) => p.frontEnd !== fe).map((p) => p.name);
+    return staleNames(this.#prints(), this.#engine.frontEnd);
   }
 
   /** Too little speech to verify (fail closed: such an utterance never matches a print). */
-  #tooShort(samples: Float32Array, sampleRate: number): boolean {
-    return this.#engine.speechMs !== undefined && this.#engine.speechMs(samples, sampleRate) < MIN_VERIFY_SPEECH_MS;
+  #tooShort(samples: Float32Array, sampleRate: number, min: number): boolean {
+    return this.#engine.speechMs !== undefined && this.#engine.speechMs(samples, sampleRate) < min;
   }
 
   /**
@@ -168,7 +214,7 @@ export class SpeakerVerifier {
    */
   async provisional(samples: Float32Array, sampleRate: number): Promise<boolean> {
     const prints = this.#usable();
-    if (!prints.length || this.#tooShort(samples, sampleRate)) return false;
+    if (!prints.length || this.#tooShort(samples, sampleRate, MIN_PROVISIONAL_SPEECH_MS)) return false;
     const e = await this.#engine.embed(samples, sampleRate);
     return prints.some((p) => cosine(e, p.embedding) >= this.#threshold);
   }
@@ -180,7 +226,7 @@ export class SpeakerVerifier {
       const s = cosine(e, p.embedding);
       if (!best || s > best.score) best = { name: p.name, score: s };
     }
-    if (best && best.score >= this.#threshold && !this.#tooShort(samples, sampleRate)) return { name: best.name, score: best.score };
+    if (best && best.score >= this.#threshold && !this.#tooShort(samples, sampleRate, MIN_VERIFY_SPEECH_MS)) return { name: best.name, score: best.score };
     let idx = this.#unknowns.findIndex((u) => cosine(u, e) >= this.#threshold);
     if (idx < 0) {
       this.#unknowns.push(e);
