@@ -17,6 +17,13 @@
  * (repoKey, tool, inputHash) with inputHash = sha256 over the canonical
  * tool_input (permission.ts inputHash, the same function the card uses):
  * an EXACT match only — a different input or a different repo never matches.
+ * RC5 (TD-2026-10-20-086): a Bash exact rule ALSO matches by bashCommandHash =
+ * sha256 over canonical `{command}` (no description, no timeout), when both the
+ * learned request and the later input have no key besides command,
+ * description and timeout; so a fresh free-text `description` re-matches, while
+ * `run_in_background` (or any other key) still raises the card. Both hashes are
+ * derived at fold time from the kernel-signed request, so rules learned before
+ * this change match by command too.
  * The rule id is the card id (`modeRef: 'rule:<cardId>'` on approval.auto).
  *
  * Bounded: at most MAX_TRACKED_REQUESTS permission requests and decisions are
@@ -59,6 +66,19 @@ import { prefixMatchRefusal, prefixRefusal } from './prefix-policy.js';
 /** Input keys a prefix rule tolerates besides `command` (anything else, e.g. run_in_background, raises the card). */
 export const PREFIX_RULE_INPUT_KEYS: ReadonlySet<string> = new Set(['command', 'description', 'timeout']);
 
+/**
+ * RC5 (TD-2026-10-20-086): the hash an exact Bash rule ALSO matches by — sha256 over canonical `{command}` alone, so
+ * Claude's fresh free-text `description` (and `timeout`) never defeat a rule. Only for an input whose keys are within
+ * PREFIX_RULE_INPUT_KEYS (command, description, timeout); any other key (run_in_background, …) ⇒ null and only the
+ * whole-input hash can match.
+ */
+export function bashCommandHash(toolInput: unknown): string | null {
+  if (toolInput === null || typeof toolInput !== 'object' || Array.isArray(toolInput)) return null;
+  const o = toolInput as Record<string, unknown>;
+  if (typeof o.command !== 'string' || Object.keys(o).some((k) => !PREFIX_RULE_INPUT_KEYS.has(k))) return null;
+  return inputHash({ command: o.command });
+}
+
 /** The argv of a Bash input whose command is one literal simple command, else null. */
 export function bashArgvOfInput(toolInput: unknown): string[] | null {
   if (toolInput === null || typeof toolInput !== 'object' || Array.isArray(toolInput)) return null;
@@ -98,6 +118,8 @@ export interface AlwaysRule {
   repoKey: string;
   tool: string;
   inputHash: string;
+  /** RC5: Bash exact rules only — bashCommandHash of the learned request's input (null when it had another key) */
+  commandHash?: string | null;
   /** 'exact' (inputHash) or 'prefix' (a Bash rule over one literal simple command starting with `prefix`) */
   match: 'exact' | 'prefix';
   /** prefix rules only: the literal argv words */
@@ -122,7 +144,7 @@ function bump<V>(m: Map<string, V>, k: string, v: V, cap: number): void {
 
 export class RuleBook {
   readonly #trust: KernelTrust;
-  readonly #requests = new Map<string, { tool: string; inputHash: string; argv: string[] | null }>();
+  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null }>();
   /** cardId → the decide row's scope key ('exact' or the canonical prefix JSON) */
   readonly #always = new Map<string, string>();
   readonly #rules = new Map<string, AlwaysRule>();
@@ -142,7 +164,7 @@ export class RuleBook {
     if (r.kind === 'approval.request') {
       const card = obj(p.card);
       if (!card || card.kind !== 'permission' || typeof card.cardId !== 'string' || typeof p.tool !== 'string' || !('tool_input' in p)) return;
-      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null }, MAX_TRACKED_REQUESTS);
+      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null }, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'approval.decide') {
       if (p.decision !== 'always' || typeof p.cardId !== 'string') return;
       let key = 'exact';
@@ -163,7 +185,7 @@ export class RuleBook {
       const base = { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh') };
       if (exact) {
         if (decided !== 'exact') return; // a scoped decision never learns a different rule
-        bump(this.#rules, cardId, { ...base, match: 'exact' }, MAX_RULES);
+        bump(this.#rules, cardId, { ...base, match: 'exact', ...(p.tool === 'Bash' ? { commandHash: req.commandHash } : {}) }, MAX_RULES);
         return;
       }
       // prefix: Bash only, the decide row's scope is the same prefix, and the shown command starts with it
@@ -189,6 +211,11 @@ export class RuleBook {
    */
   match(repoKey: string, tool: string, hash: string, toolInput?: unknown, ctx?: PrefixMatchContext): AlwaysRule | null {
     for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
+    // RC5: an exact Bash rule also matches the same command text with another description/timeout (both hashes fold)
+    if (tool === 'Bash' && toolInput !== undefined) {
+      const ch = bashCommandHash(toolInput);
+      if (ch !== null) for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.commandHash === ch) return r;
+    }
     // Aegis M2/M3: prefix rules need the session context (roots) and never apply in manual mode
     if (tool !== 'Bash' || toolInput === undefined || !ctx || !ctx.prefixRules || !ctx.roots.length) return null;
     let argv: string[] | null = null;
