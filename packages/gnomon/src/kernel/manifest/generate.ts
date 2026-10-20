@@ -38,7 +38,8 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson, ulid } from '@a-company/gnomon-contracts';
-import { manifestHash, type ManifestV1 } from './manifest.js';
+import { mcpServerName } from '@a-company/gnomon-contracts';
+import { canonicalManifestHash, type ManifestV2 } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { removeTree } from './snapshot.js';
 
@@ -66,15 +67,15 @@ export function stableJson(v: unknown): string {
 }
 
 /** The generated file set (posix path under the repo → content), a pure function of the manifest. */
-export function renderGenerated(m: ManifestV1): Map<string, string> {
+export function renderGenerated(m: ManifestV2): Map<string, string> {
   if (m.kind !== 'distro') throw new ManifestRefusal('SCHEMA', `generated plugin files come from a kind: distro manifest, not ${m.kind}`, { name: m.name });
-  const mh = manifestHash(m);
+  const mh = canonicalManifestHash(m);
   const marker = { generatedBy: 'gnomon', manifestHash: mh, doNotEdit: true };
   const p = m.provides ?? {};
   const out = new Map<string, string>();
   out.set('.gnomon/generated/plugin.json', stableJson({ _gnomon: marker, name: m.name, version: m.version, ...(m.description ? { description: m.description } : {}) }));
   const servers: Record<string, unknown> = {};
-  for (const s of p.mcp ?? []) servers[s.name] = { command: s.command, args: s.args ?? [] };
+  for (const s of p.mcp ?? []) servers[mcpServerName(`${m.publisher}.${m.name}`)] = { command: s.command, args: s.args ?? [] };
   out.set('.gnomon/generated/.mcp.json', stableJson({ _gnomon: marker, mcpServers: servers }));
   const hooks: Record<string, unknown[]> = {};
   for (const h of p.hooks ?? []) (hooks[h.event] ??= []).push({ hooks: [{ type: 'command', command: h.command }] });
@@ -215,7 +216,7 @@ export interface GenerateReport {
 }
 
 /** Generate (or regenerate) the repo's files. Idempotent; refuses to overwrite a file that is not ours. */
-export function generateRepo(repo: string, m: ManifestV1, opts: { home: string; writeProjectYaml?: boolean; emit?: ManifestEventSink }): GenerateReport {
+export function generateRepo(repo: string, m: ManifestV2, opts: { home: string; writeProjectYaml?: boolean; emit?: ManifestEventSink }): GenerateReport {
   const emit = opts.emit ?? noEvents;
   const files = renderGenerated(m);
   const root = repoRoot(repo);
@@ -223,7 +224,7 @@ export function generateRepo(repo: string, m: ManifestV1, opts: { home: string; 
   const ignored = [...(prior?.files ?? []).map((f) => f.path), ...(prior?.createdDirs ?? [])].filter((p) => !(GENERATED_FILES as readonly string[]).includes(p) && !(GENERATED_DIRS as readonly string[]).includes(p));
   const ours = new Map((prior?.files ?? []).filter((f) => (GENERATED_FILES as readonly string[]).includes(f.path)).map((f) => [f.path, f.sha256]));
   const createdDirs = new Set((prior?.createdDirs ?? []).filter((d) => (GENERATED_DIRS as readonly string[]).includes(d)));
-  const report: GenerateReport = { written: [], unchanged: [], manifestHash: manifestHash(m), ignored };
+  const report: GenerateReport = { written: [], unchanged: [], manifestHash: canonicalManifestHash(m), ignored };
 
   // confine + ownership check before writing anything
   for (const d of GENERATED_DIRS) confined(root, d, emit);

@@ -40,18 +40,29 @@
  * packageHash from pinned snapshots only. Watching (`fs.watch` /
  * `ReadDirectoryChangesW`) and dev mode belong to #mod-host (M1.11), which
  * calls this primitive on every start and every watch event.
+ *
+ * S0b (mod ids and versions, §12.4.1). Every mod is `<publisher>.<name>`; the snapshot, staged cards and grant rows
+ * are keyed by that id. The source is `package`, `linked:<realpath>` or `git:<canonical url>#<sha40>` (the fetch is
+ * S4; stageInstall takes the fetched checkout plus its claimed git URL and commit). Publisher checks against the
+ * source (checkPublisherSource, at stage AND load): a folder or package is "(unverified, local folder)" and never a
+ * founder brand; github.com needs publisher = the URL owner; another host binds (host, namespace) on first approval
+ * (TOFU grant.publisher) and a later claim from elsewhere is refused unless the human re-binds through a full card.
+ * The card's index-3 line classifies the bytes against the approved history (first / update / downgrade /
+ * same-version-new-bytes / format-only); the header verb is Install / Update / Downgrade / Re-approve "by
+ * <publisher>"; a short card only when nothing widens and the source did not change. COLLISION: the derived MCP
+ * server name may not equal another installed mod's nor one in the user's .mcp.json, at install AND load.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { canonicalJson, mintId, sanitizeDisplayText, validateCardV1, type CardFlag, type CardV1 } from '@a-company/gnomon-contracts';
+import { canonicalJson, FOUNDER_BRANDS, gitSourceString, isModId, mcpServerName, mintId, modSkeleton, parseGitSource, parseModId, sanitizeDisplayText, validateCardV1, type CardFlag, type CardV1 } from '@a-company/gnomon-contracts';
 import { MAX_LINE } from '../broker/card.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
-import { appendGrantRow, checkAgainstGrants, effectiveInstall, readGrants, type GrantInstallRow } from './grants.js';
-import { COMMAND_UNSAFE, detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestMcpConfig, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
+import { appendGrantRow, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
+import { COMMAND_UNSAFE, compareVersions, detectWidening, MANIFEST_FILE, readManifest, type ManifestMcpConfig, type ManifestV2, type ReadManifestResult, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
 
@@ -70,6 +81,7 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   'sha256:be0cce015b2db126206973adddd899060b6a3e6ff28fd7e53d5d0842530cfd71', // packages/gnomon-mods/paradigm-context 1.0.0 (#paradigm-context-mod)
   'sha256:7759e22cda86b37318d741c8371cb139ee25110739a1a45e0f154816a940e1f5', // packages/gnomon-mods/neurons-brain 1.0.0 (#neurons-mod, the Desk S2)
   'sha256:1a9cccc2685527105d71e3e2e3003b9880f53c42a60d9f259dd0e1d56b9de1fb', // packages/gnomon-mods/constellation 1.0.0 (#constellation-mod, the Desk S2)
+  ...HISTORICAL_FIRST_PARTY_PINS,
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
 export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
@@ -83,12 +95,33 @@ export function deriveTier(packageHash: string, signature?: { keyId: string; sig
   return FIRST_PARTY_PACKAGE_HASHES.has(packageHash) ? 'first-party' : 'local';
 }
 
-export type InstallSource = 'package' | `linked:${string}`;
+export type InstallSource = 'package' | `linked:${string}` | `git:${string}`;
+
+/** S0b §3: how the bytes compare with the approved history of this mod id (the card's index-3 line). */
+export type VersionClass = 'first' | 'update' | 'downgrade' | 'same-version-new-bytes' | 'format-only';
 
 /** What the install card shows (§12.5), and what its contentHash covers. */
 export interface InstallCardDetail {
+  /** the mod id <publisher>.<name> */
   name: string;
-  kind: ManifestV1['kind'];
+  publisher: string;
+  /** how the publisher is shown: `acme`, `acme (unverified, local folder)`, `acme @ gitlab.com` */
+  publisherDisplay: string;
+  /** manifest format of the staged bytes (1 only for a historical first-party pin) */
+  format: 1 | 2;
+  upgradedHash?: string;
+  versionClass: VersionClass;
+  /** the version of the pin this replaces (absent on a first install) */
+  prevVersion?: string;
+  /** the source this replaces when it differs in kind, owner, host or namespace (a source change: always the full card) */
+  sourceChangedFrom?: string;
+  /** another installed third-party publisher this one is a skeleton match of */
+  looksLike?: string;
+  /** the derived MCP server name (absent when the mod has no provides.mcp) */
+  serverName?: string;
+  /** a non-GitHub publisher re-bound to a new (host, namespace) by this card */
+  rebind?: { host: string; namespace: string };
+  kind: ManifestV2['kind'];
   version: string;
   source: InstallSource;
   tier: TrustTier;
@@ -123,7 +156,7 @@ export interface StagedRecord {
   schemaVersion: typeof STAGED_RECORD_SCHEMA;
   card: CardV1;
   detail: InstallCardDetail;
-  manifest: ManifestV1;
+  manifest: ManifestV2;
   decision?: { decision: 'install' | 'deny'; at: string };
 }
 
@@ -131,7 +164,13 @@ export interface StageOptions {
   home: string;
   /** the package path or the linked folder */
   source: string;
-  via: 'package' | 'linked';
+  via: 'package' | 'linked' | 'git';
+  /** via 'git': the claimed URL and commit of the fetched checkout in `source` (the fetch itself is S4) */
+  git?: { url: string; commit: string };
+  /** the human asked to re-bind a non-GitHub publisher to this source's (host, namespace) (full card) */
+  rebindPublisher?: boolean;
+  /** MCP server names in the user's .mcp.json (COLLISION) */
+  userMcpServers?: readonly string[];
   /** a signature over the manifestHash claiming the `signed:<gkey>` tier (refused until trusted keys exist) */
   signature?: { keyId: string; sig: string };
   /** the principal that staged it (an agent session principal for agent-written mods) */
@@ -147,25 +186,127 @@ export interface StageOptions {
 
 export type StageResult = { state: 'staged'; cardId: string; record: StagedRecord } | { state: 'unchanged'; packageHash: string };
 
-function readManifestFile(dir: string, name: string, emit: ManifestEventSink): unknown {
-  const p = path.join(dir, MANIFEST_FILE);
+function readManifestBytes(dir: string, name: string, emit: ManifestEventSink): Buffer {
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    return fs.readFileSync(path.join(dir, MANIFEST_FILE));
   } catch {
     emit('manifest.refuse', { name, code: 'SCHEMA', reason: 'manifest-unreadable' });
     throw new ManifestRefusal('SCHEMA', `${MANIFEST_FILE} is missing or not JSON`, { name });
   }
 }
 
-/** Best-effort name for refusal events before the manifest validates. */
-function sourceName(source: string): string {
+/** The raw manifest object of a folder, or null. */
+function rawManifestOf(dir: string): Record<string, unknown> | null {
   try {
-    const n = (JSON.parse(fs.readFileSync(path.join(source, MANIFEST_FILE), 'utf8')) as { name?: unknown }).name;
-    if (typeof n === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(n)) return n;
+    const v = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')) as unknown;
+    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   } catch {
-    /* fall through */
+    return null;
   }
-  return path.basename(path.resolve(source)).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 64) || 'unnamed';
+}
+
+/** Best-effort mod id for refusal events and the snapshot directory before the manifest validates. */
+function sourceName(source: string, legacyPublisher?: string): string {
+  const m = rawManifestOf(source);
+  const id = m && typeof m.name === 'string' ? `${typeof m.publisher === 'string' ? m.publisher : (legacyPublisher ?? 'local')}.${m.name}` : '';
+  if (isModId(id)) return id;
+  return `local.${path.basename(path.resolve(source)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^[^a-z]+|-+$/g, '').slice(0, 24) || 'unnamed'}`;
+}
+
+/** The kind and identity of a source, compared for a source change (S0b §3). */
+function sourceIdentity(source: string): string {
+  if (source === 'package') return 'package';
+  if (source.startsWith('linked:')) return 'linked';
+  const g = parseGitSource(source);
+  return g ? `git:${g.host}/${g.namespace}` : source;
+}
+
+/** How a publisher is shown for this source (S0b §1 Display). */
+export function publisherDisplay(publisher: string, source: string): string {
+  if (publisher === 'gnomon') return publisher;
+  if (source === 'package' || source.startsWith('linked:')) return `${publisher} (unverified, local folder)`;
+  const g = parseGitSource(source);
+  return g && g.host !== 'github.com' ? `${publisher} @ ${g.host}` : publisher;
+}
+
+/**
+ * S0b §1: the publisher against the source and the TOFU bindings (at stage AND at load). Returns the (host, namespace)
+ * a non-GitHub git install binds (or re-binds), or null. Throws PUBLISHER.
+ */
+export function checkPublisherSource(manifest: ManifestV2, source: string, grants: ResolvedGrants, opts: { rebind?: boolean; tier?: TrustTier } = {}): { host: string; namespace: string; rebind: boolean } | null {
+  const pub = manifest.publisher;
+  const refuse = (msg: string, detail: Record<string, unknown> = {}): never => {
+    throw new ManifestRefusal('PUBLISHER', msg, { publisher: pub, ...detail });
+  };
+  const brand = Object.prototype.hasOwnProperty.call(FOUNDER_BRANDS, pub) ? FOUNDER_BRANDS[pub] : undefined;
+  if (brand === null) refuse(`publisher ${pub} is a reserved founder brand`);
+  // ascend42 and its skeleton matches: only as the github.com owner ascend42
+  const ascendLike = Object.entries(FOUNDER_BRANDS).find(([b, v]) => v !== null && modSkeleton(b) === modSkeleton(pub));
+  if (pub === 'gnomon' || pub === 'local') return null; // tier rule in validateManifest; local is kernel-assigned
+  if (source === 'package' || source.startsWith('linked:')) {
+    if (ascendLike) refuse(`publisher ${pub} is accepted only from github.com/${ascendLike[1]!.githubOwner}`);
+    return null;
+  }
+  const g = parseGitSource(source);
+  if (!g) return refuse('the git source is not canonical', { source: source.slice(0, 200) });
+  if (g.host === 'github.com') {
+    if (g.owner !== pub) refuse(`publisher ${pub} does not match the github.com owner ${g.owner}`, { owner: g.owner });
+    if (ascendLike && (pub !== ascendLike[0] || g.owner !== ascendLike[1]!.githubOwner)) refuse(`publisher ${pub} looks like the founder brand ${ascendLike[0]}`);
+    const bound = grants.publishers.get(pub);
+    if (bound && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound.host}/${bound.namespace}; re-bind it through a full card`, { boundHost: bound.host });
+    return null;
+  }
+  if (ascendLike) refuse(`publisher ${pub} is accepted only from github.com/${ascendLike[1]!.githubOwner}`);
+  const bound = grants.publishers.get(pub);
+  // a github.com owner binds implicitly: another host claiming an installed github publisher needs a re-bind too
+  const githubClaim = grants.installs.some((r) => r.name.startsWith(`${pub}.`) && parseGitSource(r.source)?.host === 'github.com');
+  const same = bound !== undefined && bound.host === g.host && bound.namespace === g.namespace;
+  if (!same && (bound !== undefined || githubClaim) && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound ? `${bound.host}/${bound.namespace}` : 'github.com'}; re-bind it through a full card`, { host: g.host, namespace: g.namespace });
+  return same ? null : { host: g.host, namespace: g.namespace, rebind: bound !== undefined || githubClaim };
+}
+
+/** S0b §2: the mod's derived MCP server name against installed mods and the user's .mcp.json (COLLISION). */
+export function checkServerCollision(home: string, manifest: ManifestV2, grants: ResolvedGrants, userMcpServers: readonly string[] = []): string | undefined {
+  if (!manifest.provides?.mcp?.length) return undefined;
+  const id = `${manifest.publisher}.${manifest.name}`;
+  const server = mcpServerName(id);
+  if (userMcpServers.includes(server)) throw new ManifestRefusal('COLLISION', `MCP server name ${server} is already in your .mcp.json`, { name: id, server });
+  for (const other of new Set(grants.installs.map((r) => r.name))) {
+    if (other === id || !effectiveInstall(grants, other)) continue;
+    // only mods that declare a server occupy a name; the derived name is a function of the id
+    const row = effectiveInstall(grants, other)!;
+    const m = pinnedManifest(home, row);
+    if (m?.provides?.mcp?.length && isModId(other) && mcpServerName(other) === server) throw new ManifestRefusal('COLLISION', `MCP server name ${server} is already used by ${other}`, { name: id, server, other });
+  }
+  return server;
+}
+
+/** S0b §3: the version class of staged bytes against the approved history of this id. */
+function classify(grants: ResolvedGrants, id: string, current: GrantInstallRow | undefined, prev: ReadManifestResult | null, next: ReadManifestResult, packageHash: string): VersionClass {
+  if (!current || !prev) return 'first';
+  const c = compareVersions(next.manifest.version, prev.manifest.version);
+  // a packageHash approved before under a lower version than the current pin is a downgrade too
+  const earlier = grants.installs.find((r) => r.name === id && r.packageHash === packageHash);
+  if (c !== null && c < 0) return 'downgrade';
+  if (c !== null && c > 0) return 'update';
+  void earlier;
+  return prev.format !== next.format ? 'format-only' : 'same-version-new-bytes';
+}
+
+/** The index-3 card line (S0b §3). A downgrade is always prominent, even to a previously approved version. */
+function versionLine(d: InstallCardDetail): string {
+  switch (d.versionClass) {
+    case 'first':
+      return `version: first install of ${d.name} ${d.version}`;
+    case 'update':
+      return `version: update ${d.prevVersion} → ${d.version}`;
+    case 'downgrade':
+      return `DOWNGRADE: ${d.prevVersion} → ${d.version} (older version; check why)`;
+    case 'format-only':
+      return `version: ${d.version} unchanged, manifest format ${d.format === 1 ? 1 : 2} (format-only change)`;
+    default:
+      return `version: ${d.version} unchanged, NEW BYTES under the same version`;
+  }
 }
 
 function sha(s: string): string {
@@ -173,7 +314,7 @@ function sha(s: string): string {
 }
 
 type Surface = Pick<InstallCardDetail, 'effects' | 'egress' | 'capabilities' | 'events' | 'tools' | 'views' | 'commands' | 'keybindings' | 'knowledge' | 'mcp' | 'hooks' | 'offers' | 'opaque'>;
-function surfaceOf(m: ManifestV1): Surface {
+function surfaceOf(m: ManifestV2): Surface {
   const p = m.provides ?? {};
   const eg = m.requires?.egress;
   const opaque: Record<string, number> = {};
@@ -182,7 +323,7 @@ function surfaceOf(m: ManifestV1): Surface {
     commands: (p.commands ?? []).map((c) => c.id).sort(),
     keybindings: (p.keybindings ?? []).map((k) => `${k.key}→${k.command}`).sort(),
     knowledge: (p.knowledge ?? []).map((k) => `${k.name} ${k.scheme} ${k.query} ≤${k.maxTier}`).sort(),
-    mcp: (p.mcp ?? []).map((s) => `${s.name}: ${[s.command, ...(s.args ?? [])].join(' ')}${mcpConfigSuffix(s.config)}`).sort(),
+    mcp: (p.mcp ?? []).map((s) => `${mcpServerName(`${m.publisher}.${m.name}`)}: ${[s.command, ...(s.args ?? [])].join(' ')}${mcpConfigSuffix(s.config)}`).sort(),
     ...(p.offers?.length ? { offers: p.offers.map((o) => `${o.kind} (${o.phase}) → ${o.handoffTool}: ${o.title} · takes: ${o.contextIn.join(', ') || 'nothing'}`).sort() } : {}),
     hooks: (p.hooks ?? []).map((h) => `${h.event}: ${h.command}`).sort(),
     opaque,
@@ -217,7 +358,8 @@ function midTrunc(s: string, max: number): string {
  * wraps and the kernel-composed count line stays at index 2.
  */
 function headerLine(d: InstallCardDetail): string {
-  const compose = (src: string) => `${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${midTrunc(d.version, 64)} (${d.kind}) from ${src}, tier ${d.tier}`;
+  const verb = !d.replaces ? 'Install' : d.versionClass === 'update' ? 'Update' : d.versionClass === 'downgrade' ? 'Downgrade' : 'Re-approve';
+  const compose = (src: string) => `${verb} mod ${d.name} ${midTrunc(d.version, 64)} (${d.kind}) by ${d.publisherDisplay} from ${src}, tier ${d.tier}`;
   const budget = Math.max(16, MAX_LINE - Array.from(compose('')).length);
   return compose(midTrunc(d.source, budget));
 }
@@ -270,11 +412,26 @@ export function wrappedBlock(logical: readonly string[]): { block: Record<string
  */
 export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>; flags: CardFlag[] } {
   const flags = new Set<CardFlag>();
-  const logical = [
+  const head = [
     headerLine(d),
     `packageHash ${d.packageHash}`,
     // kernel-composed, before any manifest-controlled line (Aegis round 2 C2): the count cannot be pushed off-screen
     `runs commands: ${d.mcp.length} mcp server(s), ${d.hooks.length} hook(s)`,
+    // S0b: index 3, kernel-composed: what these bytes are against the approved history
+    versionLine(d),
+    ...(d.sourceChangedFrom ? [`SOURCE CHANGED: ${d.sourceChangedFrom} → ${d.source}`] : []),
+    ...(d.rebind ? [`PUBLISHER RE-BIND: ${d.publisher} → ${d.rebind.host}/${d.rebind.namespace}`] : []),
+    ...(d.looksLike ? [`publisher ${d.publisher} looks like ${d.looksLike} (installed)`] : []),
+  ];
+  // S0b §3: a short card only when nothing widens and the source did not change (a downgrade line stays at index 3)
+  if (d.replaces && !d.widened.length && !d.sourceChangedFrom && !d.rebind) {
+    const short = [...head, `nothing widens · files: +${d.files.added.length} ~${d.files.changed.length} -${d.files.removed.length}`];
+    const children = short.flatMap((l) => wrapLine(l, flags)).map((text) => ({ type: 'Text', text }));
+    return { block: { schemaVersion: 'display-block:v1', type: 'Box', children }, flags: [...flags].sort() };
+  }
+  const logical = [
+    ...head,
+    ...(d.serverName ? [`mcp server name: ${d.serverName}`] : []),
     `effects: ${d.effects.join(', ') || 'none'} · egress: ${d.egress.join(', ') || 'none'}`,
     `capabilities: ${d.capabilities.join(', ') || 'none'} · read paths: ${d.readPaths.join(', ') || 'none'}`,
     `events: ${d.events.join(', ') || 'none'} · tools: ${d.tools.join(', ') || 'none'} · views: ${d.views.join(', ') || 'none'}`,
@@ -292,6 +449,7 @@ export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>
 }
 
 function stagedPath(home: string, name: string, cardId: string): string {
+  // a mod id contains '.', never a URL or ':' (Windows-safe directory name)
   return path.join(modDir(home, name), 'staged', `${cardId.replace(':', '-')}.json`);
 }
 
@@ -302,7 +460,7 @@ function writeStaged(home: string, rec: StagedRecord): void {
 }
 
 export function readStaged(home: string, name: string, cardId: string): StagedRecord | null {
-  if (!CARD_ID.test(cardId) || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) return null;
+  if (!CARD_ID.test(cardId) || !isModId(name)) return null;
   try {
     const r = JSON.parse(fs.readFileSync(stagedPath(home, name, cardId), 'utf8')) as StagedRecord;
     return r.schemaVersion === STAGED_RECORD_SCHEMA ? r : null;
@@ -332,19 +490,38 @@ function pendingFor(home: string, name: string, packageHash: string, mh: string,
 }
 
 /** Read the manifest stored inside a pinned snapshot. */
-function pinnedManifest(home: string, row: GrantInstallRow): ManifestV1 | null {
+function pinnedManifest(home: string, row: GrantInstallRow): ManifestV2 | null {
+  return pinnedRead(home, row, undefined)?.manifest ?? null;
+}
+
+/** Read a pin's manifest (format 1 through the alias publisher of its row), or null. */
+function pinnedRead(home: string, row: GrantInstallRow, tier: TrustTier | undefined): ReadManifestResult | null {
   try {
-    return JSON.parse(fs.readFileSync(path.join(pinnedDir(home, row.name, row.packageHash), MANIFEST_FILE), 'utf8')) as ManifestV1;
+    const bytes = fs.readFileSync(path.join(pinnedDir(home, pinDirKey(row), row.packageHash), MANIFEST_FILE));
+    const pub = parseModId(row.name)?.publisher;
+    return readManifest(bytes, { tier: tier ?? (pub === 'gnomon' ? 'first-party' : 'local'), ...(row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {}) });
   } catch {
     return null;
   }
 }
 
-/** Stage an install (package) or a link (folder). Raises a pending card; takes no effect. */
+/** Stage an install (package), a link (folder) or a fetched git checkout. Raises a pending card; takes no effect. */
 export function stageInstall(opts: StageOptions): StageResult {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
-  const name0 = sourceName(opts.source);
+  // format 1 is staged only for a historical first-party pin (its id is then gnomon.<name>); the hash decides
+  const raw0 = rawManifestOf(opts.source);
+  let legacyPublisher: 'gnomon' | undefined;
+  if (raw0?.manifest === 1 && typeof raw0.name === 'string') {
+    let h = '';
+    try {
+      h = hashSourceTree(opts.source, `local.${raw0.name}`, noEvents).packageHash;
+    } catch {
+      h = '';
+    }
+    if (HISTORICAL_FIRST_PARTY_PINS.has(h) && opts.via !== 'linked') legacyPublisher = 'gnomon';
+  }
+  const name0 = sourceName(opts.source, legacyPublisher);
   // a linked source path reaches the card header: refuse line separators, format and control characters (Aegis round 3)
   if (opts.via === 'linked') {
     let real = '';
@@ -358,37 +535,66 @@ export function stageInstall(opts: StageOptions): StageResult {
       throw new ManifestRefusal('SCHEMA', 'the linked folder path contains a line separator, format or control character', { name: name0, field: 'source' });
     }
   }
+  let source: InstallSource;
+  if (opts.via === 'git') {
+    try {
+      source = gitSourceString(opts.git?.url ?? '', opts.git?.commit ?? '') as InstallSource;
+    } catch (err) {
+      emit('manifest.refuse', { name: name0, code: 'SCHEMA', field: 'source' });
+      throw new ManifestRefusal('SCHEMA', `git source: ${(err as Error).message}`, { name: name0, field: 'source' });
+    }
+  } else source = opts.via === 'package' ? 'package' : `linked:${fs.realpathSync.native(opts.source)}`;
   const snap = snapshotFolder(opts.home, opts.source, name0, emit);
-  let manifest: ManifestV1;
+  let read: ReadManifestResult;
   let tier: TrustTier;
+  const grants = readGrants(opts.home, opts.trust);
+  let binding: ReturnType<typeof checkPublisherSource> = null;
+  let serverName: string | undefined;
   try {
     tier = opts.via === 'linked' && !opts.signature ? 'local' : deriveTier(snap.packageHash, opts.signature);
-    const raw = readManifestFile(snap.dir, name0, emit);
+    const bytes = readManifestBytes(snap.dir, name0, emit);
     try {
-      manifest = validateManifest(raw, { tier });
+      read = readManifest(bytes, { tier, ...(legacyPublisher ? { legacyPublisher } : {}) });
+      const id = `${read.manifest.publisher}.${read.manifest.name}`;
+      if (id !== name0) throw new ManifestRefusal('SCHEMA', `manifest id ${id} changed during the copy`, { name: id });
+      binding = checkPublisherSource(read.manifest, source, grants, { rebind: opts.rebindPublisher === true, tier });
+      serverName = checkServerCollision(opts.home, read.manifest, grants, opts.userMcpServers);
     } catch (err) {
       if (err instanceof ManifestRefusal) emit('manifest.refuse', { name: name0, code: err.manifestCode, ...err.detail });
       throw err;
     }
-    if (manifest.name !== name0) throw new ManifestRefusal('SCHEMA', `manifest name ${manifest.name} changed during the copy`, { name: manifest.name });
   } catch (err) {
     // a snapshot of a refused manifest is never kept
     if (snap.created) removeTree(snap.dir);
     throw err;
   }
-  const name = manifest.name;
-  const mh = manifestHash(manifest);
-  const source: InstallSource = opts.via === 'package' ? 'package' : `linked:${fs.realpathSync.native(opts.source)}`;
-  const grants = readGrants(opts.home, opts.trust);
+  const manifest = read.manifest;
+  const name = name0;
+  const mh = read.manifestHash;
   const current = effectiveInstall(grants, name);
-  if (current && current.packageHash === snap.packageHash && current.manifestHash === mh) return { state: 'unchanged', packageHash: snap.packageHash };
+  if (current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
   const pending = pendingFor(opts.home, name, snap.packageHash, mh, source);
   if (pending) return { state: 'staged', cardId: pending.card.cardId, record: pending };
-  const prevManifest = current ? pinnedManifest(opts.home, current) : null;
-  const prevFiles: TreeFile[] = current ? hashPinnedTree(pinnedDir(opts.home, name, current.packageHash)) : [];
+  const prevRead = current ? pinnedRead(opts.home, current, grants.trust.get(current.manifestHash)) : null;
+  const prevManifest = prevRead?.manifest ?? null;
+  const prevFiles: TreeFile[] = current ? hashPinnedTree(pinnedDir(opts.home, pinDirKey(current), current.packageHash)) : [];
   const widened = detectWidening(prevManifest, manifest);
+  // a third-party publisher that is a skeleton match of another installed third-party publisher (S0b §1)
+  const others = [...new Set(grants.installs.map((r) => parseModId(r.name)?.publisher).filter((p): p is string => !!p && p !== 'gnomon' && p !== 'local' && p !== manifest.publisher))];
+  const looksLike = manifest.publisher === 'gnomon' ? undefined : others.find((o) => modSkeleton(o) === modSkeleton(manifest.publisher));
+  const sourceChangedFrom = current && sourceIdentity(current.source) !== sourceIdentity(source) ? current.source : undefined;
   const detail: InstallCardDetail = {
     name,
+    publisher: manifest.publisher,
+    publisherDisplay: publisherDisplay(manifest.publisher, source),
+    format: read.format,
+    ...(read.upgradedHash ? { upgradedHash: read.upgradedHash } : {}),
+    versionClass: classify(grants, name, current, prevRead, read, snap.packageHash),
+    ...(prevManifest ? { prevVersion: prevManifest.version } : {}),
+    ...(sourceChangedFrom ? { sourceChangedFrom } : {}),
+    ...(looksLike ? { looksLike } : {}),
+    ...(serverName ? { serverName } : {}),
+    ...(binding ? { rebind: { host: binding.host, namespace: binding.namespace } } : {}),
     kind: manifest.kind,
     version: manifest.version,
     source,
@@ -428,8 +634,18 @@ export function stageInstall(opts: StageOptions): StageResult {
   return { state: 'staged', cardId: card.cardId, record };
 }
 
+/** Re-read a staged/pinned snapshot's manifest under the tier its source derives (format 1 only for a historical pin). */
+function snapshotRead(home: string, name: string, packageHash: string, source: string): { read: ReadManifestResult; tier: TrustTier } {
+  const tier: TrustTier = source.startsWith('linked:') ? 'local' : deriveTier(packageHash);
+  const bytes = fs.readFileSync(path.join(pinnedDir(home, name, packageHash), MANIFEST_FILE));
+  const legacy = tier === 'first-party' && HISTORICAL_FIRST_PARTY_PINS.has(packageHash) ? { legacyPublisher: 'gnomon' as const } : {};
+  return { read: readManifest(bytes, { tier, ...legacy }), tier };
+}
+
 export interface DecideOptions {
   presenceToken: unknown;
+  /** MCP server names in the user's .mcp.json (COLLISION, re-checked at decide) */
+  userMcpServers?: readonly string[];
   authority: RootAuthority;
   emit?: ManifestEventSink;
   now?: Date;
@@ -464,24 +680,27 @@ export function rollbackPresenceBinding(name: string, toPackageHash: string | un
  */
 export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; lines: string[]; flags: CardFlag[]; detailHash: string } {
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
-  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
+  if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
   const dir = pinnedDir(home, name, rec.detail.packageHash);
   if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
-  const tier = rec.detail.source.startsWith('linked:') ? 'local' : deriveTier(rec.detail.packageHash);
-  const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier });
-  const mh = manifestHash(manifest);
+  const { read, tier } = snapshotRead(home, name, rec.detail.packageHash, rec.detail.source);
+  const manifest = read.manifest;
+  const mh = read.manifestHash;
   const surf = surfaceOf(manifest);
-  const derived: InstallCardDetail = { ...rec.detail, ...surf, name: manifest.name, kind: manifest.kind, version: manifest.version, tier, manifestHash: mh };
-  const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, ...pick(rec.detail) });
-  if (claimed !== canonicalJson({ mh, tier, name: manifest.name, ...pick(derived) })) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
+  const id = `${manifest.publisher}.${manifest.name}`;
+  const derived: InstallCardDetail = { ...rec.detail, ...surf, name: id, publisher: manifest.publisher, publisherDisplay: publisherDisplay(manifest.publisher, rec.detail.source), kind: manifest.kind, version: manifest.version, tier, manifestHash: mh };
+  const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, display: rec.detail.publisherDisplay, ...pick(rec.detail) });
+  if (claimed !== canonicalJson({ mh, tier, name: id, display: derived.publisherDisplay, ...pick(derived) })) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
   // Aegis C4: readPaths and source are not trusted from the staged file either
   if (derived.readPaths.length && !derived.capabilities.includes('knowledge:provide')) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: read paths without knowledge:provide`, { name, cardId });
   for (const p of derived.readPaths) {
     if (typeof p !== 'string' || !path.isAbsolute(p) || path.normalize(p) !== p || p.split(/[\\/]/).includes('..')) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: read path ${String(p).slice(0, 80)} is not an absolute normalized path`, { name, cardId });
   }
-  if (derived.source !== 'package') {
+  if (derived.source.startsWith('git:')) {
+    if (!parseGitSource(derived.source)) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the git source is not canonical`, { name, cardId });
+  } else if (derived.source !== 'package') {
     const src = derived.source.startsWith('linked:') ? derived.source.slice(7) : '';
     if (COMMAND_UNSAFE.test(src)) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the linked source path contains a line separator, format or control character`, { name, cardId });
     let linkedHash: string | null = null;
@@ -511,7 +730,7 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
-  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
+  if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
   if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
@@ -526,20 +745,25 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
   if (decision === 'install' && !already) {
     const dir = pinnedDir(home, name, rec.detail.packageHash);
     if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
-    const tier = rec.detail.source.startsWith('linked:') ? 'local' : deriveTier(rec.detail.packageHash);
-    const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier });
-    const mh = manifestHash(manifest);
+    const { read, tier } = snapshotRead(home, name, rec.detail.packageHash, rec.detail.source);
+    const manifest = read.manifest;
+    const mh = read.manifestHash;
     const surf = surfaceOf(manifest);
-    const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, ...pick(rec.detail) });
-    const derived = canonicalJson({ mh, tier, name: manifest.name, ...pick({ ...rec.detail, ...surf }) });
+    const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, up: rec.detail.upgradedHash ?? null, ...pick(rec.detail) });
+    const derived = canonicalJson({ mh, tier, name: `${manifest.publisher}.${manifest.name}`, up: read.upgradedHash ?? null, ...pick({ ...rec.detail, ...surf }) });
     if (claimed !== derived) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
     const { packageHash, source, readPaths } = rec.detail;
+    // the publisher and the server name are re-checked against the grant table as it is NOW (S0b)
+    const g = readGrants(home, opts.authority);
+    const bind = checkPublisherSource(manifest, source, g, { rebind: rec.detail.rebind !== undefined, tier });
+    checkServerCollision(home, manifest, g, opts.userMcpServers);
     appendGrantRow(home, opts.authority, { kind: 'grant.trust', manifestHash: mh, tier }, now);
     if (surf.capabilities.length) {
       appendGrantRow(home, opts.authority, { kind: 'grant.capability', manifestHash: mh, capabilities: surf.capabilities, ...(readPaths.length ? { read: readPaths } : {}) }, now);
     }
     if (surf.egress.length) appendGrantRow(home, opts.authority, { kind: 'grant.egress', manifestHash: mh, hosts: surf.egress }, now);
-    appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source }, now); // LAST
+    if (bind) appendGrantRow(home, opts.authority, { kind: 'grant.publisher', publisher: manifest.publisher, host: bind.host, namespace: bind.namespace }, now);
+    appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source, ...(read.upgradedHash ? { upgradedHash: read.upgradedHash } : {}) }, now); // LAST
     emit('manifest.installed', { name, manifestHash: mh, packageHash, cardId, source });
     emit('mod.installed', { name, packageHash, ...(rec.detail.replaces ? { replaces: rec.detail.replaces.packageHash } : {}) });
     if (source.startsWith('linked:') && !rec.detail.replaces) emit('mod.linked', { name, path: source.slice(7), packageHash });
@@ -561,7 +785,7 @@ function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
 export function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
-  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
+  if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const verdict = consumeBoundPresence(opts.presenceToken, 'mod.rollback', rollbackPresenceBinding(name, toPackageHash));
   if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `rollback needs fresh presence (${verdict})`, { name, presence: verdict });
   const grants = readGrants(home, opts.authority);
@@ -572,15 +796,17 @@ export function rollbackMod(home: string, name: string, toPackageHash: string | 
     ? [...rows].reverse().find((r) => r.packageHash === toPackageHash)
     : [...rows].reverse().find((r) => r.packageHash !== current.packageHash);
   if (!target) throw new ManifestRefusal('NOT_INSTALLED', `no previously approved snapshot ${toPackageHash ?? '(previous)'} for ${name}`, { name, toPackageHash });
-  const files = hashPinnedTree(pinnedDir(home, name, target.packageHash));
+  const files = hashPinnedTree(pinnedDir(home, pinDirKey(target), target.packageHash));
   if (computePackageHash(files) !== target.packageHash) throw new ManifestRefusal('INTEGRITY', `snapshot ${target.packageHash} of ${name} is damaged`, { name });
-  const row = appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: target.manifestHash, packageHash: target.packageHash, cardId: target.cardId, source: current.source }, now) as GrantInstallRow;
+  // a rollback to a legacy (format-1) pin keeps it as a v1 row would resolve; S0b rows carry the full id
+  if (target.legacyName) throw new ManifestRefusal('FORMAT', `${name}: a format-1 snapshot is not re-pinned by rollback (re-install it)`, { name });
+  const row = appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: target.manifestHash, packageHash: target.packageHash, cardId: target.cardId, source: current.source, ...(target.upgradedHash ? { upgradedHash: target.upgradedHash } : {}) }, now) as GrantInstallRow;
   emit('mod.rolled-back', { name, toPackageHash: target.packageHash });
   return row;
 }
 
 export type LoadResult =
-  | { state: 'ready'; name: string; snapshotDir: string; manifest: ManifestV1; packageHash: string; manifestHash: string; tier: TrustTier | undefined; readPaths: string[] }
+  | { state: 'ready'; name: string; snapshotDir: string; manifest: ManifestV2; packageHash: string; manifestHash: string; tier: TrustTier | undefined; readPaths: string[] }
   | { state: 'paused'; name: string; reason: 'changed'; cardId: string | null; files: TreeDiff; snapshotDir: string };
 
 export interface LoadOptions {
@@ -590,6 +816,8 @@ export interface LoadOptions {
   emit?: ManifestEventSink;
   /** principal recorded on a re-approve card raised by a linked-folder change (the kernel) */
   kernelPrincipal?: string;
+  /** MCP server names in the user's .mcp.json (COLLISION, re-checked at load) */
+  userMcpServers?: readonly string[];
 }
 
 /** Resolve what may load for a mod: from the pinned snapshot only, under its grants. */
@@ -601,15 +829,39 @@ export function loadMod(opts: LoadOptions): LoadResult {
     emit('manifest.refuse', { name: opts.name, code: 'NOT_INSTALLED' });
     throw new ManifestRefusal('NOT_INSTALLED', `${opts.name} has no root-signed grant.install (a staged card takes no effect until decided)`, { name: opts.name });
   }
-  const dir = pinnedDir(opts.home, row.name, row.packageHash);
+  const dir = pinnedDir(opts.home, pinDirKey(row), row.packageHash);
   const files = fs.existsSync(dir) ? hashPinnedTree(dir) : [];
   if (computePackageHash(files) !== row.packageHash) {
     emit('manifest.refuse', { name: row.name, code: 'INTEGRITY', packageHash: row.packageHash });
     throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${row.name} does not hash to ${row.packageHash}`, { name: row.name });
   }
   const tier = grants.trust.get(row.manifestHash);
-  const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier: tier ?? 'local' });
-  if (manifestHash(manifest) !== row.manifestHash) throw new ManifestRefusal('INTEGRITY', `manifestHash of ${row.name} does not match its grant`, { name: row.name });
+  const pub = parseModId(row.name)?.publisher;
+  let read: ReadManifestResult;
+  try {
+    // format 1 loads ONLY for a resolved legacy row, under its alias publisher (S0b §4)
+    read = readManifest(fs.readFileSync(path.join(dir, MANIFEST_FILE)), { tier: tier ?? 'local', ...(row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {}) });
+    if (`${read.manifest.publisher}.${read.manifest.name}` !== row.name) throw new ManifestRefusal('INTEGRITY', `${row.name}: the pinned manifest names another mod`, { name: row.name });
+    checkPublisherSource(read.manifest, row.source, grants, { tier });
+    checkServerCollision(opts.home, read.manifest, grants, opts.userMcpServers);
+  } catch (err) {
+    if (err instanceof ManifestRefusal) emit('manifest.refuse', { name: row.name, code: err.manifestCode, ...err.detail });
+    throw err;
+  }
+  const manifest = read.manifest;
+  if (read.manifestHash !== row.manifestHash) throw new ManifestRefusal('INTEGRITY', `manifestHash of ${row.name} does not match its grant`, { name: row.name });
+  // S0b §3: the upgraded V2 object must be the one the human approved; a different upgrader re-cards
+  if (row.upgradedHash !== undefined && read.upgradedHash !== row.upgradedHash) {
+    emit('mod.paused', { name: row.name, reason: 'changed', files: [] });
+    let cardId: string | null = null;
+    try {
+      const st = stageInstall({ home: opts.home, source: dir, via: 'package', requestedBy: opts.kernelPrincipal ?? 'p:00000000/kernel', trust: opts.trust, emit, ...(opts.userMcpServers ? { userMcpServers: opts.userMcpServers } : {}) });
+      if (st.state === 'staged') cardId = st.cardId;
+    } catch (err) {
+      if (!(err instanceof ManifestRefusal)) throw err;
+    }
+    return { state: 'paused', name: row.name, reason: 'changed', cardId, files: { added: [], changed: [], removed: [] }, snapshotDir: dir };
+  }
   const check = checkAgainstGrants(manifest, row.manifestHash, grants);
   if (!check.ok) {
     emit('manifest.refuse', { name: row.name, code: 'GRANT', missingCapabilities: check.missingCapabilities, missingEgress: check.missingEgress });
@@ -619,7 +871,7 @@ export function loadMod(opts: LoadOptions): LoadResult {
     const folder = row.source.slice(7);
     let changed: TreeDiff | null = null;
     try {
-      const t = hashSourceTree(folder, row.name, noEvents);
+      const t = hashSourceTree(folder, pinDirKey(row), noEvents);
       if (t.packageHash !== row.packageHash) changed = diffTrees(files, t.files);
     } catch (err) {
       if (!(err instanceof ManifestRefusal)) throw err;
