@@ -300,7 +300,7 @@ components:
       kitId and clientApiId (§12.3, §12.8). TD-2026-10-19-063 (self-update
       pickup, founder ruling "ONE Touch ID", a deliberate move) moved
       clientApiId sha256:99d5c152…97d1 →
-      sha256:fe45ab09a8a9cf2a1a82090e837c8d0dbe9b5f7a2d38ee6fb4bb772ae9013fb8
+      sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4
       (AUTH_WIRE_DESCRIPTOR gains `resume`: the {resumeToken} web form, the
       gui.resume notification, its TTL, single use, via 'resume' and its
       refusals). Before it, TD-2026-10-19-194 (voice V0,

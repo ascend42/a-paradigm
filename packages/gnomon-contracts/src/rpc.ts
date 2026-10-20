@@ -79,7 +79,7 @@ export const VERBS: readonly VerbDescriptor[] = deepFreeze([
     access: { human: 'yes', agent: 'yes', session: 'own scope', mod: false, voice: false, readToken: false, peer: false },
   },
   {
-    n: 8, verb: 'approve', params: ['cardId?', 'decision', 'note?', 'decisionSig?', 'via?', 'voice?'], result: 'card:v1',
+    n: 8, verb: 'approve', params: ['cardId?', 'decision', 'note?', 'decisionSig?', 'via?', 'voice?', 'scope?'], result: 'card:v1',
     refusals: ['FORBIDDEN', 'NOT_FOUND', 'AUTH'], humanOnly: true,
     access: { human: 'presence per class; root key for use-api-token, install; withdraw on held cards with no presence', agent: false, session: false, mod: false, voice: 'intent form only, supervised child inside a live arm', readToken: false, peer: false },
   },

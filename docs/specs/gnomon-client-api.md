@@ -8,7 +8,7 @@ Everything a community client needs is published by `@a-company/gnomon-contracts
 ## Identity
 
 - clientApi: `gnomon-rpc:v1`
-- clientApiId: `sha256:fe45ab09a8a9cf2a1a82090e837c8d0dbe9b5f7a2d38ee6fb4bb772ae9013fb8` (pinned in `schemas/client-api.ids.json`)
+- clientApiId: `sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4` (pinned in `schemas/client-api.ids.json`)
 - kitId: `sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a` (`kit:v1`)
 - clientApiId = sha256(canonicalJson(descriptor) + "\n" + kitId); modAbiId is not an input.
 
@@ -23,7 +23,7 @@ Everything a community client needs is published by `@a-company/gnomon-contracts
 | 5 | `log.append` | kind, payload?, ref?, causes?, scope?, idem?, audience?, sensitivity? | {id, seq, hash} | FORBIDDEN, BAD_REQUEST, ENGINE | no | granted kinds + request.* (first-party human-class connections) | granted kinds | no | modns.<name>.* only | voice.* + request.voice.arm | no | no |
 | 6 | `log.read` | since?, kinds?, scope?, follow? | backlog + stream | AUTH, BAD_REQUEST | no | full | redacted | own scope | granted kinds, own modns | own session + voice.* | redacted | no |
 | 7 | `permit.reserve` | kind, scope, backend?, model?, limits?, tool?, input?, op?, permitId? | permit:v1 | BUDGET_DENIED, BILLING_REFUSED, FORBIDDEN | no | yes | yes | own scope | no | no | no | no |
-| 8 | `approve` | cardId?, decision, note?, decisionSig?, via?, voice? | card:v1 | FORBIDDEN, NOT_FOUND, AUTH | yes | presence per class; root key for use-api-token, install; withdraw on held cards with no presence | no | no | no | intent form only, supervised child inside a live arm | no | no |
+| 8 | `approve` | cardId?, decision, note?, decisionSig?, via?, voice?, scope? | card:v1 | FORBIDDEN, NOT_FOUND, AUTH | yes | presence per class; root key for use-api-token, install; withdraw on held cards with no presence | no | no | no | intent form only, supervised child inside a live arm | no | no |
 | 9 | `contract.register` | contract | {contractId, nodes} | BAD_REQUEST, FORBIDDEN | no | yes | yes | no | no | no | no | no |
 | 10 | `contract.claim` | contractId, nodeId, op, ttl?, expect?, note?, responses? | {nodeId, status, by, seq, expiresAt?} | CAS_LOST, NOT_FOUND, BAD_REQUEST | no | yes | yes | yes | no | no | no | no |
 | 11 | `oracle.run` | contractId, nodeId, oracle | oracle:v1 | PERMIT_REQUIRED, UNSUPPORTED, ENGINE, FORBIDDEN | no | yes | requests | requests | no | no | no | no |
@@ -44,6 +44,7 @@ Verbs 13–15 are human-device verbs (P8-D98): only a human principal on a devic
 - hello features: `journal.cursor`, `session.resume` — the kernel advertises none until it builds them; a missing feature refuses the dependent operation, never degrades it.
 - `log.read` cursor: `{logId, seq}`; a cursor from another log is `BAD_REQUEST{reason:'cursor-epoch'}`.
 - decisionSig v2: first line `gnomon:decision:v2`, used for `answer` decisions, carrying the answer digest.
+- approve `scope` (TD-2026-10-20-294): `{kind:'exact'}` or `{kind:'prefix', prefix:[1-3 words]}`, only with `always` on a Bash permission card; a prefix scope signs the v2 layout whose last line is the scope digest (sha256 over canonicalJson of the scope).
 
 ## Refusals (`refusal:v1`)
 

@@ -49,7 +49,7 @@ import {
   D98_CLOSED_VALUES,
   VOICE_CLOSED_VALUES,
 } from './rpc.js';
-import { APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, decisionMessageV2 } from './card.js';
+import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
 import { JSON_RPC_CODES } from './refusal.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
@@ -117,12 +117,21 @@ const DECISION_V2_INPUTS = {
   approverPrincipalId: 'p:local/founder',
   answerDigest: `sha256:${'a'.repeat(64)}`,
 } as const;
+const SCOPE_VECTOR = { kind: 'prefix', prefix: ['git', 'log'] } as const;
 export const DECISION_SIG_DESCRIPTOR = deepFreeze({
   domain: APPROVE_SIG_DOMAIN,
   v2: {
     marker: DECISION_SIG_V2_MARKER,
     decisions: [...DECISION_SIG_V2_DECISIONS],
     vector: { inputs: DECISION_V2_INPUTS, message: decisionMessageV2(DECISION_V2_INPUTS) },
+  },
+  // TD-2026-10-20-294: approve{scope}; a prefix-scoped always signs the v2 layout whose last line is scopeDigest(scope)
+  scope: {
+    kinds: [...APPROVE_SCOPE_KINDS],
+    prefixWords: { min: 1, max: APPROVE_SCOPE_PREFIX_MAX_WORDS },
+    decisions: [...DECISION_SIG_V2_SCOPED_DECISIONS],
+    digest: 'sha256(canonicalJson({kind:"prefix", prefix}))',
+    vector: { scope: SCOPE_VECTOR, scopeDigest: scopeDigest(SCOPE_VECTOR), message: decisionMessageV2({ ...DECISION_V2_INPUTS, decision: 'always', answerDigest: scopeDigest(SCOPE_VECTOR) }) },
   },
 });
 

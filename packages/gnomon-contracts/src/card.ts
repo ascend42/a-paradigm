@@ -13,7 +13,7 @@
  *           note (change-note:v1) and strictness{level, mode, reason}.
  */
 
-import { Checker, isPlainObject, SHA256_TAGGED, type ValidateOptions } from './internal.js';
+import { Checker, canonicalJson, isPlainObject, sha256Tagged, SHA256_TAGGED, type ValidateOptions } from './internal.js';
 import { ID_PATTERNS, HSID_PATTERN, CONTRACT_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN } from './principal.js';
 import { validateChangeNoteV1, changeNoteHasUnknownValue, RISK_TIERS, type ChangeNoteV1 } from './change-note.js';
@@ -127,6 +127,40 @@ export function decisionMessageV2(f: DecisionMessageV2Fields): string {
 }
 /** Decisions whose decisionSig uses the v2 layout. */
 export const DECISION_SIG_V2_DECISIONS = Object.freeze(['answer'] as const);
+
+/**
+ * Prefix-scoped `always` (TD-2026-10-20-294 part 3). `approve{decision:'always', scope}` on a Bash permission card:
+ *   {kind:'exact'}                    the v1 exact rule (the same as no scope)
+ *   {kind:'prefix', prefix:[1..3 words]} the rule matches a later Bash command only when it is ONE simple command of
+ *                                     literal words whose argv starts with exactly these words (#always-rules).
+ * A prefix scope is bound by decisionSig: the decision uses the v2 layout with its LAST line the scope digest
+ * (scopeDigest: sha256 over canonicalJson({kind:'prefix', prefix})), so the line after the approver is the answer
+ * digest for `answer` and the scope digest for a prefix `always` (the decision line tells them apart). An exact (or
+ * absent) scope keeps the v1 message, unchanged.
+ */
+export const APPROVE_SCOPE_KINDS = Object.freeze(['exact', 'prefix'] as const);
+export const APPROVE_SCOPE_PREFIX_MAX_WORDS = 3;
+export const APPROVE_SCOPE_WORD_MAX_CHARS = 128;
+export type ApproveScope = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] };
+/** Decisions that may carry a scope; a prefix scope decision uses the v2 layout (last line = scope digest). */
+export const DECISION_SIG_V2_SCOPED_DECISIONS = Object.freeze(['always'] as const);
+
+/** The scope, validated (shape only: 1–3 non-empty words, no NUL/newline), else null. */
+export function parseApproveScope(v: unknown): ApproveScope | null {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  if (o.kind === 'exact') return Object.keys(o).length === 1 ? { kind: 'exact' } : null;
+  if (o.kind !== 'prefix' || Object.keys(o).length !== 2 || !Array.isArray(o.prefix)) return null;
+  const p = o.prefix as unknown[];
+  if (p.length < 1 || p.length > APPROVE_SCOPE_PREFIX_MAX_WORDS) return null;
+  if (!p.every((w) => typeof w === 'string' && w.length > 0 && w.length <= APPROVE_SCOPE_WORD_MAX_CHARS && !/[\0\n\r]/.test(w))) return null;
+  return { kind: 'prefix', prefix: [...(p as string[])] };
+}
+
+/** sha256:<hex> over canonicalJson({kind:'prefix', prefix}) — the decisionSig v2 last line of a prefix `always`. */
+export function scopeDigest(scope: { kind: 'prefix'; prefix: readonly string[] }): string {
+  return sha256Tagged(canonicalJson({ kind: 'prefix', prefix: [...scope.prefix] }));
+}
 
 /**
  * `approval.expire{why}` values (§3.4). ADDITIVE. `session-drained` (P8-D98, TD-2026-10-19-528 F4): at a drain
