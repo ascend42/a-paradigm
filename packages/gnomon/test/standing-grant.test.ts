@@ -60,7 +60,7 @@ async function refusal(p: Promise<unknown>): Promise<Record<string, unknown>> {
 }
 
 describe('F6: minting a standing grant', () => {
-  it('one grant card (root class: one fresh presence + the root key) mints grant.standing for this device, ≤ 12 h', async () => {
+  it('one grant card (fresh class: ONE presence, no root signature) mints grant.standing for this device, ≤ 12 h', async () => {
     const r = rig();
     const id = await r.mint();
     expect(r.helper.prompts.length).toBe(1);
@@ -68,7 +68,14 @@ describe('F6: minting a standing grant', () => {
     expect(row).toMatchObject({ grantId: id, cardId: id, tuples: [...ALL].sort(), repos: [REPO], device: unlockKeyOf(gui()), by: HUMAN });
     expect(Date.parse(String(row.expiresAt)) - r.now.t).toBe(STANDING_GRANT_MAX_MS);
     expect(r.kinds().indexOf('request.grant.standing')).toBeLessThan(r.kinds().indexOf('grant.standing'));
-    expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload).toMatchObject({ cardId: id, decision: 'allow', presence: 'fresh' });
+    const dec = r.rows.find((x) => x.kind === 'approval.decide')!.payload;
+    expect(dec).toMatchObject({ cardId: id, decision: 'allow', presence: 'fresh' });
+    expect(dec.rootSig).toBeUndefined(); // Aegis open point 1: no root signature on the standing-grant card
+    // every other grant card keeps the root class (root signature on its decide row)
+    const other = await r.broker.raise({ kind: 'grant', requestedBy: HUMAN, attended: true, detail: { op: 'voice-approvals' }, lines: ['grant'], decisions: ['allow', 'deny'] });
+    await r.broker.approve(gui(), { cardId: other.cardId, decision: 'allow' });
+    expect(r.rows.find((x) => x.kind === 'approval.decide' && x.payload.cardId === other.cardId)!.payload.rootSig).toBeDefined();
+    expect(r.kinds().filter((k) => k === 'grant.standing')).toHaveLength(1);
     expect(r.grants.status()).toMatchObject({ built: true, active: [{ grantId: id, uses: 0 }] });
   });
 

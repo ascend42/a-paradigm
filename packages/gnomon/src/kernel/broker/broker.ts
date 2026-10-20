@@ -190,6 +190,12 @@ export interface RaiseInput {
   /** voice never decides this card, deny included (§14.7); a gate-class card with detail.target 'claude-binary' is always hand-only (TD-2026-10-19-063 M3) */
   handOnly?: boolean;
   /**
+   * TD-2026-10-20-086 F6 (Aegis open point 1): this `grant` card mints a standing grant (#standing-grant only).
+   * Its `allow` is FRESH class (one presence, no root signature) and its touch keeps the device's cached unlock;
+   * every other `grant` card keeps the root class.
+   */
+  standingGrant?: boolean;
+  /**
    * P8-D96: the decisions this card offers, a subset of its kind's (permission
    * slice cards: allow | deny, never `always`). Only these are signed as
    * actions; `approve` refuses any other with bad-params.
@@ -265,6 +271,8 @@ interface CardRecord {
   checkNote?: RaiseInput['checkNote'];
   privateNote?: boolean;
   ruleScope?: { repoKey: string };
+  /** F6: a standing-grant card (RaiseInput.standingGrant): allow is fresh, not root */
+  standingGrant?: boolean;
   /** TD-2026-10-20-294: the argv of a Bash permission card's command when it is ONE literal simple command (simpleArgv), else absent */
   bashArgv?: readonly string[];
 }
@@ -425,7 +433,8 @@ export class ApprovalBroker {
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
-    this.#cards.set(cardId, { card, detail: input.detail, ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
+    if (input.standingGrant && input.kind !== 'grant') throw fail('BAD_REQUEST', 'bad-params', 'standingGrant is a grant card');
+    this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
   }
 
@@ -657,7 +666,8 @@ export class ApprovalBroker {
     if (!isCardDecidable(card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is ${String(card.state)}: not decidable with ${decision}`, { cardId, state: String(card.state) });
     const flags = (card.flags ?? []) as string[];
     if (decision === 'always' && flags.includes('peer')) throw fail('FORBIDDEN', 'peer-always', 'a peer-flagged card never takes always', { gate: 'link', cardId });
-    const cls = baseClass(String(card.kind), decision, flags);
+    // F6 (Aegis open point 1): ONLY the standing-grant card's allow is fresh (one presence, no root key); other grants stay root
+    const cls = r.standingGrant && decision === 'allow' ? 'fresh' : baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
     if (r.decisions && decision !== 'withdraw' && !r.decisions.includes(decision)) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not one of this card's actions (${r.decisions.join(', ')})`, { cardId });
     if (decision === 'always' && !r.ruleScope) throw fail('BAD_REQUEST', 'bad-params', 'this card has no rule scope: always is not available on it', { cardId });
@@ -731,7 +741,7 @@ export class ApprovalBroker {
       }
     }
     // F6: the grant card's own touch keeps the device's unlock, so the standing uses it mints can be signed
-    const keepForGrant = String(card.kind) === 'grant' && r.detail.op === 'standing';
+    const keepForGrant = r.standingGrant === true;
     if (!standing && helperSigns && cls === 'cached' && !isCli && (await this.#useUnlock(uk, ctx.connId)) === 'ok') {
       try {
         decisionSig = (await this.#approvals.signDecision!({ connId: ctx.connId, unlockKey: uk, approver: ctx.principal, message, mode: 'cached' })).decisionSig;

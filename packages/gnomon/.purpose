@@ -1663,7 +1663,9 @@ components:
 
   standing-grant:
     description: >-
-      TD-2026-10-20-086 F6 (spec §3.4 "Standing grant"),
+      TD-2026-10-20-086 F6 (spec §3.4 "Standing grant"). The grant card is
+      raised with RaiseInput.standingGrant: its allow is FRESH class (one
+      presence, no root signature; Aegis open point 1); other grant cards stay root.
       src/kernel/broker/standing-grant.ts. ONE root-class `grant` card
       (request.grant.standing{tuples, repos} from the human on the GUI only,
       detail.op 'standing') mints grant.standing{grantId (= the cardId),

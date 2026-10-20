@@ -3,7 +3,8 @@
  *
  * #standing-grant: the daily standing grant (TD-2026-10-20-086 F6; spec §3.4 "Standing grant"). The founder's
  * Touch ID fails, so every presence proof is a typed password; the bar is never to prompt more than native Claude
- * Code. ONE `grant` card (root class in classes.ts, so one presence) mints
+ * Code. ONE `grant` card, raised with RaiseInput.standingGrant so its allow is FRESH class (one presence, no root
+ * signature; every other `grant` card keeps classes.ts's root class; Aegis open point 1), mints
  * `grant.standing{grantId, cardId, tuples, repos, device, expiresAt, by}`; while it stands, a human decision on the
  * SAME GUI device that one of its tuples covers takes no presence prompt: the broker writes
  * `approval.decide{presence:'standing:<grantId>'}` (the decisionSig is still the approvals key's, signed by the
@@ -261,6 +262,8 @@ export class StandingGrants implements StandingSeam {
         'Never covered: installs, re-pins, gate-class, cloud fallback, declassify, anything a peer raised',
       ],
       decisions: ['allow', 'deny'],
+      // Aegis open point 1: one presence (fresh class), no root signature; every other grant card stays root
+      standingGrant: true,
       timeoutMs: this.#d.timeoutMs ?? STANDING_CARD_TIMEOUT_MS,
       effect: async (decision, ctx) => {
         if (decision !== 'allow') return;
