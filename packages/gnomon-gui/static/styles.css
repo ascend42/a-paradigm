@@ -848,3 +848,12 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .workshop-install { font-size: 11px; }
 .workshop-install[disabled] { border-style: dashed; }
 .status-line { gap: 0; }
+
+/* fidelity 2 colour: a card with no state edge takes its project's pigment on the edge (the INK of the pair, >= 3:1 on
+   the sheet in both themes; the fill is for swatches only). State edges (knot, failed, gate, held, claim-mismatch) win. */
+.card.pe-h0:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-terracotta-ink); }
+.card.pe-h1:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sage-ink); }
+.card.pe-h2:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-slate-ink); }
+.card.pe-h3:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-ochre-ink); }
+.card.pe-h4:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-rose-clay-ink); }
+.card.pe-h5:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sea-grey-ink); }

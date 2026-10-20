@@ -583,7 +583,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(
       doc,
       'header',
