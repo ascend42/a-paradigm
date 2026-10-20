@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { OfferRouter, deskRepoScope, openText, type CommittedRow, type OfferAsker, type RouterRow } from '../src/kernel/desk/offer-router.js';
-import type { DeskMod } from '../src/kernel/desk/mcp-passthrough.js';
+import { serverNameOf, type DeskMod } from '../src/kernel/desk/mcp-passthrough.js';
 import { HSID, HSID2, HUMAN, KERNEL, assistantLine, deskMod, offerReply, toolResultLine, toolUseLine } from './desk-fixtures.js';
 
 const GUI: OfferAsker = { connId: 'conn-1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
@@ -30,7 +30,7 @@ function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undef
       written.push({ kind, payload, ids });
     },
     // H1b: by default every fixture mod's server was added to the session
-    sessionServers: () => new Set(opts.served ?? mods.map((m) => `gnomon-${m.name}`)),
+    sessionServers: () => new Set(opts.served ?? mods.map((m) => serverNameOf(m.name))),
     diag: (event, data) => diags.push({ event, data }),
     send: async (principal, hsid, text) => {
       sent.push({ principal, hsid, text });
@@ -52,7 +52,7 @@ function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undef
   return { r, written, sent, diags, commit, turn, setMods: (m: DeskMod[]) => (mods = m) };
 }
 
-const BLOCK = { mod: 'constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' };
+const BLOCK = { mod: 'acme.constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' };
 
 describe('#offer-router: offer.shown', () => {
   it('one valid block → one kernel offer.shown with phase/title/contextIn COPIED from the manifest (D3)', () => {
@@ -61,7 +61,7 @@ describe('#offer-router: offer.shown', () => {
     expect(rows).toEqual([{
       kind: 'offer.shown',
       session: HSID,
-      payload: { offerId: 'offer:01J00000000000000000000001', hsid: HSID, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on constellation', contextIn: ['recent-messages'], question: BLOCK.question, replyTurnId: `turn:${HSID}/1` },
+      payload: { offerId: 'offer:01J00000000000000000000001', hsid: HSID, mod: 'acme.constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on acme.constellation', contextIn: ['recent-messages'], question: BLOCK.question, replyTurnId: `turn:${HSID}/1` },
     }]);
   });
 
@@ -97,7 +97,7 @@ describe('#offer-router: offer.shown', () => {
   });
 
   it('an uninstalled mod → plain text, no offer', () => {
-    expect(rig().turn(HSID, 1, offerReply('a', { ...BLOCK, mod: 'neurons' }))).toEqual([]);
+    expect(rig().turn(HSID, 1, offerReply('a', { ...BLOCK, mod: 'acme.neurons' }))).toEqual([]);
   });
 
   it('a non-offerable mod (no declared offers) or an undeclared kind → refused', () => {
@@ -121,13 +121,13 @@ describe('#offer-router: offer.shown', () => {
 
   it('L4: a row with no principal is not folded either', async () => {
     const t = rig();
-    t.r.observe({ kind: 'offer.shown', session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
+    t.r.observe({ kind: 'offer.shown', session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'acme.constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on acme.constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
     await expect(t.r.decide(GUI, { offerId: 'offer:01J00000000000000000000009', decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 
   it('a row by a non-kernel principal is not folded as an offer', () => {
     const t = rig();
-    t.r.observe({ kind: 'offer.shown', principal: HUMAN, session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
+    t.r.observe({ kind: 'offer.shown', principal: HUMAN, session: HSID, payload: { offerId: 'offer:01J00000000000000000000009', hsid: HSID, mod: 'acme.constellation', kind: 'map-the-idea', phase: 'diverge', title: 'Map it on acme.constellation', contextIn: [], question: 'q?', replyTurnId: `turn:${HSID}/1` } });
     return expect(t.r.decide(GUI, { offerId: 'offer:01J00000000000000000000009', decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 });
@@ -146,20 +146,37 @@ describe('#offer-router: mutes', () => {
     const t = rig({ mods: [deskMod('constellation'), deskMod('neurons')] });
     const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
     await t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'stop-here' });
-    expect(t.turn(HSID, 2, offerReply('b', { ...BLOCK, mod: 'neurons' }))).toEqual([]);
+    expect(t.turn(HSID, 2, offerReply('b', { ...BLOCK, mod: 'acme.neurons' }))).toEqual([]);
   });
 
-  it('a repo mute folds from request.offer.mute (and seed() replays it at boot)', async () => {
+  it('a repo mute: request.offer.mute names a live hsid, the kernel writes offer.muted (and seed() replays it at boot)', async () => {
     const t = rig();
-    await t.r.mute(GUI, { mod: 'constellation', scope: 'repo', repo: REPO, muted: true });
-    expect(t.written.at(-1)).toMatchObject({ kind: 'request.offer.mute', payload: { mod: 'constellation', repo: REPO, muted: true }, ids: { connId: 'conn-1' } });
+    await t.r.mute(GUI, { mod: 'acme.constellation', scope: 'repo', hsid: HSID, muted: true });
+    // S0b: the human names a live session they own; the kernel derives the repo and writes offer.muted
+    expect(t.written.at(-2)).toMatchObject({ kind: 'request.offer.mute', payload: { mod: 'acme.constellation', scope: 'repo', hsid: HSID, muted: true }, ids: { connId: 'conn-1' } });
+    expect(t.written.at(-2)!.payload).not.toHaveProperty('repo');
+    expect(t.written.at(-1)).toMatchObject({ kind: 'offer.muted', payload: { mod: 'acme.constellation', repo: REPO, muted: true, hsid: HSID } });
     expect(t.turn(HSID, 1, offerReply('a', BLOCK))).toEqual([]);
-    expect(t.r.repoMuted(REPO, 'constellation')).toBe(true);
+    expect(t.r.repoMuted(REPO, 'acme.constellation')).toBe(true);
     const fresh = rig();
-    fresh.r.seed([{ kind: 'request.offer.mute', principal: KERNEL, payload: { mod: 'constellation', scope: 'repo', repo: REPO, muted: true } }]);
-    expect(fresh.r.repoMuted(REPO, 'constellation')).toBe(true);
-    fresh.r.seed([{ kind: 'request.offer.mute', principal: KERNEL, payload: { mod: 'constellation', scope: 'repo', repo: REPO, muted: false } }]);
-    expect(fresh.r.repoMuted(REPO, 'constellation')).toBe(false);
+    fresh.r.seed([{ kind: 'offer.muted', principal: KERNEL, payload: { mod: 'acme.constellation', repo: REPO, muted: true, hsid: HSID } }]);
+    expect(fresh.r.repoMuted(REPO, 'acme.constellation')).toBe(true);
+    fresh.r.seed([{ kind: 'offer.muted', principal: KERNEL, payload: { mod: 'acme.constellation', repo: REPO, muted: false, hsid: HSID } }]);
+    expect(fresh.r.repoMuted(REPO, 'acme.constellation')).toBe(false);
+    // a request row alone (or a client-supplied repo) folds nothing: only the kernel-owned offer.muted counts
+    fresh.r.seed([{ kind: 'request.offer.mute', principal: KERNEL, payload: { mod: 'acme.constellation', scope: 'repo', repo: REPO, muted: true } }]);
+    fresh.r.seed([{ kind: 'offer.muted', principal: HUMAN, payload: { mod: 'acme.constellation', repo: REPO, muted: true, hsid: HSID } }]);
+    expect(fresh.r.repoMuted(REPO, 'acme.constellation')).toBe(false);
+    expect(fresh.r.repoMuted(REPO, 'acme.constellation')).toBe(false);
+  });
+
+  it('S0b: a mute names a live session the asker owns; a dead or foreign session, or a client repo key, is refused', async () => {
+    const m = { mod: 'acme.constellation', scope: 'repo', hsid: HSID, muted: true };
+    await expect(rig({ owner: undefined }).r.mute(GUI, m)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
+    await expect(rig({ owner: 'p:abcdefgh/someone' }).r.mute(GUI, m)).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
+    const t = rig();
+    await expect(t.r.mute(GUI, { ...m, repo: REPO })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
+    expect(t.written).toEqual([]);
   });
 
   it('deskRepoScope derives repo:<16 hex> from a repoKey', () => {
@@ -176,8 +193,8 @@ describe('#offer-router: ^offer-accept (Aegis D1)', () => {
     expect(res).toMatchObject({ offerId: id, decision: 'open' });
     expect(t.written.map((w) => w.kind)).toEqual(['request.offer.decide', 'offer.decided']);
     expect(t.written[1]!.payload).toEqual({ offerId: id, hsid: HSID, decision: 'open' });
-    expect(t.sent).toEqual([{ principal: HUMAN, hsid: HSID, text: openText('Map it on constellation', 'mcp__gnomon-constellation__open_board') }]);
-    expect(t.sent[0]!.text).toBe('Open Map it on constellation: use the mcp__gnomon-constellation__open_board tool.');
+    expect(t.sent).toEqual([{ principal: HUMAN, hsid: HSID, text: openText('Map it on acme.constellation', 'mcp__gm_acme_constellation__open_board') }]);
+    expect(t.sent[0]!.text).toBe('Open Map it on acme.constellation: use the mcp__gm_acme_constellation__open_board tool.');
   });
 
   it('exactly one decision per offer: a replay is refused', async () => {
@@ -231,7 +248,7 @@ describe('#offer-router: ^offer-accept (Aegis D1)', () => {
     const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
     const r2 = new OfferRouter({
       kernelPrincipal: KERNEL, mods: () => [deskMod('constellation')], repoScopeOf: () => REPO, ownerOf: () => HUMAN, pendingCard: () => false,
-      append: async () => undefined, send: async () => Promise.reject(new Error('not running')), sessionServers: () => new Set(['gnomon-constellation']),
+      append: async () => undefined, send: async () => Promise.reject(new Error('not running')), sessionServers: () => new Set(['gm_acme_constellation']),
       diag: (event, data) => t.diags.push({ event, data }),
     });
     r2.observe({ kind: 'offer.shown', principal: KERNEL, session: HSID, payload: shown!.payload });
@@ -245,7 +262,7 @@ describe('#offer-router: ^offer-accept (Aegis D1)', () => {
     const p = { offerId: shown!.payload.offerId, decision: 'open' };
     await expect(t.r.decide({ ...GUI, principalClass: 'agent' }, p)).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
     await expect(t.r.decide({ ...GUI, credential: 'session' }, p)).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
-    await expect(t.r.mute({ ...GUI, principalClass: 'agent' }, { mod: 'x', scope: 'repo', repo: REPO, muted: true })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
+    await expect(t.r.mute({ ...GUI, principalClass: 'agent' }, { mod: 'acme.x', scope: 'repo', hsid: HSID, muted: true })).rejects.toMatchObject({ refusal: { code: 'FORBIDDEN' } });
     await expect(t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'yes' })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
     expect(t.sent).toEqual([]);
   });
@@ -261,14 +278,14 @@ describe('#offer-router: offer.kept (D3)', () => {
     // another server's same-named tool and a different tool of the mod do not count
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t0', 'mcp__evil__open_board') } })).toEqual([]);
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t0') } })).toEqual([]);
-    expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gnomon-constellation__summarise') } })).toEqual([]);
+    expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gm_acme_constellation__summarise') } })).toEqual([]);
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t1') } })).toEqual([]);
     // an errored call is not kept
-    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t2', 'mcp__gnomon-constellation__open_board') } });
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t2', 'mcp__gm_acme_constellation__open_board') } });
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t2', true) } })).toEqual([]);
-    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t3', 'mcp__gnomon-constellation__open_board') } });
-    expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t3') } })).toEqual([{ kind: 'offer.kept', session: HSID, payload: { offerId: id, hsid: HSID, mod: 'constellation', tool: 'open_board' } }]);
-    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t4', 'mcp__gnomon-constellation__open_board') } });
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t3', 'mcp__gm_acme_constellation__open_board') } });
+    expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t3') } })).toEqual([{ kind: 'offer.kept', session: HSID, payload: { offerId: id, hsid: HSID, mod: 'acme.constellation', tool: 'open_board' } }]);
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t4', 'mcp__gm_acme_constellation__open_board') } });
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t4') } })).toEqual([]);
   });
 
@@ -276,8 +293,8 @@ describe('#offer-router: offer.kept (D3)', () => {
     const t = rig();
     const [shown] = t.turn(HSID, 1, offerReply('a', BLOCK));
     await t.r.decide(GUI, { offerId: shown!.payload.offerId, decision: 'open' });
-    await t.r.mute(GUI, { mod: 'constellation', scope: 'repo', repo: REPO, muted: true });
-    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gnomon-constellation__open_board') } });
+    await t.r.mute(GUI, { mod: 'acme.constellation', scope: 'repo', hsid: HSID, muted: true });
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gm_acme_constellation__open_board') } });
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t1') } })).toEqual([]);
     expect(t.diags.map((d) => d.event)).toEqual(['kept.refused']);
   });
@@ -293,7 +310,7 @@ describe('#offer-router: offer.kept (D3)', () => {
   it('without open, the handoff tool running is not kept', () => {
     const t = rig();
     t.turn(HSID, 1, offerReply('a', BLOCK));
-    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gnomon-constellation__open_board') } });
+    t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolUseLine('t1', 'mcp__gm_acme_constellation__open_board') } });
     expect(t.commit({ kind: 'turn.event', session: HSID, payload: { line: toolResultLine('t1') } })).toEqual([]);
   });
 });
@@ -302,7 +319,7 @@ describe('#offer-router: guidance roster', () => {
   it('lists offerable mods only; empty roster ⇒ no desk note', () => {
     const t = rig({ mods: [deskMod('constellation'), deskMod('quiet', { offers: false })] });
     const g = t.r.guidanceFor(HSID)!;
-    expect(g).toContain('- constellation: map-the-idea (diverge) "Map it on constellation"');
+    expect(g).toContain('- acme.constellation: map-the-idea (diverge) "Map it on acme.constellation"');
     expect(g).not.toContain('quiet');
     t.setMods([]);
     expect(t.r.guidanceFor(HSID)).toBeNull();
