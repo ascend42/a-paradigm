@@ -195,7 +195,7 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
     { kind: 'toggle', id: 'pane-sessions', label: 'Sessions pane', run: 'pane.sessions.toggle', on: i.layout.visible.sessions },
     { kind: 'toggle', id: 'pane-stack', label: 'Decision stack', run: 'pane.stack.toggle', on: i.layout.visible.stack },
     { kind: 'toggle', id: 'pane-workshop', label: 'Workshop', run: 'pane.workshop.toggle', on: i.layout.visible.workshop },
-    { kind: 'readonly', id: 'kernel-regions', label: 'Always shown', value: 'the chat, the voice pill, the run-mode control, the connection readout, the browser risk badge', how: 'These are kernel-owned: no preset, pane switch or mod can hide them.' },
+    { kind: 'readonly', id: 'kernel-regions', label: 'Always shown', value: 'the voice pill, the run-mode control, the connection readout, the browser risk badge (and the chat itself)', how: 'Kernel-owned: no preset, pane switch or mod can hide them; the chat is the page itself.' },
   ];
 
   const voice: SettingRow[] = [];
