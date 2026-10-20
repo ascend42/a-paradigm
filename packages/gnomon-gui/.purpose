@@ -271,6 +271,22 @@ components:
       (opens the fanned pile); pinned cards lie flat. The pane head reads
       Stack · n pending · hover to fan · scope key; rail minmax(300px,340px).
       The preview (dev only) takes ?fan=1. Tests: test/desk.test.ts.
+    motion-s4: >-
+      S4 motion (critique 2026-10-20 §2 S4). Fly-in is the comp's 4-step
+      path with no opacity, settling at the pile rotation; a pinned card
+      takes one of four preset tilts (.r-a..d by cardId; never inline
+      style). Approve: ONLY after the kernel accepted the decision (a
+      refusal throws first), flyOff stamps APPROVED (--stamp ink), adds
+      .out 550 ms later (flyout) and removes the sheet on its animationend,
+      with a 1.5 s fallback; a departing card is kept out of fresh paints and
+      re-inserted at its place. Reduced motion (in-app or OS): nothing
+      animates and the card goes at once; the stamp's end state is styled to
+      show. A held voice decision (CardView.held {seconds, undo}) renders
+      .held (amber edge), the 3 s count bar and the kernel-owned text
+      "Allowing in N · say “undo”" (the kernel does not report holds yet, so
+      app.ts passes none). Droop: a failed card droops once as it lands, a
+      rail row droops once when its session flips to failed in this page;
+      never a shake. Tests: test/desk.test.ts.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a

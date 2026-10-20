@@ -189,6 +189,8 @@ export interface CardView {
   now?: number;
   /** S3: the kernel's voice handle of the card (card.voice: eligible none | reversible | gate, and its label) */
   voice?: { eligible: string; label: string } | null;
+  /** S4: a held voice decision the kernel reports (seconds left, the undo phrase): the amber countdown, kernel-owned */
+  held?: { seconds: number; undo: string } | null;
 }
 
 /** S3: the card's voice tag from the kernel's handle: `🎙 reversible · card 3`, `🎙 gate` + the handle word, or `hand-only`. */
@@ -418,12 +420,12 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // S3 anatomy: ■ project · kind · voice tag (requestedBy and the session in title=), the title, the body, raised · waiting
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const tag = voiceTagOf(v.voice ?? null);
-  const raised = raisedLine(v.raisedAt, v.now ?? Date.now());
+  const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(
       doc,
       'header',
@@ -436,7 +438,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     ),
     h(doc, 'p', { class: 'card-title' }, title),
     h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, body)),
-    raised ? h(doc, 'small', { class: 'meta card-raised' }, raised) : null,
+    raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     h(
       doc,

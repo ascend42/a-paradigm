@@ -294,6 +294,9 @@ function closeDrawers(): void {
 /** S2.2: the rail: ACTIVE n (grouped by project, swatch + project ink name), then ▸ PAST n (collapsed by default).
  * Rows: 12px swatch · name (sessionTitle) · right-aligned state note. The kernel feed is a palette view now. */
 function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][number], hue: number): HTMLElement {
+  const was = lastState.get(s.hsid);
+  lastState.set(s.hsid, s.state);
+  if (s.state === 'failed' && was !== undefined && was !== 'failed') drooped.add(s.hsid);
   const knot = [...store.cards.values()].some((c) => c.hsid === s.hsid && /knot/.test(c.kind));
   const note = sessionNote({ ...s, knot });
   const vv = voiceStatusOf(status);
@@ -301,7 +304,7 @@ function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][numb
   return h(
     doc,
     'button',
-    { class: `session-row sess state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}`, type: 'button', 'data-hsid': s.hsid, title: `${s.hsid}${s.backend ? ` · ${s.backend}` : ''}` },
+    { class: `session-row sess state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}${drooped.has(s.hsid) ? ' fx' : ''}`, type: 'button', 'data-hsid': s.hsid, title: `${s.hsid}${s.backend ? ` · ${s.backend}` : ''}` },
     h(doc, 'span', { class: `swatch h${hue}` }),
     h(doc, 'span', { class: 'sname' }, sessionTitle(s)),
     h(doc, 'span', { class: `snote tone-${note.tone}` }, `${mic}${note.text}`),
@@ -339,9 +342,48 @@ function projectOfCard(c: { repo: string | null; hsid: string | null }): { name:
   const g = store.groups().find((x) => x.repo === repo);
   return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
 }
+/**
+ * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps APPROVED, then flies off
+ * 550 ms later and is removed on its flyout's animationend. While it leaves it is kept out of fresh paints (no
+ * duplicate) and re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an
+ * animation that never runs. A 1.5 s fallback removes it even if animationend never fires (a hidden tab).
+ */
+const departing = new Map<string, Array<{ el: HTMLElement; parent: HTMLElement; index: number }>>();
+function motionReduced(): boolean {
+  return document.documentElement.dataset.motion === 'reduced' || motionQ.matches;
+}
+function settleDeparture(cardId: string): void {
+  const d = departing.get(cardId);
+  if (!d) return;
+  departing.delete(cardId);
+  for (const x of d) x.el.remove();
+  void paintStack();
+}
+function flyOff(cardId: string): void {
+  const els = [...document.querySelectorAll<HTMLElement>(`.card[data-card-id="${CSS.escape(cardId)}"]`)];
+  if (!els.length || motionReduced()) return;
+  departing.set(cardId, els.map((el) => ({ el, parent: el.parentElement as HTMLElement, index: Array.prototype.indexOf.call(el.parentElement?.children ?? [], el) })));
+  for (const el of els) {
+    el.classList.add('leaving');
+    el.querySelector('.stamp')?.classList.add('on');
+  }
+  setTimeout(() => {
+    for (const el of els) {
+      el.classList.add('out');
+      el.addEventListener('animationend', (e) => {
+        if ((e as AnimationEvent).animationName === 'flyout') settleDeparture(cardId);
+      });
+    }
+  }, 550);
+  setTimeout(() => settleDeparture(cardId), 1500);
+}
+/** S4 droop: a session that flips to failed in this page's view droops once (never a shake). */
+const lastState = new Map<string, string>();
+const drooped = new Set<string>();
+
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
-  const cards = stackScoped && focused ? store.stack(focusRepo) : store.stack();
+  const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
   put($('stack-scope'), stackScoped && focused ? 'this project' : 'all projects');
   put($('inbox'), `${store.cards.size} pending`);
   for (const c of cards) {
@@ -380,7 +422,9 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       el.classList.add('arriving');
       // TD-2026-10-19-063: a claim-mismatch card arrives with Deny focused (a keypress never lands on allow)
       queueMicrotask(() => (el.querySelector('[data-default]') as HTMLElement | null)?.focus());
-      el.addEventListener('animationend', () => el.classList.remove('arriving'), { once: true });
+      // S4 droop: a failed-session card droops once as it lands (it keeps the chained animation; nothing restarts)
+      if (el.classList.contains('failed')) el.classList.add('fx');
+      else el.addEventListener('animationend', () => el.classList.remove('arriving'), { once: true });
     }
     return el;
   };
@@ -397,7 +441,18 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const mine = focused ? store.stack(focusRepo).filter((c) => c.hsid === focused) : [];
   // S2.6: the pinned cards carry their label (only when there are any)
   if (mine.length) pinned.appendChild(h(doc, 'span', { class: 'lbl' }, 'Pending in this session') as unknown as Node);
-  for (const c of mine) pinned.appendChild(mk(c));
+  // S4: a pinned card settles at one of four preset tilts (classes, never inline style), picked by its cardId
+  for (const c of mine) {
+    const el = mk(c);
+    let x = 0;
+    for (const ch of c.cardId) x = (x + ch.charCodeAt(0)) % 997; // a tilt pick, not a hue: hues come from projectHue
+    el.classList.add(['r-a', 'r-b', 'r-c', 'r-d'][x % 4]!);
+    pinned.appendChild(el);
+  }
+  // S4: cards still flying off go back where they were (the fresh paint never shows them twice)
+  for (const d of departing.values())
+    for (const x of d)
+      if (!x.el.isConnected && (x.parent === pile || x.parent === pinned)) x.parent.insertBefore(x.el, x.parent.children[x.index] ?? null);
   paintUpdateBanner();
 }
 
@@ -484,6 +539,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   try {
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
+    flyOff(cardId); // S4: only after the kernel accepted the decision (a refusal throws before this)
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);

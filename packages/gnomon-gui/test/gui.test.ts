@@ -500,7 +500,7 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/(?<![-a-z])(color|border(-[a-z]+)?|outline):[^;}]*--p-sage-fill/);
   });
   it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
-    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
+    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'stamp', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
     for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);

@@ -208,3 +208,38 @@ describe('S3 the card sheet and the stack pile', () => {
     expect(css).not.toMatch(/\.card[^{]*\{[^}]*border-left:[^;]*--rule/);
   });
 });
+
+describe('S4 motion', () => {
+  const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  it('fly-in is the comp\'s 4-step path, no opacity, settling at the pile rotation', () => {
+    const k = /@keyframes card-in \{([\s\S]*?)\n\}/.exec(css)![1]!;
+    expect(k).not.toMatch(/opacity/);
+    expect(k).toMatch(/55% \{ transform: translateX\(-5%\) rotate\(-3deg\); \}[\s\S]*75% \{ transform: translateX\(2%\) rotate\(1\.5deg\); \}[\s\S]*100% \{ transform: translateX\(0\) rotate\(var\(--r, 0deg\)\); \}/);
+  });
+  it('the stamp then fly-off runs only after the kernel accepted the decision; reduced motion removes at once', () => {
+    const decide = app.slice(app.indexOf('async function decide('), app.indexOf('/* ── Shuttle view'));
+    expect(decide).toMatch(/await client\.call\('approve'[\s\S]*?refusals\.delete\(cardId\);\s*flyOff\(cardId\);[\s\S]*\} catch \(err\)/);
+    const fly = app.slice(app.indexOf('function flyOff('), app.indexOf('const lastState'));
+    expect(fly).toMatch(/if \(!els\.length \|\| motionReduced\(\)\) return;/);
+    expect(fly).toMatch(/setTimeout\(\(\) => settleDeparture\(cardId\), 1500\)/);
+    expect(app).toMatch(/\.filter\(\(c\) => !departing\.has\(c\.cardId\)\)/);
+    expect(css).toMatch(/\.card \.stamp\.on \{ animation: stamp var\(--t-stamp\) forwards; \}/);
+    expect(css).toMatch(/\.card\.out \{ animation: flyout var\(--t-flyout\) forwards; \}/);
+    expect(css).toMatch(/\[data-motion="reduced"\] \.card \.stamp\.on \{ opacity: 1; transform: rotate\(-8deg\); \}/);
+  });
+  it('a held voice decision: amber edge, a 3 s bar, the seconds and the undo phrase in text (kernel-owned)', () => {
+    const block = { type: 'Box', children: [{ type: 'Text', text: 'Run the tests' }] };
+    const el = renderCard({ doc: fdoc }, { cardId: 'card:1', kind: 'permission', requestedBy: 'p:x', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [], decisions: ['allow'], decidable: true, held: { seconds: 2.2, undo: 'wait' } }, block) as FEl;
+    expect(el.className).toContain(' held');
+    const note = el.children.find((c): c is FEl => c instanceof FEl && c.className.includes('held-note'))!;
+    expect(note.text).toBe('Allowing in 3 · say “wait”');
+    expect(note.className).toContain('kernel-owned');
+    expect(css).toMatch(/\.card\.held \.bar-i \{ animation: count var\(--t-hold\) forwards; \}/);
+  });
+  it('a failure droops once (never a shake); nothing idles', () => {
+    expect(css).toMatch(/@keyframes droop \{ to \{ transform: rotate\(2\.2deg\) translateY\(3px\); \} \}/);
+    expect(css).not.toMatch(/@keyframes shake|translateX\(-?\d+px\)[^}]*translateX\(-?\d+px\)/);
+    expect(app).toMatch(/if \(s\.state === 'failed' && was !== undefined && was !== 'failed'\) drooped\.add\(s\.hsid\);/);
+  });
+});

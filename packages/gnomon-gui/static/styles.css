@@ -325,12 +325,45 @@ html, body {
 .card.claim-mismatch { --edge: var(--fail-edge); }
 .card.claim-mismatch .card-body > :first-child { color: var(--fail); font-weight: 600; }
 
+/* ── S4 motion (critique 2026-10-20 §2 S4). Every motion is an event's (nothing idles); the global reduced-motion kill
+   above stays, and the rules at the end of this block keep the END states visible without motion. ── */
 .card.arriving { animation: card-in var(--fly); }
 @keyframes card-in {
-  0% { transform: translateX(120%) rotate(12deg); opacity: 0; }
-  70% { transform: translateX(-5%) rotate(-3deg); opacity: 1; }
-  100% { transform: rotate(var(--r, 0deg)); }
+  0% { transform: translateX(120%) rotate(12deg); }
+  55% { transform: translateX(-5%) rotate(-3deg); }
+  75% { transform: translateX(2%) rotate(1.5deg); }
+  100% { transform: translateX(0) rotate(var(--r, 0deg)); }
 }
+/* a pinned card settles at one of four preset tilts (by cardId; classes, never inline style) */
+.pinned .card.r-a { --r: -.6deg; }
+.pinned .card.r-b { --r: .4deg; }
+.pinned .card.r-c { --r: -.3deg; }
+.pinned .card.r-d { --r: .7deg; }
+/* approved: the stamp lands, then the sheet flies off (removed on animationend; at once under reduced motion) */
+.card .stamp { color: var(--stamp); }
+.card .stamp.on { animation: stamp var(--t-stamp) forwards; }
+@keyframes stamp {
+  0% { opacity: 0; transform: rotate(-8deg) scale(1.9); }
+  60% { opacity: 1; transform: rotate(-8deg) scale(.92); }
+  100% { opacity: 1; transform: rotate(-8deg) scale(1); }
+}
+.card.leaving { pointer-events: none; }
+.card.out { animation: flyout var(--t-flyout) forwards; }
+@keyframes flyout {
+  30% { transform: scale(.97) rotate(var(--r, 0deg)); }
+  100% { transform: translate(-30px, -60px) rotate(-14deg); opacity: 0; }
+}
+/* a held voice decision: the amber edge and a 3 s countdown bar (kernel-owned; the seconds are also in the text) */
+.card.held .bar-i { animation: count var(--t-hold) forwards; }
+@keyframes count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.card .held-note { color: var(--warn-ink); font-weight: 500; }
+/* a failure droops once (no shake, ever) */
+.card.failed.fx, .session-row.fx { animation: droop var(--t-droop) forwards; }
+.card.failed.fx.arriving { animation: card-in var(--fly), droop var(--t-droop) 550ms forwards; }
+@keyframes droop { to { transform: rotate(2.2deg) translateY(3px); } }
+.session-row.fx { transform-origin: left center; }
+[data-motion="reduced"] .card .stamp.on { opacity: 1; transform: rotate(-8deg); }
+@media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: rotate(-8deg); } }
 
 .shuttle {
   display: flex; flex-wrap: wrap; gap: 14px;
