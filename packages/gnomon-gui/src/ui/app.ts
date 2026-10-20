@@ -19,7 +19,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, PRESETS, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
@@ -345,7 +345,7 @@ function projectOfCard(c: { repo: string | null; hsid: string | null }): { name:
   return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
 }
 /**
- * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps APPROVED, then flies off
+ * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps the decision it took (stampWord), then flies off
  * 550 ms later and is removed on its flyout's animationend. While it leaves it is kept out of fresh paints (no
  * duplicate) and re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an
  * animation that never runs. A 1.5 s fallback removes it even if animationend never fires (a hidden tab).
@@ -361,13 +361,20 @@ function settleDeparture(cardId: string): void {
   for (const x of d) x.el.remove();
   void paintStack();
 }
-function flyOff(cardId: string): void {
+function flyOff(cardId: string, decision: string): void {
   const els = [...document.querySelectorAll<HTMLElement>(`.card[data-card-id="${CSS.escape(cardId)}"]`)];
   if (!els.length || motionReduced()) return;
   departing.set(cardId, els.map((el) => ({ el, parent: el.parentElement as HTMLElement, index: Array.prototype.indexOf.call(el.parentElement?.children ?? [], el) })));
   for (const el of els) {
+    // Aegis S4 low (2): a leaving card takes no keyboard: drop focus out of it and make it inert
+    if (el.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
+    el.inert = true;
     el.classList.add('leaving');
-    el.querySelector('.stamp')?.classList.add('on');
+    const st = el.querySelector('.stamp');
+    if (st) {
+      st.textContent = stampWord(decision); // Aegis S4 low (1): the decision the kernel accepted
+      st.classList.add('on');
+    }
   }
   setTimeout(() => {
     for (const el of els) {
@@ -544,7 +551,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   try {
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
-    flyOff(cardId); // S4: only after the kernel accepted the decision (a refusal throws before this)
+    flyOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);

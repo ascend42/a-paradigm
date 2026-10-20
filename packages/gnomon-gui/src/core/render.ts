@@ -232,7 +232,25 @@ export function raisedLine(raisedAt: string | null | undefined, now: number): st
  * Only these get line 1 promoted to the title; any other kind (a mod's, a future one) keeps its block whole, is titled
  * by its kind, and its first line reads as the requester's quoted text.
  */
+/**
+ * Aegis S4 low (3), checked: `ask-user`'s line 1 is the fixed `The session asks you a question` / `… N questions`
+ * template (supervisor/permission.ts composePermission); the requester's question text starts at line 3 (askLines),
+ * so it stays kernel-titled.
+ */
 export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+
+/**
+ * Aegis S4 low (1): the stamp names the decision the kernel accepted (never always APPROVED). A closed map over the
+ * contracts' CARD_DECISIONS; anything else (a future decision) reads DECIDED, never mod- or card-supplied text.
+ */
+const STAMP_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  allow: 'APPROVED', always: 'APPROVED', accept: 'APPROVED', 'approve-plan': 'APPROVED', install: 'INSTALLED',
+  deny: 'DENIED', reject: 'REJECTED', withdraw: 'WITHDRAWN', answer: 'ANSWERED', resume: 'RESUMED', resolve: 'RESOLVED',
+  'fallback-cloud': 'SENT TO CLOUD', 'use-api-token': 'APPROVED', extend: 'EXTENDED', restart: 'RESTARTED',
+});
+export function stampWord(decision: string): string {
+  return Object.prototype.hasOwnProperty.call(STAMP_WORDS, decision) ? STAMP_WORDS[decision]! : 'DECIDED';
+}
 
 /**
  * S3: the card title is the block's first Text line (a Box whose first child is a Text), and the body is the block
@@ -477,7 +495,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
-    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, 'APPROVED'),
+    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
 }
