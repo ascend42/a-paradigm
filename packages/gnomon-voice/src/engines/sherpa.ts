@@ -12,6 +12,7 @@
  */
 import { loadManifest, modelFor, verifiedModelPaths, type ModelManifest } from '../manifest.js';
 import { wordsOfResult, type PartialWord } from '../partials.js';
+import { SPEAKER_FRONT_END, speechOnly } from '../speaker.js';
 import { silentLogger, type ComponentLog } from '../types.js';
 import type { PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceEngines } from '../types.js';
 
@@ -77,10 +78,18 @@ export class SherpaVad implements VadEngine {
   speaking(): boolean {
     return this.#speaking;
   }
+  /**
+   * sherpa's reset() restarts the detector's sample index (a segment's `start` counts from the reset), so the
+   * fed-samples counter restarts with it. Before 2026-10-20 it did not: every reset (an enrolment phrase, a pause, a
+   * barge-in, a mode change) shifted each later segment's t0 into the past by all the audio fed before it (the
+   * founder's "turns arrive 60 s late" was this skew, not a backlog; test/ambient-speaker-repro.test.ts).
+   */
   reset(): void {
     this.#vad.reset?.();
     this.#vad.clear?.();
     this.#pending = new Float32Array(0);
+    this.#fed = 0;
+    this.#anchor = { fed: 0, t0: 0 };
     this.#speaking = false;
   }
   flush(): VadSegment[] {
@@ -204,13 +213,19 @@ export class SherpaTts implements TtsEngine {
 export class SherpaSpeaker implements SpeakerEngine {
   readonly #ex: Sherpa;
   readonly dim: number;
+  /** every embedding goes through the speech gate (speaker.ts speechOnly; founder regression 2026-10-20) */
+  readonly frontEnd = SPEAKER_FRONT_END;
   constructor(sherpa: Sherpa, model: string) {
     this.#ex = new sherpa.SpeakerEmbeddingExtractor({ model, numThreads: 1, debug: false });
     this.dim = Number(this.#ex.dim);
   }
+  speechMs(samples: Float32Array, sampleRate: number): number {
+    return (speechOnly(samples, sampleRate).length / sampleRate) * 1000;
+  }
   async embed(samples: Float32Array, sampleRate: number): Promise<Float32Array> {
+    const gated = speechOnly(samples, sampleRate);
     const s = this.#ex.createStream();
-    s.acceptWaveform({ sampleRate, samples });
+    s.acceptWaveform({ sampleRate, samples: gated.length ? gated : samples });
     s.inputFinished?.();
     return Float32Array.from(this.#ex.compute(s) as Float32Array);
   }

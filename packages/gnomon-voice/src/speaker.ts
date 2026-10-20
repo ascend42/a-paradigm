@@ -25,6 +25,8 @@ export interface VoicePrint {
   phrases: number;
   embedding: number[];
   createdAt: string;
+  /** the speaker front end that made it (SPEAKER_FRONT_END); absent on prints made before 2026-10-20 */
+  frontEnd?: string;
 }
 
 export function printsDir(home: string): string {
@@ -42,6 +44,43 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
     nb += b[i]! * b[i]!;
   }
   return na && nb ? dot / Math.sqrt(na * nb) : -1;
+}
+
+/** the speaker front end's id, stored in every print it made (a print from another front end is not compared) */
+export const SPEAKER_FRONT_END = 'speech-gate:v1' as const;
+/** speech-gate frame (ms), the gate below the loudest frame (dB) and the absolute floor (dBFS) */
+export const GATE_FRAME_MS = 20;
+export const GATE_REL_DB = 30;
+export const GATE_FLOOR_DBFS = -55;
+/** below this much gated speech an utterance is not verified (fail closed: unknown) */
+export const MIN_VERIFY_SPEECH_MS = 500;
+
+/**
+ * The speech gate (founder regression 2026-10-20): keep only the 20 ms frames within GATE_REL_DB of the segment's
+ * loudest frame and above GATE_FLOOR_DBFS (plus one frame either side), concatenated. CAM++ normalizes its features
+ * over the whole input, so near-silent frames (VPIO's suppressed pauses, VAD edges) dominate an ungated embedding:
+ * measured with the real model, padding a stranger's speech with 0.5 s of quiet moved its score against an enrolled
+ * print from 0.52 to 0.82, and a print enrolled from quiet-heavy phrases matched any quiet-heavy segment (a video
+ * was accepted as the founder). Gated, the embedding no longer depends on how much silence the segment carries.
+ */
+export function speechOnly(samples: Float32Array, sampleRate: number): Float32Array {
+  const F = Math.max(1, Math.round((sampleRate * GATE_FRAME_MS) / 1000));
+  const n = Math.floor(samples.length / F);
+  if (n === 0) return new Float32Array(0);
+  const db = new Float64Array(n);
+  let top = -Infinity;
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let j = i * F; j < (i + 1) * F; j++) s += samples[j]! * samples[j]!;
+    db[i] = 10 * Math.log10(s / F + 1e-12);
+    if (db[i]! > top) top = db[i]!;
+  }
+  const thr = Math.max(GATE_FLOOR_DBFS, top - GATE_REL_DB);
+  const keep: number[] = [];
+  for (let i = 0; i < n; i++) if (db[i]! >= thr || (i > 0 && db[i - 1]! >= thr) || (i + 1 < n && db[i + 1]! >= thr)) keep.push(i);
+  const out = new Float32Array(keep.length * F);
+  keep.forEach((k, m) => out.set(samples.subarray(k * F, (k + 1) * F), m * F));
+  return out;
 }
 
 export function meanEmbedding(es: readonly Float32Array[]): Float32Array {
@@ -106,13 +145,30 @@ export class SpeakerVerifier {
     this.#threshold = threshold;
   }
 
+  /** The prints this engine can compare against: same front end (an engine without one compares every print). */
+  #usable(): VoicePrint[] {
+    const fe = this.#engine.frontEnd;
+    return this.#prints().filter((p) => fe === undefined || p.frontEnd === fe);
+  }
+
+  /** Names of prints made by another (older) front end: never compared, so those speakers must enrol again. */
+  stalePrints(): string[] {
+    const fe = this.#engine.frontEnd;
+    return fe === undefined ? [] : this.#prints().filter((p) => p.frontEnd !== fe).map((p) => p.name);
+  }
+
+  /** Too little speech to verify (fail closed: such an utterance never matches a print). */
+  #tooShort(samples: Float32Array, sampleRate: number): boolean {
+    return this.#engine.speechMs !== undefined && this.#engine.speechMs(samples, sampleRate) < MIN_VERIFY_SPEECH_MS;
+  }
+
   /**
    * B1 V1: a PROVISIONAL match on the first ~1.5 s of an open segment (live words only). Read-only: an unknown voice
    * is not numbered here (identify on the full segment does that). True only for an enrolled print over the threshold.
    */
   async provisional(samples: Float32Array, sampleRate: number): Promise<boolean> {
-    const prints = this.#prints();
-    if (!prints.length) return false;
+    const prints = this.#usable();
+    if (!prints.length || this.#tooShort(samples, sampleRate)) return false;
     const e = await this.#engine.embed(samples, sampleRate);
     return prints.some((p) => cosine(e, p.embedding) >= this.#threshold);
   }
@@ -120,11 +176,11 @@ export class SpeakerVerifier {
   async identify(samples: Float32Array, sampleRate: number): Promise<SpeakerVerdict> {
     const e = await this.#engine.embed(samples, sampleRate);
     let best: { name: string; score: number } | undefined;
-    for (const p of this.#prints()) {
+    for (const p of this.#usable()) {
       const s = cosine(e, p.embedding);
       if (!best || s > best.score) best = { name: p.name, score: s };
     }
-    if (best && best.score >= this.#threshold) return { name: best.name, score: best.score };
+    if (best && best.score >= this.#threshold && !this.#tooShort(samples, sampleRate)) return { name: best.name, score: best.score };
     let idx = this.#unknowns.findIndex((u) => cosine(u, e) >= this.#threshold);
     if (idx < 0) {
       this.#unknowns.push(e);

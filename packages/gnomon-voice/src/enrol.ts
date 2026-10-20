@@ -66,6 +66,6 @@ export async function recordEnrolment(o: EnrolOptions): Promise<{ file: string; 
     await o.recorded?.(i + 1, phrases.length);
   }
   const mean = meanEmbedding(es);
-  const print: VoicePrint = { schemaVersion: PRINT_SCHEMA, name: o.name, model: o.model, dim: mean.length, phrases: es.length, embedding: Array.from(mean), createdAt: new Date().toISOString() };
+  const print: VoicePrint = { schemaVersion: PRINT_SCHEMA, name: o.name, model: o.model, dim: mean.length, phrases: es.length, embedding: Array.from(mean), createdAt: new Date().toISOString(), ...(o.speaker.frontEnd ? { frontEnd: o.speaker.frontEnd } : {}) };
   return { file: writePrint(o.home, print), print };
 }
