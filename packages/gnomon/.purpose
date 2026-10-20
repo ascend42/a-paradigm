@@ -2914,7 +2914,10 @@ components:
       cancel{cancelToken}, unhonoured => restart; crash => mod.health{ok:false}
       + restart (cap 3/10 min). block.ts closed kit:v1 gate (256 KiB / 2000
       nodes, sanitizeLine, Button command id only, Image alt + sha256 blob,
-      Canvas names a ds). relayView/relayCommand stamp relayedFor from the
+      Canvas names a ds; S5: Text may carry a `cap`, the closed contracts
+      shape {shape, hue 0..5, filled, state, label <=40} checked by checkCap,
+      any other field refused, label sanitized; kitId/modAbiId/clientApiId do
+      not move). relayView/relayCommand stamp relayedFor from the
       caller. egress-proxy.ts per-mod loopback CONNECT proxy (443 only;
       granted declared hosts; IP literals, private names, Anthropic hosts,
       private resolutions and calls lacking network refused). state.ts

@@ -17,6 +17,7 @@ export const CONTRACTS_PACKAGE = '@a-company/gnomon-contracts' as const;
 export * from './probe-result.js';
 export { isPlainObject, sha256, sha256Tagged, hex, crockford, canonicalJson, utf8 } from './internal.js';
 export { PROJECT_HUES, projectHue } from './hue.js';
+export { CAP_KEYS, CAP_LABEL_MAX, CAP_SHAPES, CAP_STATES, checkCap, type Cap, type CapShape, type CapState } from './cap.js';
 export type { ValidationMode, ValidateOptions } from './internal.js';
 export * from './ids.js';
 export * from './principal.js';

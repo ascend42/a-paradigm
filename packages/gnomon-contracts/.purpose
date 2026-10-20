@@ -156,6 +156,21 @@ components:
     tags: [gnomon, contracts, gui, paradigm-8]
     tests:
       - test/hue.test.ts
+  contract-workshop-cap:
+    description: >-
+      The Workshop cap (critique 2026-10-20 S5.3): a closed, minimal shape a
+      mod may put on a kit Text node, {shape tall|wide|floppy, hue
+      0..PROJECT_HUES-1, filled bool, state needs|working|idle|knot, label
+      1..40 code points, one line}. checkCap refuses any unknown, missing,
+      mistyped or out-of-range field and returns a fresh five-key object. The
+      kernel mod-block gate (modhost/block.ts) and the GUI renderer both call
+      it; a client draws the hat from these fields only (no mod SVG, path,
+      colour or attribute). Not an input to kitId, modAbiId or clientApiId.
+    path: src/cap.ts
+    type: module
+    tags: [gnomon, contracts, gui, workshop, paradigm-8]
+    tests:
+      - test/cap.test.ts
   contract-ids:
     description: >-
       Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
