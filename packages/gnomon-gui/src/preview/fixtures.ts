@@ -252,12 +252,12 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}
   on('warpline', T('14:00'), 'warpline.knot', { strands: ['a3f1c2', '9c0e77'], path: 'src/seal.ts' });
 
   // billing: the focused chat (user message, the activity, the agent's reply), its permission card pending
-  ask('billing', T('13:58:05'), 'Totals are off by a cent on 3-line orders. Find out why.');
-  ev('billing', T('13:58:20'), toolLine(['Read', { file_path: 'src/totals.ts' }]));
-  ev('billing', T('13:59'), toolLine(['Read', { file_path: 'src/discount.ts' }], ['Read', { file_path: 'src/order.ts' }], ['Read', { file_path: 'src/line-item.ts' }], ['Read', { file_path: 'src/rounding.ts' }], ['Read', { file_path: 'test/totals.test.ts' }]));
-  ev('billing', T('14:01'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
-  ev('billing', T('14:05'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
-  ev('billing', T('14:06'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
+  ask('billing', T('14:05:05'), 'Totals are off by a cent on 3-line orders. Find out why.');
+  ev('billing', T('14:05:12'), toolLine(['Read', { file_path: 'src/totals.ts' }]));
+  ev('billing', T('14:05:18'), toolLine(['Read', { file_path: 'src/discount.ts' }], ['Read', { file_path: 'src/order.ts' }], ['Read', { file_path: 'src/line-item.ts' }], ['Read', { file_path: 'src/rounding.ts' }], ['Read', { file_path: 'test/totals.test.ts' }]));
+  ev('billing', T('14:05:27'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
+  ev('billing', T('14:05:35'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
+  ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
 
   // ledgerette: tsc failed, the session exited
   ask('ledgerette', T('14:02:10'), 'Run CI for packages/ledger.');

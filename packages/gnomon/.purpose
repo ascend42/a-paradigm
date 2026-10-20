@@ -425,6 +425,15 @@ components:
     oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
 
   web-endpoint:
+    gui-bundle-binaries: >-
+      #gui S1 (2026-10-20): the embedded GUI bundle carries binary files
+      (woff2 fonts) and sub-directory paths (fonts/<name>). gui-bundle.ts
+      stays opaque base64; materializeGuiBundle creates the sub-directories
+      (0700 best-effort, never relied on) under <home>/gui/bundle/; the tree
+      hash's SAFE_PATH still refuses `..`. rules.ts MIME map gains
+      svg -> image/svg+xml for the bundle's own grain.svg (static only; /blob
+      still never serves SVG); woff2 -> font/woff2 was already mapped. CSP
+      unchanged (font-src 'self', img-src 'self' blob:).
     watermarks: >-
       T-2026-10-19-009 item 6 (§11.2 rule 12): the transport child reports
       `pressure` above writeHighWater (WS_WRITE_HIGH_WATER 1 MiB) and `drain`

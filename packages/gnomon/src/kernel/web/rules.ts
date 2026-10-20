@@ -92,6 +92,9 @@ const MIME: Readonly<Record<string, string>> = Object.freeze({
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
+  // the pinned bundle's own grain texture (S1). Static only: /blob never serves SVG (rule 6); under nosniff an
+  // octet-stream SVG would not render as a CSS background, and the page CSP (script-src 'self') still applies.
+  svg: 'image/svg+xml',
   woff2: 'font/woff2',
   woff: 'font/woff',
   ttf: 'font/ttf',

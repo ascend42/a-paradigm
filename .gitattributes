@@ -13,6 +13,10 @@ packages/gnomon-contracts/conformance/*.json text eol=lf
 
 # #gui bundle: the pinned tree hash covers these bytes, and --check byte-compares the generated embed; keep LF on every OS (B3)
 packages/gnomon-gui/static/* text eol=lf
+packages/gnomon-gui/static/fonts/*.txt text eol=lf
+# Bundled fonts (#gui S1) are hashed byte-for-byte into the pin: never convert line endings or diff them as text
+*.woff2 binary
+packages/gnomon-gui/static/fonts/*.woff2 binary
 packages/gnomon-gui/src/** text eol=lf
 packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf
 packages/gnomon-contracts/src/** text eol=lf
