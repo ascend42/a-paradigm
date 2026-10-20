@@ -141,6 +141,26 @@ describe('run: exits when the fd closes or stdin ends', () => {
     expect((await run).reason).toBe('link-closed');
     expect(audio.started).toBe(false);
   });
+  it('an attachment that lands after the client started is picked up by the status re-read (dogfood 2026-10-19)', async () => {
+    let attached = false;
+    const k = await fakeKernel((method, _p, id, write) => {
+      if (method === 'status') {
+        const s = STATUS as { voice: Record<string, unknown> };
+        write(ok(id, attached ? s : { ...s, voice: { ...s.voice, attached: false, hsid: null, voiceSessionId: null, ceiling: null } }));
+      } else if (method === 'log.read') write(ok(id, { subscription: 's', head: 0, logId: 'L' }));
+      else write(ok(id, {}));
+    });
+    const stdin = new PassThrough();
+    let client: VoiceClient | undefined;
+    const run = runVoice({ link: new GnomonKernelLink(new FdRpc(k.client)), audio: new FakeAudioIO(), engines: stubEngines(), prints: () => [MATT], stdin, attachPollMs: 20, started: (c) => (client = c) });
+    for (let i = 0; i < 10 && !client; i++) await settle();
+    expect(client?.attachment).toBeNull();
+    attached = true;
+    for (let i = 0; i < 50 && !client?.attachment; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(client?.attachment?.hsid).toBe('hs:01TEST');
+    stdin.end();
+    await run;
+  });
   it('stdin end → stdin-end, audio closed', async () => {
     const { stdin, audio, run } = await boot();
     stdin.end();

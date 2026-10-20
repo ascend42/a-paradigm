@@ -34,7 +34,12 @@ export interface RunOptions {
   notice?: (n: Notice) => void;
   /** called once the loop is listening */
   started?: (client: VoiceClient) => void;
+  /** how often the attachment is re-read from status (default ATTACH_POLL_MS) */
+  attachPollMs?: number;
 }
+
+/** Attachment re-read cadence: a new attachment is picked up within this (a status call, cheap). */
+export const ATTACH_POLL_MS = 1500;
 
 export type RunEnd = 'stdin-end' | 'link-closed' | 'aborted';
 
@@ -63,9 +68,16 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
       watch = new EnrolWatch({ link: o.link, audio: o.audio, vad: o.engines.vad, speaker: o.engines.speaker, home: o.enrol.home, model: o.enrol.model, pause: (on) => c.pause(on), ...(o.enrol.pollMs !== undefined ? { pollMs: o.enrol.pollMs } : {}), ...(o.enrol.timeoutMs !== undefined ? { timeoutMs: o.enrol.timeoutMs } : {}), ...(o.log ? { log: o.log } : {}) });
       watch.start();
     }
+    // The attachment usually lands AFTER the client starts (Gnomon starts the voice app, then the human's Touch ID
+    // attaches it), and nothing tells the client: re-read it on a short cadence so a new or changed attachment is
+    // picked up (founder dogfood 2026-10-19: the client saw "not attached" forever and dropped every utterance).
+    refresher = setInterval(() => void c.refresh().catch(() => undefined), o.attachPollMs ?? ATTACH_POLL_MS);
+    refresher.unref?.();
     o.started?.(client);
   })();
+  let refresher: ReturnType<typeof setInterval> | undefined;
   const cleanup = async (): Promise<void> => {
+    if (refresher) clearInterval(refresher);
     await watch?.stop();
     if (client) await client.close().catch(() => undefined);
     else await o.audio.close().catch(() => undefined);
