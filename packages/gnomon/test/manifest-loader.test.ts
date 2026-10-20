@@ -55,7 +55,7 @@ import {
   uninstallHome,
   uninstallRepo,
   validateManifest,
-  type ManifestV1,
+  type ManifestV2,
 } from '../src/kernel/manifest/index.js';
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
 import { installPresenceBinding, rollbackPresenceBinding } from '../src/kernel/manifest/install.js';
@@ -76,7 +76,7 @@ afterEach(() => {
 const AGENT = 'p:abcdefgh/s-01hzzzzz';
 const HUMAN = 'p:abcdefgh/matt';
 
-function baseManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
+function baseManifest(over: Partial<ManifestV2> = {}): ManifestV2 {
   return {
     manifest: 1,
     kind: 'mod',
@@ -219,7 +219,7 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
       [{ ...p, keybindings: [{ key: '7', command: 'lens.toggle' }] }, 'SCHEMA'],
       [{ ...p, keybindings: [{ key: 'ctrl+k', command: 'not.declared' }] }, 'SCHEMA'],
     ];
-    for (const [provides, code] of cases) expect(refusalOf(() => validateManifest(baseManifest({ provides } as Partial<ManifestV1>), { tier: 'local' })).manifestCode).toBe(code);
+    for (const [provides, code] of cases) expect(refusalOf(() => validateManifest(baseManifest({ provides } as Partial<ManifestV2>), { tier: 'local' })).manifestCode).toBe(code);
     expect(validateManifest(baseManifest({ provides: { ...p, views: [{ id: 'v', slot: 'card.detail:install', placement: 'append' }] } }), { tier: 'local' })).toBeTruthy();
   });
 
@@ -688,7 +688,7 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
       else process.env[k] = v;
     }
   });
-  const distro = (): ManifestV1 => ({
+  const distro = (): ManifestV2 => ({
     manifest: 1,
     kind: 'distro',
     name: 'paradigm-distro',

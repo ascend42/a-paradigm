@@ -22,7 +22,7 @@ import {
   validateMcpUserConfig,
   WIDENING_FIELDS,
   type ManifestMcp,
-  type ManifestV1,
+  type ManifestV2,
 } from '../src/kernel/manifest/index.js';
 
 const tmps: string[] = [];
@@ -49,8 +49,8 @@ const OFFER = {
 } as const;
 const MCP: ManifestMcp = { name: 'constellation', command: 'node', args: ['server.js'], config: { args: true, env: ['STARBOARD_HOME'] } };
 
-function mod(over: Partial<NonNullable<ManifestV1['provides']>> = {}): ManifestV1 {
-  return { manifest: 1, kind: 'mod', name: 'starboard', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [MCP], offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }], ...over } } as ManifestV1;
+function mod(over: Partial<NonNullable<ManifestV2['provides']>> = {}): ManifestV2 {
+  return { manifest: 1, kind: 'mod', name: 'starboard', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [MCP], offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }], ...over } } as ManifestV2;
 }
 const code = (fn: () => unknown): string => {
   try {

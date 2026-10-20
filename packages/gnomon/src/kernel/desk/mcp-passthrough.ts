@@ -3,10 +3,10 @@
  *
  * The Desk's MCP passthrough (TD-2026-10-20-812 A2, slice S1). A mod reaches the model through its own local MCP
  * server (`provides.mcp`); this module puts the servers of every installed, granted, unpaused mod into the session's
- * kernel-written mcp.json (supervisor.ts, `--strict-mcp-config`), namespaced `gnomon-<mod>`:
+ * kernel-written mcp.json (supervisor.ts, `--strict-mcp-config`), named by the kernel:
  *
- *   - the entry named like the mod (or `gnomon-<mod>`) is `gnomon-<mod>`; any other entry `gnomon-<mod>-<entry>`
- *     (serverNameOf, the one naming helper);
+ *   - S0b: one server per mod, `gm_<publisher>_<name>` (or the hashed `gx_…` form), contracts mcpServerName(id)
+ *     through serverNameOf (the one naming helper); the override store is keyed by mod id;
  *   - a name the repo's own .mcp.json already uses is NEVER overridden (the mod server is skipped), nor is a name an
  *     earlier mod (sorted by name) took;
  *   - a mod the human muted for the session's repo (request.offer.mute) is skipped;
@@ -30,18 +30,19 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { mintId } from '@a-company/gnomon-contracts';
+import { mcpServerName, mintId, parseModId } from '@a-company/gnomon-contracts';
 import type { RowVerifier } from '../identity/registry.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { checkAgainstGrants, effectiveInstall, grantsPath, readGrants } from '../manifest/grants.js';
-import { MANIFEST_FILE, manifestHash, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestMcp, type ManifestV1, type McpUserConfig } from '../manifest/manifest.js';
+import { checkAgainstGrants, effectiveInstall, grantsPath, pinDirKey, readGrants } from '../manifest/grants.js';
+import { MANIFEST_FILE, readManifest, resolveMcpLaunch, validateMcpUserConfig, type ManifestMcp, type ManifestV2, type McpUserConfig } from '../manifest/manifest.js';
 import { computePackageHash, hashPinnedTree, modDir, pinnedDir } from '../manifest/snapshot.js';
 import { isUserPaused, modNames } from '../modhost/control.js';
 
 /** An installed, granted, unpaused mod as the Desk sees it (manifest read from its pinned snapshot). */
 export interface DeskMod {
+  /** the mod id <publisher>.<name> (S0b) */
   name: string;
-  manifest: ManifestV1;
+  manifest: ManifestV2;
 }
 
 /**
@@ -64,11 +65,12 @@ export function readDeskMods(home: string, trust: RowVerifier): DeskMod[] {
     const row = effectiveInstall(grants, name);
     if (!row || isUserPaused(home, name)) continue;
     try {
-      const dir = pinnedDir(home, name, row.packageHash);
+      const dir = pinnedDir(home, pinDirKey(row), row.packageHash);
       if (computePackageHash(hashPinnedTree(dir)) !== row.packageHash) continue;
-      const m = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier: grants.trust.get(row.manifestHash) ?? 'local' });
-      if (manifestHash(m) !== row.manifestHash || !checkAgainstGrants(m, row.manifestHash, grants).ok) continue;
-      out.push({ name, manifest: m });
+      const pub = parseModId(name)?.publisher;
+      const r = readManifest(fs.readFileSync(path.join(dir, MANIFEST_FILE)), { tier: grants.trust.get(row.manifestHash) ?? 'local', ...(row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {}) });
+      if (r.manifestHash !== row.manifestHash || (row.upgradedHash !== undefined && r.upgradedHash !== row.upgradedHash) || !checkAgainstGrants(r.manifest, row.manifestHash, grants).ok) continue;
+      out.push({ name, manifest: r.manifest });
     } catch {
       continue;
     }
@@ -105,11 +107,12 @@ export class DeskMods {
 
 /* ── the per-user override store (kernel state only) ─────────────────────── */
 
-export const MCP_OVERRIDES_SCHEMA = 'gnomon-mcp-overrides:v1' as const;
+/** S0b: keyed by mod id (one server per mod); a v1 store (keyed by bare name and server entry) reads as empty. */
+export const MCP_OVERRIDES_SCHEMA = 'gnomon-mcp-overrides:v2' as const;
 export const MCP_CONFIG_REQUEST = 'mcp-config.request.json';
 const STORE_MAX_BYTES = 256 * 1024;
 
-export type McpOverrides = Record<string, Record<string, McpUserConfig>>;
+export type McpOverrides = Record<string, McpUserConfig>;
 
 export function mcpOverridesPath(home: string): string {
   return path.join(home, 'desk', 'mcp-overrides.json');
@@ -129,14 +132,11 @@ export function readMcpOverrides(home: string): McpOverrides {
   }
 }
 
-/** Write one server's override (the card's `allow` effect; never called from a request path). null removes it. */
-export function writeMcpOverride(home: string, mod: string, server: string, config: McpUserConfig | null): void {
+/** Write one mod's override (the card's `allow` effect; never called from a request path). null removes it. */
+export function writeMcpOverride(home: string, mod: string, config: McpUserConfig | null): void {
   const all = readMcpOverrides(home);
-  const forMod = { ...(all[mod] ?? {}) };
-  if (config === null) delete forMod[server];
-  else forMod[server] = config;
-  if (Object.keys(forMod).length) all[mod] = forMod;
-  else delete all[mod];
+  if (config === null) delete all[mod];
+  else all[mod] = config;
   const p = mcpOverridesPath(home);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
   const tmp = `${p}.${process.pid}.tmp`;
@@ -147,10 +147,10 @@ export function writeMcpOverride(home: string, mod: string, server: string, conf
 /** An override after the S0 check, with D2's extra rule: an overridden command is an absolute path. Throws. */
 export function checkMcpOverride(entry: ManifestMcp, override: unknown, platform: string = process.platform): McpUserConfig {
   const u = validateMcpUserConfig(entry, override);
-  if (u.command !== undefined && !isAbsoluteCommand(u.command)) throw new TypeError(`mcp config ${entry.name}: command must be an absolute path`);
+  if (u.command !== undefined && !isAbsoluteCommand(u.command)) throw new TypeError('mcp config: command must be an absolute path');
   // Aegis S1 M2: on Windows only an .exe runs (never a .cmd/.bat that a shell would interpret)
-  if (u.command !== undefined && platform === 'win32' && !/\.exe$/i.test(u.command)) throw new TypeError(`mcp config ${entry.name}: on Windows the command must be an .exe`);
-  if ((u.args ?? []).join(' ').length > MCP_CARD_ARGS_MAX) throw new TypeError(`mcp config ${entry.name}: args are longer than the card can show (${MCP_CARD_ARGS_MAX} characters)`);
+  if (u.command !== undefined && platform === 'win32' && !/\.exe$/i.test(u.command)) throw new TypeError('mcp config: on Windows the command must be an .exe');
+  if ((u.args ?? []).join(' ').length > MCP_CARD_ARGS_MAX) throw new TypeError(`mcp config: args are longer than the card can show (${MCP_CARD_ARGS_MAX} characters)`);
   return u;
 }
 
@@ -201,10 +201,9 @@ export function deskLaunchKey(home: string): Buffer {
 }
 const PROCESS_KEY = randomBytes(32);
 
-/** The namespaced server name of one mod entry. */
-export function serverNameOf(mod: string, entry: ManifestMcp, _entries?: readonly ManifestMcp[]): string {
-  // the ONE naming helper (a convention rename at integration changes only this)
-  return entry.name === mod || entry.name === `gnomon-${mod}` ? `gnomon-${mod}` : `gnomon-${mod}-${entry.name}`;
+/** The server name of a mod (S0b: contracts mcpServerName(id); one server per mod). */
+export function serverNameOf(mod: string): string {
+  return mcpServerName(mod);
 }
 
 /**
@@ -243,12 +242,12 @@ export function mergeDeskMcp(repo: Record<string, unknown>, mods: readonly DeskM
       continue;
     }
     for (const e of entries) {
-      const server = serverNameOf(m.name, e, entries);
+      const server = serverNameOf(m.name);
       if (Object.prototype.hasOwnProperty.call(servers, server)) {
         skipped.push({ mod: m.name, server, why: 'name-taken' });
         continue;
       }
-      const { launch, overridden } = effectiveLaunch(e, opts.overrides?.[m.name]?.[e.name], opts.platform);
+      const { launch, overridden } = effectiveLaunch(e, opts.overrides?.[m.name], opts.platform);
       // fail closed: a relative command (e.g. `neurons`, `constellation-mcp`) never launches
       if (!isAbsoluteCommand(launch.command)) {
         skipped.push({ mod: m.name, server, why: 'needs-config' });
@@ -275,7 +274,6 @@ export function repoServersOnly(repo: Record<string, unknown>): { servers: Recor
 /* ── the human-only config request → card → store ────────────────────────── */
 
 export interface McpConfigRequest {
-  server: string;
   config: McpUserConfig;
   at: string;
 }
@@ -285,11 +283,11 @@ function requestPath(home: string, mod: string): string {
 }
 
 /** The CLI half: write the request (the kernel raises the card). Validates against the installed manifest first. */
-export function requestMcpConfig(home: string, mod: DeskMod, server: string, config: unknown, at = new Date(), platform: string = process.platform): McpConfigRequest {
-  const entry = (mod.manifest.provides?.mcp ?? []).find((e) => e.name === server);
-  if (!entry) throw new TypeError(`${mod.name} declares no mcp server ${server}`);
+export function requestMcpConfig(home: string, mod: DeskMod, config: unknown, at = new Date(), platform: string = process.platform): McpConfigRequest {
+  const entry = mod.manifest.provides?.mcp?.[0];
+  if (!entry) throw new TypeError(`${mod.name} declares no mcp server`);
   const checked = checkMcpOverride(entry, config, platform);
-  const req: McpConfigRequest = { server, config: checked, at: at.toISOString() };
+  const req: McpConfigRequest = { config: checked, at: at.toISOString() };
   const p = requestPath(home, mod.name);
   fs.mkdirSync(path.dirname(p), { recursive: true, mode: 0o700 });
   fs.writeFileSync(p, `${JSON.stringify(req)}\n`, { mode: 0o600 });
@@ -302,7 +300,7 @@ export function readMcpConfigRequest(home: string, mod: string): McpConfigReques
     const st = fs.lstatSync(p);
     if (!st.isFile() || st.size > 64 * 1024) return null;
     const v = JSON.parse(fs.readFileSync(p, 'utf8')) as McpConfigRequest;
-    if (typeof v?.server !== 'string' || v.config === null || typeof v.config !== 'object') return null;
+    if (v === null || typeof v !== 'object' || v.config === null || typeof v.config !== 'object') return null;
     return v;
   } catch {
     return null;
@@ -356,7 +354,7 @@ export class McpConfigCards {
       const stamp = JSON.stringify(req);
       if (this.#seen.get(name) === stamp) continue;
       const mod = mods.get(name);
-      const entry = mod?.manifest.provides?.mcp?.find((e) => e.name === req.server);
+      const entry = mod?.manifest.provides?.mcp?.[0];
       let launch: McpLaunch;
       try {
         if (!mod || !entry) throw new TypeError('not an installed server');
@@ -368,19 +366,19 @@ export class McpConfigCards {
       }
       this.#seen.set(name, stamp);
       const cardId = mintId('card');
-      const server = serverNameOf(name, entry, mod.manifest.provides?.mcp ?? []);
+      const server = serverNameOf(name);
       const card = await broker
         .raise({
           kind: 'grant',
           cardId,
           requestedBy: this.#o.requestedBy,
           attended: true,
-          detail: { action: 'mod.mcp.config', name, server: req.server, launchHash: launchHashOf(launch, this.#o.launchKey), envNames: Object.keys(launch.env).sort(), requestedVia: 'request-file' },
+          detail: { action: 'mod.mcp.config', name, server, launchHash: launchHashOf(launch, this.#o.launchKey), envNames: Object.keys(launch.env).sort(), requestedVia: 'request-file' },
           lines: launchCardLines(name, server, launch, this.#o.launchKey),
           decisions: ['allow', 'deny'],
           effect: async (decision) => {
             dropRequest(home, name);
-            if (decision === 'allow') writeMcpOverride(home, name, req.server, req.config);
+            if (decision === 'allow') writeMcpOverride(home, name, req.config);
           },
         })
         .catch(() => null);

@@ -28,7 +28,7 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
   it('a running child reads only its snapshot, writes nothing, and reaches the network only through the proxy', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    const folder = writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest());
+    const folder = writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest());
     fs.writeFileSync(path.join(folder, 'secret.txt'), 'approved-copy'); // in the snapshot too
     install(r, folder, { via: 'linked', egress: ['api.example.com'] });
     fs.writeFileSync(path.join(r.root, 'outside.txt'), 'not approved');
@@ -42,11 +42,11 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
     cleanups.push(async () => target.close());
     const { h } = host(r, { dial: { resolve: async () => '93.184.216.34', connect: () => net.connect({ host: '127.0.0.1', port: tport }) } });
     cleanups.push(() => h.stopAll());
-    const s = await h.start('probe');
+    const s = await h.start('acme.probe');
     expect(s).toMatchObject({ state: 'running', sandbox: 'full' });
     expect(r.events.find((e) => e.kind === 'mod.sandbox')?.payload).toMatchObject({ profile: 'mod', sandbox: 'full' });
-    const snap = s.state === 'running' ? path.join(r.home, 'mods', 'probe', 'pinned', s.packageHash.slice(7)) : '';
-    const tool = (input: Record<string, unknown>) => h.callTool('probe', 'probe.read', input);
+    const snap = s.state === 'running' ? path.join(r.home, 'mods', 'acme.probe', 'pinned', s.packageHash.slice(7)) : '';
+    const tool = (input: Record<string, unknown>) => h.callTool('acme.probe', 'probe.read', input);
     // reads: inside the snapshot yes; the linked source folder, an outside file, $HOME and the gnomon grants file no
     expect(await tool({ op: 'fs.read', path: path.join(fs.realpathSync(snap), 'secret.txt') })).toEqual({ ok: true, v: 'approved-copy' });
     for (const p of [path.join(folder, 'secret.txt'), path.join(r.root, 'outside.txt'), path.join(r.home, 'grants.jsonl'), path.join(homedir(), '.zshrc')]) {
@@ -58,8 +58,8 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
     }
     // network: a direct connect to a loopback listener fails; the proxy tunnels a granted host for a network tool only
     expect(await tool({ op: 'net', host: '127.0.0.1', port: lport })).toMatchObject({ ok: false });
-    expect(await h.callTool('probe', 'probe.net', { host: 'api.example.com' })).toEqual({ ok: true, v: 'tunnel' });
-    expect(await h.callTool('probe', 'probe.net', { host: 'evil.example.org' })).toMatchObject({ ok: false });
+    expect(await h.callTool('acme.probe', 'probe.net', { host: 'api.example.com' })).toEqual({ ok: true, v: 'tunnel' });
+    expect(await h.callTool('acme.probe', 'probe.net', { host: 'evil.example.org' })).toMatchObject({ ok: false });
     // undeclared effects: refused at the boundary
     expect(await tool({ op: 'state.set' })).toMatchObject({ ok: false });
   });
@@ -67,15 +67,15 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
   it('a mod with no write and no network effect gets no file-write and no network-outbound in its profile', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    const m = probeManifest({ provides: { tools: [{ name: 'probe.read', effects: ['read'] }], events: ['modns.probe.done'] }, requires: { capabilities: ['log.append:modns.probe.*'], egress: 'none' } });
-    const folder = writeModFolder(path.join(r.root, 'src', 'probe'), m);
+    const m = probeManifest({ provides: { tools: [{ name: 'probe.read', effects: ['read'] }], events: ['modns.acme.probe.done'] }, requires: { capabilities: ['log.append:modns.acme.probe.*'], egress: 'none' } });
+    const folder = writeModFolder(path.join(r.root, 'src', 'acme.probe'), m);
     install(r, folder);
     const { h } = host(r);
     cleanups.push(() => h.stopAll());
-    const s = await h.start('probe');
+    const s = await h.start('acme.probe');
     expect(s).toMatchObject({ state: 'running', egressPort: null });
-    const stateFile = path.join(r.home, 'mods', 'probe', 'state', 'x.txt');
-    expect(await h.callTool('probe', 'probe.read', { op: 'fs.write', path: stateFile })).toMatchObject({ ok: false });
+    const stateFile = path.join(r.home, 'mods', 'acme.probe', 'state', 'x.txt');
+    expect(await h.callTool('acme.probe', 'probe.read', { op: 'fs.write', path: stateFile })).toMatchObject({ ok: false });
     expect(fs.existsSync(stateFile)).toBe(false);
   });
 });
@@ -84,14 +84,14 @@ describe.skipIf(!floor.ok)('Aegis round 2 F1: the mod-writable dirs cannot steer
   it('a symlink planted in state/ never reaches the host store; the host-only dir is unwritable; a swapped state/ refuses the next start', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const outside = path.join(r.root, 'outside.txt');
     fs.writeFileSync(outside, 'untouched');
     const { h } = host(r);
     cleanups.push(() => h.stopAll());
-    expect(await h.start('probe')).toMatchObject({ state: 'running', sandbox: 'full' });
-    const modRoot = path.join(r.home, 'mods', 'probe');
-    const w = (input: Record<string, unknown>) => h.callTool('probe', 'probe.write', input);
+    expect(await h.start('acme.probe')).toMatchObject({ state: 'running', sandbox: 'full' });
+    const modRoot = path.join(r.home, 'mods', 'acme.probe');
+    const w = (input: Record<string, unknown>) => h.callTool('acme.probe', 'probe.write', input);
     // the mod may write its own state/ — including symlinks pointing anywhere
     expect(await w({ op: 'symlink', target: outside, path: path.join(modRoot, 'state', 'state.db') })).toMatchObject({ ok: true });
     expect(await w({ op: 'symlink', target: outside, path: path.join(modRoot, 'state', 'kv.json') })).toMatchObject({ ok: true });
@@ -105,12 +105,12 @@ describe.skipIf(!floor.ok)('Aegis round 2 F1: the mod-writable dirs cannot steer
     expect(fs.readFileSync(outside, 'utf8')).toBe('untouched');
     expect(fs.lstatSync(path.join(modRoot, 'state.db')).isSymbolicLink()).toBe(false);
     // an outside actor swaps state/ for a link to a fake $HOME: the next start refuses (never a profile granting the link target)
-    await h.stop('probe');
+    await h.stop('acme.probe');
     const fakeHome = path.join(r.root, 'fakehome');
     fs.mkdirSync(fakeHome);
     fs.rmSync(path.join(modRoot, 'state'), { recursive: true });
     fs.symlinkSync(fakeHome, path.join(modRoot, 'state'));
-    await expect(h.start('probe')).rejects.toMatchObject({ modCode: 'SANDBOX' });
+    await expect(h.start('acme.probe')).rejects.toMatchObject({ modCode: 'SANDBOX' });
     expect(fs.readdirSync(fakeHome)).toEqual([]);
   });
 });
@@ -119,7 +119,7 @@ describe.skipIf(!floor.ok)('Aegis round 3: hardlinks and the restart leg', () =>
   it('C1: a sandboxed child cannot hardlink a keys/ file, a $HOME file or ../state.db into state/ (EPERM)', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const keysFile = path.join(r.home, 'keys', 'fake-key.txt');
     fs.mkdirSync(path.dirname(keysFile), { recursive: true, mode: 0o700 });
     fs.writeFileSync(keysFile, 'harmless test key');
@@ -128,10 +128,10 @@ describe.skipIf(!floor.ok)('Aegis round 3: hardlinks and the restart leg', () =>
     cleanups.push(async () => fs.rmSync(homeFile, { force: true }));
     const { h } = host(r);
     cleanups.push(() => h.stopAll());
-    expect(await h.start('probe')).toMatchObject({ state: 'running', sandbox: 'full' });
-    const w = (input: Record<string, unknown>) => h.callTool('probe', 'probe.write', input);
+    expect(await h.start('acme.probe')).toMatchObject({ state: 'running', sandbox: 'full' });
+    const w = (input: Record<string, unknown>) => h.callTool('acme.probe', 'probe.write', input);
     expect(await w({ op: 'state.set', value: 1 })).toMatchObject({ ok: true }); // state.db exists
-    const modRoot = path.join(r.home, 'mods', 'probe');
+    const modRoot = path.join(r.home, 'mods', 'acme.probe');
     const sources = [keysFile, homeFile, path.join(modRoot, 'state.db')];
     for (const [i, from] of sources.entries()) {
       const res = (await w({ op: 'link', from, to: path.join(modRoot, 'state', `x${i}`) })) as { ok: boolean; code?: string };
@@ -143,16 +143,16 @@ describe.skipIf(!floor.ok)('Aegis round 3: hardlinks and the restart leg', () =>
   it('C2: state/ swapped for a symlink while running ⇒ the supervised restart after a crash refuses SANDBOX', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const { h } = host(r);
     cleanups.push(() => h.stopAll());
-    await h.start('probe');
-    const modRoot = path.join(r.home, 'mods', 'probe');
+    await h.start('acme.probe');
+    const modRoot = path.join(r.home, 'mods', 'acme.probe');
     const fakeHome = path.join(r.root, 'fakehome');
     fs.mkdirSync(fakeHome);
     fs.rmSync(path.join(modRoot, 'state'), { recursive: true });
     fs.symlinkSync(fakeHome, path.join(modRoot, 'state'));
-    await expect(h.callTool('probe', 'probe.read', { op: 'crash' })).rejects.toMatchObject({ modCode: 'CRASHED' });
+    await expect(h.callTool('acme.probe', 'probe.read', { op: 'crash' })).rejects.toMatchObject({ modCode: 'CRASHED' });
     await new Promise((res) => setTimeout(res, 1_000));
     expect(h.running()).toEqual([]);
     expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.why === 'sandbox-unavailable')).toBe(true);
@@ -164,8 +164,8 @@ describe.skipIf(floor.ok)('below the floor the mod host refuses (never a weaker 
   it('start refuses SANDBOX', async () => {
     const r = rig();
     cleanups.push(r.cleanup);
-    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    install(r, writeModFolder(path.join(r.root, 'src', 'acme.probe'), probeManifest()));
     const { h } = host(r);
-    await expect(h.start('probe')).rejects.toMatchObject({ modCode: 'SANDBOX' });
+    await expect(h.start('acme.probe')).rejects.toMatchObject({ modCode: 'SANDBOX' });
   });
 });

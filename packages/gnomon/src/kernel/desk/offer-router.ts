@@ -21,10 +21,13 @@
  *      writes request.offer.decide and offer.decided; on `open` it sends a KERNEL-templated turn as the human
  *      ("Open <title>: use the <handoffTool> tool.", from the manifest, never model text; session.inject origin kernel).
  *   6. offer.kept (the founder's definition, the A6 metric): after `open`, the mod's declared handoffTool, called on that
- *      mod's own server (`mcp__gnomon-<mod>__<handoffTool>`), completes without error in the same hsid. Once per offer.
+ *      mod's own server (`mcp__<mcpServerName(id)>__<handoffTool>`), completes without error in the same hsid. Once per offer.
  *
  * MUTES: offer.decided{not-now} quiets that mod for the rest of the hsid (L4); {stop-here} quiets every mod for the
- * hsid; request.offer.mute{mod, scope:'repo', repo, muted} (A3) is folded per repo and survives restarts (seed()).
+ * hsid; request.offer.mute{mod, scope:'repo', hsid, muted} (A3; S0b: the human names a LIVE session they own, the
+ * kernel derives its repo scope and writes offer.muted{mod, repo, muted, hsid}); offer.muted is folded per repo and
+ * survives restarts (seed()). Every mod key is the mod id <publisher>.<name>. Unmuting from Settings with no live
+ * session is deferred.
  * A mute (and a mod pause) stops offers at once and refuses offer.kept, but the mod's MCP server stays in a running
  * session's mcp.json: removing it applies to new sessions.
  */
@@ -44,10 +47,10 @@ import { serverNameOf, type DeskMod } from './mcp-passthrough.js';
 /** The rows the router folds. */
 export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
   'turn.sent', 'turn.event', 'turn.result', 'session.exited',
-  'offer.shown', 'offer.decided', 'offer.kept', 'request.offer.mute',
+  'offer.shown', 'offer.decided', 'offer.kept', 'offer.muted',
 ]);
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
-export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'request.offer.mute']);
+export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.muted']);
 
 /** The kernel template of an `open` turn (manifest fields only; the tool fully qualified, mcp__<server>__<tool>, H1c). */
 export function openText(title: string, qualifiedTool: string): string {
@@ -188,7 +191,7 @@ export class OfferRouter {
   #servedNames(hsid: string, mod: DeskMod): string[] {
     const set = this.#o.sessionServers(hsid);
     if (!set) return [];
-    return (mod.manifest.provides?.mcp ?? []).map((e) => serverNameOf(mod.name, e)).filter((n) => set.has(n));
+    return mod.manifest.provides?.mcp?.length ? [serverNameOf(mod.name)].filter((n) => set.has(n)) : [];
   }
 
   /** Muted for the hsid (not-now / stop-here) or its repo. */
@@ -225,8 +228,8 @@ export class OfferRouter {
     const p = isObj(e.payload) ? e.payload : {};
     const hsid = typeof e.session === 'string' ? e.session : typeof p.hsid === 'string' ? p.hsid : null;
     switch (e.kind) {
-      case 'request.offer.mute': {
-        if (!this.#kernel(e) || validateKindPayload('request.offer.mute', p).length) return [];
+      case 'offer.muted': {
+        if (!this.#kernel(e) || validateKindPayload('offer.muted', p).length) return [];
         const repo = p.repo as string;
         const set = this.#repoMutes.get(repo) ?? new Set<string>();
         if (p.muted === true) set.add(p.mod as string);
@@ -398,17 +401,27 @@ export class OfferRouter {
     }
   }
 
-  /** request.offer.mute from the human (gui/device): the kernel writes the request row; the fold applies it. */
+  /**
+   * request.offer.mute from the human (gui/device), S0b: the human names a LIVE session they own; the kernel derives the
+   * repo scope from it (never trusting a client repo key), writes the request row and the kernel-owned offer.muted, and
+   * the fold applies offer.muted.
+   */
   async mute(asker: OfferAsker, payload: unknown): Promise<{ mod: string; repo: string; muted: boolean }> {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw new RpcRefusal('FORBIDDEN', 'human-only', 'request.offer.mute is the human\'s, on a gui or device connection');
     }
     const errs = validateKindPayload('request.offer.mute', payload);
     if (errs.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `request.offer.mute: ${errs.slice(0, 3).join('; ')}`);
-    const p = payload as { mod: string; scope: 'repo'; repo: string; muted: boolean };
-    const row = { mod: p.mod, scope: p.scope, repo: p.repo, muted: p.muted };
-    await this.#o.append('request.offer.mute', row, { connId: asker.connId });
-    this.observe({ kind: 'request.offer.mute', principal: this.#o.kernelPrincipal, payload: row });
-    return { mod: p.mod, repo: p.repo, muted: p.muted };
+    const p = payload as { mod: string; scope: 'repo'; hsid: string; muted: boolean };
+    const owner = this.#o.ownerOf(p.hsid);
+    if (owner === undefined) throw new RpcRefusal('NOT_FOUND', 'not-found', 'the session is not running (unmuting with no live session is not supported yet)');
+    if (owner !== asker.principal) throw new RpcRefusal('FORBIDDEN', 'not-owner', 'the session belongs to another human');
+    const repo = this.#o.repoScopeOf(p.hsid);
+    if (repo === null) throw new RpcRefusal('NOT_FOUND', 'not-found', 'the session has no repo scope');
+    await this.#o.append('request.offer.mute', { mod: p.mod, scope: p.scope, hsid: p.hsid, muted: p.muted }, { session: p.hsid, connId: asker.connId });
+    const row = { mod: p.mod, repo, muted: p.muted, hsid: p.hsid };
+    await this.#o.append('offer.muted', row, { session: p.hsid, connId: asker.connId });
+    this.observe({ kind: 'offer.muted', principal: this.#o.kernelPrincipal, payload: row });
+    return { mod: p.mod, repo, muted: p.muted };
   }
 }

@@ -40,7 +40,7 @@ function setup() {
   const err: string[] = [];
   const io = { stdout: { write: (s: string) => out.push(s) }, stderr: { write: (s: string) => err.push(s) } };
   const run = (argv: string[], env: NodeJS.ProcessEnv = {}) => runModCommand([...argv, '--home', home], io, { trust: auth, env });
-  const copy = (name = 'hello'): string => {
+  const copy = (name = 'example.hello'): string => {
     const dst = path.join(root, `src-${name}-${tmps.length}-${Math.random().toString(36).slice(2, 8)}`);
     fs.cpSync(EXAMPLE_MOD, dst, { recursive: true });
     return dst;
@@ -94,11 +94,11 @@ describe('gnomon mod install / link (stage, never sign)', () => {
     expect(await t.run(['install', t.copy()])).toBe(0);
     const s = t.text();
     expect(s).toMatch(/^STAGED {2}card:[0-9A-Z]{26}\n/);
-    expect(s).toContain('│ Install mod hello 1.0.0 (mod) from package, tier local');
+    expect(s).toContain('│ Install mod example.hello 1.0.0 (mod) from package, tier local');
     expect(s).toContain('│ runs commands: 0 mcp server(s), 0 hook(s)'); // the kernel-composed count line
     expect(s).toContain('│ hooks: none');
     expect(s).toContain('signed  nothing');
-    expect(pendingStaged(t.home).map((p) => p.name)).toEqual(['hello']);
+    expect(pendingStaged(t.home).map((p) => p.name)).toEqual(['example.hello']);
     expect(readGrants(t.home, t.auth).installs).toEqual([]);
     // the count line is the third card line (index 2), before any manifest-controlled line
     const lines = s.split('\n').filter((l) => l.startsWith('  │ '));
@@ -159,12 +159,12 @@ describe('the pickup raises staged cards through the real broker', () => {
     const card = b.broker.card(cardId)!;
     expect(card.kind).toBe('install');
     expect(card.state).toBe('pending');
-    expect(rows.find((r) => r.kind === 'manifest.staged')?.payload).toMatchObject({ name: 'hello', cardId, via: 'cli', claimed: { by: `p:${t.auth.ns}/cli` } });
+    expect(rows.find((r) => r.kind === 'manifest.staged')?.payload).toMatchObject({ name: 'example.hello', cardId, via: 'cli', claimed: { by: `p:${t.auth.ns}/cli` } });
     expect(rows.find((r) => r.kind === 'manifest.staged')?.payload.by).toBeUndefined(); // never logged as a fact
     await p.scan(); // never raised twice
     expect(b.rows.filter((r) => r.kind === 'approval.request')).toHaveLength(1);
     await b.broker.approve(H, { cardId, decision: 'install', decisionSig: b.sig(cardId, 'install', card.contentHash) });
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')?.cardId).toBe(cardId);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')?.cardId).toBe(cardId);
     await new Promise((r) => setTimeout(r, 20));
     expect(host.calls).toContain('start hello');
     expect(pendingStaged(t.home)).toEqual([]); // decided
@@ -174,7 +174,7 @@ describe('the pickup raises staged cards through the real broker', () => {
     const t = setup();
     await t.run(['install', t.copy()]);
     const { cardId } = pendingStaged(t.home)[0]!;
-    const file = path.join(t.home, 'mods', 'hello', 'staged', `${cardId.replace(':', '-')}.json`);
+    const file = path.join(t.home, 'mods', 'example.hello', 'staged', `${cardId.replace(':', '-')}.json`);
     const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
     rec.detail.effects = [];
     fs.writeFileSync(file, JSON.stringify(rec));
@@ -270,7 +270,7 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     await t.run(['list']);
     expect(t.text()).toMatch(/^hello\s+installed\s+sha256:/m);
     t.out.length = 0;
-    expect(await t.run(['status', 'hello'])).toBe(0);
+    expect(await t.run(['status', 'example.hello'])).toBe(0);
     expect(t.text()).toMatch(/tier +local/);
     expect(t.text()).toMatch(/source +package/);
     expect(await t.run(['status', 'nope'])).toBe(1);
@@ -279,36 +279,36 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
   it('pause stops the running mod and keeps it stopped; start clears it and asks for an operator start', async () => {
     const t = setup();
     const { host, p } = await installed(t);
-    expect(host.running()).toEqual(['hello']);
-    expect(await t.run(['pause', 'hello'])).toBe(0);
-    expect(isUserPaused(t.home, 'hello')).toBe(true);
+    expect(host.running()).toEqual(['example.hello']);
+    expect(await t.run(['pause', 'example.hello'])).toBe(0);
+    expect(isUserPaused(t.home, 'example.hello')).toBe(true);
     await p.scan();
     expect(host.running()).toEqual([]);
     expect(host.calls).toContain('stop hello paused');
-    expect(await t.run(['start', 'hello'])).toBe(0);
-    expect(isUserPaused(t.home, 'hello')).toBe(false);
+    expect(await t.run(['start', 'example.hello'])).toBe(0);
+    expect(isUserPaused(t.home, 'example.hello')).toBe(false);
     await p.scan();
-    expect(host.running()).toEqual(['hello']);
+    expect(host.running()).toEqual(['example.hello']);
   });
 
   it('pause is allowed from a kernel-spawned shell (it narrows); start and uninstall are refused there (human-only)', async () => {
     const t = setup();
     await installed(t);
     const env = { GNOMON_HSID: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' };
-    expect(await t.run(['pause', 'hello'], env)).toBe(0);
-    expect(await t.run(['start', 'hello'], env)).toBe(1);
-    expect(await t.run(['uninstall', 'hello'], env)).toBe(1);
+    expect(await t.run(['pause', 'example.hello'], env)).toBe(0);
+    expect(await t.run(['start', 'example.hello'], env)).toBe(1);
+    expect(await t.run(['uninstall', 'example.hello'], env)).toBe(1);
     expect(t.errText()).toContain('kernel-spawned-shell');
-    expect(isUserPaused(t.home, 'hello')).toBe(true);
-    expect(uninstallRequested(t.home, 'hello')).toBeNull();
+    expect(isUserPaused(t.home, 'example.hello')).toBe(true);
+    expect(uninstallRequested(t.home, 'example.hello')).toBeNull();
   });
 
   it('uninstall raises a root-class card; allow appends a root-signed grant.uninstall and stops the mod', async () => {
     const t = setup();
     const { b, host, p } = await installed(t, 'link');
     expect(linkedFolders(t.home, t.auth)).toHaveLength(1);
-    expect(await t.run(['uninstall', 'hello'])).toBe(0);
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeDefined(); // nothing removed yet
+    expect(await t.run(['uninstall', 'example.hello'])).toBe(0);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeDefined(); // nothing removed yet
     await p.scan();
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     expect(card.state).toBe('pending');
@@ -317,10 +317,10 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     expect(card.attended).toBe(true); // the CLI's claim, from the request file, not a kernel constant
     await b.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: b.sig(card.cardId, 'allow', card.contentHash) });
     expect(b.rows.find((r) => r.kind === 'approval.decide' && r.payload.cardId === card.cardId)?.payload.rootSig).toBeDefined();
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeUndefined();
     expect(linkedFolders(t.home, t.auth)).toEqual([]);
     expect(host.calls).toContain('stop hello uninstalled');
-    expect(uninstallRequested(t.home, 'hello')).toBeNull();
+    expect(uninstallRequested(t.home, 'example.hello')).toBeNull();
   });
 
   it('Aegis C1 falsifier: an old install row re-appended after an uninstall is rejected `replay` and does not revive the mod', async () => {
@@ -328,14 +328,14 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const { b, p } = await installed(t);
     const file = path.join(t.home, 'grants.jsonl');
     const installLine = fs.readFileSync(file, 'utf8').split('\n').find((l) => l.includes('"grant.install"'))!;
-    await t.run(['uninstall', 'hello']);
+    await t.run(['uninstall', 'example.hello']);
     await p.scan();
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     await b.broker.approve(H, { cardId: card.cardId, decision: 'allow', decisionSig: b.sig(card.cardId, 'allow', card.contentHash) });
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeUndefined();
     fs.appendFileSync(file, `${installLine}\n`);
     const g = readGrants(t.home, t.auth);
-    expect(effectiveInstall(g, 'hello')).toBeUndefined();
+    expect(effectiveInstall(g, 'example.hello')).toBeUndefined();
     expect(g.rejected.map((r) => r.reason)).toContain('replay');
   });
 
@@ -344,23 +344,23 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
     const at = new Date(Date.UTC(2026, 9, 19, 12));
     const pin = (packageHash: string, now: Date, kind: 'grant.install' | 'grant.uninstall' = 'grant.install') =>
       kind === 'grant.install'
-        ? appendGrantRow(t.home, t.auth, { kind, name: 'hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package' }, now)
-        : appendGrantRow(t.home, t.auth, { kind, name: 'hello', packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZB' }, now);
+        ? appendGrantRow(t.home, t.auth, { kind, name: 'example.hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package' }, now)
+        : appendGrantRow(t.home, t.auth, { kind, name: 'example.hello', packageHash, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZB' }, now);
     const A = `sha256:${'a'.repeat(64)}`;
     const B = `sha256:${'b'.repeat(64)}`;
     pin(A, at);
     pin(B, at); // same millisecond
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')?.packageHash).toBe(B);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')?.packageHash).toBe(B);
     pin(B, new Date(at.getTime() - 3_600_000), 'grant.uninstall'); // the clock stepped back an hour
     const g = readGrants(t.home, t.auth);
-    expect(effectiveInstall(g, 'hello')).toBeUndefined();
+    expect(effectiveInstall(g, 'example.hello')).toBeUndefined();
     expect(g.rejected).toEqual([]);
   });
 
   it('Aegis round 3 falsifier: a pin row the reader would not resolve is refused after the write, so no caller reports it applied', () => {
     const t = setup();
-    expect(() => appendGrantRow(t.home, t.auth, { kind: 'grant.install', name: 'hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'a'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package', createdAt: 'not-a-date' })).toThrow(/did not take effect/);
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeUndefined();
+    expect(() => appendGrantRow(t.home, t.auth, { kind: 'grant.install', name: 'example.hello', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'a'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZA', source: 'package', createdAt: 'not-a-date' })).toThrow(/did not take effect/);
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeUndefined();
   });
 
   it('Aegis round 3: junk staged files are remembered by stamp, so 64 of them cannot starve a real card', async () => {
@@ -372,7 +372,7 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
       fs.writeFileSync(path.join(d, `card-01H${'Z'.repeat(21)}${String(i).padStart(2, '0')}.json`), i % 2 ? 'not json' : '{"schemaVersion":"other"}');
     }
     await t.run(['install', t.copy()]);
-    const real = pendingStaged(t.home).find((p) => p.name === 'hello')!;
+    const real = pendingStaged(t.home).find((p) => p.name === 'example.hello')!;
     const b = brokerRig(t.auth);
     const p = new StagedCardPickup({ home: t.home, broker: b.broker, authority: t.auth, host: fakeHost() });
     await p.scan(); // the budget goes on the junk once
@@ -384,28 +384,28 @@ describe('gnomon mod list / status / pause / start / uninstall', () => {
   it('falsifier: an uninstall card denied leaves the install; a stale request (the pin moved) is dropped without a card', async () => {
     const t = setup();
     const { b, p } = await installed(t);
-    await t.run(['uninstall', 'hello']);
+    await t.run(['uninstall', 'example.hello']);
     await p.scan();
     const card = b.broker.cards().find((c) => c.kind === 'grant')!;
     await b.broker.approve(H, { cardId: card.cardId, decision: 'deny', decisionSig: b.sig(card.cardId, 'deny', card.contentHash) });
-    expect(effectiveInstall(readGrants(t.home, t.auth), 'hello')).toBeDefined();
+    expect(effectiveInstall(readGrants(t.home, t.auth), 'example.hello')).toBeDefined();
     // a request written by any other process claims nothing: attended is false unless the file says so
-    fs.writeFileSync(path.join(t.home, 'mods', 'hello', 'uninstall.request'), JSON.stringify({ packageHash: effectiveInstall(readGrants(t.home, t.auth), 'hello')!.packageHash }));
+    fs.writeFileSync(path.join(t.home, 'mods', 'example.hello', 'uninstall.request'), JSON.stringify({ packageHash: effectiveInstall(readGrants(t.home, t.auth), 'example.hello')!.packageHash }));
     await p.scan();
     const unattended = b.broker.cards().filter((c) => c.kind === 'grant' && c.state === 'pending');
     expect(unattended.map((c) => c.attended)).toEqual([false]);
     await b.broker.approve(H, { cardId: unattended[0]!.cardId, decision: 'deny', decisionSig: b.sig(unattended[0]!.cardId, 'deny', unattended[0]!.contentHash) });
-    fs.writeFileSync(path.join(t.home, 'mods', 'hello', 'uninstall.request'), JSON.stringify({ packageHash: `sha256:${'0'.repeat(64)}` }));
+    fs.writeFileSync(path.join(t.home, 'mods', 'example.hello', 'uninstall.request'), JSON.stringify({ packageHash: `sha256:${'0'.repeat(64)}` }));
     await p.scan();
     expect(b.broker.cards().filter((c) => c.kind === 'grant')).toHaveLength(2);
-    expect(uninstallRequested(t.home, 'hello')).toBeNull();
+    expect(uninstallRequested(t.home, 'example.hello')).toBeNull();
   });
 
   it('status gives the same no-trust note as list; usage on error goes to stderr, asked-for help to stdout', async () => {
     const t = setup();
     const noTrust = { rootKeyId: null, ns: null, verifyRow: () => false };
     await runModCommand(['list', '--home', t.home], t.io, { trust: noTrust });
-    await runModCommand(['status', 'hello', '--home', t.home], t.io, { trust: noTrust });
+    await runModCommand(['status', 'example.hello', '--home', t.home], t.io, { trust: noTrust });
     expect(t.errText().match(/no provisioned root/g)).toHaveLength(2);
     t.out.length = 0;
     t.err.length = 0;

@@ -21,7 +21,8 @@ import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.
 import { readKernelPubs } from '../kernel/identity/index.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
 import { daemonState } from '../kernel/lifecycle/pidfile.js';
-import { deskLaunchKey, launchCardLines, readDeskMods, requestMcpConfig } from '../kernel/desk/mcp-passthrough.js';
+import { isModId } from '@a-company/gnomon-contracts';
+import { deskLaunchKey, launchCardLines, readDeskMods, requestMcpConfig, serverNameOf } from '../kernel/desk/mcp-passthrough.js';
 import { resolveMcpLaunch } from '../kernel/manifest/manifest.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
 import { GNOMON_VERSION } from '../version.js';
@@ -145,7 +146,7 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
 /** `gnomon mod config …` (mod-cli delegates here; home and trust already resolved). */
 export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr: Out }, ctx: { home: string; trust: RowVerifier; env: NodeJS.ProcessEnv; now?: () => Date }): number {
   const [name, ...rest] = argv;
-  if (!name || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) {
+  if (!name || !isModId(name)) {
     refused(io.stderr, 'usage', 'bad-name', 'gnomon mod config needs a mod name (a-z, 0-9, -)', ['gnomon mod config <mod> --command <abs> --args …']);
     return DESK_EXIT_USAGE;
   }
@@ -184,20 +185,21 @@ export function runModConfig(argv: readonly string[], io: { stdout: Out; stderr:
     refused(io.stderr, 'not_found', 'not-installed', `${name} is not an installed, granted mod`, ['gnomon mod list']);
     return DESK_EXIT_REFUSED;
   }
-  const entries = mod.manifest.provides?.mcp ?? [];
-  const entry = server !== undefined ? entries.find((e) => e.name === server) : entries.length === 1 ? entries[0] : entries.find((e) => e.name === name);
-  if (!entry) {
-    refused(io.stderr, 'not_found', 'no-server', `${name} declares ${entries.length} mcp server(s); name one with --server`, entries.map((e) => `--server ${e.name}`));
+  // S0b: one server per mod (manifest: 2), named by the kernel; --server, if given, must be that name
+  const entry = mod.manifest.provides?.mcp?.[0];
+  const serverName = serverNameOf(name);
+  if (!entry || (server !== undefined && server !== serverName)) {
+    refused(io.stderr, 'not_found', 'no-server', entry ? `${name}'s mcp server is ${serverName}` : `${name} declares no mcp server`, entry ? [`--server ${serverName}`] : ['gnomon mod list']);
     return DESK_EXIT_USAGE;
   }
   try {
-    requestMcpConfig(ctx.home, mod, entry.name, config, ctx.now?.());
+    requestMcpConfig(ctx.home, mod, config, ctx.now?.());
   } catch (err) {
     refused(io.stderr, 'forbidden', 'not-declared', (err as Error).message.slice(0, 300), ['the mod author decides what a user may set (provides.mcp[].config)']);
     return DESK_EXIT_REFUSED;
   }
-  io.stdout.write(`REQUESTED  ${name} ${entry.name}\n`);
-  for (const l of launchCardLines(name, entry.name, resolveMcpLaunch(entry, config), deskLaunchKey(ctx.home))) io.stdout.write(`  │ ${l}\n`);
+  io.stdout.write(`REQUESTED  ${name} ${serverName}\n`);
+  for (const l of launchCardLines(name, serverName, resolveMcpLaunch(entry, config), deskLaunchKey(ctx.home))) io.stdout.write(`  │ ${l}\n`);
   readout(io.stdout, [
     ['signed', 'nothing (the request takes no effect until the card is allowed)'],
     ['decide', daemonState(ctx.home).state === 'running' ? 'in the GUI: the running kernel raises this card' : 'start the kernel (gnomon up); it raises this card in the GUI'],
