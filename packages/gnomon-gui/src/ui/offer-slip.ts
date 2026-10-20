@@ -16,10 +16,10 @@ export const glyphOf = (mod: string): string => (Object.hasOwn(GLYPHS, mod) ? GL
 
 export interface SlipState {
   armed: boolean;
-  /** contextIn tokens from the mod's manifest offer (null: not declared) */
-  contextIn: readonly string[] | null;
   /** a spoken "open" was heard (L1) */
   voiceHint: boolean;
+  /** ambient speech said "not now" (M2): it never acts, the slip asks for a click */
+  ambientHint: boolean;
   /** first paint of this slip (slide-in) */
   arrive: boolean;
 }
@@ -43,8 +43,9 @@ export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniE
     attrs,
     tab(`offer · mod:${s.mod}`),
     h(doc, 'div', { class: 'slip-q' }, s.question),
-    st.armed && on ? h(doc, 'div', { class: 'slip-ctx' }, takesLine(st.contextIn)) : null,
+    st.armed && on ? h(doc, 'div', { class: 'slip-ctx' }, takesLine(s.contextIn)) : null,
     on && st.voiceHint ? h(doc, 'div', { class: 'slip-hint' }, 'click or ↵ to open') : null,
+    on && st.ambientHint ? h(doc, 'div', { class: 'slip-hint' }, 'click not now to dismiss') : null,
     h(
       doc,
       'div',
@@ -60,6 +61,8 @@ export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniE
 export function wireOfferSlips(root: HTMLElement, on: (act: 'open' | 'not-now', offerId: string, e: Event) => void): void {
   const fire = (e: Event): void => {
     if (!e.isTrusted) return;
+    // Aegis M1: a held key's repeats and a double-click's second click are not second gestures
+    if ((e as KeyboardEvent).repeat === true || (e.type === 'click' && (e as MouseEvent).detail > 1)) return;
     const b = (e.target as HTMLElement | null)?.closest('.slip.live [data-offer-act]') as HTMLElement | null;
     if (!b || b.hasAttribute('disabled')) return;
     e.preventDefault();

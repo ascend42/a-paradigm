@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { decideRequest, foldOffers, offerSpecsOf, openStep, slipViews, takesLine, voiceOfferIntent, type OfferRow } from '../src/core/offers.js';
+import { decideRequest, foldOffers, OFFER_ARM_GAP_MS, OFFER_ARM_TTL_MS, openStep, pttDismissable, slipViews, takesLine, voiceOfferIntent, type OfferRow } from '../src/core/offers.js';
 import { renderOfferSlip } from '../src/ui/offer-slip.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
@@ -50,7 +50,7 @@ const reply = (seq: number, text = 'Here is what I found. Want a map?'): Row => 
 const human = (seq: number, text = 'thanks'): Row => ({ seq, kind: 'turn.event', session: HSID, view: 'full', payload: { type: 'user', line: line('user', text) } });
 const shown = (seq: number, n: number, mod = 'constellation', extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'offer.shown', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, mod, kind: 'map-the-idea', phase: 'synthesize', title: 'Map it', question: 'Map this on the board?', replyTurnId: `turn:${HSID}/1`, ...extra } });
 const decided = (seq: number, n: number, decision: string): Row => ({ seq, kind: 'offer.decided', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, decision } });
-const heard = (seq: number, text: string): Row => ({ seq, kind: 'voice.turn.user', session: HSID, principal: VOICE, payload: { hsid: HSID, text, partial: false } });
+const heard = (seq: number, text: string, extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'voice.turn.user', session: HSID, principal: VOICE, payload: { hsid: HSID, text, partial: false, mode: 'ptt', forwardable: true, ...extra } });
 
 const views = (rows: Row[]) => slipViews(foldOffers(rows as OfferRow[], HSID), chatItems(rows).items);
 
@@ -113,23 +113,39 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
 });
 
 describe('#gui-offer-slip two-step open (A5) and the requests', () => {
-  it('untrusted or not live ⇒ refused; first trusted press arms; the second sends', () => {
-    expect(openStep({ isTrusted: false }, id(1), id(1), null)).toBe('refused');
-    expect(openStep({ isTrusted: true }, id(1), null, null)).toBe('refused');
-    expect(openStep({ isTrusted: true }, id(1), id(2), null)).toBe('refused');
-    expect(openStep({ isTrusted: true }, id(1), id(1), null)).toBe('armed');
-    expect(openStep({ isTrusted: true }, id(1), id(1), id(1))).toBe('send');
+  it('untrusted or not live ⇒ refused; first trusted press arms; the second sends after the gap', () => {
+    const T = { isTrusted: true };
+    const arm = { offerId: id(1), at: 1000 };
+    expect(openStep({ isTrusted: false }, id(1), id(1), null, 1000)).toBe('refused');
+    expect(openStep(T, id(1), null, null, 1000)).toBe('refused');
+    expect(openStep(T, id(1), id(2), null, 1000)).toBe('refused');
+    expect(openStep(T, id(1), id(1), null, 1000)).toBe('armed');
+    expect(openStep(T, id(1), id(1), arm, 1000 + OFFER_ARM_GAP_MS)).toBe('send');
+  });
+  it('Aegis M1: a key repeat or a double-click is no gesture; a send inside the gap waits; an old arm lapses', () => {
+    const arm = { offerId: id(1), at: 1000 };
+    expect(openStep({ isTrusted: true, repeat: true }, id(1), id(1), arm, 5000)).toBe('refused');
+    expect(openStep({ isTrusted: true, detail: 2 }, id(1), id(1), arm, 5000)).toBe('refused');
+    expect(openStep({ isTrusted: true, detail: 1 }, id(1), id(1), arm, 5000)).toBe('send');
+    expect(openStep({ isTrusted: true }, id(1), id(1), arm, 1000 + OFFER_ARM_GAP_MS - 1)).toBe('wait');
+    expect(openStep({ isTrusted: true }, id(1), id(1), arm, 1000 + OFFER_ARM_TTL_MS + 1)).toBe('armed');
+    expect(openStep({ isTrusted: true }, id(1), id(1), { offerId: id(2), at: 1000 }, 2000)).toBe('armed');
+    expect(SLIP_UI).toMatch(/\.repeat === true/);
+    expect(SLIP_UI).toMatch(/detail > 1/);
   });
   it('decideRequest builds log.append request.offer.decide', () => {
     expect(decideRequest(id(1), 'open')).toEqual({ kind: 'request.offer.decide', payload: { offerId: id(1), decision: 'open' } });
     expect(decideRequest(id(1), 'not-now')).toEqual({ kind: 'request.offer.decide', payload: { offerId: id(1), decision: 'not-now' } });
   });
-  it('the takes line is the manifest contextIn, never model text', () => {
-    const specs = offerSpecsOf({ mods: { offers: [{ mod: 'constellation', kind: 'map-the-idea', contextIn: ['recent-messages', 'open-files', 'BAD TOKEN'] }, { mod: 'x', kind: 'y', contextIn: 'nope' }] } });
-    expect(specs.get('constellation/map-the-idea')).toEqual(['recent-messages', 'open-files']);
-    expect(specs.has('x/y')).toBe(false);
-    expect(takesLine(specs.get('constellation/map-the-idea')!)).toBe('takes: recent messages · open files · ↵ to open');
-    expect(takesLine(null)).toBe('takes: nothing declared by the mod · ↵ to open');
+  it('Aegis M3: the takes line is the row\'s kernel-copied contextIn; unknown tokens, +N more, missing ⇒ unknown', () => {
+    expect(takesLine(['recent-messages', 'open-files'])).toBe('takes: recent messages · open files · ↵ to open');
+    expect(takesLine(['recent-messages', 'made-up'])).toBe('takes: recent messages · unknown · ↵ to open');
+    expect(takesLine(Array.from({ length: 10 }, () => 'last-reply'))).toMatch(/ · \+2 more · ↵ to open$/);
+    expect(takesLine(null)).toBe('takes: unknown (not reported by the kernel) · ↵ to open');
+    const book = foldOffers([reply(1), shown(2, 1, 'constellation', { contextIn: ['open-files', 'BAD TOKEN'] }), shown(3, 2, 'docs')] as OfferRow[], HSID);
+    expect(book.slips[0]!.contextIn).toEqual(['open-files', '?']);
+    expect(book.slips[1]!.contextIn).toBeNull();
+    expect(APP).not.toMatch(/offerSpecsOf|mods\.offers/);
   });
   it('voice dismisses only (L1): "not now" marks a dismissal, "open" only a hint', () => {
     expect(voiceOfferIntent('Not now.')).toBe('dismiss');
@@ -142,12 +158,35 @@ describe('#gui-offer-slip two-step open (A5) and the requests', () => {
     const fake = foldOffers([reply(1), shown(2, 1), { ...heard(3, 'not now'), principal: 'p:7k2m9q4x/claude' }] as OfferRow[], HSID);
     expect(fake.slips[0]!.voiceDismiss).toBeNull();
   });
+  it('Aegis M2: only a forwardable, non-intercepted push-to-talk row dismisses; ambient only hints', () => {
+    expect(pttDismissable({ mode: 'ptt', forwardable: true })).toBe(true);
+    expect(pttDismissable({ mode: 'ambient', forwardable: true })).toBe(false);
+    expect(pttDismissable({ forwardable: true })).toBe(false);
+    expect(pttDismissable({ mode: 'ptt', forwardable: false })).toBe(false);
+    expect(pttDismissable({ mode: 'ptt', forwardable: true, intercepted: 'control' })).toBe(false);
+    const amb = foldOffers([reply(1), shown(2, 1), heard(3, 'not now', { mode: 'ambient' })] as OfferRow[], HSID);
+    expect(amb.slips[0]!.voiceDismiss).toBeNull();
+    expect(amb.slips[0]!.ambientHint).toBe(true);
+    const icp = foldOffers([reply(1), shown(2, 1), heard(3, 'not now', { intercepted: 'control' })] as OfferRow[], HSID);
+    expect(icp.slips[0]!.voiceDismiss).toBeNull();
+  });
+  it('Aegis M2: a voice row acts only on the slip live when it arrived; the page ignores backlog rows', () => {
+    const afterHuman = foldOffers([reply(1), shown(2, 1), human(3), heard(4, 'not now')] as OfferRow[], HSID);
+    expect(afterHuman.slips[0]!.voiceDismiss).toBeNull();
+    const afterReply = foldOffers([reply(1), shown(2, 1), reply(3, 'more'), heard(4, 'not now')] as OfferRow[], HSID);
+    expect(afterReply.slips[0]!.voiceDismiss).toBeNull();
+    const afterDecided = foldOffers([reply(1), shown(2, 1), decided(3, 1, 'open'), heard(4, 'not now')] as OfferRow[], HSID);
+    expect(afterDecided.slips[0]!.voiceDismiss).toBeNull();
+    const older = foldOffers([reply(1), shown(2, 1), reply(3), shown(4, 2, 'docs'), heard(5, 'not now')] as OfferRow[], HSID);
+    expect(older.slips.map((x) => x.voiceDismiss)).toEqual([null, 5]);
+    expect(APP).toMatch(/if \(r\.kind !== 'voice\.turn\.user' \|\| !\(r\.seq > offerLiveSince\)\) return;/);
+  });
 });
 
 describe('#gui-offer-slip DOM: a dashed slip, never a key', () => {
   const v = views([reply(1), shown(2, 1, 'constellation', { question: 'Map <b>this</b>?' })])[0]!;
   it('tab is glyph + offer · mod:<name>; the question is a text node; no .key, no data-decision', () => {
-    const el = renderOfferSlip(fdoc, v, { armed: false, contextIn: null, voiceHint: false, arrive: false }) as FEl;
+    const el = renderOfferSlip(fdoc, v, { armed: false, voiceHint: false, ambientHint: false, arrive: false }) as FEl;
     const all = el.all();
     expect(el.className).toContain('slip');
     expect(el.className).toContain('live');
@@ -162,14 +201,14 @@ describe('#gui-offer-slip DOM: a dashed slip, never a key', () => {
     expect(all.some((e) => e.className === 'slip-ctx')).toBe(false); // the takes line shows once armed
   });
   it('armed shows "takes: … · ↵ to open"; a heard open shows the hint; inert buttons are disabled; decided is a trace', () => {
-    const armed = renderOfferSlip(fdoc, v, { armed: true, contextIn: ['recent-messages'], voiceHint: true, arrive: true }) as FEl;
+    const armed = renderOfferSlip(fdoc, { ...v, slip: { ...v.slip, contextIn: ['recent-messages'] } }, { armed: true, voiceHint: true, ambientHint: true, arrive: true }) as FEl;
     expect(armed.className).toContain('armed');
     expect(armed.className).toContain('arrive');
     expect(armed.all().find((e) => e.className === 'slip-ctx')!.text).toBe('takes: recent messages · ↵ to open');
-    expect(armed.all().find((e) => e.className === 'slip-hint')!.text).toBe('click or ↵ to open');
-    const inert = renderOfferSlip(fdoc, { ...v, live: false }, { armed: false, contextIn: null, voiceHint: false, arrive: false }) as FEl;
+    expect(armed.all().filter((e) => e.className === 'slip-hint').map((e) => e.text)).toEqual(['click or ↵ to open', 'click not now to dismiss']);
+    const inert = renderOfferSlip(fdoc, { ...v, live: false }, { armed: false, voiceHint: false, ambientHint: false, arrive: false }) as FEl;
     expect(inert.all().filter((e) => e.tag === 'button').every((b) => b.attrs.has('disabled'))).toBe(true);
-    const gone = renderOfferSlip(fdoc, { ...v, slip: { ...v.slip, decided: 'not-now' } }, { armed: false, contextIn: null, voiceHint: false, arrive: false }) as FEl;
+    const gone = renderOfferSlip(fdoc, { ...v, slip: { ...v.slip, decided: 'not-now' } }, { armed: false, voiceHint: false, ambientHint: false, arrive: false }) as FEl;
     expect(gone.className).toBe('slip gone');
     expect(gone.text).toBe('⁂ not now · mod:constellation');
   });
@@ -190,5 +229,17 @@ describe('#gui-offer-slip DOM: a dashed slip, never a key', () => {
     expect(CSS).toMatch(/--slip-shadow: none;/);
     expect(CSS).toMatch(/\.slip\.arrive \{ animation: slip-in 320ms/);
     expect(CSS).not.toMatch(/\.slip[^{]*\{[^}]*var\(--key-shadow\)/);
+    expect(CSS).not.toMatch(/\.slip[^{]*\{[^}]*var\(--key-edge\)/); // Aegis L4
+  });
+});
+
+describe('#gui-offer-slip Aegis L1: the preview arm is not in the served bundle', () => {
+  it('build.mjs defines __GNOMON_PREVIEW__ false (preview true) and app.js carries no devArmOffer', async () => {
+    expect(readFileSync(path.join(ROOT, 'scripts', 'build.mjs'), 'utf8')).toMatch(/define: \{ __GNOMON_PREVIEW__: 'false' \}/);
+    expect(readFileSync(path.join(ROOT, 'scripts', 'preview.mjs'), 'utf8')).toMatch(/define: \{ __GNOMON_PREVIEW__: 'true' \}/);
+    const { GUI_BUNDLE_FILES_B64 } = await import('../../gnomon/src/kernel/web/gui-bundle.js'); // check:bundle proves it is the fresh build
+    const app = Buffer.from(GUI_BUNDLE_FILES_B64['app.js']!, 'base64').toString('utf8');
+    expect(app).toContain('request.offer.decide');
+    expect(app).not.toContain('devArmOffer');
   });
 });

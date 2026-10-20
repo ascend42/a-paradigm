@@ -25,7 +25,7 @@ import { approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, pr
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
-import { decideRequest, offerSpecsOf, openStep, slipViews, type SlipView } from '../core/offers.js';
+import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -328,7 +328,9 @@ function itemEl(it: FoldedItem): HTMLElement {
 let slipsAt = new Map<string, SlipView[]>();
 const slipSig = new Map<string, string>();
 let liveOffer: string | null = null;
-let armedOffer: string | null = null;
+let armedOffer: OfferArm | null = null;
+let armTimer: ReturnType<typeof setTimeout> | null = null;
+declare const __GNOMON_PREVIEW__: boolean;
 /** L1: a heard "open" shows a hint; a heard "not now" dismisses once (this page's request) */
 const voiceDismissed = new Set<string>();
 /** rows up to here were backlog: their slips paint without the slide-in */
@@ -336,8 +338,7 @@ let offerLiveSince = Number.POSITIVE_INFINITY;
 /** DEV ONLY (#gui-preview offer-armed): devArmOfferOnce() asked for the live slip painted armed; the served main.ts never does */
 let devArmOffer = false;
 function slipEl(v: SlipView): MiniEl {
-  const contextIn = offerSpecsOf(status).get(`${v.slip.mod}/${v.slip.kind}`) ?? null;
-  return renderOfferSlip(doc, v, { armed: armedOffer === v.slip.offerId, contextIn, voiceHint: v.slip.openHint, arrive: v.live && v.slip.seq > offerLiveSince });
+  return renderOfferSlip(doc, v, { armed: armStanding(armedOffer, v.slip.offerId, Date.now()), voiceHint: v.slip.openHint, ambientHint: v.slip.ambientHint, arrive: v.live && v.slip.seq > offerLiveSince });
 }
 /** Recompute the slips from the store (never from reply text) and remount the replies whose slips changed. */
 function syncSlips(cur: readonly ChatItem[]): void {
@@ -345,16 +346,16 @@ function syncSlips(cur: readonly ChatItem[]): void {
   const next = new Map<string, SlipView[]>();
   for (const v of views) next.set(v.itemKey, [...(next.get(v.itemKey) ?? []), v]);
   const live = views.find((v) => v.live)?.slip.offerId ?? null;
-  if (live !== liveOffer) armedOffer = null; // a newer reply, a human message or a decision: the arm is gone
+  if (live !== liveOffer || (armedOffer && !armStanding(armedOffer, armedOffer.offerId, Date.now()))) armedOffer = null; // newer reply, human message, decision or TTL
   liveOffer = live;
-  if (devArmOffer && live) {
-    armedOffer = live;
+  if (__GNOMON_PREVIEW__ && devArmOffer && live) {
+    armedOffer = { offerId: live, at: Date.now() - OFFER_ARM_TTL_MS / 2 };
     devArmOffer = false;
   }
   slipsAt = next;
   const keys = new Set([...next.keys(), ...slipSig.keys()]);
   for (const k of keys) {
-    const sig = (next.get(k) ?? []).map((v) => `${v.slip.offerId}:${v.slip.decided}:${v.live}:${armedOffer === v.slip.offerId}:${v.slip.openHint}`).join('|');
+    const sig = (next.get(k) ?? []).map((v) => `${v.slip.offerId}:${v.slip.decided}:${v.live}:${armedOffer?.offerId === v.slip.offerId}:${v.slip.openHint}:${v.slip.ambientHint}`).join('|');
     if ((slipSig.get(k) ?? '') !== sig) remountItem(k);
     if (sig) slipSig.set(k, sig);
     else slipSig.delete(k);
@@ -367,10 +368,13 @@ function onOfferAct(act: 'open' | 'not-now', offerId: string, e: Event): void {
     if (!e.isTrusted || offerId !== liveOffer) return;
     return void sendOfferDecision(offerId, 'not-now');
   }
-  const step = openStep(e, offerId, liveOffer, armedOffer);
-  if (step === 'refused') return;
+  const now = Date.now();
+  const step = openStep({ isTrusted: e.isTrusted, repeat: (e as KeyboardEvent).repeat, detail: e.type === 'click' ? (e as MouseEvent).detail : undefined }, offerId, liveOffer, armedOffer, now);
+  if (step === 'refused' || step === 'wait') return;
   if (step === 'armed') {
-    armedOffer = offerId;
+    armedOffer = { offerId, at: now };
+    if (armTimer) clearTimeout(armTimer);
+    armTimer = setTimeout(() => paintTranscript(), OFFER_ARM_TTL_MS + 50); // Aegis M1/L2: the arm lapses visibly
     paintTranscript();
     ($('viewport').querySelector(`.slip.live[data-offer="${CSS.escape(offerId)}"] .slip-open`) as HTMLElement | null)?.focus();
     return;
@@ -387,9 +391,10 @@ async function sendOfferDecision(offerId: string, decision: 'open' | 'not-now'):
   }
   paintTranscript();
 }
-/** L1 voice: a LIVE heard "not now" dismisses the newest open slip of its conversation (once per offer). */
+/** L1 voice / Aegis M2: a LIVE push-to-talk "not now" (the fold checks ptt, forwardable, not intercepted, and that
+ * the slip was live when the row arrived) dismisses once per offer; never a row from the backlog. */
 function offerVoiceRow(r: Row): void {
-  if (r.kind !== 'voice.turn.user') return;
+  if (r.kind !== 'voice.turn.user' || !(r.seq > offerLiveSince)) return;
   const hsid = r.session ?? null;
   if (!hsid) return;
   const s = store.offers(hsid).slips.find((x) => x.voiceDismiss === r.seq && x.decided === null);
@@ -2169,7 +2174,7 @@ function wire(): void {
 /** DEV ONLY (#gui-preview offer-armed): paint the next live slip armed. src/main.ts never calls it; in-page code could
  * already call the kernel client directly, so this widens nothing (the send still needs a trusted press). */
 export function devArmOfferOnce(): void {
-  devArmOffer = true;
+  if (__GNOMON_PREVIEW__) devArmOffer = true; // L1: false in scripts/build.mjs, so the served bundle drops it
 }
 
 export function main(raw?: string): void {

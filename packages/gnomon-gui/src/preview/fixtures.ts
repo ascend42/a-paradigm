@@ -276,13 +276,13 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
   ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
 
   // #gui-offer-slip: the kernel's offer.shown under the billing reply (the #offer-router disposed its ```offer block)
-  const shown = (at: string, offerId: string, mod: string, kind: string, question: string, title: string): void => on('billing', at, 'offer.shown', { offerId, mod, kind, phase: 'synthesize', title, question, replyTurnId: `turn:${BILLING}/1` });
-  if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it');
+  const shown = (at: string, offerId: string, mod: string, kind: string, question: string, title: string, contextIn: string[]): void => on('billing', at, 'offer.shown', { offerId, mod, kind, phase: 'synthesize', title, question, replyTurnId: `turn:${BILLING}/1`, contextIn });
+  if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it', ['recent-messages', 'open-files']);
   if (o.offer === 'muted') {
-    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it');
+    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['last-reply']);
     on('billing', T('14:05:55'), 'offer.decided', { offerId: OFFER_MUTED_ID, decision: 'not-now' });
     ev('billing', T('14:06:20'), textLine('The fix is staged: one rounding call at the end of `totals()`. The tests are next once you allow the run.'));
-    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it');
+    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['last-reply']);
   }
 
   // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)
@@ -356,12 +356,6 @@ function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean } = {}
 
 const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, enrolled: [{ name: 'matt' }], maxMode: 'conversation', ambientIdleMs: 600_000 };
 const attached = (since: string): Record<string, unknown> => ({ attached: true, hsid: BILLING, ceiling: 'conversation', since, idleAt: null, voiceSessionId: `vs:${ulid('voice session')}`, turns: 2, echoTailMs: 400, ambientIdleMs: 600_000, maxMode: 'conversation', ambientConfirmed: true, enrolled: [{ name: 'matt' }] });
-
-/** #gui-offer-slip: the manifest offers' contextIn as the host reports them (TODO(S0/#mod-host): the status field name). */
-const OFFER_SPECS = [
-  { mod: 'constellation', kind: 'map-the-idea', contextIn: ['recent-messages', 'open-files'] },
-  { mod: 'neurons', kind: 'keep-finding', contextIn: ['last-reply'] },
-];
 
 /** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
 const WORKSHOP_VIEW = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
@@ -471,9 +465,9 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
   'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
   'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
-  'offer-slip': fixture('offer-slip', 'The Desk: a margin slip from mod:constellation under the billing reply', deskChain({ offer: 'slip' }), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [], offers: OFFER_SPECS } }, BILLING),
-  'offer-armed': fixture('offer-armed', 'The slip armed by a first press: "takes: … · ↵ to open"', deskChain({ offer: 'slip' }), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [], offers: OFFER_SPECS } }, BILLING, false, { open: 'offer-armed' }),
-  'offer-muted': fixture('offer-muted', '"not now" on mod:neurons: a trace, and its next offer stays quiet (L4)', deskChain({ offer: 'muted' }), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [], offers: OFFER_SPECS } }, BILLING),
+  'offer-slip': fixture('offer-slip', 'The Desk: a margin slip from mod:constellation under the billing reply', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING),
+  'offer-armed': fixture('offer-armed', 'The slip armed by a first press: "takes: … · ↵ to open"', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'offer-armed' }),
+  'offer-muted': fixture('offer-muted', '"not now" on mod:neurons: a trace, and its next offer stays quiet (L4)', deskChain({ offer: 'muted' }), statusOf(VOICE_RUNNING), BILLING),
   'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
   'paradigm-context': { ...fixture('paradigm-context', 'Desk with the Paradigm Context mod in the sidebar (billing focused)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { modAbiId: 'preview', running: [{ name: 'paradigm-context', packageHash: 'preview', dev: false, sandbox: 'full' }], paused: [], ...PARADIGM_CONTEXT_STATUS } }, BILLING), paradigm: paradigmSlices() },
 });
