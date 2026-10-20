@@ -102,17 +102,27 @@ export class SherpaStt implements SttEngine {
   }
 }
 
+/** Kokoro v0.19 speaker 9 (bm_george) is the SYSTEM voice; never the model's own speaker (then 6, am_michael). */
+export const SYSTEM_SID_DEFAULT = 9;
+export function systemSidFor(modelSid: number, wanted: number = SYSTEM_SID_DEFAULT): number {
+  if (wanted !== modelSid) return wanted;
+  return modelSid === SYSTEM_SID_DEFAULT ? 6 : SYSTEM_SID_DEFAULT;
+}
+
 export class SherpaTts implements TtsEngine {
   readonly voice: string;
   readonly #tts: Sherpa;
   readonly #sid: number;
-  constructor(sherpa: Sherpa, p: Record<string, string>, o: { sid?: number; voice?: string } = {}) {
+  readonly #systemSid: number;
+  constructor(sherpa: Sherpa, p: Record<string, string>, o: { sid?: number; voice?: string; systemSid?: number } = {}) {
     this.#tts = new sherpa.OfflineTts({ model: { kokoro: { model: p.model, voices: p.voices, tokens: p.tokens, dataDir: p.dataDir }, numThreads: 2, provider: 'cpu', debug: false }, maxNumSentences: 1 });
     this.#sid = o.sid ?? 0;
+    this.#systemSid = systemSidFor(this.#sid, o.systemSid);
     this.voice = o.voice ?? `kokoro-en-v0_19:${this.#sid}`;
   }
-  async synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }> {
-    const a = this.#tts.generate({ text: sentence, sid: this.#sid, speed: 1.0 }) as { samples: Float32Array; sampleRate: number };
+  async synthesize(sentence: string, o: { voice?: 'model' | 'system' } = {}): Promise<{ samples: Float32Array; sampleRate: number }> {
+    const sid = o.voice === 'system' ? this.#systemSid : this.#sid;
+    const a = this.#tts.generate({ text: sentence, sid, speed: 1.0 }) as { samples: Float32Array; sampleRate: number };
     return { samples: a.samples, sampleRate: a.sampleRate };
   }
 }

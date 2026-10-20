@@ -104,7 +104,8 @@ export interface SttEngine {
 
 export interface TtsEngine {
   readonly voice: string;
-  synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }>;
+  /** `voice: 'system'` = the kernel's own words (table talk S4): a different speaker than model replies */
+  synthesize(sentence: string, o?: { voice?: 'model' | 'system' }): Promise<{ samples: Float32Array; sampleRate: number }>;
 }
 
 export interface SpeakerEngine {

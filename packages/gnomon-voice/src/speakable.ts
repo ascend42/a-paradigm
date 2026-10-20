@@ -138,6 +138,12 @@ export function askQuestions(input: Record<string, unknown> | undefined): string
 export interface KernelSpeakItem {
   kind: 'reply' | 'ask' | 'edits';
   text: string;
+  /**
+   * TABLE TALK S4 (TD-2026-10-20-294): 'system' for words the KERNEL wrote (an ask-waiting line, "Edited N files":
+   * item from:'kernel'), said in the system voice after an earcon; 'model' for everything the model wrote. A reply
+   * (from:'block' | 'heuristic' | absent) is ALWAYS 'model', whatever its text says.
+   */
+  voice: 'model' | 'system';
 }
 export const KERNEL_SPEAKABLE = 'kernel-speakable' as const;
 const ITEM_KINDS = new Set(['reply', 'ask', 'edits']);
@@ -153,7 +159,8 @@ export function kernelSpeakable(kind: string, payload: Record<string, unknown>):
   for (const it of payload.items as Array<Record<string, unknown>>) {
     if (!it || typeof it !== 'object' || typeof it.kind !== 'string' || !ITEM_KINDS.has(it.kind) || typeof it.text !== 'string') continue;
     const text = clip(stripMarkdown(it.text));
-    if (text && /[A-Za-z0-9]/.test(text)) out.push({ kind: it.kind as KernelSpeakItem['kind'], text });
+    const system = it.from === 'kernel' && it.kind !== 'reply';
+    if (text && /[A-Za-z0-9]/.test(text)) out.push({ kind: it.kind as KernelSpeakItem['kind'], text, voice: system ? 'system' : 'model' });
   }
   return out;
 }

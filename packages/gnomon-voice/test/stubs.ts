@@ -79,9 +79,12 @@ export class StubStt implements SttEngine {
 export class StubTts implements TtsEngine {
   readonly voice = 'stub';
   readonly said: string[] = [];
+  /** table talk S4: the voice each sentence was asked in */
+  readonly voices: Array<'model' | 'system'> = [];
   constructor(readonly msPerSentence = 1000) {}
-  async synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }> {
+  async synthesize(sentence: string, o?: { voice?: 'model' | 'system' }): Promise<{ samples: Float32Array; sampleRate: number }> {
     this.said.push(sentence);
+    this.voices.push(o?.voice ?? 'model');
     return { samples: new Float32Array(Math.round((SR * this.msPerSentence) / 1000)), sampleRate: SR };
   }
 }
@@ -157,9 +160,9 @@ export class FakeLink implements KernelLink {
     this.row?.({ seq: ++this.#seq, kind: 'turn.result', payload: {} });
     this.speakable(this.#kernel.push('turn.result', {}));
   }
-  speakable(items: Array<{ kind: string; text: string }>, turnSeq = ++this.#turnSeq): void {
+  speakable(items: Array<{ kind: string; text: string; from?: string }>, turnSeq = ++this.#turnSeq): void {
     if (!items.length) return;
-    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text })) } });
+    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text, ...(i.from !== undefined ? { from: i.from } : {}) })) } });
   }
 }
 

@@ -31,6 +31,7 @@
  */
 import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
+import { withEarcon } from './earcon.js';
 import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
@@ -130,7 +131,7 @@ export class VoiceClient {
   #windows: Array<{ t0: number; t1: number }> = [];
   #speechRunMs = 0;
   #bargedIn = false;
-  #speakQueue: string[] = [];
+  #speakQueue: Array<{ sentence: string; voice: 'model' | 'system'; earcon: boolean }> = [];
   #speaking: Promise<void> = Promise.resolve();
   // serial utterance processing
   #work: Promise<void> = Promise.resolve();
@@ -506,19 +507,21 @@ export class VoiceClient {
       this.#spokenTurns.add(key);
       if (this.#spokenTurns.size > 256) this.#spokenTurns.delete(this.#spokenTurns.values().next().value!);
     }
-    for (const it of items) this.say(it.text);
+    for (const it of items) this.say(it.text, it.voice);
   }
 
   /** Queue text to speak, one sentence per TTS chunk. */
-  say(text: string): void {
-    for (const s of sentences(text)) this.#speakQueue.push(s);
+  say(text: string, voice: 'model' | 'system' = 'model'): void {
+    // table talk S4: system speech starts with the earcon and uses the system speaker; model text never does
+    sentences(text).forEach((sentence, i) => this.#speakQueue.push({ sentence, voice, earcon: voice === 'system' && i === 0 }));
     this.#speaking = this.#speaking.then(() => this.#drain()).catch((err) => this.#log.warn('speech failed', { error: err instanceof Error ? err.message : String(err) }));
   }
 
   async #drain(): Promise<void> {
     while (this.#speakQueue.length && !this.#closed) {
-      const sentence = this.#speakQueue.shift()!;
-      const audio = await this.#o.engines.tts.synthesize(sentence);
+      const q = this.#speakQueue.shift()!;
+      const sentence = q.sentence;
+      const audio = withEarcon(await this.#o.engines.tts.synthesize(sentence, q.voice === 'system' ? { voice: 'system' } : undefined), q.earcon);
       if (this.#closed) return;
       this.#bargedIn = false;
       this.#speechRunMs = 0;
