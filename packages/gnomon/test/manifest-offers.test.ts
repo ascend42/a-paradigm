@@ -47,7 +47,7 @@ const OFFER = {
   related: [],
   restraint: 'Not while the human is debugging.',
 } as const;
-const MCP: ManifestMcp = { command: 'node', args: ['server.js'], config: { args: true, env: ['STARBOARD_HOME'] } };
+const MCP: ManifestMcp = { command: 'node', args: ['server.js'], config: { args: true, env: ['ACME__STARBOARD__HOME'] } };
 
 function mod(over: Partial<NonNullable<ManifestV2['provides']>> = {}): ManifestV2 {
   return { manifest: 2, publisher: 'acme', kind: 'mod', name: 'starboard', version: '1.0.0', abi: 'mod-abi:v1', provides: { mcp: [MCP], offers: [{ ...OFFER, contextIn: [...OFFER.contextIn], related: [] }], ...over } } as ManifestV2;
@@ -83,9 +83,12 @@ describe('provides.offers (offer-spec:v1)', () => {
   });
   it.each(['neurons', 'constellation', 'paradigm-context', 'workshop', 'ledger', 'gnomon-x', 'paradigm-x', 'claude-x', 'anthropic-x'])('L5: %s is first-party only', (name) => {
     const m = { ...mod({ mcp: [{ command: 'node' }] }), name };
-    expect(code(() => v(m))).toBe('NAME');
-    // 'neurons' is also a §9.1 userland namespace (neurons.event), so KERNEL_NAMESPACE_TOKENS refuses it at every tier
-    expect(code(() => validateManifest(m, { tier: 'first-party' }))).toBe(name === 'neurons' ? 'NAME' : 'none');
+    // S0b: a non-gnomon publisher is refused a first-party display name (PUBLISHER); 'neurons' is also a §9.1 userland
+    // namespace (neurons.event), so KERNEL_NAMESPACE_TOKENS refuses it first (NAME)
+    expect(code(() => v(m))).toBe(name === 'neurons' ? 'NAME' : 'PUBLISHER');
+    expect(code(() => validateManifest(m, { tier: 'first-party' }))).toBe(name === 'neurons' ? 'NAME' : 'PUBLISHER');
+    // under publisher gnomon at the first-party tier it is admitted (gnomon.neurons is modns.gnomon.neurons.*, not neurons.*)
+    expect(code(() => validateManifest({ ...m, publisher: 'gnomon' }, { tier: 'first-party' }))).toBe('none');
   });
   it('offers is a widening field: a new offer, or a changed handoff, is an addition', () => {
     expect(WIDENING_FIELDS).toContain('offers');
@@ -109,11 +112,11 @@ describe('provides.offers (offer-spec:v1)', () => {
     const st = stageInstall({ home, source: src, via: 'package', requestedBy: 'p:abcdefgh/matt', trust: new DevTestRootAuthority(DEV_TEST_ROOT_ACK) });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(st.record.detail.offers).toEqual(['map-the-idea (diverge) → constellation_open: Map it on the board · takes: recent-messages']);
-    expect(st.record.detail.mcp).toEqual(["constellation: node server.js · user may set: args; env STARBOARD_HOME · env values are written to this session's mcp.json and readable by the session"]);
+    expect(st.record.detail.mcp).toEqual(["gm_acme_starboard: node server.js · user may set: args; env ACME__STARBOARD__HOME · env values are written to this session's mcp.json and readable by the session"]);
     const lines = (blockFor(st.record.detail).block.children as Array<{ text: string }>).map((c) => c.text);
     expect(lines).toContain('offer: map-the-idea (diverge) → constellation_open: Map it on the board · takes: recent-messages');
     // the long line may wrap on the card (INSTALL_CONTINUATION); its start and the env note both show
-    expect(lines.some((l) => l.startsWith('mcp: constellation: node server.js · user may set: args; env STARBOARD_HOME'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('mcp: gm_acme_starboard: node server.js · user may set: args; env ACME__STARBOARD__HOME'))).toBe(true);
     expect(lines.join(' ')).toContain('readable by the session');
   });
   it('a manifest without offers has no offers detail (pre-812 cards hash the same)', () => {
@@ -124,7 +127,7 @@ describe('provides.offers (offer-spec:v1)', () => {
     const st = stageInstall({ home, source: src, via: 'package', requestedBy: 'p:abcdefgh/matt', trust: new DevTestRootAuthority(DEV_TEST_ROOT_ACK) });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect('offers' in st.record.detail).toBe(false);
-    expect(st.record.detail.mcp).toEqual(['p: node p.js']);
+    expect(st.record.detail.mcp).toEqual(['gm_acme_plain: node p.js']);
   });
 });
 
@@ -137,7 +140,7 @@ describe('provides.mcp per-user config override', () => {
     }
   });
   it('M1: every denylisted exact name and every prefix family is refused, even at the first-party tier', () => {
-    const fp = (env: string[]) => code(() => validateManifest(mod({ mcp: [{ ...MCP, config: { env } }] }), { tier: 'first-party' }));
+    const fp = (env: string[]) => code(() => validateManifest({ ...mod({ mcp: [{ ...MCP, config: { env } }] }), publisher: 'gnomon' }, { tier: 'first-party' }));
     expect(fp(['OTHER_HOME'])).toBe('none');
     for (const n of MCP_ENV_DENY) expect(fp([n]), n).toBe('SCHEMA');
     for (const p of MCP_ENV_DENY_PREFIXES) expect(fp([`${p}X`.replace(/__+/g, '_')]), p).toBe('SCHEMA');
@@ -146,9 +149,12 @@ describe('provides.mcp per-user config override', () => {
   });
   it('M1: below first-party a declared name is the mod own prefix or a credential', () => {
     const local = (env: string[]) => code(() => v(mod({ mcp: [{ ...MCP, config: { env } }] })));
-    expect(local(['STARBOARD_HOME', 'OPENAI_API_KEY', 'NOTION_TOKEN'])).toBe('none');
+    expect(local(['ACME__STARBOARD__HOME', 'OPENAI_API_KEY', 'NOTION_TOKEN'])).toBe('none');
     expect(local(['OTHER_HOME'])).toBe('SCHEMA');
     expect(local(['STARBOARDX'])).toBe('SCHEMA');
+    // S0b: the own prefix is <PUB>__<NAME>__ (double underscore); the single-underscore and bare-name forms are not
+    expect(local(['ACME_STARBOARD_HOME'])).toBe('SCHEMA');
+    expect(local(['STARBOARD__HOME'])).toBe('SCHEMA');
     expect(code(() => v(mod({ mcp: [{ ...MCP, config: { env: ['A', 'A'] } }] })))).toBe('SCHEMA');
   });
   it('a config change is a widening of mcp; an entry without config keeps its old key', () => {
@@ -157,9 +163,9 @@ describe('provides.mcp per-user config override', () => {
     expect(detectWidening(plain, plain)).toEqual([]);
   });
   it('the user override admits only what the entry declares', () => {
-    expect(validateMcpUserConfig(MCP, { args: ['/Users/me/constellation/dist/server.js'], env: { STARBOARD_HOME: '/Users/me/.starboard' } })).toEqual({
+    expect(validateMcpUserConfig(MCP, { args: ['/Users/me/constellation/dist/server.js'], env: { ACME__STARBOARD__HOME: '/Users/me/.starboard' } })).toEqual({
       args: ['/Users/me/constellation/dist/server.js'],
-      env: { STARBOARD_HOME: '/Users/me/.starboard' },
+      env: { ACME__STARBOARD__HOME: '/Users/me/.starboard' },
     });
     // L4: a user-set command is an absolute path only
     const withCmd = { ...MCP, config: { command: true as const } };
