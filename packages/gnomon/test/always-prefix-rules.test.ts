@@ -5,7 +5,7 @@
  * the prefix word for word, in the same repo. Pure fold tests: no POSIX-only fixtures.
  */
 import { describe, expect, it } from 'vitest';
-import { inputHash } from '../src/kernel/supervisor/permission.js';
+import { composePermission, inputHash } from '../src/kernel/supervisor/permission.js';
 import { bashArgvOfInput, RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
 
 const K = 'p:abcdefgh/kernel';
@@ -111,6 +111,19 @@ describe('#always-rules prefix rules (TD-2026-10-20-294)', () => {
     expect(m(b, 'git log -p')).toBeNull();
     b.fold(rows[2]!);
     expect(m(b, 'git log -p')).toBeNull();
+  });
+
+  it('a Bash card offers prefix choices (first 1-2 argv words) inside contentHash detail only for one literal simple command', () => {
+    const plan = (command: string) => composePermission({ requestId: 'q', toolName: 'Bash', toolUseId: 't', input: { command } }, { repo: '/r', denyWrite: [] }) as { kind: string; detail: Record<string, unknown>; block: { children: Array<{ type?: string; detail?: unknown }> } };
+    const p = plan('git log -n 5');
+    expect(p.detail.prefixOptions).toEqual([['git'], ['git', 'log']]);
+    expect(p.block.children.filter((c) => c.type === 'bash-prefix').map((c) => c.detail)).toEqual([p.detail]);
+    expect(plan('ls').detail.prefixOptions).toEqual([['ls']]);
+    for (const c of ['git log | sh', 'git log; rm x', 'FOO=1 git log', 'git log $(x)', 'git log > f']) {
+      const q = plan(c);
+      expect(q.detail.prefixOptions, c).toBeUndefined();
+      expect(q.block.children.some((x) => x.type === 'bash-prefix'), c).toBe(false);
+    }
   });
 
   it('bashArgvOfInput is the simple-command rule over the input', () => {

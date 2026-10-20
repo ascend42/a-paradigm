@@ -47,6 +47,7 @@ import { canonicalJson } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
 import { realpathFollow, realpathLoose, UnresolvablePath, type PolicyPath } from '../manifest/policy.js';
 import { wrappedBlock } from '../manifest/install.js';
+import { simpleArgv } from './shell-readonly.js';
 
 export const ASK_USER_DENY = 'ask in your reply; the human answers in chat';
 /** ask-user: an unanswered question card expires into deny with this message (10 min). */
@@ -283,6 +284,16 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
   }
   const lines = [`The session asks to run ${tool}`, `repo: ${ctx.repo}`, ...body];
   if (size(lines) > MAX_CARD_CHARS) return deny('too-large', `the ${tool} request is too large to show in full on a card`);
+  // TD-2026-10-20-294: a Bash command that is ONE literal simple command offers prefix-scoped always choices (its
+  // first 1–2 argv words) as STRUCTURED detail inside contentHash, plus a {type:'bash-prefix', detail} block node the
+  // GUI verifies (like ask-user); the broker re-checks any prefix against the same simpleArgv rule
+  const argv = tool === 'Bash' && typeof inp.command === 'string' ? simpleArgv(inp.command) : null;
+  if (argv && argv.length && argv.slice(0, 2).every((w) => w.length > 0 && w.length <= 128)) {
+    detail.prefixOptions = argv.length >= 2 ? [[argv[0]!], [argv[0]!, argv[1]!]] : [[argv[0]!]];
+    const c = card('permission', PERMISSION_DECISIONS, detail, h, lines) as Extract<PermissionPlan, { kind: 'card' }>;
+    const children = [...((c.block.children as unknown[]) ?? []), { type: 'bash-prefix', detail: structuredClone(detail) }];
+    return { ...c, block: { ...c.block, children } };
+  }
   return card('permission', PERMISSION_DECISIONS, detail, h, lines);
 }
 

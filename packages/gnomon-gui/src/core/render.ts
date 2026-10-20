@@ -148,6 +148,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     }
     case 'Image':
       return h(doc, 'div', { class: 'blk blk-image', role: 'img', 'aria-label': str(data.alt) }, `[image] ${str(data.alt)}`);
+    case 'bash-prefix':
+      // the kernel's structured prefix choices: the card's always keys render them (prefixOptionsOf)
+      return h(doc, 'span', { class: 'blk blk-bash-prefix' });
     case 'ask-user':
       // the kernel's structured questions: the card's picker renders them (askDetailOf), the text lines above show them
       return h(doc, 'span', { class: 'blk blk-ask-user' });
@@ -175,6 +178,32 @@ export interface CardView {
   decidable: boolean;
   /** ask-user: the questions from the card's contentHash-verified structured detail (askDetailOf); null ⇒ no picker */
   ask?: AskCardDetail | null;
+  /** Bash permission: the prefix-scoped always choices from the contentHash-verified detail (prefixOptionsOf); null ⇒ exact only */
+  prefixOptions?: string[][] | null;
+}
+
+/**
+ * TD-2026-10-20-294: the prefix-scoped `always` choices of a Bash permission card come ONLY from the block's
+ * `{type:'bash-prefix', detail}` node whose detail hashes to the card's contentHash (the kernel derived them with
+ * its simple-command rule); display only — the broker re-checks any prefix against the shown command.
+ */
+export function prefixOptionsOf(card: Record<string, unknown>): string[][] | null {
+  if (card.kind !== 'permission') return null;
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'bash-prefix');
+  if (nodes.length !== 1) return null;
+  const detail = (nodes[0] as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  if (typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const d = detail as { tool?: unknown; prefixOptions?: unknown };
+  if (d.tool !== 'Bash' || !Array.isArray(d.prefixOptions) || d.prefixOptions.length === 0 || d.prefixOptions.length > 2) return null;
+  const out: string[][] = [];
+  for (const o of d.prefixOptions) {
+    if (!Array.isArray(o) || o.length < 1 || o.length > 3 || !o.every((w) => typeof w === 'string' && w.length > 0 && w.length <= 128)) return null;
+    out.push([...(o as string[])]);
+  }
+  return out;
 }
 
 /** Flags the GUI shows for a card: the kernel's `flags[]` plus any the sanitizer finds in the body (union, never fewer). */
@@ -310,7 +339,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       'div',
       { class: 'card-keys' },
       ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi — shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
-      ...keys.map((d) => h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)),
+      ...keys.flatMap((d) =>
+        d === 'always' && v.prefixOptions?.length
+          ? [
+              h(doc, 'button', { class: 'key key-always', type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
+              ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${p.join(' ')} …`)),
+            ]
+          : [h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
+      ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),

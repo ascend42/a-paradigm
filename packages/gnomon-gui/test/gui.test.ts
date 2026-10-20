@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, refusalFromError, RpcError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
-import { askDetailOf, askNote, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { askDetailOf, askNote, prefixOptionsOf, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { Follow, isAtBottom } from '../src/core/follow.js';
 import { chatItems, GuiStore, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
@@ -169,6 +169,29 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     // Aegis L1: a question named __proto__ is an ordinary key
     const proto = [{ n: 1, question: '__proto__', header: null, multiSelect: false, options: ['x'] }, { n: 2, question: 'b', header: null, multiSelect: false, options: ['y'] }];
     expect(JSON.parse(askNote(proto, new Map([[1, { chosen: [0], free: '' }], [2, { chosen: [0], free: '' }]]))!)).toEqual(JSON.parse('{"answers":{"__proto__":"x","b":"y"}}'));
+  });
+  it('Bash permission card (TD-2026-10-20-294): always offers the exact command or the verified prefix choices', () => {
+    const detail = { tool: 'Bash', toolUseId: 't', requestId: 'r', inputHash: 'sha256:' + 'c'.repeat(64), repo: '/r', prefixOptions: [['git'], ['git', 'log']] };
+    const base = { kind: 'permission', requestedBy: 'p:x/s-1', hsid: 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0' };
+    const block = { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'command: git log -n 5' }, { type: 'bash-prefix', detail }] };
+    const card = { ...base, block, contentHash: cardContentHash(base, detail) };
+    const opts = prefixOptionsOf(card)!;
+    expect(opts).toEqual([['git'], ['git', 'log']]);
+    // a tampered (widened) detail, a missing node, a wrong hash, a non-permission kind ⇒ exact only
+    expect(prefixOptionsOf({ ...card, block: { ...block, children: [{ type: 'bash-prefix', detail: { ...detail, prefixOptions: [['rm']] } }] } })).toBeNull();
+    expect(prefixOptionsOf({ ...card, block: { ...block, children: [] } })).toBeNull();
+    expect(prefixOptionsOf({ ...card, contentHash: 'sha256:' + '0'.repeat(64) })).toBeNull();
+    expect(prefixOptionsOf({ ...card, kind: 'ask-user' })).toBeNull();
+    const v = { cardId: 'card:01J', kind: 'permission', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: card.contentHash, flags: [], decisions: ['allow', 'deny', 'always'], decidable: true, prefixOptions: opts };
+    const el = renderCard({ doc: fdoc }, v, block) as FEl;
+    const always = el.all().filter((e) => e.attrs.get('data-decision') === 'always');
+    expect(always.map((e) => e.text)).toEqual(['Always: this exact command', 'Always: git …', 'Always: git log …']);
+    expect(always.map((e) => e.attrs.get('data-scope'))).toEqual(['exact', 'prefix', 'prefix']);
+    expect(always.map((e) => e.attrs.get('data-prefix'))).toEqual([undefined, '["git"]', '["git","log"]']);
+    // no verified prefix choices ⇒ the plain always key
+    const plain = (renderCard({ doc: fdoc }, { ...v, prefixOptions: null }, block) as FEl).all().filter((e) => e.attrs.get('data-decision') === 'always');
+    expect(plain.map((e) => e.text)).toEqual(['always']);
+    expect(plain[0]!.attrs.has('data-scope')).toBe(false);
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];

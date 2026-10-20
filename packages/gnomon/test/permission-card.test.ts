@@ -16,7 +16,8 @@ const req = (toolName: string, input: Record<string, unknown>) => ({ requestId: 
 /** the rendered text with continuations joined back (what a human reads, wrap undone) */
 const shown = (p: PermissionPlan): string => {
   if (p.kind !== 'card') throw new Error(`expected a card, got ${p.kind}:${p.why}`);
-  const texts = (p.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+  // the structured {type:'bash-prefix'} node (TD-2026-10-20-294) carries no display text
+  const texts = (p.block as { children: Array<{ text: string; type?: string }> }).children.filter((c) => c.type !== 'bash-prefix').map((c) => c.text);
   expect(texts.every((t) => Array.from(t).length <= 512)).toBe(true);
   // the field fence (Aegis L4) is undone too: body lines lose FIELD_BODY_PREFIX
   return texts.map((t, i) => (i && t.startsWith('  ↳ ') ? `\u0000${t.slice(4)}` : `\n${t}`)).join('').replaceAll('\u0000', '').replaceAll(`\n${FIELD_BODY_PREFIX}`, '\n');
