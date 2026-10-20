@@ -175,7 +175,12 @@ export interface StageOptions {
   /** the package path or the linked folder */
   source: string;
   via: 'package' | 'linked' | 'git';
-  /** via 'git': the claimed URL and commit of the fetched checkout in `source` (the fetch itself is S4) */
+  /**
+   * via 'git': the claimed URL and commit of the fetched checkout in `source` (the fetch itself is S4).
+   * TODO(S4, Aegis S0b L4): the fetch seam MUST run git with `-c http.followRedirects=false` (spec
+   * gnomon-mod-naming-versioning.md §3 Git source: repo-jacking) plus the other D4 clone flags; integrity stays the
+   * packageHash verified here and at load, never the sha40 locator.
+   */
   git?: { url: string; commit: string };
   /** the human asked to re-bind a non-GitHub publisher to this source's (host, namespace) (full card) */
   rebindPublisher?: boolean;
@@ -565,6 +570,7 @@ export function stageInstall(opts: StageOptions): StageResult {
   }
   let source: InstallSource;
   if (opts.via === 'git') {
+    // TODO(S4, Aegis S0b L4): this is the git fetch seam; the S4 fetcher must pass http.followRedirects=false (spec §3)
     try {
       source = gitSourceString(opts.git?.url ?? '', opts.git?.commit ?? '') as InstallSource;
     } catch (err) {
