@@ -3096,6 +3096,16 @@ components:
       dropped; no absolute path in the slice (hue + basename only). Granted
       by paradigm.read:summary (CAPABILITY_FORMS; not an id input; a
       manifest holding it may list no egress, any tier).
+      Aegis review (H1/M2/M3/L1/L3): no super-linear regex over file text
+      (key lines split by indexOf, trailing comments found by a linear scan,
+      scalars and titles capped at SCALAR_MAX 4 KiB before any regex); the
+      root walk runs in realpath space (cwd and home realpath'ed, case-folded
+      on darwin/win32, never at or above the home); bounded opendir
+      iteration (MAX_ENTRIES), MAX_TASK_PARSED 512, SLICE_BYTE_BUDGET 3 MiB;
+      the cache is keyed by the .paradigm realpath (hue per cwd, sync read =
+      single-flight; a worker is a follow-up); files: dev+ino match, nlink>1
+      refused, re-realpath + stat(realpath) vs fstat after open; realpath(cwd)
+      and realpath(home) scrubbed.
       K3: a RELAYED render's input is host-composed (host.ts
       composeRelayedInput, HOST_INPUT_KEYS focus/hsid/paradigm): the client
       names only {focus:{hsid}} (or the K0 {hsid}); the host joins that hsid

@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CAPABILITY_FORMS } from '@a-company/gnomon-contracts';
 import { capabilityForm, validateManifest } from '../src/kernel/manifest/manifest.js';
-import { displayTitle, MAX_FILE_BYTES, PARADIGM_SLICE_V1, ParadigmSliceCache, paradigmSlice, PATH_GLYPH, projectHue, readYamlSubset, redactPaths, SLICE_TOP, TITLE_MAX } from '../src/kernel/modhost/paradigm-slice.js';
+import { displayTitle, MAX_ENTRIES, MAX_FILE_BYTES, MAX_TASK_PARSED, PARADIGM_SLICE_V1, ParadigmSliceCache, paradigmSlice, PATH_GLYPH, projectHue, readYamlSubset, redactPaths, SCALAR_MAX, SLICE_BYTE_BUDGET, SLICE_TOP, TITLE_MAX } from '../src/kernel/modhost/paradigm-slice.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -204,6 +204,148 @@ describe('K1 paradigm-slice:v1 projector', () => {
     task(P, '2026-10-20', 1);
     expect(c.get(root, 500, { home }).tasks!.open).toBe(0);
     expect(c.get(root, 1500, { home }).tasks!.open).toBe(1);
+  });
+});
+
+/** wall-clock ms of fn (the hostile inputs below took seconds to minutes under the old regexes) */
+const timed = (fn: () => unknown): number => {
+  const t0 = performance.now();
+  fn();
+  return performance.now() - t0;
+};
+const BOUND_MS = 250;
+
+describe('Aegis H1: no super-linear regex over file text', () => {
+  it('a long whitespace run inside a scalar ("title: a" + 60,000 spaces + "b", and a 64 KiB variant) completes well under the bound', () => {
+    for (const n of [60_000, 64 * 1024]) {
+      for (const tail of ['b', '#c', '\u2028', 'b #c']) {
+        const text = `id: TD-1\ntitle: a${' '.repeat(n)}${tail}\n`;
+        let y: ReturnType<typeof readYamlSubset> = null;
+        expect(timed(() => (y = readYamlSubset(text))), `${n} ${JSON.stringify(tail)}`).toBeLessThan(BOUND_MS);
+        // over SCALAR_MAX: skipped whole like a nested value (or the line is malformed), never half-read
+        if (y) expect((y as Record<string, unknown>).title).toBeNull();
+      }
+    }
+  });
+  it('the same hostile file through the whole slice: under the bound, the decision skipped as malformed', () => {
+    const { root, home, P } = repo();
+    put(path.join(P, 'decisions', 'TD-2026-10-20-001.yaml'), `id: TD-2026-10-20-001\ntitle: a${' '.repeat(MAX_FILE_BYTES - 64)}b\n`);
+    let s: ReturnType<typeof paradigmSlice> | undefined;
+    expect(timed(() => (s = paradigmSlice(root, { home })))).toBeLessThan(BOUND_MS);
+    expect(s!.decisions!.items).toEqual([]);
+    expect(s!.skipped!.malformed).toBe(1);
+  });
+  it('a long whitespace run in a list item, a flow list and a quoted scalar stays linear too', () => {
+    const sp = ' '.repeat(60_000);
+    for (const text of [`tags:\n  - a${sp}b\n`, `refs: [a,${sp}b]\n`, `title: 'a'${sp}x\n`, `title: "a"${sp}x\n`, `k:${sp}\n`, `title: |${sp}x\n`]) expect(timed(() => readYamlSubset(text)), JSON.stringify(text.slice(0, 12))).toBeLessThan(BOUND_MS);
+  });
+  it('a title is cut to SCALAR_MAX before the sanitiser and the path regexes (a 1 MiB title, whitespace or slashes)', () => {
+    for (const raw of [`a${' '.repeat(1 << 20)}b`, '/a'.repeat(1 << 19), `\\\\${'x'.repeat(1 << 20)}`]) {
+      let t = { text: '', flags: [] as string[] };
+      expect(timed(() => (t = displayTitle(raw)))).toBeLessThan(BOUND_MS);
+      expect([...t.text].length).toBeLessThanOrEqual(TITLE_MAX);
+    }
+    expect(SCALAR_MAX).toBeLessThanOrEqual(4096);
+  });
+  it('comments still strip as before (the linear scan): only a # after a space or a tab starts one', () => {
+    expect(readYamlSubset('a: x # c\nb: x#y\nc: "q" # c\nd: x\t# c\ne: #only\n')).toMatchObject({ a: 'x', b: 'x#y', c: 'q', d: 'x', e: '' });
+  });
+});
+
+describe('Aegis M2: the root walk runs in realpath space and never reads the home', () => {
+  it('a cwd that is a symlink to the home (or below it through the link) is never rooted at the home', () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pslice-home-')));
+    dirs.push(base);
+    const home = path.join(base, 'home');
+    put(path.join(home, '.paradigm', 'decisions', 'TD-2026-10-20-001.yaml'), 'id: TD-2026-10-20-001\ntitle: HOME SECRET\n');
+    fs.mkdirSync(path.join(home, 'sub'));
+    fs.symlinkSync(home, path.join(base, 'link'));
+    for (const cwd of [path.join(base, 'link'), path.join(base, 'link', 'sub')]) {
+      const s = paradigmSlice(cwd, { home });
+      expect(s.state, cwd).toBe('absent');
+      expect(JSON.stringify(s)).not.toMatch(/HOME SECRET/);
+    }
+    // and the home handed in through a symlink is realpath'ed too
+    expect(paradigmSlice(path.join(home, 'sub'), { home: path.join(base, 'link') }).state).toBe('absent');
+  });
+  it('a case-variant cwd of the home on a case-insensitive file system is the home (compared case-folded)', () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pslice-case-')));
+    dirs.push(base);
+    const home = path.join(base, 'Home');
+    put(path.join(home, '.paradigm', 'decisions', 'TD-2026-10-20-001.yaml'), 'id: TD-2026-10-20-001\ntitle: HOME SECRET\n');
+    fs.mkdirSync(path.join(home, 'sub'));
+    const variant = path.join(base, 'HOME', 'sub');
+    if (!fs.existsSync(variant)) return; // a case-sensitive volume: no variant to name
+    const s = paradigmSlice(variant, { home });
+    expect(s.state).toBe('absent');
+    expect(JSON.stringify(s)).not.toMatch(/HOME SECRET/);
+  });
+});
+
+describe('Aegis M3: bounded work per slice', () => {
+  it('the cache is keyed by the realpath of the .paradigm root: two cwds and a symlink share one entry; the hue stays per cwd', () => {
+    const { root, home } = repo();
+    fs.mkdirSync(path.join(root, 'a'));
+    fs.symlinkSync(root, path.join(path.dirname(root), 'alias'));
+    const c = new ParadigmSliceCache(10_000);
+    const cwds = [root, path.join(root, 'a'), path.join(path.dirname(root), 'alias')];
+    for (const cwd of cwds) {
+      const s = c.get(cwd, 0, { home });
+      expect(s.state).toBe('ok');
+      expect(s.project).toBe(projectHue(cwd));
+    }
+    expect(c.size).toBe(1);
+  });
+  it(`tasks parse at most MAX_TASK_PARSED (${MAX_TASK_PARSED}) files; the slice says truncated`, () => {
+    const { root, home, P } = repo();
+    for (let i = 1; i <= MAX_TASK_PARSED + 40; i++) put(path.join(P, 'tasks', 'entries', '2026-10-20', `T-${String(i).padStart(4, '0')}.yaml`), `id: T-${i}\nblurb: t\nstatus: open\n`);
+    const s = paradigmSlice(root, { home });
+    expect(s.tasks!.open).toBe(MAX_TASK_PARSED);
+    expect(s.skipped!.truncated).toBe(true);
+  });
+  it(`a total byte budget (${SLICE_BYTE_BUDGET} bytes) per slice: past it nothing more is read`, () => {
+    const { root, home, P } = repo();
+    const pad = 'x'.repeat(MAX_FILE_BYTES - 200);
+    const n = Math.ceil(SLICE_BYTE_BUDGET / (MAX_FILE_BYTES - 100)) + 4;
+    for (let i = 1; i <= n; i++) put(path.join(P, 'tasks', 'entries', '2026-10-20', `T-${String(i).padStart(4, '0')}.yaml`), `id: T-${i}\nblurb: t\nstatus: open\npad: '${pad}'\n`);
+    const s = paradigmSlice(root, { home });
+    expect(s.tasks!.open).toBeLessThan(n);
+    expect(s.tasks!.open).toBeGreaterThan(0);
+    expect(s.skipped!.truncated).toBe(true);
+  });
+  it(`a directory is listed by a bounded iteration (MAX_ENTRIES ${MAX_ENTRIES}); the rest is never listed`, () => {
+    const { root, home, P } = repo();
+    fs.mkdirSync(path.join(P, 'decisions'));
+    for (let i = 0; i < MAX_ENTRIES + 8; i++) fs.writeFileSync(path.join(P, 'decisions', `n-${i}`), '');
+    const s = paradigmSlice(root, { home });
+    expect(s.skipped!.truncated).toBe(true);
+    expect(s.decisions!.count.of).toBe(0);
+  });
+});
+
+describe('Aegis L1 + L3: the opened file is the checked file; realpaths are scrubbed', () => {
+  it('a hard link (nlink > 1) naming an outside file is refused', () => {
+    const { root, home, P } = repo();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pslice-hl-'));
+    dirs.push(outside);
+    put(path.join(outside, 'TD-2026-10-20-001.yaml'), 'id: TD-2026-10-20-001\ntitle: OUTSIDE HARDLINK\n');
+    fs.mkdirSync(path.join(P, 'decisions'));
+    fs.linkSync(path.join(outside, 'TD-2026-10-20-001.yaml'), path.join(P, 'decisions', 'TD-2026-10-20-001.yaml'));
+    const s = paradigmSlice(root, { home });
+    expect(JSON.stringify(s)).not.toMatch(/OUTSIDE/);
+    expect(s.skipped!.refused).toBe(1);
+  });
+  it('a cwd reached through a symlink: neither its spelling nor its realpath appears in the slice', () => {
+    const { root, home, P } = repo();
+    fs.mkdirSync(path.join(root, 'sub'));
+    const via = path.join(path.dirname(root), 'via');
+    fs.symlinkSync(root, via);
+    const cwd = path.join(via, 'sub');
+    const real = fs.realpathSync(cwd);
+    decision(P, 'TD-2026-10-20-001', '2026-10-20T01:00:00.000Z', `'x${real}y and z${cwd}w'`);
+    const s = paradigmSlice(cwd, { home });
+    expect(s.state).toBe('ok');
+    for (const str of walkStrings(s)) expect(str.includes(real) || str.includes(cwd) || str.includes(via), str).toBe(false);
   });
 });
 
