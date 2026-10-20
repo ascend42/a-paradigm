@@ -119,7 +119,7 @@ const REFUSE: Array<[string, RegExp]> = [
   ['env ls', /not allowlisted: env/],
   ['sudo ls', /not allowlisted: sudo/],
   [`${C}find . -exec rm '{}' \\;`, /find: -exec/],
-  ['find . -exec rm {} \\;', /unquoted brace/],
+  ['find . -exec rm {} \\;', /brace/],
   [`${C}find . -delete`, /find: -delete/],
   [`${C}find . -ok rm "{}" \\;`, /find: -ok/],
   [`${C}find . -execdir ls ;`, /find: -execdir/],
@@ -186,17 +186,29 @@ const REFUSE: Array<[string, RegExp]> = [
   [`${C}jq -n '$ENV.TOKEN'`, /jq: env/],
   ['cd /w/home && ls', /cd: outside/],
   ['cd .. && ls', /cd: a relative path/],
-  [`${C}ls && cd src`, /cd: only as the first/],
-  ['cd src | ls', /cd: only as the first|not allowlisted/],
+  [`${C}ls && cd src`, /cd: a relative path that is not an existing directory/],
+  ['cd src | ls', /cd: only as a whole top-level command/],
   ['cd - && ls', /cd: one literal path/],
   ['! ls', /negation/],
   ['echo $((1+2))', /arithmetic/],
   ["echo $'\\x41'", /quoting/],
-  ['echo {a,b}', /unquoted brace/],
+  ['echo {a,$(rm x)}', /brace/],
+  ['echo {a,{b,c}}', /brace: nesting/],
+  ['echo {a}', /brace/],
+  ['echo {=ls,x}', /brace/],
+  ['echo {~,x}', /brace/],
+  ['echo {1..201}', /more than 200/],
+  ['echo $f{a,b}', /brace after a parameter/],
+  ['echo a}', /unquoted brace/],
   ['{ ls; }', /brace/],
   ['if true; then ls; fi', /unsupported compound if/],
   ['while true; do ls; done', /unsupported compound while/],
-  ['case x in x) ls;; esac', /unsupported compound case/],
+  ['case x in x) ls;; esac', /a relative path with an unknown cwd/],
+  ['case x in x) echo a;& y) echo b;; esac', /operator ;&/],
+  ['case x in x) echo a;;& y) echo b;; esac', /operator ;;&/],
+  ['echo a;;', /missing separator|unexpected/],
+  ['case $(rm x) in x) echo a;; esac', /not allowlisted: rm/],
+  ['case x in $y) echo a;; esac', /case: a pattern/],
   ['f() { ls; }', /unparsed/],
   ['for ((i=0;i<3;i++)); do ls; done', /unparsed/],
   ['for f; do ls; done', /expected in/],
@@ -370,7 +382,7 @@ describe('#supervisor autoBashReadOnly (the auto-edits gate around the classifie
   const gh = path.join(home, '.gnomon');
   const pass = (input: Record<string, unknown>, lines: string[] = ['x'], roots = [root]) => autoBashReadOnly('Bash', input, roots, lines, gh, process.platform, home);
   it('passes a read-only command with only command/description/timeout', () => {
-    expect(pass({ command: 'pwd', description: 'd', timeout: 1000 })).toEqual({ ok: true });
+    expect(pass({ command: 'pwd', description: 'd', timeout: 1000 })).toEqual({ ok: true, command: 'pwd', root: null });
   });
   it('cards any other key, a non-text command, a flagged card, a home root, another tool, an unknown cwd', () => {
     expect(pass({ command: 'pwd', run_in_background: true })).toMatchObject({ ok: false, why: 'input-key' });

@@ -54,7 +54,7 @@ import * as path from 'node:path';
 import { gateClassPathRule } from '../manifest/layers.js';
 import { blockOf } from '../broker/card.js';
 import { AUTO_EDIT_TOOLS, isHomeOrAbove } from '../broker/run-mode.js';
-import { classifyReadOnly } from './shell-readonly.js';
+import { anchorCommand, classifyReadOnly, shellFlavour } from './shell-readonly.js';
 
 export type AutoEditWhy = 'tool' | 'no-path' | 'relative' | 'home-root' | 'outside-root' | 'symlink' | 'gate-class' | 'flagged';
 export type AutoEditPass = { ok: true; path: string; root: string } | { ok: false; why: AutoEditWhy; rule?: string };
@@ -120,9 +120,18 @@ export function autoEditPass(tool: string, input: Record<string, unknown>, roots
 
 export const READ_ONLY_MODE_REF = 'mode:auto-edits:read-only';
 export const BASH_READ_ONLY_KEYS: readonly string[] = Object.freeze(['command', 'description', 'timeout']);
-export type AutoBashPass = { ok: true } | { ok: false; why: string };
+/**
+ * A pass: `command` is what the kernel lets run (updatedInput.command). With an `anchor` (K1) it is the anchored form
+ * (anchorCommand) and `root` the realpath it runs in; without one, the command unchanged.
+ */
+export type AutoBashPass = { ok: true; command: string; root: string | null } | { ok: false; why: string };
+/** K1: the session root the command is anchored in (the claude child's cwd) and the session env's SHELL. */
+export interface BashAnchor {
+  root: string;
+  shell?: string;
+}
 
-export function autoBashReadOnly(tool: string, input: Record<string, unknown>, roots: readonly string[], cardLines: readonly string[], gnomonHome: string, platform: string = process.platform, home: string = os.homedir()): AutoBashPass {
+export function autoBashReadOnly(tool: string, input: Record<string, unknown>, roots: readonly string[], cardLines: readonly string[], gnomonHome: string, platform: string = process.platform, home: string = os.homedir(), anchor?: BashAnchor): AutoBashPass {
   if (tool !== 'Bash') return { ok: false, why: 'tool' };
   if (Object.keys(input).some((k) => !BASH_READ_ONLY_KEYS.includes(k))) return { ok: false, why: 'input-key' };
   if (typeof input.command !== 'string') return { ok: false, why: 'bad-input' };
@@ -130,6 +139,14 @@ export function autoBashReadOnly(tool: string, input: Record<string, unknown>, r
   if (input.description !== undefined && typeof input.description !== 'string') return { ok: false, why: 'bad-input' };
   if (roots.length === 0 || roots.some((r) => isHomeOrAbove(r, home, platform))) return { ok: false, why: 'home-root' };
   if (blockOf(cardLines).flags.length > 0) return { ok: false, why: 'flagged' };
-  const v = classifyReadOnly(input.command, { roots, home, gnomonHome, platform });
-  return v.ok ? { ok: true } : { ok: false, why: `not-read-only: ${v.why}` };
+  // K1: posix only (a Windows session's Git Bash path form is not modelled): classify from the root's realpath and
+  // run there; win32 keeps the unanchored rules (a relative path needs an absolute cd first)
+  let real: string | null = null;
+  if (anchor && platform !== 'win32') {
+    real = realOr(anchor.root);
+    if (real === null || !roots.includes(anchor.root)) return { ok: false, why: 'no-root' };
+  }
+  const v = classifyReadOnly(input.command, { roots, home, gnomonHome, platform, ...(real !== null ? { cwd: real } : {}) });
+  if (!v.ok) return { ok: false, why: `not-read-only: ${v.why}` };
+  return real !== null ? { ok: true, command: anchorCommand(input.command, real, shellFlavour(anchor!.shell)), root: real } : { ok: true, command: input.command, root: null };
 }

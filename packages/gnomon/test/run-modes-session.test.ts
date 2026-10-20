@@ -18,6 +18,8 @@ import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
+import { anchorCommand } from '../src/kernel/supervisor/shell-readonly.js';
+import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 import { ASK_GUI, controlRig, errOf, HUMAN, KP } from './run-mode-helpers.js';
 
@@ -105,14 +107,22 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
   it('TD-2026-10-20-294: auto-edits passes a PROVABLY read-only Bash command with no card (mode:auto-edits:read-only); a writing one still cards', async () => {
     const r = sessionRig();
     await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
-    const s = await r.open([r.req('ro-1', 'Bash', { command: `cd '${w.cwd}' && ls -la && git status 2>/dev/null | head -5`, description: 'look' }), r.req('ro-2', 'Bash', { command: `cd '${w.cwd}' && ls > listing.txt` }), r.req('ro-3', 'Bash', { command: 'ls', run_in_background: true }), r.req('ro-4', 'Bash', { command: 'ls -la unknown-cwd' })]);
+    const s = await r.open([r.req('ro-1', 'Bash', { command: `cd '${w.cwd}' && ls -la && git status 2>/dev/null | head -5`, description: 'look' }), r.req('ro-2', 'Bash', { command: `cd '${w.cwd}' && ls > listing.txt` }), r.req('ro-3', 'Bash', { command: 'ls', run_in_background: true }), r.req('ro-4', 'Bash', { command: 'ls -la ../escape-cwd' })]);
     expect(await waitFor(() => r.answers().some((a) => a.id === 'ro-1') && r.pending().length >= 3, 10_000)).toBe(true);
     expect(r.answers().find((a) => a.id === 'ro-1')).toMatchObject({ behavior: 'allow' });
-    expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', inputHash: expect.stringMatching(/^sha256:/), modeRef: 'mode:auto-edits:read-only' }]);
+    // K1: the pass is anchored — approval.auto names where it runs (the root's realpath)
+    expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', path: fs.realpathSync(w.cwd), inputHash: expect.stringMatching(/^sha256:/), modeRef: 'mode:auto-edits:read-only' }]);
+    // K1: the allow carries the ANCHORED command (no SHELL in this env: the either-shell form); the inject row logs both hashes
+    const ro1 = { command: `cd '${w.cwd}' && ls -la && git status 2>/dev/null | head -5`, description: 'look' };
+    const anchored = { ...ro1, command: anchorCommand(ro1.command, fs.realpathSync(w.cwd), 'unknown') };
+    expect(r.answers().find((a) => a.id === 'ro-1')?.updatedInput).toEqual(anchored);
+    const inj = r.rows.find((x) => x.kind === 'session.inject' && x.payload.requestId === 'ro-1')!.payload;
+    expect(inj).toMatchObject({ inputHash: inputHash(ro1), anchoredInputHash: inputHash(anchored) });
+    expect(r.kinds('approval.auto')[0]!.inputHash).toBe(inputHash(ro1));
     const carded = r.pending().map((c) => JSON.stringify(c.block));
     expect(carded.some((t) => t.includes('listing.txt'))).toBe(true);
     expect(carded.some((t) => t.includes('run_in_background'))).toBe(true);
-    expect(carded.some((t) => t.includes('unknown-cwd'))).toBe(true); // Aegis M2: a relative path with no `cd ABS &&` cards
+    expect(carded.some((t) => t.includes('escape-cwd'))).toBe(true); // a relative path out of the anchored root cards
   }, 30_000);
 
   it('auto-edits still cards Bash, a Write outside the worktree, .claude/settings.json, CLAUDE.md and package.json — never auto-approved', async () => {

@@ -127,14 +127,16 @@ export type Part =
   | { t: 'lit'; v: string; quoted: boolean }
   | { t: 'glob'; v: string }
   | { t: 'tilde' }
-  | { t: 'var'; name: string }
+  | { t: 'var'; name: string; quoted: boolean }
+  | { t: 'brace'; vals: string[] }
   | { t: 'sub'; list: List; kind: '$(' | '`' | '<(' };
 export interface Word { parts: Part[] }
 export interface Redir { fd: number | null; op: string; target: Word | null; heredoc?: { delim: string; quoted: boolean; strip: boolean; body: string | null } }
 export type Cmd =
   | { t: 'simple'; assigns: Word[]; words: Word[]; redirs: Redir[] }
   | { t: 'subshell'; body: List; redirs: Redir[] }
-  | { t: 'for'; name: string; items: Word[]; body: List; redirs: Redir[] };
+  | { t: 'for'; name: string; items: Word[]; body: List; redirs: Redir[] }
+  | { t: 'case'; subject: Word; clauses: Array<{ pats: Word[]; body: List }>; redirs: Redir[] };
 export interface Pipeline { cmds: Cmd[]; bang: boolean }
 export interface List { items: Array<{ pipe: Pipeline; sep: string | null }> }
 
@@ -182,9 +184,10 @@ class Lexer {
       this.#readHeredocs();
       return { t: 'op', v: '\n' };
     }
-    for (const op of ['&>>', '&>', '&&', '||', ';;', '|&', '<<<', '<<-', '<<', '<>', '<&', '>>', '>&', '>|']) {
+    for (const op of ['&>>', '&>', '&&', '||', ';;&', ';;', ';&', '|&', '<<<', '<<-', '<<', '<>', '<&', '>>', '>&', '>|']) {
       if (at(op)) {
-        if (op === ';;' || op === '|&') parseFail(`operator ${op}`);
+        // `;;` is a token here; the parser accepts it only as a case clause's end. Fall-through `;&` / `;;&`: refused
+        if (op === ';;&' || op === ';&' || op === '|&') parseFail(`operator ${op}`);
         this.pos += op.length;
         return { t: 'op', v: op };
       }
@@ -246,7 +249,10 @@ class Lexer {
       } else if (c === '*' || c === '?' || c === '[') {
         parts.push({ t: 'glob', v: c });
         this.pos++;
-      } else if (c === '{' || c === '}') {
+      } else if (c === '{') {
+        if (parts.at(-1)?.t === 'var') parseFail('brace after a parameter'); // bash expands `$f{a,b}` to `$fa $fb`
+        parts.push(this.#brace());
+      } else if (c === '}') {
         parseFail('unquoted brace');
       } else if (c === '~' && parts.length === 0) {
         const n = s[this.pos + 1];
@@ -260,6 +266,33 @@ class Lexer {
     }
     if (parts.length === 0) parseFail('empty word');
     return { parts };
+  }
+
+  /**
+   * Brace expansion, the safe subset: `{a,b,c}` (two or more safe literal items, no nesting, no `$`, quote, glob or
+   * space inside) or `{N..M}` (non-negative integers, no step, at most MAX_EXPANSIONS values). Anything else is refused.
+   */
+  #brace(): Part {
+    const s = this.s;
+    const end = s.indexOf('}', this.pos + 1);
+    if (end < 0) parseFail('unquoted brace');
+    const body = s.slice(this.pos + 1, end);
+    if (body.includes('{')) parseFail('brace: nesting');
+    let vals: string[];
+    const r = /^(0|[1-9]\d{0,5})\.\.(0|[1-9]\d{0,5})$/.exec(body);
+    if (r) {
+      const a = Number(r[1]);
+      const b = Number(r[2]);
+      if (Math.abs(a - b) + 1 > MAX_EXPANSIONS) parseFail('brace: a range of more than 200 values');
+      vals = [];
+      for (let i = a; a <= b ? i <= b : i >= b; i += a <= b ? 1 : -1) vals.push(String(i));
+    } else {
+      vals = body.split(',');
+      // a safe token: no `=` (zsh EQUALS), `~` (tilde), quote, `$`, glob char, space or backslash; never empty
+      if (vals.length < 2 || !vals.every((v) => BRACE_ITEM.test(v))) parseFail('brace: only a list of safe literal items or a numeric range');
+    }
+    this.pos = end + 1;
+    return { t: 'brace', vals };
   }
 
   #double(parts: Part[], lit: (v: string, q: boolean) => void): void {
@@ -299,14 +332,14 @@ class Lexer {
     if (n === '{') {
       const m = /^\$\{(#?)([A-Za-z_][A-Za-z0-9_]*)\}/.exec(s.slice(this.pos));
       if (!m) parseFail('parameter expansion form');
-      parts.push({ t: 'var', name: m![2]! });
+      parts.push({ t: 'var', name: m![2]!, quoted });
       this.pos += m![0].length;
       return;
     }
     if (!quoted && (n === "'" || n === '"')) parseFail(`$${n}…${n} quoting`);
     const m = /^\$([A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])/.exec(s.slice(this.pos));
     if (m) {
-      parts.push({ t: 'var', name: m[1]! });
+      parts.push({ t: 'var', name: m[1]!, quoted });
       this.pos += m[0].length;
       return;
     }
@@ -359,6 +392,8 @@ class Lexer {
 const RESERVED = new Set(['if', 'then', 'else', 'elif', 'fi', 'while', 'until', 'case', 'esac', 'function', 'select', '{', '}', '[[', ']]', 'do', 'done', 'in', 'time', 'coproc']);
 /** zsh/bash parameters with a lowercase name that change the shell's behaviour when assigned (zsh/parameter included). */
 export const LOOP_VAR_DENY: ReadonlySet<string> = new Set(['path', 'cdpath', 'fpath', 'manpath', 'module_path', 'mailpath', 'fignore', 'psvar', 'watch', 'prompt', 'histchars', 'argv', 'status', 'pipestatus', 'signals', 'commands', 'functions', 'aliases', 'options', 'parameters', 'dirstack', 'history', 'historywords', 'jobstates', 'jobtexts', 'jobdirs', 'modules', 'nameddirs', 'userdirs', 'reswords', 'builtins', 'termcap', 'terminfo', 'widgets', 'funcstack', 'funcfiletrace', 'funcsourcetrace', 'functrace', 'saliases', 'galiases', 'dis_aliases', 'dis_functions', 'dis_builtins', 'dis_reswords', 'dis_galiases', 'dis_saliases', 'dis_patchars', 'patchars', 'zsh_eval_context', 'zsh_scheduled_events', 'match', 'mbegin', 'mend', 'reply', 'keymaps', 'sysparams', 'errnos']);
+/** A brace-list item: a safe literal token (see #brace). */
+const BRACE_ITEM = /^[A-Za-z0-9._+:@%/-]+$/;
 const SEPS = new Set([';', '&', '&&', '||', '\n']);
 const REDIR_OPS = new Set(['>', '>>', '>|', '<', '<>', '<&', '>&', '&>', '&>>', '<<', '<<-', '<<<']);
 
@@ -417,6 +452,7 @@ class Parser {
       return { t: 'subshell', body, redirs: this.#redirs([]) };
     }
     if (t.t === 'word' && t.plain === 'for') return this.#for();
+    if (t.t === 'word' && t.plain === 'case') return this.#case();
     if (t.t === 'word' && t.plain !== null && RESERVED.has(t.plain)) parseFail(`unsupported compound ${t.plain}`);
     return this.#simple();
   }
@@ -448,6 +484,45 @@ class Parser {
     if (body.items.length === 0) parseFail('for: empty body');
     this.#expectWord('done');
     return { t: 'for', name: (n as { plain: string }).plain, items, body, redirs: this.#redirs([]) };
+  }
+
+  /**
+   * `case WORD in [(]PAT[|PAT]…) LIST ;; … esac`: a pattern is string-only (literal and glob characters, no `$`,
+   * substitution, tilde or brace); `;;` ends a clause (the last may omit it); `;&` and `;;&` are refused by the lexer.
+   */
+  #case(): Cmd {
+    this.lx.take();
+    const subj = this.lx.take();
+    if (subj.t !== 'word') parseFail('case: a subject word');
+    this.#skipNewlines();
+    this.#expectWord('in');
+    const clauses: Array<{ pats: Word[]; body: List }> = [];
+    for (;;) {
+      this.#skipNewlines();
+      const t = this.lx.peek();
+      if (t.t === 'word' && t.plain === 'esac') {
+        this.lx.take();
+        break;
+      }
+      if (t.t === 'op' && t.v === '(') this.lx.take();
+      const pats: Word[] = [];
+      for (;;) {
+        const p = this.lx.take();
+        if (p.t !== 'word' || !p.w.parts.every((x) => x.t === 'lit' || x.t === 'glob')) parseFail('case: a pattern is literal and glob characters only');
+        pats.push((p as { w: Word }).w);
+        const n = this.lx.take();
+        if (n.t === 'op' && n.v === ')') break;
+        if (!(n.t === 'op' && n.v === '|')) parseFail('case: ) after the patterns');
+      }
+      if (this.depth >= MAX_DEPTH) parseFail('nesting too deep');
+      const body = new Parser(this.lx, this.depth + 1).list(new Set([';;', 'esac']));
+      clauses.push({ pats, body });
+      const e = this.lx.peek();
+      if (e.t === 'op' && e.v === ';;') this.lx.take();
+      else if (!(e.t === 'word' && e.plain === 'esac')) parseFail('case: ;; or esac after a clause');
+    }
+    if (clauses.length === 0) parseFail('case: no clause');
+    return { t: 'case', subject: (subj as { w: Word }).w, clauses, redirs: this.#redirs([]) };
   }
 
   #simple(): Cmd {
@@ -526,6 +601,12 @@ export interface ReadOnlyContext {
   platform?: string;
   /** the system read roots (posix); default SYSTEM_READ_ROOTS. Only ever NARROWED (tests run where /tmp is the tmpdir). */
   readRoots?: readonly string[];
+  /**
+   * K1 (anchored cwd): the directory the command is KNOWN to start in — the realpath of a session root. Set only when
+   * the caller runs the command through anchorCommand (which cds there first and unsets CDPATH); absent ⇒ the cwd is
+   * unknown until an absolute `cd`.
+   */
+  cwd?: string;
 }
 export type ReadOnlyVerdict = { ok: true } | { ok: false; why: string };
 
@@ -550,7 +631,13 @@ const LOOP_VALUE = /^[A-Za-z0-9._+,:@%=/-]+$/;
  * or a glob match.
  */
 interface Arg { lit: string | null; sub: boolean; proc: boolean; exp: boolean }
-interface Env { ctx: ReadOnlyContext; cwd: string | null; vars: ReadonlyMap<string, readonly string[]>; prot: string[]; allow: string[]; fold: (s: string) => string; pp: typeof path; native: boolean }
+/**
+ * `cwd`: the one directory this walk assumes (a top-level list walks each item once per POSSIBLE cwd, cwdSet).
+ * `taint`: local variables assigned (`name=$(…)` / `name=lit`) earlier in an enclosing list — TEXT, never a path.
+ */
+interface Env { ctx: ReadOnlyContext; cwd: string | null; vars: ReadonlyMap<string, readonly string[]>; taint: ReadonlySet<string>; prot: string[]; allow: string[]; fold: (s: string) => string; pp: typeof path; native: boolean }
+/** A top-level list tracks at most this many possible cwds (after `;` / `||` a cd may or may not have happened). */
+export const MAX_CWDS = 8;
 
 const realOr = (p: string): string | null => {
   try {
@@ -600,7 +687,7 @@ export function classifyReadOnly(command: string, ctx: ReadOnlyContext): ReadOnl
     if (r && !prot.includes(r)) prot.push(r);
   }
   if (ctx.roots.length === 0) return { ok: false, why: 'no-root' };
-  const env: Env = { ctx, cwd: null, vars: new Map(), prot, allow: [], fold, pp, native: pp === (process.platform === 'win32' ? path.win32 : path.posix) };
+  const env: Env = { ctx, cwd: ctx.cwd ?? null, vars: new Map(), taint: new Set(), prot, allow: [], fold, pp, native: pp === (process.platform === 'win32' ? path.win32 : path.posix) };
   try {
     env.allow = rootForms(env);
     if (pp === path.posix) env.allow.push(...(ctx.readRoots ?? SYSTEM_READ_ROOTS).filter((r) => SYSTEM_READ_ROOTS.includes(r)));
@@ -623,35 +710,117 @@ function rootForms(env: Env): string[] {
   return out;
 }
 
+/**
+ * Walk a list. Only a TOP-LEVEL list changes the cwd (a `cd` as one whole item); it tracks the SET of cwds each item
+ * may start in and walks the item once per member: along an unbroken `&&` run from a cd only the cd's target is
+ * possible, while after `;`, a newline or `||` (where a cd may have failed or been skipped) every cwd seen in the
+ * run is. A local assignment item (`name=$(…)`, `name=lit`) that runs unconditionally (first, or after `;` or a
+ * newline) makes `name` TAINTED text for the later items of this list (and the lists inside them).
+ */
 function walkList(list: List, env: Env, top: boolean): void {
+  const taint = new Set(env.taint);
+  const local: Env = { ...env, taint };
+  const key = (c: string | null): string => (c === null ? '\0' : env.fold(c));
+  const uniq = (xs: Array<string | null>): Array<string | null> => {
+    const seen = new Set<string>();
+    const out = xs.filter((x) => (seen.has(key(x)) ? false : (seen.add(key(x)), true)));
+    if (out.length > MAX_CWDS) no('cd: too many possible directories');
+    return out;
+  };
+  let cur: Array<string | null> = [env.cwd];
+  let seen = [...cur];
+  let pure = true;
   for (const [i, it] of list.items.entries()) {
     if (it.sep === '&') no('background');
     if (it.pipe.bang) no('negation');
-    if (top && i === 0 && it.pipe.cmds.length === 1 && isCd(it.pipe.cmds[0]!)) cdTo(it.pipe.cmds[0] as Extract<Cmd, { t: 'simple' }>, env);
-    else for (const c of it.pipe.cmds) walkCmd(c, env);
-    // Aegis H3/M2: a command runs in the cd's directory only along an unbroken `&&` chain from it — after `;`, a
-    // newline or `||` the cd may have failed, so the cwd is unknown again
-    if (top && it.sep !== '&&') env.cwd = null;
+    const prev = i > 0 ? list.items[i - 1]!.sep : null;
+    if (top && i > 0) {
+      if (prev === '||') {
+        pure = false;
+        cur = seen;
+      } else if (prev !== '&&') {
+        cur = seen;
+        seen = [...cur];
+        pure = true;
+      }
+    }
+    const only = it.pipe.cmds.length === 1 ? it.pipe.cmds[0]! : null;
+    if (top && only && isCd(only)) {
+      const next = uniq(cur.map((c) => cdTo(only as Extract<Cmd, { t: 'simple' }>, { ...local, cwd: c })));
+      cur = pure ? next : uniq([...cur, ...next]);
+      seen = uniq([...seen, ...next]);
+      continue;
+    }
+    const assign = only && only.t === 'simple' && only.assigns.length === 1 && only.words.length === 0 && only.redirs.length === 0 ? only.assigns[0]! : null;
+    for (const c of top ? cur : [env.cwd]) {
+      const e: Env = { ...local, cwd: c };
+      if (assign) localAssign(assign, e);
+      else for (const cmd of it.pipe.cmds) walkCmd(cmd, e);
+    }
+    // the value is text: usable later only when the assignment certainly ran (an item after `;` / newline always runs)
+    if (assign && (i === 0 || prev === ';' || prev === '\n')) taint.add(assignName(assign)!);
   }
 }
 
 const isCd = (c: Cmd): boolean => c.t === 'simple' && c.words.length > 0 && wordLit(c.words[0]!) === 'cd';
 
-/** Aegis H3: `cd` takes one ABSOLUTE literal path (or `~/…`) inside a session root; the cwd becomes its realpath. */
-function cdTo(c: Extract<Cmd, { t: 'simple' }>, env: Env): void {
+/** A lowercase local name (never a special parameter of bash or zsh), else null. */
+function assignName(w: Word): string | null {
+  const p0 = w.parts[0];
+  if (!p0 || p0.t !== 'lit' || p0.quoted) return null;
+  const m = /^([a-z][a-z0-9_]{0,15})=/.exec(p0.v);
+  return m && !LOOP_VAR_DENY.has(m[1]!) ? m[1]! : null;
+}
+
+/**
+ * `name=VALUE` with no command word: `name` is lowercase and no special parameter (an uppercase or special name is an
+ * env assignment: refused), not an enclosing loop variable; VALUE holds literal text, proven read-only `$(…)` and
+ * known variables only (no glob, tilde or brace). `X=1 cmd` never reaches here (walkCmd refuses it).
+ */
+function localAssign(w: Word, env: Env): void {
+  const name = assignName(w);
+  if (name === null) no('env assignment');
+  if (env.vars.has(name!)) no('assignment: a loop variable');
+  for (const p of w.parts) {
+    if (p.t === 'sub') walkList(p.list, { ...env }, false);
+    else if (p.t === 'var') {
+      if (!env.vars.has(p.name) && !env.taint.has(p.name)) no(`parameter $${p.name}`);
+    } else if (p.t !== 'lit') no('assignment: a glob, tilde or brace in the value');
+  }
+}
+
+/**
+ * Aegis H3 + K1: `cd` takes one literal path (or `~/…`): absolute, or relative to the KNOWN cwd. No `..` segment
+ * (the shell's logical `..` and the physical one differ under a symlink), never `-`/`+`/`=`-led (cd -, zsh's dir
+ * stack, EQUALS). A relative target must be an existing directory (so bash/zsh `cdable_vars` never apply; CDPATH is
+ * unset by anchorCommand). It must lie in a session root as given and at its realpath; the cwd becomes the realpath.
+ */
+function cdTo(c: Extract<Cmd, { t: 'simple' }>, env: Env): string {
   if (c.assigns.length || c.redirs.length || c.words.length !== 2) no('cd: one literal path');
   const w = c.words[1]!;
   if (!w.parts.every((p, i) => p.t === 'lit' || (p.t === 'tilde' && i === 0))) no('cd: one literal path');
   const { pp, ctx, fold } = env;
   const rest = w.parts.map((p) => (p.t === 'lit' ? p.v : '')).join('');
   const t = w.parts[0]!.t === 'tilde' ? pp.join(ctx.home, rest) : rest;
-  if (t === '' || t.startsWith('-')) no('cd: one literal path');
-  if (!pp.isAbsolute(t)) no('cd: a relative path (the cwd is unknown)');
-  const real = realDeep(t, env);
-  const forms = [pp.resolve(t), ...(real !== null ? [real] : [])];
+  if (t === '' || /^[-+=]/.test(t)) no('cd: one literal path');
+  const rel = !pp.isAbsolute(t);
+  if (rel && env.cwd === null) no('cd: a relative path (the cwd is unknown)');
+  const lexical = rel ? pp.resolve(env.cwd!, t) : pp.resolve(t);
+  const real = realDeep(lexical, env);
+  const forms = [lexical, ...(real !== null ? [real] : [])];
   const roots = rootForms(env);
   if (!forms.every((f) => roots.some((r) => within(fold(f), fold(r), pp, true)))) no('cd: outside the session roots');
-  env.cwd = real ?? pp.resolve(t);
+  if (t.split(/[\\/]+/).includes('..')) no('cd: a .. segment');
+  if (rel) {
+    let dir = false;
+    try {
+      dir = env.native && fs.statSync(lexical).isDirectory();
+    } catch {
+      dir = false;
+    }
+    if (!dir) no('cd: a relative path that is not an existing directory');
+  }
+  return real ?? lexical;
 }
 
 function within(p: string, root: string, pp: typeof path, orEqual: boolean): boolean {
@@ -676,13 +845,20 @@ function walkCmd(c: Cmd, env: Env): void {
     if (vals.length > MAX_EXPANSIONS) no('for: too many values');
     return walkList(c.body, { ...env, vars: new Map([...env.vars, [c.name, vals]]) }, false);
   }
+  if (c.t === 'case') {
+    // the subject is TEXT matched against string patterns (no split, no glob): a proven read-only $(…), a loop
+    // variable or a tainted local may appear in it, quoted or not; the patterns were checked at parse
+    textWord(c.subject, env, true);
+    for (const cl of c.clauses) walkList(cl.body, env, false);
+    return;
+  }
   if (c.assigns.length) no('env assignment');
   if (c.words.length === 0) no('no command');
   const w0 = c.words[0]!;
   const p0 = w0.parts[0]!;
   const name = w0.parts.length === 1 && p0.t === 'glob' && p0.v === '[' ? '[' : wordLit(w0);
   if (name === null || name === '') no('command name not literal');
-  if (name === 'cd') no('cd: only as the first command');
+  if (name === 'cd') no('cd: only as a whole top-level command');
   const rule = COMMANDS[name!];
   if (!rule) no(`not allowlisted: ${name}`);
   const args = c.words.slice(1).flatMap((w) => expand(w, env));
@@ -741,11 +917,9 @@ function expand(w: Word, env: Env): Arg[] {
     walkList(p0.list, { ...env }, false);
     return [{ lit: null, sub: false, proc: true, exp: false }];
   }
-  if (w.parts.some((p) => p.t === 'sub')) {
-    for (const p of w.parts) {
-      if (p.t === 'sub') walkList(p.list, { ...env }, false);
-      else if (p.t === 'var' && !env.vars.has(p.name)) no(`parameter $${p.name}`);
-    }
+  // a substitution or a TAINTED local makes the word text with no static value (echo/printf/<<< only take it)
+  if (w.parts.some((p) => p.t === 'sub' || (p.t === 'var' && !env.vars.has(p.name) && env.taint.has(p.name)))) {
+    textWord(w, env, false);
     return [{ lit: null, sub: true, proc: false, exp: false }];
   }
   // zsh EQUALS (on by default): an unquoted leading `=cmd` expands to the command's full path, read from $PATH
@@ -759,6 +933,11 @@ function expand(w: Word, env: Env): Arg[] {
       pats = pats.map((s) => s + p.v);
       glob = true;
     } else if (p.t === 'tilde') pats = pats.map((s) => s + escQ(env.ctx.home));
+    else if (p.t === 'brace') {
+      fromVar = true; // each value is a new word: a `-`-led one is refused below
+      pats = pats.flatMap((s) => p.vals.map((v) => s + escQ(v)));
+      if (pats.length > MAX_EXPANSIONS) no('too many expansions');
+    }
     else if (p.t === 'var') {
       const vs = env.vars.get(p.name);
       if (!vs) no(`parameter $${p.name}`);
@@ -776,6 +955,21 @@ function expand(w: Word, env: Env): Arg[] {
   }
   for (const a of out) if (a.exp && a.lit!.startsWith('-')) no('an expanded value starts with -');
   return out;
+}
+
+/**
+ * A word used as TEXT (never a path): every substitution proven read-only; every variable a loop variable or a
+ * tainted local. A tainted local must be double-quoted (`"$s"`: no split, no glob) unless `bare` (the case subject).
+ */
+function textWord(w: Word, env: Env, bare: boolean): void {
+  for (const p of w.parts) {
+    if (p.t === 'sub') walkList(p.list, { ...env }, false);
+    else if (p.t === 'var') {
+      if (env.vars.has(p.name)) continue;
+      if (!env.taint.has(p.name)) no(`parameter $${p.name}`);
+      if (!p.quoted && !bare) no(`an unquoted tainted $${p.name}`);
+    }
+  }
 }
 
 /** One glob segment as a regex that matches a SUPERSET of what bash or zsh would (any case, dotfiles too, every bracket class as one char). */
@@ -1162,6 +1356,8 @@ const GIT_SECRET_KEY = /^(remote|credential|http|https|url|sendemail)\.|url|toke
 const gitRule: Rule = (args, env, name) => {
   staticOnly(args, name);
   needCwd(env, name); // git finds its repo (and that repo's config) from the cwd
+  // K1: only while the cwd IS a session root — below it, a planted nested `.git` would choose the repo and its config
+  if (!rootForms(env).some((r) => env.fold(r) === env.fold(env.cwd!))) no('git: only with the cwd at a session root');
   const sub = args[0]?.lit;
   if (!sub || sub.startsWith('-')) no('git: a global option');
   const rest = args.slice(1);
@@ -1254,4 +1450,29 @@ export function simpleArgv(command: string): string[] | null {
     argv.push(s);
   }
   return argv;
+}
+
+/* ── K1: the anchored command ─────────────────────────────────────────────── */
+
+/** The shell Claude Code runs Bash in, from the session env's SHELL: zsh, bash, or unknown (then a form for either). */
+export type ShellFlavour = 'zsh' | 'bash' | 'unknown';
+export function shellFlavour(shell: string | undefined): ShellFlavour {
+  const b = (shell ?? '').split(/[\\/]/).pop() ?? '';
+  return b === 'zsh' ? 'zsh' : b === 'bash' ? 'bash' : 'unknown';
+}
+
+/** A single-quoted shell word (`'` as `'\\''`). */
+export const shQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * K1 (TD-2026-10-20-086): the command as the kernel lets it run after a read-only pass — in `root` (the realpath the
+ * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked),
+ * the original text inside a brace group on its own lines (a heredoc's delimiter line and a trailing `# comment`
+ * end before the closing `}`). zsh: `cd -q` (no chpwd hooks); bash: no -q; unknown: picked at run time by
+ * ZSH_VERSION. `builtin` skips a function named cd/unset. If the cd or the unset fails nothing runs.
+ */
+export function anchorCommand(command: string, root: string, flavour: ShellFlavour): string {
+  const q = shQuote(root);
+  const cd = flavour === 'zsh' ? `builtin cd -q -- ${q}` : flavour === 'bash' ? `builtin cd -- ${q}` : `if [ -n "\${ZSH_VERSION-}" ]; then builtin cd -q -- ${q}; else builtin cd -- ${q}; fi`;
+  return `${cd} && builtin unset CDPATH && {\n${command}\n}`;
 }

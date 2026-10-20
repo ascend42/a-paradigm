@@ -97,7 +97,7 @@ import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
-import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
+import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
@@ -969,18 +969,22 @@ export class SessionSupervisor {
     }
     if (mode === 'auto-edits' && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
       // TD-2026-10-20-294 part 1: a PROVABLY read-only command (#shell-readonly; fails closed) passes with no card
-      const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#o.userHome ?? os.homedir());
+      // K1: anchored in the claude child's cwd (its realpath): the allow sends the anchored command, which runs there
+      const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#o.userHome ?? os.homedir(), { root: s.cwd, ...(s.env.SHELL !== undefined ? { shell: s.env.SHELL } : {}) });
       if (pass.ok) {
-        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
+        // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered).
+        // inputHash is the REQUEST's (the card's, the rules'); path is where it runs (the anchored root)
+        const updated = { ...structuredClone(ev.input), command: pass.command };
         let logged = false;
         try {
-          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: READ_ONLY_MODE_REF });
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, ...(pass.root !== null ? { path: pass.root } : {}), inputHash: plan.inputHash, modeRef: READ_ONLY_MODE_REF });
           logged = true;
         } catch {
           logged = false;
         }
         if (logged) {
-          await this.#write(s, permissionAllowLine(requestId, structuredClone(ev.input)), { answer: 'allow', requestId, why: 'mode', modeRef: READ_ONLY_MODE_REF });
+          // both hashes: the request's (as on approval.auto) and the anchored input actually sent (sensitive inject row)
+          await this.#write(s, permissionAllowLine(requestId, updated), { answer: 'allow', requestId, why: 'mode', modeRef: READ_ONLY_MODE_REF, inputHash: plan.inputHash, anchoredInputHash: inputHash(updated) });
           return;
         }
       }
