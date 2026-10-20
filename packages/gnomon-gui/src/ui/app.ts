@@ -1249,7 +1249,10 @@ function paintMode(): void {
   put(btn, modeChip(v));
   btn.title = `Run mode: ${modeLabel(v).replace(/ ▾$/, '')} (kernel-owned; ⇧Tab in the composer cycles it)`;
   btn.className = `key quiet mode-btn kernel-owned${v ? ` mode-${v.effective}` : ''}`;
-  put($('composer-mode'), focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused');
+  const to = focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused';
+  put($('composer-mode'), to);
+  // fidelity 2: the comp's composer is the input alone; who it goes to and the mode live in its tooltip
+  $('composer-text').title = `${to}. Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode.`;
   if (!$('mode-menu').hidden) paintModeMenu();
 }
 

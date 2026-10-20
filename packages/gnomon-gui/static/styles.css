@@ -826,3 +826,12 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .more-wrap { position: relative; display: inline-flex; }
 .more-btn { font-size: 13px; line-height: 1; padding: 1px 7px; border-color: transparent; }
 .more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
+
+/* fidelity 2 composer (comp): the input alone with "Reply to <name>…" and a small ⌘↵ hint; send is a small key. Who it
+   goes to and the run mode are in the textarea's title= (and the sr-only #composer-mode line). */
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
+.composer > textarea { grid-column: 1; resize: none; min-height: 21px; line-height: 1.55; }
+.composer > .composer-ghost { grid-column: 1 / -1; }
+.composer > .composer-foot { grid-column: 2; grid-row: 1; margin-top: 0; justify-content: flex-end; }
+.composer-kbd { border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+.composer-foot .key.pri { margin-left: 2px; min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
