@@ -1670,8 +1670,45 @@ components:
       - test/honesty.test.ts
     oracles: [G-CLI-02, G-OBS-01, G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07]
 
+  standing-grant:
+    description: >-
+      TD-2026-10-20-086 F6 (spec §3.4 "Standing grant"). The grant card is
+      raised with RaiseInput.standingGrant: its allow is FRESH class (one
+      presence, no root signature; Aegis open point 1); other grant cards stay root.
+      src/kernel/broker/standing-grant.ts. ONE root-class `grant` card
+      (request.grant.standing{tuples, repos} from the human on the GUI only,
+      detail.op 'standing') mints grant.standing{grantId (= the cardId),
+      cardId, tuples, repos, device (the GUI device's udev: unlock key),
+      expiresAt ≤ 12 h, by}; the same touch keeps the device's cached unlock
+      so later uses can be signed by the helper. While it stands, a human
+      GUI decision on the same device that a tuple covers
+      (STANDING_TUPLES: mode.loosen:auto-edits, permission:always,
+      voice.widen, voice-arm:allow, daemon-stop:restart with
+      detail.binaryUnchanged and no update; NOT reconsider:extend, Aegis M2; repo-scoped
+      ones only with a non-null granted repo) takes no prompt: approval.decide
+      {presence:'standing:<grantId>'} then the notify row
+      grant.standing.used{grantId, cardId, tuple, decision, repo, hsid}.
+      Never standing: root class, hand-only, install, gate-class,
+      fallback-cloud, declassify, peer-pair, api-token, grant, handoff,
+      peer-flagged or irreversible cards (standingTupleOf + broker checks).
+      Ends: expiresAt, Revoke (request.grant.standing.revoke{grantId} →
+      grant.standing.revoked{grantId, by, reason:'human'}, a tighten, no
+      presence), the next screen lock / sleep / user switch or a helper exit
+      (broker.helperSessionEnded/helperExited → endAll). StandingGrantBook
+      folds kernel-signed rows only (forged rows ignored), like RuleBook /
+      RunModeBook; status.standing{built, tuples, active[], pendingCardId}.
+      No new signal (events are the §9.1 grant.standing* kinds).
+    path: src/kernel/broker/standing-grant.ts
+    type: module
+    tags: [gnomon, kernel, broker, approvals, presence, td-2026-10-20-086]
+    tests:
+      - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      STANDING GRANT (TD-2026-10-20-086 F6): StandingSeam (setStanding) is
+      asked before any presence; a match is signed under the device unlock
+      (or a verified client decisionSig) with presence 'standing:<id>' and
+      #standing-grant writes grant.standing.used after approval.decide.
       RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
       mode:auto-edits:read-only / mode:ask:read-only (a Bash command
       #shell-readonly proves read-only; TD-2026-10-20-294 part 1, F1
@@ -1759,11 +1796,19 @@ components:
       #manifest-loader's install-card wrapping); the presence summary takes
       the first line's first 120 code points, never splitting a surrogate
       pair. install-card.ts passes the install card's pre-sanitized lines
-      together with their sanitizer flags. unlock.ts — per-connection cached unlock keyed by
-      connId, created only by a fresh presence on that connection, never for a
-      CLI connection, dropped on close (approval.unlock.dropped{reason:closed})
-      or after 15 min idle (reason idle), never usable from another
-      connection. broker.ts — ApprovalBroker: raise (approval.request before
+      together with their sanitizer flags. unlock.ts — the cached unlock
+      (TD-2026-10-20-086 F4/F5, superseding S25-H1 and the M2 60 min / 64):
+      created only by a fresh presence on a GUI connection, never for a CLI
+      connection; KEYED BY THE GUI DEVICE (broker unlockKeyOf: `udev:` + 40
+      hex of sha256 over the launch-token deviceId; a gui context without a
+      deviceId keeps its connId) so it survives a reconnect and is shared by
+      the device's GUI sessions; ends at screen lock / sleep / user switch
+      (helper push), helper exit, 12 h (UNLOCK_ABSOLUTE_MS = UNLOCK_IDLE_MS)
+      or 512 signatures, each bound LOWERED to the helper's: helper 1.7.0
+      reports `bounds` on a kept sign (helperBoundsOf), 1.6.0 reports none and
+      is held to LEGACY_HELPER_BOUNDS (15 min idle, 60 min, 64). Dropped rows
+      name the last connection and scope:'device'
+      (test/unlock-device.test.ts). broker.ts — ApprovalBroker: raise (approval.request before
       the card exists; permission cards time out into deny, fallback and
       api-token never expire), approve (human only, B4; voice FORBIDDEN gate
       voice `voice-off` for every form, G-ABI-02 voice row; via link refused
@@ -1863,6 +1908,13 @@ components:
       on a non-pending card is refused before presence with no
       approval.decide row; an unknown card is NOT_FOUND. Tests:
       test/broker-deny-safe.test.ts (every platform).
+      F3 (TD-2026-10-20-086): RunModeControl configDefault = the
+      root-signed config `runModes.default` (budget/config.ts
+      parseRunModesSection; any fallback ⇒ null): a repo with no mode of its
+      own takes it (view source 'config') when its folder is known and not
+      home / above home / `/` (else ask; a repo key with no live session ⇒
+      ask, fail safe); the ceiling still applies; status.runModes
+      .configDefault (test/run-mode-default.test.ts).
       RUN MODES (P8-D86/D87, src/kernel/broker/run-mode.ts + supervisor/
       auto-edits.ts): manual | ask (default) | auto-edits, per repo and per
       session, folded from KERNEL-signed approval.mode.set and

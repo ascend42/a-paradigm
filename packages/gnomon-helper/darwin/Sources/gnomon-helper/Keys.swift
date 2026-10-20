@@ -11,9 +11,9 @@
 //              a per-connection CACHED unlock: the evaluated LAContext is held
 //              here keyed by the kernel's connId (the kernel holds only the
 //              reference, S29-K5), with interactionNotAllowed set so a cached
-//              sign can never raise a prompt; dropped after 15 idle minutes,
-//              60 minutes after it opened, after 64 signatures (T-2026-10-18-028
-//              M2: hard bounds the idle timer cannot slide), on unlock.drop, and
+//              sign can never raise a prompt; dropped 12 hours after it opened
+//              or after 512 signatures (TD-2026-10-20-086 F4, helper 1.7.0; was
+//              15 idle min / 60 min / 64 in 1.6.0), on unlock.drop, and
 //              when this process exits; helper 1.6.0 also on conn.close, on any
 //              session event (lock, screensaver, display or system sleep, user
 //              switch: SessionWatch.swift) and never for the voice domain.

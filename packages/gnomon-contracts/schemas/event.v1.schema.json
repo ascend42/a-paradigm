@@ -5,6 +5,7 @@
   "description": "Gnomon kernel log envelope (spec §4.1). Labels default per kind (§9.1, x-gnomon-kinds).",
   "x-gnomon-kinds": [
     "approval.auto",
+    "approval.auto.miss",
     "approval.decide",
     "approval.effect.failed",
     "approval.expire",
@@ -20,6 +21,7 @@
     "approval.suspect",
     "approval.unlock",
     "approval.unlock.dropped",
+    "approval.unlock.joined",
     "approval.voice.arm",
     "approval.voice.disarm",
     "approval.voice.handle.rotated",
@@ -73,6 +75,9 @@
     "flow.event",
     "gate-class.decided",
     "gate-class.detected",
+    "grant.standing",
+    "grant.standing.revoked",
+    "grant.standing.used",
     "inject.receipt",
     "key.device.added",
     "key.device.revoked",
@@ -155,6 +160,8 @@
     "request.brief.send",
     "request.cowork.allow",
     "request.grant",
+    "request.grant.standing",
+    "request.grant.standing.revoke",
     "request.incident",
     "request.link.revoke",
     "request.mode.set",
@@ -237,6 +244,7 @@
   ],
   "x-gnomon-reserved-kinds": {
     "approval.auto": "M1.1:P8-D86-D88",
+    "approval.auto.miss": "8.0:TD-2026-10-20-086",
     "approval.effect.failed": "8.0:P8-D98",
     "approval.mode.set": "M1.1:P8-D86-D88",
     "approval.rule.revoked": "8.0:P8-D98",
@@ -244,6 +252,7 @@
     "approval.strictness.lowered": "M1.1:P8-D86-D88",
     "approval.strictness.proposed": "M1.1:P8-D86-D88",
     "approval.strictness.raised": "M1.1:P8-D86-D88",
+    "approval.unlock.joined": "8.0:TD-2026-10-20-086",
     "approval.voice.arm": "M1.1:P8-D58",
     "approval.voice.disarm": "M1.1:P8-D58",
     "approval.voice.handle.rotated": "M1.1:P8-D58",
@@ -257,6 +266,9 @@
     "contract.review.restarted": "M1.1:P8-D86-D88",
     "contract.review.returned": "M1.1:P8-D86-D88",
     "daemon.log.quarantined": "M1.4:P8-D89",
+    "grant.standing": "8.0:TD-2026-10-20-086",
+    "grant.standing.revoked": "8.0:TD-2026-10-20-086",
+    "grant.standing.used": "8.0:TD-2026-10-20-086",
     "key.token.revoked": "M1.4:P8-D89",
     "link.auth.fail": "M1.1:P8-R9",
     "link.brief.accepted": "M1.1:P8-R9",
@@ -287,6 +299,8 @@
     "request.brief.send": "M1.1:P8-R9",
     "request.cowork.allow": "M1.1:P8-R9",
     "request.grant": "M1.1:P8-D58",
+    "request.grant.standing": "8.0:TD-2026-10-20-086",
+    "request.grant.standing.revoke": "8.0:TD-2026-10-20-086",
     "request.incident": "M1.1:P8-D86-D88",
     "request.link.revoke": "M1.1:P8-R9",
     "request.mode.set": "M1.1:P8-D86-D88",
@@ -347,6 +361,9 @@
     },
     "approval.decide": {
       "scope": "8.0:TD-2026-10-20-294"
+    },
+    "approval.auto": {
+      "anchoredInputHash": "8.0:TD-2026-10-20-086"
     },
     "approval.expire": {
       "why": "8.0:P8-D98"
@@ -464,6 +481,46 @@
     ],
     "key.token.revoked": [
       "tokenId"
+    ],
+    "grant.standing": [
+      "grantId",
+      "cardId",
+      "tuples",
+      "repos",
+      "device",
+      "expiresAt",
+      "by"
+    ],
+    "grant.standing.used": [
+      "grantId",
+      "cardId",
+      "tuple",
+      "decision",
+      "repo",
+      "hsid"
+    ],
+    "grant.standing.revoked": [
+      "grantId",
+      "by",
+      "reason"
+    ],
+    "request.grant.standing": [
+      "tuples",
+      "repos"
+    ],
+    "request.grant.standing.revoke": [
+      "grantId"
+    ],
+    "approval.auto.miss": [
+      "hsid",
+      "tool",
+      "why",
+      "inputHash",
+      "modeRef"
+    ],
+    "approval.unlock.joined": [
+      "connId",
+      "scope"
     ]
   },
   "x-gnomon-kind-payloads": {

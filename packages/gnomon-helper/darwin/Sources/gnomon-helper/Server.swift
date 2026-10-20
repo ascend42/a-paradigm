@@ -143,7 +143,8 @@ final class Server {
                 // a session event while the prompt was up: the signature stands (the human touched), the unlock is never kept
                 if keep, let c = conn { kept = custody.sync { custody.epochIsCurrent(epoch0) && custody.unlocks.put(c, gen: g, ctx: ctx) } }
                 if !kept { ctx.invalidate() }
-                return ["sigs": sigs, "kept": kept, "shown": line]
+                // 1.7.0 (F4): a kept unlock names its bounds, so the kernel stops assuming the 1.6.0 ones
+                return kept ? ["sigs": sigs, "kept": true, "shown": line, "bounds": Bounds.unlockBoundsReply] : ["sigs": sigs, "kept": false, "shown": line]
             case (.approvals, "cached"):
                 guard let c = conn else { throw bad("a cached sign needs a connId") }
                 return try custody.sync {

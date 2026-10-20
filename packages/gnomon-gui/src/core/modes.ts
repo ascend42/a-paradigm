@@ -17,6 +17,13 @@
  *   - `⇧Tab` cycles manual → ask → auto-edits → manual (`nextRunMode`).
  *   - The request is `log.append{kind:'request.mode.set', payload:{hsid, to}}`
  *     (focused session) or `{repo, to}` (its repo, the palette's `mode.repo.*`).
+ *   - SCOPE (TD-2026-10-20-086 F2): the switch and ⇧Tab default to the FOLDER
+ *     (the repo, labelled "this folder"), so a new session in the same folder
+ *     starts in the mode already chosen there (repo modes persist: the kernel
+ *     folds them from kernel-signed rows). "This session only" stays as the
+ *     secondary choice; a session that already has its own mode keeps
+ *     session scope (`defaultScope`), so the switch always moves what the
+ *     session actually runs under.
  */
 import { RUN_MODES, type RunMode } from '@a-company/gnomon-contracts';
 
@@ -38,6 +45,8 @@ export interface SessionModeView {
   repo: string | null;
   chosen: RunMode;
   source: string;
+  /** the folder's (repo's) mode, or the default — what a folder-scope choice changes (F2) */
+  repoMode: RunMode;
   ceiling: RunMode;
   effective: RunMode;
   level: string | null;
@@ -62,6 +71,7 @@ export function sessionModeOf(status: unknown, hsid: string | null): SessionMode
       repo: typeof o.repo === 'string' ? o.repo : null,
       chosen: m(o.chosen),
       source: typeof o.source === 'string' ? o.source : '?',
+      repoMode: isRunMode(o.repoMode) ? o.repoMode : m(o.chosen),
       ceiling: m(o.ceiling),
       effective: m(o.effective),
       level: typeof o.level === 'string' ? o.level : null,
@@ -84,7 +94,9 @@ export function planChange(v: Pick<SessionModeView, 'chosen' | 'ceiling' | 'leve
 export function modeLabel(v: SessionModeView | null): string {
   if (!v) return 'mode: —';
   const clamp = v.effective !== v.chosen ? ` → ${v.effective} (ceiling)` : '';
-  return `mode: ${v.chosen}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
+  // F3 (TD-2026-10-20-086): the folder runs the root-signed default because no mode was chosen for it
+  const dflt = v.source === 'config' ? ' (default)' : '';
+  return `mode: ${v.chosen}${dflt}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
 }
 
 /** One line per mode for the menu: what it does, and why it is disabled when it is. */
@@ -94,9 +106,9 @@ export const MODE_HELP: Readonly<Record<RunMode, string>> = Object.freeze({
   'auto-edits': 'file edits in this folder pass with no card; commands, network and protected files still ask',
 });
 
-export function menuEntries(v: SessionModeView): Array<{ mode: RunMode; current: boolean; disabled: boolean; note: string }> {
+export function menuEntries(v: SessionModeView, scope: ModeScope = defaultScope(v)): Array<{ mode: RunMode; current: boolean; disabled: boolean; note: string }> {
   return RUN_MODES.map((mode) => {
-    const c = planChange(v, mode);
+    const c = planFor(v, mode, scope);
     return {
       mode,
       current: c.kind === 'same',
@@ -106,10 +118,36 @@ export function menuEntries(v: SessionModeView): Array<{ mode: RunMode; current:
   });
 }
 
-/** The `log.append` params of a mode request: the session's own mode, or (repo: true) its repo's. */
-export function modeRequest(v: Pick<SessionModeView, 'hsid' | 'repo'>, to: RunMode, scope: 'session' | 'repo' = 'session'): { kind: 'request.mode.set'; payload: { hsid: string; to: RunMode } | { repo: string; to: RunMode } } | null {
+export type ModeScope = 'session' | 'repo';
+
+/** What each scope is called in the switch (F2: the folder is the default and first). */
+export const SCOPE_LABEL: Readonly<Record<ModeScope, string>> = Object.freeze({ repo: 'this folder', session: 'this session only' });
+
+/**
+ * F2 (TD-2026-10-20-086): the switch's scope. The folder (repo) unless the session has no repo, or already runs
+ * under a mode of its own (then a folder choice would not move it, so the switch stays on the session).
+ */
+export function defaultScope(v: Pick<SessionModeView, 'repo' | 'source'> | null): ModeScope {
+  return v && v.repo && v.source !== 'session' ? 'repo' : 'session';
+}
+
+/** planChange for a scope: a folder choice is measured from the folder's mode, a session one from the session's. */
+export function planFor(v: Pick<SessionModeView, 'chosen' | 'repoMode' | 'ceiling' | 'level'>, to: RunMode, scope: ModeScope): ModeChange {
+  return planChange(scope === 'repo' ? { ...v, chosen: v.repoMode } : v, to);
+}
+
+/** The `log.append` params of a mode request: the session's own mode, or (scope repo, the default when it has one) its folder's. */
+export function modeRequest(v: Pick<SessionModeView, 'hsid' | 'repo'>, to: RunMode, scope: ModeScope = v.repo ? 'repo' : 'session'): { kind: 'request.mode.set'; payload: { hsid: string; to: RunMode } | { repo: string; to: RunMode } } | null {
   if (scope === 'repo') return v.repo ? { kind: 'request.mode.set', payload: { repo: v.repo, to } } : null;
   return { kind: 'request.mode.set', payload: { hsid: v.hsid, to } };
+}
+
+/** The menu's scope line and its secondary entry (F2): which scope the choices apply to, and the other one. */
+export function scopeEntries(v: SessionModeView): { heading: string; other: { scope: ModeScope; label: string } | null } {
+  const scope = defaultScope(v);
+  const heading = scope === 'repo' ? `for ${SCOPE_LABEL.repo} (new sessions here start in it)` : v.repo ? `for ${SCOPE_LABEL.session} (it has its own mode)` : `for ${SCOPE_LABEL.session}`;
+  const other: ModeScope | null = scope === 'repo' ? 'session' : v.repo ? 'repo' : null;
+  return { heading, other: other ? { scope: other, label: `set for ${SCOPE_LABEL[other]} instead…` } : null };
 }
 
 /** Rows whose arrival changes what status.runModes says (the page re-reads status on them). */

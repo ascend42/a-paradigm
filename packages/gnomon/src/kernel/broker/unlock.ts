@@ -1,28 +1,61 @@
 /**
  * @symbol #approval-broker
  *
- * #approval-broker per-connection cached unlock (spec §3.1 approvals key,
- * §3.4, S25-H1, D38). An unlock is created ONLY by a fresh presence proved on
- * a connection and belongs to that `connId` alone. It is dropped when the
- * connection closes, after `UNLOCK_IDLE_MS` (15 min) without a decision,
- * `UNLOCK_ABSOLUTE_MS` (60 min) after it opened, or once it has made
- * `UNLOCK_MAX_SIGNATURES` (64) signatures (T-2026-10-18-028 M2). It is never
- * usable from another connection. A CLI connection never holds one
- * (`gnomon approve` prompts every time, §3.1).
+ * #approval-broker cached unlock (spec §3.1 approvals key, §3.4, D38;
+ * TD-2026-10-20-086 F4/F5, superseding S25-H1's per-connection binding and
+ * T-2026-10-18-028 M2's 60 min / 64 signatures). An unlock is created ONLY by
+ * a fresh presence proved on a GUI connection. It is KEYED BY THE GUI DEVICE
+ * (the launch-token deviceId, broker.ts `unlockKeyOf`), so it survives a
+ * reconnect of the same device; a GUI context with no deviceId falls back to
+ * its connId (dropped when that connection closes). It ends at screen lock,
+ * screensaver, display or system sleep and user switch (the helper's
+ * SessionWatch push, broker.helperSessionEnded), on a helper exit, and at the
+ * hard caps: `UNLOCK_ABSOLUTE_MS` (12 h) after it opened and
+ * `UNLOCK_MAX_SIGNATURES` (512) signatures. `UNLOCK_IDLE_MS` equals the
+ * absolute cap: there is no separate idle limit any more (the lock is the
+ * idle signal).
+ *
+ * The helper enforces its own Bounds independently (Protocol.swift). Helper
+ * 1.7.0 mirrors 12 h / 512 and says so on a kept sign (`bounds`); an older
+ * helper (1.6.0: 15 min idle, 60 min, 64) says nothing, and the broker then
+ * opens the unlock with `LEGACY_HELPER_BOUNDS`: always the LOWER of the two
+ * sides, so the kernel never believes in an unlock the helper already ended.
+ * A CLI connection never holds one (`gnomon approve` prompts every time).
  *
  * The clock is the broker's own (the daemon passes a monotonic reading); no
  * caller supplies a time.
  */
-export const UNLOCK_IDLE_MS = 15 * 60_000;
+export const UNLOCK_ABSOLUTE_MS = 12 * 60 * 60_000;
+export const UNLOCK_MAX_SIGNATURES = 512;
+/** F4: no idle limit apart from the absolute cap (screen lock / sleep / user switch end the unlock). */
+export const UNLOCK_IDLE_MS = UNLOCK_ABSOLUTE_MS;
+
+export interface UnlockBounds {
+  idleMs: number;
+  absoluteMs: number;
+  maxSignatures: number;
+}
+/** Helper 1.6.0's Bounds (unlockIdleSeconds 15 min, unlockAbsoluteSeconds 60 min, maxSignaturesPerUnlock 64): used until helper 1.7.0 reports its own. */
+export const LEGACY_HELPER_BOUNDS: Readonly<UnlockBounds> = Object.freeze({ idleMs: 15 * 60_000, absoluteMs: 60 * 60_000, maxSignatures: 64 });
+
+/** The stricter of two bound sets, field by field (the unlock lives only as long as BOTH sides allow). */
+export function lowerBounds(a: UnlockBounds, b: Partial<UnlockBounds> | null | undefined): UnlockBounds {
+  if (!b) return { ...a };
+  const m = (x: number, y: unknown): number => (typeof y === 'number' && Number.isFinite(y) && y >= 0 ? Math.min(x, y) : x);
+  return { idleMs: m(a.idleMs, b.idleMs), absoluteMs: m(a.absoluteMs, b.absoluteMs), maxSignatures: m(a.maxSignatures, b.maxSignatures) };
+}
+
 /**
- * T-2026-10-18-028 M2: the idle timer slides on every use, so an unlock in steady use never ended.
- * Two hard bounds, mirrored in the helper (Protocol.swift Bounds.unlockAbsoluteSeconds /
- * maxSignaturesPerUnlock) and enforced on EACH side independently: an absolute lifetime counted
- * from the presence that opened the unlock, and a cap on the signatures made under it. Either ends
- * the unlock; the next decision on that connection takes fresh presence again.
+ * The bounds a helper reported on a kept sign (helper 1.7.0: `bounds{idleSeconds, absoluteSeconds,
+ * maxSignatures}`); anything else (an older helper, a malformed field) is LEGACY_HELPER_BOUNDS.
  */
-export const UNLOCK_ABSOLUTE_MS = 60 * 60_000;
-export const UNLOCK_MAX_SIGNATURES = 64;
+export function helperBoundsOf(v: unknown): UnlockBounds {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ...LEGACY_HELPER_BOUNDS };
+  const o = v as Record<string, unknown>;
+  const ok = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0;
+  if (!ok(o.idleSeconds) || !ok(o.absoluteSeconds) || !ok(o.maxSignatures)) return { ...LEGACY_HELPER_BOUNDS };
+  return { idleMs: o.idleSeconds * 1000, absoluteMs: o.absoluteSeconds * 1000, maxSignatures: Math.floor(o.maxSignatures) };
+}
 
 /** `idle` = no use for the idle limit; `expired` = past the absolute TTL; `exhausted` = the signature cap is spent. Each is dropped. */
 export type UnlockEnd = 'idle' | 'expired' | 'exhausted';
@@ -34,10 +67,13 @@ export interface UnlockLimits {
 }
 
 interface Unlock {
+  /** the unlock key: `udev:<digest>` for a GUI device (F5), else a connId */
   connId: string;
   openedAt: number;
   lastUsedAt: number;
   signatures: number;
+  /** this unlock's bounds: the store's, lowered by the helper's when it opened (F4) */
+  b: UnlockBounds;
 }
 
 export class UnlockStore {
@@ -56,15 +92,23 @@ export class UnlockStore {
 
   /** Why `u` has ended (absolute first, then idle, then the cap), or null while it may still sign. */
   #end(u: Unlock, now: number): UnlockEnd | null {
-    if (now - u.openedAt > this.#absoluteMs) return 'expired';
-    if (now - u.lastUsedAt > this.#idleMs) return 'idle';
-    if (u.signatures >= this.#maxSignatures) return 'exhausted';
+    if (now - u.openedAt > u.b.absoluteMs) return 'expired';
+    if (now - u.lastUsedAt > u.b.idleMs) return 'idle';
+    if (u.signatures >= u.b.maxSignatures) return 'exhausted';
     return null;
   }
 
-  open(connId: string): void {
+  /** Open (or re-open) the unlock under `connId` (an unlock key); `peer` = the helper's bounds, applied as the lower bound (F4). */
+  open(connId: string, peer?: Partial<UnlockBounds> | null): void {
     const now = this.#clock();
-    this.#by.set(connId, { connId, openedAt: now, lastUsedAt: now, signatures: 0 });
+    const b = lowerBounds({ idleMs: this.#idleMs, absoluteMs: this.#absoluteMs, maxSignatures: this.#maxSignatures }, peer);
+    this.#by.set(connId, { connId, openedAt: now, lastUsedAt: now, signatures: 0, b });
+  }
+
+  /** The bounds the unlock under `connId` runs with (status and tests), or null. */
+  boundsOf(connId: string): UnlockBounds | null {
+    const u = this.#by.get(connId);
+    return u ? { ...u.b } : null;
   }
 
   /**
@@ -111,7 +155,7 @@ export class UnlockStore {
     if (!u) return null;
     const now = this.#clock();
     if (this.#end(u, now)) return null;
-    const left = Math.min(this.#idleMs - (now - u.lastUsedAt), this.#absoluteMs - (now - u.openedAt));
+    const left = Math.min(u.b.idleMs - (now - u.lastUsedAt), u.b.absoluteMs - (now - u.openedAt));
     return left > 0 ? { state: 'cached', idleLeftMs: left } : null;
   }
 

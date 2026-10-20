@@ -249,7 +249,7 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by P8-D98 (T-2026-10-19-001: human-device verbs, drain/resume + cursor + claim reservations): was sha256:1faf47f5…8720.
 // Moved once by TD-2026-10-19-194 (voice V0, founder ruling: VOICE_DISARM_REASONS, voice-strictness ceiling, status.arms/armCustody): was sha256:f27ecb8b…11a4.
 // Moved once by TD-2026-10-19-063 (self-update pickup, founder ruling "ONE Touch ID": the GUI resume auth form + gui.resume): was sha256:99d5c152…97d1.
-const PINNED_CLIENT_API_ID = 'sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4';
+const PINNED_CLIENT_API_ID = 'sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -575,7 +575,8 @@ describe('event labels and payload docs (round 2)', () => {
     for (const banned of ['tool_input', 'input', 'toolInput', 'content']) expect(f).not.toContain(banned);
     expect(defaultLabelsFor('approval.auto')).toEqual({ audience: 'private', sensitivity: 'normal' });
     expect(f).toContain('path');
-    expect(EVENT_KINDS['approval.auto']!.fieldLabels).toEqual({ path: 'sensitive', inputHash: 'sensitive' });
+    // T-2026-10-20-007 (TD-2026-10-20-086): the anchored command's digest is a sensitive field too
+    expect(EVENT_KINDS['approval.auto']!.fieldLabels).toEqual({ path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' });
   });
   it('merge.reverted: row private + normal, field trailer sensitive (Aegis)', () => {
     expect(RESERVED_KIND_PAYLOADS['merge.reverted']).toContain('trailer');
@@ -588,7 +589,8 @@ describe('event labels and payload docs (round 2)', () => {
       'approval.request': { tool_input: 'sensitive' },
       'oracle.result': { evidence: 'sensitive' },
       'voice.turn.user': { audioRef: 'sensitive' },
-      'approval.auto': { path: 'sensitive', inputHash: 'sensitive' },
+      'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },
+      'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' }, // T-2026-10-20-007
       'merge.reverted': { trailer: 'sensitive' },
       'turn.sent': { contentHash: 'sensitive' },
       'approval.voice.arm': { phrasesHash: 'sensitive' },
@@ -608,7 +610,8 @@ describe('event labels and payload docs (round 2)', () => {
   it('every reserved D86 kind has a payload doc', () => {
     const d86 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === D86);
     const d89 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === 'M1.4:P8-D89');
-    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86, ...d89].sort());
+    const standing = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === '8.0:TD-2026-10-20-086');
+    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86, ...d89, ...standing].sort());
   });
   it('voice.approve:<class> is grant-derived only: never in any manifest, first-party included', () => {
     expect(GRANT_DERIVED_ONLY_CAPABILITIES).toEqual(['voice.approve:<class>']);
