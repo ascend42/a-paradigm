@@ -30,6 +30,14 @@
  *   controlInterrupt / userMessage — the stdin lines: interrupt is the
  *     stream-json `control_request{subtype:'interrupt'}` on every OS, never a
  *     signal (A23-4).
+ *   controlSetModelLine — the mid-session model switch (probe p-set-model,
+ *     claude 2.1.304): `control_request{subtype:'set_model', model}`; claude
+ *     answers `control_response{subtype:'success'|'error', request_id, error?,
+ *     error_code?}` (an unknown model is `error` / `catalog_unknown`), parsed
+ *     as `{kind:'control', subtype, requestId, error, errorCode}`. An assistant
+ *     message carries `message.model` (the model that actually ran: the
+ *     switch's ground truth) and `parent_tool_use_id` (non-null: a subagent's
+ *     message, not the main chain's context).
  *   P8-D96 permission channel (shapes measured by probe p01b, claude 2.1.302):
  *     stdout `control_request{request_id, request:{subtype:'can_use_tool',
  *     tool_name, input, tool_use_id, …}}` ⇒ `permission-request`;
@@ -265,6 +273,17 @@ export function controlInterruptLine(requestId: string = randomUUID()): string {
   return `${JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'interrupt' } })}\n`;
 }
 
+/**
+ * The mid-session model switch (probe p-set-model). The model must pass claudeModelProblem (an alias or a strict
+ * `claude-…` id); the request id must be a REQUEST_ID (the kernel matches the control_response by it).
+ */
+export function controlSetModelLine(requestId: string, model: string): string {
+  if (!REQUEST_ID.test(requestId)) throw new TypeError('#claude-adapter: set_model needs a printable request id');
+  const why = claudeModelProblem(model);
+  if (why !== null) throw new TypeError(`#claude-adapter: set_model refused: ${why}`);
+  return `${JSON.stringify({ type: 'control_request', request_id: requestId, request: { subtype: 'set_model', model } })}\n`;
+}
+
 /** P8-D96 allow: `updatedInput` is ALWAYS the kernel-held input of the request (never a client's); no updatedPermissions. */
 export function permissionAllowLine(requestId: string, updatedInput: unknown): string {
   return `${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: { behavior: 'allow', updatedInput } } })}\n`;
@@ -288,10 +307,10 @@ export interface Usage {
 export type AdapterEvent =
   | { kind: 'init'; type: string; sessionId: string | null; model: string | null; apiKeySource: string | null }
   | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number } }
-  | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean }
+  | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean; model: string | null; parentToolUseId: string | null }
   | { kind: 'user'; type: string; replay: boolean; toolResults: ToolResultSeen[] }
   | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; split: UsageSplit | null; costUsd: number | null; permissionDenials: number; quota: boolean }
-  | { kind: 'control'; type: string; subtype: string | null; requestId: string | null }
+  | { kind: 'control'; type: string; subtype: string | null; requestId: string | null; error: string | null; errorCode: string | null }
   | { kind: 'permission-request'; type: 'control_request.can_use_tool'; requestId: string; toolName: string; toolUseId: string | null; input: Record<string, unknown> }
   | { kind: 'control-cancel'; type: 'control_cancel_request'; requestId: string }
   | { kind: 'permission-malformed'; type: 'control_request.can_use_tool'; requestId: string }
@@ -368,7 +387,7 @@ export function parseStreamLine(line: string): AdapterEvent {
       const content = Array.isArray(m?.content) ? (m!.content as unknown[]) : [];
       const toolUses = content.map(obj).filter((c): c is Record<string, unknown> => c !== null && c.type === 'tool_use').map((c) => ({ id: str(c.id), name: str(c.name) ?? '', input: c.input }));
       const quota = str(o.error) !== null && QUOTA.test(String(o.error));
-      return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota };
+      return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota, model: str(m?.model), parentToolUseId: str(o.parent_tool_use_id) };
     }
     case 'user': {
       // Aegis detector (P8-D96): the tool_result ids, with Claude's own permission decision when it reports one
@@ -420,7 +439,9 @@ export function parseStreamLine(line: string): AdapterEvent {
     }
     case 'control_response': {
       const r = obj(o.response);
-      return { kind: 'control', type: 'control_response', subtype: str(r?.subtype), requestId: str(r?.request_id) };
+      // set_model's answer: the error text (bounded) and claude's error code, when it refused
+      const error = str(r?.error);
+      return { kind: 'control', type: 'control_response', subtype: str(r?.subtype), requestId: str(r?.request_id), error: error === null ? null : error.slice(0, 256), errorCode: str(r?.error_code)?.slice(0, 64) ?? null };
     }
     default:
       return { kind: 'unknown', type };
