@@ -8,7 +8,8 @@
  * stack (approve on a user gesture only, `G-GUI-04`; refusals shown
  * verbatim), the composer (session.open / session.send), the run-mode
  * control (header menu, ⇧Tab, palette; core/modes.ts), the voice pill and
- * attach controls (core/voice.ts, V2d), the palette,
+ * attach controls (core/voice.ts, V2d), the voice app's lifecycle, dev banner,
+ * enrolment dialog and notices (core/voice-client.ts, V2e), the palette,
  * themes + auto + reduced motion, the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
@@ -23,6 +24,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
+import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -434,6 +436,8 @@ function schedule(what: Set<string>): void {
     if (w.has('cards')) void paintStack(w);
     if (w.has('modes') || w.has('voice')) void refreshStatus();
     if (w.has('voice-activity')) kickMeter();
+    if (w.has('voice-enrol')) paintEnrol();
+    if (w.has('voice-toast')) showToast();
     paintShuttle();
   });
 }
@@ -700,6 +704,29 @@ function paintVoice(): void {
   put($('voice-label'), p.label);
   put($('voice-target'), p.target ? `· ${p.target}` : '');
   $('voice-meter').hidden = p.state !== 'ambient';
+  // V2e: with nothing attached, the voice app's lifecycle owns the pill (setup phases, crash, the enrol nudge)
+  const c = clientOf(status);
+  const cp = clientPillOf(c, v.state !== 'off', canAttach(status));
+  if (cp.label !== null) {
+    btn.className = `voice-pill kernel-owned ${cp.className}`;
+    btn.title = cp.title;
+    btn.dataset.state = `client-${c.phase}`;
+    put($('voice-label'), cp.label);
+  }
+  const bar = $('voice-progress');
+  bar.hidden = cp.progress === null;
+  if (cp.progress !== null) {
+    bar.style.setProperty('--progress', String(cp.progress));
+    bar.setAttribute('aria-valuenow', String(Math.round(cp.progress * 100)));
+  }
+  const act = $('voice-action');
+  act.hidden = cp.action === null;
+  act.dataset.action = cp.action ?? '';
+  put(act, cp.actionLabel);
+  const dev = devBannerOf(c);
+  $('voice-dev').hidden = dev === null;
+  put($('voice-dev'), dev ? `⚠ ${dev}` : '');
+  if (!$('enrol-dialog').hidden) paintEnrol();
   if (v.level !== null) $('voice-meter').style.setProperty('--level', String(v.level));
   const note = store.voiceNote;
   $('voice-note').hidden = !note || v.state !== 'off';
@@ -731,6 +758,9 @@ function paintVoiceMenu(): void {
     b.disabled = e.disabled;
     menu.appendChild(b);
   }
+  // V2e: Start / Stop voice and "Teach Gnomon your voice" (human connections only: clientMenuEntries is [] otherwise)
+  for (const e of clientMenuEntries(clientOf(status), canAttach(status)))
+    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-client': e.id }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as Node);
   menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk`) as unknown as Node);
 }
 function openVoiceMenu(): void {
@@ -779,6 +809,11 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   if (voiceBusy) return;
   voiceBusy = true;
   try {
+    // V2e seamless: attaching (or choosing Ambient) while the voice app is not running starts it in the same gesture
+    if (to !== 'off' && needsStart(clientOf(status))) {
+      await client.call('log.append', clientRequest('start'));
+      notice('Starting voice…');
+    }
     const r = await client.call<Record<string, unknown>>('log.append', req);
     if (r.pending === true && typeof r.cardId === 'string') {
       // Aegis L (V2d): approve in this gesture ONLY the voice-widen presence card for this session; else the stack decides
@@ -807,6 +842,139 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
     voiceBusy = false;
     await refreshStatus();
   }
+}
+
+/* ── voice app lifecycle, enrolment, notices (V2e; core/voice-client.ts) ─ */
+/** Start / Stop the voice app: one log.append request.voice.client{op} on a trusted gesture (human connections only). */
+async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  closeVoiceMenu();
+  if (!client) return notice('not connected: the voice app was not changed', true);
+  if (!canAttach(status)) return notice('only a human connection starts or stops the voice app', true);
+  try {
+    await client.call('log.append', clientRequest(op));
+    notice(null);
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : `the voice app was not ${op === 'start' ? 'started' : 'stopped'}`, true);
+  } finally {
+    await refreshStatus();
+  }
+}
+
+function openEnrol(trusted: boolean): void {
+  if (!trusted) return;
+  closeVoiceMenu();
+  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
+  if (!store.enrol || store.enrol.step === 'done' || store.enrol.step === 'failed') store.enrol = enrolStart();
+  $('enrol-dialog').hidden = false;
+  paintEnrol();
+  if (store.enrol.step === 'form') $('enrol-name').focus();
+}
+
+function paintEnrol(): void {
+  const s = store.enrol;
+  if (!s || $('enrol-dialog').hidden) return;
+  const raw = $<HTMLInputElement>('enrol-name').value;
+  const name = normalizeVoiceName(raw);
+  put($('enrol-line'), enrolLine(s));
+  const formStep = s.step === 'form' || s.step === 'failed';
+  $('enrol-form-step').hidden = !formStep;
+  put($('enrol-name-norm'), raw && name !== raw ? `saved as “${name}”` : '');
+  put($('enrol-consent'), consentText(name || 'your name'));
+  const phraseStep = s.step === 'waiting' || s.step === 'phrase';
+  $('enrol-phrase-step').hidden = !phraseStep;
+  if (phraseStep) {
+    put($('enrol-progress'), s.step === 'waiting' ? 'The voice app is getting ready to listen…' : `Phrase ${s.index + 1} of ${s.phrases.length} · ${s.recorded} recorded`);
+    put($('enrol-phrase'), s.step === 'phrase' ? `“${s.phrases[s.index] ?? ''}”` : '');
+    $('enrol-rec').className = `enrol-rec${s.recording ? ' recording' : ''}`;
+    put($('enrol-rec-label'), s.recording ? 'recording' : s.step === 'waiting' ? 'waiting' : 'get ready');
+  }
+  const go = $<HTMLButtonElement>('enrol-go');
+  go.hidden = !(formStep || s.step === 'confirm');
+  put(go, s.step === 'confirm' ? 'Finish with Touch ID' : s.step === 'failed' ? 'Try again' : 'Start recording');
+  put($('enrol-cancel'), s.step === 'done' ? 'done' : phraseStep || s.step === 'confirm' ? 'cancel' : 'close');
+  const list = $('enrol-list');
+  clear(list);
+  const enrolled = clientOf(status).enrolled;
+  if (enrolled === null) list.appendChild(h(doc, 'p', { class: 'meta' }, 'this kernel does not list enrolled voices') as unknown as Node);
+  else if (!enrolled.length) list.appendChild(h(doc, 'p', { class: 'meta' }, 'none yet: Gnomon forwards no speech until a voice is enrolled') as unknown as Node);
+  else
+    for (const n of enrolled)
+      list.appendChild(h(doc, 'div', { class: 'enrol-voice' }, h(doc, 'span', null, n), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-forget': n, 'data-armed': forgetArmed === n ? 'true' : 'false' }, forgetArmed === n ? `Forget ${n}? confirm` : 'Forget')) as unknown as Node);
+}
+
+/** The dialog's one button: send the request (form), or finish with Touch ID (confirm). Trusted gestures only. */
+async function submitEnrol(trusted: boolean): Promise<void> {
+  const s = store.enrol;
+  if (!trusted || !s) return;
+  if (!client) return notice('not connected: no voice was enrolled', true);
+  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
+  if (s.step === 'form' || s.step === 'failed') {
+    const v = enrolRequest($<HTMLInputElement>('enrol-name').value, $<HTMLInputElement>('enrol-agree').checked);
+    if (!v.ok) return void put($('enrol-line'), v.reason);
+    try {
+      // the voice app records the phrases (it watches for this enrolment); start it first if it is not running
+      if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start'));
+      const r = await client.call<Record<string, unknown>>('log.append', v.req);
+      store.enrol = enrolSent(s, (v.req.payload as { name: string }).name, typeof r.cardId === 'string' ? r.cardId : null);
+    } catch (err) {
+      store.enrol = { ...s, step: 'failed', error: err instanceof RpcError ? refusalText(err.refusal) : 'the request was not sent' };
+    }
+    return paintEnrol();
+  }
+  if (s.step !== 'confirm') return;
+  const cardId = s.cardId ?? [...store.cards.values()].find((c) => isEnrolCard(c, s.name))?.cardId ?? null;
+  if (!cardId) return void put($('enrol-line'), 'the Touch ID card has not arrived yet; it shows in the decisions pile when it does');
+  put($('enrol-line'), 'Confirm with Touch ID…');
+  try {
+    await client.call('approve', { cardId, decision: 'allow' });
+    store.enrol = { ...s, cardId, step: 'done' };
+  } catch (err) {
+    focusCard(cardId);
+    return void put($('enrol-line'), err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet');
+  }
+  paintEnrol();
+  await refreshStatus();
+}
+
+/** Close the dialog; an enrolment in flight is cancelled by denying its card (no Touch ID needed to say no). */
+async function closeEnrol(trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  const s = store.enrol;
+  $('enrol-dialog').hidden = true;
+  forgetArmed = null;
+  store.enrol = null;
+  if (client && s?.cardId && (s.step === 'waiting' || s.step === 'phrase' || s.step === 'confirm')) await client.call('approve', { cardId: s.cardId, decision: 'deny' }).catch(() => undefined);
+}
+
+let forgetArmed: string | null = null;
+/** [Forget] asks once more in place, then sends request.voice.forget{name} (assumed name, A2). */
+async function forgetVoice(name: string, trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  if (forgetArmed !== name) {
+    forgetArmed = name;
+    return paintEnrol();
+  }
+  forgetArmed = null;
+  try {
+    await client.call('log.append', forgetRequest(name));
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : `${name} was not forgotten`, true);
+  }
+  await refreshStatus();
+}
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+/** A voice-app notice ("open Gnomon to turn on ambient") as a quiet toast; never a decision, never a backlog replay. */
+function showToast(): void {
+  const t = store.voiceToast;
+  store.voiceToast = null;
+  if (!t || !toastFresh(t.at, Date.now())) return;
+  const el = $('voice-toast');
+  put(el, t.text);
+  el.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), TOAST_MS);
 }
 
 /* ── palette ────────────────────────────────────────────────────── */
@@ -845,6 +1013,9 @@ function run(id: string): void {
   else if (id === 'composer.focus') $('composer-text').focus();
   else if (id.startsWith('mode.repo.') && (RUN_MODES as readonly string[]).includes(id.slice(10))) void setMode(id.slice(10) as RunMode, 'repo', true);
   else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', true);
+  else if (id === 'voice.client.start') void voiceClientOp('start', true);
+  else if (id === 'voice.client.stop') void voiceClientOp('stop', true);
+  else if (id === 'voice.enrol') openEnrol(true);
   else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), true);
   else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
@@ -961,6 +1132,12 @@ function wire(): void {
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
   $('voice-menu').addEventListener('click', (e) => {
+    const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
+    if (vc) {
+      const id = vc.dataset.voiceClient!;
+      if (id === 'voice.enrol') return openEnrol(e.isTrusted);
+      return void voiceClientOp(id === 'voice.client.stop' ? 'stop' : 'start', e.isTrusted);
+    }
     const b = (e.target as HTMLElement).closest('[data-voice]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
     const id = b.dataset.voice!;
@@ -970,6 +1147,22 @@ function wire(): void {
     }
     const to = id.slice(6) as VoiceState;
     void setVoice(to, voiceTargetFor(to), e.isTrusted);
+  });
+  // V2e: the pill's own action ([Start voice] · [Restart] · [Teach]) and the enrolment dialog
+  $('voice-action').addEventListener('click', (e) => {
+    const a = $('voice-action').dataset.action;
+    if (a === 'enrol') return openEnrol(e.isTrusted);
+    if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted);
+  });
+  $('enrol-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitEnrol(e.isTrusted);
+  });
+  $('enrol-name').addEventListener('input', () => paintEnrol());
+  $('enrol-cancel').addEventListener('click', (e) => void closeEnrol(e.isTrusted));
+  $('enrol-list').addEventListener('click', (e) => {
+    const f = (e.target as HTMLElement).closest('[data-forget]') as HTMLElement | null;
+    if (f) void forgetVoice(f.dataset.forget!, e.isTrusted);
   });
   $('voice-meter').addEventListener('animationend', () => $('voice-meter').classList.remove('kick'));
   document.addEventListener('click', (e) => {
@@ -1020,6 +1213,8 @@ function wire(): void {
       closeModeMenu();
     } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
       closeVoiceMenu();
+    } else if (e.key === 'Escape' && !$('enrol-dialog').hidden) {
+      void closeEnrol(e.isTrusted);
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new');

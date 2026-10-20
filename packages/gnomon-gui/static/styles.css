@@ -352,3 +352,25 @@ html, body {
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
 .trow.role-voice-refused { color: var(--sec); font-size: 11px; padding-left: 28px; border-left: 2px solid var(--fail-edge); }
 .mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }
+/* V2e voice app lifecycle, dev banner, enrolment, notices (T-2026-10-19-026). Existing tokens only; reduced motion is
+   covered by the global [data-motion="reduced"] rule. */
+.voice-pill.voice-setup { border-style: solid; }
+.voice-pill.voice-crashed { color: var(--fail); border-color: var(--fail-edge); border-style: solid; }
+.voice-pill.voice-unavailable { color: var(--sec); }
+.voice-pill.voice-nudge { color: var(--slate); border-color: var(--slate); border-style: dashed; }
+.voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
+.voice-progress[hidden] { display: none; }
+.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--slate); }
+.voice-action { font-size: 11.5px; padding: 1px 8px; }
+.voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
+.voice-toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--sec); font-size: 12px; box-shadow: var(--shadow); }
+.voice-toast[hidden] { display: none; }
+.enrol-card { max-width: 460px; }
+.enrol-consent { font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; }
+.enrol-agree { display: flex; align-items: center; gap: 6px; }
+.enrol-phrase { font-size: 17px; line-height: 1.4; padding: 10px 4px; font-weight: 600; }
+.enrol-rec { display: inline-flex; align-items: center; gap: 6px; color: var(--sec); font-size: 12px; }
+.enrol-rec .voice-dot { border-style: dashed; }
+.enrol-rec.recording { color: var(--fail); font-weight: 600; }
+.enrol-rec.recording .voice-dot { background: var(--fail-edge); border-color: var(--fail-edge); border-style: solid; animation: voice-pulse 1.4s ease-in-out infinite; }
+.enrol-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }

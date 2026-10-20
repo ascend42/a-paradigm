@@ -17,13 +17,15 @@
 <span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
 <span id="risk" class="badge risk kernel-owned" hidden title="A browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.">browser · extension risk</span>
 <span class="spacer"></span>
-<span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false" aria-live="polite" data-state="off" title="Voice (kernel-owned: shows what the kernel says, never the voice app's claim)"><span class="voice-dot" aria-hidden="true"></span><span id="voice-label">Mic off</span><span id="voice-meter" class="voice-meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></span><span id="voice-target" class="voice-target"></span></button><span id="voice-menu" class="mode-menu voice-menu" role="menu" hidden></span><span id="voice-note" class="meta voice-note" role="status" hidden></span></span>
+<span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false" aria-live="polite" data-state="off" title="Voice (kernel-owned: shows what the kernel says, never the voice app's claim)"><span class="voice-dot" aria-hidden="true"></span><span id="voice-label">Mic off</span><span id="voice-meter" class="voice-meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></span><span id="voice-target" class="voice-target"></span><span id="voice-progress" class="voice-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden><i></i></span></button><button id="voice-action" class="key quiet voice-action kernel-owned" type="button" hidden></button><span id="voice-menu" class="mode-menu voice-menu" role="menu" hidden></span><span id="voice-note" class="meta voice-note" role="status" hidden></span></span>
 <span id="inbox" class="readout" title="global inbox: all projects">0 pending</span>
 <button id="toggle-stack" class="key pane-toggle" type="button" aria-controls="pane-stack" aria-expanded="false" title="Decisions">decisions</button>
 <button id="palette-btn" class="key" type="button" title="Command palette">⌘K</button>
 </header>
 <div id="repin" class="notice repin kernel-owned" role="alert" hidden><span id="repin-text"></span> <button id="repin-ack" class="key" type="button">understood</button></div>
+<div id="voice-dev" class="notice voice-dev kernel-owned" role="alert" hidden></div>
 <div id="notice" class="notice" hidden></div>
+<div id="voice-toast" class="voice-toast" role="status" aria-live="polite" hidden></div>
 <main class="desk">
 <nav id="pane-sessions" class="pane sessions" aria-label="sessions">
 <div class="pane-head"><span class="title">sessions</span><button id="new-session" class="key" type="button" title="New session (⌘N)">+ new</button></div>
@@ -68,6 +70,25 @@
 <label class="meta">cwd <input id="ns-cwd" class="field" type="text" required placeholder="/absolute/path/to/project"></label>
 <label class="meta">model <select id="ns-model" class="field"><option value="claude">claude</option><option value="local">local</option><option value="any">any</option></select></label>
 <div class="composer-foot"><button id="ns-cancel" class="key" type="button">cancel</button><button class="key" type="submit">open</button></div>
+</form>
+</div>
+<div id="enrol-dialog" class="overlay" hidden>
+<form id="enrol-form" class="sheet-card enrol-card" autocomplete="off" aria-label="Teach Gnomon your voice">
+<p class="title">Teach Gnomon your voice</p>
+<p id="enrol-line" class="meta" role="status" aria-live="polite"></p>
+<div id="enrol-form-step">
+<label class="meta">your name <input id="enrol-name" class="field" type="text" maxlength="64" placeholder="matt" spellcheck="false"></label>
+<p id="enrol-name-norm" class="meta"></p>
+<p id="enrol-consent" class="enrol-consent"></p>
+<label class="meta enrol-agree"><input id="enrol-agree" type="checkbox"> I agree</label>
+</div>
+<div id="enrol-phrase-step" hidden>
+<p id="enrol-progress" class="meta"></p>
+<p id="enrol-phrase" class="enrol-phrase"></p>
+<span id="enrol-rec" class="enrol-rec" aria-hidden="true"><span class="voice-dot"></span> <span id="enrol-rec-label">get ready</span></span>
+</div>
+<div id="enrol-voices"><p class="meta">enrolled voices</p><div id="enrol-list" class="list"></div></div>
+<div class="composer-foot"><button id="enrol-cancel" class="key" type="button">close</button><button id="enrol-go" class="key" type="submit">Start recording</button></div>
 </form>
 </div>
 </div>
