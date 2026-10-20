@@ -35,7 +35,9 @@
  * this gate (dispatch.ts `requests`; broker/run-mode.ts), which validates it
  * and writes the KERNEL-signed request row itself. `request.session.model`
  * (8.0:model-switch) from the same human on the same connections goes to the
- * session port (SessionPort.model), which writes its request row. Every other caller and
+ * session port (SessionPort.model), which writes its request row. `request.offer.decide` and
+ * `request.offer.mute` (TD-2026-10-20-812) from the same human on the same connections go to
+ * #offer-router (requests.offer), which writes the request rows. Every other caller and
  * kind still lands here.
  *
  * So in M1.4 NO principal can append through the socket: every outcome is a
@@ -59,6 +61,8 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.incident',
   'request.voice.arm',
   'request.session.model',
+  'request.offer.decide',
+  'request.offer.mute',
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);

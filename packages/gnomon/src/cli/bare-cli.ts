@@ -62,6 +62,7 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   session            repin-claude: re-pin the claude binary after Claude Code updates itself
   rules              list | revoke: standing always-allow rules
   mod                stage mod changes as cards for approval (never signs)
+  desk               stats: offers shown and kept per mod (the Desk)
   replay             replay the hash-chained log and check its head
   trace              read-only audit timeline of a session (log + transcript; contains prompt text);
                      on | off | status | path: record a folder's sessions (kept in ~/.gnomon/trace/)

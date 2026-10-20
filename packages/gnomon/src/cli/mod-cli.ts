@@ -49,6 +49,7 @@ import { isUserPaused, modNames, pendingStaged, requestStart, writePause, reques
 import { GNOMON_VERSION } from '../version.js';
 import { isDevHome, loadDevHome } from './dev-home.js';
 import { readout, refused, type Out } from './readout.js';
+import { runModConfig } from './desk-cli.js';
 
 export const MOD_EXIT_OK = 0;
 export const MOD_EXIT_REFUSED = 1;
@@ -63,6 +64,9 @@ usage: gnomon mod <verb> [--home <abs>] …
   pause <name>       stop the mod and keep it stopped
   start <name>       clear a pause and start the mod
   uninstall <name>   ask for the uninstall card (root key, decided in the GUI)
+  config <name> [--server <s>] [--command <abs>] [--args …] [--env NAME=value]
+                     ask to override how the mod's MCP server launches (only what
+                     its manifest lets you set; a card in the GUI decides it)
 Cards are raised by the running kernel (gnomon up) and decided in the GUI with Touch ID.
 `;
 
@@ -130,6 +134,11 @@ export async function runModCommand(argv: readonly string[], io: ModCliIo, deps:
     args.splice(hi, 2);
   }
   const [verb, target, ...extra] = args;
+  // TD-2026-10-20-812 (#mcp-passthrough): `gnomon mod config` takes flags, so it is parsed by desk-cli.ts
+  if (verb === 'config') {
+    const h = path.resolve(home ?? resolveGnomonHome());
+    return runModConfig(args.slice(1), io, { home: h, trust: deps.trust ?? homeTrust(h), env, ...(deps.now ? { now: deps.now } : {}) });
+  }
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') {
     // asked-for help goes to stdout; a missing verb is a usage error: stderr
     (verb ? io.stdout : io.stderr).write(MOD_USAGE);

@@ -142,6 +142,10 @@ import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-chi
 import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { KernelSpeakable } from '../voice/speakable.js';
+import { composeGuidance } from '../desk/desk-guidance.js';
+import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
+import { DeskMods, McpConfigCards, mergeDeskMcp, readMcpOverrides, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
+import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { spawn as spawnChild } from 'node:child_process';
 
 /**
@@ -166,6 +170,8 @@ export type DaemonEvent =
   | { kind: 'daemon.fuse.clock.skew'; chainAt: string; wall: string }
   /** TD-2026-10-19-063: #update-watch saw a new build stamp and raised (or found) the upgrade card. */
   | { kind: 'daemon.update.detected'; from: string | null; to: string; cardId: string | null }
+  /** TD-2026-10-20-812 (Aegis S2): a mod MCP server whose resolved command is not absolute was left out (needs-config) */
+  | { kind: 'daemon.desk.mcp.unconfigured'; hsid: string; name: string; server: string | null; next: string }
   | SocketEvent;
 
 export interface DaemonOptions {
@@ -596,6 +602,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         await scheduler.stop().catch(() => undefined); // an in-flight tick finishes before children stop
         // §2.4 rule 3: mod, session and transport children stop BEFORE daemon.exit — never exit with a live child
         try {
+          if (mcpCardsTimer) clearInterval(mcpCardsTimer);
           modPickup.stop();
         } catch {
           /* shutdown before the pickup existed */
@@ -886,7 +893,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   const repinTimer = setInterval(() => void repin.poll().catch(() => undefined), REPIN_POLL_MS);
   repinTimer.unref();
+  // TD-2026-10-20-812 (the Desk): installed, granted, unpaused mods (cached on the grant table); the router is late-bound
+  const deskMods = new DeskMods(home, authority);
+  let offerRouter: OfferRouter | null = null;
   const supervisor: SessionSupervisor = new SessionSupervisor({
+    // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
+    deskMcp: (repoServers, ctx) => {
+      const repo = deskRepoScope(repoKeyOf([ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])]));
+      const r = mergeDeskMcp(repoServers, deskMods.list(), { overrides: readMcpOverrides(home), repoMuted: (mod) => offerRouter?.repoMuted(repo, mod) ?? false });
+      // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config on the diag channel
+      for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk.mcp.unconfigured', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });
+      return r.servers;
+    },
     onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
@@ -1051,7 +1069,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // kind: the end row itself is what failed to write); send() already refuses past idleAt, so it fails closed
   });
   // table talk (TD-2026-10-20-294): while voice is attached, every send to that session carries the guidance block
-  supervisor.setVoiceGuidance((hsid) => voice.guidanceFor(hsid));
+  // + the Desk (TD-2026-10-20-812): ONE composite block under one guidanceHash (trace-cli extrasAgree, Aegis M2)
+  supervisor.setTurnGuidance((hsid) => composeGuidance(voice.guidanceFor(hsid), offerRouter?.guidanceFor(hsid) ?? null));
   // TD-2026-10-19-063: the build stamp this kernel LOADED, read once at boot (Aegis V2e M2: it also pins the voice
   // client manifest, so it is read before the voice client is verified and copied below)
   const stampPath = opts.update?.stampPath === undefined ? defaultBuildStampPath() : opts.update.stampPath;
@@ -1084,6 +1103,36 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     if (!row) return;
     setImmediate(() => void log.append({ kind: row.kind, principal: kernelPrincipal, payload: { ...row.payload }, session: row.session, as: 'userland' }).catch(() => undefined));
   });
+  // #offer-router (TD-2026-10-20-812): a fold over committed rows; offer.shown / offer.kept appended as the kernel
+  const router = new OfferRouter({
+    kernelPrincipal,
+    mods: () => deskMods.list(),
+    repoScopeOf: (hsid) => {
+      const sc = supervisor.scopeOf(hsid);
+      return sc ? deskRepoScope(sc.repoKey) : null;
+    },
+    ownerOf: (hsid) => supervisor.ownerOf(hsid),
+    pendingCard: (hsid) => broker.cards().some((c) => c.state === 'pending' && c.hsid === hsid),
+    append: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload: { ...payload }, ...(ids.session ? { session: ids.session } : {}), ...(ids.connId ? { connId: ids.connId } : {}) }).then(() => undefined),
+    send: (principal, hsid, text) => supervisor.send(principal, { hsid, text, origin: 'kernel' }),
+  });
+  try {
+    const seed: CommittedRow[] = [];
+    for (const v of log.read({ reader: { class: 'human' }, kinds: OFFER_SEED_KINDS })) {
+      if (v.view === 'full') seed.push({ seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, session: v.event.session ?? null, payload: v.event.payload });
+    }
+    router.seed(seed);
+  } catch {
+    /* an unreadable history seeds nothing: no repo mute is invented */
+  }
+  offerRouter = router;
+  log.onCommit((e) => {
+    const rows = router.observe(e);
+    for (const row of rows) setImmediate(() => void log.append({ kind: row.kind, principal: kernelPrincipal, payload: { ...row.payload }, session: row.session }).catch(() => undefined));
+  });
+  // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
+  let mcpCardsTimer: NodeJS.Timeout | null = null;
+  const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli` });
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1105,6 +1154,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       modeSet: (asker: Parameters<RunModeControl['request']>[0], payload: unknown) => runModes.request(asker, payload),
       status: () => runModes.status(),
       standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
+      offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
@@ -1270,6 +1320,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // §2.4 rule 11: resume the drained sessions and retire the old kernel's pending cards (background: never blocks serving)
   const resume = resumeAfterUpgrade(resumePlan, { supervisor, broker }).catch((): ResumeReport => ({ resumed: [], refused: [], retired: [] }));
   modPickup.start(opts.modPickupMs);
+  void mcpCards.scan().catch(() => undefined);
+  mcpCardsTimer = setInterval(() => void mcpCards.scan().catch(() => undefined), opts.modPickupMs ?? PICKUP_SCAN_MS);
+  mcpCardsTimer.unref();
   idle.start();
   return {
     pidfile,

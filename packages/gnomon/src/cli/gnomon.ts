@@ -18,6 +18,7 @@ import { runLogCommand } from './log-cli.js';
 import { runModCommand } from './mod-cli.js';
 import { runPlaceholderBin } from './placeholder.js';
 import { runReplayCommand } from './replay-cli.js';
+import { runDeskCommand } from './desk-cli.js';
 import { runTraceCommand } from './trace-cli.js';
 import { runRulesCommand } from './rules-cli.js';
 import { runModeCommand } from './mode-cli.js';
@@ -141,6 +142,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'mod') {
   // M1.11 slice 3: `gnomon mod …` (#mod-cli, mod-cli.ts) — stages cards, never signs
   runModCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'desk') {
+  // TD-2026-10-20-812: `gnomon desk stats` — kept/shown per mod from the verified log (#offer-router, desk-cli.ts)
+  runDeskCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

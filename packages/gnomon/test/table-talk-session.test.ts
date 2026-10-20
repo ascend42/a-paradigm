@@ -5,6 +5,7 @@
  * turn with no divergence and `gnomon trace` checks only the first text block. Nothing is injected when not attached.
  */
 // @gnomon-platform: darwin
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
@@ -15,7 +16,11 @@ import { SessionSupervisor, turnContentHash } from '../src/kernel/supervisor/sup
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { foldReplay } from '../src/kernel/log/index.js';
 import { TABLE_TALK_GUIDANCE, TABLE_TALK_GUIDANCE_HASH } from '../src/kernel/voice/table-talk.js';
-import { promptText } from '../src/cli/trace-cli.js';
+import { extrasAgree, promptExtraHashes, promptText } from '../src/cli/trace-cli.js';
+import { composeGuidance, deskGuidance } from '../src/kernel/desk/desk-guidance.js';
+import { mergeDeskMcp } from '../src/kernel/desk/mcp-passthrough.js';
+import { guidanceHashOf } from '../src/kernel/voice/table-talk.js';
+import { deskMod } from './desk-fixtures.js';
 import { sessionWorld, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const SANDBOX_OK = darwinFloor().ok;
@@ -80,5 +85,37 @@ describe.runIf(SANDBOX_OK)('#gnomon-voice table talk S2: the supervisor injects 
     // replay: every turn.sent binds to its inject; no divergence
     const replayRows = asRows(r.rows.filter((x) => x.kind === 'session.inject' || x.kind === 'turn.sent'));
     expect(foldReplay(replayRows).divergences).toEqual([]);
+  }, 60_000);
+
+  it('the Desk (TD-2026-10-20-812): voice + desk travel as ONE composite block under one guidanceHash; desk mcp servers reach mcp.json', async () => {
+    w = sessionWorld();
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
+      rows.push({ kind, payload });
+    };
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
+    const desk = deskGuidance([{ name: 'constellation', offers: [{ kind: 'map-the-idea', phase: 'diverge', title: 'Map it' }] }])!;
+    const sup = new SessionSupervisor({
+      log, children, fuse, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude,
+      env: () => ({ HOME: '/x', PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 200, allowScripts: true,
+      deskMcp: (repo) => mergeDeskMcp(repo, [deskMod('constellation')]).servers,
+    });
+    live.push(() => children.stopAll('test-end'));
+    sup.setTurnGuidance(() => composeGuidance(TABLE_TALK_GUIDANCE, desk));
+    const s = await sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
+    await sup.send(HUMAN, { hsid: s.hsid, text: 'with the desk' });
+    await sup.send(HUMAN, { hsid: s.hsid, text: 'Open Map it: use the open_board tool.', origin: 'kernel' });
+    expect(await waitFor(() => rows.filter((r) => r.kind === 'turn.result').length === 2)).toBe(true);
+    const both = composeGuidance(TABLE_TALK_GUIDANCE, desk)!;
+    const lines = userLines();
+    expect(lines[0]).toEqual([{ type: 'text', text: 'with the desk' }, { type: 'text', text: both }]);
+    const sent = rows.filter((r) => r.kind === 'turn.sent').map((r) => r.payload);
+    expect(sent.map((p) => p.guidanceHash)).toEqual([guidanceHashOf(both), guidanceHashOf(both)]);
+    expect(extrasAgree(promptExtraHashes(lines[0]), sent[0]!.guidanceHash as string)).toBe(true);
+    expect(rows.filter((r) => r.kind === 'session.inject').map((r) => r.payload.origin)).toEqual(['client', 'kernel']);
+    const dirs = fs.readdirSync(path.join(w.home, 'sessions'));
+    const mcp = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', dirs[0]!, 'mcp.json'), 'utf8'));
+    expect(Object.keys(mcp.mcpServers)).toContain('gnomon-constellation');
   }, 60_000);
 });
