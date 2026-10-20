@@ -1645,6 +1645,19 @@ components:
       RUN MODES: approval.auto modeRef is mode:auto-edits (file edits) or
       mode:auto-edits:read-only (a Bash command #shell-readonly proves
       read-only; TD-2026-10-20-294 part 1) or rule:<cardId>.
+      PREFIX SCOPE (TD-2026-10-20-294 part 3): approve{decision:'always',
+      scope} — {kind:'exact'} is the v1 exact rule; {kind:'prefix', prefix}
+      (1-3 words) is accepted only on a Bash permission card whose SHOWN
+      command parses via simpleArgv as one literal simple command whose argv
+      starts with exactly those words (else BAD_REQUEST); decisionSig is the v2
+      layout whose last line is scopeDigest(scope) (signer decisionMessage
+      {scopeDigest}), the presence binding carries scopeDigest, the prompt
+      names the prefix, approval.decide records scope and
+      approval.rule.learned records {match:'prefix', prefix}. replay.ts
+      verifies a scoped always ONLY over the scope layout. A Bash card whose
+      command is one literal simple command carries detail.prefixOptions (first
+      1-2 argv words) + a {type:'bash-prefix', detail} block node the GUI
+      verifies against contentHash.
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
       Voice (TD-2026-10-19-194): whether voice may take a decision is
       gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
@@ -2395,11 +2408,26 @@ components:
       resurrects it); a forged revoked row is ignored; a fresh always on a new
       card learns a new rule. get(ruleId) serves #rules-revoke. Not built: the
       strictness L1 suspension of rules (M2.10).
+      PREFIX RULES (TD-2026-10-20-294 part 3, F2 amended): a learned row
+      {match:'prefix', prefix:[1..3 words]} forms a rule ONLY when the
+      kernel-signed request is a Bash card whose command is one literal simple
+      command (#shell-readonly simpleArgv) starting with the prefix AND the
+      kernel-signed approval.decide{always} carries the same
+      scope{kind:'prefix', prefix}; an exact learned row after a scoped decision
+      (or vice versa) forms nothing. match(repoKey, tool, hash, input) answers a
+      prefix rule only for a Bash input whose command is again one literal
+      simple command (no ; && || | & newline, substitution, parameter, glob,
+      tilde, redirection or assignment) whose argv starts with the prefix word
+      for word, same repoKey and tool, input keys within command/description/
+      timeout. A prefix rule widens only within a single literal simple
+      command. gnomon rules list shows match + prefix.
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]
     tests:
       - test/always-rules.test.ts
+      - test/always-prefix-rules.test.ts
+      - test/approval-prefix-scope.test.ts
       - test/permission-session.test.ts
     oracles: [G-BRK-05]
 
