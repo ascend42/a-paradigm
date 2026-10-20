@@ -11,10 +11,13 @@
  * API shapes are sherpa-onnx's documented Node API; UNVERIFIED here until the integration test runs with models.
  */
 import { loadManifest, modelFor, verifiedModelPaths, type ModelManifest } from '../manifest.js';
+import { wordsOfResult, type PartialWord } from '../partials.js';
 import type { PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceEngines } from '../types.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Sherpa = any;
+/** the offline recognizer's result JSON (verified 2026-10-20: text, tokens with a leading space per word, timestamps in s) */
+type SherpaResult = { text?: unknown; tokens?: unknown; timestamps?: unknown };
 
 export const SHERPA_PACKAGE = 'sherpa-onnx-node';
 
@@ -101,16 +104,21 @@ export class SherpaStt implements SttEngine {
    * capture frames, level events and the stop hotkey (the sync decode() blocked it for the whole 200 to 400 ms
    * decode). Same text as the sync path (B0 `sameText`). The sync decode is only a fallback for an addon without it.
    */
-  transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
-    const run = async (): Promise<string> => {
+  async transcribe(samples: Float32Array, sampleRate: number): Promise<string> {
+    return String((await this.#decode(samples, sampleRate)).text ?? '');
+  }
+  /** B1: a live-words window → words with start times (the result's `tokens` + `timestamps`). decodeAsync only. */
+  async transcribeWords(samples: Float32Array, sampleRate: number): Promise<PartialWord[]> {
+    if (typeof this.#rec.decodeAsync !== 'function') return []; // never a sync decode for a partial
+    return wordsOfResult(await this.#decode(samples, sampleRate));
+  }
+  #decode(samples: Float32Array, sampleRate: number): Promise<SherpaResult> {
+    const run = async (): Promise<SherpaResult> => {
       const s = this.#rec.createStream();
       s.acceptWaveform({ sampleRate, samples });
-      if (typeof this.#rec.decodeAsync === 'function') {
-        const r = (await this.#rec.decodeAsync(s)) as { text?: unknown } | undefined;
-        return String(r?.text ?? '');
-      }
+      if (typeof this.#rec.decodeAsync === 'function') return ((await this.#rec.decodeAsync(s)) as SherpaResult | undefined) ?? {};
       this.#rec.decode(s);
-      return String(this.#rec.getResult(s).text ?? '');
+      return (this.#rec.getResult(s) as SherpaResult | undefined) ?? {};
     };
     const p = this.#chain.then(run);
     this.#chain = p.catch(() => undefined);

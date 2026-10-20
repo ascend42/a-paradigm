@@ -23,9 +23,13 @@
  *                                       {state: idle | hearing | transcribing | captured | dropped, segId, reason?
  *                                       (dropped only, closed CAPTURE_DROP_REASONS), level? (hearing only, 0..1)},
  *                                       relayed as status.voice.capture{…, at} with the SHORT VOICE_CAPTURE_TTL_MS so a
- *                                       crashed client never leaves "hearing" lit. In memory only, no text (A1).
- *                                       V2 seam: the later partial text (B) is projected to the gui credential only
- *                                       by voiceStatusFor (dispatch.ts status), never to device, voice or any other.
+ *                                       crashed client never leaves "hearing" lit. In memory only.
+ *                                       B1 (T-2026-10-20-005, V1/V2/V4): capture.text{committed, tail} = the live
+ *                                       PARTIAL words of the open segment, on hearing / transcribing only. Sanitised
+ *                                       (control + bidi characters to spaces, whitespace collapsed), capped at
+ *                                       CAPTURE_TEXT_MAX together, kept in memory with the same capture TTL, NEVER a
+ *                                       row, never voice.turn.user, never sent to a session. voiceStatusFor projects
+ *                                       it to a HUMAN-class connection on the gui credential only (V2).
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
@@ -66,6 +70,8 @@ export interface CaptureReport {
   reason?: CaptureDropReason;
   /** hearing only: the measured mic level, 0..1 (A2) */
   level?: number;
+  /** B1: hearing / transcribing only, the live partial words (in memory only; projected to the gui credential only) */
+  text?: CaptureText;
   /** Aegis M1: on a terminal state, the state is the voice app's claim ('client'); the kernel's cross-check is `kernel` */
   claim?: 'client';
   /**
@@ -83,20 +89,28 @@ export const VOICE_CAPTURE_ACCEPT_WINDOW_MS = 5_000;
 /** status.voice.capture goes stale this fast: a crashed client never leaves "hearing" lit (the client re-reports ≤ 1 s) */
 export const VOICE_CAPTURE_TTL_MS = 5_000;
 const SEG_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const CAPTURE_KEYS = ['state', 'segId', 'reason', 'level'];
-/** the fields status.voice.capture may carry (the kernel's own cross-check fields included) */
-const CAPTURE_STATUS_KEYS = [...CAPTURE_KEYS, 'claim', 'kernel', 'clientReason', 'at'];
+const CAPTURE_KEYS = ['state', 'segId', 'reason', 'level', 'text'];
+/** B1: the live partial words of one segment (committed + tail) are capped at this many characters together */
+export const CAPTURE_TEXT_MAX = 600;
+/** B1: the live partial words; `committed` never shrinks within a segment (client-side LocalAgreement-2), `tail` may */
+export interface CaptureText {
+  committed: string;
+  tail: string;
+}
+/** the fields status.voice.capture may carry for every viewer (the kernel's own cross-check fields included; never `text`) */
+const CAPTURE_STATUS_KEYS = ['state', 'segId', 'reason', 'level', 'claim', 'kernel', 'clientReason', 'at'];
+/** B1 (V2): `text` is added to the allow-list for a human-class connection on the gui credential only */
+const CAPTURE_GUI_KEYS = [...CAPTURE_STATUS_KEYS, 'text'];
 
 /**
- * The status.voice view for one connection. V2 (TD-2026-10-20-086) seam: when B adds partial words to the capture
- * (`capture.text`), they are kept for a HUMAN-class connection on the `gui` credential only (Aegis L1); every other
- * class or credential (device, voice, read token) gets the capture without them. A1 carries no text, so today this
- * only enforces the field allow-list.
+ * The status.voice view for one connection. V2 (TD-2026-10-20-086): the partial words (`capture.text`, B1) are kept
+ * for a HUMAN-class connection on the `gui` credential only (Aegis L1); every other class or credential (device,
+ * voice, read token) gets the capture without them. Every other unknown field is dropped too (an allow-list).
  */
 export function voiceStatusFor(voice: Record<string, unknown>, credential: string | undefined, cls?: string): Record<string, unknown> {
   const c = voice.capture as Record<string, unknown> | null | undefined;
   if (!c || typeof c !== 'object') return voice;
-  const allowed = cls === 'human' && credential === 'gui' ? [...CAPTURE_STATUS_KEYS, 'text'] : CAPTURE_STATUS_KEYS;
+  const allowed = cls === 'human' && credential === 'gui' ? CAPTURE_GUI_KEYS : CAPTURE_STATUS_KEYS;
   return { ...voice, capture: Object.fromEntries(Object.entries(c).filter(([k]) => allowed.includes(k))) };
 }
 
@@ -125,6 +139,23 @@ function bad(msg: string): TypeError {
 }
 const smallInt = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= 100;
 const plain = (s: string, max: number): string => s.replace(/[\u0000-\u001f\u007f‪-‮⁦-⁩]/g, ' ').slice(0, max);
+/** B1: partial words: control, bidi, zero-width and line/paragraph separators become spaces; whitespace collapses */
+const words = (s: string): string =>
+  s
+    .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+/** B1: capture.text → {committed, tail}, sanitised and capped at CAPTURE_TEXT_MAX together (the committed words first). */
+function captureText(v: unknown): CaptureText {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw bad('capture.text is {committed, tail}');
+  const t = v as Record<string, unknown>;
+  if (Object.keys(t).some((k) => k !== 'committed' && k !== 'tail') || typeof t.committed !== 'string' || typeof t.tail !== 'string') throw bad('capture.text is {committed, tail} (strings)');
+  // a hostile client cannot make the kernel scan megabytes: anything far past the cap is refused, not trimmed
+  if (t.committed.length + t.tail.length > CAPTURE_TEXT_MAX * 4) throw bad(`capture.text is at most ${CAPTURE_TEXT_MAX} characters`);
+  const committed = [...words(t.committed)].slice(0, CAPTURE_TEXT_MAX).join('');
+  const tail = [...words(t.tail)].slice(0, Math.max(0, CAPTURE_TEXT_MAX - [...committed].length - (committed ? 1 : 0))).join('');
+  return { committed, tail };
+}
 
 /** The client's relayed progress and notices (in memory only). */
 export class VoiceReports {
@@ -191,12 +222,14 @@ export class VoiceReports {
     let capture: CaptureReport | undefined;
     if (o.capture !== undefined) {
       const c = o.capture as Record<string, unknown> | null;
-      if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).some((k) => !CAPTURE_KEYS.includes(k))) throw bad('capture is {state, segId, reason?, level?}');
+      if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).some((k) => !CAPTURE_KEYS.includes(k))) throw bad('capture is {state, segId, reason?, level?, text?}');
       if (!(CAPTURE_STATES as readonly unknown[]).includes(c.state)) throw bad(`capture.state is ${CAPTURE_STATES.join(' | ')}`);
       if (typeof c.segId !== 'string' || !SEG_ID.test(c.segId)) throw bad('capture.segId is ≤ 32 of [a-z0-9-]');
       if (c.state === 'dropped' ? !(CAPTURE_DROP_REASONS as readonly unknown[]).includes(c.reason) : c.reason !== undefined) throw bad(`capture.reason is ${CAPTURE_DROP_REASONS.join(' | ')}, on dropped only`);
       if (c.level !== undefined && (c.state !== 'hearing' || typeof c.level !== 'number' || !Number.isFinite(c.level) || c.level < 0 || c.level > 1)) throw bad('capture.level is 0..1, on hearing only');
-      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), at };
+      if (c.text !== undefined && c.state !== 'hearing' && c.state !== 'transcribing') throw bad('capture.text is on hearing / transcribing only');
+      const text = c.text !== undefined ? captureText(c.text) : undefined;
+      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), ...(text && (text.committed || text.tail) ? { text } : {}), at };
       capture = this.#crossCheck(capture, connId);
     }
     if (capture) {

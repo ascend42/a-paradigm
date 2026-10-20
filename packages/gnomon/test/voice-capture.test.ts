@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { createKernelDispatcher, RpcRefusal } from '../src/kernel/socket/index.js';
 import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
-import { CAPTURE_DROP_REASONS, CAPTURE_STATES, VoiceReports, VOICE_CAPTURE_ACCEPT_WINDOW_MS, VOICE_CAPTURE_TTL_MS, VOICE_REPORT_TTL_MS, voiceStatusFor } from '../src/kernel/voice/voice-requests.js';
+import { CAPTURE_DROP_REASONS, CAPTURE_STATES, CAPTURE_TEXT_MAX, VoiceReports, VOICE_CAPTURE_ACCEPT_WINDOW_MS, VOICE_CAPTURE_TTL_MS, VOICE_REPORT_TTL_MS, voiceStatusFor } from '../src/kernel/voice/voice-requests.js';
 
 describe('#gnomon-voice capture: VoiceReports', () => {
   it('relays {state, segId, reason?, level?, at}; the latest report wins', () => {
@@ -269,5 +269,73 @@ describe('#gnomon-voice capture: the dispatcher', () => {
     expect(((await human('status')).voice as Record<string, unknown>).capture).toMatchObject({ state: 'hearing' });
     r.tick(VOICE_CAPTURE_TTL_MS + 1);
     expect(((await human('status')).voice as Record<string, unknown>).capture).toBeNull();
+  });
+});
+
+describe('#gnomon-voice B1 live words: status.voice.capture.text', () => {
+  const T = (committed: string, tail: string) => ({ committed, tail });
+
+  it('accepts {committed, tail} on hearing / transcribing only; refuses it on a terminal state or a bad shape', () => {
+    const rep = new VoiceReports(() => 1_000_000);
+    rep.report({ capture: { state: 'hearing', segId: 's1', level: 0.4, text: T('run the', 'tests') } }, 'conn:V');
+    expect(rep.status().capture).toMatchObject({ state: 'hearing', text: { committed: 'run the', tail: 'tests' } });
+    rep.report({ capture: { state: 'transcribing', segId: 's1', text: T('run the tests', '') } }, 'conn:V');
+    expect(rep.status().capture?.text).toEqual({ committed: 'run the tests', tail: '' });
+    for (const c of [
+      { state: 'captured', segId: 's1', text: T('a', '') },
+      { state: 'dropped', segId: 's1', reason: 'echo', text: T('a', '') },
+      { state: 'idle', segId: 's1', text: T('a', '') },
+      { state: 'hearing', segId: 's1', text: 'run the' },
+      { state: 'hearing', segId: 's1', text: { committed: 'a' } },
+      { state: 'hearing', segId: 's1', text: { committed: 'a', tail: 1 } },
+      { state: 'hearing', segId: 's1', text: { committed: 'a', tail: '', extra: '' } },
+      { state: 'hearing', segId: 's1', text: T('x'.repeat(5_000), '') },
+    ]) expect(() => rep.report({ capture: c }, 'conn:V'), JSON.stringify(c).slice(0, 80)).toThrow(TypeError);
+    // a terminal report replaces the slot: the words are gone with it
+    rep.report({ capture: { state: 'captured', segId: 's1' } }, 'conn:V');
+    expect(rep.status().capture).not.toHaveProperty('text');
+  });
+
+  it('sanitises (control, bidi, zero-width to spaces, whitespace collapsed) and caps committed + tail at CAPTURE_TEXT_MAX', () => {
+    const rep = new VoiceReports(() => 1_000_000);
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T('run\u0000the‮  te​sts\n', '⁦now⁩') } }, 'conn:V');
+    expect(rep.status().capture?.text).toEqual({ committed: 'run the te sts', tail: 'now' });
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T('a'.repeat(500), 'b'.repeat(500)) } }, 'conn:V');
+    const t = rep.status().capture!.text!;
+    expect(t.committed).toBe('a'.repeat(500));
+    expect(t.committed.length + 1 + t.tail.length).toBeLessThanOrEqual(CAPTURE_TEXT_MAX);
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T('c'.repeat(900), 'd') } }, 'conn:V');
+    expect(rep.status().capture!.text).toEqual({ committed: 'c'.repeat(CAPTURE_TEXT_MAX), tail: '' });
+    // nothing left after sanitising: no text field at all
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T(' \u0007 ', '') } }, 'conn:V');
+    expect(rep.status().capture).not.toHaveProperty('text');
+  });
+
+  it('TTL: the words go stale with the capture slot (VOICE_CAPTURE_TTL_MS)', () => {
+    let t = 1_000_000;
+    const rep = new VoiceReports(() => t);
+    rep.report({ capture: { state: 'hearing', segId: 's1', text: T('run', 'the') } }, 'conn:V');
+    t += VOICE_CAPTURE_TTL_MS;
+    expect(rep.status().capture?.text).toEqual({ committed: 'run', tail: 'the' });
+    t += 1;
+    expect(rep.status().capture).toBeNull();
+  });
+
+  it('voice principal only, never a row: only a HUMAN on the gui credential ever sees the words', async () => {
+    const r = crig();
+    for (const who of [{ kind: 'human' }, { kind: 'human', credential: 'gui' }, { kind: 'agent' }, { kind: 'mod' }, { kind: 'readToken' }] as Who[]) {
+      await expect((await r.connect(who))('log.append', { kind: 'request.voice.report', payload: { capture: { state: 'hearing', segId: 's1', text: T('forged', '') } } }), JSON.stringify(who)).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    expect(r.reports.status().capture).toBeNull();
+    const voice = await r.connect({ kind: 'voice' });
+    expect(await voice('log.append', { kind: 'request.voice.report', payload: { capture: { state: 'hearing', segId: 's1', level: 0.5, text: T('secret words', 'here') } } })).toEqual({ ok: true });
+    // in memory only: nothing was written to the log
+    expect(JSON.stringify(r.logged)).not.toContain('secret');
+    const gui = (await (await r.connect({ kind: 'human', credential: 'gui' }))('status')).voice as Record<string, unknown>;
+    expect(gui.capture).toMatchObject({ state: 'hearing', text: { committed: 'secret words', tail: 'here' } });
+    for (const who of [{ kind: 'human' }, { kind: 'voice' }, { kind: 'mod' }, { kind: 'agent' }, { kind: 'session' }, { kind: 'readToken' }] as Who[]) {
+      const st = await (await r.connect(who))('status').catch((e: unknown) => (e instanceof RpcRefusal ? { refused: true } : Promise.reject(e)));
+      expect(JSON.stringify(st), JSON.stringify(who)).not.toContain('secret');
+    }
   });
 });

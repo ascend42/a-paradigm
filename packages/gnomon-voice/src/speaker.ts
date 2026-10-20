@@ -106,6 +106,17 @@ export class SpeakerVerifier {
     this.#threshold = threshold;
   }
 
+  /**
+   * B1 V1: a PROVISIONAL match on the first ~1.5 s of an open segment (live words only). Read-only: an unknown voice
+   * is not numbered here (identify on the full segment does that). True only for an enrolled print over the threshold.
+   */
+  async provisional(samples: Float32Array, sampleRate: number): Promise<boolean> {
+    const prints = this.#prints();
+    if (!prints.length) return false;
+    const e = await this.#engine.embed(samples, sampleRate);
+    return prints.some((p) => cosine(e, p.embedding) >= this.#threshold);
+  }
+
   async identify(samples: Float32Array, sampleRate: number): Promise<SpeakerVerdict> {
     const e = await this.#engine.embed(samples, sampleRate);
     let best: { name: string; score: number } | undefined;

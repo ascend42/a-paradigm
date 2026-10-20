@@ -49,6 +49,24 @@ components:
       waiting capture report of the same segment and state is replaced by
       the newest (no backlog behind a slow kernel); edges and terminal
       states are always queued in order.
+      Live words (B1, T-2026-10-20-005, V1-V5 in TD-2026-10-20-086,
+      src/partials.ts): while hearing, the open segment is buffered in memory
+      with 300 ms of pre-roll; every 600 ms of heard audio one tick decodes a
+      window (from the segment start up to 6 s, then about 4 s with its head
+      anchored at a committed word boundary, never sliding freely, capped at
+      8 s) with SttEngine.transcribeWords (sherpa decodeAsync, word starts
+      from tokens + timestamps). ONE decode in flight: a busy tick (or a
+      running final transcription) is skipped, never queued.
+      LocalAgreement-2 (LiveAgreement): words two consecutive decodes agree
+      on are committed and never shrink; a flip inside the committed region
+      commits nothing; trailing punctuation is stripped. V1 gate: no words
+      until SpeakerVerifier.provisional matches an enrolled print on the
+      first 1.5 s (PTT too); a non-match means no words for the segment.
+      Words ride capture reports as text{committed, tail} (sanitised, newest
+      600 chars) on hearing / transcribing only; never log.append rows,
+      voice.turn.user or session.send. The final transcript stays the
+      full-segment decode. SherpaStt decodes are serialized and async
+      (decodeAsync; the sync decode blocked the loop 200-400 ms).
       Table talk system voice (TD-2026-10-20-294, src/earcon.ts): kernel
       speakable items with from:'kernel' (ask-waiting, edits) are said by a
       different Kokoro speaker (SherpaTts systemSidFor, never the model's
