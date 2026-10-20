@@ -21,7 +21,7 @@ import { CLIENT_API_ID } from '@a-company/gnomon-contracts';
 import { GUI_COMMANDS, PRESETS, WORKSHOP_PLACES, resolveMotion, resolveTheme, type Layout, type ThemeChoice } from './commands.js';
 import { DELAY_CHOICES, delayLabel, serializeDelay } from './dictation.js';
 import { defaultScope, MODE_HELP, planFor, RUN_MODES, type SessionModeView } from './modes.js';
-import { KERNEL_PRINCIPAL, standingStatusOf, STANDING_TUPLE_TEXT } from './standing.js';
+import { isKernelPrincipal, standingStatusOf, STANDING_TUPLE_TEXT } from './standing.js';
 import { clientBusy, clientOf } from './voice-client.js';
 import { canAttach, voiceStatusOf, VOICE_TITLE } from './voice.js';
 
@@ -110,7 +110,7 @@ export interface UnlockSeen {
  * `daemon.start` clears (a new kernel holds no unlock). Only kernel-principal rows for this connection or this
  * device (scope 'device') count; anything else is ignored. Never a guess of "unlocked" from anything else.
  */
-export function unlockSeenOf(rows: Iterable<{ kind: string; at?: string; principal?: string; payload?: unknown }>, connId: string | null): UnlockSeen {
+export function unlockSeenOf(rows: Iterable<{ kind: string; at?: string; principal?: string; payload?: unknown }>, connId: string | null, kernel?: string | null): UnlockSeen {
   let out: UnlockSeen = { state: 'none', at: null, reason: null };
   for (const r of rows) {
     if (r.kind === 'daemon.start') {
@@ -118,7 +118,7 @@ export function unlockSeenOf(rows: Iterable<{ kind: string; at?: string; princip
       continue;
     }
     if (r.kind !== 'approval.unlock' && r.kind !== 'approval.unlock.dropped') continue;
-    if (typeof r.principal !== 'string' || !KERNEL_PRINCIPAL.test(r.principal)) continue;
+    if (!isKernelPrincipal(r.principal, kernel)) continue; // Aegis L1: the connected home's kernel only
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
     if (!(p.scope === 'device' || (connId !== null && p.connId === connId))) continue;
     out = r.kind === 'approval.unlock' ? { state: 'open', at: r.at ?? null, reason: null } : { state: 'ended', at: r.at ?? null, reason: typeof p.reason === 'string' ? p.reason : null };
@@ -260,7 +260,7 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
     kind: 'readonly',
     id: 'unlock',
     label: 'Touch ID unlock',
-    value: u.state === 'open' ? `active since ${u.at ? fmt(u.at) : 'this login'}, until the screen locks` : u.state === 'ended' ? `ended${u.at ? ` ${fmt(u.at)}` : ''}${u.reason ? ` (${u.reason})` : ''}: the next card asks for Touch ID` : 'none seen on this page: the next card asks for Touch ID',
+    value: u.state === 'open' ? `active since ${u.at ? fmt(u.at) : 'this login'}, until the screen locks` : u.state === 'ended' ? `ended${u.at ? ` ${fmt(u.at)}` : ''}${u.reason ? ` (${u.reason})` : ''}` : 'no unlock seen since this page connected', // Aegis M1: never a claim about the next card
     how: `Kernel-owned. ${UNLOCK_BOUNDS_TEXT} Lock the screen to end it now.`,
   });
 

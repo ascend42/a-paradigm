@@ -28,6 +28,8 @@ export interface StandingFeedDeps {
   /** the focused session's repo key (the grant's repo), or null */
   focusRepo: () => string | null;
   notice: (msg: string | null, fail?: boolean) => void;
+  /** Aegis L1: the kernel principal of the connected home (core/standing.ts kernelPrincipalOf), or null */
+  kernelPrincipal: () => string | null;
 }
 
 export interface StandingFeed {
@@ -44,7 +46,7 @@ export function mountStandingFeed(doc: Document, d: StandingFeedDeps): StandingF
   toasts.setAttribute('role', 'status');
   const offer = doc.createElement('button');
   offer.type = 'button';
-  offer.className = 'key standing-offer';
+  offer.className = 'standing-offer';
   offer.textContent = 'Let Gnomon handle these today';
   offer.title = 'One password now; mode switches, "always" rules, voice and same-build restarts then just notify you here until the screen locks';
   offer.hidden = true;
@@ -138,7 +140,7 @@ export function mountStandingFeed(doc: Document, d: StandingFeedDeps): StandingF
 
   return {
     row(r) {
-      const i = feedItemOf(r);
+      const i = feedItemOf(r, d.kernelPrincipal());
       if (!i) return;
       items.push(i);
       if (items.length > MAX_ITEMS) items.shift();

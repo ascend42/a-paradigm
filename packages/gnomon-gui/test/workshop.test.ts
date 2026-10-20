@@ -178,7 +178,7 @@ describe('S5 Workshop region and placement', () => {
     expect(html).toContain('<aside id="workshop-col" class="workshop-col"');
     expect(html).not.toContain('pane-shuttle');
     expect(app).toMatch(/const place: WorkshopPlace = narrowQ\.matches \? 'footer' : layout\.workshop;/);
-    expect(app).toMatch(/\$\('status-line'\)\.addEventListener\('click', \(\) => run\('view\.kernel-feed'\)\)/);
+    expect(app).toMatch(/\$\('status-line'\)\.addEventListener\('click', \(e\) => run\('view\.kernel-feed', e\.isTrusted\)\)/);
     const mount = readFileSync(path.join(ROOT, 'src', 'ui', 'mod-panels-mount.ts'), 'utf8');
     expect(mount).toContain("workshop: { id: 'mod-slot-workshop', parent: 'workshop-host' }");
   });

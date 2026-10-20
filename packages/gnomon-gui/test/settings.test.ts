@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, resolveTheme } from '../src/core/commands.js';
 import { MOTION_KEY, parseMotion, parseTheme, SETTINGS_RUNS, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf, type SettingRow, type SettingsInput } from '../src/core/settings.js';
 import type { SessionModeView } from '../src/core/modes.js';
+import { feedItemOf, isKernelPrincipal, kernelPrincipalOf } from '../src/core/standing.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
@@ -157,5 +158,45 @@ describe('#gui-settings opens from ⚙, ⌘, and the palette', () => {
     expect(app).toMatch(/e\.key === 'Escape' && settings\.isOpen\(\)\) \{\s*settings\.close\(\);/);
     expect(html).toMatch(/id="settings" class="overlay" hidden/);
     expect(html).toMatch(/role="dialog" aria-modal="true" aria-labelledby="settings-title"/);
+  });
+});
+
+describe('#gui-settings Aegis fixes (M1, M2, L1, L2/L3)', () => {
+  it('M1: with no unlock seen the row claims nothing about the next card', () => {
+    const r = rows(input({ unlock: { state: 'none', at: null, reason: null } })).find((x) => x.id === 'unlock');
+    expect(r).toMatchObject({ kind: 'readonly', value: 'no unlock seen since this page connected' });
+    for (const u of [{ state: 'none' as const, at: null, reason: null }, { state: 'ended' as const, at: 't', reason: 'screen-lock' }]) {
+      const x = rows(input({ unlock: u })).find((y) => y.id === 'unlock');
+      if (x?.kind === 'readonly') expect(x.value).not.toMatch(/next card/);
+    }
+  });
+  it('L1: kernel rows are pinned to the connected home kernel principal', () => {
+    expect(kernelPrincipalOf('p:7k2m9q4x/matt')).toBe(K);
+    expect(kernelPrincipalOf(null)).toBeNull();
+    expect(isKernelPrincipal('p:aaaaaaaa/kernel', K)).toBe(false);
+    expect(isKernelPrincipal(K, K)).toBe(true);
+    expect(isKernelPrincipal(K, null)).toBe(false);
+    const row = { kind: 'approval.unlock', principal: 'p:aaaaaaaa/kernel', payload: { scope: 'device' } };
+    expect(unlockSeenOf([row], 'conn:A', K).state).toBe('none');
+    expect(unlockSeenOf([{ ...row, principal: K }], 'conn:A', K).state).toBe('open');
+    const used = { seq: 5, kind: 'grant.standing.used', payload: { grantId: 'sg:1', tuple: 'voice.widen' } };
+    expect(feedItemOf({ ...used, principal: 'p:aaaaaaaa/kernel' }, K)).toBeNull();
+    expect(feedItemOf({ ...used, principal: K }, K)).not.toBeNull();
+    expect(app).toMatch(/kernelPrincipal: \(\) => kernelPrincipalOf\(session\?\.principal\)/);
+  });
+  it('L2/L3: the theme switch checks isTrusted and run() takes the gesture trust (never hard-coded true for palette paths)', () => {
+    expect(app).toMatch(/if \(b && e\.isTrusted && b\.dataset\.run!\.startsWith\('theme\.'\)\)/);
+    expect(app).toMatch(/function run\(id: string, trusted: boolean\)/);
+    expect(app).toMatch(/return run\(palItems\[palSel\]!\.id, e\.isTrusted\)/);
+    expect(app).toMatch(/if \(r\) run\(r\.dataset\.id!, e\.isTrusted\)/);
+    expect(app).not.toMatch(/setMode\([^)]*'(repo|session)', true\)|voiceClientOp\('(start|stop)', true\)/);
+  });
+  it('M2: the standing feed sits under overlays, hides while a dialog is open, its offer is not a key, the pile reserves room', () => {
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(css).toMatch(/\.overlay \{ z-index: 40; \}/);
+    expect(css).toMatch(/\.standing-feed \{[^}]*z-index: 15;/);
+    expect(css).toMatch(/body:has\(\.overlay:not\(\[hidden\]\)\) \.standing-feed/);
+    expect(css).toMatch(/\.pile \{ padding-bottom: 140px; \}/);
+    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'standing-feed.ts'), 'utf8')).toContain("offer.className = 'standing-offer';");
   });
 });
