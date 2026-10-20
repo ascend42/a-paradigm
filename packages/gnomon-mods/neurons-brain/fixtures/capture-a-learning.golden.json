@@ -1,0 +1,20 @@
+{
+  "offer": {
+    "mod": "neurons-brain",
+    "kind": "capture-a-learning",
+    "question": "Should I save this measurement as a first-hand note in your brain?"
+  },
+  "body": "The benchmark shows the cold start drops from 840 ms to 210 ms once the index is memory-mapped, measured three times on this machine.",
+  "shown": {
+    "mod": "neurons-brain",
+    "kind": "capture-a-learning",
+    "phase": "synthesize",
+    "title": "Note what we just learned",
+    "contextIn": [
+      "recent-messages",
+      "repo-path"
+    ],
+    "question": "Should I save this measurement as a first-hand note in your brain?",
+    "handoffTool": "source_note"
+  }
+}

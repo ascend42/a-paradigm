@@ -1,0 +1,60 @@
+{
+  "manifest": 1,
+  "kind": "mod",
+  "name": "constellation",
+  "version": "1.0.0",
+  "abi": "mod-abi:v1",
+  "description": "Constellation: the idea map as a Desk mod. Offers to map an idea on the board, to summarize the session, and to turn a repeated step into an automation, through the local Constellation MCP server.",
+  "provides": {
+    "mcp": [
+      {
+        "name": "constellation",
+        "command": "constellation-mcp",
+        "args": [],
+        "config": { "command": true, "args": true, "env": ["CONSTELLATION_NO_AUTOSTART"] }
+      }
+    ],
+    "offers": [
+      {
+        "kind": "map-the-idea",
+        "phase": "diverge",
+        "title": "Map this on the board",
+        "summary": "Lay the ideas in play out as stars and beams on the Constellation map of the active session, so the options and their links are visible side by side.",
+        "contextIn": ["recent-messages", "session-summary"],
+        "resultOut": "map-ops",
+        "reach": "mcp",
+        "handoffTool": "apply",
+        "related": ["summarize-the-session"],
+        "restraint": "Not for a single linear task, a quick fix or a yes/no question; only when several ideas or options are on the table."
+      },
+      {
+        "kind": "summarize-the-session",
+        "phase": "synthesize",
+        "title": "Write the session summary",
+        "summary": "Read the session outline, then save a short written summary of what changed and what was decided to the Constellation session.",
+        "contextIn": ["session-summary", "recent-messages"],
+        "resultOut": "session-summary",
+        "reach": "mcp",
+        "handoffTool": "summarize",
+        "related": ["map-the-idea"],
+        "restraint": "Only at a natural stopping point with real progress; not mid-task and not twice in one stretch of work."
+      },
+      {
+        "kind": "automate-this",
+        "phase": "commit",
+        "title": "Turn this into an automation",
+        "summary": "Save the step just done by hand as a Constellation automation (a schedule, a map event or a manual trigger), checking the list first so it updates instead of duplicating.",
+        "contextIn": ["recent-messages"],
+        "resultOut": "automation-id",
+        "reach": "mcp",
+        "handoffTool": "automation_save",
+        "related": ["summarize-the-session"],
+        "restraint": "Only for a step the user has repeated or asked to repeat; never a one-off, and never anything that spends money or posts publicly unasked."
+      }
+    ],
+    "skills": [
+      { "name": "constellation-desk", "path": "skills/constellation-desk/SKILL.md" }
+    ]
+  },
+  "requires": { "egress": "none" }
+}
