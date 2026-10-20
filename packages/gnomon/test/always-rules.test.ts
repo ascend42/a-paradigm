@@ -321,6 +321,32 @@ describe('#rules-cli: `gnomon rules list` reads a VERIFIED log', () => {
     const bad = io();
     expect(await runRulesCommand(['list', 'relative/home'], bad.io)).toBe(64);
   });
+
+  it('lists a prefix rule (TD-2026-10-20-294) with its match and words, and the json carries match + prefix', async () => {
+    const t = tempHome('rules-prefix-');
+    homes.push(t.cleanup);
+    const KERNEL = kernelPrincipalOf();
+    const key = SoftwareEd25519Signer.generate('kernel');
+    recordKernelPub(t.home, key.publicKeyPem);
+    const ring = new KeyRing();
+    ring.addEd25519(key.publicKeyPem);
+    const log = openKernelLog({ home: t.home, kernelPrincipal: KERNEL, signer: key, keyRing: ring });
+    logs.push(log);
+    const cid = card(7);
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [
+      { kind: 'approval.request', payload: { card: { cardId: cid, kind: 'permission' }, tool: 'Bash', tool_input: { command: 'git log -n 5' } } },
+      { kind: 'approval.decide', payload: { cardId: cid, decision: 'always', scope: { kind: 'prefix', prefix: ['git', 'log'] } } },
+      { kind: 'approval.rule.learned', payload: { cardId: cid, tool: 'Bash', match: 'prefix', prefix: ['git', 'log'], presence: 'fresh', repoKey: REPO } },
+    ];
+    for (const r of rows) await log.append({ kind: r.kind, principal: KERNEL, payload: r.payload });
+    await log.close();
+    const j = io();
+    expect(await runRulesCommand(['list', t.home, '--json'], j.io)).toBe(0);
+    expect((JSON.parse(j.out.join('')) as { rules: unknown[] }).rules).toEqual([expect.objectContaining({ ruleId: cid, match: 'prefix', prefix: ['git', 'log'], tool: 'Bash', repoKey: REPO })]);
+    const txt = io();
+    expect(await runRulesCommand(['list', t.home], txt.io)).toBe(0);
+    expect(txt.out.join('')).toContain('prefix: git log …');
+  });
 });
 
 describe('#rules-cli: `gnomon rules revoke` end to end (running daemon, human device)', () => {
