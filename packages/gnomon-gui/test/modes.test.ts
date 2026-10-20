@@ -136,6 +136,14 @@ describe('run modes in the transcript: what auto-edits passed is shown inline', 
       ['auto', 'auto-approved · Write (always rule)'],
     ]);
   });
+  it('Aegis (fidelity 2): hiding the bookkeeping rows never hides a run-mode change; the raw view lists it too', () => {
+    const { items, hidden } = chatItems(rows);
+    expect(hidden).toBe(1); // session.open only
+    expect(items.some((i) => i.role === 'system' && i.text.startsWith('run mode ask → auto-edits'))).toBe(true);
+    const raw = chatItems(rows, { raw: true }).items;
+    expect(raw.map((i) => i.role)).toEqual(['raw', 'raw', 'raw', 'raw']);
+    expect(raw[1]!.text).toContain('approval.mode.set');
+  });
   it('the store flags `modes` on a mode or session row, so the page re-reads status (no polling)', () => {
     const s = new GuiStore();
     const wire = (r: Row) => ({ seq: r.seq, view: 'full', event: { kind: r.kind, session: r.session, payload: r.payload } }); // log.read's row shape
