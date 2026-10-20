@@ -386,6 +386,35 @@ components:
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+  gui-preview:
+    description: >-
+      #gui-preview (DEV ONLY; never in the kernel-served bundle) - the GUI
+      fixture preview for designers and agents. scripts/preview.mjs serves
+      the REAL static/index.html, boot.js and styles.css on 127.0.0.1 only
+      (default port 8790, loopback Host check) with an app.js bundled from
+      src/preview/main.ts: the real ui/app.ts and core run over a fake
+      kernel Transport (src/preview/fake-kernel.ts) that answers hello with a
+      real Ed25519 serverSig from a per-page throwaway WebCrypto key, auth,
+      status, log.read (backlog + follow), approve (emits approval.decide),
+      log.append and session.send (no effect), and refuses session.open.
+      Card actions are signed with the same key, so the real GUI verifies
+      and renders the decision keys. Fixtures (src/preview/fixtures.ts:
+      contracts LogRow chains of registered kinds plus the status result;
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop) are
+      chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
+      src/preview/env.ts stubs only the colour-scheme and reduced-motion
+      media queries and the wrapper surface marker. The workshop fixture runs
+      the real Workshop mod model (packages/gnomon-mods/workshop/model.mjs)
+      over the feed projection and draws it with renderBlock. / lists every
+      fixture x theme; --fixture-list prints the URLs.
+      scripts/preview-shots.mjs writes <fixture>-<theme>.png at 1440x900 with
+      Playwright or Puppeteer when one is already installed (none is added),
+      or an installed Chrome with --chrome; otherwise it skips.
+    path: src/preview/
+    type: module
+    tags: [gnomon, gui, dev-tool, preview]
+    tests:
+      - test/preview.test.ts
   gui-table-talk:
     description: >-
       #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
