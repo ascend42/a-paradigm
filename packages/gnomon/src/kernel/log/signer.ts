@@ -51,6 +51,7 @@ import {
   AUTH_SERVER_DOMAIN,
   AUTH_TOKEN_DOMAIN,
   DECISION_SIG_V2_DECISIONS,
+  DECISION_SIG_V2_SCOPED_DECISIONS,
   decisionMessageV2,
   KEY_ID_PATTERN,
 } from '@a-company/gnomon-contracts';
@@ -155,7 +156,14 @@ export function decisionMessage(f: {
   cardContentHash: string;
   approverPrincipalId: string;
   answerDigest?: string;
+  /** TD-2026-10-20-294: a prefix-scoped `always` signs v2 with the scope digest as its last line */
+  scopeDigest?: string;
 }): string {
+  if (f.scopeDigest !== undefined) {
+    if (!(DECISION_SIG_V2_SCOPED_DECISIONS as readonly string[]).includes(f.decision) || f.answerDigest !== undefined) throw new Error(`#kernel-log: a ${f.decision} decisionSig carries no scopeDigest`);
+    if (!/^sha256:[0-9a-f]{64}$/.test(f.scopeDigest)) throw new Error('#kernel-log: a scoped always decisionSig (v2) needs a scopeDigest sha256:<hex>');
+    return decisionMessageV2({ cardId: f.cardId, decision: f.decision, cardContentHash: f.cardContentHash, approverPrincipalId: f.approverPrincipalId, answerDigest: f.scopeDigest });
+  }
   if (usesDecisionV2(f.decision)) {
     if (typeof f.answerDigest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(f.answerDigest)) {
       throw new Error(`#kernel-log: a ${f.decision} decisionSig (v2) needs an answerDigest sha256:<hex>`);
