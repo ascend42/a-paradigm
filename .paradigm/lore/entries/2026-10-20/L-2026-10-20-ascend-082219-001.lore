@@ -1,0 +1,34 @@
+id: L-2026-10-20-ascend-082219-001
+type: agent-session
+timestamp: '2026-10-20T08:22:19.731Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: GUI slice S2 (desk structure) landed on the design branch; screenshots look close to the comp
+summary: |-
+  701ceca7 plus 32e852a9 (with a feat/gnomon merge between them):
+  - one shared project hue;
+  - sessions named from the first message, grouped by project, with Active and Past collapsed under counts;
+  - a quiet centre (the kernel feed moved to ⌘K);
+  - the user message right-aligned;
+  - tool calls folded into "▸ 13:58–14:06 · read 6 files · ran 2 commands";
+  - safe markdown (bold and inline code render);
+  - the PENDING IN THIS SESSION label;
+  - header palette field and Layout button; "+ New session ⌘N".
+  Also on the design branch: 1b0b5999, the Aegis S1 lows. Gaps I found in shots-s2: the failed session is missing from Active; the header overflows at 1440; "took" is measured from the session start. S3 next: card anatomy and the paper pile.
+symbols_touched:
+  - '#gui'
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+linked_commits:
+  - 701ceca7
+  - 32e852a9
+  - 1b0b5999
+git_context:
+  ref: 744946df90112d93d1ee94906f9f2d6631862270
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-082945-001
+type: agent-session
+timestamp: '2026-10-20T08:29:45.969Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: GUI slices S2 fixes + S3 (card layout and paper pile) built; the desk now reads like the Atelier comp
+summary: |-
+  a24ee67b + ab77592c:
+  - Failed sessions stay in Active in vermilion; the header no longer clips (the raw toggle is now a short key).
+  - "took" was already correct: the fixture data's gap is 7m 55s, and the comp's 41s is a comp value.
+  - Card layout: a ■ project · kind · voice-tag head; a title promoted from the first Text line (claim-mismatch cards exempt); raised/waiting; the contentHash kept last; a 4px state edge; a folded-paper shadow by day and a rule by night.
+  - The pile overlaps by 64px with CSS-class rotations, fans on hover AND focus-within, and shows +n more past 6.
+  - projectHue lives in gnomon-contracts and is shared by the kernel feed and the GUI.
+  - Tests: gui 287, contracts 455, gnomon 2386.
+  - G-LOG-04 perf flaked under machine load (0.2% of appends >5 ms vs 0.1%); worth watching.
+  Shots in scratchpad/shots-s3 match the comp's pile; the night fan is clean. Aegis review launched; S4 (motion) and S5 (Workshop mount) next.
+symbols_touched:
+  - '#gui'
+  - '#contract-project-hue'
+  - '#mod-host'
+learnings:
+  - Perf gates (G-LOG-04 tail latency) flake when several builders load the machine; rerun perf alone before trusting a failure.
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+linked_commits:
+  - a24ee67b
+  - ab77592c
+git_context:
+  ref: 4d0ec8d0dd822989b3af520a0634318c1a8c2dc2
+  branch: feat/gnomon
+  dirty: true
