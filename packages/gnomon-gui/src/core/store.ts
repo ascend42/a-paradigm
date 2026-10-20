@@ -499,15 +499,11 @@ export function replyParts(body: string): ReplyPart[] {
   return out;
 }
 
-/** The human's own text of a replayed user message: the FIRST text block (a second one is the table-talk guidance). */
-function firstTextOf(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  for (const c of content) {
-    const x = objOf(c);
-    if (x?.type === 'text' && typeof x.text === 'string') return x.text;
-  }
-  return '';
+const GUIDANCE_BLOCK = /^<gnomon-voice>[\s\S]*<\/gnomon-voice>$/;
+/** The human's own text of a replayed user message: its text blocks without the table-talk `<gnomon-voice>` guidance block. */
+function humanTextOf(content: unknown): string {
+  if (!Array.isArray(content)) return textOf(content);
+  return textOf(content.filter((c) => !(objOf(c)?.type === 'text' && GUIDANCE_BLOCK.test(String(objOf(c)?.text ?? '').trim()))));
 }
 
 /** One turn.event line as chat items (none = noise: hooks, partials, rate limits, status, control frames, tool results). */
@@ -537,7 +533,7 @@ function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text' | 'said'>
   // the user's own message as claude replays it (--replay-user-messages): the only row that carries its text
   // (session.inject / turn.sent log a hash and a byte count, never the text — G-LOG-03)
   if (m.type === 'user' && msg) {
-    const text = firstTextOf(msg.content);
+    const text = humanTextOf(msg.content);
     return text.trim() ? [{ role: 'user', text: cap(text, CHAT_TEXT_MAX) }] : [];
   }
   return [];
@@ -711,8 +707,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const items: ChatItem[] = [];
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice'] }): void => {
-    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}) });
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string }): void => {
+    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said } : {}) });
   };
   // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
   const voiceEcho = new Map<number, string>();
