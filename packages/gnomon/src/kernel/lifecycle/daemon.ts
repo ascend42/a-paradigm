@@ -86,6 +86,7 @@ import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
 import { loadFuseConfig } from '../budget/config.js';
 import { fileLayers } from '../budget/billing.js';
+import { rmSync } from 'node:fs';
 import * as path from 'node:path';
 import { completePendingQuarantine, readBootSession, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
@@ -455,6 +456,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
 
   const kernelSigner = opts.kernelSigner ?? SoftwareEd25519Signer.generate('kernel');
+  // T-2026-10-20-001 (Aegis H1): a remembered web port is NOT kept. A port reused across a stop/start lets a local
+  // process squat it while the kernel is down, so a reloaded stale tab would load ITS page (and service worker) at the
+  // origin the next launch URL opens into. Every plain start binds an OS-chosen port; a web-port.json left by the
+  // withdrawn 945349a3 build is deleted, never read. (The upgrade successor keeps its inherited fd, TD-2026-10-19-063.)
+  try {
+    rmSync(path.join(home, 'web-port.json'), { force: true });
+  } catch {
+    /* best effort: the file is never read */
+  }
   const kernelKeySource = opts.kernelSigner ? 'supplied-software' : 'ephemeral-software';
   const authority = opts.rootAuthority ?? new UnprovisionedRootAuthority();
   const kernelPrincipal = kernelPrincipalOf(authority);
@@ -993,6 +1003,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     clientStatus: () => voiceChild.status(),
     reportStatus: () => voiceReports.status(),
+    // Aegis M1 (T-2026-10-20-005): the kernel's acceptances cross-check the client's capture claims
+    onAccepted: (connId, kind) => voiceReports.accepted(connId, kind),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
@@ -1056,7 +1068,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     voiceClient: {
       start: () => voiceChild.start(),
       stop: () => voiceChild.stop(),
-      connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
+      connectionClosed: (connId: string) => {
+        voiceReports.connectionClosed(connId); // Aegis L3: the closed connection's capture slot goes with it
+        voiceChild.connectionClosed(connId);
+      },
       enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
       forget: (p: { name: string }) => voiceEnrol.forget(p),
       report: (p: unknown, connId?: string) => voiceReports.report(p, connId),

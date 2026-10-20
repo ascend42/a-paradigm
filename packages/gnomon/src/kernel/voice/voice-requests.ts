@@ -19,6 +19,13 @@
  *                                       as status.voice.dictation{activity, holdToggles, at}. In memory only.
  *   request.voice.report{playback}      T-2026-10-19-026: the client's spoken-reply edges {playing: boolean}, relayed
  *                                       as status.voice.playback{playing, at} (the GUI's ⏹ Stop speaking). In memory.
+ *   request.voice.report{capture}       T-2026-10-20-005 A1 (TD-2026-10-20-086): the client's per-segment capture state
+ *                                       {state: idle | hearing | transcribing | captured | dropped, segId, reason?
+ *                                       (dropped only, closed CAPTURE_DROP_REASONS), level? (hearing only, 0..1)},
+ *                                       relayed as status.voice.capture{…, at} with the SHORT VOICE_CAPTURE_TTL_MS so a
+ *                                       crashed client never leaves "hearing" lit. In memory only, no text (A1).
+ *                                       V2 seam: the later partial text (B) is projected to the gui credential only
+ *                                       by voiceStatusFor (dispatch.ts status), never to device, voice or any other.
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
@@ -44,6 +51,53 @@ export interface DictationReport {
 export interface PlaybackReport {
   playing: boolean;
   at: string;
+}
+
+/** T-2026-10-20-005 A1: the client's per-segment capture states and drop reasons (closed; mirrors gnomon-voice). */
+export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
+export type CaptureState = (typeof CAPTURE_STATES)[number];
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
+export interface CaptureReport {
+  state: CaptureState;
+  /** the client's opaque segment id */
+  segId: string;
+  /** dropped only */
+  reason?: CaptureDropReason;
+  /** hearing only: the measured mic level, 0..1 (A2) */
+  level?: number;
+  /** Aegis M1: on a terminal state, the state is the voice app's claim ('client'); the kernel's cross-check is `kernel` */
+  claim?: 'client';
+  /**
+   * Aegis M1: what the kernel saw on this voice connection in the window. 'accepted': it accepted a turn (or a direct
+   * send) and the state shown is captured, whatever the client said; 'unconfirmed': the client said captured and the
+   * kernel accepted nothing.
+   */
+  kernel?: 'accepted' | 'unconfirmed';
+  /** Aegis M1: the client's own drop reason when the kernel overrode it to captured */
+  clientReason?: CaptureDropReason;
+  at: string;
+}
+/** Aegis M1: a kernel acceptance is matched to a terminal capture report within this window */
+export const VOICE_CAPTURE_ACCEPT_WINDOW_MS = 5_000;
+/** status.voice.capture goes stale this fast: a crashed client never leaves "hearing" lit (the client re-reports ≤ 1 s) */
+export const VOICE_CAPTURE_TTL_MS = 5_000;
+const SEG_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const CAPTURE_KEYS = ['state', 'segId', 'reason', 'level'];
+/** the fields status.voice.capture may carry (the kernel's own cross-check fields included) */
+const CAPTURE_STATUS_KEYS = [...CAPTURE_KEYS, 'claim', 'kernel', 'clientReason', 'at'];
+
+/**
+ * The status.voice view for one connection. V2 (TD-2026-10-20-086) seam: when B adds partial words to the capture
+ * (`capture.text`), they are kept for a HUMAN-class connection on the `gui` credential only (Aegis L1); every other
+ * class or credential (device, voice, read token) gets the capture without them. A1 carries no text, so today this
+ * only enforces the field allow-list.
+ */
+export function voiceStatusFor(voice: Record<string, unknown>, credential: string | undefined, cls?: string): Record<string, unknown> {
+  const c = voice.capture as Record<string, unknown> | null | undefined;
+  if (!c || typeof c !== 'object') return voice;
+  const allowed = cls === 'human' && credential === 'gui' ? [...CAPTURE_STATUS_KEYS, 'text'] : CAPTURE_STATUS_KEYS;
+  return { ...voice, capture: Object.fromEntries(Object.entries(c).filter(([k]) => allowed.includes(k))) };
 }
 
 export const ENROL_PHASES = ['ready', 'recording', 'recorded', 'done', 'failed', 'cancelled'] as const;
@@ -78,6 +132,11 @@ export class VoiceReports {
   #notice: { text: string; code?: string; at: string } | null = null;
   #dictation: DictationReport | null = null;
   #playback: PlaybackReport | null = null;
+  #capture: CaptureReport | null = null;
+  /** Aegis L3: the voice connection that reported the capture slot (cleared when it closes) */
+  #captureConn: string | undefined;
+  /** Aegis M1: the kernel's acceptances on each voice connection, not yet matched to a terminal capture report */
+  #accepted: Array<{ connId: string; kind: 'turn' | 'send'; at: number }> = [];
   /** the human's ⏹ Stop speaking presses (request.voice.client{op:'stop-speaking'}); the client acts on a change */
   #stopSpeakingSeq = 0;
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
@@ -90,10 +149,11 @@ export class VoiceReports {
 
   /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
   report(p: unknown, connId?: string): { ok: true } {
-    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?}`;
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?}`;
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice' && k !== 'dictation' && k !== 'playback') || (o.enrolment === undefined && o.notice === undefined && o.dictation === undefined && o.playback === undefined)) throw bad(shape);
+    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture'];
+    if (Object.keys(o).some((k) => !keys.includes(k)) || keys.every((k) => o[k] === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
     if (o.enrolment !== undefined) {
@@ -128,6 +188,21 @@ export class VoiceReports {
       if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => k !== 'playing') || typeof b.playing !== 'boolean') throw bad('playback is {playing: boolean}');
       playback = { playing: b.playing, at };
     }
+    let capture: CaptureReport | undefined;
+    if (o.capture !== undefined) {
+      const c = o.capture as Record<string, unknown> | null;
+      if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).some((k) => !CAPTURE_KEYS.includes(k))) throw bad('capture is {state, segId, reason?, level?}');
+      if (!(CAPTURE_STATES as readonly unknown[]).includes(c.state)) throw bad(`capture.state is ${CAPTURE_STATES.join(' | ')}`);
+      if (typeof c.segId !== 'string' || !SEG_ID.test(c.segId)) throw bad('capture.segId is ≤ 32 of [a-z0-9-]');
+      if (c.state === 'dropped' ? !(CAPTURE_DROP_REASONS as readonly unknown[]).includes(c.reason) : c.reason !== undefined) throw bad(`capture.reason is ${CAPTURE_DROP_REASONS.join(' | ')}, on dropped only`);
+      if (c.level !== undefined && (c.state !== 'hearing' || typeof c.level !== 'number' || !Number.isFinite(c.level) || c.level < 0 || c.level > 1)) throw bad('capture.level is 0..1, on hearing only');
+      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), at };
+      capture = this.#crossCheck(capture, connId);
+    }
+    if (capture) {
+      this.#capture = capture;
+      this.#captureConn = connId;
+    }
     if (playback) this.#playback = playback;
     if (enrolment) this.#enrolment = enrolment;
     if (notice) this.#notice = notice;
@@ -136,6 +211,55 @@ export class VoiceReports {
       this.#dictationConn = connId;
     }
     return { ok: true };
+  }
+
+  /**
+   * Aegis M1: the kernel accepted a voice.turn.user (not refused, not intercepted) or a direct session.send on this
+   * voice connection. A later terminal capture report on the same connection is checked against it.
+   */
+  accepted(connId: string, kind: 'turn' | 'send'): void {
+    this.#accepted.push({ connId, kind, at: this.#now() });
+    if (this.#accepted.length > 16) this.#accepted.splice(0, this.#accepted.length - 16);
+  }
+
+  /** Aegis L3: a voice connection closed: its capture slot and its unmatched acceptances go with it. */
+  connectionClosed(connId: string): void {
+    if (this.#captureConn === connId) {
+      this.#capture = null;
+      this.#captureConn = undefined;
+    }
+    this.#accepted = this.#accepted.filter((a) => a.connId !== connId);
+  }
+
+  /** Take (consume) this connection's freshest unmatched acceptance of `kinds` inside the window. */
+  #take(connId: string | undefined, kinds: ReadonlyArray<'turn' | 'send'>): boolean {
+    const now = this.#now();
+    this.#accepted = this.#accepted.filter((a) => now - a.at <= VOICE_CAPTURE_ACCEPT_WINDOW_MS);
+    for (let i = this.#accepted.length - 1; i >= 0; i--) {
+      const a = this.#accepted[i]!;
+      if (a.connId === connId && kinds.includes(a.kind)) {
+        this.#accepted.splice(i, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Aegis M1: a compromised client cannot mask a delivered turn. A terminal state is marked claim:'client'. A drop the
+   * kernel contradicts (it accepted the turn, or for 'refused' it accepted the send) is shown as captured with
+   * kernel:'accepted' and the client's reason kept as clientReason; a captured with no acceptance is kernel:'unconfirmed'.
+   */
+  #crossCheck(c: CaptureReport, connId: string | undefined): CaptureReport {
+    if (c.state === 'captured') return { ...c, claim: 'client', kernel: this.#take(connId, ['turn', 'send']) ? 'accepted' : 'unconfirmed' };
+    if (c.state === 'dropped') {
+      // 'refused' after a logged turn is a real refusal of the send: the turn's acceptance is matched (consumed) to it
+      const contradicted = c.reason === 'refused' ? this.#take(connId, ['send']) || (this.#take(connId, ['turn']) && false) : this.#take(connId, ['turn', 'send']);
+      if (contradicted) return { state: 'captured', segId: c.segId, claim: 'client', kernel: 'accepted', clientReason: c.reason!, at: c.at };
+      return { ...c, claim: 'client' };
+    }
+    if (c.state === 'idle') return { ...c, claim: 'client' };
+    return c;
   }
 
   /** request.voice.client{op:'stop-speaking'} (human only): one more stop for the client to act on. */
@@ -150,9 +274,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; stopSpeakingSeq: number } {
-    const fresh = <T extends { at: string }>(x: T | null): T | null => (x && this.#now() - Date.parse(x.at) <= VOICE_REPORT_TTL_MS ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), stopSpeakingSeq: this.#stopSpeakingSeq };
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; stopSpeakingSeq: number } {
+    const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), stopSpeakingSeq: this.#stopSpeakingSeq };
   }
 }
 

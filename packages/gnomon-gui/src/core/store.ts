@@ -401,12 +401,11 @@ export function turnEventSummary(line: string, type: string | null): string {
 
 /** How one transcript item reads: the user's message, the assistant's text, a tool call, a card, the turn result, a lifecycle note, an error, or a raw row. */
 /**
- * V2d voice roles: `user` with `speaker` set is a voice turn sent to the session (🎙 <speaker>); `voice-partial` is
- * the voice app's in-progress text (grey); `voice-heard` a turn heard but not sent (handled as a decision/control,
+ * V2d voice roles: `user` with `speaker` set is a voice turn sent to the session (🎙 <speaker>); `voice-heard` a turn heard but not sent (handled as a decision/control,
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-partial' | 'voice-heard' | 'voice-refused' | 'spoken';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-heard' | 'voice-refused' | 'spoken';
 
 export interface ChatItem {
   /** Stable per row (and part): `seq` or `seq.part`. */
@@ -598,6 +597,11 @@ function resultText(p: Record<string, unknown>): string {
   return parts.join(' · ');
 }
 
+/**
+ * T-2026-10-20-005: there is no partial-text row. voice.turn.partial is not a registered kind and the kernel stores no
+ * partial voice.turn.user; live words (phase B) come through status.voice.capture to the gui credential only
+ * (core/capture.ts), never through the log. A row claiming to be partial is hidden.
+ */
 function isPartial(r: Row, p: Record<string, unknown> | null): boolean {
   return r.kind === 'voice.turn.partial' || (r.kind === 'voice.turn.user' && p?.partial === true);
 }
@@ -630,7 +634,7 @@ function citedSeqs(p: Record<string, unknown> | null): number[] {
   return typeof p.voiceTurnSeq === 'number' ? [p.voiceTurnSeq] : [];
 }
 
-type VoiceCtx = { lastPartial: Map<string, number>; finals: Set<string>; shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; editedSeqs: Set<number>; speakable: { n: number } };
+type VoiceCtx = { shownVoiceSeqs: Set<number>; sentSeqs: Set<number>; editedSeqs: Set<number>; speakable: { n: number } };
 function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (Pick<ChatItem, 'role' | 'text'> & { speaker?: string; part?: number; voice?: ChatItem['voice'] }) | null | undefined {
   const isVoiceRefusal = r.kind.endsWith('.refused') && !!p && (p.source === 'voice' || p.gate === 'voice' || (typeof p.reason === 'string' && p.reason.startsWith('voice-')) || (typeof voiceReasonOf(p) === 'string' && voiceReasonOf(p)!.startsWith('voice-')));
   if (isVoiceRefusal) return { role: 'voice-refused', text: `voice turn not sent · ${reasonWithCause(p!, voiceReasonOf(p!) ?? String(p!.reason))}` };
@@ -643,13 +647,9 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
   }
   if (!r.kind.startsWith('voice.')) return undefined;
   if (r.view === 'stub' || r.view === 'oversize' || !p) return null;
-  const tid = typeof p.turnId === 'string' ? p.turnId : null;
   const text = typeof p.text === 'string' ? p.text : '';
   const speaker = speakerName(p.speakerId);
-  if (isPartial(r, p)) {
-    if (!tid || ctx.finals.has(tid) || ctx.lastPartial.get(tid) !== r.seq || !text.trim()) return null;
-    return { role: 'voice-partial', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker };
-  }
+  if (isPartial(r, p)) return null;
   switch (r.kind) {
     case 'voice.turn.user': {
       if (!text.trim()) return null;
@@ -763,9 +763,6 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
   const voiceEcho = new Map<number, string>();
   let editedReplays = 0; // turn.sent{voice-edited} not yet matched by the message's replay (it gets the 🎙✎ mark)
-  // V2d: a partial shows only while it is the latest word on its turn (a later partial or the final replaces it)
-  const lastPartial = new Map<string, number>();
-  const finals = new Set<string>();
   const shownVoiceSeqs = new Set<number>();
   // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
   const sentSeqs = new Set<number>();
@@ -782,10 +779,6 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     }
     if (r.kind === 'turn.sent' && p?.source === 'voice') for (const n of citedSeqs(p)) sentSeqs.add(n);
     if (r.kind === 'turn.sent' && p?.source === 'voice-edited') for (const n of citedSeqs(p)) editedSeqs.add(n);
-    const tid = p && typeof p.turnId === 'string' ? p.turnId : null;
-    if (!tid) continue;
-    if (isPartial(r, p)) lastPartial.set(tid, r.seq);
-    else if (r.kind === 'voice.turn.user') finals.add(tid);
   }
   for (const r of rows) {
     if (r.connId === 'local') {
@@ -832,7 +825,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
         echoes.push(oneLine(cited.map((n) => voiceEcho.get(n)!).join(' ')));
       }
     }
-    const v = voiceItem(r, p, { lastPartial, finals, shownVoiceSeqs, sentSeqs, editedSeqs, speakable });
+    const v = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs, speakable });
     if (v !== undefined) {
       if (v === null) hidden++;
       else {

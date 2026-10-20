@@ -17,6 +17,7 @@ import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contract
 import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, PRESETS, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
+import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
@@ -24,6 +25,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
+import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
@@ -188,7 +190,6 @@ function itemEl(it: FoldedItem): HTMLElement {
   }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
-  if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
     ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
@@ -507,10 +508,7 @@ function schedule(what: Set<string>): void {
       else noticeCard = step.next;
     }
     if (w.has('modes') || w.has('voice')) void refreshStatus();
-    if (w.has('voice-activity')) {
-      kickMeter();
-      watchSpeech();
-    }
+    if (w.has('voice-activity')) watchSpeech();
     paintShuttle();
   });
 }
@@ -533,7 +531,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   try {
     t = await webSocketTransport(endpointPath);
   } catch {
-    return showReconnect('the endpoint is not reachable: run `gnomon` (or `gnomon up`) in a terminal');
+    return showReconnect(staleView('down').text); // #gui-relaunch: never a terminal as the only way back
   }
   const c = new GnomonClient(t);
   const out = await c.connect({ surface: SURFACE, endpointPath, verifyKey: pin.verifyWith, auth, subtle: globalThis.crypto?.subtle });
@@ -569,6 +567,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     void gnomonPost(fetch, '/diag', out.session.guiToken, `protocol error ${r.code} ${r.reason ?? ''} ${r.message}`).catch(() => undefined);
   });
   $('reconnect').hidden = true;
+  staleStop = true;
+  staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
   c.onNotification((method, params) => {
@@ -584,11 +584,15 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   c.onClose(() => {
     client = null;
     session = null;
+    stopStatusPolls();
+    paintCapture(voiceStatusOf(status), false);
     if (restarting(sessionStorage)) return void awaitRestart();
     showReconnect('the connection ended; the GUI session ended with it (D54)');
+    void goStale();
   });
   try {
     status = await c.call<Record<string, unknown>>('status');
+    statusAt = Date.now();
   } catch {
     status = null;
   }
@@ -602,6 +606,41 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   }
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   syncDictationContext();
+}
+
+/* ── #gui-relaunch (T-2026-10-20-001, core/stale.ts): a stale tab after a stop-then-start ── */
+let staleStop = false;
+const reconnectBtn = (): HTMLElement => document.getElementById('reconnect-btn')!;
+let staleCh: BroadcastChannel | null | undefined;
+function staleChannel(): BroadcastChannel | null {
+  if (staleCh === undefined) {
+    staleCh = typeof BroadcastChannel === 'function' ? new BroadcastChannel(STALE_CHANNEL) : null;
+    staleCh?.addEventListener('message', (e) => {
+      const m = parseStaleMsg(e.data);
+      if (m?.t === 'who' && client) staleCh?.postMessage({ t: 'attached' });
+      else if (m?.t === 'attached' && !client && !staleStop) paintStale('reopened');
+    });
+  }
+  return staleCh;
+}
+function paintStale(st: StaleState): void {
+  const v = staleView(st);
+  if (st === 'reopened') staleStop = true;
+  showReconnect(v.text);
+  let close = document.getElementById('reconnect-close');
+  if (!close) {
+    close = h(doc, 'button', { id: 'reconnect-close', class: 'key', type: 'button' }, 'Close this tab') as unknown as HTMLElement;
+    // a user click only; window.close() is allowed for a tab with one history entry, else the text says to continue there
+    close.addEventListener('click', (e) => void (e.isTrusted && window.close()));
+    reconnectBtn().after(close);
+  }
+  close.hidden = v.action !== 'close';
+  reconnectBtn().hidden = v.action === 'close';
+}
+async function goStale(): Promise<void> {
+  staleStop = false;
+  staleChannel()?.postMessage({ t: 'who' });
+  await watchStale({ fetchFn: (u) => fetch(u, { cache: 'no-store' }), origin: location.origin, onState: (st) => paintStale(st), stopped: () => staleStop || !!client });
 }
 
 function showReconnect(why: string): void {
@@ -798,9 +837,11 @@ function paintDictation(): void {
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
 /** The control's state is the kernel's status.runModes only (never a guess): re-read on a mode row (store 'modes'). */
 async function refreshStatus(): Promise<void> {
-  if (!client) return;
+  // Aegis L2 (862ef85a): with no connection a status read cannot happen, so every status poll stops here too
+  if (!client) return stopStatusPolls();
   try {
     status = await client.call<Record<string, unknown>>('status');
+    statusAt = Date.now(); // Aegis L2: the capture overlay ages from here (a failed read keeps the old status)
   } catch {
     /* keep the last status; the control shows what it last knew */
   }
@@ -842,18 +883,42 @@ function syncSpeakPoll(): void {
   }
 }
 let clientPoll: ReturnType<typeof setInterval> | null = null;
+let clientPollMs: number | null = null;
 /**
  * T-2026-10-20-002: the kernel logs no row when the voice app's phase or connection changes, so while voice is
  * attached (or the app is setting up, starting or in a backoff restart) status is re-read every CLIENT_POLL_MS
  * (one read in flight, pollStatusOnce) and the pill never goes stale on a crash loop.
+ * T-2026-10-20-005 V3 (#gui-voice-capture): attached with the voice app connected, the same poll runs at the capture
+ * cadence instead (capturePollMs: ~1 s at rest, ~175 ms while hearing or transcribing); it is re-armed when that changes.
  */
 function syncClientPoll(): void {
   const want = !!client && clientPollWanted(clientOf(status), voiceStatusOf(status).state !== 'off', canAttach(status));
-  if (want && !clientPoll) clientPoll = setInterval(() => void pollStatusOnce(), CLIENT_POLL_MS);
-  else if (!want && clientPoll) {
+  const v = voiceStatusOf(status);
+  const ms = want ? (capturePollMs({ attached: v.state !== 'off', clientConnected: v.clientConnected, attachable: canAttach(status), connected: !!client }, captureStatusOf(status)) ?? CLIENT_POLL_MS) : null;
+  if (clientPoll && ms !== clientPollMs) {
     clearInterval(clientPoll);
     clientPoll = null;
   }
+  if (ms !== null && !clientPoll) {
+    clientPollMs = ms;
+    clientPoll = setInterval(() => void pollStatusOnce(), ms);
+  }
+}
+
+/** Disconnect (Aegis L2, 862ef85a): every status poll and the capture flash timer stop; the capture overlay clears. */
+function stopStatusPolls(): void {
+  if (speakPoll) clearInterval(speakPoll);
+  speakPoll = null;
+  speakWatchUntil = null;
+  if (clientPoll) clearInterval(clientPoll);
+  clientPoll = null;
+  clientPollMs = null;
+  if (enrolPoll) clearInterval(enrolPoll);
+  enrolPoll = null;
+  if (captureFlash) clearTimeout(captureFlash);
+  captureFlash = null;
+  captureTrack = null;
+  statusAt = null;
 }
 /** ⏹ / Esc: one log.append request.voice.client{op:'stop-speaking'} on a trusted gesture. */
 async function stopSpeaking(trusted: boolean): Promise<void> {
@@ -1005,7 +1070,6 @@ function paintVoice(): void {
   btn.dataset.state = p.state;
   put($('voice-label'), p.label);
   put($('voice-target'), p.target ? `· ${p.target}` : '');
-  $('voice-meter').hidden = p.state !== 'ambient';
   if (cp.label !== null) {
     btn.className = `voice-pill kernel-owned ${cp.className}`;
     btn.title = cp.title;
@@ -1027,7 +1091,7 @@ function paintVoice(): void {
   $('voice-dev').hidden = dev === null;
   put($('voice-dev'), dev ? `⚠ ${dev}` : '');
   if (!$('enrol-dialog').hidden) paintEnrol();
-  if (v.level !== null) $('voice-meter').style.setProperty('--level', String(v.level));
+  paintCapture(v, cp.label === null);
   const note = store.voiceNote;
   $('voice-note').hidden = !note || v.state !== 'off';
   put($('voice-note'), note ?? '');
@@ -1035,12 +1099,35 @@ function paintVoice(): void {
   paintDictation();
 }
 
-/** A voice.turn.* row arrived: the meter kicks once (CSS; reduced motion keeps it still). */
-function kickMeter(): void {
-  const m = $('voice-meter');
-  m.classList.remove('kick');
-  void m.offsetWidth; // restart the animation
-  m.classList.add('kick');
+/* ── live capture (T-2026-10-20-005 A1; core/capture.ts, #gui-voice-capture) ── */
+let captureTrack: CaptureTrack | null = null;
+/** when the page last RECEIVED a status (null: never on this connection) */
+let statusAt: number | null = null;
+let captureFlash: ReturnType<typeof setTimeout> | null = null;
+let captionState: string | null = null;
+/**
+ * The capture overlay on the attached pill: only while voice is attached and the voice app is connected (`live`).
+ * The meter is drawn from the REAL level while hearing and is still otherwise (no decorative motion); the composer
+ * ghost line "…" is its own element, never the textarea; the polite caption changes on a state change only.
+ */
+function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): void {
+  const live = pillOwned && !!client && v.state !== 'off' && v.clientConnected === true;
+  captureTrack = live ? captureStep(captureTrack, freshCapture(captureStatusOf(status), statusAt, Date.now()), Date.now()) : null;
+  const d = captureDisplayOf(captureTrack, Date.now(), live);
+  const btn = $('voice-pill');
+  for (const c of [...btn.classList]) if (c.startsWith('capture-')) btn.classList.remove(c);
+  if (live) btn.classList.add(d.className);
+  if (live && d.label !== null) put($('voice-label'), `${d.label}${clientPillOf(clientOf(status), true, canAttach(status)).tail ?? ''}`);
+  const meter = $('voice-meter');
+  meter.hidden = !live;
+  meter.style.setProperty('--level', String(d.meter));
+  $('composer-ghost').hidden = !d.ghost;
+  if (d.state !== captionState) {
+    captionState = d.state;
+    put($('voice-caption'), d.caption);
+  }
+  if (captureFlash) clearTimeout(captureFlash);
+  captureFlash = d.flashLeftMs !== null ? setTimeout(() => ((captureFlash = null), paintVoice()), d.flashLeftMs + 20) : null;
 }
 
 /** The session a choice applies to: Off and a mode switch go to the attached session; nothing attached ⇒ the focused one. */
@@ -1549,7 +1636,6 @@ function wire(): void {
     const f = (e.target as HTMLElement).closest('[data-forget]') as HTMLElement | null;
     if (f) void forgetVoice(f.dataset.forget!, e.isTrusted);
   });
-  $('voice-meter').addEventListener('animationend', () => $('voice-meter').classList.remove('kick'));
   document.addEventListener('click', (e) => {
     if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
   });

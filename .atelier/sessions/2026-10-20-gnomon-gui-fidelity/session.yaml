@@ -1,0 +1,72 @@
+id: 2026-10-20-gnomon-gui-fidelity
+verb: critique
+scope: "Fidelity of the shipped Gnomon GUI (packages/gnomon-gui, the Workshop mod) against the approved Gnomon direction; a ranked gap list plus a five-slice builder brief."
+depth: standard
+surface: web
+mode: existing
+preserve_from:
+  - ".atelier/design-system.yaml gnomon.* (tokens and rules; unchanged by this session)"
+  - "docs/specs/gnomon-fixtures/contrast.json (G-GUI-10; values unchanged, test MAP/TEXT extended to the existing project ink pairs)"
+  - "kernel-owned regions (spec §11; .kernel-owned): conn, risk, voice indicator, mode, repin, voice-dev, dictation, handle words, held countdown, card bodies, contentHash line"
+read: "An instrument for one operator running an armada: exact, calm, quietly beautiful, a made object that reads a larger order. (Unchanged from 2026-10-15-gnomon-aesthetic.)"
+inputs:
+  - "Founder: \"stylistically it doesn't feel like anything we did in atelier\"; wants it to \"actually look like the gnomon we spec'd out\""
+  - "Approved comp: sessions/2026-10-15-gnomon-aesthetic/refs/direction.html (+ motion, workshop-placement, papercraft)"
+  - "Live screenshot: dev kernel, night, no sessions (scratchpad live-desk-dark.jpg); comp screenshot day (comp-direction-day.jpg)"
+  - "Shipped: packages/gnomon-gui/static/{index.html,styles.css}, src/ui/app.ts, src/core/render.ts, src/core/store.ts; packages/gnomon-mods/workshop; kernel web rules.ts (CSP), modhost/feed.ts"
+started: 2026-10-20T00:00:00Z
+findings:
+  - "Tokens are right, material is missing: every gnomon colour token ships verbatim, but no fonts, grain, sheet shadows, ink keys, pile, caps or motion"
+  - "Fonts not bundled: system mono and Georgia fallback on every machine without JetBrains Mono installed (rank 1)"
+  - "Empty centre renders the raw kernel feed; it dominates the live screenshot (rank 2)"
+  - "Workshop mod is never mounted: the GUI does not call mod.view; the footer is a debug readout; renderBlock drops tone"
+  - "Hue identity split: GUI hashes repo %6, kernel feed hashes sha256(cwd)[0] %8; the same project shows two hues, indices 6-7 have no pigment"
+  - "Project ink-pair tokens absent, so project names cannot be coloured"
+  - "Voice indicator uses vermilion + idle pulse for ambient and slate (a project hue) for PTT; direction says amber = armed"
+  - "Night glow is applied to every card; comp glows only wordmark and caps"
+  - "CSP constraints the comp ignored: no data: grain (img-src 'self' blob:), no inline style (pile rotations by nth-child classes); build.mjs reads static files as utf8 and would corrupt woff2"
+  - "Comps live in gitignored refs/; critique.md carries every value a builder needs"
+boards:
+  - id: s1-tokens-themes
+    question: "S1: tokens, day/night, fonts, grain, ink keys, voice indicator restyle"
+    options:
+      - { id: per-brief, label: "As briefed in critique.md S1", recommended: true, why: "CSS-heavy, little DOM; fixes ranks 1, 3, 4, 12, 13 (tokens), 14 at once" }
+    references_rendered: []
+    decision: null
+  - id: s2-desk-structure
+    question: "S2: sessions rail grouped by project with hue swatches, empty centre, chat with timestamps/took/activity fold, pinned label, header palette field and Layout"
+    options:
+      - { id: per-brief, label: "As briefed in critique.md S2", recommended: true, why: "single shared projectHue function; kernel feed moves to the palette" }
+    references_rendered: []
+    decision: null
+  - id: s3-card-and-pile
+    question: "S3: card sheet anatomy and the stack as a fanned paper pile"
+    options:
+      - { id: per-brief, label: "As briefed in critique.md S3", recommended: true, why: "pile fans on hover AND focus-within so buried keys stay keyboard-reachable" }
+    references_rendered: []
+    decision: null
+  - id: s4-motion
+    question: "S4: flutter-in, stamp-and-fly, held countdown, droop; reduced motion instant"
+    options:
+      - { id: per-brief, label: "As briefed in critique.md S4", recommended: true, why: "comp keyframes verbatim; stamp only after a successful approve and after a committed hold" }
+    references_rendered: []
+    decision: null
+  - id: s5-workshop-footer
+    question: "S5: mount the Workshop mod in the footer (right/left presets), caps as structured data"
+    options:
+      - { id: gui-places-sidebar-slot, label: "Keep manifest slot 'sidebar'; GUI Layout places it (footer default)", recommended: true, why: "no mod-ABI or FIXED_SLOTS change; matches founder 2026-10-17 placement ruling" }
+      - { id: new-footer-slot, label: "Add a 'footer' fixed slot to the manifest schema", why: "more literal, but a kernel manifest change plus mod re-pin for a layout concern" }
+    references_rendered: []
+    decision: null
+  - id: founder-reopens
+    question: "Three items to confirm with the founder (builders proceed on the default)"
+    options:
+      - { id: live-mic-amber, label: "Live mic = amber, static (default)", recommended: true, why: "direction: amber = armed, vermilion = failure only, nothing idles; matches the macOS mic dot" }
+      - { id: stamp-comp-ink, label: "APPROVED stamp in sea-grey ink #3F6664 (default, comp value)", recommended: true, why: "approved comp; tension with 'project hue is identity, never state'" }
+      - { id: session-title-first-message, label: "Session name = first user message 28ch, else repo · hsid4 (default)", recommended: true, why: "no kernel session names exist; a name field needs a spec change" }
+    references_rendered: []
+    decision: null
+mika_vet: "pending: neutral card left edge --key-edge (vs comp --rule); cap whitelist rendering; --on-ink and --stamp added to the contrast fixture pairs"
+status: open
+deliverable: critique.md
+next: "Mika vets the S1-S5 brief; founder confirms or overrides the three re-opens; builders start S1 on the defaults. DESIGN.md and design-system.yaml unchanged: no direction change was made."

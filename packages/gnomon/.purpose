@@ -870,6 +870,27 @@ components:
       refused; RESUME_MAX_MISSES wrong tokens burn it. It authenticates a GUI
       connection only — never presence, never a card decision.
     tags: [kernel, web, auth]
+  gui-relaunch:
+    description: >-
+      #gui-relaunch (T-2026-10-20-001) — a kernel restarted outside the
+      self-update path (stop, then start) reopens the GUI with no terminal.
+      (1) A start without a TTY opens it: printLaunch with no TTY hands the
+      launch URL to the browser opener ONLY (osascript stdin; never printed),
+      and `gnomon daemon start | --detach` / `gnomond` (activator) open it
+      after a FRESH ready through cli/relaunch.ts openGuiAfterStart — the same
+      gui.open path bare `gnomon` uses (home pin verifies the hello before the
+      device signs; one shared launch-grant cap; single use, 60 s). `--no-open`
+      / GNOMON_NO_OPEN=1 turn it off; `gnomond --foreground --no-open` is a
+      usage refusal (the foreground kernel never opens anything). (2) NO
+      remembered web port (Aegis H1, withdrawn from 945349a3): a port reused
+      across stop/start lets a local squatter serve the old origin while
+      Gnomon is down, so a reloaded stale tab could plant a service worker
+      that the next auto-opened `#launch=` would load into. Every plain start
+      binds an OS-chosen port and deletes any leftover `web-port.json`
+      without reading it; the upgrade successor keeps its inherited fd. The
+      stale tab cannot rejoin in place (each start has a new ephemeral key
+      that only a launch fragment delivers); see gnomon-gui core/stale.ts.
+    tags: [kernel, web, cli, lifecycle]
   bare-entry:
     description: >-
       #bare-entry (spec §2.4 rule 8) — bare `gnomon` in a folder, like
@@ -1959,7 +1980,20 @@ components:
       its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol
       (fresh-presence strictness card, detail.op voice.enrol, writes the
       root-signed row), request.voice.forget (no card), request.voice.report
-      (client progress + notices relayed in status.voice); request.voice.client
+      (client progress + notices relayed in status.voice; T-2026-10-20-005
+      A1 capture{state idle|hearing|transcribing|captured|dropped, segId,
+      reason? closed too-short|echo|not-attached|no-words|not-enrolled|
+      barge-in|refused on dropped only, level? 0..1 on hearing only} relayed
+      as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor
+      is the V2 seam that keeps a later capture.text for the gui credential
+      only; voice.capture.level declared in status-numbers.ts. Aegis
+      follow-ups: terminal states are marked claim:'client' and cross-checked
+      against the kernel's own acceptances on that voice connection
+      (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop
+      shows captured with kernel:'accepted' and clientReason, a captured with
+      no acceptance is kernel:'unconfirmed'; text only for cls human on the
+      gui credential; the slot remembers its connId and clears when that
+      connection closes); request.voice.client
       start|stop is human only. speakable.ts KernelSpeakable appends
       voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
       session; the voice reader is narrowed to voice.* rows. speakerEnrolled is
@@ -2407,7 +2441,9 @@ components:
       (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
       <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
       loops, redirections with IO numbers, heredocs); it refuses $((...)),
-      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, braces
+      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, (Aegis C1)
+      any line of an UNQUOTED heredoc (<< or <<-) ending in an odd run of
+      backslashes (the shell joins it before the delimiter match), braces
       other than the safe brace expansion, ~user, zsh $= $~ $^ forms and every
       other compound. TD-2026-10-20-086 grammar (each fail-closed): brace
       expansion {a,b} (two or more safe literal items, no nesting, no $, = or ~)
@@ -2415,7 +2451,8 @@ components:
       $NAME; case WORD in pat) list ;; esac (patterns literal + glob chars
       only, bodies walked, the subject is text); a local assignment name=$(...)
       or name=lit with no command word (lowercase, not LOOP_VAR_DENY, not a
-      loop variable) makes name TAINTED text for the later items of its list
+      zsh hook array *_functions, not mapfile or a lowercase proxy variable
+      (Aegis L2; deniedVarName, also for loop names), not a loop variable) makes name TAINTED text for the later items of its list
       when it ran unconditionally (first or after ; / newline): "$name" only
       where a substitution may be (echo/printf args, <<<), unquoted only as
       the case subject; X=1 cmd and uppercase/special names stay refused. classifyReadOnly proves read-only:
@@ -2450,7 +2487,23 @@ components:
       the long --list. RC3 git also: show-ref ls-tree rev-list shortlog
       merge-base for-each-ref, worktree list, stash list (flags only), reflog
       show, cat-file -t/-s/-p OBJECT, tag -l/--list (listing flags only); all
-      through gitOptBad. No background/negation/env assignment, output
+      through gitOptBad. Aegis H1 (both modes): git is refused when the repo
+      git would use from the cwd (nearest .git dir or gitdir: file, its
+      config, config.worktree, the commondir config, every include/includeIf
+      path) names an exec-class key (core.fsmonitor unless false, core.pager
+      sshCommand hooksPath alternateRefsCommand askPass gitProxy,
+      diff.external, diff.*.textconv/command, filter.*, pager.*,
+      remote.*.uploadpack/receivepack, gpg[.*].program,
+      uploadpack.packObjectsHook, credential.helper; repoGitExecKey); and
+      anchorCommand exports command-scope GIT_CONFIG_COUNT/KEY_n/VALUE_n
+      (ANCHOR_GIT_CONFIG: core.fsmonitor=false, core.pager=cat,
+      core.hooksPath=/dev/null, core.sshCommand=false, log.showSignature=false,
+      gpg[.ssh|.x509].program=false, credential.helper=) plus
+      GIT_NO_LAZY_FETCH=1 and GIT_PAGER=cat. Prelude hardening (Aegis M2,
+      L1): zsh unfunction chpwd cd, chpwd_functions=(), setopt
+      no_ignore_braces; bash unset -f cd, set -B; then a runtime guard
+      (set -- x{a,b}; test $# -eq 2) so the command runs only with brace
+      expansion really on. No background/negation/env assignment, output
       redirection only to /dev/null. simpleArgv returns the argv of a single
       literal simple command (prefix always rules; signature unchanged).
     tags: [kernel, security]

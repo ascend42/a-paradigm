@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeAudioIO } from '../src/fake-audio-io.js';
 import { PRINT_SCHEMA, readPrints, type VoicePrint } from '../src/speaker.js';
-import { VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
+import { CAPTURE_DROP_REASONS, CAPTURE_REPORT_MIN_MS, levelOf, VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
 import { recordEnrolment } from '../src/enrol.js';
 import { FakeLink, refusal, stubEngines, StubSpeaker, StubVad, tone, toneWav } from './stubs.js';
 
@@ -236,6 +236,199 @@ describe('$voice-turn agent side + half-duplex', () => {
     }
     await client.idle();
     expect(engines.tts.said).toEqual(['I fixed it.', 'Ship it now?', 'Options: Yes, or No.', 'Edited 2 files.']);
+  });
+});
+
+describe('capture states (T-2026-10-20-005 A1, TD-2026-10-20-086)', () => {
+  const seen = new Set<string>();
+  const dropReasons = (link: FakeLink): string[] => {
+    const r = link.capture.filter((c) => c.state === 'dropped').map((c) => c.reason!);
+    r.forEach((x) => seen.add(x));
+    return r;
+  };
+  const states = (link: FakeLink): string[] => link.capture.map((c) => c.state);
+
+  it('PTT: key-down is hearing, then transcribing, then captured, all for one segId', async () => {
+    const { audio, link, client } = await setup({ texts: ['run the tests'] });
+    audio.hotkey(true);
+    await settle();
+    expect(link.capture.at(-1)).toMatchObject({ state: 'hearing', segId: 's1' });
+    audio.captureWav(toneWav(800, 0.5));
+    audio.hotkey(false);
+    await client.idle();
+    expect(states(link)).toEqual(['hearing', 'transcribing', 'captured']);
+    expect(new Set(link.capture.map((c) => c.segId))).toEqual(new Set(['s1']));
+    expect(client.capture).toMatchObject({ state: 'captured', segId: 's1' });
+  });
+
+  it('AMBIENT: VAD start is hearing, then transcribing, then captured (composer delivery)', async () => {
+    const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', delivery: 'composer', texts: ['what changed'] });
+    audio.silence(100);
+    expect(link.capture).toHaveLength(0);
+    audio.captureWav(toneWav(700, 0.5));
+    audio.silence(400);
+    await client.idle();
+    expect(states(link)).toEqual(['hearing', 'transcribing', 'captured']);
+    expect(link.sends).toEqual([]);
+  });
+
+  it('too-short: a short hold, and a press with no audio at all', async () => {
+    const { audio, link, client } = await setup();
+    ptt(audio, 100, 0.5);
+    audio.hotkey(true);
+    audio.hotkey(false);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['too-short', 'too-short']);
+    expect(link.appends).toHaveLength(0);
+  });
+
+  it('echo: speech inside our playback or its tail is dropped as echo', async () => {
+    const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation' });
+    link.reply('One sentence only.');
+    await settle();
+    audio.captureWav(toneWav(250, 0.5)); // < 300 ms: not a barge-in, inside playback
+    audio.silence(900);
+    await settle();
+    audio.captureWav(toneWav(400, 0.5)); // inside the 750 ms tail
+    audio.silence(400);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['echo', 'echo']);
+  });
+
+  it('barge-in (AMBIENT): the speech that cut the reply off is dropped as barge-in, never echo', async () => {
+    const { audio, engines, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation' });
+    engines.tts.msPerSentence = 3000;
+    link.reply('First long sentence here. Second sentence never said.');
+    await settle();
+    audio.captureWav(toneWav(400, 0.5));
+    await settle();
+    audio.silence(400);
+    await client.idle();
+    const r = dropReasons(link);
+    expect(r.length).toBeGreaterThan(0);
+    expect(new Set(r)).toEqual(new Set(['barge-in']));
+    expect(link.appends.filter((a) => a.kind === 'voice.turn.user')).toHaveLength(0);
+  });
+
+  it('barge-in (PTT): a hold that stopped playback is dropped as barge-in at release', async () => {
+    const { audio, link, client } = await setup();
+    link.reply('Something to say.');
+    await settle();
+    audio.hotkey(true);
+    await settle();
+    audio.captureWav(toneWav(600, 0.5));
+    audio.hotkey(false);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['barge-in']);
+  });
+
+  it('not-attached: a detach while hearing drops the live segment', async () => {
+    const { audio, link, client } = await setup();
+    audio.hotkey(true);
+    audio.captureWav(toneWav(400, 0.5));
+    link.att = null;
+    await client.refresh();
+    audio.hotkey(false);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['not-attached']);
+    expect(link.appends).toHaveLength(0);
+  });
+
+  it('no-words: an empty transcript', async () => {
+    const { audio, link, client } = await setup({ texts: ['  '] });
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['no-words']);
+  });
+
+  it('not-enrolled: an unknown speaker is dropped with the reason only (no text anywhere in the report)', async () => {
+    const { audio, link, client } = await setup({ texts: ['secret words'] });
+    ptt(audio, 800, 0.2);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['not-enrolled']);
+    expect(JSON.stringify(link.capture)).not.toContain('secret');
+  });
+
+  it('refused: a kernel refusal of the send is a drop', async () => {
+    const { audio, link, client } = await setup({ texts: ['hi'] });
+    link.sendError = refusal('voice-busy');
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    expect(dropReasons(link)).toEqual(['refused']);
+  });
+
+  it('every reason of the closed enum is emitted by some drop site', () => {
+    expect([...seen].sort()).toEqual([...CAPTURE_DROP_REASONS].sort());
+  });
+
+  it('capture rides request.voice.report only: never a log row, never text', async () => {
+    const { audio, link, client } = await setup({ texts: ['run the tests'] });
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    expect(link.capture.length).toBeGreaterThan(0);
+    expect(link.appends.map((a) => a.kind)).toEqual(['voice.turn.user']);
+    expect(link.appends.some((a) => 'capture' in a.payload)).toBe(false);
+    for (const c of link.capture) expect(Object.keys(c).every((k) => ['state', 'segId', 'reason', 'level'].includes(k))).toBe(true);
+  });
+
+  it('A2: the real level rides hearing reports only, ≤ 5 Hz; terminal states always go', async () => {
+    const { audio, link, client } = await setup({ texts: ['ok'] });
+    audio.emitLevel(-10); // not hearing: no report
+    await settle();
+    expect(link.capture).toHaveLength(0);
+    audio.hotkey(true);
+    const t0 = audio.clock;
+    for (let i = 0; i < 50; i++) {
+      audio.tick(20);
+      audio.emitLevel(-60 + i);
+      if (i % 10 === 9) await settle(); // let the report chain drain (a waiting update is otherwise coalesced, L4)
+    }
+    const heldMs = audio.clock - t0;
+    audio.captureWav(toneWav(400, 0.5));
+    audio.hotkey(false);
+    await client.idle();
+    const hearing = link.capture.filter((c) => c.state === 'hearing');
+    expect(hearing.length).toBeGreaterThan(1);
+    expect(hearing.length).toBeLessThanOrEqual(Math.ceil((heldMs + 400) / CAPTURE_REPORT_MIN_MS) + 1);
+    for (const h of hearing) expect(h.level).toBeGreaterThanOrEqual(0);
+    for (const h of hearing) expect(h.level).toBeLessThanOrEqual(1);
+    expect(link.capture.filter((c) => c.state !== 'hearing').every((c) => c.level === undefined)).toBe(true);
+    expect(link.capture.at(-1)!.state).toBe('captured');
+    expect(levelOf(-60)).toBe(0);
+    expect(levelOf(0)).toBe(1);
+    expect(levelOf(-Infinity)).toBe(0);
+    expect(levelOf(-30)).toBe(0.5);
+  });
+
+  it('Aegis L4: with a slow kernel, waiting level updates are replaced by the newest, never queued; terminal ones are never lost', async () => {
+    const { audio, link, client } = await setup({ texts: ['ok'] });
+    let open!: () => void;
+    link.captureGate = new Promise<void>((r) => (open = r));
+    audio.hotkey(true); // hearing s1: in flight, held by the gate
+    for (let i = 0; i < 40; i++) {
+      audio.tick(CAPTURE_REPORT_MIN_MS); // past the throttle every time: 40 sends while the first is still in flight
+      audio.emitLevel(-50 + i);
+    }
+    audio.captureWav(toneWav(400, 0.5));
+    audio.hotkey(false);
+    await settle();
+    open();
+    link.captureGate = undefined;
+    await client.idle();
+    const states = link.capture.map((c) => c.state);
+    // the first hearing, at most one coalesced hearing (the newest level), then the segment's own edges
+    expect(states.filter((s) => s === 'hearing').length).toBeLessThanOrEqual(3);
+    expect(states.slice(-2)).toEqual(['transcribing', 'captured']);
+    const lastHearing = link.capture.filter((c) => c.state === 'hearing').at(-1)!;
+    expect(lastHearing.level).toBe(levelOf(-50 + 39));
+  });
+
+  it('a mode change while hearing abandons the segment (idle, no reason)', async () => {
+    const { audio, link, client } = await setup();
+    audio.hotkey(true);
+    client.setMode('off');
+    await client.idle();
+    expect(states(link)).toEqual(['hearing', 'idle']);
   });
 });
 

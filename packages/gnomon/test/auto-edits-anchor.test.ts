@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { anchorCommand, parseShell, shellFlavour, shQuote } from '../src/kernel/supervisor/shell-readonly.js';
+import { anchorCommand, anchorGitEnv, classifyReadOnly, parseShell, repoGitExecKey, shellFlavour, shQuote } from '../src/kernel/supervisor/shell-readonly.js';
 import { autoBashReadOnly } from '../src/kernel/supervisor/auto-edits.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 
@@ -39,8 +39,8 @@ const HEREDOC = "cat <<'EOF'\nline one\nEOF\ncat a.txt # trailing comment";
 describe('K1 anchorCommand', () => {
   it('quotes the root safely and wraps the command on its own lines', () => {
     expect(shQuote("a'b")).toBe(`'a'\\''b'`);
-    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && builtin unset CDPATH && {\nls\n}`);
-    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && builtin unset CDPATH && {\nls\n}`);
+    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
+    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && { builtin unset -f cd; builtin set -B; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
     expect(anchorCommand('ls', '/r', 'unknown')).toContain('ZSH_VERSION');
     expect(shellFlavour('/bin/zsh')).toBe('zsh');
     expect(shellFlavour('/usr/local/bin/bash')).toBe('bash');
@@ -82,4 +82,119 @@ describe('K1 autoBashReadOnly with an anchor', () => {
   it('win32 is never anchored (the unanchored rules apply)', () => {
     expect(autoBashReadOnly('Bash', { command: 'pwd' }, ['C:\\w\\repo'], ['x'], 'C:\\g', 'win32', 'C:\\Users\\me', { root: 'C:\\w\\repo' })).toEqual({ ok: true, command: 'pwd', root: null });
   });
+});
+
+describe('Aegis C1: an unquoted heredoc line ending in a backslash (bash/zsh join it before the delimiter match)', () => {
+  const ctx = () => ({ roots: [root], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform, readRoots: [], cwd: real });
+  const attack = (op: string) => `cat ${op}EOF\nEO\\\nF\ntouch PWNED\nEOF`;
+  it.each(['<<', '<<-'])('refuses the split delimiter (%s)', (op) => {
+    expect(classifyReadOnly(attack(op), ctx())).toMatchObject({ ok: false, why: 'unparsed: heredoc: a line ending in a backslash' });
+    expect(classifyReadOnly(`cat ${op}EOF\nbody \\\nEOF\\\nEOF`, ctx()).ok).toBe(false);
+  });
+  it('a quoted heredoc keeps backslashes literal (no join): still passes; an even run passes unquoted', () => {
+    expect(classifyReadOnly("cat <<'EOF'\nEO\\\nF\nEOF", ctx())).toEqual({ ok: true });
+    expect(classifyReadOnly('cat <<EOF\nx \\\\\nEOF', ctx())).toEqual({ ok: true });
+  });
+  for (const [sh, flavour] of [['/bin/zsh', 'zsh'], ['/bin/bash', 'bash']] as const) {
+    it.skipIf(!have(sh))(`under ${sh}: the attack WOULD run touch (why it is refused), the passing forms run with no side effect`, () => {
+      const dir = fs.mkdtempSync(path.join(base, 'c1-'));
+      const raw = spawnSync(sh, ['-c', attack('<<')], { cwd: dir, encoding: 'utf8' });
+      expect(raw.status).toBe(127); // the trailing `EOF` line then runs as a command
+      expect(fs.existsSync(path.join(dir, 'PWNED'))).toBe(true); // the shell joined EO\⏎F into EOF
+      const realDir = fs.realpathSync(dir);
+      for (const ok of ["cat <<'EOF'\nEO\\\nF\nEOF", 'cat <<EOF\nx \\\\\nEOF']) {
+        expect(classifyReadOnly(ok, { ...ctx(), roots: [dir], cwd: realDir })).toEqual({ ok: true });
+        const r = spawnSync(sh, ['-c', anchorCommand(ok, realDir, flavour)], { cwd: elsewhere, encoding: 'utf8' });
+        expect(r.status).toBe(0);
+        expect(fs.readdirSync(dir).filter((n) => n !== 'PWNED')).toEqual([]);
+      }
+    });
+  }
+});
+
+describe('Aegis H1: a repo git config that names a program', () => {
+  const git = (cwd: string, ...a: string[]) => spawnSync('git', a, { cwd, encoding: 'utf8' });
+  const mk = (name: string, config = ''): string => {
+    const d = path.join(base, name);
+    fs.mkdirSync(d);
+    git(d, 'init', '-q');
+    fs.writeFileSync(path.join(d, 'f.txt'), 'f\n');
+    git(d, 'add', 'f.txt');
+    git(d, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'i');
+    if (config) fs.appendFileSync(path.join(d, '.git', 'config'), config);
+    return d;
+  };
+  const ro = (c: string, d: string) => classifyReadOnly(c, { roots: [d], home, gnomonHome: path.join(home, '.gnomon'), platform: process.platform, readRoots: [], cwd: fs.realpathSync(d) });
+  it('(b) refuses git when the repo config (or an include) names an exec-class key; other commands still pass', () => {
+    const cases: Array<[string, string]> = [
+      ['[core]\n\tfsmonitor = ./hook.sh\n', 'core.fsmonitor'],
+      ['[core]\n\tpager = sh -c x\n', 'core.pager'],
+      ['[diff]\n\texternal = ./x\n', 'diff.external'],
+      ['[diff "pdf"]\n\ttextconv = ./x\n', 'diff.pdf.textconv'],
+      ['[diff "pdf"]\n\tcommand = ./x\n', 'diff.pdf.command'],
+      ['[filter "lfs"]\n\tsmudge = ./x\n', 'filter.lfs.smudge'],
+      ['[core] hooksPath = ./h\n', 'core.hookspath'],
+      ['[core]\n\tsshCommand = ./x\n', 'core.sshcommand'],
+      ['[remote "o"]\n\tuploadpack = ./x\n', 'remote.o.uploadpack'],
+      ['[gpg]\n\tprogram = ./x\n', 'gpg.program'],
+      ['[gpg "ssh"]\n\tprogram = ./x\n', 'gpg.ssh.program'],
+      ['[uploadpack]\n\tpackObjectsHook = ./x\n', 'uploadpack.packobjectshook'],
+      ['[pager]\n\tlog = ./x\n', 'pager.log'],
+    ];
+    for (const [i, [cfg, key]] of cases.entries()) {
+      const d = mk(`h1-${i}`, cfg);
+      expect(repoGitExecKey(fs.realpathSync(d), home)).toBe(key);
+      expect(ro('git status', d)).toMatchObject({ ok: false, why: `git: the repo config names a program (${key})` });
+      expect(ro('cat f.txt', d)).toEqual({ ok: true });
+    }
+    const inc = mk('h1-inc', '[include]\n\tpath = ../extra.cfg\n[includeIf "gitdir:/nowhere/"]\n\tpath = ~/cond.cfg\n');
+    fs.writeFileSync(path.join(inc, '.git', '..', '.git', '..', '..', 'extra.cfg'), '[user]\n\tname = x\n');
+    fs.writeFileSync(path.join(home, 'cond.cfg'), '[filter "x"]\n\tclean = ./x\n');
+    expect(ro('git log', inc)).toMatchObject({ ok: false, why: 'git: the repo config names a program (filter.x.clean)' });
+    expect(ro('git log', mk('h1-clean', '[core]\n\tfsmonitor = false\n'))).toEqual({ ok: true });
+  });
+  it('(b) a linked worktree: its .git file, the common dir config', () => {
+    const main = mk('h1-main', '[diff "x"]\n\ttextconv = ./x\n');
+    const wt = path.join(base, 'h1-wt');
+    expect(git(main, 'worktree', 'add', '-q', wt).status).toBe(0);
+    expect(repoGitExecKey(fs.realpathSync(wt), home)).toBe('diff.x.textconv');
+  });
+  for (const [sh, flavour] of [['/bin/zsh', 'zsh'], ['/bin/bash', 'bash']] as const) {
+    it.skipIf(!have(sh))(`(a) under ${sh}: the prelude's command-scope config wins over a repo fsmonitor hook and pager`, () => {
+      const d = mk(`h1-run-${flavour}`);
+      const mark = path.join(d, 'HOOK-RAN');
+      fs.writeFileSync(path.join(d, 'hook.sh'), `#!/bin/sh\ntouch '${mark}'\n`, { mode: 0o755 });
+      git(d, 'config', 'core.fsmonitor', path.join(d, 'hook.sh'));
+      git(d, 'config', 'core.pager', `touch '${mark}'`);
+      // the effective values git reads under the prelude are the command-scope ones (they outrank the repo config)
+      const r = spawnSync(sh, ['-c', anchorCommand('git status --porcelain >/dev/null; git config core.pager; git config core.fsmonitor; echo "lazy=$GIT_NO_LAZY_FETCH"', fs.realpathSync(d), flavour)], { cwd: elsewhere, encoding: 'utf8' });
+      expect(r.stdout.split('\n').slice(0, 3)).toEqual(['cat', 'false', 'lazy=1']);
+      expect(fs.existsSync(mark)).toBe(false);
+    });
+  }
+});
+
+describe('Aegis M2/L1: the prelude removes cd hooks and functions and turns brace expansion on', () => {
+  for (const [sh, flavour] of [['/bin/zsh', 'zsh'], ['/bin/bash', 'bash'], ['/bin/zsh', 'unknown'], ['/bin/bash', 'unknown']] as const) {
+    it.skipIf(!have(sh))(`under ${sh} (${flavour} form)`, () => {
+      const marks = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-m2-'));
+      const mark = path.join(marks, 'HOOK');
+      try {
+        const setup = sh === '/bin/zsh'
+          ? `chpwd() { touch '${mark}'; }; h() { touch '${mark}'; }; chpwd_functions=(h); cd() { touch '${mark}'; builtin cd "$@"; }\n`
+          : `cd() { touch '${mark}'; builtin cd "$@"; }; set +B\n`;
+        const r = spawnSync(sh, ['-c', setup + anchorCommand('cd sub && pwd -P && echo {a,b}', real, flavour)], { cwd: elsewhere, encoding: 'utf8' });
+        expect(r.stdout).toBe(`${path.join(real, 'sub')}\na b\n`);
+        expect(fs.existsSync(mark)).toBe(false);
+      } finally {
+        fs.rmSync(marks, { recursive: true, force: true });
+      }
+    });
+  }
+  for (const [sh, off] of [['/bin/zsh', 'setopt ignore_braces'], ['/bin/bash', 'set +B']] as const) {
+    it.skipIf(!have(sh))(`${sh} with brace expansion off beforehand (${off}): the command sees it expanded, or nothing runs`, () => {
+      const r = spawnSync(sh, ['-c', `${off}\neval ${shQuote(anchorCommand('echo {a,b}', real, sh === '/bin/zsh' ? 'zsh' : 'bash'))}`], { cwd: elsewhere, encoding: 'utf8' });
+      expect(['', 'a b\n']).toContain(r.stdout);
+    });
+  }
 });

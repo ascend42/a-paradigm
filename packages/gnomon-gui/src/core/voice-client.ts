@@ -38,6 +38,7 @@
  *   A6 lifecycle rows: `voice.client.*`, `voice.enrol` and `voice.forget` rows change status.voice (the page
  *      re-reads status on them).
  */
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 
 export type ClientPhase = 'idle' | 'installing' | 'downloading' | 'starting' | 'running' | 'crashed' | 'unavailable';
 export const CLIENT_PHASES: readonly ClientPhase[] = Object.freeze(['idle', 'installing', 'downloading', 'starting', 'running', 'crashed', 'unavailable'] as const);
@@ -143,9 +144,15 @@ const MB = (x: number): string => (x >= 100 ? String(Math.round(x)) : String(Mat
 /** The longest lastError shown in the pill label (the kernel's text carries up to 300 chars of the app's stderr). */
 export const PILL_ERROR_MAX = 60;
 const ERROR_TITLE_MAX = 400;
-const oneLine = (s: string, max: number): string => {
-  const t = s.replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+/**
+ * Aegis L1 (862ef85a): lastError is the voice app's own stderr text, so it is sanitised (display.ts §4.5: controls,
+ * bidi and hidden characters made visible or removed) BEFORE it is folded to one line and capped, and the cap counts
+ * code points, so a surrogate pair is never cut in half.
+ */
+export const oneLine = (s: string, max: number): string => {
+  const t = sanitizeDisplayText(s).text.replace(/\s+/g, ' ').trim();
+  const cps = Array.from(t);
+  return cps.length > max ? `${cps.slice(0, max - 1).join('')}…` : t;
 };
 
 /**
@@ -175,9 +182,9 @@ export function clientPillOf(c: ClientView, attached: boolean, attachable: boole
     case 'starting':
       return { label: 'Starting…', tail: null, className: 'voice-noclient voice-setup', title: 'The voice app is starting.', action: null, actionLabel: '', progress: null };
     case 'crashed':
-      return { label: 'Voice crashed', tail: null, className: 'voice-noclient voice-crashed', title: c.lastError ? `The voice app stopped: ${c.lastError}` : 'The voice app stopped unexpectedly.', action: act('restart'), actionLabel: 'Restart', progress: null };
+      return { label: 'Voice crashed', tail: null, className: 'voice-noclient voice-crashed', title: c.lastError ? `The voice app stopped: ${oneLine(c.lastError, ERROR_TITLE_MAX)}` : 'The voice app stopped unexpectedly.', action: act('restart'), actionLabel: 'Restart', progress: null };
     case 'unavailable':
-      return { label: `Voice unavailable${c.unavailable ? ` · ${c.unavailable}` : ''}`, tail: null, className: 'voice-noclient voice-unavailable', title: c.unavailable ?? 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
+      return { label: `Voice unavailable${c.unavailable ? ` · ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, tail: null, className: 'voice-noclient voice-unavailable', title: c.unavailable ? oneLine(c.unavailable, ERROR_TITLE_MAX) : 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
     case 'running':
       if (c.enrolled !== null && c.enrolled.length === 0)
         return { label: 'Teach Gnomon your voice first', tail: null, className: 'voice-off voice-nudge', title: 'Gnomon only forwards speech from an enrolled voice. Teach it yours (about a minute).', action: act('enrol'), actionLabel: 'Teach', progress: null };
@@ -200,7 +207,7 @@ function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none:
     case 'starting':
       return t('voice starting…', 'voice-noclient voice-setup', 'The voice app is starting; nothing is heard until it runs.');
     case 'unavailable':
-      return t(`voice unavailable${c.unavailable ? `: ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, 'voice-noclient voice-unavailable', c.unavailable ?? 'Voice is not available on this machine.');
+      return t(`voice unavailable${c.unavailable ? `: ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, 'voice-noclient voice-unavailable', c.unavailable ? oneLine(c.unavailable, ERROR_TITLE_MAX) : 'Voice is not available on this machine.');
     case 'idle':
       return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
     case 'running':

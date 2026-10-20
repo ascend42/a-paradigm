@@ -15,6 +15,12 @@
  *   forward for headless use (`gnomon-voice run --delivery direct`). Activity edges go to the kernel as
  *   `request.voice.report{dictation: {activity: speaking | transcribing | idle, holdToggles}}` (edges only); the
  *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
+ *   CAPTURE (T-2026-10-20-005 A1, TD-2026-10-20-086): every segment runs `idle → hearing → transcribing → captured |
+ *   dropped{reason}` (PTT: key-down is hearing; AMBIENT: VAD start is hearing), reason from the closed
+ *   CAPTURE_DROP_REASONS, set at each drop site. Reported as `request.voice.report{capture: {state, segId, reason?,
+ *   level?}}` on the same serialized #reports chain: non-terminal reports ≤ 5 Hz (CAPTURE_REPORT_MIN_MS, the latest
+ *   wins), terminal ones always sent. `level` (0..1, from the binary's level events) rides hearing reports only. No
+ *   words in A1: the later partial text (B) gets its own field, projected by the kernel to the gui credential only.
  * $voice-turn, agent side: `log.read follow` on the attached session → the KERNEL's speakable rows
  *   (`voice.turn.agent{source:'kernel-speakable', turnSeq, items}`; never turn.event) → Kokoro per sentence → AudioIO.play →
  *   `log.append voice.turn.agent{turnId, t0, t1, textPlanned, textSpoken}` per played chunk (the windows the
@@ -47,6 +53,29 @@ export type ClientMode = 'off' | 'ptt' | 'ambient';
 /** TD-2026-10-20-262: where a dictated turn goes — the GUI composer (default) or straight to the session. */
 export type Delivery = 'composer' | 'direct';
 export type DictationActivity = 'speaking' | 'transcribing' | 'idle';
+/** T-2026-10-20-005 A1: the per-segment capture states (status.voice.capture.state). Closed. */
+export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
+export type CaptureState = (typeof CAPTURE_STATES)[number];
+/** Why a segment was not captured (status.voice.capture.reason). Closed; the kernel refuses any other value. */
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
+export interface CaptureReport {
+  state: CaptureState;
+  segId: string;
+  reason?: CaptureDropReason;
+  /** mic level 0..1, hearing reports only (A2) */
+  level?: number;
+}
+/** non-terminal capture reports are sent at most this often (≤ 5 Hz); terminal ones always */
+export const CAPTURE_REPORT_MIN_MS = 200;
+/** a hearing segment re-reports at least this often so the kernel's short capture TTL never expires a live one */
+export const CAPTURE_KEEPALIVE_MS = 1_000;
+/** dBFS → 0..1: -60 dBFS (and quieter) is 0, 0 dBFS is 1, two decimals */
+export function levelOf(db: number): number {
+  if (!Number.isFinite(db)) return 0;
+  return Math.round(Math.min(1, Math.max(0, (db + 60) / 60)) * 100) / 100;
+}
+const isTerminal = (s: CaptureState): boolean => s === 'captured' || s === 'dropped' || s === 'idle';
 const RANK: Record<ClientMode, number> = { off: 0, ptt: 1, ambient: 2 };
 
 export const ECHO_TAIL_MS = 750;
@@ -181,7 +210,8 @@ export class VoiceClient {
   #pttT0 = 0;
   // playback state
   #playing: { t0: number } | null = null;
-  #windows: Array<{ t0: number; t1: number }> = [];
+  /** playback windows; `barged`: the human cut this chunk off (a capture drop inside it is 'barge-in', not 'echo') */
+  #windows: Array<{ t0: number; t1: number; barged?: boolean }> = [];
   #speechRunMs = 0;
   #bargedIn = false;
   #speakQueue: SpeakItem[] = [];
@@ -212,6 +242,16 @@ export class VoiceClient {
   #vadSpeaking = false;
   #vadLastSpeech = 0;
   #reports: Promise<void> = Promise.resolve();
+  // capture (T-2026-10-20-005 A1): the live (hearing) segment, the last level, the ≤ 5 Hz throttle
+  #capN = 0;
+  #cap: { segId: string; state: CaptureState } | null = null;
+  #lastCapture: CaptureReport | null = null;
+  #level = 0;
+  #capLastSent = -Infinity;
+  #capPending: CaptureReport | null = null;
+  #capTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Aegis L4: capture reports waiting on the #reports chain; a waiting non-terminal one is replaced, never queued behind */
+  #capQueue: CaptureReport[] = [];
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -251,6 +291,107 @@ export class VoiceClient {
     if (next === this.#activity) return;
     this.#activity = next;
     this.#report();
+  }
+
+  /** the capture report last sent (null before the first segment) */
+  get capture(): CaptureReport | null {
+    return this.#lastCapture;
+  }
+
+  /** A new live segment is being heard (PTT key-down, AMBIENT VAD start). Returns its segId. */
+  #beginHearing(): string {
+    if (this.#cap?.state === 'hearing') return this.#cap.segId;
+    const segId = `s${++this.#capN}`;
+    this.#cap = { segId, state: 'hearing' };
+    this.#capture({ state: 'hearing', segId });
+    return segId;
+  }
+
+  /** The live segment's id when it is being heard (and clears it); a segment arriving with none gets a fresh id. */
+  #takeLive(): string {
+    const live = this.#cap?.state === 'hearing' ? this.#cap.segId : `s${++this.#capN}`;
+    this.#cap = null;
+    return live;
+  }
+
+  /** End a segment: dropped{reason}, captured, or idle (abandoned by a mode change or pause). Always sent. */
+  #endCapture(segId: string, state: 'captured' | 'dropped' | 'idle', reason?: CaptureDropReason): void {
+    if (this.#cap?.segId === segId) this.#cap = null;
+    if (state === 'dropped') this.#flow.info('capture dropped', { segId, reason });
+    this.#capture({ state, segId, ...(state === 'dropped' && reason ? { reason } : {}) });
+  }
+
+  /** Abandon a live hearing segment: dropped{reason} (a detach, a barge-in) or idle (a mode change, a pause). */
+  #abandonLive(reason?: CaptureDropReason): void {
+    const live = this.#cap;
+    if (!live || live.state !== 'hearing') return;
+    this.#endCapture(live.segId, reason ? 'dropped' : 'idle', reason);
+  }
+
+  /** Throttled report: terminal states go now; others ≤ 5 Hz, the latest pending one wins. */
+  #capture(r: CaptureReport): void {
+    if (this.#closed) return;
+    if (isTerminal(r.state)) {
+      this.#capPending = null;
+      if (this.#capTimer) clearTimeout(this.#capTimer);
+      this.#capTimer = undefined;
+      this.#sendCapture(r);
+      // a later segment is still being heard: put it back in the slot (throttled)
+      const live = this.#cap;
+      if (live?.state === 'hearing' && live.segId !== r.segId) this.#capture({ state: 'hearing', segId: live.segId });
+      return;
+    }
+    const since = this.#now() - this.#capLastSent;
+    if (since >= CAPTURE_REPORT_MIN_MS) {
+      this.#capPending = null;
+      if (this.#capTimer) clearTimeout(this.#capTimer);
+      this.#capTimer = undefined;
+      this.#sendCapture(r);
+      return;
+    }
+    this.#capPending = r;
+    this.#capTimer ??= setTimeout(() => this.#flushCapture(), Math.max(0, Math.min(CAPTURE_REPORT_MIN_MS, CAPTURE_REPORT_MIN_MS - since)));
+  }
+
+  #flushCapture(): void {
+    if (this.#capTimer) clearTimeout(this.#capTimer);
+    this.#capTimer = undefined;
+    const p = this.#capPending;
+    this.#capPending = null;
+    if (p && !this.#closed) this.#sendCapture(p);
+  }
+
+  /** request.voice.report{capture}, on the serialized #reports chain. A hearing report carries the latest level. */
+  #sendCapture(r: CaptureReport): void {
+    this.#capLastSent = this.#now();
+    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level } : r;
+    this.#lastCapture = capture;
+    // Aegis L4: a slow kernel never builds a backlog: the newest report replaces a waiting one of the same segment and
+    // state (a level update or keepalive). A state change is queued, so every edge, and every terminal state, still
+    // reaches the kernel in order; the queue is bounded by the segment's few edges.
+    const q = this.#capQueue;
+    const last = q[q.length - 1];
+    if (last && !isTerminal(last.state) && last.state === capture.state && last.segId === capture.segId) {
+      q[q.length - 1] = capture;
+      return;
+    }
+    q.push(capture);
+    this.#reports = this.#reports.then(async () => {
+      const next = this.#capQueue.shift();
+      if (!next) return;
+      try {
+        await this.#o.link.append('request.voice.report', { capture: next });
+      } catch (err) {
+        this.#log.warn('capture report not relayed', { reason: toRefusal(err).reason });
+      }
+    });
+  }
+
+  /** The binary's level event (dBFS, ~15 Hz): kept, and reported only while a segment is being heard (A2). */
+  #onLevel(db: number): void {
+    this.#level = levelOf(db);
+    const live = this.#cap;
+    if (live?.state === 'hearing' && !this.#paused && this.mode !== 'off') this.#capture({ state: 'hearing', segId: live.segId });
   }
 
   /** request.voice.report{dictation}, serialized so holdToggles reaches the kernel in order (monotone). */
@@ -296,6 +437,7 @@ export class VoiceClient {
     this.#offs.push(
       a.on('frame', (f) => this.#onFrame(f)),
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
+      a.on('level', (db) => this.#onLevel(db)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
       a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
@@ -338,6 +480,7 @@ export class VoiceClient {
     this.#unfollow?.();
     this.#unfollow = undefined;
     this.#o.engines.vad.reset();
+    if (!readFailed) this.#abandonLive('not-attached');
     if (!next) {
       this.#notice('info', 'Voice is not attached to a session. Attach it from Gnomon to talk.');
       return;
@@ -396,6 +539,7 @@ export class VoiceClient {
     this.#pttHeld = false;
     this.#pttFrames = [];
     this.#o.engines.vad.reset();
+    this.#abandonLive();
     const eff = this.mode;
     if (RANK[m] > RANK[eff]) this.#notice('info', `The human allows up to ${eff === 'off' ? 'nothing (not attached)' : eff} here; using ${eff}.`);
     this.#vadSpeaking = false;
@@ -458,6 +602,7 @@ export class VoiceClient {
   /** V2e: pause the voice loop (an enrolment is recording: its phrases are never turns). */
   pause(on: boolean): void {
     this.#paused = on;
+    if (on) this.#abandonLive();
     this.#pttHeld = false;
     this.#pttFrames = [];
     this.#o.engines.vad.reset();
@@ -467,6 +612,7 @@ export class VoiceClient {
 
   /** Wait until queued utterances and speech are done (tests, shutdown). */
   async idle(): Promise<void> {
+    this.#flushCapture();
     let w: Promise<void> | undefined;
     let s: Promise<void> | undefined;
     let r: Promise<void> | undefined;
@@ -480,6 +626,9 @@ export class VoiceClient {
 
   async close(): Promise<void> {
     this.#closed = true;
+    if (this.#capTimer) clearTimeout(this.#capTimer);
+    this.#capTimer = undefined;
+    this.#capPending = null;
     this.#unfollow?.();
     for (const off of this.#offs) off();
     this.#o.audio.stopPlayback();
@@ -490,12 +639,17 @@ export class VoiceClient {
   // ---- capture -------------------------------------------------------------------------------------------------
 
   #onHotkey(down: boolean, at: number): void {
-    if (this.mode === 'off' || this.#paused) return;
+    if (this.mode === 'off' || this.#paused) {
+      // released after a detach: the held segment is not sent
+      if (!down && this.mode === 'off') this.#abandonLive('not-attached');
+      return;
+    }
     if (down) {
       if (this.#playing) this.#bargeIn('hotkey');
       this.#pttHeld = true;
       this.#pttFrames = [];
       this.#pttT0 = at;
+      if (this.mode === 'ptt') this.#beginHearing(); // PTT: key-down is hearing
       this.#recompute();
       return;
     }
@@ -503,7 +657,11 @@ export class VoiceClient {
     this.#pttHeld = false;
     const frames = this.#pttFrames;
     this.#pttFrames = [];
-    if (this.mode !== 'ptt' || !frames.length) return this.#recompute();
+    if (this.mode !== 'ptt') return this.#recompute();
+    if (!frames.length) {
+      this.#endCapture(this.#takeLive(), 'dropped', 'too-short');
+      return this.#recompute();
+    }
     const sr = frames[0]!.sampleRate;
     const n = frames.reduce((s, f) => s + f.samples.length, 0);
     const samples = new Float32Array(n);
@@ -521,6 +679,9 @@ export class VoiceClient {
     const mode = this.mode;
     if (mode === 'off' || this.#paused) return;
     if (mode === 'ptt' && this.#pttHeld) this.#pttFrames.push(f);
+    // keep a long live segment fresh in the kernel (its capture TTL is short)
+    const live = this.#cap;
+    if (live?.state === 'hearing' && this.#now() - this.#capLastSent >= CAPTURE_KEEPALIVE_MS) this.#capture({ state: 'hearing', segId: live.segId });
     // VAD runs in AMBIENT (segmentation) and during playback in any mode (barge-in)
     if (mode !== 'ambient' && !this.#playing) return;
     const segs = this.#o.engines.vad.accept(f);
@@ -537,36 +698,57 @@ export class VoiceClient {
       if (this.#o.engines.vad.speaking()) {
         this.#vadSpeaking = true;
         this.#vadLastSpeech = f.t0;
-      } else if (segs.length || f.t0 - this.#vadLastSpeech > VAD_OPEN_MAX_SILENCE_MS) this.#vadSpeaking = false;
+      } else if (segs.length || f.t0 - this.#vadLastSpeech > VAD_OPEN_MAX_SILENCE_MS) {
+        this.#vadSpeaking = false;
+        // the VAD lost an open utterance without emitting it: nothing is being heard any more
+        if (!segs.length) this.#abandonLive();
+      }
+      // AMBIENT: VAD start is hearing (also the speech that follows a barge-in drop)
+      if (this.#o.engines.vad.speaking() && this.#cap?.state !== 'hearing') this.#beginHearing();
       this.#recompute();
     }
   }
 
   /** Inside our playback or its tail (the client mirror of the kernel's voice-echo guard). */
-  #inEcho(t: number): boolean {
-    if (this.#playing && t >= this.#playing.t0) return true;
-    return this.#windows.some((w) => t >= w.t0 && t <= w.t1 + this.#tail);
+  /** Which echo guard `t` falls in: 'barge-in' when it is the reply the human cut off, 'echo' otherwise, or null. */
+  #echoOf(t: number): 'echo' | 'barge-in' | null {
+    if (this.#playing && t >= this.#playing.t0) return this.#bargedIn ? 'barge-in' : 'echo';
+    const w = this.#windows.find((x) => t >= x.t0 && t <= x.t1 + this.#tail);
+    return w ? (w.barged ? 'barge-in' : 'echo') : null;
   }
 
   #segment(seg: VadSegment, pressedAt?: number): void {
+    const segId = this.#takeLive();
     const dur = seg.t1 - seg.t0;
-    if (dur < MIN_UTTERANCE_MS) return;
+    // the echo guard first: a fragment inside our playback (or the reply the human cut off) says why, not its length
     const startedAt = pressedAt ?? seg.t0;
-    if (this.#inEcho(startedAt) || this.#inEcho(seg.t0)) {
+    const echo = this.#echoOf(startedAt) ?? this.#echoOf(seg.t0);
+    if (echo) {
       this.#flow.info('utterance dropped (playback or echo tail)', { t0: seg.t0, ms: Math.round(dur) });
-      return;
+      return this.#endCapture(segId, 'dropped', echo);
     }
+    if (dur < MIN_UTTERANCE_MS) return this.#endCapture(segId, 'dropped', 'too-short');
     const a = this.#attachment;
     const mode = this.mode;
     if (!a || mode === 'off') {
       this.#flow.info('utterance dropped (not attached)', { ms: Math.round(dur) });
-      return;
+      return this.#endCapture(segId, 'dropped', 'not-attached');
     }
+    this.#capture({ state: 'transcribing', segId });
+    let ended = false;
+    const end = (state: 'captured' | 'dropped', reason?: CaptureDropReason): void => {
+      if (ended) return;
+      ended = true;
+      this.#endCapture(segId, state, reason);
+    };
     this.#pending++;
     this.#recompute();
     this.#work = this.#work
-      .then(() => this.#utterance(seg, a, mode as 'ptt' | 'ambient'))
-      .catch((err) => this.#log.warn('utterance failed', { error: err instanceof Error ? err.message : String(err) }))
+      .then(() => this.#utterance(seg, a, mode as 'ptt' | 'ambient', end))
+      .catch((err) => {
+        this.#log.warn('utterance failed', { error: err instanceof Error ? err.message : String(err) });
+        end('dropped', 'no-words'); // the STT or the verifier failed: no words came out of it
+      })
       .finally(() => {
         // idle after the append (or the drop): the edge is reported once nothing is pending
         this.#pending--;
@@ -574,12 +756,12 @@ export class VoiceClient {
       });
   }
 
-  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient'): Promise<void> {
+  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason) => void): Promise<void> {
     const text = (await this.#o.engines.stt.transcribe(seg.samples, seg.sampleRate)).trim();
-    if (!text) return;
+    if (!text) return end('dropped', 'no-words');
     const who = await this.#verifier.identify(seg.samples, seg.sampleRate);
     // the samples are not kept past this point (G-VOX-05)
-    if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return; // attachment moved under us
+    if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return end('dropped', 'not-attached'); // attachment moved under us
     const enrolled = who.name !== undefined;
     const speakerId = enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
@@ -595,23 +777,25 @@ export class VoiceClient {
       await this.#o.link.append('voice.turn.user', payload);
     } catch (err) {
       this.#refused(err, 'log.append');
-      return;
+      return end('dropped', 'refused');
     }
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
     if (!enrolled) {
       this.#notice('info', 'I heard someone who is not enrolled; nothing was sent.');
-      return;
+      return end('dropped', 'not-enrolled');
     }
     if (!direct) {
       this.#flow.info('turn dictated (composer)', { turnId });
-      return;
+      return end('captured');
     }
     try {
       await this.#o.link.send(a.hsid, text);
       this.#flow.info('turn sent', { turnId });
       this.#notice('info', `Sent: ${text}`);
+      end('captured');
     } catch (err) {
       this.#refused(err, 'session.send'); // never retried blindly
+      end('dropped', 'refused');
     }
   }
 
@@ -738,7 +922,7 @@ export class VoiceClient {
         return;
       }
       this.#lastAgentMs = Math.max(this.#lastAgentMs, r.t0);
-      this.#windows.push({ t0: r.t0, t1: r.t1 });
+      this.#windows.push({ t0: r.t0, t1: r.t1, ...(!r.completed && this.#bargedIn ? { barged: true } : {}) });
       if (this.#windows.length > WINDOW_KEEP) this.#windows.splice(0, this.#windows.length - WINDOW_KEEP);
       try {
         await this.#o.link.append('voice.turn.agent', { turnId: id, t0: Math.round(r.t0), t1: Math.round(r.t1), textPlanned: cur.sentence, textSpoken: r.completed ? cur.sentence : '', ...(r.completed ? {} : { interrupted: true }) });
@@ -760,6 +944,9 @@ export class VoiceClient {
     this.#speakQueue = [];
     this.#o.audio.stopPlayback();
     this.#o.engines.vad.reset(); // the barge-in speech is not forwarded
+    // AMBIENT: the speech that barged in is dropped now; PTT's held segment is dropped at release (it started inside
+    // the barged window, so its reason is 'barge-in' too)
+    if (by === 'speech') this.#abandonLive('barge-in');
     this.#flow.info('barge-in', { by });
   }
 

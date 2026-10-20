@@ -1,0 +1,34 @@
+id: L-2026-10-20-ascend-075712-001
+type: incident
+timestamp: '2026-10-20T07:57:12.683Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis BLOCK: a heredoc backslash-continuation bypasses the read-only proof (C1, reproduced), and F1 widens the git-config residual (H1)'
+summary: 'Aegis reviewed the parity commits. A1 anchoring holds (nothing can inject past the closing `}`). But C1 is critical: #readHeredocs compares raw physical lines with the delimiter, while bash and zsh join backslash-newline in unquoted heredoc bodies first. So `cat <<EOF / EO\ / F / touch X / EOF` ends the heredoc early and runs `touch X`, yet passes as read-only. I reproduced it in a scratch folder under both bash and zsh. The bug is pre-existing (it predates today) and was already reachable in auto-edits; F1 now extends it to ask. H1: F1 also extends the accepted repo-.git/config exec residual (fsmonitor, textconv, diff.external, …) to ask mode, which matters for untrusted repos from archives. Also: M1 promisor lazy fetch, M2 cd hooks (chpwd/rvm/autoenv), and L1–L4. Sent back with fixes: refuse odd-backslash body lines; git config env overrides plus a .git/config exec-key scan; a prelude that disables cd hooks and forces brace expansion; GIT_NO_LAZY_FETCH.'
+symbols_touched:
+  - '#shell-readonly'
+  - '#supervisor'
+errors_encountered:
+  - description: Heredoc delimiter matching ignored backslash-newline joining in unquoted heredocs, so the body can hide commands
+    resolution: Refuse unquoted heredoc body lines ending in an odd number of backslashes; add a run-under-real-shell regression test
+learnings:
+  - A shell classifier must model the shell's line-joining phases (backslash-newline) before every comparison, including heredoc delimiters; test classifiers by executing accepted inputs under real shells and asserting no side effects.
+  - 'Widening WHERE a proof applies (F1: ask mode) re-exposes every old residual to a more cautious audience; re-run the security review over the residual list, not just the diff.'
+verification:
+  status: fail
+  details:
+    verdict: BLOCK
+    critical: 1
+    high: 1
+    repro: bash+zsh confirmed
+tags:
+  - gnomon
+  - security
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: 2777cf6017d7e8ef109bea42a7d8d68199e250ac
+  branch: feat/gnomon
+  dirty: true

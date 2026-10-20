@@ -1,0 +1,25 @@
+id: L-2026-10-20-ascend-074008-003
+type: insight
+timestamp: '2026-10-20T07:40:08.759Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The shipped Gnomon GUI drifted from the approved Atelier direction; overnight preview loop set up
+summary: 'The founder: "stylistically it doesn''t feel like anything we did in atelier". A dev kernel on an isolated home (~/.gnomon-preview-a via `gnomon dev up`) was driven in Chrome and compared against the 2026-10-15 direction comp: papercraft day / phosphor night, the desk with project-grouped sessions, the stack as a paper pile, pending cards pinned above the composer, the Workshop footer. What ships is a generic dark kernel-feed viewer. Tried and failed: dev homes under /tmp are refused (shared temp root); `script` with fifo stdin fails (tcgetattr); node needs --disable-sigusr1 and no NODE_OPTIONS. Working: a python pty driver (scratchpad preview.py) with kick/stop files for fresh launch URLs. In flight: Luna''s fidelity critique and five-slice brief, a builder on a fixture preview harness (the real GUI plus a fake client), and Arky on a mods roadmap toward the founder''s north star: "the ultimate personal agentic optimization and context tool… especially those wrapped in the paradigm system".'
+symbols_touched:
+  - '#gui'
+  - '#dev-launch'
+  - '#mod-host'
+learnings:
+  - Build the design-fidelity loop (fixture preview plus screenshot vs comp) before building UI; without it, implementation drifts from approved comps.
+  - Isolated worktrees are created from main, not the current branch. Builders must reset to feat/gnomon first.
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+git_context:
+  ref: 32b4a08e6207f43a45ebe3f6bda36848d22f7ffc
+  branch: feat/gnomon
+  dirty: true

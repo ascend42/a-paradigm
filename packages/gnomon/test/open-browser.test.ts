@@ -133,7 +133,7 @@ describe('the terminal: opened, or printed as before', () => {
     expect(off.join('')).toBe(`\n  open this:\n\n  ${URL1}\n`);
   });
 
-  it('printLaunch opens the minted URL (with the hint suffix) on a TTY, again on each fresh URL; off a TTY it neither mints nor opens', async () => {
+  it('printLaunch opens the minted URL (with the hint suffix) on a TTY, again on each fresh URL; off a TTY it opens without printing (#gui-relaunch)', async () => {
     const opened: string[] = [];
     const open = async (u: string): Promise<OpenResult> => (opened.push(u), { ok: true });
     let mints = 0;
@@ -147,10 +147,25 @@ describe('the terminal: opened, or printed as before', () => {
     // the Enter keypress calls printLaunch again: the fresh URL opens too
     await printLaunch(k, t.io, 'Enter = a fresh URL', '&cwd=abc', open);
     expect(opened).toHaveLength(2);
+    // T-2026-10-20-001: no TTY (nohup, a script) still opens the GUI, and the URL never reaches stdout
     const p = tty(false);
-    expect(await printLaunch(k, p.io, 'keys', '', open)).toBe(false);
-    expect(opened).toHaveLength(2);
-    expect(mints).toBe(2);
+    expect(await printLaunch(k, p.io, 'keys', '&cwd=abc', open)).toBe(true);
+    expect(opened).toHaveLength(3);
+    expect(opened[2]).toBe('http://127.0.0.1:51234/#launch=T0k&k=KEY&cwd=abc');
+    expect(mints).toBe(3);
+    expect(p.o.join('')).not.toContain('T0k');
+    expect(p.o.join('')).not.toContain('127.0.0.1');
+    expect(p.o.join('')).toContain('opened in your default browser');
+    // a failing opener: still no URL on stdout, and the UI path is named first
+    const f = tty(false);
+    expect(await printLaunch(k, f.io, 'keys', '', async () => ({ ok: false, reason: 'osascript exited 1' }))).toBe(false);
+    expect(f.o.join('')).not.toContain('T0k');
+    expect(f.o.join('')).toContain('Open Gnomon.app');
+    // no TTY and no opener (--no-open / GNOMON_NO_OPEN): nothing minted, nothing opened
+    const n = tty(false);
+    expect(await printLaunch(k, n.io, 'keys', '', null)).toBe(false);
+    expect(mints).toBe(4);
+    expect(n.o.join('')).toContain('auto-open is off');
   });
 });
 

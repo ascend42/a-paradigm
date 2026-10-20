@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T05:15:07.372Z'
+generated: '2026-10-20T08:03:25.831Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -458,6 +458,22 @@ protocols:
       - bug
       - agent-protocol
       - calibration
+  - id: P-gnomon-table-talk-voice-replies
+    name: Gnomon table talk (reply to a listening human)
+    status: stale
+    last_verified: '2026-10-20T06:00:00Z'
+    trigger:
+      - table talk
+      - voice attached
+      - gnomon voice reply
+      - speak block
+      - spoken reply
+      - reply out loud
+    tags:
+      - gnomon
+      - voice
+      - table-talk
+      - conversation
   - id: P-record-lore
     name: Record a lore entry
     status: stale
@@ -519,24 +535,8 @@ protocols:
       - dogfood
       - qa
       - battle-test
-  - id: P-gnomon-table-talk-voice-replies
-    name: Gnomon table talk (reply to a listening human)
-    status: current
-    last_verified: '2026-10-20T06:00:00Z'
-    trigger:
-      - table talk
-      - voice attached
-      - gnomon voice reply
-      - speak block
-      - spoken reply
-      - reply out loud
-    tags:
-      - gnomon
-      - voice
-      - table-talk
-      - conversation
 health:
   total: 40
-  current: 21
-  stale: 15
+  current: 20
+  stale: 16
   broken: 4

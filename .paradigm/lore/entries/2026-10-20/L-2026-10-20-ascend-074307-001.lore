@@ -1,0 +1,25 @@
+id: L-2026-10-20-ascend-074307-001
+type: agent-session
+timestamp: '2026-10-20T07:43:07.066Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mods roadmap proposed (Arky): mods are nearly blind, and the GUI renders none'
+summary: 'Arky mapped the mod platform against the founder''s north star. Mods see only a 10-kind feed projection (ids, hues, flags; no numbers, no repo, no Paradigm data), and the GUI renders no mod views at all; that last gap (K0) is the hidden blocker. Ranked mods: 1 Ledger (context/budget meter), 2 Paradigm Context (tasks/decisions/lore/symbols for the focused repo), 3 Notify feed (F6 notify-not-ask), 4 Checkpoint/resume, 5 Cid task board, 6 Decisions and lore timeline, 7 orchestration lanes, 8 calibration, 9 protocol suggestions. Host slices: K0 GUI mod panels, K2 numbers-only feed projection, K1 a paradigm-slice:v1 kernel projection (not raw readPaths), K3 focus (server-side hsid→repo), K4 actions become cards via userland writers, K5 SDK fixture helpers. Plan: iterate Ledger as a linked local mod and pin first-party last. Builder launched for K2 + Ledger + K0.'
+symbols_touched:
+  - '#mod-host'
+  - '#gui'
+  - '#ledger-mod'
+learnings:
+  - A plugin platform with no rendering surface for plugins is invisible. Ship the host panel (K0) with the first mod.
+  - Give mods projections (numbers/enums/ids), never raw reads; readPaths via knowledge:provide is the wrong shortcut for UI mods.
+tags:
+  - gnomon
+  - mods
+  - roadmap
+  - marathon-2026-10-20
+git_context:
+  ref: b8e082f1cf8aceaa08969483cfd8a098b097714d
+  branch: feat/gnomon
+  dirty: true

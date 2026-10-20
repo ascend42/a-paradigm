@@ -210,7 +210,7 @@ export function voiceMenuEntries(v: VoiceView, focused: string | null, attachabl
 /** Rows whose arrival changes status.voice (the page re-reads status on them; motion-on-events, no polling). */
 export const VOICE_ROW_KINDS: ReadonlySet<string> = new Set(['voice.session.start', 'voice.session.end', 'voice.session.mode', 'daemon.start']);
 /** Rows that mean the voice app heard or said something (the pill's level meter kicks on them). */
-export const VOICE_ACTIVITY_KINDS: ReadonlySet<string> = new Set(['voice.turn.user', 'voice.turn.partial', 'voice.turn.agent', 'voice.bargein']);
+export const VOICE_ACTIVITY_KINDS: ReadonlySet<string> = new Set(['voice.turn.user', 'voice.turn.agent', 'voice.bargein']);
 
 const IDLE_REASONS: ReadonlySet<string> = new Set(['idle', 'idle-timeout', 'idle-auto-off', 'ambient-idle']);
 

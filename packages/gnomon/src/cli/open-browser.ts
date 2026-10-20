@@ -15,9 +15,13 @@
  * the script. Never throws: the result is ok or failed, and the caller keeps
  * printing the URL on the TTY as the fallback.
  *
- * Who may open: only a terminal launch (printLaunch's TTY rule, runGuiSetup
- * via 'tty'). Never the wrapper channel (`up --wrapper`), never without a
- * TTY, never with `--no-open` or `GNOMON_NO_OPEN=1`. Zero deps (G-SEC-01).
+ * Who may open: a terminal launch (printLaunch's TTY rule, runGuiSetup via
+ * 'tty'), and (T-2026-10-20-001 #gui-relaunch) a start WITHOUT a terminal:
+ * printLaunch with no TTY and `gnomon daemon start` / `gnomond` after the
+ * kernel is ready (daemon-cli.ts openGuiAfterStart). Without a TTY the URL
+ * goes to the opener ONLY and is never printed. Never the wrapper channel
+ * (`up --wrapper`), never with `--no-open` or `GNOMON_NO_OPEN=1`. Zero deps
+ * (G-SEC-01).
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 

@@ -376,7 +376,7 @@ html, body {
    --ink2 with a filled --ink2 dot (slate is a project hue, never a state); ambient (the live mic, "armed") = the
    fixture's voice-armed pair (--warn-ink on --warn-bg) inside a 1px amber --warn-edge (3.24:1 on its fill, a fixture
    pair) with a 7px amber dot, STATIC: amber = armed, vermilion = failure only, nothing idles. Only the level meter
-   moves, and only on an audio event (.kick, one beat); crashed keeps vermilion (a failure). */
+   moves, and only with the real mic level (#gui-voice-capture); crashed keeps vermilion (a failure). */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; border-radius: var(--radius); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
@@ -388,13 +388,21 @@ html, body {
 .voice-pill.voice-ambient .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
 .voice-pill.voice-noclient { color: var(--sec); border-style: dashed; }
 .voice-target { font-weight: 400; }
-.voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0.5; }
+/* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level) while hearing,
+   and still otherwise; no decorative animation */
+.voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
 .voice-meter[hidden] { display: none; }
-.voice-meter i { display: block; width: 2px; background: var(--warn-edge); height: calc(20% + 60% * var(--level)); }
-.voice-meter.kick i { height: 100%; animation: voice-meter 0.45s ease-out 1; }
-.voice-meter.kick i:nth-child(2) { animation-delay: 0.05s; }
-.voice-meter.kick i:nth-child(3) { animation-delay: 0.1s; }
-.voice-meter.kick i:nth-child(4) { animation-delay: 0.15s; }
+/* S1 + capture merge: amber (armed), static; the meter follows the REAL level only (no idle or decorative motion) */
+.voice-meter i { display: block; width: 2px; background: var(--warn-edge); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+.voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
+.voice-pill.capture-hearing { font-weight: 600; }
+.voice-pill.capture-hearing .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
+.voice-pill.capture-transcribing .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
+.voice-pill.capture-captured { border-color: var(--key-edge); color: var(--ink); }
+.voice-pill.capture-dropped { border-style: dashed; color: var(--warn-ink); }
+.composer-ghost { padding: 2px 10px; font-style: italic; color: var(--sec); }
+.composer-ghost[hidden] { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .voice-note { font-style: italic; }
 .voice-menu { left: 0; right: auto; }
 .voice-keys { padding: 4px 8px 2px; border-top: 1px solid var(--rule); }
@@ -405,11 +413,8 @@ html, body {
 .voice-row-btn.voice-ambient { color: var(--warn-ink); }
 .voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--ink2); }
 .voice-choice.current { border-width: 2px; }
-@keyframes voice-meter { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
 /* the transcript's voice turns */
 .trow.voice .who { color: var(--slate); }
-.trow.role-voice-partial { color: var(--sec); font-style: italic; padding: 4px 14px; }
-.trow.role-voice-partial .voice-tag { font-style: normal; font-size: 11px; }
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
 .trow.role-voice-refused { color: var(--sec); font-size: 11px; padding-left: 28px; border-left: 2px solid var(--fail-edge); }
 .mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }

@@ -7,6 +7,7 @@
     { "symbol": "#update-watch", "reason": "TD-2026-10-19-063 sub-component of $daemon-lifecycle (§2.4 rule 11 self-update pickup: build stamp poll, kernel upgrade card, helper re-pin); spec Appendix A node pending the TD-2026-10-19-063 spec pass" },
     { "symbol": "#gui-dictation", "reason": "TD-2026-10-20-262 sub-component of #gui (voice dictation into the composer, §14.4.1 Dictation paragraph); spec Appendix A node pending a spec pass" },
     { "symbol": "#gui-stop-speaking", "reason": "T-2026-10-19-026 sub-component of #gui (the Stop speaking button, Esc and 300 ms poll, §14.4.1 Stop speaking paragraph); spec Appendix A node pending a spec pass" },
+    { "symbol": "#gui-relaunch", "reason": "T-2026-10-20-001 sub-component of #web-endpoint / #gui (a stop-then-start reopens the GUI without a terminal: remembered port, open-after-start, stale-tab steering); spec Appendix A node pending a spec pass" },
     { "symbol": "#gui-resume", "reason": "TD-2026-10-19-063 sub-component of #web-endpoint (the {resumeToken} auth form, §4.9 / §11.2); spec Appendix A node pending the TD-2026-10-19-063 spec pass" },
     { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },
@@ -31,6 +32,7 @@
     { "symbol": "#gnomon-voice-io-build", "reason": "the build-and-sign script of #gnomon-voice-io (packages/gnomon-voice/scripts/build-voice-io.mjs); spec has no node" },
     { "symbol": "#gui-dictation", "reason": "TD-2026-10-20-262 sub-component of #gui (composer dictation reducer); spec §14.7's Dictation paragraph names it in plain words (no node span, no test id), so Appendix A has no node for it" },
     { "symbol": "#gui-preview", "reason": "dev-only sub-component of #gui (the fixture preview harness, scripts/preview.mjs + src/preview, never in the kernel-served bundle); the spec has no node for dev tooling, so Appendix A has no node for it" },
+    { "symbol": "#gui-voice-capture", "reason": "T-2026-10-20-005 / TD-2026-10-20-086 sub-component of #gui (packages/gnomon-gui/src/core/capture.ts: the status.voice.capture adapter, the pill words and the V3 poll cadence); spec §14.7's Capture paragraph names it in plain words (no node span, no test id), so Appendix A has no node for it" },
     { "symbol": "#gui-table-talk", "reason": "TD-2026-10-20-294 sub-component of #gui (the said-aloud line and label chips); spec §14.7's Table talk paragraph names it in plain words (no node span, no test id), so Appendix A has no node for it" }
   ]
 }
