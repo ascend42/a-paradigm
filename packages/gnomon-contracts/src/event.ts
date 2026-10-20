@@ -47,7 +47,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -70,6 +70,8 @@ const D89 = 'M1.4:P8-D89' as const;
 const D98 = '8.0:P8-D98' as const;
 /** TD-2026-10-20-294 part 3 (prefix-scoped always rules, a deliberate clientApiId move). */
 const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
+/** TD-2026-10-20-086 F6 (the daily standing grant) + T-2026-10-20-007 (approval.auto.miss, anchoredInputHash): one clientApiId move. */
+const STANDING = '8.0:TD-2026-10-20-086' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -115,6 +117,18 @@ const TABLE: Row[] = [
   // revoked a standing `always` rule (rules.revoke). approval.effect.failed{cardId, decision, effect, reason} — a
   // decided card whose effect could not be applied (never a silent success).
   ['approval', 'kernel', 'rule.revoked effect.failed', D98],
+  // TD-2026-10-20-086 F6: grant.standing{grantId, cardId, tuples, repos, device, expiresAt, by} — minted by ONE root-class
+  // `grant` card; grant.standing.used{grantId, cardId, tuple, decision, repo, hsid} — the notify row of each use
+  // (beside approval.decide{presence:'standing:<grantId>'}); grant.standing.revoked{grantId, by, reason} — a tighten,
+  // no presence. request.grant.standing{tuples, repos} / request.grant.standing.revoke{grantId}: the human's asks.
+  ['grant', 'kernel', 'standing standing.used standing.revoked', STANDING],
+  ['request', 'kernel', 'grant.standing grant.standing.revoke', STANDING],
+  // T-2026-10-20-007: approval.auto.miss{hsid, tool, why, inputHash, modeRef} — the supervisor's read-only pass refused
+  // under auto-edits/ask, written before the card (a sensitive kind: why and inputHash are sensitive fields).
+  ['approval', 'kernel', 'auto.miss', STANDING],
+  // Aegis M1 (TD-2026-10-20-086 F5): approval.unlock.joined{connId, scope:'device'} — a new connection of the same GUI
+  // device first used the device's cached unlock (the GUI feed says "another Gnomon window joined your unlock").
+  ['approval', 'kernel', 'unlock.joined', STANDING],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -187,6 +201,8 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'voice.turn.agent': 'sensitive',
   // "voiceprints secret (§14.4)": the enrol row is the one that carries the print reference.
   'voice.enrol': 'secret',
+  // T-2026-10-20-007: why the read-only pass refused names command structure (paths, words)
+  'approval.auto.miss': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -196,7 +212,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'voice.turn.user': { audioRef: 'sensitive' },
   // Aegis round 3 (P8-D86–D88): a worktree path and a commit trailer can carry
   // project or agent-written detail; the rows stay private + normal.
-  'approval.auto': { path: 'sensitive', inputHash: 'sensitive' },
+  'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },
+  'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
   'merge.reverted': { trailer: 'sensitive' },
   // M1.4 slice 2 round 3 (Aegis): digests of sensitive or low-entropy content are
   // confirmation oracles for a dictionary guess, so a limited reader never gets them.
@@ -260,6 +277,8 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
   'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES }),
   'approval.decide': Object.freeze({ scope: PREFIX_RULES }),
+  // T-2026-10-20-007: the digest of the ANCHORED command the kernel actually ran (the rewritten updatedInput)
+  'approval.auto': Object.freeze({ anchoredInputHash: STANDING }),
   // P8-D98 (TD-2026-10-19-528 F4, §2.4 rule 11): approval.expire{why:'session-drained'} (CARD_EXPIRY_WHYS).
   'approval.expire': Object.freeze({ why: D98 }),
   // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
@@ -295,7 +314,40 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   // P8-D89 (M1.4)
   'daemon.log.quarantined': ['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy'],
   'key.token.revoked': ['tokenId'],
+  // TD-2026-10-20-086 F6 / T-2026-10-20-007
+  'grant.standing': ['grantId', 'cardId', 'tuples', 'repos', 'device', 'expiresAt', 'by'],
+  'grant.standing.used': ['grantId', 'cardId', 'tuple', 'decision', 'repo', 'hsid'],
+  'grant.standing.revoked': ['grantId', 'by', 'reason'],
+  'request.grant.standing': ['tuples', 'repos'],
+  'request.grant.standing.revoke': ['grantId'],
+  'approval.auto.miss': ['hsid', 'tool', 'why', 'inputHash', 'modeRef'],
+  'approval.unlock.joined': ['connId', 'scope'],
 });
+
+/**
+ * TD-2026-10-20-086 F6: what a daily standing grant may cover (CLOSED). Each names a (card kind, decision) the human
+ * still takes by gesture, but with no presence prompt while the grant stands:
+ *   mode.loosen:auto-edits  a strictness card loosening a run mode to auto-edits (detail.op mode.loosen), allow
+ *   permission:always       a permission card's `always`
+ *   voice.widen             a strictness card widening voice to ambient (detail.op voice.widen), allow
+ *   voice-arm:allow         a voice-arm card, allow
+ *   daemon-stop:restart     a daemon-stop card the kernel marked binaryUnchanged (a restart, never an upgrade), accept
+ * (Aegis M2: `reconsider.extend` is NOT standing; the founder's F6 list does not name it.)
+ * NEVER standing (no tuple names them, and the broker refuses them whatever a row says): root-class decisions
+ * (install, use-api-token, peer-pair, a grant), a re-pin or any binary/publisher change, gate-class cards,
+ * fallback-cloud, declassify, and every peer-raised (peer-flagged) card.
+ */
+export const STANDING_TUPLES = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'] as const;
+/** Tuples that apply only inside a granted repo (a match with no repo never uses them). */
+export const STANDING_REPO_TUPLES = ['mode.loosen:auto-edits', 'permission:always'] as const;
+export type StandingTuple = (typeof STANDING_TUPLES)[number];
+/** grant.standing.revoked{reason} (CLOSED): the human's Revoke, or what ended the grant with the unlock. */
+export const STANDING_REVOKE_REASONS = ['human', 'screen-lock', 'display-sleep', 'system-sleep', 'user-switch', 'helper-exit'] as const;
+export type StandingRevokeReason = (typeof STANDING_REVOKE_REASONS)[number];
+/** approval.decide{presence} of a decision a standing grant carried: this prefix + the grantId. */
+export const STANDING_PRESENCE_PREFIX = 'standing:' as const;
+/** The longest a standing grant lives (it also ends at the next screen lock, sleep or user switch). */
+export const STANDING_GRANT_MAX_MS = 12 * 60 * 60_000;
 
 /**
  * Payload fields of BUILT kinds whose payload the kernel validates at append

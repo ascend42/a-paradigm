@@ -27,7 +27,7 @@ export const errOf = async (p: Promise<unknown>): Promise<RefusedError> => {
 };
 
 /** A broker + run-mode control rig with no session (pure half). */
-export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | 'L3' | null; sessions?: Array<{ hsid: string; repoKey: string; cwd: string }>; userHome?: string } = {}) {
+export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | 'L3' | null; sessions?: Array<{ hsid: string; repoKey: string; cwd: string }>; userHome?: string; configDefault?: () => 'manual' | 'ask' | 'auto-edits' | null } = {}) {
   const rows: Array<{ kind: string; payload: Record<string, unknown>; ids?: Record<string, unknown> }> = [];
   const book = new RunModeBook({ principal: KP, isKernelKey: (k) => k === 'kernel-key' });
   const log = async (kind: string, payload: Record<string, unknown>, ids?: Record<string, unknown>): Promise<void> => {
@@ -58,6 +58,7 @@ export function controlRig(o: { level?: (repo: string) => 'L0' | 'L1' | 'L2' | '
     logRequest: (payload, ids) => log('request.mode.set', { ...payload }, ids),
     repoKeyOfPath: (abs) => repoKeyOf([abs]),
     userHome: o.userHome ?? '/nonexistent-home-for-tests',
+    ...(o.configDefault ? { configDefault: o.configDefault } : {}),
     onChange: () => {
       changes.n++;
     },

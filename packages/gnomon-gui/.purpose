@@ -71,7 +71,27 @@ components:
       mode.* commands are excluded from BLOCK_SAFE_COMMANDS. The transcript
       shows approval.auto as a subtle `auto-approved edit · <path>` line
       (`auto-approved · <tool> (always rule)` for a rule) and
-      approval.mode.set as a system line. Tests: test/modes.test.ts.
+      approval.mode.set as a system line. F2 (TD-2026-10-20-086): the
+      switch, ⇧Tab and the menu default to FOLDER scope (the repo,
+      labelled "this folder"; defaultScope/planFor/scopeEntries/SCOPE_LABEL,
+      status repoMode) so a new session in the same folder starts in the
+      chosen mode; "this session only" is the secondary entry (palette
+      mode.*); a session that already has its own mode keeps session scope.
+      F3: a folder on the root-signed default (status source 'config')
+      is labelled `mode: auto-edits (default) ▾`. Tests: test/modes.test.ts.
+    standing-feed: >-
+      TD-2026-10-20-086 F6 (#standing-grant's GUI): core/standing.ts (PURE)
+      reads status.standing fail-safe, turns grant.standing / .used /
+      .revoked rows into feed lines (a use is also a toast naming what
+      Gnomon did), decides the once-a-day offer (shouldOffer: a pending
+      strictness/permission/voice-arm/daemon-stop card, no live
+      grant, not offered today) and builds request.grant.standing{tuples,
+      repos} / request.grant.standing.revoke{grantId}. ui/standing-feed.ts
+      (its own module; app.ts only mounts it and forwards live rows and
+      status reads) shows toasts, today's list with Revoke (a tighten, no
+      presence) and "Let Gnomon handle these today", which sends the request
+      and approves its grant card `allow` in the same trusted gesture (one
+      password). Tests: test/standing.test.ts.
     voice-controls: >-
       Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
       header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the

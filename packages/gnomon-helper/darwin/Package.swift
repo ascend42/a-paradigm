@@ -4,6 +4,7 @@
 // LaunchServices URL hand-off (docs/specs/gnomon.md §16, §18). PR-0 scaffold.
 // 1.6.0: unit tests (`swift test`) over the executable target (@testable import
 // gnomon_helper): arm custody, signature domains, the session observer.
+// 1.7.0: the unlock bounds (12 h / 512, reported on a kept sign; UnlockBoundsTests).
 
 import PackageDescription
 

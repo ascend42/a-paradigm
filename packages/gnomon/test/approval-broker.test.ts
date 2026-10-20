@@ -287,7 +287,7 @@ describe('G-BRK-05 presence classes and the per-connection cached unlock', () =>
     expect(r.rows.find((x) => x.kind === 'approval.rule.learned')!.payload).toMatchObject({ tool: 'Bash', matchExact: true, presence: 'fresh' });
   });
 
-  it('the unlock drops on connection close and after 15 min idle; a CLI connection never holds one', async () => {
+  it('a per-connection unlock (no deviceId) drops on connection close and at the 12 h cap (F4); a CLI connection never holds one', async () => {
     let touch = true;
     const presence: PresenceProvider = { prove: (req) => (touch ? touching().prove(req) : declining.prove(req)) };
     const r = rig({ presence });
