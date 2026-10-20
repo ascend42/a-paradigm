@@ -899,7 +899,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       }
     },
   });
-  const sessions = createSessionPort(supervisor, runModes);
+  // TD-2026-10-20-262 dictation: a human send{source:'voice'} is attributed by #gnomon-voice (declared below; called
+  // only once the daemon serves, so the late binding is safe)
+  const sessions = createSessionPort(supervisor, runModes, {
+    attributeHumanSend: (human, hsid, parts) => voice.attributeHumanSend(human, hsid, parts),
+    releaseAttribution: (attr) => voice.releaseAttribution(attr),
+  });
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
     home,
@@ -1052,7 +1057,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
       enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
       forget: (p: { name: string }) => voiceEnrol.forget(p),
-      report: (p: unknown) => voiceReports.report(p),
+      report: (p: unknown, connId?: string) => voiceReports.report(p, connId),
     },
     mods: createModRelayPort(mods),
     sessions,

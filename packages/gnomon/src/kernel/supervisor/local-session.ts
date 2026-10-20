@@ -73,7 +73,7 @@ import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPA
 import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
-import { voiceTag, type VoiceTurnLink } from '../voice/voice-control.js';
+import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -540,7 +540,7 @@ export class LocalLane {
     return s && s.state === 'running' ? s.owner : undefined;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink }): Promise<{ turn: string; steered?: boolean }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution }): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });

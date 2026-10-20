@@ -14,6 +14,9 @@
  *                                       voice principal only: the client's enrolment recording progress and its
  *                                       notices, held in memory and relayed in status.voice.enrolment /
  *                                       status.voice.notice (bounded, kernel-stamped `at`). Never logged.
+ *   request.voice.report{dictation}     TD-2026-10-20-262: the client's dictation edges {activity: speaking |
+ *                                       transcribing | idle, holdToggles (monotone per voice connection)}, relayed
+ *                                       as status.voice.dictation{activity, holdToggles, at}. In memory only.
  */
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
@@ -23,6 +26,16 @@ export const VOICE_FORGET_REQUEST = 'request.voice.forget' as const;
 export const VOICE_REPORT_REQUEST = 'request.voice.report' as const;
 
 /** the phases the CLIENT reports; 'requested' is the kernel's own (an allowed GUI enrolment card) */
+/** TD-2026-10-20-262: the client's dictation activity edges */
+export const DICTATION_ACTIVITY = ['speaking', 'transcribing', 'idle'] as const;
+export type DictationActivity = (typeof DICTATION_ACTIVITY)[number];
+export interface DictationReport {
+  activity: DictationActivity;
+  /** the hold-toggle hotkey presses this client made (monotone; the GUI holds or releases its send countdown on a change) */
+  holdToggles: number;
+  at: string;
+}
+
 export const ENROL_PHASES = ['ready', 'recording', 'recorded', 'done', 'failed', 'cancelled'] as const;
 export type EnrolPhase = (typeof ENROL_PHASES)[number] | 'requested';
 const NOTICE_CODE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
@@ -53,17 +66,21 @@ const plain = (s: string, max: number): string => s.replace(/[\u0000-\u001f\u007
 export class VoiceReports {
   #enrolment: EnrolmentReport | null = null;
   #notice: { text: string; code?: string; at: string } | null = null;
+  #dictation: DictationReport | null = null;
+  /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
+  #dictationConn: string | undefined;
   readonly #now: () => number;
 
   constructor(now: () => number = Date.now) {
     this.#now = now;
   }
 
-  /** request.voice.report payload → state. Throws TypeError on a bad shape. */
-  report(p: unknown): { ok: true } {
-    if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(`${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?}`);
+  /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
+  report(p: unknown, connId?: string): { ok: true } {
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?}`;
+    if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice') || (o.enrolment === undefined && o.notice === undefined)) throw bad(`${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?}`);
+    if (Object.keys(o).some((k) => k !== 'enrolment' && k !== 'notice' && k !== 'dictation') || (o.enrolment === undefined && o.notice === undefined && o.dictation === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
     if (o.enrolment !== undefined) {
@@ -82,8 +99,22 @@ export class VoiceReports {
       if (n.code !== undefined && (typeof n.code !== 'string' || !NOTICE_CODE.test(n.code))) throw bad('notice.code is ≤ 64 of [a-z0-9.-]');
       notice = { text: plain(n.text, NOTICE_MAX), ...(typeof n.code === 'string' ? { code: n.code } : {}), at };
     }
+    let dictation: DictationReport | undefined;
+    if (o.dictation !== undefined) {
+      const d = o.dictation as Record<string, unknown> | null;
+      if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => k !== 'activity' && k !== 'holdToggles')) throw bad('dictation is {activity, holdToggles}');
+      if (!(DICTATION_ACTIVITY as readonly unknown[]).includes(d.activity)) throw bad(`dictation.activity is ${DICTATION_ACTIVITY.join(' | ')}`);
+      if (typeof d.holdToggles !== 'number' || !Number.isSafeInteger(d.holdToggles) || d.holdToggles < 0) throw bad('dictation.holdToggles is a non-negative integer');
+      const sameConn = this.#dictationConn === connId;
+      if (this.#dictation && sameConn && d.holdToggles < this.#dictation.holdToggles) throw bad(`dictation.holdToggles is monotone (was ${this.#dictation.holdToggles})`);
+      dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, at };
+    }
     if (enrolment) this.#enrolment = enrolment;
     if (notice) this.#notice = notice;
+    if (dictation) {
+      this.#dictation = dictation;
+      this.#dictationConn = connId;
+    }
     return { ok: true };
   }
 
@@ -92,10 +123,10 @@ export class VoiceReports {
     this.#enrolment = { name, phase: 'requested', at: new Date(this.#now()).toISOString() };
   }
 
-  /** status.voice.enrolment / status.voice.notice (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null } {
+  /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null } {
     const fresh = <T extends { at: string }>(x: T | null): T | null => (x && this.#now() - Date.parse(x.at) <= VOICE_REPORT_TTL_MS ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice) };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation) };
   }
 }
 
