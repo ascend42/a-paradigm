@@ -276,3 +276,20 @@ describe('Aegis S0b M4: re-binding back to github.com', () => {
     expect(checkGrantRow(row('evil'))).toBe('host');
   });
 });
+
+describe('Aegis S0b L3: the implicit github claim uses effective pins only', () => {
+  const m = (publisher: string) => validateManifest(base({ publisher }), local) as ManifestV2;
+  const row = (kind: 'grant.install' | 'grant.uninstall', source: string) =>
+    ({ schemaVersion: 'grantRow:v2', kind, createdAt: '2026-10-20T00:00:00.000Z', name: 'acme.board', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', source }) as never;
+  const gl = `git:https://gitlab.com/acme/board#${SHA}`;
+  it('an uninstalled github mod no longer claims the publisher; a live one still does', () => {
+    const gh = row('grant.install', `git:https://github.com/acme/board#${SHA}`);
+    const live = grants({ installs: [gh], pins: [gh] });
+    expect(code(() => checkPublisherSource(m('acme'), gl, live))).toBe('PUBLISHER');
+    const gone = grants({ installs: [gh], pins: [gh, row('grant.uninstall', 'package')] });
+    expect(checkPublisherSource(m('acme'), gl, gone)).toMatchObject({ host: 'gitlab.com', namespace: 'acme', rebind: false });
+    const moved = row('grant.install', 'package');
+    const nowFolder = grants({ installs: [gh, moved], pins: [gh, moved] });
+    expect(checkPublisherSource(m('acme'), gl, nowFolder)).toMatchObject({ rebind: false });
+  });
+});

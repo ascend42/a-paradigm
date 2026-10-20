@@ -264,7 +264,8 @@ export function checkPublisherSource(manifest: ManifestV2, source: string, grant
   if (ascendLike) refuse(`publisher ${pub} is accepted only from github.com/${ascendLike[1]!.githubOwner}`);
   const bound = grants.publishers.get(pub);
   // a github.com owner binds implicitly: another host claiming an installed github publisher needs a re-bind too
-  const githubClaim = grants.installs.some((r) => r.name.startsWith(`${pub}.`) && parseGitSource(r.source)?.host === 'github.com');
+  // Aegis S0b L3: only the EFFECTIVE pin of each id of this publisher counts, never every historical row
+  const githubClaim = [...new Set(grants.installs.map((r) => r.name))].some((id) => id.startsWith(`${pub}.`) && parseGitSource(effectiveInstall(grants, id)?.source ?? '')?.host === 'github.com');
   const same = bound !== undefined && bound.host === g.host && bound.namespace === g.namespace;
   if (!same && (bound !== undefined || githubClaim) && !opts.rebind) refuse(`publisher ${pub} is bound to ${bound ? `${bound.host}/${bound.namespace}` : 'github.com'}; re-bind it through a full card`, { host: g.host, namespace: g.namespace });
   return same ? null : { host: g.host, namespace: g.namespace, rebind: bound !== undefined || githubClaim };
