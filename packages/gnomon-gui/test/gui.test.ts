@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, refusalFromError, RpcError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, shownPrefixWords, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { Follow, isAtBottom } from '../src/core/follow.js';
 import { chatItems, GuiStore, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
@@ -185,7 +185,7 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const v = { cardId: 'card:01J', kind: 'permission', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: card.contentHash, flags: [], decisions: ['allow', 'deny', 'always'], decidable: true, prefixOptions: opts };
     const el = renderCard({ doc: fdoc }, v, block) as FEl;
     const always = el.all().filter((e) => e.attrs.get('data-decision') === 'always');
-    expect(always.map((e) => e.text)).toEqual(['Always: this exact command', 'Always: git …', 'Always: git log …']);
+    expect(always.map((e) => e.text)).toEqual(['Always: this exact command', "Always: 'git' …", "Always: 'git' 'log' …"]);
     expect(always.map((e) => e.attrs.get('data-scope'))).toEqual(['exact', 'prefix', 'prefix']);
     expect(always.map((e) => e.attrs.get('data-prefix'))).toEqual([undefined, '["git"]', '["git","log"]']);
     // no verified prefix choices ⇒ the plain always key
@@ -202,6 +202,20 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     expect(approveParamsOf('card:01J', 'allow', null, { scope: 'prefix', prefix: '["git"]' })).toEqual({ cardId: 'card:01J', decision: 'allow' });
     expect(approveParamsOf('card:01J', 'always', null, { scope: 'prefix', prefix: '{bad' })).toEqual({ cardId: 'card:01J', decision: 'always' });
     expect(approveParamsOf('card:01J', 'always', null, { scope: 'prefix', prefix: '[]' })).toEqual({ cardId: 'card:01J', decision: 'always' });
+  });
+  it("prefix words render separately and quoted, non-ASCII escaped (Aegis M1): 'git log' x and a homoglyph argv0", () => {
+    expect(shownPrefixWords(['git log', 'x'])).toBe("'git log' 'x'");
+    expect(shownPrefixWords(['git', 'log', 'x'])).toBe("'git' 'log' 'x'");
+    expect(shownPrefixWords(['git log', 'x'])).not.toBe(shownPrefixWords(['git', 'log', 'x']));
+    // Cyrillic i (U+0456) in argv0 is visibly not git
+    expect(shownPrefixWords(['gіt', 'log'])).toBe("'g\\u0456t' 'log'");
+    expect(shownPrefixWords(['git​', 'log'])).toBe("'git\\u200b' 'log'");
+    expect(shownPrefixWords(["it's", 'a\\b'])).toBe("'it\\u0027s' 'a\\u005cb'");
+    expect(shownPrefixWords(['\u{1f600}x', 'y'])).toBe("'\\u{1f600}x' 'y'");
+    // and the card keys use it
+    const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:x/s-1', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [], decisions: ['always'], decidable: true, prefixOptions: [['git log', 'x'], ['gіt', 'log']] };
+    const keys = (renderCard({ doc: fdoc }, v, { schemaVersion: 'display-block:v1', type: 'Box', children: [] }) as FEl).all().filter((e) => e.attrs.get('data-scope') === 'prefix');
+    expect(keys.map((e) => e.text)).toEqual(["Always: 'git log' 'x' …", "Always: 'g\\u0456t' 'log' …"]);
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];

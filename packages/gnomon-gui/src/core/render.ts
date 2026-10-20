@@ -341,6 +341,21 @@ function askPicker(ctx: RenderCtx, cardId: string, ask: AskCardDetail): MiniEl {
   );
 }
 
+/**
+ * Aegis M1 (TD-2026-10-20-294): prefix words shown one by one, each quoted, with every character outside printable
+ * ASCII (and the quote and backslash themselves) escaped as \uXXXX, so ['git log', 'x'] reads 'git log' 'x', never
+ * like ['git', 'log', 'x'], and a homoglyph argv0 (Cyrillic i in git) is visibly not git. Mirrors the kernel's
+ * presence prompt (#prefix-policy shownPrefixWords).
+ */
+export function shownPrefixWords(prefix: readonly string[]): string {
+  const esc = (ch: string): string => {
+    const c = ch.codePointAt(0)!;
+    if (c >= 0x20 && c <= 0x7e && ch !== "'" && ch !== '\\') return ch;
+    return c <= 0xffff ? `\\u${c.toString(16).padStart(4, '0')}` : `\\u{${c.toString(16)}}`;
+  };
+  return prefix.map((w) => `'${Array.from(w).map(esc).join('')}'`).join(' ');
+}
+
 /** The kernel-owned card region. Decision keys only for verified actions on a decidable card. */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
@@ -364,7 +379,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
         d === 'always' && v.prefixOptions?.length
           ? [
               h(doc, 'button', { class: 'key key-always', type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
-              ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${p.join(' ')} …`)),
+              ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${shownPrefixWords(p)} …`)),
             ]
           : [h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
       ),
