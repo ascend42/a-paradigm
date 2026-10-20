@@ -506,9 +506,10 @@ export class VoiceControl {
         const t = this.#checkTurnCommon(p, kind);
         if (typeof p.speakerId !== 'string' || !SPEAKER_ID.test(p.speakerId)) throw bad('speakerId is spk:<ns>/<name> or spk:unknown-N');
         if (typeof p.speakerEnrolled !== 'boolean' || typeof p.forwarded !== 'boolean') throw bad('speakerEnrolled and forwarded are booleans');
-        const unknown = p.speakerId.startsWith('spk:unknown-');
-        if (!unknown && !this.#o.enrolled().has(p.speakerId)) throw bad('speakerId is not a known (enrolled) speaker; label it spk:unknown-N');
-        if (unknown && p.speakerEnrolled) throw bad('an unknown-N speaker is not enrolled');
+        // V2e item 4: the kernel decides who is enrolled. speakerEnrolled:true counts ONLY when speakerId is in the
+        // root-signed consented registry (readEnrolled); any other claim — an unknown-N label, a forgotten or never
+        // enrolled name — is treated as an unknown speaker: stored hash-only (no text) and never forwardable
+        const enrolledNow = p.speakerEnrolled === true && !p.speakerId.startsWith('spk:unknown-') && this.#o.enrolled().has(p.speakerId);
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
@@ -523,7 +524,7 @@ export class VoiceControl {
           connId: c.connId,
           principal: c.principal,
           speakerId: p.speakerId,
-          speakerEnrolled: p.speakerEnrolled,
+          speakerEnrolled: enrolledNow,
           intercepted: p.intercepted as string | undefined,
           mode: p.mode as string,
           t0: t.t0,
@@ -535,16 +536,18 @@ export class VoiceControl {
           aec: p.aec as string | undefined,
           refused: undefined,
         };
-        // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text
-        if (!turn.intercepted) {
+        // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
+        // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
+        if (!enrolledNow) refusedAtReceipt = voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
+        else if (!turn.intercepted) {
           refusedAtReceipt = a ? this.#guards(turn, a) : voiceRefusal('voice-target', 'voice is not attached (attach is a human gesture)', { turnId: turn.turnId });
-          if (refusedAtReceipt) {
-            turn.refused = refusedAtReceipt;
-            const kept: Record<string, unknown> = {};
-            for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
-            const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
-            stamped = { ...kept, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}) };
-          }
+        }
+        if (refusedAtReceipt) {
+          turn.refused = refusedAtReceipt;
+          const kept: Record<string, unknown> = {};
+          for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
+          const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
+          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}) };
         }
         commit.push((seq) => {
           turn.seq = seq;
@@ -556,6 +559,8 @@ export class VoiceControl {
       }
       case 'voice.turn.agent': {
         const t = this.#checkTurnCommon(p, kind);
+        // V2e: source 'kernel-speakable' is the kernel's own speakable row; the voice principal can never write one
+        if (p.source === 'kernel-speakable') throw bad("source 'kernel-speakable' is written by the kernel only");
         for (const k of ['textPlanned', 'textSpoken'] as const) if (typeof p[k] !== 'string') throw bad(`${k} is a string`);
         if (Buffer.byteLength(String(p.textPlanned), 'utf8') > VOICE_TEXT_MAX_BYTES) throw bad('textPlanned is at most 16 KiB');
         commit.push(() => this.#playback.push({ t0: t.t0, t1: t.t1, receivedAt }));
