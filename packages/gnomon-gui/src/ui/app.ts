@@ -691,11 +691,12 @@ function paintShuttle(): void {
   clear(s);
   const by = store.pendingByKind();
   const live = store.liveCount();
-  const kv = (k: string, v: string) => h(doc, 'span', null, `${k} `, h(doc, 'span', { class: 'v' }, v));
-  s.appendChild(kv('sessions', `${live} live · ${store.sessions.size} seen`) as unknown as Node);
-  s.appendChild(kv('inbox', Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear') as unknown as Node);
-  s.appendChild(kv('log', `head ${store.head} · ${store.rowsSeen} rows`) as unknown as Node);
-  if (session) s.appendChild(kv('api', `${session.hello.clientApi}${session.clientApiDrift ? ' · clientApiId drift' : ''}`) as unknown as Node);
+  // fidelity 2: one quiet line (the detail is in its title=); a clientApiId drift still shows in the line itself
+  const waiting = Object.values(by).reduce((n, x) => n + x, 0);
+  const parts = [`${live} live`, waiting ? `${waiting} waiting` : 'inbox clear', `log ${store.head}`];
+  if (session) parts.push(`${session.hello.clientApi}${session.clientApiDrift ? ' · clientApiId drift' : ''}`);
+  s.appendChild(h(doc, 'span', null, parts.join(' · ')) as unknown as Node);
+  s.title = `sessions ${live} live · ${store.sessions.size} seen\ninbox ${Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear'}\nlog head ${store.head} · ${store.rowsSeen} rows${session ? `\napi ${session.hello.clientApi}` : ''}\n(click: the kernel feed)`;
 }
 
 let paintQueued = false;

@@ -843,3 +843,8 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .pilehead #stack-hint { margin-left: 0; }
 .stack-scope { font-size: 10.5px; padding: 0 5px; border-color: var(--rule); }
 .stack-scope[aria-pressed="true"] { color: var(--ink); border-color: var(--key-edge); }
+
+/* fidelity 2 footer: the Install Workshop key (disabled until install has a GUI request kind) and ONE quiet status line */
+.workshop-install { font-size: 11px; }
+.workshop-install[disabled] { border-style: dashed; }
+.status-line { gap: 0; }

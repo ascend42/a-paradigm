@@ -101,8 +101,23 @@ export function workshopAbsence(status: unknown, views: readonly ModPanelView[])
     const why = (p as { why?: unknown }).why;
     return `workshop paused${typeof why === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(why) ? ` (${why})` : ''} · gnomon mod start workshop`;
   }
-  return 'workshop not installed · gnomon mod install packages/gnomon-mods/workshop';
+  return WORKSHOP_NOT_INSTALLED;
 }
+
+/** S5.1: the line when no Workshop is installed (the footer shows it as the Install Workshop key's tooltip). */
+export const WORKSHOP_NOT_INSTALLED = 'workshop not installed · gnomon mod install packages/gnomon-mods/workshop';
+
+/**
+ * fidelity 2 (UI-first): the footer's "Install Workshop" key. Install has NO wire request today: `gnomon mod install`
+ * stages the card on disk and the kernel's StagedCardPickup raises it (packages/gnomon/src/kernel/modhost/control.ts:
+ * "§5 names no wire verb for install … adding one moves clientApiId"). So the key is shown DISABLED with the command in
+ * its tooltip; when a request kind exists it becomes the one-click path to the normal install card. Never a verb here.
+ */
+export const WORKSHOP_INSTALL_KEY = Object.freeze({
+  label: 'Install Workshop',
+  enabled: false,
+  title: 'Not a one-click action yet: install has no GUI request kind. In a terminal run `gnomon mod install packages/gnomon-mods/workshop`; the kernel then raises the install card in the stack.',
+});
 
 /** The views of one region, in status order. */
 export function panelsIn(views: readonly ModPanelView[], region: ModRegion): ModPanelView[] {
