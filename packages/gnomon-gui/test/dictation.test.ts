@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { armed, dictationNote, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
+import { canAttach } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -128,6 +129,15 @@ describe('dictation: hold', () => {
     s = run(s, { type: 'sent', now: 1 });
     expect(s).toMatchObject({ hold: false, text: '', parts: [], edited: false, sending: false });
   });
+  it('turns heard while a send is in flight stay for the next draft', () => {
+    const s = run(ready(), turn(11, 'one', 0), { type: 'sendNow', now: 0 }, turn(12, 'two', 1), { type: 'sent', now: 2 });
+    expect(s).toMatchObject({ text: 'two', parts: [{ seq: 12, text: 'two' }], sending: false });
+  });
+  it('typed text with no dictated turn never arms the ring and sends with no voice source', () => {
+    const s = run(ready(), { type: 'userEdit', text: 'typed', now: 0 }, { type: 'hold', hold: false, now: 0 }, { type: 'tick', now: 1e9 });
+    expect(s.sending).toBe(false);
+    expect(sendRequest(s)).toEqual({ hsid: A, content: [{ text: 'typed' }] });
+  });
   it('a failed send holds the draft (never loops)', () => {
     const s = run(ready(), turn(11, 'hello', 0), { type: 'sendNow', now: 0 }, { type: 'sendFailed', now: 1 });
     expect(s).toMatchObject({ sending: false, hold: true, text: 'hello' });
@@ -208,6 +218,8 @@ describe('dictation: page wiring (read from the source)', () => {
   const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
   it('a voice connection never gets the dictation controls (gated on canAttach)', () => {
     expect(app).toMatch(/function dictationOn\(\)[^]*?canAttach\(status\)/);
+    expect(canAttach({ principalKind: 'voice' })).toBe(false);
+    expect(canAttach({ principalKind: 'human' })).toBe(true);
     expect(html).toMatch(/id="dictation"[^>]*hidden/);
   });
   it('the ring, [Hold]/[Resume], [Send], an aria-live countdown and the delay picks are wired', () => {

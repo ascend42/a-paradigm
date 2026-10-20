@@ -57,6 +57,8 @@ export interface DictationState {
   sending: boolean;
   /** the last holdToggles value seen, or null before the first */
   holdToggles: number | null;
+  /** the last part seq the in-flight send carries (turns heard while it is in flight stay for the next draft) */
+  sentThrough: number;
 }
 
 export type DictationEvent =
@@ -77,7 +79,7 @@ export type DictationEvent =
   | { type: 'setDelay'; delayMs: number | null; now: number };
 
 export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): DictationState {
-  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null };
+  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0 };
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -86,7 +88,7 @@ export const hasDraft = (s: DictationState): boolean => s.text.trim().length > 0
 
 /** The ring may run now (a draft, no hold, a delay, idle, not streaming, focused here, not sending). */
 export function armed(s: DictationState): boolean {
-  return hasDraft(s) && !s.hold && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
+  return hasDraft(s) && s.parts.length > 0 && !s.hold && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
 }
 
 /** Re-derive the ring after an event: `reset` restarts it at the full delay when armed. */
@@ -108,7 +110,12 @@ export function insertableText(payload: unknown): string | null {
 
 const append = (text: string, t: string): string => (!text ? t : /\s$/.test(text) ? text + t : `${text} ${t}`);
 
-const cleared = (s: DictationState): DictationState => ({ ...s, hsid: s.attached, parts: [], text: '', edited: false, hold: false, sending: false, ringStartedAt: null });
+/** After a send: the turns heard while it was in flight stay as the next (unedited) draft; hold and the rest clear. */
+function cleared(s: DictationState): DictationState {
+  const rest = s.parts.filter((p) => p.seq > s.sentThrough);
+  return { ...s, hsid: rest.length ? s.hsid : s.attached, parts: rest, text: rest.map((p) => p.text).join(' '), edited: false, hold: false, sending: false, ringStartedAt: null };
+}
+const lastPartSeq = (s: DictationState): number => (s.parts.length ? s.parts[s.parts.length - 1]!.seq : 0);
 
 export function reduceDictation(s: DictationState, e: DictationEvent): DictationState {
   switch (e.type) {
@@ -156,11 +163,11 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return settle({ ...s, busy: e.busy, lastActivityAt: e.now }, e.now, true);
     case 'tick':
       if (!armed(s) || s.ringStartedAt === null || s.delayMs === null) return s;
-      return e.now - s.ringStartedAt >= s.delayMs ? { ...s, sending: true, ringStartedAt: null } : s;
+      return e.now - s.ringStartedAt >= s.delayMs ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s) } : s;
     case 'sendNow':
-      return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null } : s;
+      return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s) } : s;
     case 'sent':
-      return cleared(s);
+      return settle(cleared(s), e.now, true);
     case 'sendFailed':
       return settle({ ...s, sending: false, hold: true }, e.now, false); // never loop a refused send: wait for the human
     case 'setDelay':
@@ -183,19 +190,20 @@ export function ringFraction(s: DictationState, now: number): number | null {
 export interface SendRequest {
   hsid: string;
   content: { text: string }[];
-  source: 'voice';
+  /** voice when the draft holds dictated turns; absent for a typed-only message */
+  source?: 'voice';
 }
 
 /** The `session.send` params the draft makes, or null (nothing, or no session). */
 export function sendRequest(s: DictationState): SendRequest | null {
   if (!s.hsid || !hasDraft(s)) return null;
   if (!s.edited && s.parts.length) return { hsid: s.hsid, content: s.parts.map((p) => ({ text: p.text })), source: 'voice' };
-  return { hsid: s.hsid, content: [{ text: s.text }], source: 'voice' };
+  return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length ? { source: 'voice' as const } : {}) };
 }
 
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
-  if (!hasDraft(s)) return null;
+  if (!hasDraft(s) || !s.parts.length) return null;
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold) return 'draft held';
   if (s.delayMs === null) return 'draft · auto-send off';

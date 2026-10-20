@@ -41,7 +41,7 @@
 <div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
 <form id="composer" class="composer" autocomplete="off">
 <textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode." aria-label="composer"></textarea>
-<div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><button class="key" type="submit">send</button></div>
+<div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><span id="dictation" class="dictation kernel-owned" hidden><span id="dictation-ring" class="dictation-ring" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" focusable="false"><circle class="ring-track" cx="10" cy="10" r="8"></circle><circle id="dictation-arc" class="ring-arc" cx="10" cy="10" r="8" pathLength="100"></circle></svg><span id="dictation-secs" class="ring-secs"></span></span><span id="dictation-live" class="meta dictation-live" role="status" aria-live="polite"></span><button id="dictation-hold" class="key quiet" type="button" aria-pressed="false" title="Hold: no auto-send (⌃⌥H in the voice app toggles it too)">Hold</button><button id="dictation-send" class="key" type="button" title="Send the dictated draft now (Enter / ⌘Enter)">Send</button></span><button id="composer-send" class="key" type="submit">send</button></div>
 </form>
 </section>
 <aside id="pane-stack" class="pane stack" aria-label="decision stack">

@@ -21,10 +21,11 @@ import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type Cw
 import { askDetailOf, askNote, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
-import { chatItems, GuiStore, isLiveState, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
+import { chatItems, GuiStore, isLiveState, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
 import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -138,7 +139,7 @@ function resetTranscript(): void {
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
 function itemEl(it: ChatItem): HTMLElement {
-  const label = it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
+  const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
@@ -500,8 +501,11 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
     const p = (params ?? {}) as { row?: unknown; end?: { since?: number } };
-    if (p.row) store.apply([p.row]);
-    else if (p.end) void followLog(c, store).catch(() => undefined);
+    if (p.row) {
+      store.apply([p.row]);
+      const r = rowOf(p.row);
+      if (r) dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
+    } else if (p.end) void followLog(c, store).catch(() => undefined);
   });
   c.onClose(() => {
     client = null;
@@ -522,6 +526,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   } catch (err) {
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', true);
   }
+  dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
+  syncDictationContext();
 }
 
 function showReconnect(why: string): void {
@@ -533,6 +539,9 @@ function showReconnect(why: string): void {
 /* ── composer / new session ─────────────────────────────────────── */
 async function send(textValue: string): Promise<void> {
   if (!textValue.trim()) return;
+  // dictation: a draft with dictated turns for the focused session goes through the dictation send (one part per turn)
+  if (dictationOn() && dict.focusedHere && dict.parts.length && hasDraft(dict)) return dispatchDictation({ type: 'sendNow', now: Date.now() });
+  if (hasDraft(dict)) dispatchDictation({ type: 'sent', now: Date.now() }); // a typed message clears hold
   // never swallow a message silently: say why nothing was sent (dogfood: Enter on the kernel feed "did nothing")
   if (!client) return notice('not connected: nothing was sent', true);
   if (!focused) return notice('no session focused: pick a session on the left or open a new one; nothing was sent', true);
@@ -586,6 +595,128 @@ function focus(hsid: string | null): void {
   resetTranscript();
   paintSessions();
   void paintStack();
+  syncDictationContext();
+}
+
+/* ── voice dictation (TD-2026-10-20-262; core/dictation.ts) ────────── */
+let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
+let dictTimer: ReturnType<typeof setInterval> | null = null;
+let dictTicks = 0;
+let dictLive = '';
+
+/** Only a first-party human connection dictates (a voice connection never gets these controls). */
+function dictationOn(): boolean {
+  return !!client && canAttach(status);
+}
+
+function dispatchDictation(e: DictationEvent): void {
+  const prev = dict;
+  dict = reduceDictation(dict, e);
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  // the composer shows the draft while its session is focused (a typed edit is already in it)
+  if (dict.focusedHere && dict.text !== prev.text && ta.value !== dict.text && e.type !== 'userEdit') ta.value = dict.text;
+  if (e.type === 'context' && !prev.focusedHere && dict.focusedHere && dict.parts.length && !ta.value) ta.value = dict.text; // back on the draft's session
+  if (prev.focusedHere && !dict.focusedHere && prev.parts.length && ta.value === prev.text) ta.value = ''; // the draft waits off-screen
+  if (dict.sending && !prev.sending) void sendDictation();
+  syncDictationTimer();
+  paintDictation();
+}
+
+/** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
+function dictationRow(r: Row): void {
+  if (!dictationOn()) return;
+  const now = Date.now();
+  if (r.kind === 'voice.turn.user') {
+    const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
+    dispatchDictation({ type: 'turnRow', seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, now });
+  }
+  if (dict.hsid && r.session === dict.hsid) dispatchDictation({ type: 'busy', busy: store.sessions.get(dict.hsid)?.state === 'streaming', now });
+}
+
+/** status.voice: the attached session, the voice app's activity and the ⌃⌥H count; the GUI's focused session. */
+function syncDictationContext(): void {
+  const now = Date.now();
+  const on = dictationOn();
+  dispatchDictation({ type: 'context', attached: on ? voiceStatusOf(status).hsid : null, focused, now });
+  if (!on) return;
+  const d = dictationStatusOf(status);
+  if (d.activity !== dict.activity) dispatchDictation({ type: 'activity', activity: d.activity, now });
+  if (d.holdToggles !== null && d.holdToggles !== dict.holdToggles) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, now });
+}
+
+function setDictationDelay(d: number | null): void {
+  localStorage.setItem(DELAY_KEY, serializeDelay(d));
+  dispatchDictation({ type: 'setDelay', delayMs: d, now: Date.now() });
+  if (!$('voice-menu').hidden) paintVoiceMenu();
+  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: auto-send after ${delayLabel(d)} of silence`);
+}
+
+/** While a draft exists: tick the ring (100 ms) and re-read status about every 300 ms (the ENROL_POLL_MS precedent). */
+function syncDictationTimer(): void {
+  const want = dict.parts.length > 0 && dictationOn();
+  if (want && !dictTimer)
+    dictTimer = setInterval(() => {
+      dispatchDictation({ type: 'tick', now: Date.now() });
+      if (++dictTicks % Math.max(1, Math.round(DICTATION_POLL_MS / 100)) === 0) void refreshStatus();
+    }, 100);
+  else if (!want && dictTimer) {
+    clearInterval(dictTimer);
+    dictTimer = null;
+  }
+}
+
+/** The send the draft asked for: one part per dictated turn (unedited) or the edit as one part, source voice. */
+async function sendDictation(): Promise<void> {
+  const req = sendRequest(dict);
+  if (!client || !req) return dispatchDictation({ type: 'sendFailed', now: Date.now() });
+  // an edited draft's words are the human's: this page echoes them (🎙✎); unedited turns become the 🎙 bubbles
+  if (dict.edited) local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: req.hsid, payload: dict.text, at: new Date().toISOString(), mark: 'voice-edited' });
+  schedule(new Set([`transcript:${req.hsid}`]));
+  const sentText = dict.text;
+  try {
+    await client.call('session.send', req);
+    dispatchDictation({ type: 'sent', now: Date.now() });
+    const ta = $<HTMLTextAreaElement>('composer-text');
+    if (dict.focusedHere && (ta.value === sentText || !ta.value)) ta.value = dict.text; // turns heard in flight stay
+  } catch (err) {
+    if (err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: req.hsid, payload: refusalText(err.refusal) });
+    else notice('the dictated draft was not sent; it stays in the composer', true);
+    dispatchDictation({ type: 'sendFailed', now: Date.now() });
+    const ta = $<HTMLTextAreaElement>('composer-text');
+    if (dict.focusedHere && !ta.value) ta.value = dict.text; // the draft stays in the composer
+    schedule(new Set([`transcript:${req.hsid}`]));
+  }
+}
+
+/** The ring, [Hold]/[Resume], [Send], the aria-live countdown and the pill's "draft waiting" note. */
+function paintDictation(): void {
+  const on = dictationOn() && dict.parts.length > 0;
+  const bar = $('dictation');
+  bar.hidden = !on || !dict.focusedHere;
+  const now = Date.now();
+  const frac = ringFraction(dict, now);
+  const rem = ringRemaining(dict, now);
+  $('dictation-ring').hidden = frac === null;
+  if (frac !== null) $('dictation-arc').setAttribute('stroke-dashoffset', String(Math.round(frac * 1000) / 10));
+  put($('dictation-secs'), rem === null ? '' : `${Math.ceil(rem / 1000)} s`);
+  const line = on ? liveLine(dict, now) : '';
+  if (line !== dictLive) put($('dictation-live'), (dictLive = line)); // a changed line only: the live region speaks once a second at most
+  const hold = $('dictation-hold');
+  put(hold, dict.hold ? 'Resume' : 'Hold');
+  hold.setAttribute('aria-pressed', String(dict.hold));
+  bar.classList.toggle('held', dict.hold);
+  ($('dictation-send') as HTMLButtonElement).disabled = dict.sending;
+  const note = on ? dictationNote(dict) : null;
+  const vn = $('voice-note');
+  const wasWaiting = vn.classList.contains('dictation-waiting');
+  vn.classList.toggle('dictation-waiting', note === 'draft waiting');
+  if (note === 'draft waiting' && dict.hsid) {
+    vn.hidden = false;
+    put(vn, `draft waiting · ${sessionName(dict.hsid)}`);
+  } else if (wasWaiting) {
+    vn.hidden = !store.voiceNote || voiceStatusOf(status).state !== 'off';
+    put(vn, store.voiceNote ?? '');
+  }
 }
 
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
@@ -600,6 +731,7 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  syncDictationContext();
   foldVoiceReports();
 }
 
@@ -761,6 +893,7 @@ function paintVoice(): void {
   $('voice-note').hidden = !note || v.state !== 'off';
   put($('voice-note'), note ?? '');
   if (!$('voice-menu').hidden) paintVoiceMenu();
+  paintDictation();
 }
 
 /** A voice.turn.* row arrived: the meter kicks once (CSS; reduced motion keeps it still). */
@@ -790,7 +923,14 @@ function paintVoiceMenu(): void {
   // V2e: Start / Stop voice and "Teach Gnomon your voice" (human connections only: clientMenuEntries is [] otherwise)
   for (const e of clientMenuEntries(clientOf(status), canAttach(status)))
     menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-client': e.id }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as Node);
-  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk`) as unknown as Node);
+  if (canAttach(status)) {
+    // dictation: the auto-send delay after silence (per machine)
+    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'auto-send after silence' }, h(doc, 'span', { class: 'mode-name' }, 'Auto-send after')) as unknown as HTMLElement;
+    for (const d of DELAY_CHOICES)
+      picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
+    menu.appendChild(picks);
+  }
+  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃⌥H holds the dictation`) as unknown as Node);
 }
 function openVoiceMenu(): void {
   $('voice-menu').hidden = false;
@@ -1048,6 +1188,8 @@ function run(id: string): void {
   else if (id === 'voice.client.start') void voiceClientOp('start', true);
   else if (id === 'voice.client.stop') void voiceClientOp('stop', true);
   else if (id === 'voice.enrol') openEnrol(true);
+  else if (id.startsWith('voice.delay.')) setDictationDelay(parseDelay(id.slice(12)));
+  else if (id === 'voice.dictation.hold') dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() });
   else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), true);
   else if (id === 'gui.reconnect') void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
@@ -1139,6 +1281,16 @@ function wire(): void {
     void send(t.value);
     t.value = '';
   });
+  // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
+  $('composer-text').addEventListener('input', () => {
+    if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: $<HTMLTextAreaElement>('composer-text').value, now: Date.now() });
+  });
+  $('composer-text').addEventListener('pointerdown', () => {
+    if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'focusComposer', now: Date.now() });
+  });
+  $('composer-text').addEventListener('blur', () => dispatchDictation({ type: 'blurComposer', now: Date.now() }));
+  $('dictation-hold').addEventListener('click', () => dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() }));
+  $('dictation-send').addEventListener('click', () => dispatchDictation({ type: 'sendNow', now: Date.now() }));
   $('composer-text').addEventListener('keydown', (e) => {
     if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault(); // ⇧Tab cycles the run mode, as in Claude Code (§11.5)
@@ -1164,6 +1316,8 @@ function wire(): void {
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
   $('voice-menu').addEventListener('click', (e) => {
+    const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
+    if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
     if (vc) {
       const id = vc.dataset.voiceClient!;
