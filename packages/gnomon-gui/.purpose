@@ -715,17 +715,23 @@ components:
       non-intercepted push-to-talk row (pttDismissable) dismisses, only the
       slip live when it arrived, only rows after offerLiveSince; ambient
       speech shows "click not now to dismiss"; M3 "takes:" comes from the
-      row's kernel-copied contextIn (CONTEXT_SOURCES mirror, unknown tokens
-      shown as unknown, +N more past 8, missing = "unknown (not reported by
-      the kernel)"); L1 devArmOfferOnce is dead code in the served bundle
-      (__GNOMON_PREVIEW__ define false + minifySyntax in build.mjs). The
-      offer contract types are
-      local mirrors marked TODO(S0 integration). ui/offer-slip.ts:
+      row's kernel-copied contextIn (contracts CONTEXT_SOURCES labelled by
+      CONTEXT_SOURCE_LABELS, unknown tokens shown as unknown, +N more past
+      8, missing = "unknown (not reported by the kernel)"); L1
+      devArmOfferOnce is dead code in the served bundle (__GNOMON_PREVIEW__
+      define false + minifySyntax in build.mjs). The offer kinds, patterns,
+      CONTEXT_SOURCES and the isOfferTitle / isOfferQuestion text rules are
+      imported from @a-company/gnomon-contracts. stripOfferBlocks (called by
+      store.ts chatItems) hides a reply's trailing ```offer block (contracts
+      offerBlockOf body) ONLY when a valid kernel offer.shown row anchors to
+      that reply and the block names the same mod and kind; otherwise the
+      reply text shows as-is (model text alone never hides anything).
+      ui/offer-slip.ts:
       renderOfferSlip (dashed, soft shadow, never .key / data-decision; tab =
       glyph + offer · mod:<name>, no per-mod hue, L2; the question a text
       node) and wireOfferSlips (trusted click / Enter only). ui/app.ts mounts
       the slips in itemEl and syncs them in paintTranscript; styles.css
-      .slip* (-0.7deg by day via --slip-tilt, flat at night, 320ms slide-in,
+      .slip* (-0.7deg by day via --slip-tilt, flat at night, a slide-in of up to 320ms,
       instant under reduced motion). Preview fixtures offer-slip,
       offer-armed (devArmOfferOnce, DEV ONLY), offer-muted; the fake kernel
       answers request.offer.decide with offer.decided. Tests:

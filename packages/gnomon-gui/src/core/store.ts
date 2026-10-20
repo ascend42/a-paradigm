@@ -30,7 +30,7 @@ import { projectHue, sha256Tagged } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
-import { foldOffers, OFFER_ROW_KINDS, type OfferBook } from './offers.js';
+import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
 
 export interface Row {
   seq: number;
@@ -937,7 +937,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     if (it) push(r, 0, it);
     else hidden++;
   }
-  return { items, hidden };
+  // #gui-offer-slip: a reply's ```offer block is hidden only under a kernel offer.shown row for that reply
+  return { items: opts.raw ? items : stripOfferBlocks(items, rows), hidden };
 }
 
 /* ── S2 desk structure: pure helpers (critique 2026-10-20 §2 S2) ─────────────────────────────────────────────── */

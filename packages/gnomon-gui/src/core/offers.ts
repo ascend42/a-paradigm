@@ -23,77 +23,75 @@
  *     "click not now to dismiss". A heard "open" only shows "click or ↵ to open".
  */
 
+import {
+  CONTEXT_SOURCES,
+  HSID_PATTERN,
+  OFFER_DECISIONS,
+  OFFER_ID_PATTERN,
+  OFFER_MOD_PATTERN,
+  OFFER_PHASES,
+  OFFER_TOKEN_PATTERN,
+  TURN_ID_PATTERN,
+  isOfferQuestion,
+  isOfferTitle,
+  offerBlockOf,
+  type ContextSource,
+  type OfferDecision,
+  type OfferPhase,
+} from '@a-company/gnomon-contracts';
 import { pttTurn } from './dictation.js';
 
-/* TODO(S0 integration): switch these to the @a-company/gnomon-contracts imports (OFFER_DECISIONS, OfferDecision,
- * the offer.shown / offer.decided / offer.kept payloads and request.offer.decide) once the S0 contracts slice lands
- * on feat/gnomon. They mirror packages/gnomon-contracts/src/event.ts KIND_PAYLOADS exactly. */
-export const OFFER_DECISIONS = ['open', 'not-now', 'stop-here'] as const;
-export type OfferDecision = (typeof OFFER_DECISIONS)[number];
-/** TODO(S0 integration): contracts `offer.shown` payload. */
+export { OFFER_DECISIONS, type OfferDecision };
+
+/** contracts KIND_PAYLOADS['offer.shown'] (the kernel's row; shownOf validates every field before a slip exists). */
 export interface OfferShown {
   offerId: string;
   hsid: string;
   mod: string;
   kind: string;
-  phase: string;
+  phase: OfferPhase;
   title: string;
   question: string;
   replyTurnId: string;
-  /** S0 adds it (kernel-copied from the manifest); null: the row carries none ⇒ "takes: unknown" */
+  /** kernel-copied from the manifest; null: the row carries none (an older kernel) => "takes: unknown" */
   contextIn: string[] | null;
 }
-/** TODO(S0 integration): contracts CONTEXT_SOURCES (the closed contextIn tokens); a token outside it shows as unknown. */
-export const CONTEXT_SOURCES: Readonly<Record<string, string>> = Object.freeze({
+/** How the slip names each contracts CONTEXT_SOURCES token; a token outside it shows as unknown. */
+export const CONTEXT_SOURCE_LABELS: Readonly<Record<ContextSource, string>> = Object.freeze({
   'recent-messages': 'recent messages',
-  'last-reply': 'the last reply',
   'open-files': 'open files',
+  'repo-path': 'the repo path',
   selection: 'the selection',
-  'repo-diff': 'the working diff',
-  'repo-summary': 'a repo summary',
+  'session-summary': 'a session summary',
 });
+const isContextSource = (t: string): t is ContextSource => (CONTEXT_SOURCES as readonly string[]).includes(t);
 /** Aegis M1: the send needs this long after the arm; an arm older than the TTL is dropped. */
 export const OFFER_ARM_GAP_MS = 400;
 export const OFFER_ARM_TTL_MS = 15_000;
 const CONTEXT_SHOWN_MAX = 8;
-/** TODO(S0 integration): contracts `offer.decided` payload. */
+/** contracts KIND_PAYLOADS['offer.decided']. */
 export interface OfferDecided {
   offerId: string;
   hsid: string;
   decision: OfferDecision;
 }
-/** TODO(S0 integration): contracts `offer.kept` payload. */
+/** contracts KIND_PAYLOADS['offer.kept']. */
 export interface OfferKept {
   offerId: string;
   hsid: string;
   mod: string;
   tool: string;
 }
-/** TODO(S0 integration): contracts `request.offer.decide` payload. */
+/** contracts KIND_PAYLOADS['request.offer.decide']. */
 export interface OfferDecideRequest {
   kind: 'request.offer.decide';
   payload: { offerId: string; decision: OfferDecision };
 }
-/** The offer row kinds a store folds (TODO(S0 integration): the contracts registry has them). */
+/** The offer row kinds a store folds. */
 export const OFFER_ROW_KINDS: ReadonlySet<string> = new Set(['offer.shown', 'offer.decided', 'offer.kept']);
 
-// TODO(S0 integration): contracts OFFER_ID_PATTERN / OFFER_MOD_PATTERN / OFFER_TOKEN_PATTERN / OFFER_QUESTION_MAX
-const OFFER_ID = /^offer:[0-9A-HJKMNP-TV-Z]{26}$/;
-const MOD = /^[a-z][a-z0-9-]{0,63}$/;
-const TOKEN = /^[a-z][a-z0-9-]{0,63}$/;
-const TURN_ID = /^turn:(hsid:[a-z0-9]+:[0-9A-Za-z]+)\/([1-9][0-9]*)$/;
-export const OFFER_QUESTION_MAX = 240;
-// eslint-disable-next-line no-control-regex
-const UNSAFE_TEXT = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
 const KERNEL = /^p:[0-9a-z]{8}\/kernel$/;
 const VOICE = /^p:[0-9a-z]{8}\/voice$/;
-
-/** A single-line model text the slip may show: 1..max code points, no control/format/separator, no edge space. */
-export function isOfferText(v: unknown, max: number): v is string {
-  if (typeof v !== 'string' || v.length === 0 || v.length > max * 2) return false;
-  if (UNSAFE_TEXT.test(v) || v.trim() !== v) return false;
-  return Array.from(v).length <= max;
-}
 
 export interface OfferRow {
   seq: number;
@@ -134,14 +132,15 @@ export function shownOf(r: OfferRow, hsid: string): OfferShown | null {
   const p = obj(r.payload);
   if (!p || p.hsid !== hsid) return null;
   const { offerId, mod, kind, phase, title, question, replyTurnId } = p;
-  if (typeof offerId !== 'string' || !OFFER_ID.test(offerId)) return null;
-  if (typeof mod !== 'string' || !MOD.test(mod) || typeof kind !== 'string' || !TOKEN.test(kind) || typeof phase !== 'string' || !TOKEN.test(phase)) return null;
-  if (!isOfferText(title, 60) || !isOfferText(question, OFFER_QUESTION_MAX)) return null;
-  const t = typeof replyTurnId === 'string' ? TURN_ID.exec(replyTurnId) : null;
+  if (typeof offerId !== 'string' || !OFFER_ID_PATTERN.test(offerId) || !HSID_PATTERN.test(hsid)) return null;
+  if (typeof mod !== 'string' || !OFFER_MOD_PATTERN.test(mod) || typeof kind !== 'string' || !OFFER_TOKEN_PATTERN.test(kind)) return null;
+  if (!(OFFER_PHASES as readonly unknown[]).includes(phase)) return null;
+  if (!isOfferTitle(title) || !isOfferQuestion(question)) return null;
+  const t = typeof replyTurnId === 'string' ? TURN_ID_PATTERN.exec(replyTurnId) : null;
   if (!t || t[1] !== hsid) return null;
   let contextIn: string[] | null = null;
-  if (Array.isArray(p.contextIn)) contextIn = p.contextIn.slice(0, 64).map((t) => (typeof t === 'string' && TOKEN.test(t) ? t : '?'));
-  return { offerId, hsid, mod, kind, phase, title, question, replyTurnId: replyTurnId as string, contextIn };
+  if (Array.isArray(p.contextIn)) contextIn = p.contextIn.slice(0, 64).map((t) => (typeof t === 'string' && OFFER_TOKEN_PATTERN.test(t) ? t : '?'));
+  return { offerId, hsid, mod, kind, phase: phase as OfferPhase, title, question, replyTurnId: replyTurnId as string, contextIn };
 }
 
 /** What a heard utterance means to a live slip (L1): `dismiss` ("not now", "no thanks", "dismiss"), `open-hint`
@@ -267,10 +266,10 @@ export function slipViews(book: OfferBook, items: readonly AnchorItem[]): SlipVi
 }
 
 /** The "takes:" line, from the offer.shown row's kernel-copied contextIn (never model text). A token outside
- * CONTEXT_SOURCES shows as "unknown"; past 8, "+N more"; no contextIn on the row => "unknown (not reported ...)". */
+ * the contracts CONTEXT_SOURCES shows as "unknown"; past 8, "+N more"; no contextIn on the row => "unknown (not reported ...)". */
 export function takesLine(contextIn: readonly string[] | null): string {
   if (contextIn === null) return 'takes: unknown (not reported by the kernel) · ↵ to open';
-  const words = contextIn.map((t) => (Object.hasOwn(CONTEXT_SOURCES, t) ? CONTEXT_SOURCES[t]! : 'unknown'));
+  const words = contextIn.map((t) => (isContextSource(t) ? CONTEXT_SOURCE_LABELS[t] : 'unknown'));
   const shown = words.slice(0, CONTEXT_SHOWN_MAX);
   const more = words.length - shown.length;
   return `takes: ${shown.length ? shown.join(' · ') : 'nothing'}${more > 0 ? ` · +${more} more` : ''} · ↵ to open`;
@@ -318,4 +317,41 @@ export function traceText(s: Pick<Slip, 'decided' | 'mod' | 'kept'>): string {
   if (s.decided === 'stop-here') return `offers off in this thread · mod:${s.mod}`;
   if (s.decided === 'not-now') return `not now · mod:${s.mod}`;
   return `offer · mod:${s.mod}`;
+}
+
+/** The reply items stripOfferBlocks rewrites (store.ts ChatItem's shape). */
+export interface ReplyItem extends AnchorItem {
+  text: string;
+}
+
+/**
+ * The reply text the transcript renders. A reply's trailing ```offer block is hidden ONLY when the kernel wrote a
+ * valid `offer.shown` for that reply (kernel principal, the row's own hsid, the slip's anchor = the last assistant
+ * item before the row) and the block names the same mod and kind; the text then becomes contracts
+ * `offerBlockOf(text).body`. No kernel row, or a block that does not match it, and the text shows as-is: model text
+ * alone never hides anything.
+ */
+export function stripOfferBlocks<T extends ReplyItem>(items: readonly T[], rows: readonly OfferRow[]): T[] {
+  const strip = new Map<string, { mod: string; kind: string }>();
+  for (const r of rows) {
+    if (r.kind !== 'offer.shown') continue;
+    const h = obj(r.payload)?.hsid;
+    if (typeof h !== 'string' || (r.session !== undefined && r.session !== h)) continue;
+    const s = shownOf(r, h);
+    if (!s) continue;
+    let anchor: T | null = null;
+    for (const it of items) {
+      if (it.seq >= r.seq) break;
+      if (it.role === 'assistant') anchor = it;
+    }
+    if (anchor && !strip.has(anchor.key)) strip.set(anchor.key, { mod: s.mod, kind: s.kind });
+  }
+  if (!strip.size) return items as T[];
+  return items.map((it) => {
+    const want = strip.get(it.key);
+    if (!want) return it;
+    const b = offerBlockOf(it.text);
+    if (!b || b.offer.mod !== want.mod || b.offer.kind !== want.kind) return it;
+    return { ...it, text: b.body.trimEnd() };
+  });
 }

@@ -14,7 +14,7 @@ import { followLog, GnomonClient, type Transport } from '../src/core/client.js';
 import { verifiedDecisions } from '../src/core/server-sig.js';
 import { GuiStore } from '../src/core/store.js';
 import { FakeKernel, PREVIEW_MARKER, PREVIEW_METHODS, previewKey, signRows } from '../src/preview/fake-kernel.js';
-import { FIXTURE_NAMES, FIXTURES, PENDING_DESK_KINDS } from '../src/preview/fixtures.js';
+import { FIXTURE_NAMES, FIXTURES } from '../src/preview/fixtures.js';
 import { feedEventOf, workshopBlock } from '../src/preview/workshop.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,8 +49,7 @@ describe('#gui-preview fixtures', () => {
       expect(r.seq).toBe(i + 1);
       expect(r.view).toBe('full');
       if (r.view !== 'full') return;
-      // TODO(S0 integration): drop PENDING_DESK_KINDS once the contracts registry has the Desk's offer kinds
-      expect(isKnownKind(r.event.kind) || PENDING_DESK_KINDS.has(r.event.kind), r.event.kind).toBe(true);
+      expect(isKnownKind(r.event.kind), r.event.kind).toBe(true);
       if (r.event.session !== undefined) expect(r.event.session).toMatch(HSID_PATTERN);
     });
     for (const card of cardsOf(fx.rows)) expect(validateCardV1(card, { mode: 'strict' }), String(card.cardId)).toEqual([]);

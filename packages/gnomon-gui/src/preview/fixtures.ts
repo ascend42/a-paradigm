@@ -49,11 +49,6 @@ export interface Fixture {
 
 /* ── the chain builder ───────────────────────────────────────────── */
 
-/** TODO(S0 integration): the Desk's offer kinds join the contracts registry in the S0 slice; until then the preview
- * labels them as the kernel will (audience private, sensitivity normal). Drop this once defaultLabelsFor knows them. */
-export const PENDING_DESK_KINDS: ReadonlySet<string> = new Set(['offer.shown', 'offer.decided', 'offer.kept', 'request.offer.decide']);
-const PENDING_DESK_LABELS: Record<string, { audience: 'private'; sensitivity: 'normal' }> = Object.fromEntries([...PENDING_DESK_KINDS].map((k) => [k, { audience: 'private' as const, sensitivity: 'normal' as const }]));
-
 type Draft = { at: string; kind: string; payload: unknown; session?: string; repo?: string; principal: string };
 
 class Chain {
@@ -68,7 +63,7 @@ class Chain {
     const sorted = this.#drafts.map((d, i) => ({ d, i })).sort((a, b) => (a.d.at < b.d.at ? -1 : a.d.at > b.d.at ? 1 : a.i - b.i));
     let prev = sha256Tagged(`${PREVIEW_LOG_ID} genesis`);
     return sorted.map(({ d }, i) => {
-      const labels = defaultLabelsFor(d.kind) ?? PENDING_DESK_LABELS[d.kind];
+      const labels = defaultLabelsFor(d.kind);
       if (!labels) throw new Error(`fixture row kind ${d.kind} is not in the contracts registry`);
       const seq = i + 1;
       const hash = sha256Tagged(`${PREVIEW_LOG_ID}\n${seq}\n${d.kind}\n${d.at}`);
@@ -279,10 +274,10 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
   const shown = (at: string, offerId: string, mod: string, kind: string, question: string, title: string, contextIn: string[]): void => on('billing', at, 'offer.shown', { offerId, mod, kind, phase: 'synthesize', title, question, replyTurnId: `turn:${BILLING}/1`, contextIn });
   if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it', ['recent-messages', 'open-files']);
   if (o.offer === 'muted') {
-    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['last-reply']);
+    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['recent-messages']);
     on('billing', T('14:05:55'), 'offer.decided', { offerId: OFFER_MUTED_ID, decision: 'not-now' });
     ev('billing', T('14:06:20'), textLine('The fix is staged: one rounding call at the end of `totals()`. The tests are next once you allow the run.'));
-    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['last-reply']);
+    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['recent-messages']);
   }
 
   // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)

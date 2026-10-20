@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T21:50:14.667Z'
+generated: '2026-10-20T21:58:06.876Z'
 structure: {}
 key_files:
   config:
@@ -268,6 +268,7 @@ symbols:
   '#purpose-component-gui-dictation': packages/gnomon-gui/
   '#purpose-component-gui-preview': packages/gnomon-gui/
   '#purpose-component-gui-voice-capture': packages/gnomon-gui/
+  '#purpose-component-gui-offer-slip': packages/gnomon-gui/
   '#purpose-component-gui-table-talk': packages/gnomon-gui/
   '#purpose-component-gui-settings': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/

@@ -112,6 +112,27 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
   });
 });
 
+describe('#gui-offer-slip the reply hides its ```offer block only under a kernel offer.shown row', () => {
+  const block = '```offer\n{"mod":"constellation","kind":"map-the-idea","question":"Map this on the board?"}\n```';
+  const text = `Here is what I found.\n\n${block}`;
+  const replyText = (rows: Row[]) => chatItems(rows).items.find((i) => i.role === 'assistant')!.text;
+  it('a kernel offer.shown for the reply strips the block (contracts offerBlockOf body)', () => {
+    expect(replyText([reply(1, text), shown(2, 1)])).toBe('Here is what I found.');
+  });
+  it('no offer.shown row: the reply shows as-is, block and all', () => {
+    expect(replyText([reply(1, text)])).toBe(text);
+  });
+  it('a non-kernel, other-hsid or mismatched offer.shown never strips', () => {
+    expect(replyText([reply(1, text), { ...shown(2, 1), principal: 'p:7k2m9q4x/claude' }])).toBe(text);
+    expect(replyText([reply(1, text), shown(2, 1, 'constellation', { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])).toBe(text);
+    expect(replyText([reply(1, text), shown(2, 1, 'neurons')])).toBe(text);
+  });
+  it('only the reply the slip anchors to: an earlier reply keeps its block', () => {
+    const items = chatItems([reply(1, text), reply(2, 'Later.'), shown(3, 1)]).items.filter((i) => i.role === 'assistant');
+    expect(items.map((i) => i.text)).toEqual([text, 'Later.']);
+  });
+});
+
 describe('#gui-offer-slip two-step open (A5) and the requests', () => {
   it('untrusted or not live ⇒ refused; first trusted press arms; the second sends after the gap', () => {
     const T = { isTrusted: true };
@@ -140,7 +161,7 @@ describe('#gui-offer-slip two-step open (A5) and the requests', () => {
   it('Aegis M3: the takes line is the row\'s kernel-copied contextIn; unknown tokens, +N more, missing ⇒ unknown', () => {
     expect(takesLine(['recent-messages', 'open-files'])).toBe('takes: recent messages · open files · ↵ to open');
     expect(takesLine(['recent-messages', 'made-up'])).toBe('takes: recent messages · unknown · ↵ to open');
-    expect(takesLine(Array.from({ length: 10 }, () => 'last-reply'))).toMatch(/ · \+2 more · ↵ to open$/);
+    expect(takesLine(Array.from({ length: 10 }, () => 'recent-messages'))).toMatch(/ · \+2 more · ↵ to open$/);
     expect(takesLine(null)).toBe('takes: unknown (not reported by the kernel) · ↵ to open');
     const book = foldOffers([reply(1), shown(2, 1, 'constellation', { contextIn: ['open-files', 'BAD TOKEN'] }), shown(3, 2, 'docs')] as OfferRow[], HSID);
     expect(book.slips[0]!.contextIn).toEqual(['open-files', '?']);
