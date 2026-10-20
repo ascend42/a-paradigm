@@ -85,8 +85,8 @@ components:
       widen card (strictness, op voice.widen) is focused in the stack; an
       attached session whose mode is not ptt reads as ambient
       (the indicator never under-reports a live mic). Three states: Mic off
-      (grey), push-to-talk (slate blue, "Hold <hotkey> to talk"), ambient
-      (red edge, pulsing dot, "Listening", level meter). clientConnected is
+      (grey), push-to-talk (neutral ink2 since S1, never slate, "Hold <hotkey> to talk"), ambient
+      (S1: amber warn-edge, static amber dot, "Listening", level meter that moves only on an audio event; vermilion only when crashed). clientConnected is
       only an explicit kernel field (null when unsure; no client-name
       guesses); attached with the app not connected keeps the attached
       state's class, label and meter plus "· voice app not connected"
@@ -209,6 +209,84 @@ components:
       so an old kernel's card id is never clickable (the new kernel refuses it
       NOT_FOUND and retires it with approval.expire). Tests: test/gui.test.ts
       (#gui store after an upgrade); bundle pin in gnomon test/web-units.test.ts.
+    materials-s1: >-
+      S1 papercraft/phosphor materials (critique 2026-10-20 §2 S1, Luna).
+      Self-hosted fonts in static/fonts/: JetBrains Mono 400/500/600 and one
+      Fraunces variable cut (opsz + wght, covers 460 and 600), Fontsource
+      5.3.0 latin subsets copied unmodified, each family with its OFL 1.1
+      licence beside it (OFL-JetBrainsMono.txt, OFL-Fraunces.txt; no
+      Reserved Font Name upstream); @font-face font-display swap, font-src
+      'self', no CDN, no data: URL. scripts/build.mjs walks static/
+      recursively: .html/.css/.js/.svg/.txt get LF, everything else (woff2)
+      is read raw; *.woff2 is binary in .gitattributes. Bundle files may sit
+      in sub-directories (fonts/...); the kernel materializes them under
+      <home>/gui/bundle/ and serves woff2 as font/woff2. Tests:
+      test/fonts.test.ts (pinned sha256, embed byte-exact, licences, CSS
+      sources), ../gnomon/test/gui-endpoint.test.ts (served byte-exact).
+      scripts/preview.mjs (dev only) serves grain.svg and fonts/* raw too.
+    desk-structure-s2: >-
+      S2 desk structure (critique 2026-10-20 §2 S2). Pure helpers in
+      core/store.ts: groupHue (projectHue of the session.open cwd, else of the
+      repo: the SAME function as the kernel's Workshop feed), sessionTitle (the
+      first user message cut to 28 chars, else repo basename · hsid tail 4;
+      SessionRow gains cwd, openedAt, firstUser), sessionNote (N card(s) /
+      KNOT in warn ink, failed in vermilion), splitActivePast, failedExit (a
+      session.exited with reason error, or no stop reason and a non-zero code
+      or a signal, is state "failed", terminal), foldActivity +
+      activitySummary + durationText (consecutive tool / auto rows fold into
+      ONE collapsible activity line "HH:MM–HH:MM · read N files · ran N
+      commands · Ns of work", key act:<first key>; a reply after a user
+      message gets "took Ns"). core/render.ts mdInline / mdBlocks: a SAFE
+      markdown subset for agent text (inline code, bold, italics, bullet and
+      numbered lists, fenced code) built as DOM nodes through h(); no HTML
+      passthrough, no links, no images. ui/app.ts: the rail is ACTIVE n
+      (project groups: swatch + project ink name) and ▸ PAST n (collapsed by
+      default, toggle kept in localStorage gnomon.gui.pastOpen; a failed session stays in ACTIVE); the kernel
+      feed is a palette view (view.kernel-feed), the default centre is a
+      quiet "No session open" sheet with + New session; the chat header is
+      the session name plus ■ project · backend · started · elapsed; pinned
+      cards carry "Pending in this session"; the header is wordmark, palette
+      field (Search, run, jump… ⌘K), risk, spacer, conn, voice, ⊞ Layout
+      (presets + pane toggles; kernel-owned chrome is never listed); #inbox
+      sits in the stack head; the composer placeholder is "Reply to <name>…"
+      with the long hint in title=, and send is the filled primary key.
+      Tests: test/desk.test.ts.
+    card-sheet-pile-s3: >-
+      S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
+      anatomy (data only from kernel fields): header ■ <repo basename> in
+      the project ink (the ONE hue, groupHue) · kind · the voice tag from
+      the kernel's card.voice (🎙 reversible · <label>, 🎙 gate + the
+      .handle word, else hand-only), requestedBy and the session in title=;
+      the title (the block's first Text line, splitCardBlock; a
+      claim-mismatch card keeps its block whole and is titled by its kind);
+      the body (kernel-owned); "raised HH:MM · waiting Nm" (raisedLine, from
+      the approval.request row at, StackCard.raisedAt); keys; .bar and
+      .stamp (S4 animates them); the contentHash line last. CSS: a sheet with
+      a --edge-w state edge on the left (knot / failed / gate-class + held /
+      claim-mismatch; a neutral card's edge is --key-edge, never --rule) and
+      --sheet-shadow (night: a 1px --rule ring, no shadow). The stack is a
+      pile: -64px overlap, rotation and z-order by :nth-child classes (no
+      inline style), fanned flat on :hover AND :focus-within (keyboard
+      reach) and .fan / .open; more than 6 cards ⇒ 6 piled + "+n more"
+      (opens the fanned pile); pinned cards lie flat. The pane head reads
+      Stack · n pending · hover to fan · scope key; rail minmax(300px,340px).
+      The preview (dev only) takes ?fan=1. Tests: test/desk.test.ts.
+    motion-s4: >-
+      S4 motion (critique 2026-10-20 §2 S4). Fly-in is the comp's 4-step
+      path with no opacity, settling at the pile rotation; a pinned card
+      takes one of four preset tilts (.r-a..d by cardId; never inline
+      style). Approve: ONLY after the kernel accepted the decision (a
+      refusal throws first), flyOff stamps APPROVED (--stamp ink), adds
+      .out 550 ms later (flyout) and removes the sheet on its animationend,
+      with a 1.5 s fallback; a departing card is kept out of fresh paints and
+      re-inserted at its place. Reduced motion (in-app or OS): nothing
+      animates and the card goes at once; the stamp's end state is styled to
+      show. A held voice decision (CardView.held {seconds, undo}) renders
+      .held (amber edge), the 3 s count bar and the kernel-owned text
+      "Allowing in N · say “undo”" (the kernel does not report holds yet, so
+      app.ts passes none). Droop: a failed card droops once as it lands, a
+      rail row droops once when its session flips to failed in this page;
+      never a shake. Tests: test/desk.test.ts.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a
@@ -324,6 +402,8 @@ components:
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts
+      - test/fonts.test.ts
+      - test/desk.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:

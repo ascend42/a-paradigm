@@ -36,7 +36,7 @@
  *   budget.pause / budget.resume / budget.breaker.open / budget.breaker.close  {dimension}
  *   permit.deny       {dimension}                                      (the refusal's dimension, e.g. api-billing-path)
  */
-import { createHash } from 'node:crypto';
+import { projectHue } from '@a-company/gnomon-contracts';
 
 export const FEED_KINDS: readonly string[] = Object.freeze([
   'session.open',
@@ -126,7 +126,7 @@ export function projectFeedEvent(e: { kind?: unknown; seq?: unknown; at?: unknow
       if (!hsid) return null;
       out.hsid = hsid;
       out.backend = p.backend === 'local' ? 'local' : 'claude';
-      out.project = typeof p.cwd === 'string' ? createHash('sha256').update(p.cwd, 'utf8').digest()[0]! % FEED_HUES : 0;
+      out.project = typeof p.cwd === 'string' ? projectHue(p.cwd) : 0; // S2.1: the one hue function the GUI rail uses too (0..5, within 0..FEED_HUES-1)
       break;
     }
     case 'session.exited':
