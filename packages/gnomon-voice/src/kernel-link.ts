@@ -217,6 +217,12 @@ export function nsOf(principalId: string): string {
   return m[1]!;
 }
 
+/** status.voice.stopSpeakingSeq (T-2026-10-19-026: the human's ⏹ Stop speaking count), or null when absent. */
+export function stopSpeakingSeqFromStatus(status: unknown): number | null {
+  const n = (status as { voice?: { stopSpeakingSeq?: unknown } } | undefined)?.voice?.stopSpeakingSeq;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : null;
+}
+
 /** The principal this connection is authenticated as: `status.voice.principal` (V2e; the kernel reports it to the voice connection only). */
 export function principalFromStatus(status: unknown): string | undefined {
   const p = (status as { voice?: { principal?: unknown } } | undefined)?.voice?.principal;
@@ -240,10 +246,11 @@ export function attachmentFromStatus(status: unknown): VoiceAttachment | null {
 
 /** A projected row → KernelRow (full view: the event; a stub carries only kind + hsid and no payload). */
 export function kernelRowOf(r: unknown): KernelRow | undefined {
-  const x = r as { seq?: unknown; kind?: unknown; session?: unknown; payload?: unknown; event?: Record<string, unknown> } | undefined;
+  const x = r as { seq?: unknown; kind?: unknown; session?: unknown; principal?: unknown; payload?: unknown; event?: Record<string, unknown> } | undefined;
   const e = (x?.event && typeof x.event === 'object' ? x.event : x) as typeof x;
   if (!e || typeof e.kind !== 'string') return undefined;
-  return { seq: Number(e.seq ?? x?.seq ?? 0), kind: e.kind, ...(typeof e.session === 'string' ? { session: e.session } : {}), payload: (e.payload && typeof e.payload === 'object' ? e.payload : {}) as Record<string, unknown> };
+  const principal = (e as { principal?: unknown }).principal;
+  return { seq: Number(e.seq ?? x?.seq ?? 0), kind: e.kind, ...(typeof e.session === 'string' ? { session: e.session } : {}), ...(typeof principal === 'string' ? { principal } : {}), payload: (e.payload && typeof e.payload === 'object' ? e.payload : {}) as Record<string, unknown> };
 }
 
 export class GnomonKernelLink implements KernelLink {
@@ -257,8 +264,14 @@ export class GnomonKernelLink implements KernelLink {
   status(): Promise<unknown> {
     return this.client.call('status', {});
   }
+  #stopSpeakingSeq: number | null = null;
   async attachment(): Promise<VoiceAttachment | null> {
-    return attachmentFromStatus(await this.status());
+    const st = await this.status();
+    this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
+    return attachmentFromStatus(st);
+  }
+  stopSpeakingSeq(): number | null {
+    return this.#stopSpeakingSeq;
   }
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     return (await this.client.call('log.append', { kind, payload })) as { seq: number };

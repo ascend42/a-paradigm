@@ -4,12 +4,13 @@
 //
 //   spec    = mod ("+" mod)* "+" key | "none"
 //   mod     = ctrl|control  alt|opt|option  cmd|command  shift
-//   key     = a-z | 0-9 | space | return | tab | escape | f1..f12
+//   key     = a-z | 0-9 | space | return | tab | escape | period (".") | f1..f12
 //
 // At least one of ctrl/alt/cmd is required (F-keys excepted), so a binding can
 // never swallow plain typing. Actions: talk (hold: press and release), mic-toggle,
 // mode-toggle (ambient vs push-to-talk), hold-toggle (dictation: hold the composer's
-// countdown; TD-2026-10-20-262). The binary only REPORTS hotkeys; the
+// countdown; TD-2026-10-20-262), stop-speaking (cut the reply being read aloud;
+// T-2026-10-19-026). The binary only REPORTS hotkeys; the
 // controller decides what they do (it sends mic.on / mic.off itself).
 
 import Foundation
@@ -19,6 +20,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
     case micToggle = "mic-toggle"
     case modeToggle = "mode-toggle"
     case holdToggle = "hold-toggle"
+    case stopSpeaking = "stop-speaking"
 
     /// Carbon EventHotKeyID.id (1-based, stable).
     public var carbonId: UInt32 {
@@ -27,6 +29,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
         case .micToggle: return 2
         case .modeToggle: return 3
         case .holdToggle: return 4
+        case .stopSpeaking: return 5
         }
     }
 
@@ -59,7 +62,7 @@ public struct HotkeySpec: Equatable, Hashable, Sendable {
             "t": 0x11, "1": 0x12, "2": 0x13, "3": 0x14, "4": 0x15, "6": 0x16, "5": 0x17, "9": 0x19,
             "7": 0x1A, "8": 0x1C, "0": 0x1D, "o": 0x1F, "u": 0x20, "i": 0x22, "p": 0x23, "l": 0x25,
             "j": 0x26, "k": 0x28, "n": 0x2D, "m": 0x2E,
-            "space": 0x31, "return": 0x24, "tab": 0x30, "escape": 0x35,
+            "space": 0x31, "return": 0x24, "tab": 0x30, "escape": 0x35, ".": 0x2F, // kVK_ANSI_Period ("period" parses to ".")
         ]
         let f: [UInt32] = [0x7A, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6D, 0x67, 0x6F]
         for (i, code) in f.enumerated() { m["f\(i + 1)"] = code }
@@ -78,7 +81,8 @@ public struct HotkeySpec: Equatable, Hashable, Sendable {
         let s = raw.trimmingCharacters(in: .whitespaces).lowercased()
         if s == "none" { return nil }
         let parts = s.split(separator: "+", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
-        guard parts.count >= 1, parts.allSatisfy({ !$0.isEmpty }), let keyName = parts.last else { throw HotkeyError.badSpec(raw) }
+        guard parts.count >= 1, parts.allSatisfy({ !$0.isEmpty }), var keyName = parts.last else { throw HotkeyError.badSpec(raw) }
+        if keyName == "period" { keyName = "." }
         guard let code = keyCodes[keyName] else { throw HotkeyError.unknownKey(keyName) }
         var mods: UInt32 = 0
         for m in parts.dropLast() {
@@ -133,6 +137,7 @@ public struct HotkeyConfig: Equatable, Sendable {
         b[.micToggle] = try! HotkeySpec.parse("ctrl+alt+m")!
         b[.modeToggle] = try! HotkeySpec.parse("ctrl+alt+a")!
         b[.holdToggle] = try! HotkeySpec.parse("ctrl+alt+h")!
+        b[.stopSpeaking] = try! HotkeySpec.parse("ctrl+alt+.")!
         return HotkeyConfig(bindings: b)
     }()
 

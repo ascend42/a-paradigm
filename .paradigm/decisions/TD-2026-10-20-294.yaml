@@ -1,0 +1,34 @@
+id: TD-2026-10-20-294
+timestamp: '2026-10-20T05:44:57.277Z'
+title: Table-talk voice replies, and fewer approval prompts under auto-edits
+decision: >-
+  (1) Voice replies use two channels. A ```speak block comes first: 1–3 spoken sentences, ≤300 chars, second person,
+  pointing at the screen, ending with one question. Reference material goes below. Per-turn guidance is injected on
+  EVERY turn while voice is attached (no respawn, no layer churn). The speak block can never decide anything. System
+  speech gets an earcon and a separate voice. (2) Labelling (FOUNDER): no fixed scheme. The agent picks the clearest
+  form for the situation (letters for options, numbers for ordered steps, names for files and things, etc.), governed by
+  a proper TABLE-TALK PROTOCOL that tells agents their options and when to use each; the GUI renders whatever labels are
+  used. (3) Approvals: build BOTH. Read-only shell commands auto-pass in auto-edits, and 'always' offers a
+  command-prefix scope (compound commands must match on every part). Aegis reviews both.
+rationale: >-
+  Founder dogfood: "almost like I am sitting at the table with claude and they are showing me something and talking to
+  me"; "different situations call for different things, maybe we make a proper protocol". Exact-match always-rules never
+  converge, so prompts never stop.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: arky
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#gnomon-voice'
+  - '#gui'
+  - '#always-rules'
+  - '#approval-broker'
+status: active
+tags:
+  - gnomon
+  - voice
+  - ux
+  - approvals

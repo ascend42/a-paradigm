@@ -18,15 +18,15 @@ import { followLog, GnomonClient, gnomonPost, RpcError, webSocketTransport, type
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
-import { chatItems, GuiStore, isLiveState, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
+import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
-import { canAttach, isVoiceWidenCard, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -138,12 +138,18 @@ function resetTranscript(): void {
 }
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
+/** table talk: an assistant body whose lines start with a bold label (the agent's own A/B/C, 1/2/3 or names) shows those lines as chips. */
+function replyBody(it: ChatItem): MiniEl {
+  const parts = it.role === 'assistant' ? replyParts(it.text) : [];
+  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body' }, it.text);
+  return h(doc, 'div', { class: 'body' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', x.text) : h(doc, 'div', { class: 'plain' }, x.text))));
+}
 function itemEl(it: ChatItem): HTMLElement {
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), h(doc, 'div', { class: 'body' }, it.text)]
+    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
@@ -437,7 +443,10 @@ function schedule(what: Set<string>): void {
     if (w.has('sessions') || w.has('cards')) paintSessions();
     if (w.has('cards')) void paintStack(w);
     if (w.has('modes') || w.has('voice')) void refreshStatus();
-    if (w.has('voice-activity')) kickMeter();
+    if (w.has('voice-activity')) {
+      kickMeter();
+      watchSpeech();
+    }
     paintShuttle();
   });
 }
@@ -735,6 +744,48 @@ async function refreshStatus(): Promise<void> {
   paintSessions();
   syncDictationContext();
   foldVoiceReports();
+  syncSpeakPoll();
+}
+
+/* ── Stop speaking (T-2026-10-19-026; core/voice.ts) ───────────────── */
+let speakPoll: ReturnType<typeof setInterval> | null = null;
+let speakWatchUntil: number | null = null;
+/** A voice row arrived: re-read status for a short window so a reply that starts speaking shows its ⏹. */
+function watchSpeech(): void {
+  speakWatchUntil = Date.now() + SPEAK_WATCH_MS;
+  syncSpeakPoll();
+}
+/** One status read in flight at a time: a slow read is never stacked by the poll (Aegis L3). */
+let speakReading = false;
+async function pollStatusOnce(): Promise<void> {
+  if (speakReading) return;
+  speakReading = true;
+  try {
+    await refreshStatus();
+  } finally {
+    speakReading = false;
+  }
+}
+/** The 300 ms status re-read runs only while the voice app is speaking (or within the watch window). */
+function syncSpeakPoll(): void {
+  const want = !!client && speakPollWanted(status, speakWatchUntil, Date.now());
+  if (want && !speakPoll) speakPoll = setInterval(() => void pollStatusOnce(), SPEAK_POLL_MS);
+  else if (!want && speakPoll) {
+    clearInterval(speakPoll);
+    speakPoll = null;
+  }
+}
+/** ⏹ / Esc: one log.append request.voice.client{op:'stop-speaking'} on a trusted gesture. */
+async function stopSpeaking(trusted: boolean): Promise<void> {
+  if (!trusted || !client || !stopSpeakingShown(status)) return;
+  $('voice-stop').hidden = true; // the press is seen at once; the next status re-read is the truth
+  try {
+    await client.call('log.append', stopSpeakingRequest());
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not stopped', true);
+  } finally {
+    await refreshStatus();
+  }
 }
 
 let lastNoticeAt: string | null | undefined;
@@ -882,6 +933,7 @@ function paintVoice(): void {
     bar.style.setProperty('--progress', String(cp.progress));
     bar.setAttribute('aria-valuenow', String(Math.round(cp.progress * 100)));
   }
+  $('voice-stop').hidden = !stopSpeakingShown(status);
   const act = $('voice-action');
   act.hidden = cp.action === null;
   act.dataset.action = cp.action ?? '';
@@ -1319,6 +1371,7 @@ function wire(): void {
     void setMode(b.dataset.mode as RunMode, 'session', e.isTrusted);
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
+  $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
     const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
     if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
@@ -1405,6 +1458,9 @@ function wire(): void {
       closeVoiceMenu();
     } else if (e.key === 'Escape' && !$('enrol-dialog').hidden) {
       void closeEnrol(e.isTrusted);
+    } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
+      e.preventDefault();
+      void stopSpeaking(e.isTrusted);
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new');

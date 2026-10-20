@@ -1861,7 +1861,9 @@ components:
       component lstat'd, the final one too; H1), not gate-class (layers.ts
       gateClassPathRule, incl. editor/toolchain dirs, lint/format configs,
       task/build files, other agents' steering files, non-ASCII and win32
-      alias names; H2) and whose card has no hidden/bidi flags, after
+      alias names; H2; TD-2026-10-20-294 re-check C2: .gitconfig,
+      .git-credentials, .netrc, curl/pip/conda config, interpreter and
+      toolchain pins, build entry points, shell rc files, .env/.env.*) and whose card has no hidden/bidi flags, after
       broker.auto ⇒ approval.auto{hsid, tool, path (real), inputHash,
       modeRef:'mode:auto-edits'} (a failed row falls through to the card);
       everything else cards as in ask. Tightening a REPO pulls every live
@@ -1950,6 +1952,19 @@ components:
       voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
       session; the voice reader is narrowed to voice.* rows. speakerEnrolled is
       the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged.
+      TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item
+      prefers the first speak fenced block (markdown, URLs and long digit/hex runs
+      stripped, 300-char sentence cap, unclosed fence = its first paragraph)
+      as from:'block', else the gnome line / first paragraph as from:'heuristic';
+      kernel-written ask-waiting and edits items carry from:'kernel'.
+      table-talk.ts holds the frozen guidance (at most 160 words, pinned hash);
+      VoiceControl.guidanceFor(hsid) returns it only while voice is attached
+      to that session, and the #supervisor writes it as a second
+      <gnomon-voice> text block on every send (turn.sent guidanceHash;
+      contentHash stays the human text, replay unchanged). The spoken scrub
+      (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon
+      trace allows one extra prompt block only when turn.sent names its
+      guidanceHash and the hash matches (Aegis M2).
     path: src/kernel/voice/
     type: module
     tags: [gnomon, kernel, voice, paradigm-8, move-4]
@@ -1960,6 +1975,8 @@ components:
       - test/voice-v2e-daemon.test.ts
       - test/voice-v2e-enrol.test.ts
       - test/voice-v2e-speak.test.ts
+      - test/table-talk.test.ts
+      - test/table-talk-session.test.ts
       - test/voice-enrolment.test.ts
       - test/voice-golden.test.ts
       - test/socket-abi.test.ts
@@ -2361,27 +2378,45 @@ components:
 
   shell-readonly:
     description: >-
-      #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1) in
-      src/kernel/supervisor/shell-readonly.ts. PURE, fails closed. parseShell
-      is a real tokenizer/parser for a shell subset (quotes, escapes, line
-      continuations, $NAME/${NAME}, $(...), backticks, <(...), globs, tilde,
-      comments, ; && || | & newline, subshells, for-in loops, redirections
-      with IO numbers, heredocs); it refuses $((...)), $'...', $"...",
-      >(...), |&, ;;, unquoted braces, ~user, zsh $= $~ $^ forms and every
-      other compound. classifyReadOnly proves read-only: allowlisted command
-      names with per-command flag rules (git read subcommands, no global
-      options; find without -exec/-delete/-ok/-fprint; sed print scripts
-      only; awk without system/getline/pipes/redirection; sort/uniq/file/
-      date/rg/jq restricted), no background/negation/env assignment, output
-      redirection only to /dev/null, substitutions recursively read-only,
-      loop variables lowercase and not shell-special, cd only first and into
-      a session root, path operands never device paths nor inside/ancestor
-      of the Gnomon home or credential dirs. simpleArgv returns the argv of
-      a single literal simple command (for future prefix always rules).
+      #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis
+      re-check C1 C2 H1-H4 M1-M3 + Low closed) in
+      src/kernel/supervisor/shell-readonly.ts. Side-effect free, fails closed;
+      reads the filesystem (realpath, readdir) only to check symlinks and
+      expand globs. parseShell is a real tokenizer/parser for a shell subset
+      (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
+      <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
+      loops, redirections with IO numbers, heredocs); it refuses $((...)),
+      $'...', $"...", >(...), |&, ;;, unquoted braces, ~user, zsh $= $~ $^
+      forms and every other compound. classifyReadOnly proves read-only:
+      allowlisted command names with per-command flag rules; C1 a $(...) or
+      backtick word is only echo/printf text or a <<< word, never a path, and
+      a for loop iterates only literal words and literal globs (expanded now,
+      each value one safe token), so every path a reader gets is concrete and
+      checked; C2 printf takes no flag (printf -v), echo only -n/-e/-E, test
+      only POSIX operators, pwd/which/basename/dirname/tr tight flags; H1 awk
+      runs one `[PATTERN] { print ITEMS }` program; H2 globs expanded against
+      the filesystem with a superset matcher, every match realpath-checked,
+      > 200 matches or a match starting with - refused, no recursive or
+      symlink-following reader flags (grep -r/-R/-S/-O/-d/-D, ls -L/-R, du -L,
+      stat -L, diff -r, find -L/-follow), rg removed, diff takes no directory
+      operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
+      path-checked; H3 cd only first, to an
+      ABSOLUTE path inside a session root, cwd = its realpath; H4 reads only
+      inside the session roots and /usr /opt/homebrew /etc /tmp /private/tmp
+      /private/etc (as given and at the deepest-existing-ancestor realpath;
+      ctx.readRoots may only narrow that system list),
+      plus the device/protected-root deny; M1 date display only; M2 the cwd
+      is known only along an unbroken && chain from that cd, else relative
+      paths, implicit-cwd reads and git raise the card; M3 no git remote -v,
+      no credential-bearing git config key; Low git branch NAME only after
+      the long --list. No background/negation/env assignment, output
+      redirection only to /dev/null. simpleArgv returns the argv of a single
+      literal simple command (prefix always rules; signature unchanged).
     tags: [kernel, security]
     signals: []
     tests:
       - test/shell-readonly.test.ts
+      - test/shell-readonly-fs.test.ts
       - test/run-modes-session.test.ts
   always-rules:
     description: >-

@@ -63,6 +63,7 @@
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
+import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
 /**
@@ -349,6 +350,16 @@ export class VoiceControl {
   /** The attached session's hsid (the voice reader's scope), or null. */
   attachedHsid(): string | null {
     return this.#attachment?.hsid ?? null;
+  }
+
+  /**
+   * TABLE TALK (TD-2026-10-20-294): the per-turn guidance for a send to `hsid`, or null. Non-null only while voice
+   * is attached to exactly that session and its owner still owns it; every turn then (typed or voice) carries it.
+   */
+  guidanceFor(hsid: string): string | null {
+    const a = this.#attachment;
+    if (!a || a.hsid !== hsid || this.#o.sessions.ownerOf(hsid) !== a.owner) return null;
+    return TABLE_TALK_GUIDANCE;
   }
 
   /** The idle deadline (kernel clock) of a conversation ceiling, or null (ptt never idles out). */

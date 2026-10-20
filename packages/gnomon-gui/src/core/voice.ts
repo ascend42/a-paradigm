@@ -235,3 +235,36 @@ export function voiceRefusalNote(reason: string | null, data: Record<string, unk
   if (reason === 'voice-playback') return `the voice app is still speaking; try again when it finishes (voice-playback${data?.streaming === true ? ' · streaming' : ''})`;
   return null;
 }
+
+/*
+ * Stop speaking (T-2026-10-19-026). The voice app reports its spoken-reply edges (request.voice.report{playback})
+ * and the kernel relays them as status.voice.playback{playing, at}; the human's ⏹ / Esc is one log.append
+ * request.voice.client{op:'stop-speaking'} (core/voice-client.ts stopSpeakingRequest), which bumps
+ * status.voice.stopSpeakingSeq for the voice app to act on. Stopping only narrows: no card, no presence.
+ */
+/** The status re-read while the voice app is speaking (the button hides within one tick of the end). */
+export const SPEAK_POLL_MS = 300;
+/** After a voice row arrives, how long the page re-reads status to SEE a reply start (reports are never logged). */
+export const SPEAK_WATCH_MS = 4000;
+
+/** The voice app is reading a reply aloud now (status.voice.playback.playing; anything else is "not playing"). */
+export function playbackPlaying(status: unknown): boolean {
+  return obj(obj(obj(status)?.voice)?.playback)?.playing === true;
+}
+
+/** The ⏹ shows only for a human connection, with the voice app connected and speaking. */
+export function stopSpeakingShown(status: unknown): boolean {
+  return canAttach(status) && voiceStatusOf(status).clientConnected === true && playbackPlaying(status);
+}
+
+/** The 300 ms re-read runs while speech plays, or within the watch window after a voice row (to see it start). */
+export function speakPollWanted(status: unknown, watchUntil: number | null, now: number): boolean {
+  // a crashed client's stale playing:true lingers for the report TTL: poll only while the client is connected (Aegis L1)
+  const connected = (status as { voice?: { clientConnected?: unknown } } | null)?.voice?.clientConnected === true;
+  return (connected && playbackPlaying(status)) || (watchUntil !== null && now < watchUntil);
+}
+
+/** Esc stops speaking only when ⏹ is shown and Esc has nothing nearer to do: no open menu or dialog, not typing in the composer. */
+export function escStopsSpeaking(o: { shown: boolean; menuOpen: boolean; dialogOpen: boolean; inComposer: boolean }): boolean {
+  return o.shown && !o.menuOpen && !o.dialogOpen && !o.inComposer;
+}

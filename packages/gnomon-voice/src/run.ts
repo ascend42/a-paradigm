@@ -12,7 +12,7 @@ import { nsOf, principalFromStatus } from './kernel-link.js';
 import type { AudioIO, KernelLink, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 import type { VoicePrint } from './speaker.js';
-import { VoiceClient, type ClientMode, type Notice, type Delivery } from './voice-client.js';
+import { SPEAKING_POLL_MS, VoiceClient, type ClientMode, type Notice, type Delivery } from './voice-client.js';
 
 export interface RunLink extends KernelLink {
   status(): Promise<unknown>;
@@ -60,7 +60,8 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
   }
   let client: VoiceClient | undefined;
   let watch: EnrolWatch | undefined;
-  let refresher: ReturnType<typeof setInterval> | undefined;
+  let refresher: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
   const boot = (async () => {
     const principal = principalFromStatus(await o.link.status());
     if (!principal) throw new Error('the kernel did not say which voice principal this is (status.voice.principal)');
@@ -74,12 +75,27 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
     // The attachment usually lands AFTER the client starts (Gnomon starts the voice app, then the human's Touch ID
     // attaches it), and nothing tells the client: re-read it on a short cadence so a new or changed attachment is
     // picked up (founder dogfood 2026-10-19: the client saw "not attached" forever and dropped every utterance).
-    refresher = setInterval(() => void c.refresh().catch(() => undefined), o.attachPollMs ?? ATTACH_POLL_MS);
-    refresher.unref?.();
+    // T-2026-10-19-026: while a reply is spoken the re-read runs every SPEAKING_POLL_MS, so the GUI's ⏹ (a changed
+    // status.voice.stopSpeakingSeq) stops the audio within ~300 ms
+    const every = o.attachPollMs ?? ATTACH_POLL_MS;
+    const step = Math.min(every, SPEAKING_POLL_MS);
+    let last = Date.now();
+    const tick = (): void => {
+      if (stopped) return;
+      refresher = setTimeout(() => {
+        // a cheap timer: status is read every `every` ms, or every `step` ms while a reply is spoken
+        if (!c.speaking && Date.now() - last < every - step / 2) return tick();
+        last = Date.now();
+        void c.refresh().catch(() => undefined).finally(tick);
+      }, step);
+      refresher.unref?.();
+    };
+    tick();
     o.started?.(client);
   })();
   const cleanup = async (): Promise<void> => {
-    if (refresher) clearInterval(refresher);
+    stopped = true;
+    if (refresher) clearTimeout(refresher);
     await watch?.stop();
     if (client) await client.close().catch(() => undefined);
     else await o.audio.close().catch(() => undefined);

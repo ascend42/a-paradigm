@@ -304,6 +304,21 @@ components:
     tags: [gnomon, gui, setup]
     tests:
       - test/setup.test.ts
+  gui-stop-speaking:
+    description: >-
+      #gui Stop speaking (T-2026-10-19-026). A ⏹ "Stop speaking" button beside
+      the mic pill (static/index.html #voice-stop), shown only for a human
+      connection with the voice app connected (status.voice.clientConnected)
+      and status.voice.playback.playing; a trusted click, or Esc when no menu
+      or dialog is open and focus is not in the composer, sends ONE log.append
+      request.voice.client{op:'stop-speaking'} (narrows: no card, no presence).
+      core/voice.ts holds the pure decisions (playbackPlaying,
+      stopSpeakingShown, speakPollWanted, escStopsSpeaking); app.ts re-reads
+      status every 300 ms (SPEAK_POLL_MS) only while speech plays, plus a 4 s
+      watch window after a voice row (playback reports are never logged, so
+      the page cannot otherwise see a reply start).
+    tags: [voice, gui]
+    signals: []
   gui-dictation:
     description: >-
       #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation
@@ -338,3 +353,23 @@ components:
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+  gui-table-talk:
+    description: >-
+      #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
+      (store.ts splitSpeak, mirroring the kernel projector) shows as a
+      highlighted "said aloud" line at the top of the reply and is removed
+      from the body; a reply without one (heuristic) gets no highlight. Lines
+      that start with a bold label, in whatever scheme the agent chose
+      (letters, numbers, short names), render as subtle chips (replyParts).
+      Aegis L3: when the kernel's speakable row (principal p:<ns>/kernel) for
+      that reply exists, the line is its text (from block, "said aloud";
+      heuristic shows none); otherwise the GUI's own parse ("spoken part").
+      Aegis M1: a replayed user message always keeps content[0]; a later text
+      block is hidden only when its sha256 is the kernel guidance hash
+      (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
+      guidanceHash; a human-typed <gnomon-voice> stays visible.
+    path: src/core/store.ts
+    type: module
+    tags: [gnomon, gui, voice, table-talk]
+    tests:
+      - test/table-talk.test.ts

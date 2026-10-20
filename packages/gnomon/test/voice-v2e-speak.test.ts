@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { KernelSpeakable, SpeakableProjector, speakableSummary, isKernelSpeakable, ASK_WAITING } from '../src/kernel/voice/speakable.js';
 import { mayBeVisible, projectForReader } from '../src/kernel/log/redaction.js';
 import { VoiceReports, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
+import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
 
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 const line = (content: unknown[]) => JSON.stringify({ type: 'assistant', message: { content } });
@@ -20,15 +21,15 @@ describe('#gnomon-voice V2e: KernelSpeakable', () => {
     expect(k.observe(ev(5, 'turn.event', { line: line([{ type: 'text', text: 'Here is the plan.\n\nSecond para.' }]) }))).toEqual({
       kind: 'voice.turn.agent',
       session: HSID,
-      payload: { source: 'kernel-speakable', turnSeq: 5, items: [{ kind: 'reply', text: 'Here is the plan.' }] },
+      payload: { source: 'kernel-speakable', turnSeq: 5, items: [{ kind: 'reply', text: 'Here is the plan.', from: 'heuristic' }] },
     });
-    expect(k.observe(ev(6, 'turn.event', { line: line([{ type: 'text', text: 'Long words.\ngnome: All tests pass.' }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'All tests pass.' }]);
-    expect(k.observe(ev(7, 'turn.event', { line: line([{ type: 'text', text: diff }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }, { type: 'tool_use', name: 'Write', input: { file_path: '/b' } }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'Done.' }]);
+    expect(k.observe(ev(6, 'turn.event', { line: line([{ type: 'text', text: 'Long words.\ngnome: All tests pass.' }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'All tests pass.', from: 'heuristic' }]);
+    expect(k.observe(ev(7, 'turn.event', { line: line([{ type: 'text', text: diff }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }, { type: 'tool_use', name: 'Write', input: { file_path: '/b' } }, { type: 'tool_use', name: 'Edit', input: { file_path: '/a' } }]) }))?.payload.items).toEqual([{ kind: 'reply', text: 'Done.', from: 'heuristic' }]);
     expect(k.observe(ev(8, 'turn.event', { line: line([{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions: [{ question: 'Ship it?', options: [{ label: 'yes' }, { label: 'no' }] }] } }]) }))?.payload.items).toEqual([{ kind: 'ask', text: 'Ship it? Options: yes, or no.' }]);
     // the turn.ask-user row for the same tool use is not said twice; an unseen one says a question is waiting
     expect(k.observe(ev(9, 'turn.ask-user', { toolUseId: 'tu1' }))).toBeNull();
-    expect(k.observe(ev(10, 'turn.ask-user', { toolUseId: 'tu9' }))?.payload.items).toEqual([{ kind: 'ask', text: ASK_WAITING }]);
-    expect(k.observe(ev(11, 'turn.result', { tokens: 1 }))?.payload).toEqual({ source: 'kernel-speakable', turnSeq: 11, items: [{ kind: 'edits', text: 'Edited 2 files.' }] });
+    expect(k.observe(ev(10, 'turn.ask-user', { toolUseId: 'tu9' }))?.payload.items).toEqual([{ kind: 'ask', text: ASK_WAITING, from: 'kernel' }]);
+    expect(k.observe(ev(11, 'turn.result', { tokens: 1 }))?.payload).toEqual({ source: 'kernel-speakable', turnSeq: 11, items: [{ kind: 'edits', text: 'Edited 2 files.', from: 'kernel' }] });
     // never: another session, a hashed line, tool output, an unrelated kind, nothing attached
     expect(k.observe(ev(12, 'turn.event', { line: line([{ type: 'text', text: 'hi' }]) }, 'hs:other'))).toBeNull();
     expect(k.observe(ev(13, 'turn.event', { lineHash: 'sha256:x', bytes: 99999 }))).toBeNull();
@@ -76,11 +77,11 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
   it('validates and relays enrolment progress and notices; stale past the TTL', () => {
     let t = 1_000_000;
     const r = new VoiceReports(() => t);
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, stopSpeakingSeq: 0 });
     r.report({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5 } });
     r.report({ notice: { text: 'Microphone access is off.‮' } });
     const at = new Date(t).toISOString();
-    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null });
+    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, stopSpeakingSeq: 0 });
     for (const bad of [null, {}, { x: 1 }, { enrolment: { name: 'Bad Name', phase: 'ready' } }, { enrolment: { name: 'a', phase: 'nope' } }, { enrolment: { name: 'a', phase: 'ready', phrase: -1 } }, { enrolment: { name: 'a', phase: 'ready', extra: 1 } }, { notice: { text: '' } }, { notice: { text: 'x', y: 1 } }]) {
       expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
     }
@@ -93,6 +94,19 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     r.report({ notice: { text: 'x'.repeat(1000) } });
     expect(r.status().notice!.text).toHaveLength(280);
     t += VOICE_REPORT_TTL_MS + 1;
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, stopSpeakingSeq: 0 });
+  });
+
+  it('T-2026-10-19-026: playback edges relay as status.voice.playback; stop-speaking bumps a declared counter', () => {
+    let t = 1_000_000;
+    const r = new VoiceReports(() => t);
+    r.report({ playback: { playing: true } });
+    expect(r.status().playback).toEqual({ playing: true, at: new Date(t).toISOString() });
+    for (const bad of [{ playback: null }, { playback: { playing: 1 } }, { playback: { playing: true, x: 1 } }, { playback: [] }]) expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
+    expect(r.stopSpeaking()).toEqual({ stopSpeakingSeq: 1 });
+    expect(r.stopSpeaking()).toEqual({ stopSpeakingSeq: 2 });
+    expect(checkStatusNumbers({ voice: r.status() })).toEqual([]);
+    t += VOICE_REPORT_TTL_MS + 1;
+    expect(r.status()).toMatchObject({ playback: null, stopSpeakingSeq: 2 });
   });
 });

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:42:19.128Z'
+generated: '2026-10-20T06:50:00.550Z'
 structure: {}
 key_files:
   config:
@@ -260,7 +260,9 @@ symbols:
   '#purpose-component-contract-voice-allowlist': packages/gnomon-contracts/
   '#purpose-component-gui': packages/gnomon-gui/
   '#purpose-component-gui-setup': packages/gnomon-gui/
+  '#purpose-component-gui-stop-speaking': packages/gnomon-gui/
   '#purpose-component-gui-dictation': packages/gnomon-gui/
+  '#purpose-component-gui-table-talk': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
@@ -1373,6 +1375,7 @@ symbols:
   '#purpose-ref-component-launch': packages/gnomon-gui/
   '#purpose-ref-component-client-ts': packages/gnomon-gui/
   '#purpose-ref-component-setup': packages/gnomon-gui/
+  '#purpose-ref-component-voice-stop': packages/gnomon-gui/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/

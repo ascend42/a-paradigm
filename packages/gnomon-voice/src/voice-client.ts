@@ -20,6 +20,14 @@
  *   `log.append voice.turn.agent{turnId, t0, t1, textPlanned, textSpoken}` per played chunk (the windows the
  *   kernel's voice-echo guard checks).
  *
+ * Speaking (T-2026-10-19-026): sentences are PIPELINED — sentence n+1 is synthesized while sentence n plays (TTS
+ * calls are serialized; an optional warm-up synthesis runs at start). The spoken-reply state is reported as
+ * `request.voice.report{playback: {playing}}` edges (status.voice.playback; the GUI shows ⏹ Stop speaking). Speech
+ * stops ONLY on: an explicit stop (⌃⌥. hotkey → control 'stop-speaking', the GUI's ⏹ / Esc → the human's
+ * request.voice.client{op:'stop-speaking'} → a changed status.voice.stopSpeakingSeq on the next status re-read),
+ * a barge-in, a detach (a successful status read with no or another attachment) or close. A status re-read, a
+ * transient status failure or a follow end never stops it (founder dogfood 2026-10-20: "scrolling stopped it").
+ *
  * Half-duplex: no utterance that STARTS while TTS plays or within the 750 ms tail is forwarded. Barge-in: VAD
  * speech ≥ 300 ms during playback (or the PTT hotkey pressed) stops playback and drops the rest of the reply; the
  * speech that barged in is not forwarded — only a full utterance that starts after playback + tail is.
@@ -31,6 +39,7 @@
  */
 import { kernelSpeakable, sentences } from './speakable.js';
 import { SpeakerVerifier, type VoicePrint } from './speaker.js';
+import { withEarcon } from './earcon.js';
 import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
@@ -42,6 +51,51 @@ const RANK: Record<ClientMode, number> = { off: 0, ptt: 1, ambient: 2 };
 
 export const ECHO_TAIL_MS = 750;
 export const BARGE_IN_MS = 300;
+/**
+ * A barge-in frame must be LOUD as well as VAD speech: the VAD's latched state (min-speech/min-silence hangover) can
+ * stay "speech" across transient noise (clicks, a trackpad, residual echo), so a quieter frame resets the run.
+ */
+export const BARGE_IN_MIN_DBFS = -42;
+/** while a reply is being spoken the status re-read (the GUI ⏹ path) runs at this cadence (run.ts) */
+export const SPEAKING_POLL_MS = 300;
+
+/** Per-reply latency (ms from the kernel row's receipt), the first sentence only. */
+export interface SpeechLatency {
+  /** row received → its first sentence's synthesis started (queueing behind an earlier reply or the warm-up) */
+  queuedMs: number;
+  /** first-sentence synthesis */
+  synthMs: number;
+  /** play() called → audible (the binary's playback.start audibleAt) */
+  toAudibleMs: number;
+  /** row received → audible */
+  totalMs: number;
+  /** sentences played for this reply */
+  sentences: number;
+}
+
+type Audio = { samples: Float32Array; sampleRate: number };
+/** Who speaks a queued sentence (table talk S4): the model's words, or the kernel's own in the system voice. */
+type SpeakVoice = 'model' | 'system';
+interface SpeakItem {
+  sentence: string;
+  voice: SpeakVoice;
+  /** play the system earcon right before this sentence (the first sentence of a system item) */
+  earcon: boolean;
+}
+interface SynthJob {
+  sentence: string;
+  audio: Promise<Audio>;
+  t0: number;
+  t1?: number;
+}
+
+function frameDbfs(f: PcmFrame): number {
+  let sum = 0;
+  for (let i = 0; i < f.samples.length; i++) sum += f.samples[i]! * f.samples[i]!;
+  const rms = Math.sqrt(sum / Math.max(1, f.samples.length));
+  return rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+}
+const hr = (): number => Number(process.hrtime.bigint()) / 1e6;
 export const MIN_UTTERANCE_MS = 250;
 const WINDOW_KEEP = 64;
 /** dictation activity: an open VAD utterance with no speech for this long is treated as ended */
@@ -130,8 +184,17 @@ export class VoiceClient {
   #windows: Array<{ t0: number; t1: number }> = [];
   #speechRunMs = 0;
   #bargedIn = false;
-  #speakQueue: string[] = [];
+  #speakQueue: SpeakItem[] = [];
   #speaking: Promise<void> = Promise.resolve();
+  /** bumped by every stop: a synthesis or prefetch of an older generation is dropped, never played */
+  #speechGen = 0;
+  /** TTS calls are serialized (one model handle; the warm-up first) */
+  #ttsChain: Promise<unknown> = Promise.resolve();
+  #speechOn = false;
+  #stopSeq: number | null = null;
+  #lastLatency: SpeechLatency | null = null;
+  #stops = 0;
+  #following = false;
   // serial utterance processing
   #work: Promise<void> = Promise.resolve();
   #turnN = 0;
@@ -208,6 +271,17 @@ export class VoiceClient {
   get playing(): boolean {
     return this.#playing !== null;
   }
+  /** a reply is being spoken (synthesizing or playing, until its queue drains or is stopped) */
+  get speaking(): boolean {
+    return this.#speechOn;
+  }
+  get lastLatency(): SpeechLatency | null {
+    return this.#lastLatency;
+  }
+  /** explicit stops made by the human (hotkey, GUI request) */
+  get stops(): number {
+    return this.#stops;
+  }
   /** The mode in force: the requested mode narrowed to the human's ceiling. */
   get mode(): ClientMode {
     const c = ceilingOf(this.#attachment);
@@ -223,25 +297,44 @@ export class VoiceClient {
       a.on('frame', (f) => this.#onFrame(f)),
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
-      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : this.toggleAmbient())),
+      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
+    // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
+    const tts = this.#o.engines.tts;
+    if (tts.warmUp) {
+      const t0 = hr();
+      void this.#serialTts(() => tts.warmUp!()).then(
+        () => this.#log.info('tts warm', { ms: Math.round(hr() - t0) }),
+        (err) => this.#log.warn('tts warm-up failed', { error: err instanceof Error ? err.message : String(err) }),
+      );
+    }
     await this.refresh();
   }
 
   /** Re-read the attachment from status and (re)follow its session. */
   async refresh(): Promise<void> {
     let next: VoiceAttachment | null;
+    let readFailed = false;
     try {
       next = await this.#o.link.attachment();
     } catch (err) {
       this.#refused(err, 'status');
       next = null;
+      readFailed = true;
     }
     const changed = !this.#refreshed || next?.voiceSessionId !== this.#attachment?.voiceSessionId;
     this.#refreshed = true;
+    const prev = this.#attachment;
     this.#attachment = next;
-    if (!changed) return;
+    if (!readFailed) this.#checkStopSeq();
+    // a detach (a SUCCESSFUL read with no or another attachment) stops speech; a failed read never does
+    if (changed && prev && !readFailed) this.stopSpeaking('detach');
+    // the same attachment whose follow ended (the kernel ends voice readers on any attachment change): follow again
+    if (!changed) {
+      if (next && !this.#unfollow && !this.#following && !this.#closed) await this.#follow(next);
+      return;
+    }
     this.#unfollow?.();
     this.#unfollow = undefined;
     this.#o.engines.vad.reset();
@@ -253,15 +346,48 @@ export class VoiceClient {
     // ⌃⌥A hotkey can still narrow it locally afterwards (founder dogfood 2026-10-19: ambient sat in ptt)
     this.#requested = ceilingOf(next);
     this.#notice('info', `Attached to ${next.hsid} (up to ${ceilingOf(next) === 'ambient' ? 'ambient' : 'push-to-talk'}). Mode: ${this.mode}.`);
+    await this.#follow(next);
+  }
+
+  async #follow(a: VoiceAttachment): Promise<void> {
+    this.#following = true;
     try {
-      this.#unfollow = await this.#o.link.follow(next.hsid, (r) => this.#onRow(r.kind, r.payload), (reason) => {
+      let off: (() => void) | undefined;
+      off = await this.#o.link.follow(a.hsid, (r) => this.#onRow(r.kind, r.payload, r.principal), (reason) => {
         this.#log.info('follow ended', { reason });
-        this.#unfollow = undefined;
+        if (off === undefined || this.#unfollow === off) this.#unfollow = undefined;
+        off = undefined;
         if (!this.#closed) void this.refresh();
       });
+      this.#unfollow = off;
     } catch (err) {
       this.#refused(err, 'log.read');
+    } finally {
+      this.#following = false;
     }
+  }
+
+  /** The human's ⏹ (GUI button / Esc → request.voice.client{op:'stop-speaking'}) shows up as a changed status count. */
+  #checkStopSeq(): void {
+    const seq = this.#o.link.stopSpeakingSeq?.() ?? null;
+    if (seq === null) return;
+    const before = this.#stopSeq;
+    this.#stopSeq = seq;
+    if (before !== null && seq !== before) this.stopSpeaking('gui');
+  }
+
+  /**
+   * Stop speaking NOW: the chunk playing stops (play.stop flushes the binary's queue), the rest of the reply and any
+   * prefetched sentence are dropped. Returns whether anything was being said. Never touches capture or the kernel.
+   */
+  stopSpeaking(by: 'hotkey' | 'gui' | 'detach' | 'api' = 'api'): boolean {
+    if (!this.#speechOn && !this.#playing && !this.#speakQueue.length) return false;
+    this.#speechGen++;
+    this.#speakQueue = [];
+    if (by === 'hotkey' || by === 'gui') this.#stops++;
+    this.#o.audio.stopPlayback();
+    this.#flow.info('stopped speaking', { by });
+    return true;
   }
 
   /** Local mode switch. Asking above the human's ceiling narrows to the ceiling (never widens). */
@@ -400,7 +526,8 @@ export class VoiceClient {
     const segs = this.#o.engines.vad.accept(f);
     if (this.#playing && !this.#bargedIn) {
       const ms = (f.samples.length / f.sampleRate) * 1000;
-      this.#speechRunMs = this.#o.engines.vad.speaking() ? this.#speechRunMs + ms : 0;
+      // only LOUD VAD speech counts; a quieter frame resets the run (transient noise is not a barge-in)
+      this.#speechRunMs = this.#o.engines.vad.speaking() && frameDbfs(f) >= BARGE_IN_MIN_DBFS ? this.#speechRunMs + ms : 0;
       if (this.#speechRunMs >= BARGE_IN_MS) this.#bargeIn('speech');
     }
     if (mode === 'ambient') {
@@ -496,8 +623,8 @@ export class VoiceClient {
 
   // ---- speaking ------------------------------------------------------------------------------------------------
 
-  #onRow(kind: string, payload: Record<string, unknown>): void {
-    const items = kernelSpeakable(kind, payload);
+  #onRow(kind: string, payload: Record<string, unknown>, principal?: string): void {
+    const items = kernelSpeakable(kind, payload, principal, this.#o.ns);
     if (!items.length) return;
     // a kernel-speakable row is said once per turnSeq (a re-follow after an attachment change replays rows)
     const key = typeof payload.turnSeq === 'number' || typeof payload.turnSeq === 'string' ? String(payload.turnSeq) : undefined;
@@ -506,24 +633,87 @@ export class VoiceClient {
       this.#spokenTurns.add(key);
       if (this.#spokenTurns.size > 256) this.#spokenTurns.delete(this.#spokenTurns.values().next().value!);
     }
-    for (const it of items) this.say(it.text);
+    const at = hr();
+    for (const it of items) this.say(it.text, it.voice, at);
   }
 
-  /** Queue text to speak, one sentence per TTS chunk. */
-  say(text: string): void {
-    for (const s of sentences(text)) this.#speakQueue.push(s);
-    this.#speaking = this.#speaking.then(() => this.#drain()).catch((err) => this.#log.warn('speech failed', { error: err instanceof Error ? err.message : String(err) }));
+  /**
+   * Queue text to speak, one sentence per TTS chunk (pipelined: the next is synthesized while one plays).
+   * table talk S4: system speech starts with the earcon and uses the system speaker; model text never does.
+   */
+  say(text: string, voice: SpeakVoice = 'model', receivedAt = hr()): void {
+    const parts = sentences(text);
+    if (!parts.length) return;
+    parts.forEach((sentence, i) => this.#speakQueue.push({ sentence, voice, earcon: voice === 'system' && i === 0 }));
+    this.#setSpeech(true);
+    this.#speaking = this.#speaking
+      .then(() => this.#drain(receivedAt))
+      .catch((err) => this.#log.warn('speech failed', { error: err instanceof Error ? err.message : String(err) }))
+      .finally(() => {
+        if (!this.#speakQueue.length && !this.#playing) this.#setSpeech(false);
+      });
   }
 
-  async #drain(): Promise<void> {
-    while (this.#speakQueue.length && !this.#closed) {
-      const sentence = this.#speakQueue.shift()!;
-      const audio = await this.#o.engines.tts.synthesize(sentence);
-      if (this.#closed) return;
+  /** One TTS call at a time, in order (the warm-up first). */
+  #serialTts<T>(fn: () => Promise<T>): Promise<T> {
+    const p = this.#ttsChain.then(fn);
+    this.#ttsChain = p.catch(() => undefined);
+    return p;
+  }
+
+  /** Synthesize one queued sentence in its voice; a system item's audio is prefixed with the earcon (same play call). */
+  #synth(item: SpeakItem): SynthJob {
+    const { sentence } = item;
+    const job: SynthJob = { sentence, audio: Promise.resolve({ samples: new Float32Array(0), sampleRate: 16_000 }), t0: hr() };
+    job.audio = this.#serialTts(() => {
+      job.t0 = hr();
+      return this.#o.engines.tts.synthesize(sentence, item.voice === 'system' ? { voice: 'system' } : undefined);
+    }).then((a) => {
+      job.t1 = hr();
+      return withEarcon(a, item.earcon);
+    });
+    job.audio.catch(() => undefined); // a dropped prefetch never surfaces as an unhandled rejection
+    return job;
+  }
+
+  /** request.voice.report{playback: {playing}} on an edge (status.voice.playback: the GUI's ⏹ Stop speaking). */
+  #setSpeech(on: boolean): void {
+    if (on === this.#speechOn) return;
+    this.#speechOn = on;
+    const playback = { playing: on };
+    this.#reports = this.#reports.then(async () => {
+      try {
+        await this.#o.link.append('request.voice.report', { playback });
+      } catch (err) {
+        this.#log.warn('playback report not relayed', { reason: toRefusal(err).reason });
+      }
+    });
+  }
+
+  async #drain(receivedAt: number): Promise<void> {
+    const gen = this.#speechGen;
+    if (!this.#speakQueue.length || this.#closed) return;
+    let job: SynthJob | undefined = this.#synth(this.#speakQueue.shift()!);
+    let n = 0;
+    while (job && !this.#closed && gen === this.#speechGen) {
+      const cur: SynthJob = job;
+      job = undefined;
+      let audio: Audio;
+      try {
+        audio = await cur.audio;
+      } catch (err) {
+        this.#log.warn('synthesis failed', { error: err instanceof Error ? err.message : String(err) });
+        if (this.#speakQueue.length && gen === this.#speechGen) job = this.#synth(this.#speakQueue.shift()!);
+        continue;
+      }
+      if (this.#closed || gen !== this.#speechGen) return;
+      // pipeline: the next sentence synthesizes while this one plays
+      if (this.#speakQueue.length) job = this.#synth(this.#speakQueue.shift()!);
       this.#bargedIn = false;
       this.#speechRunMs = 0;
       const id = turnStamp('a', Math.max(this.#now(), this.#lastAgentMs), ++this.#agentN);
-      this.#playing = { t0: this.#now() };
+      const calledAt = this.#now();
+      this.#playing = { t0: calledAt };
       let r: PlaybackResult | undefined;
       try {
         r = await this.#o.audio.play({ id, samples: audio.samples, sampleRate: audio.sampleRate });
@@ -535,6 +725,14 @@ export class VoiceClient {
         // L4: play threw ⇒ no result; keep a conservative echo window and drop the rest of the reply
         if (!r) this.#windows.push({ t0, t1: this.#now() });
       }
+      n++;
+      if (r && n === 1) {
+        const synthMs = (cur.t1 ?? cur.t0) - cur.t0;
+        const queuedMs = Math.max(0, cur.t0 - receivedAt);
+        const toAudibleMs = Math.max(0, r.t0 - calledAt);
+        this.#lastLatency = { queuedMs: Math.round(queuedMs), synthMs: Math.round(synthMs), toAudibleMs: Math.round(toAudibleMs), totalMs: Math.round(queuedMs + synthMs + toAudibleMs), sentences: 1 };
+        this.#flow.info('speech latency', { ...this.#lastLatency });
+      } else if (r && this.#lastLatency) this.#lastLatency.sentences = n;
       if (!r) {
         this.#speakQueue = [];
         return;
@@ -543,7 +741,7 @@ export class VoiceClient {
       this.#windows.push({ t0: r.t0, t1: r.t1 });
       if (this.#windows.length > WINDOW_KEEP) this.#windows.splice(0, this.#windows.length - WINDOW_KEEP);
       try {
-        await this.#o.link.append('voice.turn.agent', { turnId: id, t0: Math.round(r.t0), t1: Math.round(r.t1), textPlanned: sentence, textSpoken: r.completed ? sentence : '', ...(r.completed ? {} : { interrupted: true }) });
+        await this.#o.link.append('voice.turn.agent', { turnId: id, t0: Math.round(r.t0), t1: Math.round(r.t1), textPlanned: cur.sentence, textSpoken: r.completed ? cur.sentence : '', ...(r.completed ? {} : { interrupted: true }) });
       } catch (err) {
         this.#refused(err, 'log.append');
       }
@@ -558,6 +756,7 @@ export class VoiceClient {
     if (!this.#playing || this.#bargedIn) return;
     this.#bargedIn = true;
     this.#speechRunMs = 0;
+    this.#speechGen++;
     this.#speakQueue = [];
     this.#o.audio.stopPlayback();
     this.#o.engines.vad.reset(); // the barge-in speech is not forwarded

@@ -239,8 +239,8 @@ describe('voice: palette, blocks and page wiring', () => {
   });
   it('the pill is repainted from status on a voice row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
-    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262)
-    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
+    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026)
+    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
   });
   it('contrast and motion: ambient uses the fixture voice-armed pair, the pulse stops under reduced motion', () => {
     const fx = JSON.parse(readFileSync(path.join(ROOT, '..', '..', 'docs', 'specs', 'gnomon-fixtures', 'contrast.json'), 'utf8'));

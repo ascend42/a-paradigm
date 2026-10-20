@@ -4,6 +4,8 @@ import { SpeakableProjector } from '../src/speakable.js';
 import type { KernelLink, KernelRow, PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceAttachment, VoiceEngines } from '../src/types.js';
 
 export const SR = 16_000;
+/** the fake kernel's principal (the tests' voice namespace is abcd1234) */
+export const KERNEL_PRINCIPAL = 'p:abcd1234/kernel';
 
 /** A tone of `ms` at amplitude `amp` (the amplitude stands in for "who is speaking"). */
 export function tone(ms: number, amp: number, sr = SR): Float32Array {
@@ -79,9 +81,12 @@ export class StubStt implements SttEngine {
 export class StubTts implements TtsEngine {
   readonly voice = 'stub';
   readonly said: string[] = [];
-  constructor(readonly msPerSentence = 1000) {}
-  async synthesize(sentence: string): Promise<{ samples: Float32Array; sampleRate: number }> {
+  /** table talk S4: the voice each sentence was asked in */
+  readonly voices: Array<'model' | 'system'> = [];
+  constructor(public msPerSentence = 1000) {}
+  async synthesize(sentence: string, o?: { voice?: 'model' | 'system' }): Promise<{ samples: Float32Array; sampleRate: number }> {
     this.said.push(sentence);
+    this.voices.push(o?.voice ?? 'model');
     return { samples: new Float32Array(Math.round((SR * this.msPerSentence) / 1000)), sampleRate: SR };
   }
 }
@@ -110,13 +115,26 @@ export class FakeLink implements KernelLink {
   #seq = 0;
   #turnSeq = 0;
   readonly #kernel = new SpeakableProjector();
+  /** status.voice.stopSpeakingSeq (null ⇒ the kernel does not report it) */
+  stopSeq: number | null = null;
+  attachmentError: unknown;
   async attachment(): Promise<VoiceAttachment | null> {
+    if (this.attachmentError) throw this.attachmentError;
     return this.att;
   }
+  stopSpeakingSeq(): number | null {
+    return this.stopSeq;
+  }
+  /** request.voice.report{playback} edges */
+  readonly playback: boolean[] = [];
   /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */
   readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     if (this.appendError) throw this.appendError;
+    if (kind === 'request.voice.report' && payload.playback) {
+      this.playback.push((payload.playback as { playing: boolean }).playing);
+      return { seq: 0 };
+    }
     if (kind === 'request.voice.report' && payload.dictation) {
       this.dictation.push(payload.dictation as { activity: string; holdToggles: number });
       return { seq: 0 };
@@ -157,9 +175,9 @@ export class FakeLink implements KernelLink {
     this.row?.({ seq: ++this.#seq, kind: 'turn.result', payload: {} });
     this.speakable(this.#kernel.push('turn.result', {}));
   }
-  speakable(items: Array<{ kind: string; text: string }>, turnSeq = ++this.#turnSeq): void {
+  speakable(items: Array<{ kind: string; text: string; from?: string }>, turnSeq = ++this.#turnSeq): void {
     if (!items.length) return;
-    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text })) } });
+    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', principal: KERNEL_PRINCIPAL, payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text, ...(i.from !== undefined ? { from: i.from } : {}) })) } });
   }
 }
 

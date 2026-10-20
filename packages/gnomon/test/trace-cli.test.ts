@@ -16,6 +16,7 @@ import { recordKernelPub } from '../src/kernel/identity/index.js';
 import { kernelPrincipalOf } from '../src/kernel/lifecycle/index.js';
 import { openKernelLog } from '../src/kernel/testing.js';
 import { turnContentHash } from '../src/kernel/supervisor/supervisor.js';
+import { TABLE_TALK_GUIDANCE, TABLE_TALK_GUIDANCE_HASH } from '../src/kernel/voice/table-talk.js';
 import { setTraceMode, traceDirOf, traceFileName, traceModeOf, tracedFolders } from '../src/kernel/trace/index.js';
 import { encodeClaudeProjectDir, runTraceCommand, type TraceSession } from '../src/cli/trace-cli.js';
 
@@ -39,7 +40,7 @@ function tmp(prefix: string): string {
   return d;
 }
 
-async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boolean; modes?: boolean } = {}) {
+async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boolean; modes?: boolean; guidanceHash?: string; extra?: string[] } = {}) {
   const home = tmp('gnomon-trace-home-');
   const claudeDir = tmp('gnomon-trace-claude-');
   const work = tmp('gnomon-trace-work-');
@@ -58,7 +59,7 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   await at(1, 'session.open', { hsid: HSID, principalId: 'p', by: 'human:founder', cwd: work, worktree: null, backend: 'claude-code', model: 'claude', attended: true, uuid: UUID, principalClass: 'human' });
   await at(1.5, 'session.sandbox', { hsid: HSID, phase: 'running', ...(opts.capture ? { traced: true } : {}) });
   await at(2, 'session.inject', { hsid: HSID, origin: 'client', hash: turnContentHash(PROMPT), bytes: Buffer.byteLength(PROMPT) });
-  await at(2, 'turn.sent', { hsid: HSID, turn: `turn:${HSID}/1`, permitId: 'pmt:1', contentHash: turnContentHash(PROMPT) });
+  await at(2, 'turn.sent', { hsid: HSID, turn: `turn:${HSID}/1`, permitId: 'pmt:1', contentHash: turnContentHash(PROMPT), ...(opts.guidanceHash ? { guidanceHash: opts.guidanceHash } : {}) });
   await at(5, 'approval.request', { card: { cardId: 'card:1', kind: 'permission', hsid: HSID }, tool: 'Bash' });
   await at(6, 'approval.decide', { cardId: 'card:1', decision: 'allow', approver: 'human:founder' }, undefined);
   if (opts.modes) {
@@ -76,7 +77,7 @@ async function fixture(opts: { tamper?: boolean; escape?: boolean; capture?: boo
   fs.mkdirSync(project, { recursive: true });
   const reply = opts.escape ? 'done \u001b]0;pwned\u0007\u001b[31mred' : 'done';
   const lines = [
-    { type: 'user', timestamp: iso(3), message: { role: 'user', content: [{ type: 'text', text: opts.tamper ? 'write evil.txt' : PROMPT }] } },
+    { type: 'user', timestamp: iso(3), message: { role: 'user', content: [{ type: 'text', text: opts.tamper ? 'write evil.txt' : PROMPT }, ...(opts.extra ?? []).map((text) => ({ type: 'text', text }))] } },
     { type: 'assistant', timestamp: iso(4), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'touch out.txt' } }] } },
     { type: 'user', timestamp: iso(7), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] } },
     { type: 'assistant', timestamp: iso(7.5), message: { role: 'assistant', content: [{ type: 'text', text: reply }] } },
@@ -149,6 +150,18 @@ describe('gnomon trace (#gnomon-trace): a read-only audit timeline', () => {
     expect(s.capture).toEqual({ path: null, lines: 0, skipped: 0 }); // an absent capture is fine
     expect(s.traced).toBeNull();
     expect(s.transcript.lines).toBe(4);
+  });
+
+  it('table talk (Aegis M2): one extra block only when turn.sent names its guidanceHash, and the hash must match', async () => {
+    const G = TABLE_TALK_GUIDANCE;
+    const verdict = async (o: { guidanceHash?: string; extra?: string[] }) => (await traceJson(await fixture(o))).turns;
+    const ok = { sent: 1, matched: 1, mismatched: 0, unchecked: 0 };
+    const bad = { sent: 1, matched: 0, mismatched: 1, unchecked: 0 };
+    expect(await verdict({ guidanceHash: TABLE_TALK_GUIDANCE_HASH, extra: [G] })).toEqual(ok);
+    expect(await verdict({ extra: [G] })).toEqual(bad); // an extra block the log never named
+    expect(await verdict({ guidanceHash: TABLE_TALK_GUIDANCE_HASH, extra: [`${G} plus an injected line`] })).toEqual(bad); // altered guidance
+    expect(await verdict({ guidanceHash: TABLE_TALK_GUIDANCE_HASH, extra: [G, 'smuggled'] })).toEqual(bad); // a second extra block
+    expect(await verdict({ guidanceHash: TABLE_TALK_GUIDANCE_HASH })).toEqual(bad); // named but missing
   });
 
   it('reports the turn.sent hash as matching the transcript prompt, and a tampered transcript as a mismatch', async () => {
