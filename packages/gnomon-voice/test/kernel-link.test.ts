@@ -96,11 +96,13 @@ describe('SpawnedAudioIO against a fake gnomon-voice-io:v1', () => {
     f.send({ type: 'event', event: 'hotkey', tUs: 3_000, action: 'mode-toggle', phase: 'down' });
     f.send({ type: 'event', event: 'hotkey', tUs: 3_100, action: 'hold-toggle', phase: 'down' });
     f.send({ type: 'event', event: 'hotkey', tUs: 3_200, action: 'hold-toggle', phase: 'up' });
+    f.send({ type: 'event', event: 'hotkey', tUs: 3_300, action: 'stop-speaking', phase: 'down' });
+    f.send({ type: 'event', event: 'hotkey', tUs: 3_400, action: 'stop-speaking', phase: 'up' });
     f.stdout.write(encodeCapture(4_000_000n, 16_000, new Float32Array(160)));
     await tick();
     expect(io.routeInfo().aec).toBe(false);
     expect(keys).toEqual([true]);
-    expect(controls).toEqual(['mode-toggle', 'hold-toggle']); // key down only (TD-2026-10-20-262)
+    expect(controls).toEqual(['mode-toggle', 'hold-toggle', 'stop-speaking']); // key down only (TD-2026-10-20-262)
     expect(frames[0]).toBe(1_000_000 - 1 + 4); // offset fixed at tUs 1000 → wall 1e6
     const played = io.play({ id: 'a1', samples: new Float32Array(2400), sampleRate: 24_000 });
     await tick();
