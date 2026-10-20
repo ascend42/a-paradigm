@@ -45,7 +45,13 @@ components:
       mode.* commands are excluded from BLOCK_SAFE_COMMANDS. The transcript
       shows approval.auto as a subtle `auto-approved edit · <path>` line
       (`auto-approved · <tool> (always rule)` for a rule) and
-      approval.mode.set as a system line. Tests: test/modes.test.ts.
+      approval.mode.set as a system line. F2 (TD-2026-10-20-086): the
+      switch, ⇧Tab and the menu default to FOLDER scope (the repo,
+      labelled "this folder"; defaultScope/planFor/scopeEntries/SCOPE_LABEL,
+      status repoMode) so a new session in the same folder starts in the
+      chosen mode; "this session only" is the secondary entry (palette
+      mode.*); a session that already has its own mode keeps session scope.
+      Tests: test/modes.test.ts.
     voice-controls: >-
       Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
       header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the

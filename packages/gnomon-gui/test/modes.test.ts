@@ -8,14 +8,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries } from '../src/core/commands.js';
-import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, sessionModeOf, type SessionModeView } from '../src/core/modes.js';
+import { defaultScope, menuEntries, modeLabel, modeRequest, nextRunMode, planChange, planFor, scopeEntries, SCOPE_LABEL, sessionModeOf, type SessionModeView } from '../src/core/modes.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
 const REPO = `sha256:${'a'.repeat(64)}`;
 const status = (s: Record<string, unknown>) => ({ runModes: { default: 'ask', strictness: { built: false }, repos: [], sessions: [{ hsid: HSID, repo: REPO, cwd: '/w', chosen: 'ask', source: 'default', repoMode: 'ask', level: null, ceiling: 'auto-edits', effective: 'ask', ...s }] } });
-const view = (s: Partial<SessionModeView> = {}): SessionModeView => ({ hsid: HSID, repo: REPO, chosen: 'ask', source: 'default', ceiling: 'auto-edits', effective: 'ask', level: null, pendingCardId: null, ...s });
+const view = (s: Partial<SessionModeView> = {}): SessionModeView => ({ hsid: HSID, repo: REPO, chosen: 'ask', source: 'default', repoMode: 'ask', ceiling: 'auto-edits', effective: 'ask', level: null, pendingCardId: null, ...s });
 
 describe('run modes: the ⇧Tab cycle and what a choice does', () => {
   it('⇧Tab cycles manual → ask → auto-edits → manual, as in Claude Code', () => {
@@ -60,9 +60,47 @@ describe('run modes: the ⇧Tab cycle and what a choice does', () => {
   });
 
   it('the request is log.append{kind: request.mode.set} for the session, or its repo', () => {
-    expect(modeRequest(view(), 'manual')).toEqual({ kind: 'request.mode.set', payload: { hsid: HSID, to: 'manual' } });
+    expect(modeRequest(view(), 'manual', 'session')).toEqual({ kind: 'request.mode.set', payload: { hsid: HSID, to: 'manual' } });
+    // F2: with no scope named, a session with a repo sets its folder; with none, the session
+    expect(modeRequest(view(), 'manual')).toEqual({ kind: 'request.mode.set', payload: { repo: REPO, to: 'manual' } });
+    expect(modeRequest(view({ repo: null }), 'manual')).toEqual({ kind: 'request.mode.set', payload: { hsid: HSID, to: 'manual' } });
     expect(modeRequest(view(), 'auto-edits', 'repo')).toEqual({ kind: 'request.mode.set', payload: { repo: REPO, to: 'auto-edits' } });
     expect(modeRequest(view({ repo: null }), 'ask', 'repo')).toBeNull();
+  });
+});
+
+describe('run modes: the switch defaults to this folder (TD-2026-10-20-086 F2)', () => {
+  it('the default scope is the folder; a session with its own mode, or with no repo, keeps session scope', () => {
+    expect(defaultScope(view())).toBe('repo');
+    expect(defaultScope(view({ source: 'repo' }))).toBe('repo');
+    expect(defaultScope(view({ source: 'session' }))).toBe('session');
+    expect(defaultScope(view({ repo: null }))).toBe('session');
+    expect(defaultScope(null)).toBe('session');
+    expect(SCOPE_LABEL.repo).toBe('this folder');
+  });
+  it('a folder choice is measured from the folder\'s mode, a session one from the session\'s', () => {
+    const v = view({ chosen: 'manual', source: 'session', repoMode: 'auto-edits' });
+    expect(planFor(v, 'auto-edits', 'repo')).toEqual({ kind: 'same' });
+    expect(planFor(v, 'auto-edits', 'session')).toEqual({ kind: 'loosen' });
+    expect(planFor(v, 'ask', 'repo')).toEqual({ kind: 'tighten' });
+    expect(planFor(view({ ceiling: 'ask', level: 'L2' }), 'auto-edits', 'repo')).toEqual({ kind: 'blocked', reason: 'ceiling ask at L2' });
+  });
+  it('the menu names the scope, and offers the other one as the secondary entry', () => {
+    expect(scopeEntries(view())).toEqual({ heading: 'for this folder (new sessions here start in it)', other: { scope: 'session', label: 'set for this session only instead…' } });
+    expect(scopeEntries(view({ source: 'session' })).other).toEqual({ scope: 'repo', label: 'set for this folder instead…' });
+    expect(scopeEntries(view({ repo: null })).other).toBeNull();
+  });
+  it('status carries the folder\'s mode (repoMode); an older kernel without it reads the chosen mode', () => {
+    expect(sessionModeOf(status({ source: 'session', chosen: 'manual', effective: 'manual', repoMode: 'auto-edits' }), HSID)?.repoMode).toBe('auto-edits');
+    const st = status({});
+    delete (st.runModes.sessions[0] as Record<string, unknown>).repoMode;
+    expect(sessionModeOf(st, HSID)?.repoMode).toBe('ask');
+  });
+  it('the page sends the menu choice and ⇧Tab with the default scope; the secondary entry opens the other scope\'s palette', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/setMode\(b\.dataset\.mode as RunMode, defaultScope\(currentMode\(\)\), e\.isTrusted\)/);
+    expect(app).toMatch(/const scope = defaultScope\(v\);[\s\S]{0,200}void setMode\(to, scope, trusted\)/);
+    expect(app).toContain("openPalette(b.dataset.modeScope === 'repo' ? 'mode.repo.' : 'mode.')");
   });
 });
 
@@ -113,8 +151,8 @@ describe('run modes: the page wiring (source read; the browser smoke drives the 
   });
   it('⇧Tab in the composer cycles the mode on a trusted event only; a choice is sent only on a trusted gesture (G-GUI-04)', () => {
     expect(app).toMatch(/e\.key === 'Tab' && e\.shiftKey[\s\S]{0,200}cycleMode\(e\.isTrusted\)/);
-    expect(app).toMatch(/async function setMode\(to: RunMode, scope: 'session' \| 'repo', trusted: boolean\): Promise<void> \{\s*if \(!trusted\) return;/);
-    expect(app).toMatch(/setMode\(b\.dataset\.mode as RunMode, 'session', e\.isTrusted\)/);
+    expect(app).toMatch(/async function setMode\(to: RunMode, scope: ModeScope, trusted: boolean\): Promise<void> \{\s*if \(!trusted\) return;/);
+    expect(app).toMatch(/setMode\(b\.dataset\.mode as RunMode, defaultScope\(currentMode\(\)\), e\.isTrusted\)/);
   });
   it('a loosening is decided in the SAME gesture: the pending card is approved `allow` right after the request (the kernel asks for Touch ID)', () => {
     expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);[\s\S]{0,200}r\.pending === true[\s\S]{0,300}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);

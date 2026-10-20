@@ -42,13 +42,14 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'pane.stack.toggle', title: 'Pane: show/hide decision stack' },
   { id: 'pane.shuttle.toggle', title: 'Pane: show/hide Shuttle view' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
-  // §11.4 run-mode commands (P8-D87): the focused session, or (mode.repo.*) its repo; a looser mode asks for Touch ID
-  { id: 'mode.manual', title: 'Mode: manual (this session) — writes and commands wait on a plan' },
-  { id: 'mode.ask', title: 'Mode: ask (this session) — every write and command asks' },
-  { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session) — edits in this folder pass', keys: '⇧Tab cycles' },
-  { id: 'mode.repo.manual', title: 'Mode: manual (this repo)' },
-  { id: 'mode.repo.ask', title: 'Mode: ask (this repo)' },
-  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this repo)' },
+  // §11.4 run-mode commands (P8-D87): the focused session's folder (mode.repo.*, the default scope, F2 of
+  // TD-2026-10-20-086), or this session only (mode.*); a looser mode asks for presence
+  { id: 'mode.repo.manual', title: 'Mode: manual (this folder) — writes and commands wait on a plan' },
+  { id: 'mode.repo.ask', title: 'Mode: ask (this folder) — every write and command asks' },
+  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this folder) — edits in this folder pass', keys: '⇧Tab cycles' },
+  { id: 'mode.manual', title: 'Mode: manual (this session only)' },
+  { id: 'mode.ask', title: 'Mode: ask (this session only)' },
+  { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session only)' },
   // V2d voice (TD-2026-10-19-298): the focused session (or the attached one); the global hotkeys live in the voice app
   { id: 'voice.off', title: 'Voice: off — close the mic' },
   { id: 'voice.ptt', title: 'Voice: push-to-talk — hold the hotkey to talk', keys: 'hold ⌃⌥Space (voice app)' },
