@@ -525,6 +525,11 @@ components:
       or an installed Chrome with --chrome; otherwise it skips.
     path: src/preview/
     type: module
+      Fixture paradigm-context (#paradigm-context-mod): status.mods.views
+      lists the sidebar sheet; the fake kernel answers mod.view like the
+      host (the GUI {focus:{hsid}} joined to a fixture K1 slice by hsid,
+      other keys ignored) through the REAL mod model
+      (src/preview/paradigm-context.ts), drawn by the real mod-panel path.
     tags: [gnomon, gui, dev-tool, preview]
     tests:
       - test/preview.test.ts

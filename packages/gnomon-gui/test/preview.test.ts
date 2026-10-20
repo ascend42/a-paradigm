@@ -38,8 +38,8 @@ async function connected(name: string): Promise<{ client: GnomonClient; store: G
 }
 
 describe('#gui-preview fixtures', () => {
-  it('names the six fixtures the harness promises', () => {
-    expect([...FIXTURE_NAMES].sort()).toEqual(['desk', 'empty', 'stack-heavy', 'voice-armed', 'voice-crashed', 'workshop']);
+  it('names the seven fixtures the harness promises', () => {
+    expect([...FIXTURE_NAMES].sort()).toEqual(['desk', 'empty', 'paradigm-context', 'stack-heavy', 'voice-armed', 'voice-crashed', 'workshop']);
   });
 
   it.each(FIXTURE_NAMES)('%s parses as kernel rows: JSON-clean, seq 1..n, registered kinds, valid hsids and card:v1 cards', (name) => {
@@ -92,6 +92,22 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
     for (const m of called) expect(PREVIEW_METHODS, m).toContain(m);
     const { client } = await connected('empty');
     await expect(client.call('session.open', { cwd: '/x', model: 'claude', attended: true })).rejects.toThrow(/no kernel/);
+  });
+
+  it('paradigm-context: status lists the sidebar view; mod.view joins {focus:{hsid}} to that session slice through the real mod model', async () => {
+    const { client } = await connected('paradigm-context');
+    const st = await client.call<{ mods: { views: unknown[] } }>('status', {});
+    expect(st.mods.views).toEqual([{ name: 'paradigm-context', viewId: 'paradigm-context.sheet', slot: 'sidebar', placement: 'append', dev: false }]);
+    const billing = FIXTURES['paradigm-context']!.focus!;
+    const r = await client.call<{ label: string; block: unknown }>('mod.view', { name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: billing } } });
+    expect(r.label).toBe('mod:paradigm-context');
+    const s = JSON.stringify(r.block);
+    expect(s).toContain('billing');
+    expect(s).toContain('tasks · 5 of 9 open · 2 high');
+    expect(s).not.toMatch(/Button/);
+    // a forged repo never picks the slice; no focus ⇒ unfocused
+    expect(JSON.stringify((await client.call<{ block: unknown }>('mod.view', { name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { repo: 'billing', path: '/Users/matt/code/billing' } })).block)).toContain('focus a live session');
+    await expect(client.call('mod.view', { name: 'ledger', viewId: 'ledger.sheet', input: {} })).rejects.toThrow(/no mod ledger/);
   });
 
   it('the workshop strip comes from the real mod model over the feed projection', () => {

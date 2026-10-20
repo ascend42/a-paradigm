@@ -15,8 +15,9 @@
  * kernel's. Sample text follows the approved comp
  * (.atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
  */
-import { crockford, defaultLabelsFor, sha256, sha256Tagged, type LogRow } from '@a-company/gnomon-contracts';
+import { crockford, defaultLabelsFor, projectHue, sha256, sha256Tagged, type LogRow } from '@a-company/gnomon-contracts';
 import { cardContentHash } from '../core/render.js';
+import { PARADIGM_CONTEXT_STATUS } from './paradigm-context.js';
 
 export const PREVIEW_NS = '7k2m9q4x';
 export const KERNEL_PRINCIPAL = `p:${PREVIEW_NS}/kernel`;
@@ -38,6 +39,8 @@ export interface Fixture {
   focus: string | null;
   /** mount the Workshop mod's strip (packages/gnomon-mods/workshop) at the foot of the sessions pane */
   workshop: boolean;
+  /** #paradigm-context-mod: the K1 slice per live hsid (the fake kernel joins the GUI's {focus:{hsid}} to it, as the host does) */
+  paradigm?: Record<string, unknown>;
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -311,6 +314,71 @@ function fixture(name: string, title: string, c: Chain, status: Record<string, u
   return { name, title, rows: c.rows(), status, focus, workshop };
 }
 
+/* ── #paradigm-context-mod: the K1 slices the kernel would compute for the live sessions' repos ── */
+
+function slice(key: string, o: { newest: string; tasks: Array<[string, string, string]>; open: number; high: number; decisions: Array<[string, string, string]>; decisionsOf: number; lore: Array<[string, string, string]>; loreOf: number; symbols: string[]; skipped?: Record<string, unknown> }): Record<string, unknown> {
+  const a = A(key);
+  return {
+    v: 'paradigm-slice:v1',
+    state: 'ok',
+    project: projectHue(a.cwd),
+    name: a.repo,
+    at: '2026-10-20',
+    newest: o.newest,
+    tasks: { open: o.open, high: o.high, items: o.tasks.map(([id, title, priority]) => ({ id, title, priority })), count: { n: o.tasks.length, of: o.open } },
+    decisions: { items: o.decisions.map(([id, date, title]) => ({ id, title, date })), count: { n: o.decisions.length, of: o.decisionsOf } },
+    lore: { items: o.lore.map(([id, type, title]) => ({ id, title, type })), count: { n: o.lore.length, of: o.loreOf } },
+    symbols: o.symbols,
+    skipped: { malformed: 0, refused: 0, secret: 0, truncated: false, ...o.skipped },
+  };
+}
+
+function paradigmSlices(): Record<string, unknown> {
+  return {
+    [A('billing').hsid]: slice('billing', {
+      newest: '2026-10-20',
+      open: 9,
+      high: 2,
+      tasks: [
+        ['T-2026-10-20-004', 'Proration: credit the unused days when a plan is downgraded mid-cycle', 'high'],
+        ['T-2026-10-19-012', 'Webhook retries must be idempotent on the invoice id', 'high'],
+        ['T-2026-10-20-002', 'Move the tax table to the shared config', 'medium'],
+        ['T-2026-10-18-007', 'Dunning emails: one template per locale', 'medium'],
+        ['T-2026-10-15-003', 'Delete the v1 invoice exporter', 'low'],
+      ],
+      decisions: [
+        ['TD-2026-10-20-311', '2026-10-20', 'Money is integer cents end to end, never floats'],
+        ['TD-2026-10-19-208', '2026-10-19', 'Stripe is the source of truth for subscription state'],
+        ['TD-2026-10-17-140', '2026-10-17', 'Invoices are immutable once finalised; corrections are credit notes'],
+        ['TD-2026-10-14-077', '2026-10-14', 'Proration happens server side only'],
+        ['TD-2026-10-09-019', '2026-10-09', 'One webhook endpoint per environment'],
+      ],
+      decisionsOf: 23,
+      lore: [
+        ['L-2026-10-20-matt-101500-001', 'milestone', 'Downgrade proration lands behind a flag'],
+        ['L-2026-10-19-matt-170212-002', 'insight', 'Webhook storms come from the retry schedule, not Stripe'],
+        ['L-2026-10-18-matt-093001-001', 'decision', 'Decision TD-2026-10-17-140 recorded'],
+        ['L-2026-10-16-matt-142233-004', 'incident', 'Double charge on the 15th: replayed webhook'],
+        ['L-2026-10-14-matt-110000-001', 'insight', 'Cents everywhere removed four rounding bugs'],
+      ],
+      loreOf: 61,
+      symbols: ['#invoice-service', '$checkout-flow', '!payment-captured', '^billing-admin', '#proration', '~audit-required'],
+      skipped: { malformed: 1 },
+    }),
+    [A('warpline').hsid]: slice('warpline', {
+      newest: '2026-09-02',
+      open: 2,
+      high: 0,
+      tasks: [['T-2026-08-23-001', 'Founder gates for the field test', 'medium']],
+      decisions: [['TD-2026-09-02-913', '2026-09-02', 'M3-lite first: agent-key attribution before signing']],
+      decisionsOf: 40,
+      lore: [['L-2026-09-02-ascend-120000-001', 'milestone', 'M3-lite complete']],
+      loreOf: 88,
+      symbols: ['#warpline'],
+    }),
+  };
+}
+
 function emptyChain(): Chain {
   const c = new Chain();
   c.add(T('09:00'), 'daemon.start', { version: '8.0.0', pid: 501 });
@@ -325,6 +393,7 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-crashed': fixture('voice-crashed', 'Ambient attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
+  'paradigm-context': { ...fixture('paradigm-context', 'Desk with the Paradigm Context mod in the sidebar (billing focused)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { modAbiId: 'preview', running: [{ name: 'paradigm-context', packageHash: 'preview', dev: false, sandbox: 'full' }], paused: [], ...PARADIGM_CONTEXT_STATUS } }, BILLING), paradigm: paradigmSlices() },
 });
 
 export const FIXTURE_NAMES: readonly string[] = Object.freeze(Object.keys(FIXTURES));

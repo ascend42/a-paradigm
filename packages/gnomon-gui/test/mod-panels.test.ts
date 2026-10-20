@@ -176,6 +176,17 @@ describe('#gui mod panels: the scheduler', () => {
     expect(s.focus(null)).toBe(true);
     await flush();
     expect(n).toBe(2);
+    // a focus change DURING a render: the follow-up runs at once (no 250 ms debounce)
+    let release!: () => void;
+    let m = 0;
+    const slow = new ModPanelScheduler(() => (m++, m === 1 ? new Promise<void>((r) => (release = r)) : Promise.resolve()), t);
+    slow.focus('hsid:v1:A');
+    slow.now();
+    expect(slow.focus('hsid:v1:B')).toBe(true);
+    release();
+    await flush();
+    expect(m).toBe(2);
+    expect(t.pending.size).toBe(0);
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
     expect(app).toMatch(/function focus\(hsid: string \| null\): void \{[\s\S]*?modPanelsFocus\(hsid\);[\s\S]*?\n\}/);
   });

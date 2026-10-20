@@ -11,19 +11,20 @@
  * the page (WebCrypto, never stored), `auth`, `status`, `log.read` (one
  * backlog page, then the follow subscription), `approve` (the card leaves as
  * an approval.decide row), and `log.append` / `session.send` (accepted, no
- * effect). `session.open` is refused in plain words. NOT part of the
+ * effect), `mod.view` for the Paradigm Context mod (paradigm-context.ts). `session.open` is refused in plain words. NOT part of the
  * kernel-served bundle (test/preview.test.ts).
  */
 import { CLIENT_API_ID, authServerPreimage, utf8, type HelloResult, type LogRow } from '@a-company/gnomon-contracts';
 import { GUI_FEATURES, RPC, type Transport } from '../core/client.js';
 import { bytesToBase64Url, CARD_ACTION_DOMAIN, keyIdOfSpki } from '../core/server-sig.js';
 import { HUMAN_PRINCIPAL, KERNEL_PRINCIPAL, PREVIEW_LOG_ID, type Fixture } from './fixtures.js';
+import { PARADIGM_CONTEXT_MOD, PARADIGM_CONTEXT_VIEW, paradigmContextView } from './paradigm-context.js';
 
 /** A marker the bundle-exclusion test looks for in the embedded bundle (it must never be there). */
 export const PREVIEW_MARKER = 'gnomon-preview:fake-kernel:v1';
 
 /** Every method the preview kernel answers (test/preview.test.ts checks app.ts calls nothing else). */
-export const PREVIEW_METHODS: readonly string[] = Object.freeze(['hello', 'auth', 'status', 'log.read', 'approve', 'log.append', 'session.send', 'session.open']);
+export const PREVIEW_METHODS: readonly string[] = Object.freeze(['hello', 'auth', 'status', 'log.read', 'approve', 'log.append', 'session.send', 'session.open', 'mod.view']);
 
 export interface PreviewKey {
   subtle: SubtleCrypto;
@@ -69,6 +70,8 @@ export class FakeKernel implements Transport {
   onClose: ((code: number) => void) | null = null;
   readonly rows: LogRow[];
   readonly #status: Record<string, unknown>;
+  /** #paradigm-context-mod slices by hsid (the fixture stands in for the host's K3 join), null: the mod is not installed */
+  readonly #paradigm: Readonly<Record<string, unknown>> | null;
   readonly #key: PreviewKey;
   readonly #endpointPath: string;
   #open = true;
@@ -79,9 +82,10 @@ export class FakeKernel implements Transport {
   readonly followed: Promise<void>;
   #resolveFollowed!: () => void;
 
-  constructor(fx: Pick<Fixture, 'status'>, signedRows: readonly LogRow[], key: PreviewKey, endpointPath: string) {
+  constructor(fx: Pick<Fixture, 'status'> & Partial<Pick<Fixture, 'paradigm'>>, signedRows: readonly LogRow[], key: PreviewKey, endpointPath: string) {
     this.rows = [...signedRows];
     this.#status = fx.status;
+    this.#paradigm = fx.paradigm ?? null;
     this.#key = key;
     this.#endpointPath = endpointPath;
     this.followed = new Promise((r) => (this.#resolveFollowed = r));
@@ -164,6 +168,9 @@ export class FakeKernel implements Transport {
       case 'log.append':
       case 'session.send':
         return { ok: true };
+      case 'mod.view':
+        if (this.#paradigm && p.name === PARADIGM_CONTEXT_MOD && p.viewId === PARADIGM_CONTEXT_VIEW) return paradigmContextView(this.#paradigm, p);
+        throw refusal('NOT_INSTALLED', 'not-found', `no mod ${String(p.name)} is installed in this preview`);
       case 'session.open':
         throw refusal('UNAVAILABLE', 'preview', 'this is the GUI fixture preview: there is no kernel, so no session was opened');
       default:

@@ -182,8 +182,11 @@ export class ModPanelScheduler {
   now(): void {
     if (this.#timer !== null) this.#t.clearTimeout(this.#timer);
     this.#timer = null;
+    if (this.#inFlight) this.#againNow = true; // a focus change during a render: the follow-up runs at once, not debounced
     void this.#run();
   }
+
+  #againNow = false;
 
   #arm(): void {
     if (this.#timer !== null) this.#t.clearTimeout(this.#timer);
@@ -206,7 +209,11 @@ export class ModPanelScheduler {
       /* a failed render shows in its fence; the scheduler keeps going */
     } finally {
       this.#inFlight = false;
-      if (this.#again) {
+      if (this.#againNow) {
+        this.#againNow = false;
+        this.#again = false;
+        void this.#run();
+      } else if (this.#again) {
         this.#again = false;
         this.#arm();
       }

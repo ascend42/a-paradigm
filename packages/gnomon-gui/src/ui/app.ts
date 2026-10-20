@@ -783,6 +783,7 @@ function focusCard(cardId: string | null): void {
 function focus(hsid: string | null): void {
   if (width) widths.save(transcriptId(), width, heights);
   focused = hsid;
+  modPanelsFocus(hsid); // K3: the mod panels re-render for the new focus (the host joins it to the repo); first, so a later paint error never skips it
   if (hsid) feedView = false;
   closeDrawers();
   closeModeMenu();
@@ -794,7 +795,6 @@ function focus(hsid: string | null): void {
   paintSessions();
   void paintStack();
   syncDictationContext();
-  modPanelsFocus(hsid); // K3: the mod panels re-render for the new focus (the host joins it to the repo)
 }
 
 /* ── voice dictation (TD-2026-10-20-262; core/dictation.ts) ────────── */

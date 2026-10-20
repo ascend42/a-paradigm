@@ -624,6 +624,8 @@ html, body {
    kernel-owned regions; tones are tokens (.tone-*), the project hue only ever colours a cap glyph. ── */
 .mod-slot { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; }
 .mod-slot[hidden] { display: none; }
+/* #paradigm-context-mod: the sidebar region is bounded and scrolls, so a tall sheet never pushes the sessions list away */
+.mod-slot-left-bottom { flex: none; max-height: 45%; overflow-y: auto; }
 /* Aegis M2: the right-pane mod region is ruled off from the decision stack (outside its scroll), headed `mods` */
 .mod-slot-right { flex: none; max-height: 40%; overflow-y: auto; border-top: 2px solid var(--rule); margin-top: 6px; }
 .mod-slot-head { color: var(--sec); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -635,6 +637,9 @@ html, body {
 .mod-fence .blk-progress { display: inline-flex; gap: 6px; align-items: center; }
 .mod-fence progress { transition: none; }
 .tone-quiet { color: var(--sec); }
+/* #paradigm-context-mod: zone heads and symbol chips are ink and mono (never a hue: hues are fills on the cap glyph only) */
+.tone-head { color: var(--sec); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+.tone-chip { font-family: var(--mono); color: var(--ink); font-size: 11px; border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; }
 .tone-warn { color: var(--warn-ink); }
 .tone-deny { color: var(--fail); font-weight: 600; }
 /* the cap: a project hue is a FILL (G-GUI-10), the glyph itself stays in ink */
