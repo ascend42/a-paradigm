@@ -221,7 +221,7 @@ export interface SupervisorOptions {
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
-  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown) => { ruleId: string } | null;
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[] }) => { ruleId: string } | null;
   /**
    * P8-D87 run modes (broker/run-mode.ts RunModeControl.view): the session's EFFECTIVE mode (stricter of the chosen
    * mode and the strictness ceiling), read at every permission request. Absent ⇒ `ask` (Move 1's behaviour).
@@ -980,7 +980,8 @@ export class SessionSupervisor {
       // S-L1: an exact (repo, tool, inputHash) match of a kernel-derived `always` rule ⇒ allow with no card, approval.auto first
       let rule: { ruleId: string } | null = null;
       try {
-        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash, ev.input) ?? null;
+        // Aegis M2: prefix rules never apply in manual mode (exact rules do); M3: the match is bound to the session roots
+        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash, ev.input, { prefixRules: mode !== 'manual', roots: [s.cwd, ...(s.worktree ? [s.worktree] : [])] }) ?? null;
       } catch {
         rule = null; // an unreadable rule source never allows
       }

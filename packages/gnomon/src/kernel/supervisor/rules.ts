@@ -36,7 +36,11 @@
  * starts with the prefix word for word, the repoKey and tool are the same and
  * the input has no key besides command, description and timeout. A prefix
  * rule widens only within a single literal simple command. Any other `match`
- * value forms no rule.
+ * value forms no rule. Aegis H1/M2/M3 (#prefix-policy): a prefix the policy refuses
+ * (one word, an interpreter/runner, a script-running package-manager subcommand,
+ * a non-read-ish git subcommand) forms no rule; a match is refused in manual mode,
+ * without the session roots, or when a later argument is a refused git option, a
+ * `-C`-style option, a `..`/`~` path or an absolute path outside the roots.
  *
  * REVOKE (P8-D98, TD-2026-10-19-528 F1): a kernel-signed
  * `approval.rule.revoked{ruleId, repoKey, tool, connId}` (written by the
@@ -50,6 +54,7 @@
 import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 import { simpleArgv } from './shell-readonly.js';
+import { prefixMatchRefusal, prefixRefusal } from './prefix-policy.js';
 
 /** Input keys a prefix rule tolerates besides `command` (anything else, e.g. run_in_background, raises the card). */
 export const PREFIX_RULE_INPUT_KEYS: ReadonlySet<string> = new Set(['command', 'description', 'timeout']);
@@ -64,6 +69,16 @@ export function bashArgvOfInput(toolInput: unknown): string[] | null {
 
 const startsWith = (argv: readonly string[], prefix: readonly string[]): boolean => prefix.length > 0 && prefix.length <= argv.length && prefix.every((w, i) => argv[i] === w);
 const prefixOk = (v: unknown): v is string[] => Array.isArray(v) && v.length >= 1 && v.length <= 3 && v.every((w) => typeof w === 'string' && w.length > 0 && w.length <= 128);
+
+/**
+ * What a prefix match needs from the session (Aegis M2/M3). Absent ⇒ no prefix rule matches (fail closed).
+ * `prefixRules` is false in `manual` mode (a card is raised); `roots` are the session's cwd (+ worktree): a later
+ * argument naming a path outside them, a `..` or a `-C`-style option refuses the match (#prefix-policy).
+ */
+export interface PrefixMatchContext {
+  prefixRules: boolean;
+  roots: readonly string[];
+}
 
 export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
@@ -153,6 +168,7 @@ export class RuleBook {
       }
       // prefix: Bash only, the decide row's scope is the same prefix, and the shown command starts with it
       if (p.tool !== 'Bash' || !prefixOk(p.prefix) || decided !== JSON.stringify(p.prefix) || !req.argv || !startsWith(req.argv, p.prefix)) return;
+      if (prefixRefusal(p.prefix) !== null) return; // Aegis H1: a prefix the policy refuses forms no rule, whatever the chain says
       bump(this.#rules, cardId, { ...base, match: 'prefix', prefix: [...p.prefix] }, MAX_RULES);
     } else if (r.kind === 'approval.rule.revoked') {
       if (typeof p.ruleId !== 'string') return;
@@ -168,17 +184,19 @@ export class RuleBook {
 
   /**
    * The rule (repoKey, tool, input) matches, or null: an exact rule by inputHash; a prefix rule only when the
-   * input is a Bash command that is one literal simple command whose argv starts with the prefix.
+   * input is a Bash command that is one literal simple command whose argv starts with the prefix, `ctx` allows prefix
+   * rules (not manual mode) and #prefix-policy passes the argv against the session roots.
    */
-  match(repoKey: string, tool: string, hash: string, toolInput?: unknown): AlwaysRule | null {
+  match(repoKey: string, tool: string, hash: string, toolInput?: unknown, ctx?: PrefixMatchContext): AlwaysRule | null {
     for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
-    if (tool !== 'Bash' || toolInput === undefined) return null;
+    // Aegis M2/M3: prefix rules need the session context (roots) and never apply in manual mode
+    if (tool !== 'Bash' || toolInput === undefined || !ctx || !ctx.prefixRules || !ctx.roots.length) return null;
     let argv: string[] | null = null;
     for (const r of this.#rules.values()) {
       if (r.match !== 'prefix' || r.repoKey !== repoKey || r.tool !== tool || !r.prefix) continue;
       argv ??= bashArgvOfInput(toolInput);
       if (!argv) return null;
-      if (startsWith(argv, r.prefix)) return r;
+      if (startsWith(argv, r.prefix) && prefixMatchRefusal(argv, r.prefix, ctx.roots) === null) return r;
     }
     return null;
   }

@@ -82,6 +82,7 @@ import { blockOf, composePresencePrompt, contentHashOf, signActions, type Signed
 import { UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
 import { SESSION_DISARM_REASON } from './arm-custody.js';
 import { simpleArgv } from '../supervisor/shell-readonly.js';
+import { prefixRefusal, shownPrefixWords } from '../supervisor/prefix-policy.js';
 import type { HelperSessionCause } from '../identity/helper.js';
 
 /** A refusal thrown by the broker (reasons are registered refusal reasons; scanned by test/refusal-reasons.test.ts). */
@@ -614,6 +615,9 @@ export class ApprovalBroker {
         const argv = r.bashArgv;
         if (String(card.kind) !== 'permission' || r.tool !== 'Bash' || !argv) throw fail('BAD_REQUEST', 'bad-params', 'a prefix scope needs a Bash card whose command is one simple command of literal words', { cardId });
         if (sc.prefix.length > argv.length || !sc.prefix.every((w, i) => argv[i] === w)) throw fail('BAD_REQUEST', 'bad-params', 'the prefix is not a prefix of the command on this card', { cardId });
+        // Aegis H1: a prefix that equals arbitrary code execution is never a rule (#prefix-policy; kernel-enforced here)
+        const why = prefixRefusal(sc.prefix);
+        if (why) throw fail('BAD_REQUEST', 'bad-params', `this prefix cannot be a standing rule: ${why}`, { cardId });
         prefix = sc.prefix;
       }
     }
@@ -813,7 +817,7 @@ export class ApprovalBroker {
   #promptOf(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, prefix: readonly string[] | null = null): SignedPresencePrompt {
     const reason =
       decision === 'always' && prefix
-        ? `fresh presence: always allow Bash commands starting ${JSON.stringify(prefix.join(' '))} in this repo`
+        ? `fresh presence: always allow Bash commands whose words start ${shownPrefixWords(prefix)} (${prefix.length} words) in this repo`
         : decision === 'always'
         ? 'fresh presence: always is a standing rule'
         : cls === 'root'
