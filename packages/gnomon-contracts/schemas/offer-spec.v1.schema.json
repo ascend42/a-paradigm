@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/offer-spec.v1.schema.json",
+  "title": "offer-spec:v1",
+  "description": "One playbook offer a mod manifest declares under provides.offers (the Desk, TD-2026-10-20-812). Structured fields only (A7). A model proposes it with one ```offer block {mod, kind, question} (offerBlockOf).",
+  "x-gnomon-max-per-mod": 6,
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "diverge",
+        "synthesize",
+        "commit"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "x-gnomon-single-line": true
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "x-gnomon-single-line": true
+    },
+    "contextIn": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "recent-messages",
+          "open-files",
+          "repo-path",
+          "selection",
+          "session-summary"
+        ]
+      },
+      "maxItems": 8,
+      "uniqueItems": true
+    },
+    "resultOut": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "reach": {
+      "type": "string",
+      "enum": [
+        "mcp"
+      ]
+    },
+    "handoffTool": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+      },
+      "maxItems": 6,
+      "uniqueItems": true
+    },
+    "restraint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "x-gnomon-single-line": true
+    }
+  },
+  "required": [
+    "kind",
+    "phase",
+    "title",
+    "summary",
+    "contextIn",
+    "resultOut",
+    "reach",
+    "handoffTool",
+    "related",
+    "restraint"
+  ],
+  "additionalProperties": false
+}

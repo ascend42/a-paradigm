@@ -1159,6 +1159,19 @@ components:
 
   manifest-loader:
     description: >-
+      #manifest-loader, the Desk (TD-2026-10-20-812). manifest.ts: provides.offers
+      (offer-spec:v1 from gnomon-contracts, at most 6, unique kinds, needs a
+      provides.mcp server since reach is mcp) and 'offers' in WIDENING_FIELDS (key
+      kind@phase→handoffTool; a text-only change is no widening); a provides.mcp entry
+      may declare a closed per-user override surface config{command?:true, args?:true,
+      env?:[names]} (env names never PATH/HOME/NODE_OPTIONS/… nor LD_/DYLD_/ANTHROPIC_/
+      CLAUDE_/GNOMON_/NPM_CONFIG_/GIT_; a config is part of the mcp widening key);
+      validateMcpUserConfig + resolveMcpLaunch admit only what it declares, under
+      COMMAND_UNSAFE (first-party servers launch as node <absolute path> from other
+      repos). Not yet wired into a launch path. RESERVED_MOD_NAMES kernel, gnomon,
+      system (NAME). install.ts surfaceOf: one 'offer:' card line per offer and a
+      'user may set:' suffix on an mcp line; both absent when undeclared, so pre-812
+      card detail hashes are unchanged.
       #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,
       §16; §19.1 M1.5). src/kernel/manifest/. manifest.ts — manifest:v1
       validation, producer-strict and fail-closed (wire form: the JSON subset
@@ -1266,6 +1279,7 @@ components:
     type: module
     tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
     tests:
+      - test/manifest-offers.test.ts
       - test/manifest-loader.test.ts
       - test/seams-fence.test.ts
     oracles: [G-MAN-01, G-MAN-02, G-MAN-03, G-HON-04, G-LAW-04, G-WIN-04]

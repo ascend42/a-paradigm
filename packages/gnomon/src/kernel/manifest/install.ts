@@ -51,7 +51,7 @@ import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
 import { appendGrantRow, checkAgainstGrants, effectiveInstall, readGrants, type GrantInstallRow } from './grants.js';
-import { COMMAND_UNSAFE, detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
+import { COMMAND_UNSAFE, detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestMcpConfig, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
 
@@ -105,6 +105,8 @@ export interface InstallCardDetail {
   knowledge: string[];
   mcp: string[];
   hooks: string[];
+  /** the Desk (TD-2026-10-20-812): one line per declared offer; absent when the manifest declares none */
+  offers?: string[];
   /** counts of the opaque provides arrays (skills, agents, bands, steps, resolvers, blocks, oracles) */
   opaque: Record<string, number>;
   /** the effective pin this card would replace, or null for a first install */
@@ -168,7 +170,7 @@ function sha(s: string): string {
   return `sha256:${createHash('sha256').update(s, 'utf8').digest('hex')}`;
 }
 
-type Surface = Pick<InstallCardDetail, 'effects' | 'egress' | 'capabilities' | 'events' | 'tools' | 'views' | 'commands' | 'keybindings' | 'knowledge' | 'mcp' | 'hooks' | 'opaque'>;
+type Surface = Pick<InstallCardDetail, 'effects' | 'egress' | 'capabilities' | 'events' | 'tools' | 'views' | 'commands' | 'keybindings' | 'knowledge' | 'mcp' | 'hooks' | 'offers' | 'opaque'>;
 function surfaceOf(m: ManifestV1): Surface {
   const p = m.provides ?? {};
   const eg = m.requires?.egress;
@@ -178,7 +180,8 @@ function surfaceOf(m: ManifestV1): Surface {
     commands: (p.commands ?? []).map((c) => c.id).sort(),
     keybindings: (p.keybindings ?? []).map((k) => `${k.key}→${k.command}`).sort(),
     knowledge: (p.knowledge ?? []).map((k) => `${k.name} ${k.scheme} ${k.query} ≤${k.maxTier}`).sort(),
-    mcp: (p.mcp ?? []).map((s) => `${s.name}: ${[s.command, ...(s.args ?? [])].join(' ')}`).sort(),
+    mcp: (p.mcp ?? []).map((s) => `${s.name}: ${[s.command, ...(s.args ?? [])].join(' ')}${mcpConfigSuffix(s.config)}`).sort(),
+    ...(p.offers?.length ? { offers: p.offers.map((o) => `${o.kind} (${o.phase}) → ${o.handoffTool}: ${o.title}`).sort() } : {}),
     hooks: (p.hooks ?? []).map((h) => `${h.event}: ${h.command}`).sort(),
     opaque,
     effects: [...new Set((p.tools ?? []).flatMap((t) => t.effects))].sort(),
@@ -188,6 +191,13 @@ function surfaceOf(m: ManifestV1): Surface {
     tools: (p.tools ?? []).map((t) => t.name).sort(),
     views: (p.views ?? []).map((v) => `${v.id}@${v.slot}`).sort(),
   };
+}
+
+/** What a user may override on an mcp server's launch, shown on its card line (absent config: nothing). */
+function mcpConfigSuffix(c: ManifestMcpConfig | undefined): string {
+  if (!c) return '';
+  const parts = [...(c.command ? ['command'] : []), ...(c.args ? ['args'] : []), ...(c.env?.length ? [`env ${c.env.join(', ')}`] : [])];
+  return parts.length ? ` · user may set: ${parts.join('; ')}` : '';
 }
 
 /** Middle-truncate by code points for DISPLAY only (the detail, inside contentHash, keeps the full value). */
@@ -268,6 +278,7 @@ export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>
     `commands: ${d.commands.join(', ') || 'none'} · keybindings: ${d.keybindings.join(', ') || 'none'} · knowledge: ${d.knowledge.join(', ') || 'none'}`,
     ...(d.mcp.length ? d.mcp.map((m) => `mcp: ${m}`) : ['mcp: none']),
     ...(d.hooks.length ? d.hooks.map((h) => `hooks: ${h}`) : ['hooks: none']),
+    ...(d.offers?.length ? d.offers.map((o) => `offer: ${o}`) : []),
     ...(Object.keys(d.opaque).length ? [`also ships: ${Object.entries(d.opaque).map(([k, n]) => `${k} ×${n}`).join(', ')}`] : []),
     ...(d.packages.length ? [`packages: ${d.packages.join(', ')}`] : []),
     ...(d.widened.length && d.replaces ? [`WIDENED: ${d.widened.map((w) => `${w.field} +${w.added.join(' +')}`).join('; ')}`] : []),
@@ -537,7 +548,7 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
 
 /** The security-relevant detail fields re-derived on decide. */
 function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
-  return { packageHash: d.packageHash, effects: d.effects, egress: d.egress, capabilities: d.capabilities, events: d.events, tools: d.tools, views: d.views, commands: d.commands, keybindings: d.keybindings, knowledge: d.knowledge, mcp: d.mcp, hooks: d.hooks, opaque: d.opaque };
+  return { packageHash: d.packageHash, effects: d.effects, egress: d.egress, capabilities: d.capabilities, events: d.events, tools: d.tools, views: d.views, commands: d.commands, keybindings: d.keybindings, knowledge: d.knowledge, mcp: d.mcp, hooks: d.hooks, opaque: d.opaque, ...(d.offers?.length ? { offers: d.offers } : {}) };
 }
 
 /**

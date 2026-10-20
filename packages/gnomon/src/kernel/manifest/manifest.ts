@@ -37,6 +37,9 @@ import {
   FIRST_PARTY_ONLY_CAPABILITIES,
   GRANT_DERIVED_ONLY_CAPABILITIES,
   isPlainObject,
+  OFFERS_PER_MOD_MAX,
+  validateOfferSpecV1,
+  type OfferSpecV1,
 } from '@a-company/gnomon-contracts';
 import { checkEgressHost } from './egress.js';
 import { ManifestRefusal, type ManifestRefusalCode } from './refusal.js';
@@ -64,7 +67,7 @@ export const TRUST_TIER_PATTERN = /^(first-party|local|signed:gkey-[a-z0-9-]+:v1
 export const NEVER_REQUESTABLE = Object.freeze(['approve', 'band:write']);
 
 const TOP_KEYS = ['manifest', 'kind', 'name', 'version', 'abi', 'compat', 'provides', 'requires', 'config_schema', 'description'] as const;
-const PROVIDES_KEYS = ['mcp', 'skills', 'agents', 'hooks', 'bands', 'steps', 'resolvers', 'blocks', 'oracles', 'tools', 'views', 'events', 'commands', 'keybindings', 'knowledge'] as const;
+const PROVIDES_KEYS = ['mcp', 'skills', 'agents', 'hooks', 'bands', 'steps', 'resolvers', 'blocks', 'oracles', 'tools', 'views', 'events', 'commands', 'keybindings', 'knowledge', 'offers'] as const;
 const NAME_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const DOTTED_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
@@ -106,7 +109,27 @@ export interface ManifestMcp {
   name: string;
   command: string;
   args?: string[];
+  /** what a per-user override may replace (TD-2026-10-20-812): absent = nothing (the manifest's command runs as is) */
+  config?: ManifestMcpConfig;
 }
+/** The author-declared override surface of one provides.mcp server (closed). */
+export interface ManifestMcpConfig {
+  command?: true;
+  args?: true;
+  /** env var NAMES the user may set (never a launch-critical name, MCP_ENV_DENY) */
+  env?: string[];
+}
+/** A per-user override of a provides.mcp server's launch (validateMcpUserConfig); only what config permits. */
+export interface McpUserConfig {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+export const MCP_ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
+/** Env names no override may set: they change how any process loads or where its keys live. */
+export const MCP_ENV_DENY: ReadonlySet<string> = new Set(['PATH', 'HOME', 'USER', 'SHELL', 'TMPDIR', 'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'ELECTRON_RUN_AS_NODE']);
+export const MCP_ENV_DENY_PREFIXES = Object.freeze(['LD_', 'DYLD_', 'ANTHROPIC_', 'CLAUDE_', 'GNOMON_', 'NPM_CONFIG_', 'GIT_']);
+export const MCP_CONFIG_LIMITS = Object.freeze({ env: 16, args: 64, value: 4096 });
 export interface ManifestEgress {
   host: string;
   purpose: string;
@@ -136,10 +159,15 @@ export interface ManifestV1 {
     commands?: ManifestCommand[];
     keybindings?: ManifestKeybinding[];
     knowledge?: ManifestKnowledge[];
+    /** the Desk (TD-2026-10-20-812): playbook offers, offer-spec:v1, at most OFFERS_PER_MOD_MAX */
+    offers?: OfferSpecV1[];
   };
   requires?: { capabilities?: string[]; egress?: 'none' | ManifestEgress[] };
   config_schema?: Record<string, unknown>;
 }
+
+/** Mod names reserved outright (Aegis review of the Desk GUI slice): never a mod, whatever the namespace table says. */
+export const RESERVED_MOD_NAMES: ReadonlySet<string> = new Set(['kernel', 'gnomon', 'system']);
 
 /** Namespace tokens the kernel owns (the §9.1 registry's namespaces + the reserved prefixes). */
 export const KERNEL_NAMESPACE_TOKENS: ReadonlySet<string> = new Set([
@@ -240,6 +268,7 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   const name = str(m.name, 'name', NAME_PATTERN);
   str(m.version, 'version', SEMVER);
   if (m.description !== undefined) str(m.description, 'description');
+  if (RESERVED_MOD_NAMES.has(name)) fail('NAME', `name "${name}" is reserved`, { name });
   if (KERNEL_NAMESPACE_TOKENS.has(name)) fail('NAME', `name "${name}" collides with a kernel namespace token`, { name });
 
   // abi (§4.3: required for kind: mod; the kernel refuses an unknown abi)
@@ -270,12 +299,38 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
 
   arr(provides.mcp, 'provides.mcp').forEach((e, i) => {
     const o = obj(e, `provides.mcp[${i}]`);
-    closed(o, ['name', 'command', 'args'], `provides.mcp[${i}]`);
+    closed(o, ['name', 'command', 'args', 'config'], `provides.mcp[${i}]`);
     str(o.name, `provides.mcp[${i}].name`, NAME_PATTERN);
     cmdStr(o.command, `provides.mcp[${i}].command`);
     arr(o.args, `provides.mcp[${i}].args`).forEach((a, j) => {
       if (typeof a !== 'string' || COMMAND_UNSAFE.test(a)) fail('SCHEMA', `provides.mcp[${i}].args[${j}] must be a string without line separator, format or control characters`, { field: `provides.mcp[${i}].args[${j}]` });
     });
+    if (o.config !== undefined) {
+      const w = `provides.mcp[${i}].config`;
+      const cfg = obj(o.config, w);
+      closed(cfg, ['command', 'args', 'env'], w);
+      for (const k of ['command', 'args'] as const) if (cfg[k] !== undefined && cfg[k] !== true) fail('SCHEMA', `${w}.${k} must be true when present`, { field: `${w}.${k}` });
+      const names = arr(cfg.env, `${w}.env`);
+      if (names.length > MCP_CONFIG_LIMITS.env) fail('SCHEMA', `${w}.env lists at most ${MCP_CONFIG_LIMITS.env} names`, { field: `${w}.env` });
+      const seen = new Set<string>();
+      names.forEach((n, j) => {
+        const name = str(n, `${w}.env[${j}]`, MCP_ENV_NAME);
+        if (mcpEnvDenied(name)) fail('SCHEMA', `${w}.env[${j}]: ${name} is never user-settable`, { field: `${w}.env[${j}]`, name });
+        if (seen.has(name)) fail('SCHEMA', `${w}.env: duplicate ${name}`, { field: `${w}.env[${j}]` });
+        seen.add(name);
+      });
+    }
+  });
+  const offers = arr(provides.offers, 'provides.offers');
+  if (offers.length > OFFERS_PER_MOD_MAX) fail('SCHEMA', `provides.offers lists at most ${OFFERS_PER_MOD_MAX} offers`, { field: 'provides.offers', count: offers.length });
+  if (offers.length > 0 && arr(provides.mcp, 'provides.mcp').length === 0) fail('SCHEMA', 'provides.offers reach the mod through its MCP server (reach: mcp); provides.mcp is empty', { field: 'provides.offers' });
+  const offerKinds = new Set<string>();
+  offers.forEach((e, i) => {
+    const errors = validateOfferSpecV1(e);
+    if (errors.length) fail('SCHEMA', `provides.offers[${i}] is not offer-spec:v1: ${errors.slice(0, 3).join('; ')}`, { field: `provides.offers[${i}]`, errors });
+    const k = (e as OfferSpecV1).kind;
+    if (offerKinds.has(k)) fail('SCHEMA', `duplicate offer ${k}`, { field: `provides.offers[${i}]` });
+    offerKinds.add(k);
   });
   arr(provides.hooks, 'provides.hooks').forEach((e, i) => {
     const o = obj(e, `provides.hooks[${i}]`);
@@ -396,10 +451,60 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
   return value as ManifestV1;
 }
 
+function mcpEnvDenied(name: string): boolean {
+  return MCP_ENV_DENY.has(name) || MCP_ENV_DENY_PREFIXES.some((p) => name.startsWith(p));
+}
+
+/**
+ * Validate a per-user override of one provides.mcp server (TD-2026-10-20-812: first-party servers launch as
+ * `node <absolute path>` from another repo, so the manifest's fixed command cannot name them). Closed: only what the
+ * manifest entry's `config` permits; the same COMMAND_UNSAFE rule as the manifest; env names from the declared list
+ * only. Throws ManifestRefusal SCHEMA.
+ */
+export function validateMcpUserConfig(entry: ManifestMcp, value: unknown): McpUserConfig {
+  const w = `mcp config ${entry.name}`;
+  const o = obj(value, w);
+  closed(o, ['command', 'args', 'env'], w);
+  const allow = entry.config ?? {};
+  const out: McpUserConfig = {};
+  if (o.command !== undefined) {
+    if (allow.command !== true) fail('SCHEMA', `${w}: the manifest does not let the user set command`, { field: 'command' });
+    out.command = cmdStr(o.command, `${w}.command`);
+  }
+  if (o.args !== undefined) {
+    if (allow.args !== true) fail('SCHEMA', `${w}: the manifest does not let the user set args`, { field: 'args' });
+    const a = arr(o.args, `${w}.args`);
+    if (a.length > MCP_CONFIG_LIMITS.args) fail('SCHEMA', `${w}.args: at most ${MCP_CONFIG_LIMITS.args}`, { field: 'args' });
+    out.args = a.map((x, j) => {
+      if (typeof x !== 'string' || x.length > MCP_CONFIG_LIMITS.value || COMMAND_UNSAFE.test(x)) fail('SCHEMA', `${w}.args[${j}] must be a string without line separator, format or control characters`, { field: `args[${j}]` });
+      return x as string;
+    });
+  }
+  if (o.env !== undefined) {
+    const e = obj(o.env, `${w}.env`);
+    const declared = allow.env ?? [];
+    const env: Record<string, string> = {};
+    for (const [k, v] of Object.entries(e)) {
+      if (!declared.includes(k) || mcpEnvDenied(k)) fail('SCHEMA', `${w}.env: ${k} is not a user-settable name of this server`, { field: `env.${k}` });
+      if (typeof v !== 'string' || v.length > MCP_CONFIG_LIMITS.value || COMMAND_UNSAFE.test(v)) fail('SCHEMA', `${w}.env.${k} must be a string without line separator, format or control characters`, { field: `env.${k}` });
+      env[k] = v as string;
+    }
+    out.env = env;
+  }
+  return out;
+}
+
+/** The launch of one provides.mcp server under an optional per-user override (validated here). */
+export function resolveMcpLaunch(entry: ManifestMcp, override?: unknown): { command: string; args: string[]; env: Record<string, string> } {
+  const u = override === undefined ? {} : validateMcpUserConfig(entry, override);
+  return { command: u.command ?? entry.command, args: u.args ?? entry.args ?? [], env: u.env ?? {} };
+}
+
 /* ── manifest widening (§3.6, §12.5) ──────────────────────────────────────── */
 
-/** §12.5's list plus `mcp` and `hooks` (Aegis F3): both run commands, so an addition is always a widening. */
-export const WIDENING_FIELDS = ['effects', 'egress', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings', 'knowledge', 'mcp', 'hooks'] as const;
+/** §12.5's list plus `mcp` and `hooks` (Aegis F3): both run commands, so an addition is always a widening; plus
+ * `offers` (TD-2026-10-20-812): a new offer is a new way the model may steer the human to the mod. */
+export const WIDENING_FIELDS = ['effects', 'egress', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings', 'knowledge', 'mcp', 'hooks', 'offers'] as const;
 export type WideningField = (typeof WIDENING_FIELDS)[number];
 
 export interface WideningEntry {
@@ -420,7 +525,9 @@ function surface(m: ManifestV1 | null): Record<WideningField, Set<string>> {
     commands: new Set((p.commands ?? []).map((c) => c.id)),
     keybindings: new Set((p.keybindings ?? []).map((k) => `${k.key.trim().toLowerCase()}→${k.command}`)),
     knowledge: new Set((p.knowledge ?? []).map((k) => `${k.name}|${k.scheme}|${k.query}|${k.maxTier}`)),
-    mcp: new Set((p.mcp ?? []).map((s) => canonicalJson([s.name, s.command, s.args ?? []]))),
+    // an entry with no config keeps its pre-812 key; a config (what a user may override) is part of the surface
+    mcp: new Set((p.mcp ?? []).map((s) => canonicalJson(s.config ? [s.name, s.command, s.args ?? [], s.config] : [s.name, s.command, s.args ?? []]))),
+    offers: new Set((p.offers ?? []).map((o) => `${o.kind}@${o.phase}→${o.handoffTool}`)),
     hooks: new Set((p.hooks ?? []).map((h) => canonicalJson([h.event, h.command]))),
   };
 }

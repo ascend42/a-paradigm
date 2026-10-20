@@ -39,3 +39,4 @@ export * from './client-api-doc.js';
 export type * from './client-types.js';
 export * from './setup.js';
 export * from './claude-model.js';
+export * from './offer.js';

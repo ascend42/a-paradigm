@@ -51,7 +51,8 @@ import {
 } from './rpc.js';
 import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
 import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
-import { MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from './event.js';
+import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
+import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
 export const KIT_V1 = 'kit:v1' as const;
@@ -163,6 +164,25 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   standingGrant: { tuples: [...STANDING_TUPLES], repoTuples: [...STANDING_REPO_TUPLES], revokeReasons: [...STANDING_REVOKE_REASONS], presencePrefix: STANDING_PRESENCE_PREFIX, maxMs: STANDING_GRANT_MAX_MS },
   // 8.0:model-switch: the mid-session Claude model switch's closed outcomes, refusal routes and context guard
   modelSwitch: { outcomes: [...SESSION_MODEL_OUTCOMES], reasons: MODEL_SWITCH_REASON_ROUTES, contextGuard: MODEL_SWITCH_CONTEXT_GUARD },
+  // 8.0:TD-2026-10-20-812 (the Desk + the context meter, one batched move): the offer block grammar and limits, the
+  // closed offer phases/decisions/reach, the mute scope, the install sources and their url/path rule, the restart's
+  // checkpoint id and which KIND_PAYLOADS keys may be absent. The kinds and their payload keys ride the event schema;
+  // offer-spec:v1 is its own published schema.
+  desk: {
+    offer: {
+      phases: [...OFFER_PHASES],
+      decisions: [...OFFER_DECISIONS],
+      reaches: [...OFFER_REACHES],
+      contextSources: [...CONTEXT_SOURCES],
+      perMod: OFFERS_PER_MOD_MAX,
+      limits: OFFER_LIMITS,
+      block: { fence: '```offer', format: 'json', keys: [...OFFER_BLOCK_KEYS], maxChars: OFFER_BLOCK_MAX, maxReplyChars: OFFER_TEXT_MAX, questionMax: OFFER_QUESTION_MAX, onePerReply: true },
+    },
+    muteScopes: [...OFFER_MUTE_SCOPES],
+    install: { sources: [...MOD_INSTALL_SOURCES], urlPattern: MOD_INSTALL_URL_PATTERN.source, limits: MOD_INSTALL_LIMITS },
+    restart: { checkpointRefPattern: CHECKPOINT_REF_PATTERN.source },
+    optionalPayloadKeys: KIND_PAYLOAD_OPTIONAL,
+  },
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {
