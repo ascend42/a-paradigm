@@ -2443,7 +2443,19 @@ components:
       the long --list. RC3 git also: show-ref ls-tree rev-list shortlog
       merge-base for-each-ref, worktree list, stash list (flags only), reflog
       show, cat-file -t/-s/-p OBJECT, tag -l/--list (listing flags only); all
-      through gitOptBad. No background/negation/env assignment, output
+      through gitOptBad. Aegis H1 (both modes): git is refused when the repo
+      git would use from the cwd (nearest .git dir or gitdir: file, its
+      config, config.worktree, the commondir config, every include/includeIf
+      path) names an exec-class key (core.fsmonitor unless false, core.pager
+      sshCommand hooksPath alternateRefsCommand askPass gitProxy,
+      diff.external, diff.*.textconv/command, filter.*, pager.*,
+      remote.*.uploadpack/receivepack, gpg[.*].program,
+      uploadpack.packObjectsHook, credential.helper; repoGitExecKey); and
+      anchorCommand exports command-scope GIT_CONFIG_COUNT/KEY_n/VALUE_n
+      (ANCHOR_GIT_CONFIG: core.fsmonitor=false, core.pager=cat,
+      core.hooksPath=/dev/null, core.sshCommand=false, log.showSignature=false,
+      gpg[.ssh|.x509].program=false, credential.helper=) plus
+      GIT_NO_LAZY_FETCH=1 and GIT_PAGER=cat. No background/negation/env assignment, output
       redirection only to /dev/null. simpleArgv returns the argv of a single
       literal simple command (prefix always rules; signature unchanged).
     tags: [kernel, security]
