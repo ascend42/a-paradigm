@@ -149,7 +149,7 @@ function itemEl(it: ChatItem): HTMLElement {
   const at = it.at ? it.at.slice(11, 16) : '';
   if (it.role === 'voice-partial') return h(doc, 'div', { class: 'trow role-voice-partial' }, h(doc, 'span', { class: 'voice-tag' }, `🎙 ${it.speaker ?? 'voice'}`), ' ', it.text) as unknown as HTMLElement;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, '🔊 said aloud'), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at)), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];

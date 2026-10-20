@@ -26,6 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
+import { sha256Tagged } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
@@ -398,6 +399,8 @@ export interface ChatItem {
   voice?: 'voice' | 'voice-edited';
   /** table talk (TD-2026-10-20-294): an assistant reply's speak block, shown as the "said aloud" line (the body omits it) */
   said?: string;
+  /** Aegis L3: 'kernel' = the words come from the kernel's speakable row (from:'block'); 'reply' = this GUI's own parse (no kernel row) */
+  saidBy?: 'kernel' | 'reply';
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -499,15 +502,39 @@ export function replyParts(body: string): ReplyPart[] {
   return out;
 }
 
-const GUIDANCE_BLOCK = /^<gnomon-voice>[\s\S]*<\/gnomon-voice>$/;
-/** The human's own text of a replayed user message: its text blocks without the table-talk `<gnomon-voice>` guidance block. */
-function humanTextOf(content: unknown): string {
+/** sha256 of the kernel's frozen table-talk guidance block (kernel/voice/table-talk.ts; a GUI test pins it to the kernel's). */
+export const TABLE_TALK_GUIDANCE_HASH = 'sha256:eb3b660651dab20c94cbc00e432d6b13d94f7ce007024ff6d53be3ab363a9f5a';
+
+/**
+ * The human's own text of a replayed user message (Aegis M1). content[0] is ALWAYS kept. A text block at index 1 or
+ * later is dropped only when its bytes are the kernel's guidance (its sha256 is TABLE_TALK_GUIDANCE_HASH) or match the
+ * guidanceHash of the turn.sent it answers; anything else (a human-typed `<gnomon-voice>` too) stays visible.
+ */
+export function humanTextOf(content: unknown, guidanceHash: string | null = null): string {
   if (!Array.isArray(content)) return textOf(content);
-  return textOf(content.filter((c) => !(objOf(c)?.type === 'text' && GUIDANCE_BLOCK.test(String(objOf(c)?.text ?? '').trim()))));
+  return textOf(
+    content.filter((c, i) => {
+      if (i === 0) return true;
+      const x = objOf(c);
+      if (x?.type !== 'text' || typeof x.text !== 'string') return true;
+      const h = sha256Tagged(x.text);
+      return h !== TABLE_TALK_GUIDANCE_HASH && h !== guidanceHash;
+    }),
+  );
+}
+
+/**
+ * Aegis L3: the said-aloud line of a reply comes from the kernel's speakable row when there is one: from:'block' ⇒ the
+ * kernel's words (saidBy 'kernel'); from:'heuristic' ⇒ no highlight. No kernel row ⇒ this GUI's parse (saidBy 'reply').
+ */
+function withKernelSaid<T extends Pick<ChatItem, 'role' | 'text' | 'said'>>(it: T, k: { text: string; from: string } | undefined): T & { saidBy?: ChatItem['saidBy'] } {
+  if (!k) return it.said !== undefined ? { ...it, saidBy: 'reply' as const } : it;
+  const { said: _drop, ...rest } = it;
+  return k.from === 'block' ? { ...(rest as T), said: k.text, saidBy: 'kernel' as const } : (rest as T);
 }
 
 /** One turn.event line as chat items (none = noise: hooks, partials, rate limits, status, control frames, tool results). */
-function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text' | 'said'>> {
+function lineItems(line: string, guidanceHash: string | null = null): Array<Pick<ChatItem, 'role' | 'text' | 'said'>> {
   let m: Record<string, unknown> | null = null;
   try {
     m = objOf(JSON.parse(line));
@@ -533,7 +560,7 @@ function lineItems(line: string): Array<Pick<ChatItem, 'role' | 'text' | 'said'>
   // the user's own message as claude replays it (--replay-user-messages): the only row that carries its text
   // (session.inject / turn.sent log a hash and a byte count, never the text — G-LOG-03)
   if (m.type === 'user' && msg) {
-    const text = humanTextOf(msg.content);
+    const text = humanTextOf(msg.content, guidanceHash);
     return text.trim() ? [{ role: 'user', text: cap(text, CHAT_TEXT_MAX) }] : [];
   }
   return [];
@@ -707,8 +734,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const items: ChatItem[] = [];
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string }): void => {
-    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said } : {}) });
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }): void => {
+    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}) });
   };
   // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
   const voiceEcho = new Map<number, string>();
@@ -721,8 +748,15 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
   const sentSeqs = new Set<number>();
   const editedSeqs = new Set<number>();
   const speakable = { n: 0 }; // V2e: kernel-speakable replies not yet matched by the voice app's playback row
+  // Aegis L3: the kernel's speakable reply per source row (turnSeq): the said-aloud line is the kernel's words
+  const kernelReply = new Map<number, { text: string; from: string }>();
+  let turnGuidance: string | null = null; // Aegis M1: the guidanceHash of the latest turn.sent
   for (const r of rows) {
     const p = objOf(r.payload);
+    if (r.kind === 'voice.turn.agent' && p?.source === 'kernel-speakable' && typeof r.principal === 'string' && /^p:[0-9a-z]{8}\/kernel$/.test(r.principal) && typeof p.turnSeq === 'number' && Array.isArray(p.items)) {
+      const it = p.items.map(objOf).find((x) => x?.kind === 'reply' && typeof x.text === 'string');
+      if (it) kernelReply.set(p.turnSeq, { text: String(it.text), from: typeof it.from === 'string' ? it.from : '' });
+    }
     if (r.kind === 'turn.sent' && p?.source === 'voice') for (const n of citedSeqs(p)) sentSeqs.add(n);
     if (r.kind === 'turn.sent' && p?.source === 'voice-edited') for (const n of citedSeqs(p)) editedSeqs.add(n);
     const tid = p && typeof p.turnId === 'string' ? p.turnId : null;
@@ -745,8 +779,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       continue;
     }
     const p = objOf(r.payload);
+    if (r.kind === 'turn.sent') turnGuidance = typeof p?.guidanceHash === 'string' ? p.guidanceHash : null;
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
-      const its = lineItems(p.line).filter((it) => {
+      const its = lineItems(p.line, turnGuidance).map((it) => (it.role === 'assistant' ? withKernelSaid(it, kernelReply.get(r.seq)) : it)).filter((it) => {
         if (it.role !== 'user') return true;
         const i = echoes.indexOf(oneLine(it.text));
         if (i < 0) return true;

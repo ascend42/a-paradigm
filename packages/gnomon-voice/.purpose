@@ -40,7 +40,8 @@ components:
       speakable items with from:'kernel' (ask-waiting, edits) are said by a
       different Kokoro speaker (SherpaTts systemSidFor, never the model's
       speaker) after a generated two-note earcon; model text (from block,
-      heuristic or absent) never gets either.
+      heuristic or absent) never gets either. A kernel-speakable row is
+      spoken only when its principal is p:<ns>/kernel (Aegis L1).
       Kernel-decided enrolment (src/enrol-watch.ts): while running it polls
       status (1.5 s); on status.voice.enrolment phase 'requested' it pauses
       the voice loop, turns the mic on for the recording if it was off,

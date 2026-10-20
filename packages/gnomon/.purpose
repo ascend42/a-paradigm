@@ -1943,7 +1943,10 @@ components:
       VoiceControl.guidanceFor(hsid) returns it only while voice is attached
       to that session, and the #supervisor writes it as a second
       <gnomon-voice> text block on every send (turn.sent guidanceHash;
-      contentHash stays the human text, replay unchanged).
+      contentHash stays the human text, replay unchanged). The spoken scrub
+      (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon
+      trace allows one extra prompt block only when turn.sent names its
+      guidanceHash and the hash matches (Aegis M2).
     path: src/kernel/voice/
     type: module
     tags: [gnomon, kernel, voice, paradigm-8, move-4]
