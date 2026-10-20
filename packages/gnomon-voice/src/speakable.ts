@@ -1,16 +1,17 @@
 /**
  * @symbol #gnomon-voice
  *
- * What voice says out loud (spec §14 "speak only speakable content"; V2c). From the attached session's turn rows:
- *   - an assistant text reply → its speakable summary: the GNOME LINE if the reply has one (a line starting
- *     `gnome:`; the short spoken line a session may lead with), else the FIRST PARAGRAPH, with code fences,
- *     inline code, markdown links/emphasis and diff/tool text stripped. Never a diff, never tool output.
- *   - file-editing tool calls (Edit / Write / MultiEdit / NotebookEdit / apply_patch) → counted, said once at the
- *     end of the turn as "edited N files".
- *   - an ask-user question (AskUserQuestion) → ALWAYS read, every question.
- * Assumption (unverified against a live kernel): the voice projection delivers `turn.event` rows with the
- * stream-json `line` (Claude Code's `assistant` / `result` messages). A row whose line is hashed (big or a
- * control_request) has nothing speakable and is skipped.
+ * What voice says out loud (spec §14 "speak only speakable content"; V2e).
+ *
+ * V2e: the KERNEL projects the speakable content and writes it as a row the voice reader can see:
+ *   `voice.turn.agent{source:'kernel-speakable', turnSeq, items:[{kind:'reply'|'ask'|'edits', text}]}`.
+ * The client speaks exactly those items (kernelSpeakable) and never reads `turn.event` (the voice projection
+ * cannot see it). The client's OWN voice.turn.agent rows (playback windows {turnId, t0, t1, textPlanned,
+ * textSpoken}, no `source`) are never spoken.
+ *
+ * SpeakableProjector below is the REFERENCE projection (what the kernel's speakable rows are expected to
+ * contain: the gnome line or the first prose paragraph, "edited N files" at turn end, every ask-user question).
+ * The client no longer runs it; the tests' fake kernel does.
  */
 
 export type SpeakItem = { kind: 'reply'; text: string } | { kind: 'question'; text: string } | { kind: 'edits'; files: number; text: string };
@@ -129,6 +130,30 @@ export function askQuestions(input: Record<string, unknown> | undefined): string
     const opts = Array.isArray(q.options) ? q.options.map((o) => (typeof o === 'string' ? o : typeof (o as { label?: unknown })?.label === 'string' ? (o as { label: string }).label : '')).filter(Boolean) : [];
     const said = stripMarkdown(text);
     out.push(opts.length ? `${said} Options: ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(", ")}, or ${opts.at(-1)}`}.` : said);
+  }
+  return out;
+}
+
+/** One item of a kernel-speakable row. */
+export interface KernelSpeakItem {
+  kind: 'reply' | 'ask' | 'edits';
+  text: string;
+}
+export const KERNEL_SPEAKABLE = 'kernel-speakable' as const;
+const ITEM_KINDS = new Set(['reply', 'ask', 'edits']);
+
+/**
+ * The items to speak for one kernel row: only `voice.turn.agent` rows whose `source` is 'kernel-speakable'.
+ * Everything else (turn.event, the client's own playback rows, malformed items) says nothing. Text is
+ * markdown-stripped and clipped defensively; an item with no letters or digits is dropped.
+ */
+export function kernelSpeakable(kind: string, payload: Record<string, unknown>): KernelSpeakItem[] {
+  if (kind !== 'voice.turn.agent' || payload.source !== KERNEL_SPEAKABLE || !Array.isArray(payload.items)) return [];
+  const out: KernelSpeakItem[] = [];
+  for (const it of payload.items as Array<Record<string, unknown>>) {
+    if (!it || typeof it !== 'object' || typeof it.kind !== 'string' || !ITEM_KINDS.has(it.kind) || typeof it.text !== 'string') continue;
+    const text = clip(stripMarkdown(it.text));
+    if (text && /[A-Za-z0-9]/.test(text)) out.push({ kind: it.kind as KernelSpeakItem['kind'], text });
   }
   return out;
 }

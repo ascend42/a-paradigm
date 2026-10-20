@@ -1,5 +1,6 @@
 /** Stub engines and a fake kernel link for the pipeline tests (no models, no network, no audio device). */
 import { encodeWav } from '../src/fake-audio-io.js';
+import { SpeakableProjector } from '../src/speakable.js';
 import type { KernelLink, KernelRow, PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceAttachment, VoiceEngines } from '../src/types.js';
 
 export const SR = 16_000;
@@ -107,6 +108,8 @@ export class FakeLink implements KernelLink {
   row: ((r: KernelRow) => void) | undefined;
   end: ((reason: string) => void) | undefined;
   #seq = 0;
+  #turnSeq = 0;
+  readonly #kernel = new SpeakableProjector();
   async attachment(): Promise<VoiceAttachment | null> {
     return this.att;
   }
@@ -132,10 +135,25 @@ export class FakeLink implements KernelLink {
     };
   }
   async close(): Promise<void> {}
-  /** Deliver an assistant text reply as a turn.event stream line. */
+  /**
+   * The fake KERNEL: an assistant reply arrives as a turn.event (which the voice reader must ignore), and the
+   * kernel's speakable projection (the reference SpeakableProjector) is delivered as
+   * voice.turn.agent{source:'kernel-speakable', turnSeq, items}.
+   */
   reply(text: string, tools: Array<{ name: string; input: Record<string, unknown> }> = []): void {
     const content = [{ type: 'text', text }, ...tools.map((t) => ({ type: 'tool_use', ...t }))];
-    this.row?.({ seq: ++this.#seq, kind: 'turn.event', payload: { type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content } }) } });
+    const payload = { type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content } }) };
+    this.row?.({ seq: ++this.#seq, kind: 'turn.event', payload });
+    this.speakable(this.#kernel.push('turn.event', payload));
+  }
+  /** The turn ended: the kernel says the edit count. */
+  endTurn(): void {
+    this.row?.({ seq: ++this.#seq, kind: 'turn.result', payload: {} });
+    this.speakable(this.#kernel.push('turn.result', {}));
+  }
+  speakable(items: Array<{ kind: string; text: string }>, turnSeq = ++this.#turnSeq): void {
+    if (!items.length) return;
+    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text })) } });
   }
 }
 

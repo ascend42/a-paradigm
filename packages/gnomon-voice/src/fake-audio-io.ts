@@ -69,6 +69,8 @@ export class FakeAudioIO implements AudioIO {
   readonly played: Array<{ id: string; t0: number; t1: number; completed: boolean }> = [];
   #playing: { id: string; durMs: number; t0: number; resolve: (r: PlaybackResult) => void } | undefined;
   started = false;
+  micOn = true;
+  readonly micOps: boolean[] = [];
 
   constructor(o: { sampleRate?: number; frameMs?: number; clock?: number } = {}) {
     this.captureSampleRate = o.sampleRate ?? 16_000;
@@ -96,7 +98,7 @@ export class FakeAudioIO implements AudioIO {
       const f = samples.subarray(i, Math.min(samples.length, i + n));
       const t0 = this.clock;
       this.#advance((f.length / sampleRate) * 1000);
-      this.#ev.emit('frame', { samples: f, sampleRate, t0 });
+      if (this.micOn) this.#ev.emit('frame', { samples: f, sampleRate, t0 });
     }
   }
   captureWav(wav: Buffer): void {
@@ -106,6 +108,14 @@ export class FakeAudioIO implements AudioIO {
   /** Silence for `ms`. */
   silence(ms: number): void {
     this.capture(new Float32Array(Math.round((this.captureSampleRate * ms) / 1000)));
+  }
+  async setMic(on: boolean): Promise<void> {
+    this.micOn = on;
+    this.micOps.push(on);
+  }
+  /** Press a control hotkey (mic-toggle / mode-toggle). */
+  control(action: 'mic-toggle' | 'mode-toggle'): void {
+    this.#ev.emit('control', action, this.clock);
   }
   hotkey(down: boolean): void {
     this.#ev.emit('hotkey', down, this.clock);

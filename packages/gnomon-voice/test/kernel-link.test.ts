@@ -69,7 +69,7 @@ function fakeBinary() {
       ops.push(m.op);
       if (m.op === 'route.get') send({ type: 'reply', id: m.id, op: m.op, ok: true, route: { device: 'AirPods', transport: 'bluetooth', kind: 'headphones' }, aec: 'headphones' });
       else if (m.op === 'quit') child.emit('exit', 0, null);
-      else send({ type: 'reply', id: m.id, op: m.op, ok: true });
+      else send({ type: 'reply', id: m.id, op: m.op, ok: true, ...(m.op === 'info' ? { disclaimed: true } : {}) });
     }),
   );
   setImmediate(() => child.emit('spawn'));

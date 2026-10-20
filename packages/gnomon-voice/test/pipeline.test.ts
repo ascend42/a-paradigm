@@ -227,7 +227,7 @@ describe('$voice-turn agent side + half-duplex', () => {
       { name: 'Edit', input: { file_path: '/r/a.ts' } },
       { name: 'AskUserQuestion', input: { questions: [{ question: 'Ship it now?', options: [{ label: 'Yes' }, { label: 'No' }] }] } },
     ]);
-    link.row!({ seq: 99, kind: 'turn.result', payload: {} });
+    link.endTurn();
     for (let i = 0; i < 6; i++) {
       await settle();
       audio.tick(1000);

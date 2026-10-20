@@ -45,6 +45,8 @@ export interface AudioIOEvents {
   frame(f: PcmFrame): void;
   /** the push-to-talk hotkey */
   hotkey(down: boolean, atMs: number): void;
+  /** a local control hotkey: ⌃⌥M mic-toggle, ⌃⌥A mode-toggle (gnomon-voice-io default bindings) */
+  control(action: 'mic-toggle' | 'mode-toggle', atMs: number): void;
   /** the human muted or unmuted the mic (hardware/menu) */
   mic(muted: boolean): void;
   route(r: RouteInfo): void;
@@ -68,6 +70,9 @@ export interface AudioIO {
   /** Stop the chunk now playing (barge-in); its play() resolves with completed: false. */
   stopPlayback(): void;
   routeInfo(): RouteInfo;
+  /** Turn capture on/off locally (gnomon-voice-io mic.on / mic.off). */
+  setMic(on: boolean): Promise<void>;
+  readonly micOn: boolean;
 }
 
 export interface VadSegment {
@@ -142,6 +147,8 @@ export interface KernelLink {
   interrupt(hsid: string): Promise<unknown>;
   /** log.read follow on the attached session (voice projection). Returns an unsubscribe. */
   follow(hsid: string, row: (r: KernelRow) => void, end: (reason: string) => void): Promise<() => void>;
+  /** The link closed (fd EOF): the client exits. Optional for stubs. */
+  onClose?(cb: (reason: string) => void): void;
   close(): Promise<void>;
 }
 

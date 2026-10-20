@@ -2,30 +2,34 @@
 /**
  * @symbol #gnomon-voice
  *
- * `gnomon-voice [run] | models fetch | enrol <name> | status` (V2c). Plain, friendly output. `run` is the client
- * loop; `enrol` stores a voiceprint and then points at the root-signed `gnomon voice enrol` (V1) step.
+ * `gnomon-voice run --fd N --home H --io P | models fetch [--json] [--from <dir>] | enrol <name> | status` (V2e).
+ * `run` is spawned BY THE KERNEL with fd N = an already-authenticated socketpair (no hello, no auth, no key on
+ * this side) and exits when stdin ends or the link closes. Plain, friendly output for humans; `--json` for the
+ * kernel/GUI (models fetch: `{"total":N,"bytes":M}` lines, then `{"done":true}`).
  */
-import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DARWIN_IO_BINARY, SpawnedAudioIO } from './audio-io.js';
 import { fileURLToPath } from 'node:url';
 import { recordEnrolment } from './enrol.js';
 import { createSherpaEngines, loadSherpa } from './engines/sherpa.js';
-import { GnomonKernelLink, nsOf, type VoiceConnectProfile } from './kernel-link.js';
-import { fetchModel, loadManifest, ModelVerifyError, verifiedModelPaths } from './manifest.js';
+import { GnomonKernelLink } from './kernel-link.js';
+import { fetchModel, loadManifest, localFetch, ModelVerifyError, verifiedModelPaths } from './manifest.js';
+import { runVoice } from './run.js';
 import { readPrints } from './speaker.js';
 import type { VoiceEngines, VoiceLogger } from './types.js';
-import { VoiceClient, type ClientMode } from './voice-client.js';
+import type { ClientMode } from './voice-client.js';
 
 export const VOICE_CLIENT_VERSION = '0.1.0';
-const USAGE = `usage: gnomon-voice [run] [--mode ptt|ambient|off] [--io <gnomon-voice-io>] [--connect <profile.json>]
-       gnomon-voice models fetch [--force]
+const USAGE = `usage: gnomon-voice run --fd <n> [--home <abs>] [--io <gnomon-voice-io>] [--mode ptt|ambient|off] [--principal p:<ns>/voice]
+       gnomon-voice models fetch [--force] [--json] [--from <dir>]
        gnomon-voice enrol <name> [--io <gnomon-voice-io>]
        gnomon-voice status
 
-  run          talk to the session voice is attached to (push-to-talk by default)
+  run          started by Gnomon: talk to the session voice is attached to (push-to-talk by default)
+               ⌃⌥M turns the mic on/off; ⌃⌥A switches ambient/push-to-talk within what Gnomon allows
   models fetch download the pinned models into ~/.gnomon/voice/models and verify them
+               (--from <dir> installs from files you already downloaded)
   enrol        record three phrases and store your voiceprint on this computer
   status       show models, voiceprints and the engine runtime
 
@@ -49,7 +53,8 @@ function homeOf(flag: string | undefined): string {
   return env && path.isAbsolute(env) ? env : path.join(os.homedir(), '.gnomon');
 }
 
-function parse(argv: string[]): { pos: string[]; flags: Record<string, string | true> } {
+const VALUED = ['mode', 'io', 'home', 'fd', 'from', 'principal'];
+export function parse(argv: string[]): { pos: string[]; flags: Record<string, string | true> } {
   const pos: string[] = [];
   const flags: Record<string, string | true> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -57,7 +62,7 @@ function parse(argv: string[]): { pos: string[]; flags: Record<string, string | 
     if (a.startsWith('--')) {
       const k = a.slice(2);
       const v = argv[i + 1];
-      if (['mode', 'io', 'connect', 'home'].includes(k) && v !== undefined) (flags[k] = v), i++;
+      if (VALUED.includes(k) && v !== undefined) (flags[k] = v), i++;
       else flags[k] = true;
     } else pos.push(a);
   }
@@ -77,26 +82,42 @@ async function engines(home: string): Promise<VoiceEngines> {
   }
 }
 
-async function cmdFetch(home: string, force: boolean): Promise<number> {
+async function cmdFetch(home: string, o: { force: boolean; json: boolean; from?: string }): Promise<number> {
   const m = loadManifest();
+  const total = m.models.reduce((s, e) => s + e.size, 0);
+  let done = 0;
+  let lastJson = -1;
+  const jsonLine = (v: unknown): void => out(JSON.stringify(v));
+  if (o.json) jsonLine({ total, bytes: 0 });
   for (const e of m.models) {
-    out(`${e.id} (${(e.size / 1e6).toFixed(1)} MB)`);
+    if (!o.json) out(`${e.id} (${(e.size / 1e6).toFixed(1)} MB)`);
     let last = 0;
     try {
       const r = await fetchModel(home, e, {
-        force,
+        force: o.force,
+        ...(o.from ? { fetch: localFetch(o.from) } : {}),
         progress: (_id, b, t) => {
+          if (o.json) {
+            const pct = Math.floor(((done + b) / total) * 100);
+            if (pct > lastJson) (lastJson = pct), jsonLine({ total, bytes: done + b });
+            return;
+          }
           const pct = Math.floor((b / t) * 10);
           if (pct > last) (last = pct), process.stdout.write(`  ${pct * 10}%\r`);
         },
       });
-      out(r === 'present' ? '  already here and verified' : '  downloaded and verified');
+      done += e.size;
+      if (o.json) jsonLine({ total, bytes: done });
+      else out(r === 'present' ? '  already here and verified' : '  installed and verified');
     } catch (x) {
-      err(`  refused: ${x instanceof Error ? x.message : String(x)}`);
+      const msg = x instanceof Error ? x.message : String(x);
+      if (o.json) jsonLine({ error: msg, model: e.id });
+      else err(`  refused: ${msg}`);
       return 1;
     }
   }
-  out('All voice models are ready.');
+  if (o.json) jsonLine({ done: true });
+  else out('All voice models are ready.');
   return 0;
 }
 
@@ -141,30 +162,24 @@ async function cmdEnrol(home: string, name: string, io: string): Promise<number>
 }
 
 async function cmdRun(home: string, flags: Record<string, string | true>): Promise<number> {
-  const profilePath = typeof flags.connect === 'string' ? flags.connect : path.join(home, 'voice', 'connect.json');
-  let profile: VoiceConnectProfile;
-  try {
-    profile = JSON.parse(fs.readFileSync(profilePath, 'utf8')) as VoiceConnectProfile;
-  } catch {
-    err(`No voice connect profile at ${profilePath}. Run \`gnomon voice setup\` first.`);
-    return 1;
-  }
+  const fd = typeof flags.fd === 'string' ? Number(flags.fd) : NaN;
+  if (!Number.isInteger(fd) || fd < 3) return err('gnomon-voice run is started by Gnomon with --fd <n> (an inherited, authenticated descriptor).'), 64;
   const mode = (typeof flags.mode === 'string' ? flags.mode : 'ptt') as ClientMode;
   if (!['ptt', 'ambient', 'off'].includes(mode)) return err('--mode is ptt, ambient or off'), 64;
+  const link = GnomonKernelLink.fromFd(fd);
+  const ac = new AbortController();
+  process.once('SIGINT', () => ac.abort());
+  process.once('SIGTERM', () => ac.abort());
   const eng = await engines(home);
-  const link = await GnomonKernelLink.connect(profile, { version: VOICE_CLIENT_VERSION });
   const audio = new SpawnedAudioIO({ binary: typeof flags.io === 'string' ? flags.io : defaultIoBinary() });
-  const client = new VoiceClient({
-    audio, engines: eng, link, ns: nsOf(profile.principalId), prints: () => readPrints(home), mode,
+  const r = await runVoice({
+    link, audio, engines: eng, prints: () => readPrints(home), stdin: process.stdin, mode, signal: ac.signal,
+    ...(typeof flags.principal === 'string' ? { principal: flags.principal } : {}),
     log: stderrLogger(flags.verbose === true),
     notice: (n) => (n.level === 'warn' ? err(n.text) : out(n.text)),
+    started: () => out(mode === 'ptt' ? 'Listening. Hold the talk hotkey to talk.' : 'Listening.'),
   });
-  await client.start();
-  out(mode === 'ptt' ? 'Listening. Hold the hotkey to talk; Ctrl-C to stop.' : 'Listening. Ctrl-C to stop.');
-  await new Promise<void>((resolve) => process.once('SIGINT', () => resolve()));
-  await client.close();
-  await link.close();
-  out('Voice stopped.');
+  out(`Voice stopped (${r.reason}).`);
   return 0;
 }
 
@@ -175,7 +190,7 @@ export async function main(argv: string[]): Promise<number> {
   const [cmd = 'run', sub] = pos;
   try {
     if (cmd === 'run') return await cmdRun(home, flags);
-    if (cmd === 'models' && sub === 'fetch') return await cmdFetch(home, flags.force === true);
+    if (cmd === 'models' && sub === 'fetch') return await cmdFetch(home, { force: flags.force === true, json: flags.json === true, ...(typeof flags.from === 'string' ? { from: flags.from } : {}) });
     if (cmd === 'status') return await cmdStatus(home);
     if (cmd === 'enrol') {
       if (!sub) return err('gnomon-voice enrol needs a name'), 64;
