@@ -83,6 +83,17 @@ describe('F6: minting a standing grant', () => {
 });
 
 describe('F6: using it', () => {
+  it('Aegis L1: the run-mode loosen effect records the real presence (standing:<id>) on approval.mode.set', async () => {
+    const r = rig();
+    const id = await r.mint();
+    const { RunModeBook, RunModeControl } = await import('../src/kernel/broker/index.js');
+    const book = new RunModeBook({ principal: KERNEL, isKernelKey: () => true });
+    const ctl = new RunModeControl({ broker: r.broker, book: () => book, sessions: { scope: () => null, live: () => [] }, logRequest: async () => undefined, repoKeyOfPath: () => REPO, userHome: '/nonexistent-home-for-tests' });
+    const out = (await ctl.request(gui(), { repo: REPO, to: 'auto-edits' })) as { cardId: string };
+    expect((await r.broker.approve(gui(), { cardId: out.cardId, decision: 'allow' })).presence).toBe(`standing:${id}`);
+    expect(r.rows.find((x) => x.kind === 'approval.mode.set')!.payload).toMatchObject({ to: 'auto-edits', presence: `standing:${id}` });
+  });
+
   it('a covered mode loosen takes NO prompt: approval.decide{presence standing:<id>} then grant.standing.used', async () => {
     const r = rig();
     const id = await r.mint();

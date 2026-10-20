@@ -482,7 +482,9 @@ export class RunModeControl {
         const ceiling = ceilingOf(level);
         if (MODE_RANK[to] > MODE_RANK[ceiling]) throw this.#overCeiling(to, ceiling, level); // the level rose while the card waited
         const cur = scope.hsid ? this.view(scope.hsid, scope.repo).chosen : this.#repoMode(scope.repo, null).mode;
-        await this.#d.broker.modeSet({ scope, from: cur, to, by: { principal: asker.principal!, connId: ctx.connId }, presence: 'fresh' }, { connId: ctx.connId, ...(scope.hsid ? { session: scope.hsid } : {}) });
+        // Aegis L1 (TD-2026-10-20-086 F6): record the presence that really carried the allow (a standing grant's id, else fresh)
+        const presence = typeof ctx.presence === 'string' && ctx.presence.startsWith('standing:') ? (ctx.presence as `standing:${string}`) : 'fresh';
+        await this.#d.broker.modeSet({ scope, from: cur, to, by: { principal: asker.principal!, connId: ctx.connId }, presence }, { connId: ctx.connId, ...(scope.hsid ? { session: scope.hsid } : {}) });
         this.#d.book().apply(scope, to);
         this.#changed();
       },
