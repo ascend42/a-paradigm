@@ -993,6 +993,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     clientStatus: () => voiceChild.status(),
     reportStatus: () => voiceReports.status(),
+    // Aegis M1 (T-2026-10-20-005): the kernel's acceptances cross-check the client's capture claims
+    onAccepted: (connId, kind) => voiceReports.accepted(connId, kind),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
@@ -1056,7 +1058,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     voiceClient: {
       start: () => voiceChild.start(),
       stop: () => voiceChild.stop(),
-      connectionClosed: (connId: string) => voiceChild.connectionClosed(connId),
+      connectionClosed: (connId: string) => {
+        voiceReports.connectionClosed(connId); // Aegis L3: the closed connection's capture slot goes with it
+        voiceChild.connectionClosed(connId);
+      },
       enrol: (asker: { connId: string; principal: string }, p: { name: string; consent: string }) => voiceEnrol.enrol(asker, p),
       forget: (p: { name: string }) => voiceEnrol.forget(p),
       report: (p: unknown, connId?: string) => voiceReports.report(p, connId),

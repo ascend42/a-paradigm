@@ -31,6 +31,8 @@ export const CAPTURED_FLASH_MS = 1_200;
 export const DROPPED_FLASH_MS = 2_500;
 export const CAPTURE_IDLE_POLL_MS = 1_000;
 export const CAPTURE_FAST_POLL_MS = 175;
+/** Aegis L2: a capture read longer ago than the kernel's TTL is never shown (the page keeps its last status on a failed read) */
+export const CAPTURE_STALE_MS = 5_000;
 
 export interface CaptureView {
   state: CaptureState;
@@ -38,6 +40,8 @@ export interface CaptureView {
   reason: CaptureDropReason | null;
   /** 0..1 while hearing, else null */
   level: number | null;
+  /** Aegis M1: the kernel's cross-check of a captured claim ('accepted' | 'unconfirmed'), or null */
+  kernel: 'accepted' | 'unconfirmed' | null;
 }
 
 /** V4: the reason only, never words or a count. */
@@ -61,7 +65,14 @@ export function captureStatusOf(status: unknown): CaptureView | null {
   const reason = state === 'dropped' && (CAPTURE_DROP_REASONS as readonly unknown[]).includes(c.reason) ? (c.reason as CaptureDropReason) : null;
   if (state === 'dropped' && reason === null) return null;
   const level = state === 'hearing' && typeof c.level === 'number' && Number.isFinite(c.level) ? Math.max(0, Math.min(1, c.level)) : state === 'hearing' ? 0 : null;
-  return { state, segId: c.segId, reason, level };
+  const kernel = c.kernel === 'accepted' || c.kernel === 'unconfirmed' ? c.kernel : null;
+  return { state, segId: c.segId, reason, level, kernel };
+}
+
+/** Aegis L2: the capture only while the status it came from was received within CAPTURE_STALE_MS of `now` (page clock). */
+export function freshCapture(cap: CaptureView | null, statusReceivedAt: number | null, now: number): CaptureView | null {
+  if (!cap || statusReceivedAt === null || now - statusReceivedAt > CAPTURE_STALE_MS) return null;
+  return cap;
 }
 
 /** What the page has seen: the capture and when this page first saw it (flashes are timed on the page's clock). */
@@ -107,6 +118,8 @@ export function captureDisplayOf(t: CaptureTrack | null, now: number, live: bool
     case 'transcribing':
       return { state: 'transcribing', label: 'Catching that…', className: 'capture-transcribing', meter: 0, ghost: true, caption: 'Catching that', flashLeftMs: null };
     case 'captured':
+      // Aegis M1: a captured claim the kernel did not see a turn for is not "Got it"
+      if (c.kernel === 'unconfirmed') return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Heard, not confirmed', className: 'capture-dropped', meter: 0, ghost: false, caption: 'Heard, not confirmed', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
       return age < CAPTURED_FLASH_MS ? { state: 'captured', label: 'Got it', className: 'capture-captured', meter: 0, ghost: false, caption: 'Got it', flashLeftMs: CAPTURED_FLASH_MS - age } : rest;
     case 'dropped': {
       const label = DROP_LABEL[c.reason!];

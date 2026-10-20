@@ -392,6 +392,10 @@ components:
       decorative meter animation and row kick are gone, and the dead
       voice.turn.partial path is removed. Phase B's live words will read a
       capture.text the kernel projects to the gui credential only.
+      Aegis follow-ups: a capture from a status received more than
+      CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
+      a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
+      confirmed", never "Got it".
     path: src/core/capture.ts
     type: module
     tags: [gnomon, gui, voice, capture]

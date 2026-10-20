@@ -250,6 +250,8 @@ export class VoiceClient {
   #capLastSent = -Infinity;
   #capPending: CaptureReport | null = null;
   #capTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Aegis L4: capture reports waiting on the #reports chain; a waiting non-terminal one is replaced, never queued behind */
+  #capQueue: CaptureReport[] = [];
 
   constructor(o: VoiceClientOptions) {
     this.#o = o;
@@ -364,9 +366,21 @@ export class VoiceClient {
     this.#capLastSent = this.#now();
     const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level } : r;
     this.#lastCapture = capture;
+    // Aegis L4: a slow kernel never builds a backlog: the newest report replaces a waiting one of the same segment and
+    // state (a level update or keepalive). A state change is queued, so every edge, and every terminal state, still
+    // reaches the kernel in order; the queue is bounded by the segment's few edges.
+    const q = this.#capQueue;
+    const last = q[q.length - 1];
+    if (last && !isTerminal(last.state) && last.state === capture.state && last.segId === capture.segId) {
+      q[q.length - 1] = capture;
+      return;
+    }
+    q.push(capture);
     this.#reports = this.#reports.then(async () => {
+      const next = this.#capQueue.shift();
+      if (!next) return;
       try {
-        await this.#o.link.append('request.voice.report', { capture });
+        await this.#o.link.append('request.voice.report', { capture: next });
       } catch (err) {
         this.#log.warn('capture report not relayed', { reason: toRefusal(err).reason });
       }

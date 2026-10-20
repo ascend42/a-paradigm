@@ -1953,7 +1953,14 @@ components:
       barge-in|refused on dropped only, level? 0..1 on hearing only} relayed
       as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor
       is the V2 seam that keeps a later capture.text for the gui credential
-      only; voice.capture.level declared in status-numbers.ts); request.voice.client
+      only; voice.capture.level declared in status-numbers.ts. Aegis
+      follow-ups: terminal states are marked claim:'client' and cross-checked
+      against the kernel's own acceptances on that voice connection
+      (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop
+      shows captured with kernel:'accepted' and clientReason, a captured with
+      no acceptance is kernel:'unconfirmed'; text only for cls human on the
+      gui credential; the slot remembers its connId and clears when that
+      connection closes); request.voice.client
       start|stop is human only. speakable.ts KernelSpeakable appends
       voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
       session; the voice reader is narrowed to voice.* rows. speakerEnrolled is

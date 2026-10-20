@@ -131,6 +131,8 @@ export class FakeLink implements KernelLink {
   readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
   /** request.voice.report{capture} reports (T-2026-10-20-005 A1), kept apart from the log rows */
   readonly capture: Array<{ state: string; segId: string; reason?: string; level?: number }> = [];
+  /** while set, every capture report waits on it (a slow kernel) */
+  captureGate: Promise<void> | undefined;
   async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
     if (this.appendError) throw this.appendError;
     if (kind === 'request.voice.report' && payload.playback) {
@@ -138,6 +140,7 @@ export class FakeLink implements KernelLink {
       return { seq: 0 };
     }
     if (kind === 'request.voice.report' && payload.capture) {
+      if (this.captureGate) await this.captureGate;
       this.capture.push(payload.capture as { state: string; segId: string; reason?: string; level?: number });
       return { seq: 0 };
     }

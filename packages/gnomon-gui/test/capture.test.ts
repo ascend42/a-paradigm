@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CAPTURE_DROP_REASONS, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, DROP_LABEL, DROPPED_FLASH_MS } from '../src/core/capture.js';
+import { CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, DROP_LABEL, DROPPED_FLASH_MS } from '../src/core/capture.js';
 import { clientOf, clientPillOf, oneLine } from '../src/core/voice-client.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +23,7 @@ const show = (capture: unknown, ageMs = 0) => {
 
 describe('captureStatusOf: the one adapter over status.voice.capture', () => {
   it('reads every state; level only while hearing (clamped), reason only on dropped', () => {
-    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, level: 0.4 });
+    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, level: 0.4, kernel: null });
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 7 }))!.level).toBe(1);
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1' }))!.level).toBe(0);
     expect(captureStatusOf(st({ state: 'transcribing', segId: 's1', level: 0.9 }))!.level).toBeNull();
@@ -66,6 +66,22 @@ describe('the pill words (V4: a drop says its reason only)', () => {
   it('not live (detached, the app gone, disconnected): nothing shows', () => {
     const t = captureStep(null, captureStatusOf(st({ state: 'hearing', segId: 's1', level: 1 })), 0);
     expect(captureDisplayOf(t, 0, false)).toMatchObject({ label: null, meter: 0, ghost: false, caption: '' });
+  });
+});
+
+describe('Aegis M1 / L2 follow-ups', () => {
+  it('M1: a captured the kernel did not confirm is not "Got it"; a kernel-overridden drop shows Got it', () => {
+    expect(show({ state: 'captured', segId: 's1', claim: 'client', kernel: 'unconfirmed' }).label).toBe('Heard, not confirmed');
+    expect(show({ state: 'captured', segId: 's1', claim: 'client', kernel: 'accepted', clientReason: 'no-words' }).label).toBe('Got it');
+    expect(captureStatusOf(st({ state: 'captured', segId: 's1', kernel: 'bogus' }))!.kernel).toBeNull();
+  });
+  it('L2: a capture from a status received longer ago than the TTL is never shown (page clock)', () => {
+    const cap = captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.5 }));
+    expect(freshCapture(cap, 10_000, 10_000 + CAPTURE_STALE_MS)).toBe(cap);
+    expect(freshCapture(cap, 10_000, 10_000 + CAPTURE_STALE_MS + 1)).toBeNull();
+    expect(freshCapture(cap, null, 0)).toBeNull();
+    expect(APP).toMatch(/status = await client\.call<Record<string, unknown>>\('status'\);\s*statusAt = Date\.now\(\);/);
+    expect(APP).toContain('freshCapture(captureStatusOf(status), statusAt, Date.now())');
   });
 });
 

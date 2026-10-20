@@ -381,6 +381,7 @@ describe('capture states (T-2026-10-20-005 A1, TD-2026-10-20-086)', () => {
     for (let i = 0; i < 50; i++) {
       audio.tick(20);
       audio.emitLevel(-60 + i);
+      if (i % 10 === 9) await settle(); // let the report chain drain (a waiting update is otherwise coalesced, L4)
     }
     const heldMs = audio.clock - t0;
     audio.captureWav(toneWav(400, 0.5));
@@ -397,6 +398,29 @@ describe('capture states (T-2026-10-20-005 A1, TD-2026-10-20-086)', () => {
     expect(levelOf(0)).toBe(1);
     expect(levelOf(-Infinity)).toBe(0);
     expect(levelOf(-30)).toBe(0.5);
+  });
+
+  it('Aegis L4: with a slow kernel, waiting level updates are replaced by the newest, never queued; terminal ones are never lost', async () => {
+    const { audio, link, client } = await setup({ texts: ['ok'] });
+    let open!: () => void;
+    link.captureGate = new Promise<void>((r) => (open = r));
+    audio.hotkey(true); // hearing s1: in flight, held by the gate
+    for (let i = 0; i < 40; i++) {
+      audio.tick(CAPTURE_REPORT_MIN_MS); // past the throttle every time: 40 sends while the first is still in flight
+      audio.emitLevel(-50 + i);
+    }
+    audio.captureWav(toneWav(400, 0.5));
+    audio.hotkey(false);
+    await settle();
+    open();
+    link.captureGate = undefined;
+    await client.idle();
+    const states = link.capture.map((c) => c.state);
+    // the first hearing, at most one coalesced hearing (the newest level), then the segment's own edges
+    expect(states.filter((s) => s === 'hearing').length).toBeLessThanOrEqual(3);
+    expect(states.slice(-2)).toEqual(['transcribing', 'captured']);
+    const lastHearing = link.capture.filter((c) => c.state === 'hearing').at(-1)!;
+    expect(lastHearing.level).toBe(levelOf(-50 + 39));
   });
 
   it('a mode change while hearing abandons the segment (idle, no reason)', async () => {

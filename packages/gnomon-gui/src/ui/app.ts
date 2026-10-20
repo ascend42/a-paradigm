@@ -24,7 +24,7 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, type CaptureTrack } from '../core/capture.js';
+import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
@@ -533,6 +533,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   });
   try {
     status = await c.call<Record<string, unknown>>('status');
+    statusAt = Date.now();
   } catch {
     status = null;
   }
@@ -745,6 +746,7 @@ async function refreshStatus(): Promise<void> {
   if (!client) return stopStatusPolls();
   try {
     status = await client.call<Record<string, unknown>>('status');
+    statusAt = Date.now(); // Aegis L2: the capture overlay ages from here (a failed read keeps the old status)
   } catch {
     /* keep the last status; the control shows what it last knew */
   }
@@ -821,6 +823,7 @@ function stopStatusPolls(): void {
   if (captureFlash) clearTimeout(captureFlash);
   captureFlash = null;
   captureTrack = null;
+  statusAt = null;
 }
 /** ⏹ / Esc: one log.append request.voice.client{op:'stop-speaking'} on a trusted gesture. */
 async function stopSpeaking(trusted: boolean): Promise<void> {
@@ -1003,6 +1006,8 @@ function paintVoice(): void {
 
 /* ── live capture (T-2026-10-20-005 A1; core/capture.ts, #gui-voice-capture) ── */
 let captureTrack: CaptureTrack | null = null;
+/** when the page last RECEIVED a status (null: never on this connection) */
+let statusAt: number | null = null;
 let captureFlash: ReturnType<typeof setTimeout> | null = null;
 let captionState: string | null = null;
 /**
@@ -1012,7 +1017,7 @@ let captionState: string | null = null;
  */
 function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): void {
   const live = pillOwned && !!client && v.state !== 'off' && v.clientConnected === true;
-  captureTrack = live ? captureStep(captureTrack, captureStatusOf(status), Date.now()) : null;
+  captureTrack = live ? captureStep(captureTrack, freshCapture(captureStatusOf(status), statusAt, Date.now()), Date.now()) : null;
   const d = captureDisplayOf(captureTrack, Date.now(), live);
   const btn = $('voice-pill');
   for (const c of [...btn.classList]) if (c.startsWith('capture-')) btn.classList.remove(c);
