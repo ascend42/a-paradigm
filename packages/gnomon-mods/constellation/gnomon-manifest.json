@@ -1,14 +1,14 @@
 {
-  "manifest": 1,
+  "manifest": 2,
   "kind": "mod",
+  "publisher": "gnomon",
   "name": "constellation",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "abi": "mod-abi:v1",
   "description": "Constellation: the idea map as a Desk mod. Offers to map an idea on the board and to summarize the session, through the local Constellation MCP server.",
   "provides": {
     "mcp": [
       {
-        "name": "gnomon-constellation",
         "command": "constellation-mcp",
         "args": [],
         "config": {

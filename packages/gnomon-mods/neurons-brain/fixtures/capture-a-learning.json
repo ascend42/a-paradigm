@@ -1,3 +1,0 @@
-{
-  "reply": "The benchmark shows the cold start drops from 840 ms to 210 ms once the index is memory-mapped, measured three times on this machine.\n\n```offer\n{\"mod\":\"neurons-brain\",\"kind\":\"capture-a-learning\",\"question\":\"Should I save this measurement as a first-hand note in your brain?\"}\n```\n"
-}

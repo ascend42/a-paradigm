@@ -1,6 +1,6 @@
 {
   "offer": {
-    "mod": "neurons-brain",
+    "mod": "gnomon.neurons",
     "kind": "delete-the-brain",
     "question": "Want me to wipe the brain?"
   },

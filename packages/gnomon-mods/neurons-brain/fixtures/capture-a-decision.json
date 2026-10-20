@@ -1,3 +1,0 @@
-{
-  "reply": "So we go with SQLite over Postgres for the local store: one file, no daemon, and the write volume fits.\n\n```offer\n{\"mod\":\"neurons-brain\",\"kind\":\"capture-a-decision\",\"question\":\"Want me to save this decision and its reasons to the brain?\"}\n```\n"
-}

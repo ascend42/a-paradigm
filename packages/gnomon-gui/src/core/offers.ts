@@ -40,6 +40,9 @@ import {
   type OfferPhase,
 } from '@a-company/gnomon-contracts';
 import { pttTurn } from './dictation.js';
+import { modLabel } from './mod-label.js';
+
+export { modLabel } from './mod-label.js';
 
 export { OFFER_DECISIONS, type OfferDecision };
 
@@ -313,10 +316,10 @@ export function decideRequest(offerId: string, decision: OfferDecision): OfferDe
 
 /** A closed slip's trace text (the comp's `.slip.gone`). */
 export function traceText(s: Pick<Slip, 'decided' | 'mod' | 'kept'>): string {
-  if (s.decided === 'open') return `${s.kept ? 'kept in' : 'opened'} mod:${s.mod}`;
-  if (s.decided === 'stop-here') return `offers off in this thread · mod:${s.mod}`;
-  if (s.decided === 'not-now') return `not now · mod:${s.mod}`;
-  return `offer · mod:${s.mod}`;
+  if (s.decided === 'open') return `${s.kept ? 'kept in' : 'opened'} mod:${modLabel(s.mod)}`;
+  if (s.decided === 'stop-here') return `offers off in this thread · mod:${modLabel(s.mod)}`;
+  if (s.decided === 'not-now') return `not now · mod:${modLabel(s.mod)}`;
+  return `offer · mod:${modLabel(s.mod)}`;
 }
 
 /** The reply items stripOfferBlocks rewrites (store.ts ChatItem's shape). */

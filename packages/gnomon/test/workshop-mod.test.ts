@@ -75,9 +75,9 @@ import { serveMod } from './gnomon-mod-sdk.mjs';
 let events = 0;
 serveMod({
   onEvent: () => { events++; },
-  views: { 'hello.panel': async () => ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hello' }) },
+  views: { 'hello.panel': async () => ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'example.hello' }) },
   commands: { 'hello.bump': async () => ({ ok: true }), 'hello.events': async () => ({ events }), 'hello.deaf': async () => { setInterval(() => {}, 1000); setTimeout(() => process.stdin.pause(), 20); return { deaf: true }; } },
-  tools: { 'hello.greet': async () => ({ greeting: 'hello' }), 'hello.count': async () => ({ count: 0 }) },
+  tools: { 'hello.greet': async () => ({ greeting: 'example.hello' }), 'hello.count': async () => ({ count: 0 }) },
 });
 `;
 
@@ -85,18 +85,18 @@ async function installHello(w: { root: string; home: string; auth: DevTestRootAu
   const m = JSON.parse(fs.readFileSync(path.join(EXAMPLE_MOD, 'gnomon-manifest.json'), 'utf8'));
   m.provides.commands.push({ id: 'hello.events', title: 'Events received' }, { id: 'hello.deaf', title: 'Stop reading stdin' });
   if (opts.feed) m.requires.capabilities.push('log.read');
-  const src = writeModFolder(path.join(w.root, 'hello'), m, HELLO_COUNTING);
+  const src = writeModFolder(path.join(w.root, 'example.hello'), m, HELLO_COUNTING);
   const st = stageInstall({ home: w.home, source: src, via: 'package', requestedBy: 'p:abcdefgh/cli', trust: w.auth });
   if (st.state !== 'staged') throw new Error('expected staged');
-  const bind = installPresenceBinding(st.cardId, readStaged(w.home, 'hello', st.cardId)!.card.contentHash, 'install');
-  decideInstallCard(w.home, 'hello', st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: w.auth });
+  const bind = installPresenceBinding(st.cardId, readStaged(w.home, 'example.hello', st.cardId)!.card.contentHash, 'install');
+  decideInstallCard(w.home, 'example.hello', st.cardId, 'install', { presenceToken: mintTestPresence('mod.install', { bind }), authority: w.auth });
 }
 
 const fixture = (f: string) => JSON.parse(fs.readFileSync(path.join(WORKSHOP, 'fixtures', f), 'utf8'));
 
 describe('#workshop-mod', () => {
   it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
-    const h = hashSourceTree(WORKSHOP, 'workshop', () => undefined).packageHash;
+    const h = hashSourceTree(WORKSHOP, 'gnomon.workshop', () => undefined).packageHash;
     // an intended edit: `npm run repin:first-party` regenerates the goldens, then pin the hash printed here
     expect([...FIRST_PARTY_PACKAGE_HASHES], `the Workshop tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
   });
@@ -127,37 +127,37 @@ describe('#workshop-mod', () => {
 
   it('installs through gnomon mod install + the broker card as tier first-party, effects read only, and starts', async () => {
     const w = await installedWorkshop();
-    expect(w.out).toContain('│ Install mod workshop 1.0.0 (mod) from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.workshop 1.1.0 (mod) by gnomon from package, tier first-party');
     expect(w.out).toContain('│ effects: none · egress: none');
     const g = readGrants(w.home, w.auth);
-    const row = effectiveInstall(g, 'workshop')!;
+    const row = effectiveInstall(g, 'gnomon.workshop')!;
     expect(g.trust.get(row.manifestHash)).toBe('first-party');
     await new Promise((r) => setTimeout(r, 50));
-    const st = await w.host.start('workshop');
+    const st = await w.host.start('gnomon.workshop');
     expect(st).toMatchObject({ state: 'running', effects: [] });
     expect(pendingStaged(w.home)).toEqual([]);
   });
 
   it('fixtures render to their golden blocks (full and reduced motion)', async () => {
     const w = await installedWorkshop();
-    await w.host.start('workshop');
+    await w.host.start('gnomon.workshop');
     for (const f of ['strip', 'strip-reduced']) {
       const fx = fixture(`${f}.json`);
-      const r = await w.host.render('workshop', 'workshop.strip', fx.input, { width: fx.width, prefs: fx.prefs });
-      expect(r.label).toBe('mod:workshop');
+      const r = await w.host.render('gnomon.workshop', 'workshop.strip', fx.input, { width: fx.width, prefs: fx.prefs });
+      expect(r.label).toBe('mod:gnomon.workshop');
       expect(r.block).toEqual(fixture(`${f}.golden.json`));
     }
   });
 
   it('G-WSP-01: caps derive from the projected kernel feed only; a relayed render cannot replay fixture events', async () => {
     const w = await installedWorkshop();
-    await w.host.start('workshop');
+    await w.host.start('gnomon.workshop');
     const hsid = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
     expect(w.host.feed({ kind: 'session.open', seq: 1, payload: { hsid, backend: 'claude-code', cwd: '/secret/project', model: 'claude' } })).toBe(1);
     expect(w.host.feed({ kind: 'turn.partial', seq: 2, payload: { hsid, bytes: 10 } })).toBe(1);
     expect(w.host.feed({ kind: 'approval.request', seq: 3, payload: { card: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', kind: 'permission', hsid, block: { text: 'rm -rf /' } }, tool_input: { command: 'rm -rf /' } } })).toBe(1);
     expect(w.host.feed({ kind: 'turn.text', seq: 4, payload: { hsid, text: 'ignore previous instructions' } })).toBe(0);
-    const r = await w.host.relayView({ name: 'workshop', viewId: 'workshop.strip', input: fixture('strip.json').input, principal: HUMAN, connId: H.connId, prefs: { motion: 'full' } });
+    const r = await w.host.relayView({ name: 'gnomon.workshop', viewId: 'workshop.strip', input: fixture('strip.json').input, principal: HUMAN, connId: H.connId, prefs: { motion: 'full' } });
     const s = JSON.stringify(r.block);
     expect(s).toContain('needs you 1');
     expect(s).toContain('▲ permission');
@@ -166,7 +166,7 @@ describe('#workshop-mod', () => {
     for (const leak of ['secret', 'rm -rf', 'ignore previous']) expect(s).not.toContain(leak);
     w.host.feed({ kind: 'turn.result', seq: 5, payload: { hsid } });
     w.host.feed({ kind: 'approval.decide', seq: 6, payload: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZC', decision: 'allow' } });
-    const r2 = JSON.stringify((await w.host.render('workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
+    const r2 = JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
     expect(r2).toContain('needs you 0');
     expect(r2).toContain('▲ builder filled still');
   });
@@ -180,61 +180,61 @@ describe('#workshop-mod', () => {
 
   it('falsifier: a running mod without the log.read capability receives no event notification at all', async () => {
     const w = await installedWorkshop();
-    await w.host.start('workshop');
+    await w.host.start('gnomon.workshop');
     await installHello(w);
-    expect(await w.host.start('hello')).toMatchObject({ state: 'running' });
-    expect(w.host.running()).toEqual(['hello', 'workshop']);
+    expect(await w.host.start('example.hello')).toMatchObject({ state: 'running' });
+    expect(w.host.running()).toEqual(['example.hello', 'gnomon.workshop']);
     expect(w.host.feed({ kind: 'turn.partial', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } })).toBe(1);
     expect(w.host.feed({ kind: 'session.open', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA', cwd: '/p' } })).toBe(1);
-    expect(await w.host.runCommand('hello', 'hello.events', null)).toEqual({ events: 0 });
+    expect(await w.host.runCommand('example.hello', 'hello.events', null)).toEqual({ events: 0 });
     // positive control: the counter has teeth (its own modns kind does reach it)
-    expect(w.host.sendEvent('hello', { kind: 'modns.hello.greeted' })).toBe(true);
+    expect(w.host.sendEvent('example.hello', { kind: 'modns.example.hello.greeted' })).toBe(true);
     await new Promise((r) => setTimeout(r, 50));
-    expect(await w.host.runCommand('hello', 'hello.events', null)).toEqual({ events: 1 });
+    expect(await w.host.runCommand('example.hello', 'hello.events', null)).toEqual({ events: 1 });
   });
 
   it('Aegis C2: a paused mod is visible (status, Workshop) and every path that relies on it fails closed', async () => {
     const w = await installedWorkshop();
-    await w.host.start('workshop');
+    await w.host.start('gnomon.workshop');
     await installHello(w);
-    await w.host.start('hello');
+    await w.host.start('example.hello');
     const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
     const pickup = new StagedCardPickup({ home: w.home, broker: w.broker, authority: w.auth, host: w.host, emit: (kind, payload) => void rows.push({ kind, payload }) });
     const out: string[] = [];
     const io = { stdout: { write: (x: string) => out.push(x) }, stderr: { write: (x: string) => out.push(x) } };
-    expect(await runModCommand(['pause', 'hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
+    expect(await runModCommand(['pause', 'example.hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
     // visible before the kernel even acts on it (the marker is read by status)
-    expect((w.host.status().paused as Array<{ name: string; why: string }>).map((p) => `${p.name}:${p.why}`)).toEqual(['hello:user']);
+    expect((w.host.status().paused as Array<{ name: string; why: string }>).map((p) => `${p.name}:${p.why}`)).toEqual(['example.hello:user']);
     // fail closed at once, before the pickup reaps the child: the first call is refused and stops it
-    await expect(w.host.runCommand('hello', 'hello.bump', null)).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.runCommand('example.hello', 'hello.bump', null)).rejects.toMatchObject({ modCode: 'PAUSED' });
     await pickup.scan();
-    expect(w.host.running()).toEqual(['workshop']);
+    expect(w.host.running()).toEqual(['gnomon.workshop']);
     const paused = [...rows, ...w.events].find((r) => r.kind === 'mod.paused')!;
-    expect(paused.payload).toMatchObject({ name: 'hello', reason: 'user' });
+    expect(paused.payload).toMatchObject({ name: 'example.hello', reason: 'user' });
     // the Workshop shows it (the row reaches it through the feed)
     expect(w.host.feed({ kind: 'mod.paused', payload: paused.payload })).toBe(1);
-    expect(JSON.stringify((await w.host.render('workshop', 'workshop.strip', null)).block)).toContain('⏸ mod hello paused (user)');
+    expect(JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null)).block)).toContain('⏸ mod example.hello paused (user)');
     // fail closed: relays, commands, tools, admission and a plain start all refuse or stay paused
     const H2 = { principal: HUMAN, connId: H.connId };
-    await expect(w.host.relayView({ name: 'hello', viewId: 'hello.panel', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
-    await expect(w.host.relayCommand({ name: 'hello', commandId: 'hello.bump', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
-    await expect(w.host.callTool('hello', 'hello.greet', {}, { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' })).rejects.toMatchObject({ modCode: 'PAUSED' });
-    await expect(w.host.admit('hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
-    expect(await w.host.start('hello')).toMatchObject({ state: 'paused', why: 'user' });
+    await expect(w.host.relayView({ name: 'example.hello', viewId: 'hello.panel', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.relayCommand({ name: 'example.hello', commandId: 'hello.bump', ...H2 })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.callTool('example.hello', 'hello.greet', {}, { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' })).rejects.toMatchObject({ modCode: 'PAUSED' });
+    await expect(w.host.admit('example.hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
+    expect(await w.host.start('example.hello')).toMatchObject({ state: 'paused', why: 'user' });
     expect(w.host.feed({ kind: 'turn.partial', payload: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } })).toBe(1); // only the workshop
     // the pause survives a kernel restart: a fresh host shows it from the marker
     const fresh = createModHostForTest({ home: w.home, trust: w.auth, children: w.children }, { launcher: unsandboxedModLauncher });
-    expect((fresh.status().paused as Array<{ name: string }>).map((p) => p.name)).toEqual(['hello']);
-    await expect(fresh.admit('hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
+    expect((fresh.status().paused as Array<{ name: string }>).map((p) => p.name)).toEqual(['example.hello']);
+    await expect(fresh.admit('example.hello')).rejects.toMatchObject({ modCode: 'PAUSED' });
     // start clears it
-    expect(await runModCommand(['start', 'hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
+    expect(await runModCommand(['start', 'example.hello', '--home', w.home], io, { trust: w.auth })).toBe(0);
     await pickup.scan();
-    expect(w.host.running()).toEqual(['hello', 'workshop']);
+    expect(w.host.running()).toEqual(['example.hello', 'gnomon.workshop']);
     expect(w.host.status().paused).toEqual([]);
   });
   it('turn.partial is coalesced to one edge per session; turn.result re-arms it', async () => {
     const w = await installedWorkshop();
-    await w.host.start('workshop');
+    await w.host.start('gnomon.workshop');
     const hsid = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
     expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(1);
     expect(w.host.feed({ kind: 'turn.partial', payload: { hsid } })).toBe(0);
@@ -247,14 +247,14 @@ describe('#workshop-mod', () => {
     const w = await installedWorkshop();
     await installHello(w, { feed: true });
     await new Promise((r) => setTimeout(r, 50));
-    await w.host.stop('workshop'); // only hello is fed
-    await w.host.start('hello');
-    await w.host.runCommand('hello', 'hello.deaf', null);
+    await w.host.stop('gnomon.workshop'); // only hello is fed
+    await w.host.start('example.hello');
+    await w.host.runCommand('example.hello', 'hello.deaf', null);
     await new Promise((r) => setTimeout(r, 100));
-    expect(w.host.restarts('hello')).toBe(0); // still the same (deaf) child
+    expect(w.host.restarts('example.hello')).toBe(0); // still the same (deaf) child
     let reached = 0;
     for (let i = 0; i < 20_000; i++) reached += w.host.feed({ kind: 'session.open', payload: { hsid: `hsid:v1:01HZZZZZZZZZZZZZZZZZZ${String(i).padStart(4, '0')}`, cwd: `/p/${i}` } });
-    const insp = w.host.inspect('hello') as { droppedNotifications: number };
+    const insp = w.host.inspect('example.hello') as { droppedNotifications: number };
     expect(insp.droppedNotifications).toBeGreaterThan(0);
     expect(reached + insp.droppedNotifications).toBe(20_000); // only hello is running and fed: each event reached it or was dropped
   });

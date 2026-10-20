@@ -1,6 +1,6 @@
-# constellation (first-party Gnomon mod)
+# gnomon.constellation (first-party Gnomon mod)
 
-Constellation puts the user's local idea map on the Desk. It has no view and no process of its own. It declares the Constellation MCP server (`gnomon-constellation`), two offers and a playbook skill.
+Constellation puts the user's local idea map on the Desk. It has no view and no process of its own. It declares the Constellation MCP server (the kernel names it `gm_gnomon_constellation`), two offers and a playbook skill. Its mod id is `gnomon.constellation` (manifest: 2, publisher `gnomon`, slice S0b); that is what the model writes in an offer block.
 
 - **map-the-idea** (diverge, `apply`): lay the ideas in play out as stars and beams on the active session's map.
 - **summarize-the-session** (synthesize, `summarize`): read the session outline, then save a short written summary.

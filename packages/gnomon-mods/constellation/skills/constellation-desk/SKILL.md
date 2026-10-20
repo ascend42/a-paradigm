@@ -25,7 +25,7 @@ Constellation is the user's local idea map: Spaces hold sessions, and each sessi
 When an offer fits, end that reply with at most one offer block (never more than one per reply across all mods). Name this mod and one of the kinds above, and ask one short question:
 
 ```offer
-{"mod": "constellation", "kind": "map-the-idea", "question": "Want me to map these options on the Constellation board?"}
+{"mod": "gnomon.constellation", "kind": "map-the-idea", "question": "Want me to map these options on the Constellation board?"}
 ```
 
 The kernel shows it on the Desk. Call the tool only after the human opens it.

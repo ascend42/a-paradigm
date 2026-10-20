@@ -1,8 +1,9 @@
 {
-  "manifest": 1,
+  "manifest": 2,
   "kind": "mod",
+  "publisher": "gnomon",
   "name": "ledger",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "abi": "mod-abi:v1",
   "description": "The Ledger: a context and budget meter (tokens in and out, cache share, cost, compactions, budget rungs and breakers), every number from the kernel's numbers-only feed.",
   "provides": {

@@ -9,10 +9,14 @@
  */
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { takesLine, traceText, type SlipView } from '../core/offers.js';
+import { firstPartyName, modLabel } from '../core/mod-label.js';
 
-/** First-party glyphs (ink only, never a hue); any other mod gets the generic ◇. */
+/** First-party glyphs (ink only, never a hue), keyed by the name of a gnomon.* mod id; any other mod gets the generic ◇. */
 const GLYPHS: Readonly<Record<string, string>> = Object.freeze({ constellation: '⁂', neurons: '◎', docs: '▤', atelier: '✎', paradigm: '≡', 'paradigm-context': '≡' });
-export const glyphOf = (mod: string): string => (Object.hasOwn(GLYPHS, mod) ? GLYPHS[mod]! : '◇');
+export const glyphOf = (mod: string): string => {
+  const n = firstPartyName(mod);
+  return n !== null && Object.hasOwn(GLYPHS, n) ? GLYPHS[n]! : '◇';
+};
 
 export interface SlipState {
   armed: boolean;
@@ -41,7 +45,7 @@ export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniE
     doc,
     'div',
     attrs,
-    tab(`offer · mod:${s.mod}`),
+    tab(`offer · mod:${modLabel(s.mod)}`),
     h(doc, 'div', { class: 'slip-q' }, s.question),
     st.armed && on ? h(doc, 'div', { class: 'slip-ctx' }, takesLine(s.contextIn)) : null,
     on && st.voiceHint ? h(doc, 'div', { class: 'slip-hint' }, 'click or ↵ to open') : null,

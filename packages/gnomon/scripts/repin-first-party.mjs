@@ -30,7 +30,7 @@ for (const mod of ['workshop', 'ledger', 'paradigm-context']) {
 // the Desk mods (#neurons-mod, #constellation-mod) have no view: their fixtures are model replies carrying one
 // ```offer block, and the golden is what that block resolves to against the mod's own manifest (offer-golden.mjs)
 const { offerGolden } = await import(pathToFileURL(path.join(here, 'offer-golden.mjs')).href);
-for (const mod of ['neurons-brain', 'constellation']) {
+for (const mod of ['neurons', 'constellation']) {
   const dir = path.join(mods, mod);
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'gnomon-manifest.json'), 'utf8'));
   for (const f of fs.readdirSync(path.join(dir, 'fixtures')).filter((n) => n.endsWith('.json') && !n.endsWith('.golden.json')).sort()) {

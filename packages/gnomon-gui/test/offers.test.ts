@@ -48,7 +48,7 @@ const id = (n: number): string => `offer:01JPREV${String(n).padStart(19, '0')}`;
 const line = (role: 'user' | 'assistant', text: string): string => JSON.stringify({ type: role, message: { role, content: [{ type: 'text', text }] } });
 const reply = (seq: number, text = 'Here is what I found. Want a map?'): Row => ({ seq, kind: 'turn.event', session: HSID, view: 'full', payload: { type: 'assistant', line: line('assistant', text) } });
 const human = (seq: number, text = 'thanks'): Row => ({ seq, kind: 'turn.event', session: HSID, view: 'full', payload: { type: 'user', line: line('user', text) } });
-const shown = (seq: number, n: number, mod = 'constellation', extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'offer.shown', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, mod, kind: 'map-the-idea', phase: 'synthesize', title: 'Map it', question: 'Map this on the board?', replyTurnId: `turn:${HSID}/1`, ...extra } });
+const shown = (seq: number, n: number, mod = 'gnomon.constellation', extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'offer.shown', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, mod, kind: 'map-the-idea', phase: 'synthesize', title: 'Map it', question: 'Map this on the board?', replyTurnId: `turn:${HSID}/1`, ...extra } });
 const decided = (seq: number, n: number, decision: string): Row => ({ seq, kind: 'offer.decided', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, decision } });
 const heard = (seq: number, text: string, extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'voice.turn.user', session: HSID, principal: VOICE, payload: { hsid: HSID, text, partial: false, mode: 'ptt', forwardable: true, ...extra } });
 
@@ -63,16 +63,16 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
     expect(v[0]!.slip.question).toBe('Map this on the board?');
   });
   it('never from reply text: an ```offer block in a reply makes no slip', () => {
-    const text = 'Done.\n\n```offer\n{"mod":"constellation","kind":"map-the-idea","question":"Map it?"}\n```';
+    const text = 'Done.\n\n```offer\n{"mod":"gnomon.constellation","kind":"map-the-idea","question":"Map it?"}\n```';
     expect(views([reply(1, text)])).toEqual([]);
   });
   it('refuses rows not from the kernel, for another hsid, with a bad id, a bad turn id or unsafe question text', () => {
     expect(views([reply(1), { ...shown(2, 1), principal: 'p:7k2m9q4x/claude' }])).toEqual([]);
-    expect(views([reply(1), shown(2, 1, 'constellation', { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])).toEqual([]);
-    expect(views([reply(1), shown(2, 1, 'constellation', { offerId: 'offer:nope' })])).toEqual([]);
-    expect(views([reply(1), shown(2, 1, 'constellation', { replyTurnId: 'turn:hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ/1' })])).toEqual([]);
-    expect(views([reply(1), shown(2, 1, 'constellation', { question: 'Open?‮evil' })])).toEqual([]);
-    expect(views([reply(1), shown(2, 1, 'constellation', { question: 'x'.repeat(241) })])).toEqual([]);
+    expect(views([reply(1), shown(2, 1, 'gnomon.constellation', { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])).toEqual([]);
+    expect(views([reply(1), shown(2, 1, 'gnomon.constellation', { offerId: 'offer:nope' })])).toEqual([]);
+    expect(views([reply(1), shown(2, 1, 'gnomon.constellation', { replyTurnId: 'turn:hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ/1' })])).toEqual([]);
+    expect(views([reply(1), shown(2, 1, 'gnomon.constellation', { question: 'Open?‮evil' })])).toEqual([]);
+    expect(views([reply(1), shown(2, 1, 'gnomon.constellation', { question: 'x'.repeat(241) })])).toEqual([]);
     expect(views([reply(1), shown(2, 1, 'Bad Mod')])).toEqual([]);
   });
   it('inert once the human sends anything after the reply, or a newer reply lands', () => {
@@ -80,23 +80,23 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
     expect(views([reply(1), shown(2, 1), reply(3, 'Something else.')])[0]!.live).toBe(false);
   });
   it('only the newest open slip is live', () => {
-    const v = views([reply(1), shown(2, 1), reply(3), shown(4, 2, 'docs')]);
+    const v = views([reply(1), shown(2, 1), reply(3), shown(4, 2, 'gnomon.docs')]);
     expect(v.map((x) => x.live)).toEqual([false, true]);
   });
   it('folding offer.decided closes the slip; not-now quiets that mod for the rest of the conversation (L4)', () => {
-    const rows = [reply(1), shown(2, 1, 'neurons'), decided(3, 1, 'not-now'), reply(4), shown(5, 2, 'neurons'), reply(6), shown(7, 3, 'docs')];
+    const rows = [reply(1), shown(2, 1, 'gnomon.neurons'), decided(3, 1, 'not-now'), reply(4), shown(5, 2, 'gnomon.neurons'), reply(6), shown(7, 3, 'gnomon.docs')];
     const book = foldOffers(rows as OfferRow[], HSID);
     expect(book.slips[0]!.decided).toBe('not-now');
-    expect(book.muted.has('neurons')).toBe(true);
+    expect(book.muted.has('gnomon.neurons')).toBe(true);
     expect(book.slips[1]!.quiet).toBe(true);
     expect(book.slips[2]!.quiet).toBe(false);
     const v = slipViews(book, chatItems(rows).items);
-    expect(v.map((x) => x.slip.mod)).toEqual(['neurons', 'docs']);
+    expect(v.map((x) => x.slip.mod)).toEqual(['gnomon.neurons', 'gnomon.docs']);
     expect(v[0]!.live).toBe(false);
     expect(v[1]!.live).toBe(true);
   });
   it('stop-here quiets every later slip; a decided row from a non-kernel principal is ignored', () => {
-    const book = foldOffers([reply(1), shown(2, 1), decided(3, 1, 'stop-here'), shown(4, 2, 'docs')] as OfferRow[], HSID);
+    const book = foldOffers([reply(1), shown(2, 1), decided(3, 1, 'stop-here'), shown(4, 2, 'gnomon.docs')] as OfferRow[], HSID);
     expect(book.stopped).toBe(true);
     expect(book.slips[1]!.quiet).toBe(true);
     const forged = foldOffers([reply(1), shown(2, 1), { ...decided(3, 1, 'open'), principal: 'p:7k2m9q4x/claude' }] as OfferRow[], HSID);
@@ -113,7 +113,7 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
 });
 
 describe('#gui-offer-slip the reply hides its ```offer block only under a kernel offer.shown row', () => {
-  const block = '```offer\n{"mod":"constellation","kind":"map-the-idea","question":"Map this on the board?"}\n```';
+  const block = '```offer\n{"mod":"gnomon.constellation","kind":"map-the-idea","question":"Map this on the board?"}\n```';
   const text = `Here is what I found.\n\n${block}`;
   const replyText = (rows: Row[]) => chatItems(rows).items.find((i) => i.role === 'assistant')!.text;
   it('a kernel offer.shown for the reply strips the block (contracts offerBlockOf body)', () => {
@@ -124,8 +124,8 @@ describe('#gui-offer-slip the reply hides its ```offer block only under a kernel
   });
   it('a non-kernel, other-hsid or mismatched offer.shown never strips', () => {
     expect(replyText([reply(1, text), { ...shown(2, 1), principal: 'p:7k2m9q4x/claude' }])).toBe(text);
-    expect(replyText([reply(1, text), shown(2, 1, 'constellation', { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])).toBe(text);
-    expect(replyText([reply(1, text), shown(2, 1, 'neurons')])).toBe(text);
+    expect(replyText([reply(1, text), shown(2, 1, 'gnomon.constellation', { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])).toBe(text);
+    expect(replyText([reply(1, text), shown(2, 1, 'gnomon.neurons')])).toBe(text);
   });
   it('only the reply the slip anchors to: an earlier reply keeps its block', () => {
     const items = chatItems([reply(1, text), reply(2, 'Later.'), shown(3, 1)]).items.filter((i) => i.role === 'assistant');
@@ -163,7 +163,7 @@ describe('#gui-offer-slip two-step open (A5) and the requests', () => {
     expect(takesLine(['recent-messages', 'made-up'])).toBe('takes: recent messages · unknown · ↵ to open');
     expect(takesLine(Array.from({ length: 10 }, () => 'recent-messages'))).toMatch(/ · \+2 more · ↵ to open$/);
     expect(takesLine(null)).toBe('takes: unknown (not reported by the kernel) · ↵ to open');
-    const book = foldOffers([reply(1), shown(2, 1, 'constellation', { contextIn: ['open-files', 'BAD TOKEN'] }), shown(3, 2, 'docs')] as OfferRow[], HSID);
+    const book = foldOffers([reply(1), shown(2, 1, 'gnomon.constellation', { contextIn: ['open-files', 'BAD TOKEN'] }), shown(3, 2, 'gnomon.docs')] as OfferRow[], HSID);
     expect(book.slips[0]!.contextIn).toEqual(['open-files', '?']);
     expect(book.slips[1]!.contextIn).toBeNull();
     expect(APP).not.toMatch(/offerSpecsOf|mods\.offers/);
@@ -198,14 +198,14 @@ describe('#gui-offer-slip two-step open (A5) and the requests', () => {
     expect(afterReply.slips[0]!.voiceDismiss).toBeNull();
     const afterDecided = foldOffers([reply(1), shown(2, 1), decided(3, 1, 'open'), heard(4, 'not now')] as OfferRow[], HSID);
     expect(afterDecided.slips[0]!.voiceDismiss).toBeNull();
-    const older = foldOffers([reply(1), shown(2, 1), reply(3), shown(4, 2, 'docs'), heard(5, 'not now')] as OfferRow[], HSID);
+    const older = foldOffers([reply(1), shown(2, 1), reply(3), shown(4, 2, 'gnomon.docs'), heard(5, 'not now')] as OfferRow[], HSID);
     expect(older.slips.map((x) => x.voiceDismiss)).toEqual([null, 5]);
     expect(APP).toMatch(/if \(r\.kind !== 'voice\.turn\.user' \|\| !\(r\.seq > offerLiveSince\)\) return;/);
   });
 });
 
 describe('#gui-offer-slip DOM: a dashed slip, never a key', () => {
-  const v = views([reply(1), shown(2, 1, 'constellation', { question: 'Map <b>this</b>?' })])[0]!;
+  const v = views([reply(1), shown(2, 1, 'gnomon.constellation', { question: 'Map <b>this</b>?' })])[0]!;
   it('tab is glyph + offer · mod:<name>; the question is a text node; no .key, no data-decision', () => {
     const el = renderOfferSlip(fdoc, v, { armed: false, voiceHint: false, ambientHint: false, arrive: false }) as FEl;
     const all = el.all();

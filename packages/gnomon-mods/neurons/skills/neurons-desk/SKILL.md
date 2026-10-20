@@ -34,7 +34,7 @@ Before calling `source_note` or `neuron_write`, show the human the exact text yo
 When an offer fits, end that reply with at most one offer block (never more than one per reply across all mods). Name this mod and one of the kinds above, and ask one short question:
 
 ```offer
-{"mod": "neurons-brain", "kind": "search-the-brain", "question": "Want me to check the brain for what you already know about this first?"}
+{"mod": "gnomon.neurons", "kind": "search-the-brain", "question": "Want me to check the brain for what you already know about this first?"}
 ```
 
 The kernel shows it on the Desk. Call the tool only after the human opens it.

@@ -7,21 +7,23 @@ import * as fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CONTEXT_SOURCES, OFFER_PHASES, OFFERS_PER_MOD_MAX, validateOfferSpecV1, type OfferSpecV1 } from '@a-company/gnomon-contracts';
+import { CONTEXT_SOURCES, mcpServerName, OFFER_PHASES, OFFERS_PER_MOD_MAX, validateOfferSpecV1, type OfferSpecV1 } from '@a-company/gnomon-contracts';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
 import { ManifestRefusal } from '../src/kernel/manifest/refusal.js';
-import { FIRST_PARTY_MOD_NAMES, RESERVED_MOD_NAMES, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestV1 } from '../src/kernel/manifest/manifest.js';
+import { FIRST_PARTY_MOD_NAMES, RESERVED_MOD_NAMES, resolveMcpLaunch, validateManifest, validateMcpUserConfig, type ManifestV2 } from '../src/kernel/manifest/manifest.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { runModCommand } from '../src/cli/mod-cli.js';
 import { privateTmpRoot } from './daemon-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 
 export interface DeskModSpec {
+  /** the mod id (S0b: gnomon.<name>) */
   name: string;
-  /** the package folder under packages/gnomon-mods and the MCP server name */
+  /** the package folder under packages/gnomon-mods */
   dir: string;
+  /** the kernel-derived MCP server name (mcpServerName(id)) */
   server: string;
   /** symbol id, for test titles */
   symbol: string;
@@ -42,7 +44,7 @@ type Golden = { offer: { mod: string; kind: string; question: string } | null; b
 
 export function deskModSuite(spec: DeskModSpec): void {
   const DIR = path.resolve(PKG_ROOT, '..', 'gnomon-mods', spec.dir);
-  const raw = JSON.parse(fs.readFileSync(path.join(DIR, 'gnomon-manifest.json'), 'utf8')) as ManifestV1;
+  const raw = JSON.parse(fs.readFileSync(path.join(DIR, 'gnomon-manifest.json'), 'utf8')) as ManifestV2;
   const offers = (raw.provides?.offers ?? []) as OfferSpecV1[];
   const cleanups: Array<() => unknown> = [];
   afterEach(async () => {
@@ -51,10 +53,12 @@ export function deskModSuite(spec: DeskModSpec): void {
 
   describe(`${spec.symbol} manifest`, () => {
     it('validates at the first-party tier only: a first-party mod name, never reserved, with the reserved floor intact', () => {
-      expect(validateManifest(raw, { tier: 'first-party' }).name).toBe(spec.name);
+      const v = validateManifest(raw, { tier: 'first-party' });
+      expect(`${v.publisher}.${v.name}`).toBe(spec.name);
+      expect(raw.manifest).toBe(2);
       expect(raw.kind).toBe('mod');
-      expect(FIRST_PARTY_MOD_NAMES.has(spec.name)).toBe(true);
-      expect(RESERVED_MOD_NAMES.has(spec.name)).toBe(false);
+      expect(FIRST_PARTY_MOD_NAMES.has(raw.name)).toBe(true);
+      expect(RESERVED_MOD_NAMES.has(raw.name)).toBe(false);
       for (const n of ['kernel', 'gnomon', 'system']) expect(RESERVED_MOD_NAMES.has(n)).toBe(true);
       // Aegis L5: a first-party name belongs to the first-party tier, so a local install of the same manifest is refused
       expect(() => validateManifest(raw, { tier: 'local' })).toThrow(ManifestRefusal);
@@ -71,7 +75,8 @@ export function deskModSuite(spec: DeskModSpec): void {
       const mcp = raw.provides!.mcp!;
       expect(mcp.length).toBe(1);
       const s = mcp[0]!;
-      expect(s.name).toBe(spec.server);
+      expect('name' in s, 'a manifest:2 server entry carries no name').toBe(false);
+      expect(mcpServerName(spec.name)).toBe(spec.server);
       expect(s.config).toEqual({ command: true, args: true, env: [...spec.env] });
       for (const part of [s.command, ...(s.args ?? [])]) {
         expect(part, 'a committed manifest names no absolute path').not.toMatch(/^([/\\~]|[A-Za-z]:)/);
@@ -154,6 +159,7 @@ export function deskModSuite(spec: DeskModSpec): void {
   describe(`${spec.symbol} first-party pin`, () => {
     it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
       const h = hashSourceTree(DIR, spec.name, () => undefined).packageHash;
+      if (process.env.GNOMON_PRINT_PINS) process.stdout.write(`PIN ${spec.dir} ${h}\n`);
       expect([...FIRST_PARTY_PACKAGE_HASHES], `the ${spec.name} tree now hashes to ${h}: pin it in FIRST_PARTY_PACKAGE_HASHES (src/kernel/manifest/install.ts)`).toContain(h);
     });
 
@@ -166,7 +172,9 @@ export function deskModSuite(spec: DeskModSpec): void {
       const io = { stdout: { write: (s: string) => out.push(s) }, stderr: { write: (s: string) => out.push(s) } };
       expect(await runModCommand(['install', DIR, '--home', home], io, { trust: new DevTestRootAuthority(DEV_TEST_ROOT_ACK) })).toBe(0);
       const text = out.join('');
-      expect(text).toContain(`│ Install mod ${spec.name} 1.0.0 (mod) from package, tier first-party`);
+      expect(text).toContain(`│ Install mod ${spec.name} 1.1.0 (mod) by gnomon from package, tier first-party`);
+      expect(text).toContain(`version: first install of ${spec.name} 1.1.0`);
+      expect(text).toContain(`mcp server name: ${spec.server}`);
       for (const o of offers) expect(text).toContain(o.kind);
     });
   });

@@ -6,9 +6,9 @@
 import { deskModSuite } from './desk-mod-helpers.js';
 
 deskModSuite({
-  name: 'constellation',
+  name: 'gnomon.constellation',
   dir: 'constellation',
-  server: 'gnomon-constellation',
+  server: 'gm_gnomon_constellation',
   symbol: '#constellation-mod',
   // registered by a-constellation mcp/server.ts
   serverTools: ['start', 'status', 'get', 'wait', 'apply', 'done', 'reply', 'say', 'summary', 'summarize', 'list_spaces', 'list_sessions', 'open', 'automation_list', 'automation_save', 'automation_run', 'automation_enable', 'run_get', 'follow', 'tasks', 'search'],

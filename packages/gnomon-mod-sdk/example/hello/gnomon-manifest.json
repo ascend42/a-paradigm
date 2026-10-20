@@ -1,6 +1,7 @@
 {
-  "manifest": 1,
+  "manifest": 2,
   "kind": "mod",
+  "publisher": "example",
   "name": "hello",
   "version": "1.0.0",
   "abi": "mod-abi:v1",
@@ -11,8 +12,8 @@
       { "name": "hello.count", "effects": ["read", "write"] }
     ],
     "views": [{ "id": "hello.panel", "slot": "panel", "placement": "append", "fixtures": ["fixtures/panel.json"] }],
-    "events": ["modns.hello.greeted"],
+    "events": ["modns.example.hello.greeted"],
     "commands": [{ "id": "hello.bump", "title": "Bump the hello counter" }]
   },
-  "requires": { "capabilities": ["log.append:modns.hello.*"], "egress": "none" }
+  "requires": { "capabilities": ["log.append:modns.example.hello.*"], "egress": "none" }
 }

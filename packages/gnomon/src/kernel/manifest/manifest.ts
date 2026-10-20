@@ -362,7 +362,9 @@ function checkIdentity(publisher: string, name: string, opts: ValidateManifestOp
   const dev = (s: string) => WINDOWS_DEVICE_NAMES.includes(s);
   if (dev(publisher)) fail('PUBLISHER', `publisher "${publisher}" is a Windows device name`, { publisher });
   if (dev(name)) fail('NAME', `name "${name}" is a Windows device name`, { name });
-  if (KERNEL_NAMESPACE_TOKENS.has(name)) fail('NAME', `name "${name}" collides with a kernel namespace token`, { name });
+  // a first-party mod name under publisher gnomon is exempt (gnomon.neurons: its namespace is modns.gnomon.neurons.*,
+  // never the kernel's neurons.*); every other name is checked against the kernel namespace tokens
+  if (KERNEL_NAMESPACE_TOKENS.has(name) && !(publisher === 'gnomon' && FIRST_PARTY_MOD_NAMES.has(name))) fail('NAME', `name "${name}" collides with a kernel namespace token`, { name });
   if (RESERVED_MOD_NAMES.has(name)) fail('NAME', `name "${name}" is reserved`, { name });
   // publisher ⇔ tier (both directions refused)
   if (publisher === 'gnomon' && opts.tier !== 'first-party') fail('PUBLISHER', 'publisher gnomon is first-party only', { publisher, tier: opts.tier });

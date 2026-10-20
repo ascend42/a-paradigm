@@ -64,13 +64,13 @@ const status = {
     running: [],
     paused: [],
     views: [
-      { name: 'ledger', viewId: 'ledger.sheet', slot: 'sidebar', placement: 'append', dev: false },
-      { name: 'ledger', viewId: 'ledger.strip', slot: 'composer.footer', placement: 'append', dev: false },
-      { name: 'hello', viewId: 'hello.panel', slot: 'panel', placement: 'append', dev: true },
-      { name: 'hello', viewId: 'hello.status', slot: 'status.mod', placement: 'append', dev: true },
-      { name: 'evil', viewId: 'evil.card', slot: 'card.detail:permission', placement: 'replace', dev: false },
+      { name: 'gnomon.ledger', viewId: 'ledger.sheet', slot: 'sidebar', placement: 'append', dev: false },
+      { name: 'gnomon.ledger', viewId: 'ledger.strip', slot: 'composer.footer', placement: 'append', dev: false },
+      { name: 'acme.hello', viewId: 'hello.panel', slot: 'panel', placement: 'append', dev: true },
+      { name: 'acme.hello', viewId: 'hello.status', slot: 'status.mod', placement: 'append', dev: true },
+      { name: 'acme.evil', viewId: 'evil.card', slot: 'card.detail:permission', placement: 'replace', dev: false },
       { name: 'Bad Name', viewId: 'x.y', slot: 'panel', dev: false },
-      { name: 'inbox', viewId: 'inbox.card', slot: 'inbox.card', dev: false },
+      { name: 'acme.inbox', viewId: 'inbox.card', slot: 'inbox.card', dev: false },
       'junk',
     ],
   },
@@ -80,7 +80,7 @@ describe('#gui mod panels: slots', () => {
   it('maps composer.footer → desk footer, sidebar → left pane bottom, panel → right pane; every other slot and every kernel-owned region has none', () => {
     expect(SLOT_REGIONS).toEqual({ 'composer.footer': 'desk-footer', sidebar: 'left-bottom', panel: 'right' });
     const v = modPanelsOf(status);
-    expect(v.map((x) => `${x.name}:${x.viewId}@${x.region}`)).toEqual(['ledger:ledger.sheet@left-bottom', 'ledger:ledger.strip@desk-footer', 'hello:hello.panel@right']);
+    expect(v.map((x) => `${x.name}:${x.viewId}@${x.region}`)).toEqual(['gnomon.ledger:ledger.sheet@left-bottom', 'gnomon.ledger:ledger.strip@desk-footer', 'acme.hello:hello.panel@right']);
     expect(panelsIn(v, 'desk-footer').map((x) => x.viewId)).toEqual(['ledger.strip']);
     for (const kernelOwned of ['inbox.card', 'card.detail:permission', 'status.mod', 'voice.pill', '__proto__', 'constructor']) expect(modPanelsOf({ mods: { views: [{ name: 'm', viewId: 'm.v', slot: kernelOwned }] } })).toEqual([]);
     expect(modPanelsOf(null)).toEqual([]);
@@ -90,8 +90,8 @@ describe('#gui mod panels: slots', () => {
   it('the mod.view params carry only the focused hsid as {focus:{hsid}} (K3)', () => {
     const [sheet] = modPanelsOf(status);
     // K3: {focus:{hsid}} only; the HOST joins it to the live session's repo, the GUI never names a repo or path
-    expect(modViewParams(sheet!, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA')).toEqual({ name: 'ledger', viewId: 'ledger.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } } });
-    expect(modViewParams(sheet!, null)).toEqual({ name: 'ledger', viewId: 'ledger.sheet', input: {} });
+    expect(modViewParams(sheet!, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA')).toEqual({ name: 'gnomon.ledger', viewId: 'ledger.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA' } } });
+    expect(modViewParams(sheet!, null)).toEqual({ name: 'gnomon.ledger', viewId: 'ledger.sheet', input: {} });
   });
 
   it('the GUI feed kinds equal the kernel FEED_KINDS (packages/gnomon/src/kernel/modhost/feed.ts)', () => {
@@ -106,10 +106,10 @@ describe('#gui mod panels: the fence', () => {
     const [, strip, panel] = modPanelsOf(status);
     const block = { schemaVersion: 'display-block:v1', type: 'Box', direction: 'row', children: [{ type: 'Text', text: '●', tone: 'hue-2' }, { type: 'Text', text: '182k in · 9k out', tone: 'warn' }, { type: 'Progress', value: 75, max: 100, label: 'tokens 75 of 100%' }] };
     const el = renderModFence({ doc: fdoc }, strip!, { block, dev: false }) as FEl;
-    expect(fenceLabel('ledger')).toBe('mod:ledger');
+    expect(fenceLabel('gnomon.ledger')).toBe('mod:ledger');
     expect(el.tag).toBe('section');
     expect(el.className).toContain('mod-fence');
-    expect(el.attrs.get('data-mod')).toBe('ledger');
+    expect(el.attrs.get('data-mod')).toBe('gnomon.ledger');
     expect(el.all().find((e) => e.className === 'mod-label')!.text).toBe('mod:ledger');
     expect(el.all().some((e) => e.className.includes('mod-dev'))).toBe(false);
     expect(el.text).toContain('182k in · 9k out');

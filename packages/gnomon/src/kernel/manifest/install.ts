@@ -76,11 +76,13 @@ const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
  * test/ledger-mod.test.ts hold the pins.
  */
 export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
-  'sha256:3c09d9cb5d22c3e75773baf547456bc4b2a2b0bebdaff9d67baaad159ff06e1d', // packages/gnomon-mods/workshop 1.0.0 (S5: structured caps, 6 hues)
-  'sha256:e840fb3902df137f280313d768e1cb1087a80eccfa78e0289ebacf52c1c43e83', // packages/gnomon-mods/ledger 1.0.0 (#ledger-mod)
-  'sha256:be0cce015b2db126206973adddd899060b6a3e6ff28fd7e53d5d0842530cfd71', // packages/gnomon-mods/paradigm-context 1.0.0 (#paradigm-context-mod)
-  'sha256:7759e22cda86b37318d741c8371cb139ee25110739a1a45e0f154816a940e1f5', // packages/gnomon-mods/neurons-brain 1.0.0 (#neurons-mod, the Desk S2)
-  'sha256:1a9cccc2685527105d71e3e2e3003b9880f53c42a60d9f259dd0e1d56b9de1fb', // packages/gnomon-mods/constellation 1.0.0 (#constellation-mod, the Desk S2)
+  // S0b: manifest:2, publisher gnomon, 1.1.0
+  'sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', // packages/gnomon-mods/workshop 1.1.0 (gnomon.workshop)
+  'sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', // packages/gnomon-mods/ledger 1.1.0 (gnomon.ledger)
+  'sha256:8a1e491e72e1743e5342863bcd74a0ca59efc45bc9422f47aefe32f744c1fcc0', // packages/gnomon-mods/paradigm-context 1.1.0 (gnomon.paradigm-context)
+  'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
+  'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
+  // the format-1 1.0.0 pins of workshop, ledger and paradigm-context (grants.ts; existing installs keep loading)
   ...HISTORICAL_FIRST_PARTY_PINS,
 ]);
 /** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
