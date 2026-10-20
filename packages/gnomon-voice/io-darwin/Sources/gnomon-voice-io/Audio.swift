@@ -93,9 +93,10 @@ final class AudioCore {
         guard inFmt.sampleRate > 0, inFmt.channelCount > 0 else { throw AudioError.noInput }
         guard let monoIn = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: inFmt.sampleRate, channels: 1, interleaved: false),
               let conv = AVAudioConverter(from: monoIn, to: captureFormat) else { throw AudioError.converter }
+        // The player is attached only AFTER the engine starts: with voice processing on, macOS
+        // (tested on MacBook Pro mic + speakers, 2026-10-19) fails `start()` with -10875 whenever any
+        // player node is already connected to the main mixer, whatever its format.
         let p = AVAudioPlayerNode()
-        e.attach(p)
-        e.connect(p, to: e.mainMixerNode, format: playFormat)
 
         tapLock.lock()
         tapGen += 1
@@ -134,6 +135,14 @@ final class AudioCore {
         do { try e.start() } catch {
             input.removeTap(onBus: 0)
             throw AudioError.start(error.localizedDescription)
+        }
+        e.attach(p)
+        e.connect(p, to: e.mainMixerNode, format: playFormat)
+        if !e.isRunning {
+            do { try e.start() } catch {
+                input.removeTap(onBus: 0)
+                throw AudioError.start(error.localizedDescription)
+            }
         }
         install(engine: e, player: p, duplex: true)
         micOn = true
@@ -223,7 +232,10 @@ final class AudioCore {
     }
 
     private func configurationChanged() {
-        // the engine stopped itself (device or route change): rebuild in the same mode
+        // the engine stopped itself (device or route change): rebuild in the same mode. Our own
+        // post-start player attach also posts this notice with the engine still running; rebuilding
+        // then would loop (startMic attaches again) and drop every capture frame.
+        if let e = engine, e.isRunning { return }
         let wasMic = micOn
         teardown(reason: "route-change")
         if wasMic {
