@@ -748,10 +748,21 @@ function watchSpeech(): void {
   speakWatchUntil = Date.now() + SPEAK_WATCH_MS;
   syncSpeakPoll();
 }
+/** One status read in flight at a time: a slow read is never stacked by the poll (Aegis L3). */
+let speakReading = false;
+async function pollStatusOnce(): Promise<void> {
+  if (speakReading) return;
+  speakReading = true;
+  try {
+    await refreshStatus();
+  } finally {
+    speakReading = false;
+  }
+}
 /** The 300 ms status re-read runs only while the voice app is speaking (or within the watch window). */
 function syncSpeakPoll(): void {
   const want = !!client && speakPollWanted(status, speakWatchUntil, Date.now());
-  if (want && !speakPoll) speakPoll = setInterval(() => void refreshStatus(), SPEAK_POLL_MS);
+  if (want && !speakPoll) speakPoll = setInterval(() => void pollStatusOnce(), SPEAK_POLL_MS);
   else if (!want && speakPoll) {
     clearInterval(speakPoll);
     speakPoll = null;

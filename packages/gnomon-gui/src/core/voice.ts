@@ -259,7 +259,9 @@ export function stopSpeakingShown(status: unknown): boolean {
 
 /** The 300 ms re-read runs while speech plays, or within the watch window after a voice row (to see it start). */
 export function speakPollWanted(status: unknown, watchUntil: number | null, now: number): boolean {
-  return playbackPlaying(status) || (watchUntil !== null && now < watchUntil);
+  // a crashed client's stale playing:true lingers for the report TTL: poll only while the client is connected (Aegis L1)
+  const connected = (status as { voice?: { clientConnected?: unknown } } | null)?.voice?.clientConnected === true;
+  return (connected && playbackPlaying(status)) || (watchUntil !== null && now < watchUntil);
 }
 
 /** Esc stops speaking only when ⏹ is shown and Esc has nothing nearer to do: no open menu or dialog, not typing in the composer. */

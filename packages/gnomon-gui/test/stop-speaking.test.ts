@@ -65,7 +65,7 @@ describe('Stop speaking: the page wiring', () => {
     expect(APP.slice(esc, esc + 600)).toMatch(/composer/);
   });
   it('the poll is an interval of SPEAK_POLL_MS, synced on every status read and started by a voice row', () => {
-    expect(APP).toMatch(/function syncSpeakPoll\(\)[\s\S]{0,200}setInterval\(\(\) => void refreshStatus\(\), SPEAK_POLL_MS\)[\s\S]{0,120}clearInterval\(speakPoll\)/);
+    expect(APP).toMatch(/function syncSpeakPoll\(\)[\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), SPEAK_POLL_MS\)[\s\S]{0,120}clearInterval\(speakPoll\)/);
     expect(APP).toMatch(/if \(w\.has\('voice-activity'\)\) \{\s*kickMeter\(\);\s*watchSpeech\(\);/);
   });
 });
