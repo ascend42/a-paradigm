@@ -1085,3 +1085,24 @@ describe('Aegis S0b M2: the TOFU binding race', () => {
     expect(readGrants(home, auth).publishers.get('acme')).toMatchObject({ host: 'codeberg.org' });
   });
 });
+
+describe('Aegis S0b L2: the upgradedHash re-card keeps the original source', () => {
+  it('a pin whose upgradedHash no longer matches pauses and re-cards under its linked source, not as a package', () => {
+    const home = tmp();
+    const auth = root();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'acme.diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'acme.diff-lens', st.cardId), authority: auth });
+    const { manifestHash: mh, packageHash: ph, source } = st.record.detail;
+    // a pin row that claims an upgrader output these bytes do not produce
+    appendGrantRow(home, auth, { kind: 'grant.install', name: 'acme.diff-lens', manifestHash: mh, packageHash: ph, cardId: st.cardId, source, upgradedHash: `sha256:${'0'.repeat(64)}` });
+    const paused = loadMod({ home, name: 'acme.diff-lens', trust: auth });
+    if (paused.state !== 'paused') throw new Error('paused');
+    expect(paused.cardId).not.toBeNull();
+    const rec = readStaged(home, 'acme.diff-lens', paused.cardId!)!;
+    expect(rec.detail.source).toBe(source);
+    expect(rec.detail.source.startsWith('linked:')).toBe(true);
+    expect(rec.detail.tier).toBe('local');
+  });
+});

@@ -181,6 +181,11 @@ export interface StageOptions {
   rebindPublisher?: boolean;
   /** MCP server names in the user's .mcp.json (COLLISION) */
   userMcpServers?: readonly string[];
+  /**
+   * kernel-internal (loadMod's upgradedHash re-card, Aegis S0b L2): the alias publisher of the pinned format-1 row,
+   * and a re-card even when the bytes, manifestHash and source equal the current pin. Never set from a client.
+   */
+  recard?: { legacyPublisher?: 'gnomon' | 'local' };
   /** a signature over the manifestHash claiming the `signed:<gkey>` tier (refused until trusted keys exist) */
   signature?: { keyId: string; sig: string };
   /** the principal that staged it (an agent session principal for agent-written mods) */
@@ -534,8 +539,8 @@ export function stageInstall(opts: StageOptions): StageResult {
   const now = opts.now ?? new Date();
   // format 1 is staged only for a historical first-party pin (its id is then gnomon.<name>); the hash decides
   const raw0 = rawManifestOf(opts.source);
-  let legacyPublisher: 'gnomon' | undefined;
-  if (raw0?.manifest === 1 && typeof raw0.name === 'string') {
+  let legacyPublisher: 'gnomon' | 'local' | undefined = opts.recard?.legacyPublisher;
+  if (!legacyPublisher && raw0?.manifest === 1 && typeof raw0.name === 'string') {
     let h = '';
     try {
       h = hashSourceTree(opts.source, `local.${raw0.name}`, noEvents).packageHash;
@@ -595,7 +600,7 @@ export function stageInstall(opts: StageOptions): StageResult {
   const name = name0;
   const mh = read.manifestHash;
   const current = effectiveInstall(grants, name);
-  if (current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
+  if (!opts.recard && current && current.packageHash === snap.packageHash && current.manifestHash === mh && current.source === source) return { state: 'unchanged', packageHash: snap.packageHash };
   const pending = pendingFor(opts.home, name, snap.packageHash, mh, source);
   if (pending) return { state: 'staged', cardId: pending.card.cardId, record: pending };
   const prevRead = current ? pinnedRead(opts.home, current, grants.trust.get(current.manifestHash)) : null;
@@ -886,7 +891,20 @@ export function loadMod(opts: LoadOptions): LoadResult {
     emit('mod.paused', { name: row.name, reason: 'changed', files: [] });
     let cardId: string | null = null;
     try {
-      const st = stageInstall({ home: opts.home, source: dir, via: 'package', requestedBy: opts.kernelPrincipal ?? 'p:00000000/kernel', trust: opts.trust, emit, ...(opts.userMcpServers ? { userMcpServers: opts.userMcpServers } : {}) });
+      // Aegis S0b L2: re-card under the row's ORIGINAL source and alias publisher (never as a fresh 'package')
+      const g = parseGitSource(row.source);
+      const via: StageOptions['via'] = row.source.startsWith('linked:') ? 'linked' : g ? 'git' : 'package';
+      const st = stageInstall({
+        home: opts.home,
+        source: via === 'linked' ? row.source.slice(7) : dir,
+        via,
+        ...(g ? { git: { url: g.url, commit: g.commit } } : {}),
+        recard: row.legacyName ? { legacyPublisher: pub === 'gnomon' ? 'gnomon' : 'local' } : {},
+        requestedBy: opts.kernelPrincipal ?? 'p:00000000/kernel',
+        trust: opts.trust,
+        emit,
+        ...(opts.userMcpServers ? { userMcpServers: opts.userMcpServers } : {}),
+      });
       if (st.state === 'staged') cardId = st.cardId;
     } catch (err) {
       if (!(err instanceof ManifestRefusal)) throw err;
