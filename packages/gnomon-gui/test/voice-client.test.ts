@@ -361,8 +361,30 @@ describe('spoken replies: the kernel row carries 🔊, the voice app playback is
     const { items } = chatItems([row(1, 'voice.turn.agent', { source: 'kernel-speakable', items: [{ text: 'Done.' }] }), row(2, 'voice.turn.agent', { textSpoken: 'Done.', textPlanned: 'Done.' })]);
     expect(items.filter((i) => i.role === 'spoken').map((i) => i.text)).toEqual(['🔊 spoken aloud']);
   });
+  it('founder bug: a reply spoken sentence by sentence (pipelined TTS) shows ONE marker, with its seconds', () => {
+    const play = (seq: number, t0: number, ms: number, text: string, cut = false) => row(seq, 'voice.turn.agent', { turnId: `a${seq}`, t0, t1: t0 + ms, textPlanned: text, textSpoken: cut ? '' : text, ...(cut ? { interrupted: true } : {}) });
+    const reply = (seq: number, text: string) => row(seq, 'turn.event', { type: 'assistant', line: JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } }) });
+    const kern = (seq: number) => row(seq, 'voice.turn.agent', { source: 'kernel-speakable', items: [{ text: 'One. Two. Three.' }] });
+    const spoken = (rows: Row[]) => chatItems(rows).items.filter((i) => i.role === 'spoken').map((i) => i.text);
+    expect(spoken([reply(1, 'One. Two. Three.'), kern(2), play(3, 0, 1500, 'One.'), play(4, 1500, 1500, 'Two.'), play(5, 3000, 1600, 'Three.')])).toEqual(['🔊 spoken aloud · 5s']);
+    // an older kernel (no speakable row): the first playback row opens the marker, the rest fold into it
+    expect(spoken([reply(1, 'One. Two.'), play(2, 0, 1200, 'One.'), play(3, 1200, 1200, 'Two.')])).toEqual(['🔊 spoken aloud · 2s']);
+    // the next reply gets its own marker
+    expect(spoken([reply(1, 'One.'), kern(2), play(3, 0, 1000, 'One.'), reply(4, 'Two.'), kern(5), play(6, 0, 2000, 'Two.')])).toEqual(['🔊 spoken aloud · 1s', '🔊 spoken aloud · 2s']);
+  });
+  it('a chunk cut off (barge-in or stop) keeps the one marker and marks it stopped; a lone barge-in still says interrupted', () => {
+    const play = (seq: number, t0: number, ms: number, text: string, cut = false) => row(seq, 'voice.turn.agent', { turnId: `a${seq}`, t0, t1: t0 + ms, textPlanned: text, textSpoken: cut ? '' : text, ...(cut ? { interrupted: true } : {}) });
+    const kern = (seq: number) => row(seq, 'voice.turn.agent', { source: 'kernel-speakable', items: [{ text: 'One. Two. Three.' }] });
+    const rows = [kern(1), play(2, 0, 1500, 'One.'), play(3, 1500, 1500, 'Two.'), row(4, 'voice.bargein', { turnId: 'a5', atMs: 3500, heardText: 'wait' }), play(5, 3000, 500, 'Three.', true)];
+    const { items } = chatItems(rows);
+    expect(items.filter((i) => i.role === 'spoken').map((i) => i.text)).toEqual(['🔊 spoken aloud · 4s · stopped']);
+    expect(items.find((i) => i.role === 'spoken')?.key).toBe('1');
+    // stopped without a barge-in row (⏹ Stop speaking): the interrupted chunk alone marks it
+    expect(chatItems([kern(1), play(2, 0, 1000, 'One.'), play(3, 1000, 400, 'Two.', true)]).items.map((i) => i.text)).toEqual(['🔊 spoken aloud · 1s · stopped']);
+    expect(chatItems([row(1, 'voice.bargein', { turnId: 'a1', atMs: 1, heardText: 'wait' })]).items.map((i) => i.text)).toEqual(['🔊 interrupted']);
+  });
   it('an older kernel (playback only) keeps the V2d marker; an empty speakable shows nothing', () => {
-    expect(chatItems([row(1, 'voice.turn.agent', { textSpoken: 'Hi', textPlanned: 'Hi there' })]).items.map((i) => i.text)).toEqual(['🔊 spoken aloud (in part)']);
+    expect(chatItems([row(1, 'voice.turn.agent', { textSpoken: 'Hi', textPlanned: 'Hi there' })]).items.map((i) => i.text)).toEqual(['🔊 spoken aloud · stopped']);
     expect(chatItems([row(1, 'voice.turn.agent', { source: 'kernel-speakable', items: [] })]).items).toEqual([]);
   });
 });
