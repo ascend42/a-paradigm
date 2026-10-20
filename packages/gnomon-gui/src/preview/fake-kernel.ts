@@ -143,7 +143,7 @@ export class FakeKernel implements Transport {
         return hello;
       }
       case 'auth':
-        return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: 'conn:01JAPREV1EW0000000000000000' };
+        return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: 'conn:01JAPREVX4K7Q2M9FBH3N8RTWC' };
       case 'status':
         return structuredClone(this.#status);
       case 'log.read': {

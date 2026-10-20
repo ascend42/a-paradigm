@@ -228,7 +228,7 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' } = {}
   });
   // today's boot
   c.add(T('13:00'), 'daemon.start', { version: '8.0.0', pid: 4242 });
-  c.add(T('13:00:01'), 'web.listen', { port: 7311 });
+  c.add(T('13:00:01'), 'socket.web.listen', { port: 7311 });
   for (const a of ACTIVE) c.add(a.key === 'atelier' ? T('13:30') : a.key === 'warpline' ? T('13:40') : a.key === 'billing' ? T('13:58') : a.key === 'ledgerette' ? T('14:02') : T('14:03'), 'session.open', { hsid: a.hsid, backend: 'claude', model: 'claude', cwd: a.cwd }, { session: a.hsid, repo: a.repo });
   const on = (key: string, at: string, kind: string, payload: Record<string, unknown>, principal?: string): void => {
     const a = A(key);
@@ -314,7 +314,7 @@ function fixture(name: string, title: string, c: Chain, status: Record<string, u
 function emptyChain(): Chain {
   const c = new Chain();
   c.add(T('09:00'), 'daemon.start', { version: '8.0.0', pid: 501 });
-  c.add(T('09:00:01'), 'web.listen', { port: 7311 });
+  c.add(T('09:00:01'), 'socket.web.listen', { port: 7311 });
   return c;
 }
 
