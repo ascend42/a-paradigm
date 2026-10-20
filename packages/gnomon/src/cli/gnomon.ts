@@ -25,10 +25,12 @@ import { runVoiceCommand } from './voice-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runSetupCommand } from './setup-cli.js';
 import { runUp, runUpCommand } from './up-cli.js';
+import { openGuiAfterStart } from './relaunch.js';
 
 const argv = process.argv.slice(2);
 if (argv[0] === 'daemon') {
-  runDaemonCommand(argv.slice(1), gnomondEntryFrom(import.meta.url)).then(
+  // #gui-relaunch: `daemon start | --detach` opens the GUI after a fresh start (--no-open / GNOMON_NO_OPEN: off)
+  runDaemonCommand(argv.slice(1), gnomondEntryFrom(import.meta.url), openGuiAfterStart()).then(
     (code) => {
       process.exitCode = code;
     },

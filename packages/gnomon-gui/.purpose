@@ -304,6 +304,22 @@ components:
     tags: [gnomon, gui, setup]
     tests:
       - test/setup.test.ts
+  gui-relaunch:
+    description: >-
+      #gui-relaunch page side (T-2026-10-20-001, core/stale.ts). A tab whose
+      connection ended outside the self-update path never points to a
+      terminal as the only way back. It polls its own origin (GET /, no
+      credential; 2 s for a minute, then 10 s, ~1 h cap) to say "stopped" vs
+      "running again", and listens on the same-origin BroadcastChannel
+      `gnomon.gui.v1` for a window that attached (`{t:'attached'}`; it asks
+      `{t:'who'}`). Exactly those two shapes, no token/key/connId. On
+      'attached' it offers one trusted click: Close this tab (the restarted
+      kernel already opened the fresh window at the same origin, gnomon
+      #gui-relaunch). It never rejoins in place: a restarted kernel has a new
+      ephemeral key that only a launch fragment delivers (decidePin).
+    tags: [gnomon, gui]
+    tests:
+      - test/stale.test.ts
   gui-stop-speaking:
     description: >-
       #gui Stop speaking (T-2026-10-19-026). A ⏹ "Stop speaking" button beside

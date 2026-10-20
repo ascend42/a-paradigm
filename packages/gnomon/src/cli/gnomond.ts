@@ -7,6 +7,8 @@
  */
 import { GNOMON_VERSION } from '../version.js';
 import { DAEMON_EXIT } from '../kernel/lifecycle/exit-codes.js';
+import { launchDaemon } from '../kernel/lifecycle/index.js';
+import { openGuiAfterStart } from './relaunch.js';
 import { activateDetached, daemonHomeOf, daemonUsage, EXIT_OK, parseDaemonArgs, runForeground } from './daemon-cli.js';
 
 async function main(argv: readonly string[]): Promise<number> {
@@ -16,7 +18,8 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const parsed = parseDaemonArgs(argv);
   if (typeof parsed === 'string') return daemonUsage(parsed);
-  return parsed.foreground ? runForeground(parsed) : activateDetached(parsed, process.argv[1] ?? process.execPath, daemonHomeOf); // gnomond never reads GNOMON_HOME
+  // #gui-relaunch: the activator opens the GUI after a fresh start (GNOMON_NO_OPEN / --no-open turn it off)
+  return parsed.foreground ? runForeground(parsed) : activateDetached(parsed, process.argv[1] ?? process.execPath, daemonHomeOf, launchDaemon, openGuiAfterStart()); // gnomond never reads GNOMON_HOME
 }
 
 main(process.argv.slice(2)).then(

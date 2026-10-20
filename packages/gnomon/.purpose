@@ -861,6 +861,24 @@ components:
       refused; RESUME_MAX_MISSES wrong tokens burn it. It authenticates a GUI
       connection only — never presence, never a card decision.
     tags: [kernel, web, auth]
+  gui-relaunch:
+    description: >-
+      #gui-relaunch (T-2026-10-20-001) — a kernel restarted outside the
+      self-update path (stop, then start) reopens the GUI with no terminal.
+      (1) A start without a TTY opens it: printLaunch with no TTY hands the
+      launch URL to the browser opener ONLY (osascript stdin; never printed),
+      and `gnomon daemon start | --detach` / `gnomond` (activator) open it
+      after a FRESH ready through cli/relaunch.ts openGuiAfterStart — the same
+      gui.open path bare `gnomon` uses (home pin verifies the hello before the
+      device signs; one shared launch-grant cap; single use, 60 s). `--no-open`
+      / GNOMON_NO_OPEN=1 turn it off. (2) kernel/web/last-port.ts remembers the
+      bound web port (`web-port.json`, a port number only, strict shape,
+      1024..65535) and a plain start tries it first, silently falling back,
+      so the reopened window shares the stale tab's origin; never used by the
+      upgrade successor (preferPort / inherited fd rules unchanged). The stale
+      tab cannot rejoin in place (each start has a new ephemeral key that only
+      a launch fragment delivers); see gnomon-gui core/stale.ts.
+    tags: [kernel, web, cli, lifecycle]
   bare-entry:
     description: >-
       #bare-entry (spec §2.4 rule 8) — bare `gnomon` in a folder, like

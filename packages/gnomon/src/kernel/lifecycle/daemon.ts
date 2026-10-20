@@ -1108,6 +1108,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ...(opts.web?.preferPort !== undefined ? { preferPort: opts.web.preferPort } : {}),
       ...(opts.web?.inheritFd !== undefined ? { inheritFd: opts.web.inheritFd } : {}),
       resume: resumeGate,
+      // T-2026-10-20-001 #gui-relaunch: a stop-then-start serves the GUI at the origin the open tab already has
+      rememberPort: true,
       kernelPublicKeyPem: pem,
       log: (kind, payload, ids) => logSocketRow(kind as `socket.${string}`, payload, ids),
       // §2.4 rule 3 / §11.2: an open GUI WebSocket is a subscriber; a closed one counts for nothing
