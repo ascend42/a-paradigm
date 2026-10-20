@@ -159,6 +159,13 @@ const REFUSE: Array<[string, RegExp]> = [
   [`${C}git --exec-path=/x status`, /global option/],
   [`${C}git log --output=x`, /git: --output/],
   [`${C}git diff --ext-diff`, /git: --ext-diff/],
+  // git accepts unambiguous abbreviations and bundled short options (Aegis re-check, 2026-10-20)
+  [`${C}git log --outp=x`, /git: --outp/],
+  [`${C}git log --out=/Users/u/.zshrc`, /git: --out/],
+  [`${C}git diff --ext-d`, /git: --ext-d/],
+  [`${C}git show --textc HEAD`, /git: --textc/],
+  [`${C}git log -pOfoo`, /git: -pOfoo/],
+  [`${C}git log --pag`, /git: --pag/],
   [`${C}git show --textconv HEAD`, /git: --textconv/],
   [`${C}git commit -m x`, /git: subcommand commit/],
   [`${C}git push`, /git: subcommand push/],

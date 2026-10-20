@@ -1141,7 +1141,22 @@ const sedRule: Rule = (args, env, name) => {
   pathArgs(ops, env, name);
 };
 const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'blame', 'rev-parse', 'ls-files', 'describe']);
-const GIT_BAD = /^(?:(--output|--ext-diff|--textconv|--open-files-in-pager|--exec|--upload-pack|--receive-pack|--paginate)(=|$)|-O)/;
+/**
+ * Long options that write, run a program or redirect git. git accepts any unambiguous ABBREVIATION of a long option
+ * (`--outp=f` is `--output=f`) and bundles short options (`-iOsh` carries `-O`), so a literal match is not enough
+ * (Aegis re-check of the prefix rules, 2026-10-20): a `--name` that is a prefix of any of these is refused, and so is
+ * any short bundle containing `O`.
+ */
+const GIT_BAD_LONG = ['output', 'output-directory', 'ext-diff', 'textconv', 'open-files-in-pager', 'exec', 'exec-path', 'upload-pack', 'receive-pack', 'paginate', 'git-dir', 'work-tree', 'config-env', 'namespace', 'filters'];
+function gitOptBad(s: string): boolean {
+  if (s.startsWith('--')) {
+    const name = s.slice(2).split('=')[0]!;
+    if (!name) return false; // `--` (end of options)
+    return GIT_BAD_LONG.some((bad) => bad.startsWith(name));
+  }
+  return /^-[^-]/.test(s) && s.slice(1).includes('O');
+}
+const GIT_BAD = { test: gitOptBad };
 /** Aegis M3: config keys that may hold a credential (URLs carry user:token, headers carry bearer tokens). */
 const GIT_SECRET_KEY = /^(remote|credential|http|https|url|sendemail)\.|url|token|password|passwd|secret|auth|header|cookie|proxy|key/i;
 const gitRule: Rule = (args, env, name) => {
