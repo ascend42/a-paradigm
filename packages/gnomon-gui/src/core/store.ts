@@ -54,6 +54,8 @@ export interface StackCard {
   card: Record<string, unknown>;
   flags: string[];
   arrivedSeq: number;
+  /** S3: the approval.request row's at ("raised HH:MM · waiting Nm"). */
+  raisedAt?: string | null;
 }
 
 export interface SessionRow {
@@ -295,6 +297,7 @@ export class GuiStore {
           card,
           flags: Array.isArray(p.flags) ? p.flags.filter((f): f is string => typeof f === 'string') : Array.isArray(card.flags) ? (card.flags as unknown[]).filter((f): f is string => typeof f === 'string') : [],
           arrivedSeq: ++this.#cardSeq,
+          raisedAt: typeof r.at === 'string' ? r.at : null,
         });
         what.add('cards');
         what.add(`card-in:${card.cardId}`);
@@ -866,11 +869,12 @@ export function sessionTitle(s: Pick<SessionRow, 'hsid' | 'repo' | 'cwd' | 'firs
 }
 
 export type NoteTone = 'need' | 'fail' | 'plain';
-/** S2.2: the right-aligned state note of a rail row: cards / KNOT (warn ink), failed (vermilion), else the state. */
+/** S2.2: the right-aligned state note of a rail row: KNOT (warn ink), failed (vermilion; it outranks its own cards),
+ * N card(s) (warn ink), else the state. */
 export function sessionNote(s: Pick<SessionRow, 'state'> & { pending: number; knot?: boolean }): { text: string; tone: NoteTone } {
   if (s.knot) return { text: 'KNOT', tone: 'need' };
-  if (s.pending) return { text: `${s.pending} card${s.pending === 1 ? '' : 's'}`, tone: 'need' };
   if (s.state === 'failed') return { text: 'failed', tone: 'fail' };
+  if (s.pending) return { text: `${s.pending} card${s.pending === 1 ? '' : 's'}`, tone: 'need' };
   return { text: s.state, tone: 'plain' };
 }
 

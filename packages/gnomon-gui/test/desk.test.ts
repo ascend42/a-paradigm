@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectHue } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { mdBlocks, mdInline, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { mdBlocks, mdInline, raisedLine, renderCard, splitCardBlock, voiceTagOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { activitySummary, failedExit, foldActivity, groupHue, GuiStore, isLiveState, sessionNote, sessionTitle, splitActivePast, type ChatItem, type Row } from '../src/core/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,6 +63,7 @@ describe('S2.2 sessions: names, notes, Active / Past, failed', () => {
     expect(sessionNote({ state: 'open', pending: 2 })).toEqual({ text: '2 cards', tone: 'need' });
     expect(sessionNote({ state: 'open', pending: 1, knot: true })).toEqual({ text: 'KNOT', tone: 'need' });
     expect(sessionNote({ state: 'failed', pending: 0 })).toEqual({ text: 'failed', tone: 'fail' });
+    expect(sessionNote({ state: 'failed', pending: 1 })).toEqual({ text: 'failed', tone: 'fail' }); // a failure outranks its card
     expect(sessionNote({ state: 'streaming', pending: 0 })).toEqual({ text: 'streaming', tone: 'plain' });
   });
   it('a session.exited that is an error is "failed" (gone, not live); a requested stop is "ended"', () => {
@@ -166,5 +167,44 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
     expect(css).toMatch(/\.snote\.tone-fail \{ color: var\(--fail\);/);
     expect(css).toMatch(/\.snote\.tone-need \{ color: var\(--warn-ink\);/);
     expect(css).toMatch(/\.trow\.role-user \{ display: flex; flex-direction: column; align-items: flex-end; \}/);
+  });
+});
+
+describe('S3 the card sheet and the stack pile', () => {
+  const block = { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'The session asks to run Bash' }, { type: 'Text', text: 'command: pnpm test' }] };
+  const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:x/claude', hsid: 'hsid:v1:A', repo: 'billing', state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [] as string[], decisions: ['allow', 'deny'], decidable: true };
+  it('anatomy: ■ project · kind · voice tag (requestedBy in title=), the title, the body, raised · waiting, keys, contentHash last', () => {
+    const el = renderCard({ doc: fdoc }, { ...v, project: { name: 'billing', hue: 0 }, raisedAt: '2026-10-20T14:06:00Z', now: Date.parse('2026-10-20T14:09:30Z'), voice: { eligible: 'reversible', label: 'card 3' } }, block) as FEl;
+    const kids = el.children.filter((c): c is FEl => c instanceof FEl);
+    expect(kids.map((k) => k.className)).toEqual(['card-head k', 'card-title', 'card-body kernel-owned', 'meta card-raised', 'card-keys', 'bar', 'stamp', 'meta content-hash']);
+    expect(kids[0]!.text).toBe('■ billing · permission · 🎙 reversible · card 3');
+    expect(kids[0]!.attrs.get('title')).toBe('requested by p:x/claude · hsid:v1:A · billing');
+    expect(kids[0]!.children.filter((c): c is FEl => c instanceof FEl)[0]!.className).toBe('card-project pink h0');
+    expect(kids[1]!.text).toBe('The session asks to run Bash');
+    expect(kids[2]!.text).toBe('command: pnpm test');
+    expect(kids[3]!.text).toBe('raised 14:06 · waiting 3m');
+    expect(kids[7]!.text).toMatch(/^contentHash sha256:c{16}/);
+  });
+  it('the voice tag is the kernel handle: reversible · label, gate + the handle word, else hand-only', () => {
+    expect(voiceTagOf({ eligible: 'gate', label: 'LANTERN' })).toEqual({ text: '🎙 gate', handle: 'LANTERN' });
+    expect(voiceTagOf({ eligible: 'none', label: 'KNOT' })).toEqual({ text: 'hand-only', handle: null });
+    expect(voiceTagOf(null)).toBeNull();
+    expect(raisedLine('2026-10-20T14:06:00Z', Date.parse('2026-10-20T14:06:20Z'))).toBe('raised 14:06 · waiting just now');
+  });
+  it('a claim-mismatch card keeps its block whole (the red first line stays the body\'s first) and is titled by its kind', () => {
+    expect(splitCardBlock(block, 'gate-class', true)).toEqual({ title: 'gate-class', body: block });
+    expect(splitCardBlock({ type: 'Box', children: [] }, 'knot', false).title).toBe('knot');
+  });
+  it('the pile: state edges, rotation by class (no inline style), fans on hover AND focus-within; pinned cards lie flat', () => {
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(css).toMatch(/border-left: var\(--edge-w\) solid var\(--edge, var\(--key-edge\)\);/);
+    expect(css).toMatch(/\.card\.kind-knot \{ --edge: var\(--knot-edge\); \}/);
+    expect(css).toMatch(/\.card\.failed \{ --edge: var\(--fail-edge\); \}/);
+    expect(css).toMatch(/\.card\.kind-gate-class, \.card\.held \{ --edge: var\(--warn-edge\); \}/);
+    expect(css).toMatch(/\.card\.claim-mismatch \{ --edge: var\(--fail-edge\); \}/);
+    expect(css).toMatch(/\.pile \.card \+ \.card \{ margin-top: -64px; \}/);
+    expect(css).toMatch(/\.pile:hover \.card \+ \.card, \.pile:focus-within \.card \+ \.card/);
+    expect(css).toMatch(/\.pinned \.card \{ --r: 0deg; margin: 0; \}/);
+    expect(css).not.toMatch(/\.card[^{]*\{[^}]*border-left:[^;]*--rule/);
   });
 });

@@ -225,6 +225,26 @@ components:
       sits in the stack head; the composer placeholder is "Reply to <name>…"
       with the long hint in title=, and send is the filled primary key.
       Tests: test/desk.test.ts.
+    card-sheet-pile-s3: >-
+      S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
+      anatomy (data only from kernel fields): header ■ <repo basename> in
+      the project ink (the ONE hue, groupHue) · kind · the voice tag from
+      the kernel's card.voice (🎙 reversible · <label>, 🎙 gate + the
+      .handle word, else hand-only), requestedBy and the session in title=;
+      the title (the block's first Text line, splitCardBlock; a
+      claim-mismatch card keeps its block whole and is titled by its kind);
+      the body (kernel-owned); "raised HH:MM · waiting Nm" (raisedLine, from
+      the approval.request row at, StackCard.raisedAt); keys; .bar and
+      .stamp (S4 animates them); the contentHash line last. CSS: a sheet with
+      a --edge-w state edge on the left (knot / failed / gate-class + held /
+      claim-mismatch; a neutral card's edge is --key-edge, never --rule) and
+      --sheet-shadow (night: a 1px --rule ring, no shadow). The stack is a
+      pile: -64px overlap, rotation and z-order by :nth-child classes (no
+      inline style), fanned flat on :hover AND :focus-within (keyboard
+      reach) and .fan / .open; more than 6 cards ⇒ 6 piled + "+n more"
+      (opens the fanned pile); pinned cards lie flat. The pane head reads
+      Stack · n pending · hover to fan · scope key; rail minmax(300px,340px).
+      The preview (dev only) takes ?fan=1. Tests: test/desk.test.ts.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a

@@ -180,6 +180,53 @@ export interface CardView {
   ask?: AskCardDetail | null;
   /** Bash permission: the prefix-scoped always choices from the contentHash-verified detail (prefixOptionsOf); null ⇒ exact only */
   prefixOptions?: string[][] | null;
+  /** S3: the card's project (repo basename) and its ONE project hue (groupHue / projectHue); null ⇒ no project line */
+  project?: { name: string; hue: number } | null;
+  /** S3: the approval.request row's at and the page's now (ms) for "raised HH:MM · waiting Nm" */
+  raisedAt?: string | null;
+  now?: number;
+  /** S3: the kernel's voice handle of the card (card.voice: eligible none | reversible | gate, and its label) */
+  voice?: { eligible: string; label: string } | null;
+}
+
+/** S3: the card's voice tag from the kernel's handle: `🎙 reversible · card 3`, `🎙 gate` + the handle word, or `hand-only`. */
+export function voiceTagOf(v: CardView['voice']): { text: string; handle: string | null } | null {
+  if (!v) return null;
+  if (v.eligible === 'reversible') return { text: `🎙 reversible${v.label ? ` · ${v.label}` : ''}`, handle: null };
+  if (v.eligible === 'gate') return { text: '🎙 gate', handle: v.label || null };
+  return { text: 'hand-only', handle: null };
+}
+
+/** S3: the card's voice handle from the kernel card (card.voice), or null. */
+export function cardVoiceOf(card: Record<string, unknown>): CardView['voice'] {
+  const v = card.voice && typeof card.voice === 'object' && !Array.isArray(card.voice) ? (card.voice as Record<string, unknown>) : null;
+  if (!v || typeof v.eligible !== 'string') return null;
+  return { eligible: v.eligible, label: typeof v.label === 'string' ? v.label : '' };
+}
+
+/** S3: "raised 14:06 · waiting 3m" (minutes; under a minute reads "just now"). */
+export function raisedLine(raisedAt: string | null | undefined, now: number): string | null {
+  if (!raisedAt) return null;
+  const t = Date.parse(raisedAt);
+  if (!Number.isFinite(t)) return null;
+  const m = Math.max(0, Math.floor((now - t) / 60_000));
+  const waiting = m < 1 ? 'just now' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `raised ${raisedAt.slice(11, 16)} · waiting ${waiting}`;
+}
+
+/**
+ * S3: the card title is the block's first Text line (a Box whose first child is a Text), and the body is the block
+ * without it. A claim-mismatch card keeps its block whole (its red first line stays the body's first line) and is
+ * titled by its kind.
+ */
+export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean): { title: string; body: unknown } {
+  const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
+  const kids = b && Array.isArray(b.children) ? (b.children as unknown[]) : null;
+  const first = kids?.[0] && typeof kids[0] === 'object' ? (kids[0] as Record<string, unknown>) : null;
+  const isText = !!first && (first.type === 'Text' || first.block === 'kit.Text' || first.block === 'Text');
+  const text = isText ? (typeof first!.text === 'string' ? first!.text : first!.data && typeof (first!.data as Record<string, unknown>).text === 'string' ? String((first!.data as Record<string, unknown>).text) : '') : '';
+  if (keepWhole || !text.trim() || !kids) return { title: kind, body: block };
+  return { title: text.split('\n')[0]!, body: { ...b, children: kids.slice(1) } };
 }
 
 /**
@@ -366,12 +413,28 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
   // where Deny stays the default focus and nothing is filled
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
+  // S3 anatomy: ■ project · kind · voice tag (requestedBy and the session in title=), the title, the body, raised · waiting
+  const { title, body } = splitCardBlock(block, v.kind, loud);
+  const tag = voiceTagOf(v.voice ?? null);
+  const raised = raisedLine(v.raisedAt, v.now ?? Date.now());
+  const failed = v.kind === 'incident' || v.flags.includes('failed');
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
-    h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
-    h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    h(
+      doc,
+      'header',
+      { class: 'card-head k', title: `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}` },
+      v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
+      v.project ? ' · ' : null,
+      h(doc, 'strong', { class: 'card-kind' }, v.kind),
+      tag ? ' · ' : null,
+      tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
+    ),
+    h(doc, 'p', { class: 'card-title' }, title),
+    h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, body)),
+    raised ? h(doc, 'small', { class: 'meta card-raised' }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     h(
       doc,
@@ -388,6 +451,8 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
+    h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
+    h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, 'APPROVED'),
     h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
   );
 }

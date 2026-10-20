@@ -19,7 +19,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, PRESETS, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
@@ -328,6 +328,15 @@ function paintSessions(): void {
 }
 
 /* ── decision stack ─────────────────────────────────────────────── */
+const PILE_MAX = 6;
+let pileOpen = false;
+/** S3: a card's project line: its repo basename in the ONE project hue (the rail's group hue for that repo). */
+function projectOfCard(c: { repo: string | null; hsid: string | null }): { name: string; hue: number } | null {
+  const repo = c.repo ?? (c.hsid ? (store.sessions.get(c.hsid)?.repo ?? null) : null);
+  if (!repo) return null;
+  const g = store.groups().find((x) => x.repo === repo);
+  return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
+}
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
   const cards = stackScoped && focused ? store.stack(focusRepo) : store.stack();
@@ -356,6 +365,10 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         decidable: isCardDecidable(c.card as never),
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
         prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
+        project: projectOfCard(c),
+        raisedAt: c.raisedAt ?? null,
+        now: Date.now(),
+        voice: cardVoiceOf(c.card),
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -371,7 +384,12 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   };
   const pile = $('stack');
   clear(pile);
-  for (const c of cards) pile.appendChild(mk(c));
+  // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
+  const shown = pileOpen ? cards : cards.slice(0, PILE_MAX);
+  for (const c of shown) pile.appendChild(mk(c));
+  pile.classList.toggle('open', pileOpen);
+  if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
+  put($('stack-hint'), cards.length > 1 ? 'hover to fan' : '');
   const pinned = $('pinned');
   clear(pinned);
   const mine = focused ? store.stack(focusRepo).filter((c) => c.hsid === focused) : [];
@@ -1556,7 +1574,13 @@ function wire(): void {
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
     if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
   };
-  $('stack').addEventListener('click', onCard);
+  $('stack').addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('[data-pile-more]')) {
+      pileOpen = true;
+      return void paintStack();
+    }
+    onCard(e);
+  });
   $('pinned').addEventListener('click', onCard);
   $('stack-scope').addEventListener('click', () => run('stack.scope.toggle'));
   $('composer').addEventListener('submit', (e) => {
