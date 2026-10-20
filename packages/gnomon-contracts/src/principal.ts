@@ -135,6 +135,7 @@ export const CAPABILITY_FORMS = [
   'log.read',
   'log.read:sensitive',
   'log.read:usage',
+  'paradigm.read:summary',
   'turn.text:attached-session',
   'ref.resolve',
   'resolver:<scheme>',

@@ -2971,6 +2971,15 @@ components:
       ({name, viewId, slot, placement, dev}) for the #gui mod panels.
       FIRST_PARTY_PACKAGE_HASHES pins the Workshop and the Ledger. Still to come: spend from the caller permit,
       dev-mode cards/re-pin, gnomon-mods MCP bridge, /blob (C4), Tier 0.
+      K1 (#paradigm-context-mod): paradigm-slice.ts, the paradigm-slice:v1
+      kernel projection of a LIVE session's repo (.paradigm/tasks/entries,
+      decisions/TD-*.yaml, lore/entries/**): open/high task counts, top 5
+      tasks, last 5 decisions {id,title,date}, last 5 lore {id,title,type},
+      symbols touched; zero-dep strict YAML subset (malformed files skipped
+      and counted), symlinks and realpath escapes refused, files capped,
+      titles §4.5-sanitised, path-redacted, ≤120 chars; sensitivity secret
+      dropped; no absolute path in the slice (hue + basename only). Granted
+      by paradigm.read:summary (CAPABILITY_FORMS; not an id input).
     tags: [kernel, mods, sandbox, M1.11]
 
   mod-cli:
