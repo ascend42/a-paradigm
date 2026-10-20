@@ -607,6 +607,7 @@ function paintUpdateBanner(): void {
 /** The socket closed after this page accepted the upgrade: wait for the successor, then load its bundle. */
 async function awaitRestart(): Promise<void> {
   put($('conn'), 'restarting…');
+  $('conn').title = 'kernel connection: restarting';
   notice('Gnomon is restarting with the new version…');
   if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
     clearRestarting(sessionStorage);
@@ -821,7 +822,10 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   staleStop = true;
   staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
-  put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
+  // fidelity 2: the readout is a small quiet chip (connected / not connected / restarting…); who and which connection
+  // are in its title= and in Settings → About (Kernel connection)
+  put($('conn'), 'connected');
+  $('conn').title = `kernel connection: ${out.session.principal} · ${out.session.connId.slice(-8)} (Settings → About)`;
   c.onNotification((method, params) => {
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
@@ -901,6 +905,7 @@ async function goStale(): Promise<void> {
 
 function showReconnect(why: string): void {
   put($('conn'), 'not connected');
+  $('conn').title = 'kernel connection: not connected';
   put($('reconnect-why'), why);
   $('reconnect').hidden = false;
 }

@@ -769,7 +769,7 @@ html, body {
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .seg-key.current, .seg-key[aria-checked="true"], .seg-key[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
-[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); }
 [data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key.current::after { color: var(--ink); }
 .seg-key[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); }
 .theme-switch { gap: 2px; }
@@ -802,3 +802,18 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .standing-items { margin: 4px 0; padding-left: 16px; max-height: 200px; overflow: auto; }
 .standing-toast { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--key-edge); color: var(--ink); }
 .standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }
+
+/* ── fidelity 2 (comp direction.html): the header is wordmark · search · (kernel chips) · voice · ⊞ Layout · ☀/☾ · ⚙.
+   The connection readout and the browser risk badge stay VISIBLE (kernel-owned) as small quiet chips; who is connected
+   lives in the readout's title= and in Settings → About. The theme switch is glyphs only (☀ ☾ ◐, words in title=). */
+.chrome { gap: 10px; }
+.chip, #conn.chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font-size: 10.5px; line-height: 18px; color: var(--sec); border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; }
+#conn.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--sec); }
+.badge.risk { font-size: 10.5px; line-height: 18px; padding: 0 6px; }
+.theme-word { display: none; }
+.theme-switch .seg-key { min-width: 26px; padding: 1px 6px; text-align: center; }
+.voice-pill.voice-off:not(.voice-noclient):not(.voice-setup):not(.voice-crashed):not(.voice-nudge) { padding: 1px 7px; font-size: 10.5px; border-color: var(--rule); }
+/* night: the comp's keys carry no [ ] caps (only + New session does); the dashed edge still marks a model-text choice */
+[data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
+[data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
+[data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
