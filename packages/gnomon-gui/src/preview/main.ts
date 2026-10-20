@@ -42,6 +42,10 @@ async function boot(): Promise<void> {
   if (fx.focus) (document.querySelector(`#session-list [data-hsid="${fx.focus}"]`) as HTMLElement | null)?.click();
   if (fx.workshop) {
     const pane = document.getElementById('pane-sessions')!;
+    // preview-only layout for the strip (the GUI has no mod-view styles yet); colours are the GUI's own tokens
+    const css = document.createElement('style');
+    css.textContent = '.pane-workshop{flex:none;max-height:42%;overflow:auto;border-top:1px solid var(--rule);padding:4px 0 8px}.workshop-zone{padding:2px 10px}.workshop-zone>.meta{margin:6px 0 2px}.workshop-cap{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2)}.workshop-cap .blk-text{margin:0}.workshop-cap.tone-violet{color:var(--knot)}.workshop-cap.tone-quiet{color:var(--sec)}';
+    document.head.appendChild(css);
     const paint = (): void => {
       document.querySelector('.pane-workshop')?.remove();
       pane.appendChild(drawWorkshop(document as unknown as MiniDoc, workshopBlock(k.rows, { motion: PREVIEW.motion === 'off' ? 'reduced' : 'full', theme: PREVIEW.theme })) as unknown as Node);
