@@ -126,7 +126,14 @@ components:
       closing while the card is pending denies it; enrolled voices with a
       two-click [Forget] sending request.voice.forget{name} (no card).
       Notices are status.voice.notice{text, code?, at}: a new `at` is a
-      quiet toast, never a decision or a backlog replay (30 s). Kernel
+      quiet toast prefixed "Voice app: ", never a decision or a backlog
+      replay (30 s). Aegis L2-L4: the dev-unsigned banner is a persistent
+      alert (no timer); "done" shows only once status.voice.enrolled lists
+      the name; during the phrases the dialog says "Recording <name> — only
+      <name> should speak"; isEnrolCard requires the card to name the voice.
+      The kernel's client phases (stopped, preparing, installing,
+      downloading-models, starting, running, backoff, failed, unavailable)
+      map onto the pill's (downloadMb may be a total in MB). Kernel
       replies voice.turn.agent{source: kernel-speakable, items} show the
       speaker marker and swallow the voice app's next playback row (never
       shown twice). Tests: test/voice-client.test.ts.

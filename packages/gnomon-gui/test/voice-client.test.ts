@@ -80,6 +80,12 @@ describe('the pill shows every voice-app phase while nothing is attached', () =>
   });
   it('unknown phases and stale claims fail toward "not running"', () => {
     expect(clientOf(st({ phase: 'warp-drive' })).phase).toBe('idle');
+    // the kernel's own phase words (voice-child.ts VoiceChildPhase)
+    const k = (phase: string, more: Record<string, unknown> = {}) => clientOf(human({ clientConnected: false, client: { phase, ...more } }));
+    expect(['stopped', 'preparing', 'installing', 'downloading-models', 'starting', 'backoff', 'failed'].map((p) => k(p).phase)).toEqual(['idle', 'installing', 'installing', 'downloading', 'starting', 'crashed', 'crashed']);
+    expect(k('unavailable', { unavailable: 'the installed voice client changed since the kernel copied it' })).toMatchObject({ phase: 'unavailable', unavailable: expect.stringMatching(/changed/) });
+    expect(k('failed', { unavailable: 'voice runs on macOS only for now' }).phase).toBe('unavailable');
+    expect(clientPillOf(k('downloading-models', { downloadMb: 412 }), false, true).label).toBe('Downloading voice models (412 MB)…');
     expect(clientOf(human({ clientConnected: false, client: { phase: 'running' } })).phase).toBe('idle');
     expect(clientOf(human({ clientConnected: true, client: { phase: 'idle' } })).phase).toBe('running');
     expect(clientOf(human({ attached: null })).known).toBe(false); // an older kernel: no lifecycle UI at all
@@ -171,14 +177,18 @@ describe('"Teach Gnomon your voice"', () => {
     expect(s.phrases).toBe(ENROL_PHRASES);
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 0, of: 3, at: at(2) }));
     expect(s).toMatchObject({ step: 'phrase', index: 0, recording: true });
-    expect(enrolLine(s)).toBe('Phrase 1 of 3: recording, read it aloud');
+    expect(enrolLine(s)).toBe('Recording matt — only matt should speak. Phrase 1 of 3: recording, read it aloud');
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 0, of: 3, at: at(3) }));
     expect(s).toMatchObject({ step: 'phrase', index: 1, recorded: 1, recording: false });
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 1, of: 3, at: at(4) }));
     expect(s).toMatchObject({ index: 2, recorded: 2 });
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 2, of: 3, at: at(5) }));
     expect(s.recording).toBe(true);
-    s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) }));
+    // Aegis L3: the client's "done" alone is not done: the kernel's registry must list the name
+    const notYet = reduceEnrolStatus(s, en({ name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) }));
+    expect(notYet).toMatchObject({ step: 'phrase', recorded: 3 });
+    expect(reduceEnrolStatus(s, { voice: { enrolled: ['dana'], enrolment: { name: 'matt', phase: 'done', of: 3, at: at(6) } } }).step).toBe('phrase');
+    s = reduceEnrolStatus(s, { voice: { enrolled: ['matt'], enrolment: { name: 'matt', phase: 'done', phrase: 2, of: 3, at: at(6) } } });
     expect(s).toMatchObject({ step: 'done', recorded: 3 });
     expect(enrolLine(s)).toBe("Gnomon knows matt's voice now.");
   });
@@ -215,6 +225,9 @@ describe('"Teach Gnomon your voice"', () => {
     expect(isEnrolCard(card({ op: 'voice.enrol', name: 'matt' }), 'matt')).toBe(true);
     expect(isEnrolCard(card({ op: 'voice.enrol', speakerId: 'spk:m/dana' }), 'matt')).toBe(false);
     expect(isEnrolCard(card({ op: 'voice.widen' }), 'matt')).toBe(false);
+    // Aegis L4: a nameless card is never taken for this voice; the legacy op is not accepted
+    expect(isEnrolCard(card({ op: 'voice.enrol' }), 'matt')).toBe(false);
+    expect(isEnrolCard(card({ op: 'request.voice.enrol', name: 'matt' }), 'matt')).toBe(false);
   });
   it('the page: send / confirm / forget are trusted gestures; confirm approves allow; close denies a card still pending', () => {
     const submit = APP.slice(APP.indexOf('async function submitEnrol('), APP.indexOf('async function closeEnrol('));
@@ -229,13 +242,18 @@ describe('"Teach Gnomon your voice"', () => {
     expect(forget).toMatch(/if \(!trusted \|\| !client \|\| !canAttach\(status\)\) return;/);
     expect(forget).toContain('forgetRequest(name)');
     expect(HTML).toContain('id="enrol-dialog"');
+    // Aegis L2: the dev-unsigned banner is persistent (an alert repainted from status, never a timed toast)
+    expect(HTML).toMatch(/id="voice-dev"[^>]*role="alert"/);
+    expect(APP).toContain("$('voice-dev').hidden = dev === null;");
+    expect(APP).not.toMatch(/setTimeout\([^)]*voice-dev/);
   });
 });
 
 describe('client notices are quiet toasts', () => {
   it('status.voice.notice is the toast (A5): text and at, capped and one line; absent is null', () => {
-    expect(noticeOf({ voice: { notice: { text: 'open Gnomon to turn on ambient', code: 'ambient-above-ceiling', at: '2026-10-19T10:00:00Z' } } })).toEqual({ text: 'open Gnomon to turn on ambient', at: '2026-10-19T10:00:00Z' });
-    expect(noticeOf({ voice: { notice: { text: 'mic\n busy' } } })).toEqual({ text: 'mic busy', at: null });
+    // Aegis L6: attributed to the voice app, always
+    expect(noticeOf({ voice: { notice: { text: 'open Gnomon to turn on ambient', code: 'ambient-above-ceiling', at: '2026-10-19T10:00:00Z' } } })).toEqual({ text: 'Voice app: open Gnomon to turn on ambient', at: '2026-10-19T10:00:00Z' });
+    expect(noticeOf({ voice: { notice: { text: 'mic\n busy' } } })).toEqual({ text: 'Voice app: mic busy', at: null });
     expect(noticeOf({ voice: { notice: null } })).toBeNull();
     expect(noticeOf({ voice: {} })).toBeNull();
     expect(noticeOf(null)).toBeNull();

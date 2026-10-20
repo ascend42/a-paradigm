@@ -35,6 +35,9 @@ components:
       carries no phrase text), stores the print (0700 dir, 0600 file) and
       reports ready, recording, recorded (phrase 0-based, of 3), then done,
       or failed with the reason (mic off and not turnable on, no speech).
+      Aegis M1: SpawnedAudioIO spawns gnomon-voice-io with IO_CHILD_STDIO
+      (pipe, pipe, inherit, ignore): fd 3, the kernel link, never reaches the
+      io binary (a test falsifies it against a real socket on fd 3).
       Engines come
       from sherpa-onnx-node 1.13.8, an optional native dependency: Silero VAD,
       Parakeet TDT 0.6B v2 int8, Kokoro-82M int8 en and 3D-Speaker CAM++

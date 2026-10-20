@@ -44,6 +44,8 @@ export interface ClientView {
   known: boolean;
   phase: ClientPhase;
   download: { n: number; of: number } | null;
+  /** the kernel's download size (MB) when it reports a total only */
+  downloadTotal: number | null;
   devUnsigned: boolean;
   lastError: string | null;
   unavailable: string | null;
@@ -64,17 +66,36 @@ const nameOf = (v: unknown): string | null => {
   return m ? m[1]! : s;
 };
 
+/**
+ * The kernel's status.voice.client.phase words (voice-child.ts VoiceChildPhase) → the GUI's. backoff is a crash
+ * awaiting its restart; failed is a crash the human restarts (or unavailable, when the kernel names a reason).
+ */
+const KERNEL_PHASE: Readonly<Record<string, ClientPhase>> = Object.freeze({
+  stopped: 'idle',
+  preparing: 'installing',
+  installing: 'installing',
+  'downloading-models': 'downloading',
+  starting: 'starting',
+  running: 'running',
+  backoff: 'crashed',
+  failed: 'crashed',
+  unavailable: 'unavailable',
+});
+
 /** The voice-app view from a `status` result (the adapter: every client-status assumption lives here). */
 export function clientOf(status: unknown): ClientView {
   const v = obj(obj(status)?.voice);
   const c = obj(v?.client);
   const connected = v && typeof v.clientConnected === 'boolean' ? v.clientConnected : null;
   const raw = str(c?.phase);
-  let phase: ClientPhase = raw && (CLIENT_PHASES as readonly string[]).includes(raw) ? (raw as ClientPhase) : 'idle';
+  let phase: ClientPhase = raw && (CLIENT_PHASES as readonly string[]).includes(raw) ? (raw as ClientPhase) : raw && raw in KERNEL_PHASE ? KERNEL_PHASE[raw]! : 'idle';
+  if (phase !== 'unavailable' && str(c?.unavailable) && (raw === 'failed' || raw === 'unavailable')) phase = 'unavailable';
   // the kernel's connection word wins over a stale phase: connected ⇒ running; a "running" claim while not connected ⇒ not running
   if (connected === true && (phase === 'idle' || phase === 'starting')) phase = 'running';
   if (connected === false && phase === 'running') phase = 'idle';
+  // the kernel reports the download as its total (an integer MB); {n, of} is also understood
   const d = obj(c?.downloadMb);
+  const total = num(c?.downloadMb);
   const n = num(d?.n);
   const of = num(d?.of);
   const list = Array.isArray(v?.enrolled) ? v!.enrolled : null;
@@ -82,6 +103,7 @@ export function clientOf(status: unknown): ClientView {
     known: c !== null || connected !== null,
     phase,
     download: n !== null && of !== null && of > 0 ? { n: Math.min(n, of), of } : null,
+    downloadTotal: total !== null && total > 0 ? total : null,
     devUnsigned: c?.devUnsigned === true,
     lastError: str(c?.lastError),
     unavailable: str(c?.unavailable),
@@ -125,7 +147,7 @@ export function clientPillOf(c: ClientView, attached: boolean, attachable: boole
       return { label: 'Setting up voice…', className: 'voice-noclient voice-setup', title: 'Gnomon is setting up the voice app.', action: null, actionLabel: '', progress: null };
     case 'downloading': {
       const d = c.download;
-      return { label: d ? `Downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : 'Downloading voice models…', className: 'voice-noclient voice-setup', title: 'The voice models download once, then stay on this Mac.', action: null, actionLabel: '', progress: d ? d.n / d.of : null };
+      return { label: d ? `Downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : c.downloadTotal ? `Downloading voice models (${MB(c.downloadTotal)} MB)…` : 'Downloading voice models…', className: 'voice-noclient voice-setup', title: 'The voice models download once, then stay on this Mac.', action: null, actionLabel: '', progress: d ? d.n / d.of : null };
     }
     case 'starting':
       return { label: 'Starting…', className: 'voice-noclient voice-setup', title: 'The voice app is starting.', action: null, actionLabel: '', progress: null };
@@ -253,9 +275,12 @@ export function reduceEnrolStatus(s: EnrolState, status: unknown): EnrolState {
       next = { ...s, step: 'phrase', index: Math.min(recorded, of - 1), recorded, recording: false };
       break;
     }
-    case 'done':
-      next = { ...s, step: 'done', recorded: of, recording: false, error: null };
+    case 'done': {
+      // Aegis L3: "done" only when the kernel's root-signed registry lists the name (status.voice.enrolled)
+      const listed = Array.isArray(obj(obj(status)?.voice)?.enrolled) && (obj(obj(status)?.voice)!.enrolled as unknown[]).map(nameOf).includes(s.name);
+      next = listed ? { ...s, step: 'done', recorded: of, recording: false, error: null } : { ...s, step: 'phrase', index: Math.max(0, of - 1), recorded: of, recording: false };
       break;
+    }
     case 'failed':
     case 'cancelled':
       next = { ...s, step: 'failed', recording: false, error: str(e.error) ?? (e.phase === 'cancelled' ? 'the voice app cancelled the recording' : 'the recording failed') };
@@ -274,7 +299,7 @@ export function enrolLine(s: EnrolState): string {
     case 'waiting':
       return 'Waiting for the voice app to start listening…';
     case 'phrase':
-      return `Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
+      return `Recording ${s.name ?? 'this voice'} — only ${s.name ?? 'that person'} should speak. Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
     case 'confirm':
       return 'Confirm with Touch ID, then read three short phrases aloud.';
     case 'done':
@@ -284,13 +309,13 @@ export function enrolLine(s: EnrolState): string {
   }
 }
 
-/** A Touch ID card from an enrolment request (A4: kind strictness or presence, detail.op voice.enrol, the same name). */
+/** A Touch ID card from an enrolment request (A4: detail.op voice.enrol naming exactly this voice). */
 export function isEnrolCard(card: { kind: string; card: Record<string, unknown> } | undefined, name: string | null): boolean {
   if (!card || !name) return false;
   const d = obj(card.card.detail);
-  if (!d || (d.op !== 'voice.enrol' && d.op !== 'request.voice.enrol')) return false;
-  const n = nameOf(d.name ?? d.speakerId);
-  return n === null || n === name;
+  if (!d || d.op !== 'voice.enrol') return false;
+  // Aegis L4: the card must name this voice (a nameless card is never taken for it)
+  return nameOf(d.name ?? d.speakerId) === name;
 }
 
 /** A5: `status.voice.notice` as {text, at} (one line, bounded), or null. */
@@ -298,10 +323,12 @@ export function noticeOf(status: unknown): { text: string; at: string | null } |
   const n = obj(obj(obj(status)?.voice)?.notice);
   const t = str(n?.text);
   if (!t) return null;
-  const one = t.replace(/\s+/g, ' ').trim();
+  // Aegis L6: always attributed — the text is the voice app's, never the kernel's
+  const one = `${NOTICE_PREFIX}${t.replace(/\s+/g, ' ').trim()}`;
   return { text: one.length > NOTICE_MAX ? `${one.slice(0, NOTICE_MAX - 1)}…` : one, at: str(n?.at) };
 }
 export const NOTICE_MAX = 140;
+export const NOTICE_PREFIX = 'Voice app: ';
 /** How long a quiet toast stays (ms). */
 export const TOAST_MS = 6000;
 /** A notice older than this when it is read (a backlog page) is not toasted: toasts are for now, not history. */

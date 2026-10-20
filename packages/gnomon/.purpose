@@ -1909,7 +1909,14 @@ components:
       allow-list env, backoff restarts, dies on every daemon exit and drain
       (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app
       into <home>/bin/voice and fetches models; the client entry resolves
-      lazily, darwin only. voice-requests.ts: dispatcher-only request.voice.enrol
+      lazily, darwin only. Aegis M2: createVoicePrepare copies the client
+      (dist/cli.js, a module package.json, the optional sherpa-onnx-node and
+      its platform packages) into <home>/bin/voice/client (0700/0600), pins a
+      sha256 of every file in memory, runs the model fetch and the spawn from
+      the COPY, and re-verifies the pin last in every prepare; a changed,
+      added or missing file is VoiceClientRefused, phase 'unavailable' with
+      the reason, never retried. Every exit (signal, stop, idle, upgrade after
+      its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol
       (fresh-presence strictness card, detail.op voice.enrol, writes the
       root-signed row), request.voice.forget (no card), request.voice.report
       (client progress + notices relayed in status.voice); request.voice.client
