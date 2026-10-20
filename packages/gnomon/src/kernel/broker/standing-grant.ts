@@ -12,9 +12,10 @@
  * with Revoke. Revoke writes `grant.standing.revoked{grantId, by, reason:'human'}`: a tighten, no presence.
  *
  *   tuples   STANDING_TUPLES (contracts, closed): mode.loosen:auto-edits, permission:always, voice.widen,
- *            voice-arm:allow, daemon-stop:restart (a daemon-stop card the kernel marked binaryUnchanged), and
- *            reconsider:extend.
- *   repos    the repo keys a repo-scoped tuple (mode loosen, always, reconsider) may use it in; voice, arm and
+ *            voice-arm:allow and daemon-stop:restart (a daemon-stop card the KERNEL marked binaryUnchanged by
+ *            hashing the running binary against the one on disk; never a request field). Not reconsider.extend
+ *            (Aegis M2).
+ *   repos    the repo keys a repo-scoped tuple (mode loosen, always) may use it in; voice, arm and
  *            restart carry no repo and are covered by the grant itself (it is bound to one device and one day).
  *   ends     expiresAt (at most STANDING_GRANT_MAX_MS = 12 h after it was minted), the next screen lock, sleep or
  *            user switch, a helper exit (endAll writes grant.standing.revoked with that reason), or Revoke.
@@ -28,7 +29,7 @@
  * RunModeBook): a row from any other principal or key is ignored, so a forged grant.standing never covers anything
  * and a forged revoke never ends one.
  */
-import { STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REVOKE_REASONS, STANDING_TUPLES, type CardV1, type StandingRevokeReason, type StandingTuple } from '@a-company/gnomon-contracts';
+import { STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, type CardV1, type StandingRevokeReason, type StandingTuple } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/index.js';
 import type { RuleRow, RuleSource } from '../supervisor/rules.js';
 import { fail, unlockKeyOf, type ApprovalBroker, type BrokerLog, type DecideContext, type StandingMatch, type StandingSeam } from './broker.js';
@@ -162,8 +163,7 @@ export function standingTupleOf(card: Pick<CardV1, 'kind' | 'flags'>, decision: 
   if (kind === 'voice-arm' && decision === 'allow') return { tuple: 'voice-arm:allow', repo: null };
   // a restart with NO binary change only: an upgrade card (detail.update) names a new build and is never standing
   if (kind === 'daemon-stop' && decision === 'accept' && detail.binaryUnchanged === true && detail.update === undefined) return { tuple: 'daemon-stop:restart', repo: null };
-  if (kind === 'reconsider' && decision === 'extend') return { tuple: 'reconsider:extend', repo: typeof detail.repo === 'string' ? detail.repo : null };
-  return null;
+  return null; // reconsider.extend is never standing (Aegis M2)
 }
 
 export interface StandingAsker {
@@ -194,7 +194,6 @@ const TUPLE_TEXT: Readonly<Record<StandingTuple, string>> = Object.freeze({
   'voice.widen': 'widen voice to ambient listening',
   'voice-arm:allow': 'arm voice approvals',
   'daemon-stop:restart': 'restart Gnomon when its binary did not change',
-  'reconsider:extend': 'extend a capped review',
 });
 
 /** The human's first-party GUI connection only: a CLI, an agent, a mod, voice or a peer never mints or uses one. */
@@ -313,6 +312,8 @@ export class StandingGrants implements StandingSeam {
     const device = unlockKeyOf(ctx);
     for (const g of this.#d.book().active(this.#now())) {
       if (g.device !== device || !g.tuples.includes(t.tuple)) continue;
+      // Aegis M2: a repo-scoped tuple needs a non-null repo that the grant names
+      if ((STANDING_REPO_TUPLES as readonly string[]).includes(t.tuple) && (t.repo === null || !g.repos.includes(t.repo))) continue;
       if (t.repo !== null && !g.repos.includes(t.repo)) continue;
       return { grantId: g.grantId, tuple: t.tuple, repo: t.repo };
     }

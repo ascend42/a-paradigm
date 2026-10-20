@@ -328,12 +328,14 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
  *   voice.widen             a strictness card widening voice to ambient (detail.op voice.widen), allow
  *   voice-arm:allow         a voice-arm card, allow
  *   daemon-stop:restart     a daemon-stop card the kernel marked binaryUnchanged (a restart, never an upgrade), accept
- *   reconsider:extend       a reconsider card's `extend`
+ * (Aegis M2: `reconsider.extend` is NOT standing; the founder's F6 list does not name it.)
  * NEVER standing (no tuple names them, and the broker refuses them whatever a row says): root-class decisions
  * (install, use-api-token, peer-pair, a grant), a re-pin or any binary/publisher change, gate-class cards,
  * fallback-cloud, declassify, and every peer-raised (peer-flagged) card.
  */
-export const STANDING_TUPLES = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart', 'reconsider:extend'] as const;
+export const STANDING_TUPLES = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'] as const;
+/** Tuples that apply only inside a granted repo (a match with no repo never uses them). */
+export const STANDING_REPO_TUPLES = ['mode.loosen:auto-edits', 'permission:always'] as const;
 export type StandingTuple = (typeof STANDING_TUPLES)[number];
 /** grant.standing.revoked{reason} (CLOSED): the human's Revoke, or what ended the grant with the unlock. */
 export const STANDING_REVOKE_REASONS = ['human', 'screen-lock', 'display-sleep', 'system-sleep', 'user-switch', 'helper-exit'] as const;

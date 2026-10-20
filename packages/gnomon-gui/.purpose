@@ -58,7 +58,7 @@ components:
       reads status.standing fail-safe, turns grant.standing / .used /
       .revoked rows into feed lines (a use is also a toast naming what
       Gnomon did), decides the once-a-day offer (shouldOffer: a pending
-      strictness/permission/voice-arm/daemon-stop/reconsider card, no live
+      strictness/permission/voice-arm/daemon-stop card, no live
       grant, not offered today) and builds request.grant.standing{tuples,
       repos} / request.grant.standing.revoke{grantId}. ui/standing-feed.ts
       (its own module; app.ts only mounts it and forwards live rows and

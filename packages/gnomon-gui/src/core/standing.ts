@@ -22,11 +22,10 @@ export const STANDING_TUPLE_TEXT: Readonly<Record<StandingTuple, string>> = Obje
   'voice.widen': 'widened voice to ambient listening',
   'voice-arm:allow': 'armed voice approvals',
   'daemon-stop:restart': 'restarted Gnomon (same build)',
-  'reconsider:extend': 'extended a capped review',
 });
 
 /** Card kinds a standing grant can cover (the kernel decides exactly; this only chooses when to offer). */
-export const OFFER_KINDS: ReadonlySet<string> = new Set(['strictness', 'permission', 'voice-arm', 'daemon-stop', 'reconsider']);
+export const OFFER_KINDS: ReadonlySet<string> = new Set(['strictness', 'permission', 'voice-arm', 'daemon-stop']);
 
 export interface StandingGrantView {
   grantId: string;

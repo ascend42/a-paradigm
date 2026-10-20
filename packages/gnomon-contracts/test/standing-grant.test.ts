@@ -3,7 +3,7 @@
  * approval.auto{anchoredInputHash}: one deliberate clientApiId move (old sha256:ac22e72f…, new sha256:ebf32456…).
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_API_DESCRIPTOR, CLIENT_API_ID, defaultLabelsFor, EVENT_KINDS, RESERVED_KIND_PAYLOADS, RESERVED_PAYLOAD_FIELDS, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REVOKE_REASONS, STANDING_TUPLES } from '../src/index.js';
+import { CLIENT_API_DESCRIPTOR, CLIENT_API_ID, defaultLabelsFor, EVENT_KINDS, RESERVED_KIND_PAYLOADS, RESERVED_PAYLOAD_FIELDS, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from '../src/index.js';
 
 describe('standing grant contracts (F6)', () => {
   it('the kinds exist, kernel-owned, tagged with the ruling', () => {
@@ -13,13 +13,14 @@ describe('standing grant contracts (F6)', () => {
     }
   });
   it('the tuples never name a root, install, gate-class, fallback, declassify or peer decision', () => {
-    expect([...STANDING_TUPLES]).toEqual(['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart', 'reconsider:extend']);
+    expect([...STANDING_TUPLES]).toEqual(['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart']);
+    expect(STANDING_TUPLES as readonly string[]).not.toContain('reconsider:extend'); // Aegis M2
     for (const t of STANDING_TUPLES) for (const banned of ['install', 'gate-class', 'fallback', 'declassify', 'peer', 'grant', 'api-token', 'repin']) expect(t).not.toContain(banned);
   });
   it('closed values ride the clientApiId descriptor', () => {
-    expect((CLIENT_API_DESCRIPTOR as unknown as { standingGrant: unknown }).standingGrant).toEqual({ tuples: [...STANDING_TUPLES], revokeReasons: [...STANDING_REVOKE_REASONS], presencePrefix: STANDING_PRESENCE_PREFIX, maxMs: STANDING_GRANT_MAX_MS });
+    expect((CLIENT_API_DESCRIPTOR as unknown as { standingGrant: unknown }).standingGrant).toEqual({ tuples: [...STANDING_TUPLES], repoTuples: [...STANDING_REPO_TUPLES], revokeReasons: [...STANDING_REVOKE_REASONS], presencePrefix: STANDING_PRESENCE_PREFIX, maxMs: STANDING_GRANT_MAX_MS });
     expect(STANDING_GRANT_MAX_MS).toBe(12 * 3600_000);
-    expect(CLIENT_API_ID).toBe('sha256:ebf32456626d7f80f7a6b7e90ab48270476c120e3f80336b3c762d8289a05c01');
+    expect(CLIENT_API_ID).toBe('sha256:302702e5d3b7b8d3f6a844394302d6197732884f872aeb228d1718b4a562798f');
   });
   it('approval.auto.miss is a sensitive kind whose why and inputHash are sensitive fields; approval.auto gains anchoredInputHash', () => {
     expect(defaultLabelsFor('approval.auto.miss').sensitivity).toBe('sensitive');

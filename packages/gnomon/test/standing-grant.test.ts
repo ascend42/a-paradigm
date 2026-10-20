@@ -26,7 +26,7 @@ const REPO = `sha256:${'a'.repeat(64)}`;
 const OTHER = `sha256:${'b'.repeat(64)}`;
 const NEW_BOUNDS = { idleSeconds: 12 * 3600, absoluteSeconds: 12 * 3600, maxSignatures: 512 };
 const gui = (connId = A, deviceId = DEV) => ({ connId, principal: HUMAN, principalClass: 'human', surface: 'browser', credential: 'gui', deviceId });
-const ALL = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart', 'reconsider:extend'];
+const ALL = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'];
 
 function rig() {
   const helper = new FakeHelper(GEN, { bounds: NEW_BOUNDS });
@@ -146,7 +146,7 @@ describe('F6: using it', () => {
     expect(standingTupleOf({ kind: 'daemon-stop' }, 'accept', { reason: 'upgrade', update: 'x', binaryUnchanged: true }, null)).toBeNull();
     expect(standingTupleOf({ kind: 'daemon-stop' }, 'accept', { reason: 'upgrade', binaryUnchanged: true }, null)).toEqual({ tuple: 'daemon-stop:restart', repo: null });
     expect(standingTupleOf({ kind: 'strictness' }, 'allow', { op: 'mode.loosen', to: 'ask', scope: { repo: REPO } }, null)).toBeNull();
-    expect(standingTupleOf({ kind: 'reconsider' }, 'extend', { repo: REPO }, null)).toEqual({ tuple: 'reconsider:extend', repo: REPO });
+    expect(standingTupleOf({ kind: 'reconsider' }, 'extend', { repo: REPO }, null)).toBeNull(); // Aegis M2
   });
 });
 
@@ -212,5 +212,8 @@ describe('F6: the fold reads kernel-signed rows only', () => {
     expect(g.match({ ...gui(), principalClass: 'agent' } as never, card, 'always', {}, REPO)).toBeNull();
     expect(g.match({ ...gui(), credential: 'device' } as never, card, 'always', {}, REPO)).toBeNull();
     expect(g.match({ ...gui(), principalClass: 'voice' } as never, card, 'always', {}, REPO)).toBeNull();
+    // Aegis M2: a repo-scoped tuple with no repo never matches
+    expect(g.match(gui() as never, card, 'always', {}, null)).toBeNull();
+    expect(g.match(gui() as never, { kind: 'strictness' } as never, 'allow', { op: 'mode.loosen', to: 'auto-edits', scope: { repo: null } }, null)).toBeNull();
   });
 });

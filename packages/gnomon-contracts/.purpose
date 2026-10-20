@@ -300,7 +300,7 @@ components:
       kitId and clientApiId (§12.3, §12.8). TD-2026-10-20-086 F6 + T-2026-10-20-007
       (one deliberate move) moved clientApiId
       sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4 →
-      sha256:ebf32456626d7f80f7a6b7e90ab48270476c120e3f80336b3c762d8289a05c01:
+      sha256:302702e5d3b7b8d3f6a844394302d6197732884f872aeb228d1718b4a562798f:
       grant.standing / .used / .revoked, request.grant.standing / .revoke,
       approval.auto.miss (sensitive; why + inputHash sensitive),
       approval.auto{anchoredInputHash} (sensitive field), STANDING_TUPLES,

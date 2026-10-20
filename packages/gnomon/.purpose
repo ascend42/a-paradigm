@@ -1673,8 +1673,8 @@ components:
       GUI decision on the same device that a tuple covers
       (STANDING_TUPLES: mode.loosen:auto-edits, permission:always,
       voice.widen, voice-arm:allow, daemon-stop:restart with
-      detail.binaryUnchanged and no update, reconsider:extend; repo-scoped
-      ones only in the granted repos) takes no prompt: approval.decide
+      detail.binaryUnchanged and no update; NOT reconsider:extend, Aegis M2; repo-scoped
+      ones only with a non-null granted repo) takes no prompt: approval.decide
       {presence:'standing:<grantId>'} then the notify row
       grant.standing.used{grantId, cardId, tuple, decision, repo, hsid}.
       Never standing: root class, hand-only, install, gate-class,
