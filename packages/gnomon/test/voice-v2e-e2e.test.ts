@@ -162,7 +162,15 @@ describe.skipIf(!SANDBOX_OK)('#gnomon-voice V2e end to end through a real daemon
     audio.hotkey(false);
     await client!.idle();
     const rows = (kind: string) => [...d.log.read({ reader: { class: 'human' }, kinds: [kind] })].flatMap((v) => (v.view === 'full' ? [v.event.payload as Record<string, unknown>] : []));
-    expect(rows('voice.turn.user').at(-1)).toMatchObject({ speakerId: `spk:${w.l.root.ns}/matt`, speakerEnrolled: true, forwarded: true, text: 'run the tests please' });
+    // TD-2026-10-20-262 dictation: the client appends (composer delivery, never a send); the kernel stamps forwardable
+    expect(rows('voice.turn.user').at(-1)).toMatchObject({ speakerId: `spk:${w.l.root.ns}/matt`, speakerEnrolled: true, forwarded: false, forwardable: true, text: 'run the tests please' });
+    expect(rows('turn.sent')).toHaveLength(0);
+    expect(((await hstatus()) as Record<string, unknown>).dictation).toMatchObject({ activity: 'idle', holdToggles: 0 });
+    // the GUI composer sends it as the human, with the attribution hint
+    await call(human, 'session.send', { hsid: opened.hsid, content: [{ text: 'run the tests please' }], source: 'voice' });
+    const sent = rows('turn.sent').at(-1)!;
+    expect(sent).toMatchObject({ source: 'voice', voiceTurnSeqs: [expect.any(Number)] });
+    expect(sent.voiceTurnSeq).toBe((sent.voiceTurnSeqs as number[])[0]);
     // the fake claude answers; the kernel writes the speakable row; the client speaks it
     expect(await waitFor(() => rows('voice.turn.agent').some((p) => p.source === 'kernel-speakable'), 20_000)).toBe(true);
     expect(await waitFor(() => (audio.tick(250), engines.tts.said.length > 0 && audio.played.length > 0 && !client!.playing), 10_000, 20)).toBe(true);

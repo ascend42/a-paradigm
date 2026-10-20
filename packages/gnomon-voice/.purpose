@@ -28,6 +28,14 @@ components:
       push-to-talk within the ceiling, and above it only relays a notice
       for the GUI (request.voice.report{notice: {text, code}}, never a log
       row). The principal comes from status.voice.principal (no flag).
+      Dictation (TD-2026-10-20-262): delivery 'composer' (default; the
+      kernel-spawned run) never calls session.send and appends
+      voice.turn.user forwarded:false (the kernel stamps forwardable; the
+      GUI composer sends after a countdown); --delivery direct keeps the old
+      forward for headless use. Activity edges only, as
+      request.voice.report{dictation: {activity speaking|transcribing|idle,
+      holdToggles}}; the Ctrl-Alt-H hold-toggle hotkey increments
+      holdToggles.
       Kernel-decided enrolment (src/enrol-watch.ts): while running it polls
       status (1.5 s); on status.voice.enrolment phase 'requested' it pauses
       the voice loop, turns the mic on for the recording if it was off,
@@ -64,6 +72,8 @@ components:
     flows: [$voice-turn]
   gnomon-voice-io:
     description: >-
+      Hotkeys talk, mic-toggle, mode-toggle and hold-toggle (carbonId 4,
+      default ctrl+alt+h, TD-2026-10-20-262 dictation hold).
       The voice child's audio I/O, mic only (no keychain group, no network,
       writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same
       framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON
