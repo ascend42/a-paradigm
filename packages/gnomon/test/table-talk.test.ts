@@ -3,7 +3,7 @@
  * bytes and the user-message shape. (The supervisor injection itself: the S2 describe below.)
  */
 import { describe, expect, it } from 'vitest';
-import { replyItem, speakBlock, SpeakableProjector, SPEAK_BLOCK_MAX } from '../src/kernel/voice/speakable.js';
+import { askQuestions, replyItem, speakBlock, SpeakableProjector, SPEAK_BLOCK_MAX } from '../src/kernel/voice/speakable.js';
 import { TABLE_TALK_BODY, TABLE_TALK_GUIDANCE, TABLE_TALK_GUIDANCE_HASH, guidanceHashOf } from '../src/kernel/voice/table-talk.js';
 import { userMessageLine } from '../src/adapters/claude-code/adapter.js';
 
@@ -33,6 +33,11 @@ describe('#gnomon-voice table talk S1: the speak block', () => {
     expect(noStop.length).toBeLessThanOrEqual(SPEAK_BLOCK_MAX);
     expect(noStop.endsWith('…')).toBe(true);
     expect(speakBlock(`${FENCE}speak\nSee https://evil.example/a?b=1 and www.x.io now, commit 711ef5de0a1b2c, id 1,234,567, version 12. Ok?\n${FENCE}`)).toBe('See and now, commit, id, version 12. Ok?');
+  });
+  it('Aegis L2: the same scrub (URLs, 12+ hex, 5+ digits) applies to heuristic and ask items', () => {
+    expect(replyItem('Pushed 711ef5de0a1b2c to https://github.com/x/y, run 1234567.\n\nMore.')).toEqual({ kind: 'reply', text: 'Pushed to run.', from: 'heuristic' });
+    expect(replyItem('x\ngnome: See www.evil.io id 99999 now.')).toEqual({ kind: 'reply', text: 'See id now.', from: 'heuristic' });
+    expect(askQuestions({ question: 'Open https://evil.example/a or keep 1234567?', options: ['deadbeef00112233', 'keep'] })).toEqual(['Open or keep? Options:, or keep.']);
   });
   it('an unclosed speak fence runs to its first blank line only', () => {
     expect(speakBlock(`${FENCE}speak\nI fixed it. Shall I run the tests?\n\nconst secret = 1;\nmore reference`)).toBe('I fixed it. Shall I run the tests?');

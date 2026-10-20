@@ -255,7 +255,7 @@ export class VoiceClient {
     this.#requested = ceilingOf(next);
     this.#notice('info', `Attached to ${next.hsid} (up to ${ceilingOf(next) === 'ambient' ? 'ambient' : 'push-to-talk'}). Mode: ${this.mode}.`);
     try {
-      this.#unfollow = await this.#o.link.follow(next.hsid, (r) => this.#onRow(r.kind, r.payload), (reason) => {
+      this.#unfollow = await this.#o.link.follow(next.hsid, (r) => this.#onRow(r.kind, r.payload, r.principal), (reason) => {
         this.#log.info('follow ended', { reason });
         this.#unfollow = undefined;
         if (!this.#closed) void this.refresh();
@@ -497,8 +497,8 @@ export class VoiceClient {
 
   // ---- speaking ------------------------------------------------------------------------------------------------
 
-  #onRow(kind: string, payload: Record<string, unknown>): void {
-    const items = kernelSpeakable(kind, payload);
+  #onRow(kind: string, payload: Record<string, unknown>, principal?: string): void {
+    const items = kernelSpeakable(kind, payload, principal, this.#o.ns);
     if (!items.length) return;
     // a kernel-speakable row is said once per turnSeq (a re-follow after an attachment change replays rows)
     const key = typeof payload.turnSeq === 'number' || typeof payload.turnSeq === 'string' ? String(payload.turnSeq) : undefined;

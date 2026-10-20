@@ -44,16 +44,21 @@ export function speakBlock(text: string): string | null {
   const close = /(?:^|\n)[ \t]*```/.exec(rest);
   // unclosed: the fence would run to the end, so keep only its first paragraph
   const body = close ? rest.slice(0, close.index) : rest.split(/\n\s*\n/)[0]!;
-  const said = capSentence(
-    stripMarkdown(body.replace(/\bhttps?:\/\/\S+/gi, '').replace(/\bwww\.\S+/gi, ''))
-      .replace(/\b[0-9a-f]*\d[0-9a-f]*\b/gi, (w) => (w.length >= 12 && /[0-9]/.test(w) && /^[0-9a-f]+$/i.test(w) ? '' : w))
-      .replace(/\d[\d,._:-]*\d/g, (w) => (w.replace(/\D/g, '').length >= 5 ? '' : w))
-      .replace(/\s+([,.;:!?])/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim(),
-    SPEAK_BLOCK_MAX,
-  );
+  const said = capSentence(scrubSpoken(body), SPEAK_BLOCK_MAX);
   return said && /[A-Za-z]/.test(said) ? said : null;
+}
+
+/**
+ * The spoken-text scrub (Aegis L2: every model-written item, block, heuristic and ask alike): markdown stripped,
+ * URLs removed, 12+ hex runs (with a digit) and digit runs of 5+ digits removed, whitespace tidied.
+ */
+export function scrubSpoken(s: string): string {
+  return stripMarkdown(s.replace(/\bhttps?:\/\/\S+/gi, '').replace(/\bwww\.\S+/gi, ''))
+    .replace(/\b[0-9a-f]*\d[0-9a-f]*\b/gi, (w) => (w.length >= 12 && /^[0-9a-f]+$/i.test(w) ? '' : w))
+    .replace(/\d[\d,._:-]*\d/g, (w) => (w.replace(/\D/g, '').length >= 5 ? '' : w))
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function capSentence(s: string, max: number): string {
@@ -98,12 +103,15 @@ function looksLikeDiffOrOutput(line: string): boolean {
 /** The speakable summary of one reply's text: the gnome line, else the first prose paragraph. '' when none. */
 export function speakableSummary(text: string): string {
   const gnome = /^\s*gnome:\s*(.+)$/im.exec(text);
-  if (gnome) return clip(stripMarkdown(gnome[1]!));
+  if (gnome) {
+    const g = scrubSpoken(gnome[1]!);
+    if (g && /[A-Za-z]/.test(g)) return clip(g);
+  }
   // drop fenced blocks entirely (code, diffs, tool output)
   const noFences = text.replace(/```[\s\S]*?(```|$)/g, '\n\n').replace(/~~~[\s\S]*?(~~~|$)/g, '\n\n');
   for (const para of noFences.split(/\n\s*\n/)) {
     const lines = para.split('\n').filter((l) => l.trim() && !looksLikeDiffOrOutput(l) && !/^\s*[|>]/.test(l));
-    const prose = stripMarkdown(lines.join(' '));
+    const prose = scrubSpoken(lines.join(' '));
     if (prose && /[A-Za-z]/.test(prose)) return clip(prose);
   }
   return '';
@@ -198,7 +206,8 @@ export function askQuestions(input: Record<string, unknown> | undefined): string
     if (!text) continue;
     const opts = Array.isArray(q.options) ? q.options.map((o) => (typeof o === 'string' ? o : typeof (o as { label?: unknown })?.label === 'string' ? (o as { label: string }).label : '')).filter(Boolean) : [];
     const said = stripMarkdown(text);
-    out.push(opts.length ? `${said} Options: ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(", ")}, or ${opts.at(-1)}`}.` : said);
+    const line = scrubSpoken(opts.length ? `${said} Options: ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(", ")}, or ${opts.at(-1)}`}.` : said);
+    if (line && /[A-Za-z]/.test(line)) out.push(line);
   }
   return out;
 }

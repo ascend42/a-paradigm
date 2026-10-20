@@ -244,7 +244,7 @@ function logEventOf(r: LogRow): TraceEvent {
     case 'session.open':
       return { ...base, cwd: p.cwd ?? null, uuid: p.uuid ?? null, by: p.by ?? null, model: p.model ?? null, ...(p.resume ? { resume: p.resume } : {}) };
     case 'turn.sent':
-      return { ...base, turn: p.turn ?? null, permitId: p.permitId ?? null, contentHash: p.contentHash ?? null };
+      return { ...base, turn: p.turn ?? null, permitId: p.permitId ?? null, contentHash: p.contentHash ?? null, ...(typeof p.guidanceHash === 'string' ? { guidanceHash: p.guidanceHash } : {}) };
     case 'turn.usage':
     case 'turn.result':
       return { ...base, tokens: obj(p.usage).tokens ?? null, ...(r.kind === 'turn.result' ? { costUsd: p.cost ?? null, subtype: p.subtype ?? null, isError: p.isError ?? null, permissionDenials: p.permission_denials ?? null } : {}) };
@@ -264,17 +264,31 @@ interface TranscriptLine {
   message?: { role?: unknown; content?: unknown };
 }
 
-/** The prompt text of a transcript user message as the supervisor sent it (string content, or the text blocks joined). */
 /**
  * The human's prompt text of a transcript user message: the FIRST text block only. The kernel's contentHash is the
  * hash of the human's text alone; a second text block is the table-talk `<gnomon-voice>` guidance (TD-2026-10-20-294),
- * which is never part of the turn's content and is not checked against the log.
+ * checked separately against turn.sent.guidanceHash (promptExtraHashes, extrasAgree).
  */
 export function promptText(content: unknown): string | null {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return null;
   const first = content.find((b) => obj(b).type === 'text');
   return first === undefined ? null : String(obj(first).text ?? '');
+}
+
+/** The hashes of every text block AFTER the first (Aegis M2: at most one, and only the guidance the log names). */
+export function promptExtraHashes(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  return content.filter((b) => obj(b).type === 'text').slice(1).map((b) => turnContentHash(String(obj(b).text ?? '')));
+}
+
+/**
+ * Do a transcript prompt's extra blocks agree with its turn.sent? No guidanceHash: no extra block. A guidanceHash:
+ * exactly one extra block with that hash. Anything else is a trace mismatch.
+ */
+export function extrasAgree(extraHashes: readonly string[], guidanceHash: string | null): boolean {
+  if (guidanceHash === null) return extraHashes.length === 0;
+  return extraHashes.length === 1 && extraHashes[0] === guidanceHash;
 }
 
 function resultText(content: unknown): string {
@@ -311,7 +325,7 @@ function transcriptEvents(file: string): { events: TraceEvent[]; lines: number }
         }
       }
       const prompt = promptText(content);
-      if (prompt !== null && l.isMeta !== true) events.push({ t, source: 'transcript', kind: 'prompt', text: prompt, contentHash: turnContentHash(prompt) });
+      if (prompt !== null && l.isMeta !== true) events.push({ t, source: 'transcript', kind: 'prompt', text: prompt, contentHash: turnContentHash(prompt), extraHashes: promptExtraHashes(content) });
     } else if (l.type === 'assistant' && Array.isArray(content)) {
       for (const b of content) {
         const o = obj(b);
@@ -439,7 +453,14 @@ export function traceSession(rows: readonly LogRow[], chain: ChainCheck, hsid: s
       continue;
     }
     const hit = prompts.find((p) => unpaired.has(p) && p.contentHash === h);
-    if (hit) {
+    // table talk (Aegis M2): the prompt's extra text blocks must be exactly the guidance this turn.sent names
+    if (hit && !extrasAgree(Array.isArray(hit.extraHashes) ? (hit.extraHashes as string[]) : [], str(e.guidanceHash) ?? null)) {
+      unpaired.delete(hit);
+      hit.verify = 'hash-mismatch';
+      hit.turn = e.turn;
+      e.verify = 'hash-mismatch';
+      turns.mismatched++;
+    } else if (hit) {
       unpaired.delete(hit);
       hit.verify = 'matches-log';
       hit.turn = e.turn;

@@ -240,10 +240,11 @@ export function attachmentFromStatus(status: unknown): VoiceAttachment | null {
 
 /** A projected row → KernelRow (full view: the event; a stub carries only kind + hsid and no payload). */
 export function kernelRowOf(r: unknown): KernelRow | undefined {
-  const x = r as { seq?: unknown; kind?: unknown; session?: unknown; payload?: unknown; event?: Record<string, unknown> } | undefined;
+  const x = r as { seq?: unknown; kind?: unknown; session?: unknown; principal?: unknown; payload?: unknown; event?: Record<string, unknown> } | undefined;
   const e = (x?.event && typeof x.event === 'object' ? x.event : x) as typeof x;
   if (!e || typeof e.kind !== 'string') return undefined;
-  return { seq: Number(e.seq ?? x?.seq ?? 0), kind: e.kind, ...(typeof e.session === 'string' ? { session: e.session } : {}), payload: (e.payload && typeof e.payload === 'object' ? e.payload : {}) as Record<string, unknown> };
+  const principal = (e as { principal?: unknown }).principal;
+  return { seq: Number(e.seq ?? x?.seq ?? 0), kind: e.kind, ...(typeof e.session === 'string' ? { session: e.session } : {}), ...(typeof principal === 'string' ? { principal } : {}), payload: (e.payload && typeof e.payload === 'object' ? e.payload : {}) as Record<string, unknown> };
 }
 
 export class GnomonKernelLink implements KernelLink {

@@ -138,6 +138,8 @@ export interface KernelRow {
   seq: number;
   kind: string;
   session?: string;
+  /** the row's principal (Aegis L1: a kernel-speakable row is spoken only when it is p:<ns>/kernel) */
+  principal?: string;
   payload: Record<string, unknown>;
 }
 

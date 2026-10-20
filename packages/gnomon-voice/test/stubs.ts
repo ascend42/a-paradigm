@@ -4,6 +4,8 @@ import { SpeakableProjector } from '../src/speakable.js';
 import type { KernelLink, KernelRow, PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceAttachment, VoiceEngines } from '../src/types.js';
 
 export const SR = 16_000;
+/** the fake kernel's principal (the tests' voice namespace is abcd1234) */
+export const KERNEL_PRINCIPAL = 'p:abcd1234/kernel';
 
 /** A tone of `ms` at amplitude `amp` (the amplitude stands in for "who is speaking"). */
 export function tone(ms: number, amp: number, sr = SR): Float32Array {
@@ -162,7 +164,7 @@ export class FakeLink implements KernelLink {
   }
   speakable(items: Array<{ kind: string; text: string; from?: string }>, turnSeq = ++this.#turnSeq): void {
     if (!items.length) return;
-    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text, ...(i.from !== undefined ? { from: i.from } : {}) })) } });
+    this.row?.({ seq: ++this.#seq, kind: 'voice.turn.agent', principal: KERNEL_PRINCIPAL, payload: { source: 'kernel-speakable', turnSeq, items: items.map((i) => ({ kind: i.kind === 'question' ? 'ask' : i.kind, text: i.text, ...(i.from !== undefined ? { from: i.from } : {}) })) } });
   }
 }
 

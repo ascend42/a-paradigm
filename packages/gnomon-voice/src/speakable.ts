@@ -153,8 +153,10 @@ const ITEM_KINDS = new Set(['reply', 'ask', 'edits']);
  * Everything else (turn.event, the client's own playback rows, malformed items) says nothing. Text is
  * markdown-stripped and clipped defensively; an item with no letters or digits is dropped.
  */
-export function kernelSpeakable(kind: string, payload: Record<string, unknown>): KernelSpeakItem[] {
+export function kernelSpeakable(kind: string, payload: Record<string, unknown>, principal: string | undefined, ns: string): KernelSpeakItem[] {
   if (kind !== 'voice.turn.agent' || payload.source !== KERNEL_SPEAKABLE || !Array.isArray(payload.items)) return [];
+  // Aegis L1: only the kernel's own row (principal p:<ns>/kernel of THIS namespace) is spoken
+  if (principal !== `p:${ns}/kernel`) return [];
   const out: KernelSpeakItem[] = [];
   for (const it of payload.items as Array<Record<string, unknown>>) {
     if (!it || typeof it !== 'object' || typeof it.kind !== 'string' || !ITEM_KINDS.has(it.kind) || typeof it.text !== 'string') continue;
