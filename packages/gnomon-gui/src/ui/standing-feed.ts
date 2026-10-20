@@ -6,6 +6,8 @@
  * and status reads. Shows a toast for each `grant.standing.used` row, a list of today's uses with Revoke, and the
  * one-gesture offer "Let Gnomon handle these today" (log.append request.grant.standing, then approve its grant card
  * `allow` in the same gesture: one presence). Every request is sent only on a trusted user event (G-GUI-04).
+ * Styled by classes in styles.css only (#gui-settings: the CSP's style-src 'self' refuses a style attribute, so the
+ * inline styles this module once set never applied).
  */
 import { dayKey, feedItemOf, grantRequest, revokeRequest, shouldOffer, STANDING_ROW_KINDS, standingStatusOf, type FeedItem } from '../core/standing.js';
 
@@ -38,7 +40,6 @@ export function mountStandingFeed(doc: Document, d: StandingFeedDeps): StandingF
   root.id = 'standing-feed';
   root.className = 'standing-feed kernel-owned';
   root.setAttribute('aria-label', "Today's grant");
-  root.setAttribute('style', 'position:fixed;right:12px;bottom:12px;max-width:340px;z-index:50;display:flex;flex-direction:column;gap:6px;font-size:12px');
   const toasts = doc.createElement('div');
   toasts.setAttribute('role', 'status');
   const offer = doc.createElement('button');
@@ -52,7 +53,7 @@ export function mountStandingFeed(doc: Document, d: StandingFeedDeps): StandingF
   panel.hidden = true;
   const summary = doc.createElement('summary');
   const list = doc.createElement('ul');
-  list.setAttribute('style', 'margin:4px 0;padding-left:16px;max-height:200px;overflow:auto');
+  list.className = 'standing-items';
   const revoke = doc.createElement('button');
   revoke.type = 'button';
   revoke.className = 'key quiet standing-revoke';
@@ -74,7 +75,6 @@ export function mountStandingFeed(doc: Document, d: StandingFeedDeps): StandingF
   function toast(text: string): void {
     const t = doc.createElement('div');
     t.className = 'standing-toast';
-    t.setAttribute('style', 'padding:6px 8px;border-radius:4px;background:var(--paper,#fff);border:1px solid var(--rule,#ccc)');
     t.textContent = text;
     toasts.appendChild(t);
     setTimeout(() => t.remove(), TOAST_MS);
