@@ -186,14 +186,14 @@ describe('#paradigm-context-mod through the host', () => {
     }
     const w = await installed({ focusCwd: (h) => (h === A ? repo : null), userHome: path.join(base, 'nohome') });
     await w.host.start('paradigm-context');
-    const r = await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: A }, repo: other, path: other }, principal: HUMAN, connId: H.connId });
+    const r = await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: A }, repo: other, path: other }, principal: HUMAN, connId: H.connId, principalClass: 'human' });
     const s = JSON.stringify(r.block);
     expect(s).toContain('shop');
     expect(s).toContain('T-2026-10-20-001 ▲ Ship the cart');
     expect(s).toContain('tasks · 1 of 1 open · 1 high');
     expect(s).not.toContain('OTHER');
     expect(s).not.toContain(base);
-    const none = JSON.stringify((await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' } }, principal: HUMAN, connId: H.connId })).block);
+    const none = JSON.stringify((await w.host.relayView({ name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' } }, principal: HUMAN, connId: H.connId, principalClass: 'human' })).block);
     expect(none).toContain('focus a live session');
   });
 });

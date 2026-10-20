@@ -165,6 +165,11 @@ export interface ModHostOptions {
    * the hsid is not a live session. Client input never names a repo or a path: only this join picks one.
    */
   focusCwd?: (hsid: string) => string | null;
+  /**
+   * Aegis M1: the session principal of a LIVE hsid (daemon: supervisor.principalOf), so an agent or session
+   * caller is joined only to its OWN session. Absent ⇒ agent/session callers are never joined (unfocused).
+   */
+  focusPrincipal?: (hsid: string) => string | null;
   /** the user home the K1 projector never walks into (tests); default os.homedir() */
   userHome?: string;
   platform?: string;
@@ -213,6 +218,8 @@ export interface RenderResult {
 
 export interface CallOptions {
   relayedFor?: RelayedFor;
+  /** Aegis M1: the relaying caller's §5 class (host-side only, never sent to the mod) */
+  relayedClass?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -734,7 +741,7 @@ export class ModHost {
     const view = r.manifest.provides?.views?.find((v) => v.id === viewId);
     if (!view) throw new ModRefusal('UNDECLARED', `${name} declares no view ${viewId}`, { name, viewId });
     const t0 = this.#now();
-    if (opts.relayedFor) input = this.#composeRelayedInput(r, input);
+    if (opts.relayedFor) input = this.#composeRelayedInput(r, input, opts.relayedFor, opts.relayedClass ?? null);
     const out = (await this.#call(name, 'view.render', { viewId, input: input ?? null, width: opts.width ?? 80, prefs: opts.prefs ?? {}, ...(opts.relayedFor ? { relayedFor: opts.relayedFor } : {}) }, { kind: 'view' }, opts)) as Record<string, unknown>;
     const s = sanitizeModBlock(out?.block, name);
     this.#emit('mod.view.rendered', { name, slot: view.slot, ms: this.#now() - t0 });
@@ -748,14 +755,14 @@ export class ModHost {
    * `paradigm` slice. A client `paradigm`, `repo`, `path` or any other key never picks the repo: the slice mod's
    * input is exactly {hsid?, paradigm}; every other mod gets the client's non-host keys plus {hsid?}.
    */
-  #composeRelayedInput(r: Running, input: unknown): Record<string, unknown> {
+  #composeRelayedInput(r: Running, input: unknown, rf: RelayedFor, cls: string | null): Record<string, unknown> {
     const client = input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
     const focus = client.focus && typeof client.focus === 'object' && !Array.isArray(client.focus) ? (client.focus as Record<string, unknown>).hsid : client.hsid;
     const hsid = typeof focus === 'string' && FOCUS_HSID.test(focus) ? focus : null;
     if ((r.manifest.requires?.capabilities ?? []).includes(PARADIGM_SUMMARY_CAPABILITY)) {
       let cwd: string | null = null;
       try {
-        cwd = hsid ? (this.#o.focusCwd?.(hsid) ?? null) : null;
+        cwd = hsid && this.#mayJoin(rf, cls, hsid) ? (this.#o.focusCwd?.(hsid) ?? null) : null;
       } catch {
         cwd = null;
       }
@@ -768,9 +775,25 @@ export class ModHost {
     return out;
   }
 
+  /**
+   * Aegis M1: who may have a focus JOINED to a repo. The human class: any live hsid (the GUI's focus). An agent
+   * or session principal: only its OWN session's hsid (the live session's principal is the caller). Every other
+   * class that reaches mod.view (voice, mod; peers and read tokens are refused by the §5 matrix first) and an
+   * unknown class: never (unfocused).
+   */
+  #mayJoin(rf: RelayedFor, cls: string | null, hsid: string): boolean {
+    if (cls === 'human') return true;
+    if (cls === 'agent' || cls === 'session') {
+      const owner = this.#o.focusPrincipal?.(hsid) ?? null;
+      return typeof owner === 'string' && owner.length > 0 && owner === rf.principal;
+    }
+    return false;
+  }
+
   /** The `mod.view` client relay: relayedFor is stamped from the caller's connection, never taken from input. */
-  relayView(req: { name: string; viewId: string; input?: unknown; principal: string; connId: string; width?: number; prefs?: { motion?: string; theme?: string } }): Promise<RenderResult> {
-    return this.render(req.name, req.viewId, req.input, { relayedFor: { principal: req.principal, connId: req.connId }, ...(req.width ? { width: req.width } : {}), ...(req.prefs ? { prefs: req.prefs } : {}) });
+  relayView(req: { name: string; viewId: string; input?: unknown; principal: string; connId: string; principalClass: string; width?: number; prefs?: { motion?: string; theme?: string } }): Promise<RenderResult> {
+    // the class stays host-side: the mod's relayedFor is exactly {principal, connId} (MOD_ABI relayedFor fields)
+    return this.render(req.name, req.viewId, req.input, { relayedFor: { principal: req.principal, connId: req.connId }, relayedClass: req.principalClass, ...(req.width ? { width: req.width } : {}), ...(req.prefs ? { prefs: req.prefs } : {}) });
   }
 
   async runCommand(name: string, commandId: string, args: unknown, opts: CallOptions = {}): Promise<unknown> {
@@ -781,7 +804,7 @@ export class ModHost {
   }
 
   /** The `mod.command` client relay (a GUI caller additionally needs a user gesture — the endpoint's rule, slice 2). */
-  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string }): Promise<unknown> {
+  relayCommand(req: { name: string; commandId: string; args?: unknown; principal: string; connId: string; principalClass?: string }): Promise<unknown> {
     return this.runCommand(req.name, req.commandId, req.args, { relayedFor: { principal: req.principal, connId: req.connId } });
   }
 

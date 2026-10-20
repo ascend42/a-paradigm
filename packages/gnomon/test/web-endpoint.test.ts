@@ -533,7 +533,7 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
     expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.10' } } } });
     ws.sendJson(rpc(5, 'mod.view', { name: 'probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
     expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:probe' } });
-    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId }, req: { name: 'probe', viewId: 'probe.view', input: {} } }]);
+    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId, principalClass: 'human' }, req: { name: 'probe', viewId: 'probe.view', input: {} } }]);
   });
 });
 

@@ -3114,6 +3114,14 @@ components:
       {hsid?, paradigm: slice | unfocused}; a forged repo/path/cwd/paradigm is
       ignored (test/mod-focus.test.ts). Other mods get their non-host keys +
       {hsid}. Local-lane sessions are not joined yet (unfocused).
+      Aegis M1: the join checks the CALLER. The dispatcher stamps
+      relayedFor{principal, connId, principalClass}; the host keeps the class
+      host-side (the mod's relayedFor stays {principal, connId}). Human: any
+      live hsid. Agent/session: only its OWN session (ModHostOptions.
+      focusPrincipal; daemon: supervisor.principalOf(hsid) === caller).
+      Voice, mod, unknown: unfocused (peer/read-token never reach mod.view:
+      RELAY_TIERS false). Falsifier: test/mod-focus.test.ts (agent naming
+      another session's hsid).
       HOST-LEVEL FALSIFIERS (test/mod-capability-falsifier.test.ts, real stub
       children; mutation-checked): log.read-only mods get no usage kind and
       turn.result exactly {hsid}; a mod without paradigm.read:summary never

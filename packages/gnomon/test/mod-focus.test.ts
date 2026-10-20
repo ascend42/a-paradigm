@@ -18,7 +18,10 @@ afterEach(async () => {
 });
 const LIVE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
 const GONE = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
-const HUMAN = { principal: 'p:abcdefgh/matt', connId: 'c1' };
+const HUMAN = { principal: 'p:abcdefgh/matt', connId: 'c1', principalClass: 'human' };
+/** a second live session, in the OTHER repo, run by another session principal */
+const LIVE2 = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZC';
+const OWNER: Record<string, string> = { [LIVE]: 'p:abcdefgh/s-live', [LIVE2]: 'p:abcdefgh/s-other' };
 
 function repos(r: Rig): { mine: string; other: string } {
   const mk = (name: string, title: string): string => {
@@ -38,7 +41,7 @@ async function rigged() {
   installStub(r, 'ctx', ['paradigm.read:summary']);
   installStub(r, 'plain', []);
   const joins: string[] = [];
-  const { h } = host(r, { launcher: unsandboxedModLauncher }, { focusCwd: (hsid) => (joins.push(hsid), hsid === LIVE ? mine : null), userHome: path.join(r.root, 'nohome') });
+  const { h } = host(r, { launcher: unsandboxedModLauncher }, { focusCwd: (hsid) => (joins.push(hsid), hsid === LIVE ? mine : hsid === LIVE2 ? other : null), focusPrincipal: (hsid) => OWNER[hsid] ?? null, userHome: path.join(r.root, 'nohome') });
   cleanups.push(() => h.stopAll());
   await h.start('ctx');
   await h.start('plain');
@@ -91,5 +94,41 @@ describe('K3 server-side focus join', () => {
     expect(await w.last('plain')).toEqual({ hsid: LIVE });
     expect(HOST_INPUT_KEYS).toEqual(['focus', 'hsid', 'paradigm']);
     expect(w.joins).toEqual([]); // no slice-less mod ever triggers a repo read
+  });
+});
+
+describe('Aegis M1: the K3 join checks the caller', () => {
+  const UNFOCUSED = { paradigm: { v: 'paradigm-slice:v1', state: 'unfocused' } };
+  it('FALSIFIER: an agent-class (or session-class) caller naming ANOTHER session\'s hsid gets unfocused; nothing is read', async () => {
+    const w = await rigged();
+    for (const principalClass of ['agent', 'session']) {
+      await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass });
+      const got = await w.last('ctx');
+      expect(got, principalClass).toEqual(UNFOCUSED);
+      expect(JSON.stringify(got)).not.toMatch(/OTHER/);
+    }
+    expect(w.joins).toEqual([]); // the repo lookup never ran
+  });
+  it('an agent or session principal is joined to its OWN session only', async () => {
+    const w = await rigged();
+    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c2', principalClass: 'session' });
+    expect(JSON.stringify(await w.last('ctx'))).toContain('MINE decision');
+    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, principal: 'p:abcdefgh/s-other', connId: 'c3', principalClass: 'agent' });
+    expect(JSON.stringify(await w.last('ctx'))).toContain('OTHER decision');
+  });
+  it('voice, mod, peer, read-token and an unknown or missing class are never joined', async () => {
+    const w = await rigged();
+    for (const principalClass of ['voice', 'mod', 'peer', 'readToken', 'nobody', '']) {
+      await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE } }, principal: 'p:abcdefgh/s-live', connId: 'c4', principalClass });
+      expect(await w.last('ctx'), principalClass).toEqual(UNFOCUSED);
+    }
+    expect(w.joins).toEqual([]);
+  });
+  it('the human class joins any live session (the GUI focus); the mod never sees the class', async () => {
+    const w = await rigged();
+    await w.h.relayView({ name: 'ctx', viewId: 'ctx.echo', input: { focus: { hsid: LIVE2 } }, ...HUMAN });
+    const got = await w.last('ctx');
+    expect(JSON.stringify(got)).toContain('OTHER decision');
+    expect(JSON.stringify(got)).not.toContain('principalClass');
   });
 });

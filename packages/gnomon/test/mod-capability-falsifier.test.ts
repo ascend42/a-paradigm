@@ -21,7 +21,7 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
-const HUMAN = { principal: 'p:abcdefgh/matt', connId: 'c1' };
+const HUMAN = { principal: 'p:abcdefgh/matt', connId: 'c1', principalClass: 'human' };
 type Seen = { seen: Array<{ kind: string; payload: Record<string, unknown> }>; last: Record<string, unknown> | null };
 
 /** Every usage kind, with the payload shapes the real emitters write. */
