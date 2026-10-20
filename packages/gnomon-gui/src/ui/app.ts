@@ -22,6 +22,7 @@ import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type Cw
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
+import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { mountStandingFeed } from './standing-feed.js';
@@ -203,11 +204,58 @@ function paintChatHead(): void {
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
 /** table talk: an assistant body whose lines start with a bold label (the agent's own A/B/C, 1/2/3 or names) shows those lines as chips. */
 function replyBody(it: ChatItem): MiniEl {
-  const parts = it.role === 'assistant' ? replyParts(it.text) : [];
   // S2.5: agent text renders a SAFE markdown subset (DOM nodes only, never markup); the user's words stay verbatim
   if (it.role !== 'assistant') return h(doc, 'div', { class: 'body' }, it.text);
-  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, it.text));
-  return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))));
+  // #gui-table-talk: trailing lettered options render as choice chips (core/choices.ts), live on the latest reply only
+  const ch = replyChoices(it.text, it.said ?? null);
+  const text = ch ? ch.body : it.text;
+  const parts = replyParts(text);
+  const chips = ch ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null }) : null;
+  if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, text), chips);
+  return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
+}
+/** #gui-table-talk choices: the live reply's item key, and each reply's picked option (this page only). */
+let liveChoice: string | null = null;
+const pickedChoices = new Map<string, string>();
+/** Repaint one transcript item (its chips changed state). */
+function remountItem(key: string | null): void {
+  if (key === null) return;
+  for (const [i, el] of mounted)
+    if (items[i]?.key === key) {
+      el.remove();
+      mounted.delete(i);
+    }
+}
+/** A chip pick: through the composer (send when empty, insert after a draft), only on a trusted gesture. */
+function onChoice(e: Event, b: HTMLElement): void {
+  const itemKey = b.dataset.choiceItem ?? '';
+  const pick = b.dataset.choice ?? '';
+  const it = items.find((x) => x.key === itemKey);
+  if (!it || b.hasAttribute('disabled')) return;
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  const out = pickChoice(e, { itemKey, liveKey: liveChoice, replyText: it.text, said: it.said ?? null, choiceKey: pick }, {
+    get value() {
+      return ta.value;
+    },
+    set value(v: string) {
+      ta.value = v;
+    },
+    dictationDraft: dictationOn() && dict.focusedHere && hasDraft(dict),
+    // THE send path: the composer form's submit, exactly as typing and pressing send
+    submit: () => {
+      pickedChoices.set(itemKey, pick);
+      $<HTMLFormElement>('composer').requestSubmit();
+    },
+    focus: () => ta.focus(),
+  });
+  if (out === 'inserted') {
+    if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: ta.value, now: Date.now() });
+    notice('the option is in the composer after your draft; nothing was sent');
+  }
+  if (out === 'sent') {
+    remountItem(itemKey);
+    paintTranscript();
+  }
 }
 function itemEl(it: FoldedItem): HTMLElement {
   if (it.role === 'activity') {
@@ -264,6 +312,12 @@ function paintTranscript(remeasure = false): void {
   }
   items = next;
   hiddenRows = hidden;
+  const live = focused && !rawMode ? liveChoiceKey(items) : null;
+  if (live !== liveChoice) {
+    remountItem(liveChoice);
+    liveChoice = live;
+    remountItem(live);
+  }
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
     $('spacer').style.height = `${heights.total()}px`;
@@ -1675,7 +1729,29 @@ function wire(): void {
     else expandedActs.add(k);
     paintTranscript();
   };
-  $('viewport').addEventListener('click', (e) => toggleAct(e.target));
+  $('viewport').addEventListener('click', (e) => {
+    const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
+    if (c) return onChoice(e, c);
+    toggleAct(e.target);
+  });
+  // #gui-table-talk: inside the live choices a letter / number picks (only with an empty composer); arrows move
+  $('viewport').addEventListener('keydown', (e) => {
+    const g = (e.target as HTMLElement).closest('.choices.live') as HTMLElement | null;
+    if (!g || e.metaKey || e.ctrlKey || e.altKey) return;
+    const bs = [...g.querySelectorAll<HTMLElement>('[data-choice]')];
+    const at = bs.indexOf(e.target as HTMLElement);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      return bs[(at + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length]?.focus();
+    }
+    const ta = $<HTMLTextAreaElement>('composer-text');
+    const c = choiceForKey(e.key, bs.map((b) => ({ key: b.dataset.choice ?? '', label: '' })), !ta.value.trim() && !(dictationOn() && dict.focusedHere && hasDraft(dict)));
+    const b = c ? bs.find((x) => x.dataset.choice === c.key) : undefined;
+    if (b) {
+      e.preventDefault();
+      onChoice(e, b);
+    }
+  });
   $('viewport').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       if (!(e.target as HTMLElement).closest('[data-act]')) return;

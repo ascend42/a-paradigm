@@ -292,7 +292,7 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
       // table talk: the reply's speak block, the kernel's one speakable row (turnSeq set in talkFixture), then one
       // playback row per sentence from the pipelined TTS (the third cut off by a barge-in)
       const said = o.talk === 'choices' ? 'The rounding fix is in and the tests pass. Should I open the pull request now?' : 'The rounding fix is in. All twelve billing tests pass. The invoice PDF now matches the totals.';
-      const body = o.talk === 'choices' ? `${said}\n\nA  Yes, open it against main.\nB  No, wait until I have read the diff.` : 'I rounded once at the end of `totals.ts`; the three-line order now totals $41.07, as on the invoice.';
+      const body = o.talk === 'choices' ? `A  Yes, open it against main.\nB  No, wait until I have read the diff.` : 'I rounded once at the end of `totals.ts`; the three-line order now totals $41.07, as on the invoice.';
       ev('billing', T('14:09'), textLine(`\`\`\`speak\n${said}\n\`\`\`\n\n${body}`));
       on('billing', T('14:09:01'), 'voice.turn.agent', { source: 'kernel-speakable', turnSeq: 0, items: [{ kind: 'reply', text: said, from: 'block' }] });
       if (o.talk === 'spoken') {
