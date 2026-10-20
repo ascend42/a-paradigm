@@ -122,9 +122,10 @@ describe('voice: a voice connection is never offered attach controls', () => {
     expect(m.every((e) => e.disabled)).toBe(true);
     expect(m.some((e) => e.id === 'voice.attach')).toBe(false);
   });
-  it('the page renders [Voice ▾] only under canAttach, and setVoice refuses without it', () => {
+  it('voice attaches from the header pill menu only (fidelity 2: no rail row), and setVoice refuses without canAttach', () => {
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
-    expect(app).toMatch(/isLiveState\(s\.state\) && canAttach\(status\)\) list\.appendChild\(voiceRowEl/);
+    expect(app).not.toMatch(/voiceRowEl|data-voice-row/);
+    expect(app).toMatch(/voiceMenuEntries\(v, focused, canAttach\(status\), voicePresenceDone\)/);
     expect(app).toMatch(/if \(!canAttach\(status\)\) return notice\('only a human connection attaches voice', true\);/);
   });
 });

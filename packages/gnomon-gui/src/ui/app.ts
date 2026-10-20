@@ -414,8 +414,9 @@ function closeDrawers(): void {
 }
 
 /* ── sessions sidebar ───────────────────────────────────────────── */
-/** S2.2: the rail: ACTIVE n (grouped by project, swatch + project ink name), then ▸ PAST n (collapsed by default).
- * Rows: 12px swatch · name (sessionTitle) · right-aligned state note. The kernel feed is a palette view now. */
+/** S2.2 / fidelity 2: the rail as the comp: ACTIVE n, then ONE line per session (12px swatch in the project hue · name
+ * (sessionTitle) · right-aligned state note), grouped by project order but with no heading rows; then ▸ PAST n
+ * (collapsed by default). Voice attaches from the header pill's menu (never a rail row). The kernel feed is a palette view. */
 function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][number], hue: number): HTMLElement {
   const was = lastState.get(s.hsid);
   lastState.set(s.hsid, s.state);
@@ -442,15 +443,7 @@ function paintSessions(): void {
   const past = groups.flatMap((g) => splitActivePast(g.sessions).past.map((s) => ({ s, hue: g.hue }))).sort((a, b) => b.s.lastSeq - a.s.lastSeq);
   const nActive = active.reduce((n, g) => n + g.sessions.length, 0);
   list.appendChild(h(doc, 'div', { class: 'sec-head' }, h(doc, 'span', null, 'Active'), h(doc, 'span', null, String(nActive))) as unknown as Node);
-  const vv = voiceStatusOf(status);
-  for (const g of active) {
-    list.appendChild(h(doc, 'div', { class: 'group-head' }, h(doc, 'span', { class: `swatch h${g.hue}` }), h(doc, 'span', { class: `pink h${g.hue}` }, g.repo === UNSCOPED ? 'unscoped' : g.repo)) as unknown as Node);
-    for (const s of g.sessions) {
-      list.appendChild(sessionRowEl(s, g.hue));
-      // V2d: the focused live session gets [Voice ▾] (PTT | Ambient); only a human connection is offered it
-      if (focused === s.hsid && isLiveState(s.state) && canAttach(status)) list.appendChild(voiceRowEl(s.hsid, vv));
-    }
-  }
+  for (const g of active) for (const s of g.sessions) list.appendChild(sessionRowEl(s, g.hue));
   list.appendChild(h(doc, 'button', { class: 'sec-head sec-toggle', type: 'button', 'data-past-toggle': '1', 'aria-expanded': String(pastOpen) }, h(doc, 'span', null, `${pastOpen ? '▾' : '▸'} Past`), h(doc, 'span', null, String(past.length))) as unknown as Node);
   if (pastOpen) for (const { s, hue } of past) list.appendChild(sessionRowEl(s, hue));
 }
@@ -979,7 +972,6 @@ function focus(hsid: string | null): void {
   closeDrawers();
   closeModeMenu();
   closeVoiceMenu();
-  voiceRowOpen = false;
   paintMode();
   paintVoice();
   resetTranscript();
@@ -1330,7 +1322,6 @@ function cycleMode(trusted: boolean): void {
 /* ── voice (V2d, TD-2026-10-19-298; core/voice.ts) ───────────────── */
 let voicePresenceDone = false;
 let voiceBusy = false;
-let voiceRowOpen = false;
 
 /**
  * The pill is kernel-owned: its state is status.voice only, re-read on a voice.session.* / voice-app row (store
@@ -1475,22 +1466,6 @@ function closeVoiceMenu(): void {
   $('voice-pill').setAttribute('aria-expanded', 'false');
 }
 
-/** The focused session row's [Voice ▾] and, open, its two choices. */
-function voiceRowEl(hsid: string, v: ReturnType<typeof voiceStatusOf>): HTMLElement {
-  const here: VoiceState = v.state !== 'off' && v.hsid === hsid ? v.state : 'off';
-  const kids: Node[] = [h(doc, 'button', { class: `key quiet voice-row-btn voice-${here}`, type: 'button', 'data-voice-row': hsid, 'aria-expanded': String(voiceRowOpen), title: 'Attach voice to this session' }, here === 'off' ? 'Voice ▾' : `Voice: ${VOICE_TITLE[here]} ▾`) as unknown as Node];
-  if (voiceRowOpen)
-    for (const s of ['ptt', 'ambient'] as const) {
-      const pl = planVoice(v, s, hsid, voicePresenceDone);
-      const b = h(doc, 'button', { class: `key quiet voice-choice voice-${s}${pl.kind === 'same' ? ' current' : ''}`, type: 'button', 'data-voice-set': s, 'data-voice-hsid': hsid, title: pl.kind === 'presence' ? 'needs Touch ID' : pl.kind === 'blocked' ? pl.reason : VOICE_TITLE[s] }, `${VOICE_TITLE[s]}${pl.kind === 'presence' ? ' · Touch ID' : ''}`) as unknown as HTMLButtonElement;
-      b.disabled = pl.kind === 'blocked';
-      kids.push(b as unknown as Node);
-    }
-  const row = h(doc, 'div', { class: 'voice-attach' }) as unknown as HTMLElement;
-  for (const k of kids) row.appendChild(k);
-  return row;
-}
-
 /**
  * One gesture sets voice (G-GUI-04: trusted events only). Off and a narrowing apply on the kernel's answer; the
  * first widening to ambient in this GUI login comes back as a pending presence card this same gesture approves
@@ -1499,7 +1474,6 @@ function voiceRowEl(hsid: string, v: ReturnType<typeof voiceStatusOf>): HTMLElem
 async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
-  voiceRowOpen = false;
   if (!client) return notice('not connected: voice was not changed', true);
   if (!canAttach(status)) return notice('only a human connection attaches voice', true);
   const v = voiceStatusOf(status);
@@ -1871,12 +1845,6 @@ function wire(): void {
   $('toggle-stack').addEventListener('click', () => toggleDrawer('stack'));
   $('scrim').addEventListener('click', closeDrawers);
   $('session-list').addEventListener('click', (e) => {
-    const vr = (e.target as HTMLElement).closest('[data-voice-row], [data-voice-set]') as HTMLElement | null;
-    if (vr) {
-      if (vr.dataset.voiceSet) return void setVoice(vr.dataset.voiceSet as VoiceState, vr.dataset.voiceHsid ?? null, e.isTrusted);
-      voiceRowOpen = !voiceRowOpen;
-      return paintSessions();
-    }
     if ((e.target as HTMLElement).closest('[data-past-toggle]')) {
       pastOpen = !pastOpen;
       localStorage.setItem(PAST_KEY, pastOpen ? '1' : '0');
