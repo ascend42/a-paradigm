@@ -31,7 +31,8 @@ components:
       checks in validateKindPayload), SESSION_MODEL_OUTCOMES (switched,
       backend-refused, timeout, permit-refused, reconciled: after a timeout the
       next main-chain assistant message's message.model says which model runs), MODEL_SWITCH_CONTEXT_GUARD
-      ([1m] -> 200k above 160k tokens refused), MODEL_SWITCH_REASON_ROUTES
+      (any session -> a target without [1m] above 160k tokens, or with the
+      context unknown, refused; doc-only change, ids unchanged), MODEL_SWITCH_REASON_ROUTES
       (turn-running, model-switching, local-session, context-too-large,
       model-switch-failed, model-switch-timeout) in REFUSAL_REASONS; descriptor
       field modelSwitch.

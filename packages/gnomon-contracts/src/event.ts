@@ -377,18 +377,21 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
  * `session.model{outcome}` (CLOSED, 8.0:model-switch): what one request.session.model came to.
  *   switched         claude answered set_model success; the session runs `to` under the new spawn permit `permitId`
  *   backend-refused  claude answered an error (e.g. an unknown model); nothing changed, the new permit was released
- *   timeout          claude did not answer within the kernel's wait; the kernel keeps `from` on record and released the new permit
+ *   timeout          claude did not answer within the kernel's wait; the kernel keeps `from` on record and HOLDS the new
+ *                    permit `permitId` until `reconciled` (released then if the switch never took, or when the session exits)
  *   permit-refused   the fuse or law 7 refused the new spawn permit; nothing was sent (permitId null)
  *   reconciled       after a `timeout`, the next main-chain assistant message's `message.model` (ground truth) said which
  *                    model actually runs: `to` is the model now on record (`from` again when the switch never took;
  *                    then `to` may be 'claude', Claude Code's default), `permitId` the spawn permit the session runs under
+ *                    (the timeout's held permit when the switch took)
  */
 export const SESSION_MODEL_OUTCOMES = ['switched', 'backend-refused', 'timeout', 'permit-refused', 'reconciled'] as const;
 export type SessionModelOutcome = (typeof SESSION_MODEL_OUTCOMES)[number];
 /**
- * The context guard of a switch (8.0:model-switch): a session on a 1M-context model (`[1m]` suffix) is not switched to a
- * 200k model while more than this many tokens of context are in use (the last assistant message's usage). Refused
- * UNSUPPORTED{context-too-large}; checkpoint + compact first is the context-meter build's.
+ * The context guard of a switch (8.0:model-switch): no session is switched to a 200k model (a target WITHOUT the
+ * `fromSuffix` `[1m]`, whatever the source model) while more than this many tokens of context are in use (the last
+ * main-chain assistant message's usage), nor while that is unknown (a resumed session before its first message).
+ * Refused UNSUPPORTED{context-too-large}; checkpoint + compact first is the context-meter build's.
  */
 export const MODEL_SWITCH_CONTEXT_GUARD = Object.freeze({ fromSuffix: '[1m]', maxTokens: 160_000 });
 /** The `from` of a session that runs Claude Code's own default model (session.open{model} absent). */

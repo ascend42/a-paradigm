@@ -15,7 +15,8 @@
  *   - The session's model: the kernel's rows only — the last `session.model{outcome:'switched'|'reconciled'}.to`,
  *     else `session.open.model` ('claude' = the default). A `timeout` outcome leaves the model UNCONFIRMED (the
  *     kernel keeps the old one on record) until its `reconciled` row says which model actually answered: the chip
- *     reads "model: switching… (unconfirmed)" meanwhile (modelChipText).
+ *     reads "model: switching… (unconfirmed)" meanwhile (modelChipText) — never after the session ended (no reconcile can
+ *     come then: the model on record is shown, Aegis L2).
  *   - The switch: `log.append{kind:'request.session.model', payload:{hsid, model}}` (human, first-party connection;
  *     the kernel sends Claude Code's `set_model` control request into the SAME process, so the conversation and its
  *     context continue; nothing restarts).
@@ -105,6 +106,9 @@ interface RowLike {
 }
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 
+/** The rows after which a session is over (the store's ended/failed/orphaned states). */
+const SESSION_END_KINDS: ReadonlySet<string> = new Set(['session.exited', 'session.stop', 'session.exit', 'session.end', 'session.orphaned', 'session.refused']);
+
 /** The model a session runs now, from the kernel's rows (oldest first); null when no session.open is seen. */
 export interface SessionModelView {
   model: string;
@@ -119,6 +123,9 @@ export function sessionModelOf(rows: Iterable<RowLike>): SessionModelView | null
   let backend: string | null = null;
   let pending: string | null = null;
   let uncertain: string | null = null;
+  // Aegis L2: once the session ended no reconcile can come, so a timeout (before or after the exit row) is not shown
+  // as an eternal "switching… (unconfirmed)"; the model on record stays. A resume's session.open starts afresh.
+  let ended = false;
   for (const r of rows) {
     const p = obj(r.payload);
     if (r.kind === 'session.open') {
@@ -126,10 +133,15 @@ export function sessionModelOf(rows: Iterable<RowLike>): SessionModelView | null
       backend = typeof p.backend === 'string' ? p.backend : null;
       pending = null;
       uncertain = null;
-    } else if (r.kind === MODEL_REQUEST && typeof p.model === 'string') pending = p.model;
+      ended = false;
+    } else if (SESSION_END_KINDS.has(r.kind)) {
+      ended = true;
+      pending = null;
+      uncertain = null;
+    } else if (r.kind === MODEL_REQUEST && typeof p.model === 'string') pending = ended ? null : p.model;
     else if (r.kind === 'session.model') {
       if ((p.outcome === 'switched' || p.outcome === 'reconciled') && typeof p.to === 'string') model = p.to;
-      uncertain = p.outcome === 'timeout' && typeof p.to === 'string' ? p.to : p.outcome === 'reconciled' || p.outcome === 'switched' ? null : uncertain;
+      uncertain = ended ? null : p.outcome === 'timeout' && typeof p.to === 'string' ? p.to : p.outcome === 'reconciled' || p.outcome === 'switched' ? null : uncertain;
       pending = null;
     }
   }

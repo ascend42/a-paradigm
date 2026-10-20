@@ -51,7 +51,7 @@
  *     are never read: every rule lives in the kernel log.
  */
 import { randomUUID } from 'node:crypto';
-import { claudeModelProblem } from '@a-company/gnomon-contracts';
+import { claudeModelProblem, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 
 export const FORBIDDEN_FLAGS = Object.freeze(['--dangerously-skip-permissions', '--allowedTools', '--allowed-tools', '--bare']);
 export const SETTING_SOURCES = Object.freeze(['user', 'project', 'local'] as const);
@@ -439,13 +439,22 @@ export function parseStreamLine(line: string): AdapterEvent {
     }
     case 'control_response': {
       const r = obj(o.response);
-      // set_model's answer: the error text (bounded) and claude's error code, when it refused
+      // set_model's answer: the error text and claude's error code, when it refused. Aegis L3: the text reaches a
+      // refusal message the GUI shows, so it goes through the contracts display sanitiser (control and hidden
+      // characters dropped, bidi controls made visible) and onto one line, then bounded
       const error = str(r?.error);
-      return { kind: 'control', type: 'control_response', subtype: str(r?.subtype), requestId: str(r?.request_id), error: error === null ? null : error.slice(0, 256), errorCode: str(r?.error_code)?.slice(0, 64) ?? null };
+      const code = str(r?.error_code);
+      return { kind: 'control', type: 'control_response', subtype: str(r?.subtype), requestId: str(r?.request_id), error: error === null ? null : controlErrorText(error), errorCode: code === null ? null : controlErrorText(code, 64) };
     }
     default:
       return { kind: 'unknown', type };
   }
+}
+
+/** A control_response error made safe to show: sanitised (§4.5), one line, at most 256 characters. */
+export function controlErrorText(raw: string, max = 256): string {
+  // code points, so a cut never splits a surrogate pair
+  return Array.from(sanitizeDisplayText(Array.from(raw).slice(0, 4 * max).join('')).text.replace(/[\n\t]+/g, ' ')).slice(0, max).join('');
 }
 
 /** The two tool uses that become cards (§3.3): AskUserQuestion ⇒ ask-user, ExitPlanMode ⇒ plan. */

@@ -75,17 +75,22 @@
  * Model switch (8.0:model-switch; probe p-set-model, claude 2.1.304): switchModel() serves the HUMAN's
  *   request.session.model{hsid, model} (the dispatcher routes it from a first-party gui/device connection only;
  *   any other class is refused FORBIDDEN here too). Refused before any row: a local session (local-session), a
- *   running turn (turn-running), a switch in flight (model-switching), and a `[1m]` session above
- *   MODEL_SWITCH_CONTEXT_GUARD.maxTokens moving to a 200k model (context-too-large; the context is the LAST
- *   main-chain assistant message's in+cacheRead+cacheWrite+out, never result totals or a subagent's message).
+ *   running turn (turn-running), a switch in flight (model-switching), and ANY session above
+ *   MODEL_SWITCH_CONTEXT_GUARD.maxTokens moving to a 200k model (a target without `[1m]`, whatever the source:
+ *   context-too-large; the context is the LAST main-chain assistant message's in+cacheRead+cacheWrite+out, never
+ *   result totals or a subagent's message). A resumed session's context is unknown until its first main-chain
+ *   message: a 200k target is refused context-too-large ("send one message first") meanwhile (Aegis M2).
  *   Then: the request row → law 7 re-run → a NEW session.spawn permit for the new model (assertClaudePermit,
  *   subscription billing only; a refusal is session.model{permit-refused}) → session.inject{channel:'model'} →
  *   control_request{set_model} → wait for its control_response by request id (modelSwitchTimeoutMs, default
  *   MODEL_SWITCH_TIMEOUT_MS). success ⇒ the new permit replaces the spawn permit (the old one is released) and
  *   the model is on record; error ⇒ the new permit is released, nothing changed (MODEL_UNAVAILABLE{model-switch-
- *   failed}); timeout ⇒ the new permit is released, the old model stays on record and the session is marked
- *   modelUncertain (status) until the next main-chain assistant message's `message.model` (ground truth)
- *   RECONCILES it: session.model{outcome:'reconciled'}. session.send is refused model-switching meanwhile.
+ *   failed}); timeout ⇒ the new permit is HELD (Aegis M1: claude may already run the new model), the old model
+ *   stays on record and the session is marked modelUncertain (status) until the next main-chain assistant
+ *   message's `message.model` (ground truth) RECONCILES it: session.model{outcome:'reconciled'}. Reconciled to the
+ *   new model ⇒ the held permit replaces the spawn permit exactly as on success (the row cites it); to the old ⇒
+ *   the held permit is released; the session exiting (or a later switch) meanwhile ⇒ released. session.send is
+ *   refused model-switching while a switch is in flight. A failed permit release goes to the injected logger.
  * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
  *   ~/.claude.json only through its law-7 projection, so Claude's routine
  *   rewrites never fire — a change logs session.layers.changed{which} and a
@@ -97,7 +102,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CLAUDE_DEFAULT_MODEL, claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MODEL_SWITCH_REASON_ROUTES, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal, type SessionModelOutcome } from '@a-company/gnomon-contracts';
+import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MODEL_SWITCH_REASON_ROUTES, refuse, RefusedError, turnId, validateKindPayload, type RefusalCode, type DrainExitReason, type ResumeRefusal, type SessionModelOutcome } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -267,6 +272,16 @@ export interface SupervisorOptions {
   traceOptions?: TraceOpenOptions;
   /** 8.0:model-switch: how long a switch waits for set_model's answer (default MODEL_SWITCH_TIMEOUT_MS) */
   modelSwitchTimeoutMs?: number;
+  /**
+   * A Paradigm-logger-shaped port (`logger.component('#session-runner').warn(…)`) for failures the kernel log has no
+   * row for (e.g. a permit release that failed). The kernel takes no logger dependency (G-SEC-01); omitted ⇒ silent.
+   */
+  logger?: SupervisorLogger;
+}
+
+/** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
+export interface SupervisorLogger {
+  component(id: string): { warn(message: string, data?: Record<string, unknown>): void };
 }
 
 export interface OpenRequest {
@@ -325,16 +340,23 @@ interface Session {
   planApproved: boolean;
   /** model picker: the Claude model this session runs now ('claude' = Claude Code's default); a switch updates it */
   model: string;
-  /** 8.0:model-switch: the context in use — the LAST main-chain assistant message's in+cacheRead+cacheWrite+out */
-  contextTokens: number;
+  /**
+   * 8.0:model-switch: the context in use — the LAST main-chain assistant message's in+cacheRead+cacheWrite+out; null
+   * while unknown (a resumed session before its first main-chain message: the guard refuses until one arrives)
+   */
+  contextTokens: number | null;
   /** the model the stream last said ran (system.init, then each main-chain assistant message's message.model) */
   seenModel: string | null;
   /** a switch in flight (send and a second switch are refused model-switching) */
   switching: { requestId: string; from: string; to: string } | null;
   /** control_response waiters by request id (resolved in #onLine; null on exit) */
   controlWaiters: Map<string, (r: { subtype: string | null; error: string | null; errorCode: string | null } | null) => void>;
-  /** after a timeout: which model runs is unknown until the next main-chain message.model reconciles it */
-  modelUncertain: { from: string; to: string; baseline: string | null } | null;
+  /**
+   * after a timeout: which model runs is unknown until the next main-chain message.model reconciles it. `permit` is the
+   * switch's fresh spawn permit, HELD meanwhile (Aegis M1): reconcile-to-new swaps it in, reconcile-to-old or the
+   * session's exit releases it
+   */
+  modelUncertain: { from: string; to: string; baseline: string | null; permit: PermitV1 } | null;
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -708,7 +730,7 @@ export class SessionSupervisor {
       const s: Session = {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
-        contextTokens: 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
+        contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -854,6 +876,7 @@ export class SessionSupervisor {
     s.controlWaiters.clear();
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
+    await this.#dropUncertain(s, 'session-exited'); // Aegis M1: a timed-out switch's held permit ends with the session
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
     if (s.trace) {
@@ -1220,9 +1243,15 @@ export class SessionSupervisor {
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (s.switching) throw this.#switchRefusal('model-switching', 'a model switch of this session is already in flight');
     if (s.turnPermits.length > 0) throw this.#switchRefusal('turn-running', 'a turn is running: switch the model at a turn boundary');
+    // Aegis M2: toward ANY 200k target (no `[1m]`), whatever the source model ('opus' may itself run 1M by default)
     const g = MODEL_SWITCH_CONTEXT_GUARD;
-    if (s.model.endsWith(g.fromSuffix) && !p.model.endsWith(g.fromSuffix) && s.contextTokens > g.maxTokens) {
-      throw this.#switchRefusal('context-too-large', `the session uses ${s.contextTokens} tokens of context, more than a 200k model takes (${g.maxTokens}); checkpoint and compact first`, { contextTokens: s.contextTokens, maxTokens: g.maxTokens });
+    if (!p.model.endsWith(g.fromSuffix)) {
+      if (s.contextTokens === null) {
+        throw this.#switchRefusal('context-too-large', 'the session\'s context size is not known yet (it was resumed): send one message first, then switch', { contextTokens: null, maxTokens: g.maxTokens });
+      }
+      if (s.contextTokens > g.maxTokens) {
+        throw this.#switchRefusal('context-too-large', `the session uses ${s.contextTokens} tokens of context, more than a 200k model takes (${g.maxTokens}); checkpoint and compact first`, { contextTokens: s.contextTokens, maxTokens: g.maxTokens });
+      }
     }
     const from = s.model;
     const to = p.model;
@@ -1246,7 +1275,7 @@ export class SessionSupervisor {
         this.assertClaudePermit(fresh, s.hsid);
         if (fresh.billing !== 'subscription') throw refused('BILLING_REFUSED', 'a model switch runs on the subscription only (law 7)', { billing: fresh.billing });
       } catch (err) {
-        if (fresh) await this.#o.fuse.release(fresh.permitId, s.owner).catch(() => undefined);
+        if (fresh) await this.#release(fresh.permitId, s, 'permit-refused');
         fresh = null;
         await this.#modelRow(s, from, to, null, 'permit-refused');
         throw err;
@@ -1270,24 +1299,32 @@ export class SessionSupervisor {
         const old = s.spawnPermit;
         s.spawnPermit = fresh;
         s.model = to;
-        s.modelUncertain = null;
         fresh = null;
-        await this.#o.fuse.release(old.permitId, s.owner).catch(() => undefined);
+        await this.#dropUncertain(s, 'superseded'); // an earlier timed-out switch's held permit is moot now
+        await this.#release(old.permitId, s, 'switched');
         await this.#modelRow(s, from, to, permitId, 'switched');
         return { hsid: s.hsid, from, to, outcome: 'switched', permitId };
       }
-      await this.#o.fuse.release(permitId, s.owner).catch(() => undefined);
-      fresh = null;
       if (r !== null && r !== 'timeout') {
+        await this.#release(permitId, s, 'backend-refused');
+        fresh = null;
         await this.#modelRow(s, from, to, permitId, 'backend-refused');
         throw this.#switchRefusal('model-switch-failed', `claude refused the model${r.error ? `: ${r.error}` : ''}`, { ...(r.errorCode ? { errorCode: r.errorCode } : {}) });
       }
-      // timeout (or the session exited first): the old model stays on record; ground truth reconciles a live session
-      if (r === 'timeout' && s.state === 'running') s.modelUncertain = { from, to, baseline: s.seenModel };
+      // timeout: the old model stays on record and the fresh permit is HELD until ground truth reconciles (Aegis M1:
+      // claude may already run `to`, so its usage must not land on a released permit). The session exited first ⇒ released.
+      if (r === 'timeout' && s.state === 'running') {
+        await this.#dropUncertain(s, 'superseded');
+        s.modelUncertain = { from, to, baseline: s.seenModel, permit: fresh };
+        fresh = null;
+      } else {
+        await this.#release(permitId, s, 'session-exited');
+        fresh = null;
+      }
       await this.#modelRow(s, from, to, permitId, 'timeout');
       throw this.#switchRefusal('model-switch-timeout', r === null ? 'the session exited before claude answered the switch' : 'claude did not answer the switch in time; the next reply will show which model runs', { uncertain: r === 'timeout' });
     } finally {
-      if (fresh) await this.#o.fuse.release(fresh.permitId, s.owner).catch(() => undefined);
+      if (fresh) await this.#release(fresh.permitId, s, 'switch-aborted');
       s.controlWaiters.delete(requestId);
       s.switching = null;
     }
@@ -1305,9 +1342,34 @@ export class SessionSupervisor {
     s.modelUncertain = null;
     const family = u.to.replace(/\[1m\]$/, '').replace(/^claude-/, '');
     const took = u.baseline !== null ? seen !== u.baseline : seen === u.to || (family !== 'default' && seen.includes(family));
-    const now = took ? u.to : u.from;
-    s.model = now;
-    await this.#modelRow(s, u.from, now === CLAUDE_DEFAULT_MODEL ? CLAUDE_DEFAULT_MODEL : now, s.spawnPermit.permitId, 'reconciled');
+    if (took) {
+      // Aegis M1: exactly the success path — the held permit becomes the spawn permit, the old one is released
+      const old = s.spawnPermit;
+      s.spawnPermit = u.permit;
+      s.model = u.to;
+      await this.#release(old.permitId, s, 'reconciled');
+    } else {
+      s.model = u.from;
+      await this.#release(u.permit.permitId, s, 'reconciled-old');
+    }
+    await this.#modelRow(s, u.from, s.model, s.spawnPermit.permitId, 'reconciled');
+  }
+
+  /** Release a permit; a failure is logged (Aegis L4), never thrown and never silently swallowed. */
+  async #release(permitId: string, s: Session, why: string): Promise<void> {
+    try {
+      await this.#o.fuse.release(permitId, s.owner);
+    } catch (err) {
+      this.#o.logger?.component('#session-runner').warn('permit release failed', { hsid: s.hsid, permitId, why, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** Release a timed-out switch's held permit and clear the uncertainty (exit, or a later switch supersedes it). */
+  async #dropUncertain(s: Session, why: string): Promise<void> {
+    const u = s.modelUncertain;
+    if (!u) return;
+    s.modelUncertain = null;
+    await this.#release(u.permit.permitId, s, `uncertain-${why}`);
   }
 
   async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution }): Promise<{ turn: string; steered?: boolean }> {

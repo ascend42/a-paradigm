@@ -102,10 +102,21 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
   sheet.appendChild(card);
   doc.body.appendChild(sheet);
   let target: { hsid: string; from: string; to: string } | null = null;
+  // Aegis L1 (G-GUI-04): the switch is armed only by the human's own gesture, recorded BEFORE the submit: a trusted
+  // click on the Switch key (a keyboard press on the focused key is a trusted click too) or a trusted Enter in the
+  // id field. A submit event's own isTrusted is not the gate (requestSubmit() and implicit submission blur it).
+  let armed = false;
   const closeSheet = (): void => {
     sheet.hidden = true;
     target = null;
+    armed = false;
   };
+  go.addEventListener('click', (e) => {
+    armed = e.isTrusted;
+  });
+  customSwitch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') armed = e.isTrusted;
+  });
   cancel.addEventListener('click', closeSheet);
   const paintLines = (): void => {
     if (!target) return;
@@ -117,13 +128,16 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     customRow.hidden = to !== CUSTOM;
     customSwitch.value = '';
     swWhy.hidden = true;
+    armed = false;
     paintLines();
     sheet.hidden = false;
     (to === CUSTOM ? customSwitch : go).focus();
   };
   card.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (!e.isTrusted || !target) return; // G-GUI-04: a switch is the human's own confirmed click
+    const human = armed;
+    armed = false; // one gesture, one submit
+    if (!human || !target) return; // G-GUI-04: a switch is the human's own confirmed click or Enter
     const to = target.to === CUSTOM ? customSwitch.value.trim() : target.to;
     const bad = pickerProblem(target.to === CUSTOM ? CUSTOM : to, to);
     if (bad) {
@@ -184,7 +198,7 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
       const btn = el(doc, 'button', { class: 'key quiet model-btn kernel-owned', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
       const menu = el(doc, 'span', { class: 'mode-menu model-menu', role: 'menu' });
       menu.hidden = true;
-      // opening the menu and the sheet only DISPLAYS (the preview harness clicks them); the send is the trusted submit
+      // opening the menu and the sheet only DISPLAYS (the preview harness clicks them); the send needs the armed gesture
       btn.addEventListener('click', () => {
         const cur = current(hsid)?.model ?? 'claude';
         menu.replaceChildren(...switchChoices(cur).map((to) => {

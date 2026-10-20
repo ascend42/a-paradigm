@@ -32,12 +32,15 @@ components:
       mounted once by app.ts): the "claude model" select + custom id field
       injected after #ns-model (hidden for the local route), the header chip
       (model + ▾ menu) after the backend in #chead-meta, the confirm sheet
-      #model-switch-dialog whose TRUSTED submit is the only sender, and the
+      #model-switch-dialog that sends only once armed by a trusted click on
+      its Switch key or a trusted Enter in its id field, recorded before the
+      submit (Aegis L1; never the submit event's isTrusted), and the
       read-only Settings slot [data-gnomon-slot="session-model"]. Tests:
       test/model-picker.test.ts.
       8.0:model-switch wiring: sessionModelOf also folds
       session.model{reconciled} (model = to) and {timeout} (uncertain = to,
-      kept until reconciled); modelChipText shows "model: switching…
+      kept until reconciled, never after the session ended: a timeout before
+      or after session.exited is not shown unconfirmed, Aegis L2); modelChipText shows "model: switching…
       (unconfirmed)" and disables the ▾ meanwhile; sessionModelText feeds the
       Settings Permissions row `session-model` (readonly, slot
       session-model, settings.ts SettingsInput.sessionModel); store.ts

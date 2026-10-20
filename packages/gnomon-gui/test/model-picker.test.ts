@@ -101,6 +101,22 @@ describe('model picker: the session model and the switch', () => {
     expect(sessionModelOf(rows)).toMatchObject({ model: 'sonnet', uncertain: null });
     expect(sessionModelText(null)).toBe('no session focused');
   });
+  it('after the session ended a timeout is never shown unconfirmed (Aegis L2), whichever row came first; a resume starts afresh', () => {
+    const base = [
+      { kind: 'session.open', payload: { backend: 'claude-code', model: 'haiku' } },
+      { kind: MODEL_REQUEST, payload: { hsid: 'h', model: 'sonnet' } },
+    ];
+    const timeout = { kind: 'session.model', payload: { outcome: 'timeout', from: 'haiku', to: 'sonnet' } };
+    const exited = { kind: 'session.exited', payload: { reason: 'session.stop' } };
+    for (const rows of [[...base, timeout, exited], [...base, exited, timeout]]) {
+      const m = sessionModelOf(rows)!;
+      expect(m).toEqual({ model: 'haiku', backend: 'claude-code', pending: null, uncertain: null });
+      expect(modelChipText(m)).toBe('haiku');
+      expect(sessionModelText(m)).not.toMatch(/unconfirmed/);
+    }
+    const resumed = [...base, exited, { kind: 'session.open', payload: { backend: 'claude-code', model: 'haiku' } }, { kind: MODEL_REQUEST, payload: { hsid: 'h', model: 'opus' } }, { kind: 'session.model', payload: { outcome: 'timeout', from: 'haiku', to: 'opus' } }];
+    expect(sessionModelOf(resumed)).toMatchObject({ uncertain: 'opus' });
+  });
   it('the transcript says what each outcome did', () => {
     expect(sessionModelLine({ outcome: 'switched', from: 'claude', to: 'opus' })).toMatch(/default → opus · the conversation continues; the prompt cache restarts/);
     expect(sessionModelLine({ outcome: 'timeout', from: 'haiku', to: 'opus' })).toMatch(/switching… \(unconfirmed\)/);
@@ -139,10 +155,18 @@ describe('model picker: page wiring (source)', () => {
     expect(app).toMatch(/void openSession\(cwd, model\)/);
     expect(app).toMatch(/modelPicker\?\.headChip\(meta, s\.hsid\)/);
   });
-  it('the switch is sent only from the trusted submit of the confirm sheet', () => {
+  it('the switch is sent only after a trusted click on the go key or a trusted Enter in the field (Aegis L1), never on the submit event\'s own isTrusted', () => {
     const i = ui.indexOf("card.addEventListener('submit'");
     expect(i).toBeGreaterThan(0);
-    expect(ui.slice(i, i + 200)).toMatch(/!e\.isTrusted/);
+    const submit = ui.slice(i, i + 300);
+    expect(submit).toMatch(/const human = armed;\s*armed = false;[\s\S]*if \(!human \|\| !target\) return;/);
+    expect(submit).not.toMatch(/e\.isTrusted/);
+    // armed only by the go key's click or the id field's Enter, each from its own trusted event
+    expect(ui).toMatch(/go\.addEventListener\('click', \(e\) => \{\s*armed = e\.isTrusted;/);
+    expect(ui).toMatch(/customSwitch\.addEventListener\('keydown', \(e\) => \{\s*if \(e\.key === 'Enter'\) armed = e\.isTrusted;/);
+    expect(ui.match(/armed = true/g)).toBeNull();
+    // the sheet's open and close disarm it
+    expect(ui).toMatch(/const closeSheet = \(\): void => \{[\s\S]{0,80}armed = false;/);
     expect(ui.match(/switchRequest\(/g)).toHaveLength(1);
   });
 });

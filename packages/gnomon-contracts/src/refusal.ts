@@ -276,7 +276,8 @@ export const D98_REFUSAL_REASONS = Object.freeze(Object.keys(D98_REASON_ROUTES))
  *   - `turn-running`: a turn is streaming; switch at a turn boundary.
  *   - `model-switching`: another switch of this session is in flight (also refuses session.send meanwhile).
  *   - `local-session`: a gnomon-local session has no Claude model to switch.
- *   - `context-too-large`: a 1M session is above MODEL_SWITCH_CONTEXT_GUARD.maxTokens and the target is a 200k model.
+ *   - `context-too-large`: the target is a 200k model and the session is above MODEL_SWITCH_CONTEXT_GUARD.maxTokens
+ *     (or its context is not known yet: a resumed session before its first message).
  *   - `model-switch-failed`: claude refused the model (set_model error); nothing changed.
  *   - `model-switch-timeout`: claude did not answer set_model in time; the kernel keeps the old model on record.
  */

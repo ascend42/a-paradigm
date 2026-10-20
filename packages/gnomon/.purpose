@@ -2192,17 +2192,26 @@ components:
       gui/device connection (dispatch.ts branch; HUMAN_REQUEST_KINDS) reaches
       SessionPort.model -> SessionSupervisor.switchModel. Non-human refused
       FORBIDDEN in the supervisor too; refused before any row: local-session,
-      turn-running, model-switching, context-too-large ([1m] above 160k
-      tokens, the LAST main-chain assistant message's usage, subagent
-      messages excluded). Then request row -> law 7 re-run -> a NEW
+      turn-running, model-switching, context-too-large (ANY session toward a
+      target without [1m] above 160k tokens, the LAST main-chain assistant
+      message's usage, subagent messages excluded; a resumed session's
+      context is unknown until its first main-chain message and a 200k
+      target is refused "send one message first" meanwhile, Aegis M2). Then request row -> law 7 re-run -> a NEW
       subscription session.spawn permit for the new model (assertClaudePermit)
       -> session.inject{channel:model} -> adapter controlSetModelLine ->
       control_response by request id (modelSwitchTimeoutMs, default 15 s).
       switched: the new permit replaces the spawn permit, the old one is
       released; backend-refused: MODEL_UNAVAILABLE{model-switch-failed};
-      timeout: ENGINE{model-switch-timeout}, status.sessions[].modelUncertain
-      until the next main-chain message.model reconciles it
-      (session.model{reconciled}). session.send refused model-switching while
+      timeout: ENGINE{model-switch-timeout}, the new permit HELD in
+      modelUncertain (Aegis M1), status.sessions[].modelUncertain until the
+      next main-chain message.model reconciles it (session.model{reconciled}):
+      to the new model the held permit replaces the spawn permit as on
+      success and the row cites it; to the old one, or the session exiting,
+      or a later switch, releases it. A failed permit release goes to the
+      injected Paradigm-logger-shaped SupervisorOptions.logger (Aegis L4).
+      The adapter passes claude's control_response error/error_code through
+      controlErrorText (contracts sanitizeDisplayText, one line, bounded;
+      Aegis L3). session.send refused model-switching while
       in flight. planResume: a switched/reconciled session.model sets the
       resumed model and permit. Tests: test/session-model.test.ts,
       test/resume-plan.test.ts, test/socket-abi.test.ts.

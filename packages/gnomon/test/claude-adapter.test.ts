@@ -161,3 +161,21 @@ describe('G-ADP-01 transcript replay (Claude Code 2.1.302 shapes, p10m-claude-co
     expect(dropped).toEqual([19]); // reported once, with the whole line's size
   });
 });
+
+describe('8.0:model-switch control_response (Aegis L3)', () => {
+  it("claude's set_model error text is sanitised: no control or hidden characters, bidi made visible, one line, bounded", () => {
+    const raw = 'bad\u001b[31m model‮ evil⁦\nnext\u0007line​' + 'x'.repeat(400);
+    const ev = parseStreamLine(JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: 'set-model-1', error: raw, error_code: 'cat‮alog\u0000' } }));
+    expect(ev.kind).toBe('control');
+    const e = ev as Extract<typeof ev, { kind: 'control' }>;
+    expect(e.error).not.toBeNull();
+    // eslint-disable-next-line no-control-regex
+    expect(e.error!).not.toMatch(/[\u0000-\u001f\u007f-\u009f​‪-‮⁦-⁩]/);
+    expect(e.error!.startsWith('bad model')).toBe(true);
+    expect(Array.from(e.error!).length).toBeLessThanOrEqual(256);
+    // eslint-disable-next-line no-control-regex
+    expect(e.errorCode!).not.toMatch(/[\u0000-\u001f‪-‮]/);
+    expect(e.errorCode!.length).toBeLessThanOrEqual(64);
+    expect(parseStreamLine(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'set-model-2' } }))).toMatchObject({ error: null, errorCode: null });
+  });
+});
