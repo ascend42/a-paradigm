@@ -66,7 +66,7 @@ components:
       head with the project swatch (tone hue-<0..7> on the ● cap glyph only,
       the name in ink), a stale line (warn) when the newest decision or lore
       entry is > STALE_DAYS (14) older than the slice's `at`, then three
-      zones titled with their {n, of} count - tasks (`tasks · n of m open ·
+      zones headed (Text tone head) with their {n, of} count - tasks (`tasks · n of m open ·
       k high`, id + ▲ for high + title), decisions (id + date + title), lore
       (id + type + title) - then the symbols touched as chips (tone chip,
       mono ink, never a hue), and a skipped line (malformed / refused /

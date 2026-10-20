@@ -89,8 +89,8 @@ describe('#paradigm-context-mod model (pure)', () => {
     const b = model.renderSheet(fixture('full.json').input);
     const all = nodes(b);
     expect(all.some((n) => n.type === 'Button')).toBe(false);
-    const titles = all.filter((n) => typeof n.title === 'string').map((n) => n.title);
-    expect(titles).toEqual(['Paradigm', 'tasks · 5 of 12 open · 2 high', 'decisions · 5 of 95', 'lore · 5 of 341', 'symbols']);
+    const titles = all.filter((n) => n.tone === 'head').map((n) => n.text);
+    expect(titles).toEqual(['tasks · 5 of 12 open · 2 high', 'decisions · 5 of 95', 'lore · 5 of 341', 'symbols · 7']);
     // a hue tone only ever colours the one cap glyph, never a word
     for (const n of all) if (typeof n.tone === 'string' && n.tone.startsWith('hue-')) expect(n.text).toBe('●');
     const chips = all.filter((n) => n.tone === 'chip').map((n) => n.text);

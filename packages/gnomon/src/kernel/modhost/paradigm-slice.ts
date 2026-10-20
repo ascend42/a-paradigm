@@ -36,14 +36,13 @@
  * sanitiser (§4.5), newlines and tabs collapse to spaces, absolute paths are
  * redacted to ⟨path⟩ and it is capped at TITLE_MAX code points. An item marked
  * `sensitivity: secret` is dropped (counted). No absolute path appears
- * anywhere in the slice: the root is reported as a hue (the feed's
- * sha256(cwd) % 8) and a sanitised basename only.
+ * anywhere in the slice: the root is reported as a hue (the feed's and GUI's
+ * contracts projectHue(cwd)) and a sanitised basename only.
  */
-import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { projectHue as contractsProjectHue, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 
 export const PARADIGM_SLICE_V1 = 'paradigm-slice:v1';
 /** The capability that grants the slice (CAPABILITY_FORMS; not a clientApiId / modAbiId / kitId input). */
@@ -58,7 +57,6 @@ export const MAX_ENTRIES = 4096;
 /** Files PARSED per store for decisions and lore (newest first). Tasks parse every active file up to MAX_ENTRIES. */
 export const MAX_PARSED = 64;
 export const MAX_ASCEND = 16;
-export const SLICE_HUES = 8;
 
 export interface SliceItem {
   id: string;
@@ -70,7 +68,7 @@ export interface ParadigmSlice {
   v: typeof PARADIGM_SLICE_V1;
   /** ok: a .paradigm root was read; absent: the live session's repo has none; unfocused: no live session is focused */
   state: 'ok' | 'absent' | 'unfocused';
-  /** the project hue (feed.ts session.open project): sha256(session cwd)[0] % 8 */
+  /** the project hue (feed.ts session.open project): contracts projectHue(session cwd), 0..5 */
   project?: number;
   /** the repo root's basename, sanitised (never a path) */
   name?: string;
@@ -420,9 +418,9 @@ export function paradigmRootOf(cwd: string, opts: { home?: string } = {}): { roo
   return { root: null, refused: false };
 }
 
-/** The feed's project hue for a cwd (feed.ts session.open). */
+/** The project hue for a cwd: the contracts projectHue the feed (feed.ts session.open) and the GUI rail use (0..5). */
 export function projectHue(cwd: string): number {
-  return createHash('sha256').update(cwd, 'utf8').digest()[0]! % SLICE_HUES;
+  return contractsProjectHue(cwd);
 }
 
 /**

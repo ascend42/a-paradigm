@@ -87,8 +87,9 @@ function head(sl) {
   return { type: 'Box', direction: 'row', children: [cap, text(sl && sl.name ? sl.name : 'paradigm')] };
 }
 
+// a zone heading is a Text (tone head): the GUI's kit renderer draws no Box title, so the {n, of} count rides the text
 function zone(title, lines, empty) {
-  return { type: 'Box', direction: 'column', title, children: lines.length ? lines : [text(empty, 'quiet')] };
+  return { type: 'Box', direction: 'column', children: [text(title, 'head'), ...(lines.length ? lines : [text(empty, 'quiet')])] };
 }
 
 /** The sheet (sidebar): the project swatch, then tasks, decisions and lore, each with its {n, of} count. */
@@ -109,7 +110,7 @@ export function renderSheet(input, prefs = {}) {
     zone(`lore · ${nOf(sl.lore.items.length, sl.lore.of)}`, sl.lore.items.map((it) => text(`${it.id} ${it.type} · ${it.title}`)), 'no lore'),
   );
   // symbol chips: mono ink text (tone chip), never a hue
-  if (sl.symbols.length) children.push({ type: 'Box', direction: 'row', title: 'symbols', children: sl.symbols.map((s) => text(s, 'chip')) });
+  if (sl.symbols.length) children.push({ type: 'Box', direction: 'column', children: [text(`symbols · ${sl.symbols.length}`, 'head'), { type: 'Box', direction: 'row', children: sl.symbols.map((s) => text(s, 'chip')) }] });
   const sk = sl.skipped;
   const notes = [sk.malformed ? `${sk.malformed} malformed` : '', sk.refused ? `${sk.refused} refused` : '', sk.secret ? `${sk.secret} secret` : '', sk.truncated ? 'truncated' : ''].filter(Boolean);
   if (notes.length) children.push(text(`skipped · ${notes.join(' · ')}`, 'quiet'));

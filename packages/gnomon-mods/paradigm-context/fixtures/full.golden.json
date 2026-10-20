@@ -22,8 +22,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "tasks · 5 of 12 open · 2 high",
       "children": [
+        {
+          "type": "Text",
+          "text": "tasks · 5 of 12 open · 2 high",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "T-2026-10-20-006 ▲ Gnomon: Paradigm Context mod (K1 slice, K3 focus join), read-only sidebar sheet"
@@ -49,8 +53,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "decisions · 5 of 95",
       "children": [
+        {
+          "type": "Text",
+          "text": "decisions · 5 of 95",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "TD-2026-10-20-294 2026-10-20 Table-talk voice replies, and fewer approval prompts under auto-edits"
@@ -76,8 +84,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "lore · 5 of 341",
       "children": [
+        {
+          "type": "Text",
+          "text": "lore · 5 of 341",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "L-2026-10-20-ascend-054457-857 insight · Decision TD-2026-10-20-294 recorded"
@@ -102,43 +114,53 @@
     },
     {
       "type": "Box",
-      "direction": "row",
-      "title": "symbols",
+      "direction": "column",
       "children": [
         {
           "type": "Text",
-          "text": "#gnomon-voice",
-          "tone": "chip"
+          "text": "symbols · 7",
+          "tone": "head"
         },
         {
-          "type": "Text",
-          "text": "#gui",
-          "tone": "chip"
-        },
-        {
-          "type": "Text",
-          "text": "$voice-turn",
-          "tone": "chip"
-        },
-        {
-          "type": "Text",
-          "text": "#ledger-mod",
-          "tone": "chip"
-        },
-        {
-          "type": "Text",
-          "text": "#mod-host",
-          "tone": "chip"
-        },
-        {
-          "type": "Text",
-          "text": "^repo-hook",
-          "tone": "chip"
-        },
-        {
-          "type": "Text",
-          "text": "#workshop-mod",
-          "tone": "chip"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "#gnomon-voice",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#gui",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "$voice-turn",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#ledger-mod",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#mod-host",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "^repo-hook",
+              "tone": "chip"
+            },
+            {
+              "type": "Text",
+              "text": "#workshop-mod",
+              "tone": "chip"
+            }
+          ]
         }
       ]
     },

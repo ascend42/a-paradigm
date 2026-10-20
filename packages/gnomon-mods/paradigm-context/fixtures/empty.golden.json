@@ -27,8 +27,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "tasks · 0 of 0 open",
       "children": [
+        {
+          "type": "Text",
+          "text": "tasks · 0 of 0 open",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "no open tasks",
@@ -39,8 +43,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "decisions · 0 of 0",
       "children": [
+        {
+          "type": "Text",
+          "text": "decisions · 0 of 0",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "no decisions",
@@ -51,8 +59,12 @@
     {
       "type": "Box",
       "direction": "column",
-      "title": "lore · 0 of 0",
       "children": [
+        {
+          "type": "Text",
+          "text": "lore · 0 of 0",
+          "tone": "head"
+        },
         {
           "type": "Text",
           "text": "no lore",
