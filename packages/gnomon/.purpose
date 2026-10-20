@@ -1902,12 +1902,31 @@ components:
       source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice
       reader sees only its attached session's rows; enrolment order is the
       signed seq; windows bounded at VOICE_WINDOW_CAP.
+      Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor
+      spawns the voice client over an inherited socketpair (fd 3) the kernel
+      authenticates itself as p:<ns>/voice (SocketServerHandle.adopt +
+      dispatcher.adoptPreauthenticated, no hello/auth, no key in the child),
+      allow-list env, backoff restarts, dies on every daemon exit and drain
+      (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app
+      into <home>/bin/voice and fetches models; the client entry resolves
+      lazily, darwin only. voice-requests.ts: dispatcher-only request.voice.enrol
+      (fresh-presence strictness card, detail.op voice.enrol, writes the
+      root-signed row), request.voice.forget (no card), request.voice.report
+      (client progress + notices relayed in status.voice); request.voice.client
+      start|stop is human only. speakable.ts KernelSpeakable appends
+      voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
+      session; the voice reader is narrowed to voice.* rows. speakerEnrolled is
+      the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged.
     path: src/kernel/voice/
     type: module
     tags: [gnomon, kernel, voice, paradigm-8, move-4]
     flows: [$voice-turn]
     tests:
       - test/voice-v1.test.ts
+      - test/voice-v2e.test.ts
+      - test/voice-v2e-daemon.test.ts
+      - test/voice-v2e-enrol.test.ts
+      - test/voice-v2e-speak.test.ts
       - test/voice-enrolment.test.ts
       - test/voice-golden.test.ts
       - test/socket-abi.test.ts
