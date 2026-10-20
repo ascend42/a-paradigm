@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-20T06:18:48.713Z'
+generated: '2026-10-20T06:48:24.126Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -29580,7 +29580,7 @@ by_symbol:
           - packages/gnomon-voice/.purpose
           - packages/gnomon-voice/src/engines/sherpa.ts
         description: 'docs(#gnomon-voice): Kokoro RTF bench, spec stop-speaking note, purposes — WIP 4/6'
-      - &ref_459
+      - &ref_460
         id: h0816
         ts: '2026-10-20T06:00:19Z'
         type: implement
@@ -29622,7 +29622,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#gui): Stop speaking button, Esc, 300 ms poll while speaking — WIP 2/6'
-      - &ref_457
+      - &ref_458
         id: h0814
         ts: '2026-10-20T05:56:36Z'
         type: implement
@@ -29669,12 +29669,32 @@ by_symbol:
       agent: []
   '#approval-broker':
     symbol: '#approval-broker'
-    total_changes: 8
-    last_modified: '2026-10-19T22:49:02Z'
+    total_changes: 9
+    last_modified: '2026-10-20T05:57:51Z'
     stability_score: 1
     fragility: low
     recent:
       - &ref_448
+        id: h0815
+        ts: '2026-10-20T05:57:51Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#shell-readonly'
+          - '#supervisor'
+        author:
+          type: human
+          id: ascend
+        commit: 0f03f017dffedab4b51612cbcac80a7200336a38
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/broker/run-mode.ts
+          - packages/gnomon/src/kernel/supervisor/auto-edits.ts
+          - packages/gnomon/src/kernel/supervisor/supervisor.ts
+          - packages/gnomon/test/run-modes-session.test.ts
+          - packages/gnomon/test/shell-readonly.test.ts
+        description: 'wip(#supervisor): auto-edits read-only Bash auto-pass (mode:auto-edits:read-only)'
+      - &ref_449
         id: h0801
         ts: '2026-10-19T22:49:02Z'
         type: implement
@@ -29706,7 +29726,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/claude-repin-card.test.ts
         description: 'fix(#session-runner): Aegis re-pin fixes M1, M3, L1, L4, L5 (TD-2026-10-19-063)'
-      - &ref_449
+      - &ref_450
         id: h0800
         ts: '2026-10-19T22:42:18Z'
         type: implement
@@ -29747,7 +29767,7 @@ by_symbol:
           - packages/gnomon/test/session-supervisor.test.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#session-runner): GUI re-pin of the claude binary (TD-2026-10-19-063)'
-      - &ref_450
+      - &ref_457
         id: h0799
         ts: '2026-10-19T22:42:13Z'
         type: implement
@@ -29816,20 +29836,6 @@ by_symbol:
           - packages/gnomon/src/kernel/broker/index.ts
           - packages/gnomon/test/voice-arm-custody.test.ts
         description: 'fix(#gnomon-helper): Aegis V5 fixes: voice preimage binding, fail-closed session, required cap, prompt order'
-      - id: h0792
-        ts: '2026-10-19T21:06:39Z'
-        type: implement
-        symbols:
-          - '#approval-broker'
-        author:
-          type: human
-          id: ascend
-        commit: 9cfb82f64f12ac974ca3add6a144bf891edd0d56
-        intent: fix
-        files:
-          - packages/gnomon/src/kernel/supervisor/auto-edits.ts
-          - packages/gnomon/test/run-modes.test.ts
-        description: 'fix(#approval-broker): auto-edits refuses a root prefix that matches only case-folded (Aegis re-check)'
     contributors:
       human:
         - ascend
@@ -31122,11 +31128,12 @@ by_symbol:
       agent: []
   '#supervisor':
     symbol: '#supervisor'
-    total_changes: 9
-    last_modified: '2026-10-20T04:57:25Z'
+    total_changes: 10
+    last_modified: '2026-10-20T05:57:51Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_448
       - id: h0812
         ts: '2026-10-20T04:57:25Z'
         type: implement
@@ -31171,7 +31178,6 @@ by_symbol:
           - docs/specs/gnomon.md
           - packages/gnomon/.purpose
         description: 'feat(#gnomon-voice): V2a kernel side of ambient + push-to-talk (TD-2026-10-19-298)'
-      - *ref_448
       - *ref_449
       - *ref_450
     contributors:
@@ -31528,9 +31534,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_448
       - *ref_449
       - *ref_450
+      - *ref_457
     contributors:
       human:
         - ascend
@@ -31543,7 +31549,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_431
-      - *ref_457
+      - *ref_458
       - id: h0811
         ts: '2026-10-20T04:47:18Z'
         type: implement
@@ -31566,7 +31572,7 @@ by_symbol:
           - packages/gnomon-voice/src/types.ts
           - packages/gnomon-voice/test/kernel-link.test.ts
         description: 'feat(#gnomon-voice-io): hold-toggle hotkey for dictation (WIP S)'
-      - &ref_458
+      - &ref_459
         id: h0803
         ts: '2026-10-19T23:19:13Z'
         type: implement
@@ -31635,7 +31641,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_458
+      - *ref_459
     contributors:
       human:
         - ascend
@@ -31647,7 +31653,47 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_459
+      - *ref_460
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#shell-readonly':
+    symbol: '#shell-readonly'
+    total_changes: 3
+    last_modified: '2026-10-20T06:02:57Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0816
+        ts: '2026-10-20T06:02:57Z'
+        type: implement
+        symbols:
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: ed12d149edb92eac7efcc54f3bacb4d959e58d17
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/symbol-allowlist.json
+        description: 'wip(#shell-readonly): scanner-safe parse helper, symbol allowlist entry'
+      - *ref_448
+      - id: h0814
+        ts: '2026-10-20T05:56:35Z'
+        type: implement
+        symbols:
+          - '#shell-readonly'
+        author:
+          type: human
+          id: ascend
+        commit: 74673d40a0fc9e1e2a2813dfc00218dcb72ad014
+        intent: feature
+        files:
+          - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
+          - packages/gnomon/test/shell-readonly.test.ts
+        description: 'wip(#shell-readonly): read-only Bash classifier + table tests'
     contributors:
       human:
         - ascend
