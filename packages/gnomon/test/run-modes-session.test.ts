@@ -125,6 +125,17 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     expect(carded.some((t) => t.includes('escape-cwd'))).toBe(true); // a relative path out of the anchored root cards
   }, 30_000);
 
+  it('F1 (TD-2026-10-20-086): ask mode also passes a read-only Bash command (mode:ask:read-only, anchored); a writing one and an edit still card', async () => {
+    const r = sessionRig();
+    const s = await r.open([r.req('ask-ro', 'Bash', { command: 'ls -la', description: 'look' }), r.req('ask-w', 'Bash', { command: 'ls > out.txt' }), r.req('ask-e', 'Write', { file_path: path.join(w.cwd, 'e.txt'), content: 'e' })]);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'ask-ro') && r.pending().length >= 2, 10_000)).toBe(true);
+    expect(r.answers().find((a) => a.id === 'ask-ro')).toMatchObject({ behavior: 'allow', updatedInput: { command: anchorCommand('ls -la', fs.realpathSync(w.cwd), 'unknown'), description: 'look' } });
+    expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', path: fs.realpathSync(w.cwd), inputHash: inputHash({ command: 'ls -la', description: 'look' }), modeRef: 'mode:ask:read-only' }]);
+    const carded = r.pending().map((c) => JSON.stringify(c.block));
+    expect(carded.some((t) => t.includes('out.txt'))).toBe(true);
+    expect(carded.some((t) => t.includes('e.txt'))).toBe(true);
+  }, 30_000);
+
   it('auto-edits still cards Bash, a Write outside the worktree, .claude/settings.json, CLAUDE.md and package.json — never auto-approved', async () => {
     const r = sessionRig();
     await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));

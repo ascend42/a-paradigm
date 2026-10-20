@@ -394,22 +394,22 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     const mode = { v: 'ask' };
     const r = rig({ mode });
     const bash = (id: string, command: string) => ({ request: { id, tool: 'Bash', input: { command } } });
-    await r.open([bash('g-1', 'git log -n 1')], { hold: true });
+    await r.open([bash('g-1', 'git grep -n x')], { hold: true });
     expect(await waitFor(() => r.pending().length === 1)).toBe(true);
     const c = r.pending()[0]!;
-    await r.approvePrefix(c.cardId, ['git', 'log']);
+    await r.approvePrefix(c.cardId, ['git', 'grep']);
     expect(await waitFor(() => r.answers().some((a) => a.id === 'g-1'))).toBe(true);
-    // ask: a later git log under the same roots passes with no card
-    await r.open([bash('g-2', 'git log --oneline -n 2')], { hold: true });
+    // ask: a later git grep under the same roots passes with no card (git grep is no read-only-pass command, F1)
+    await r.open([bash('g-2', 'git grep -n y')], { hold: true });
     expect(await waitFor(() => r.answers().some((a) => a.id === 'g-2'))).toBe(true);
     expect(r.kinds('approval.auto').map((x) => x.payload.modeRef)).toEqual([`rule:${c.cardId}`]);
     // ...but not one naming a path outside the roots (M3)
-    await r.open([bash('g-3', 'git log -- /etc/passwd')], { hold: true });
+    await r.open([bash('g-3', 'git grep x -- /etc/passwd')], { hold: true });
     expect(await waitFor(() => r.pending().length === 1)).toBe(true);
     await r.approve(r.pending()[0]!.cardId, 'deny');
     // manual, plan approved: the prefix rule is skipped and a card is raised
     mode.v = 'manual';
-    const s = await r.open([{ request: { tool: 'ExitPlanMode', input: { plan: '1. read the log' } } }, bash(undefined as never, 'git log --oneline -n 3')], { hold: true });
+    const s = await r.open([{ request: { tool: 'ExitPlanMode', input: { plan: '1. read the log' } } }, bash(undefined as never, 'git grep -n z')], { hold: true });
     expect(await waitFor(() => r.pending().length === 1)).toBe(true);
     await r.approve(r.pending()[0]!.cardId, 'approve-plan');
     await r.sup.send('p:abcdefgh/founder', { hsid: s.hsid, text: 'again' });

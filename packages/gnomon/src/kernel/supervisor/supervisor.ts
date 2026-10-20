@@ -106,7 +106,7 @@ import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTING
 import type { LocalLaneConfig } from '../local/config.js';
 import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
-import { autoBashReadOnly, autoEditPass, READ_ONLY_MODE_REF } from './auto-edits.js';
+import { autoBashReadOnly, autoEditPass, READ_ONLY_ASK_MODE_REF, READ_ONLY_MODE_REF } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -967,8 +967,10 @@ export class SessionSupervisor {
         }
       }
     }
-    if (mode === 'auto-edits' && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
-      // TD-2026-10-20-294 part 1: a PROVABLY read-only command (#shell-readonly; fails closed) passes with no card
+    if ((mode === 'auto-edits' || mode === 'ask') && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
+      // TD-2026-10-20-294 part 1: a PROVABLY read-only command (#shell-readonly; fails closed) passes with no card.
+      // F1 (TD-2026-10-20-086): in `ask` too (modeRef mode:ask:read-only); never in `manual`
+      const roRef = mode === 'ask' ? READ_ONLY_ASK_MODE_REF : READ_ONLY_MODE_REF;
       // K1: anchored in the claude child's cwd (its realpath): the allow sends the anchored command, which runs there
       const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#o.userHome ?? os.homedir(), { root: s.cwd, ...(s.env.SHELL !== undefined ? { shell: s.env.SHELL } : {}) });
       if (pass.ok) {
@@ -977,14 +979,14 @@ export class SessionSupervisor {
         const updated = { ...structuredClone(ev.input), command: pass.command };
         let logged = false;
         try {
-          await b.auto({ hsid: s.hsid, tool: ev.toolName, ...(pass.root !== null ? { path: pass.root } : {}), inputHash: plan.inputHash, modeRef: READ_ONLY_MODE_REF });
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, ...(pass.root !== null ? { path: pass.root } : {}), inputHash: plan.inputHash, modeRef: roRef });
           logged = true;
         } catch {
           logged = false;
         }
         if (logged) {
           // both hashes: the request's (as on approval.auto) and the anchored input actually sent (sensitive inject row)
-          await this.#write(s, permissionAllowLine(requestId, updated), { answer: 'allow', requestId, why: 'mode', modeRef: READ_ONLY_MODE_REF, inputHash: plan.inputHash, anchoredInputHash: inputHash(updated) });
+          await this.#write(s, permissionAllowLine(requestId, updated), { answer: 'allow', requestId, why: 'mode', modeRef: roRef, inputHash: plan.inputHash, anchoredInputHash: inputHash(updated) });
           return;
         }
       }

@@ -44,8 +44,10 @@
  *     absolute `cd` into a session root, joined by `&&` — and reads only
  *     inside the session roots or the system read roots, at realpath;
  *   - the card carries no hidden or bidi characters (blockOf flags).
- * The pass is never taken in `ask` or `manual` (the caller checks the
- * effective mode). Permission requests come from the session's own claude
+ * The pass is taken in `auto-edits` and (F1, TD-2026-10-20-086) in `ask`
+ * (logged `mode:ask:read-only`); never in `manual` (the caller checks the
+ * effective mode). K1: the command runs ANCHORED in the root's realpath
+ * (anchorCommand, sent as updatedInput.command). Permission requests come from the session's own claude
  * child only, so no card on this path is peer-raised.
  */
 import * as fs from 'node:fs';
@@ -119,6 +121,8 @@ export function autoEditPass(tool: string, input: Record<string, unknown>, roots
 }
 
 export const READ_ONLY_MODE_REF = 'mode:auto-edits:read-only';
+/** F1 (TD-2026-10-20-086): the same read-only pass taken in `ask` mode. */
+export const READ_ONLY_ASK_MODE_REF = 'mode:ask:read-only';
 export const BASH_READ_ONLY_KEYS: readonly string[] = Object.freeze(['command', 'description', 'timeout']);
 /**
  * A pass: `command` is what the kernel lets run (updatedInput.command). With an `anchor` (K1) it is the anchored form
