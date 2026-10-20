@@ -290,6 +290,11 @@ export class ModHost {
       modAbiId: MOD_ABI_ID,
       running: [...this.#running.values()].map((r) => ({ name: r.name, packageHash: r.packageHash, dev: r.dev, sandbox: r.sandbox })).sort((a, b) => a.name.localeCompare(b.name)),
       paused: this.#pausedView(),
+      // #gui mod panels: the declared views of RUNNING mods (manifest ids/slots only; the GUI maps slot → region)
+      views: [...this.#running.values()]
+        .filter((r) => !r.stopping)
+        .flatMap((r) => (r.manifest.provides?.views ?? []).map((v) => ({ name: r.name, viewId: v.id, slot: v.slot, placement: v.placement ?? 'append', dev: r.dev })))
+        .sort((a, b) => (a.name === b.name ? a.viewId.localeCompare(b.viewId) : a.name.localeCompare(b.name))),
     };
   }
 
