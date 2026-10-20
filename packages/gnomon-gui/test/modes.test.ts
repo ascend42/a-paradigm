@@ -121,7 +121,7 @@ describe('run modes: the page wiring (source read; the browser smoke drives the 
   });
   it('the control is repainted from status on a mode row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
-    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026)
-    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(|setTimeout\([^)]*refreshStatus/);
+    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026), and the 2 s re-read while voice is attached or the app is in a transient phase (syncClientPoll, T-2026-10-20-002)
+    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '').replace(/function syncClientPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(|setTimeout\([^)]*refreshStatus/);
   });
 });

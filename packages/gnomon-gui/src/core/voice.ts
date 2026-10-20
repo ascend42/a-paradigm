@@ -4,7 +4,8 @@
  * #gui voice controls (voice slice V2d, TD-2026-10-19-298; spec §11.4 header, §14.7 attachment). PURE.
  *
  *   - Three states: Mic off, push-to-talk (`ptt`), ambient (`conversation` on the wire). The header pill is
- *     KERNEL-OWNED: its state comes only from `status.voice` (re-read when a voice.session.* row arrives), never
+ *     KERNEL-OWNED: its state comes only from `status.voice` (re-read when a voice.session.* row arrives, and polled
+ *     lightly while attached: core/voice-client.ts clientPollWanted, T-2026-10-20-002), never
  *     from the voice client's own claims. `voiceStatusOf` is the one adapter over the status shape (V1:
  *     `{attached: {voiceSessionId, hsid, mode, turns} | null}`; V2a: `{attached: boolean, hsid, ceiling: 'ptt' |
  *     'conversation' | null, since, idleAt, voiceSessionId, turns: {n}, echoTailMs, ambientIdleMs}`, where
@@ -102,13 +103,16 @@ export interface Pill {
 
 /**
  * The header pill: grey Mic off, blue hold-to-talk, red pulsing Listening. Aegis M (V2d): never under-report a live
- * mic — when attached and the kernel says the voice app is not connected, the attached state keeps its class, label
- * and meter and gains "· voice app not connected"; only with nothing attached does the pill say "Voice app not running".
+ * mic — when attached, the attached state ALWAYS keeps its class, label and meter, and the real voice-app condition is
+ * appended to it: `clientTail` (core/voice-client.ts clientPillOf `.tail`: "· voice crashed: <lastError>", "· setting
+ * up voice…", "· voice app not connected", "· teach Gnomon your voice first", T-2026-10-20-002) when the kernel reports
+ * the client lifecycle, else "· voice app not connected" when the kernel says the voice app is not connected. Only with
+ * nothing attached does the pill say "Voice app not running".
  */
-export function pillOf(v: VoiceView): Pill {
+export function pillOf(v: VoiceView, clientTail: string | null = null): Pill {
   const target = v.hsid ? sessionName(v.hsid) : '';
   const gone = v.clientConnected === false;
-  const tail = gone ? ' · voice app not connected' : '';
+  const tail = clientTail ?? (gone ? ' · voice app not connected' : '');
   const goneCls = gone ? ' voice-noclient' : '';
   if (v.state === 'ambient') return { state: 'ambient', label: `Listening${tail}`, target, title: `Ambient: the mic is open for ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to switch to push-to-talk or off.`, className: `voice-pill kernel-owned voice-ambient${goneCls}` };
   if (v.state === 'ptt') return { state: 'ptt', label: `Hold ${v.hotkey} to talk${tail}`, target, title: `Push-to-talk to ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to change.`, className: `voice-pill kernel-owned voice-ptt${goneCls}` };
@@ -127,6 +131,17 @@ export function isVoiceWidenCard(card: { kind: string; hsid: string | null; card
   if (!d || d.op !== 'voice.widen') return false;
   const cardHsid = str(d.hsid) ?? card.hsid;
   return cardHsid === hsid;
+}
+
+/**
+ * The "decide the pending card in the stack" notice (T-2026-10-20-002) names one card; it clears once that card has
+ * been seen in the store and is no longer pending (decided, expired, or swept by a kernel restart). A card the store has
+ * not seen yet (the answer can beat its row) keeps the notice. Returns the next tracker and whether to clear the notice.
+ */
+export function cardNoticeStep(t: { cardId: string; seen: boolean } | null, pending: { has(cardId: string): boolean }): { next: { cardId: string; seen: boolean } | null; clear: boolean } {
+  if (!t) return { next: null, clear: false };
+  if (pending.has(t.cardId)) return { next: t.seen ? t : { cardId: t.cardId, seen: true }, clear: false };
+  return t.seen ? { next: null, clear: true } : { next: t, clear: false };
 }
 
 const RANK: Readonly<Record<VoiceState, number>> = Object.freeze({ off: 0, ptt: 1, ambient: 2 });

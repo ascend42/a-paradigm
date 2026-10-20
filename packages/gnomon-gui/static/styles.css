@@ -362,6 +362,8 @@ html, body {
 .voice-pill.voice-crashed { color: var(--fail); border-color: var(--fail-edge); border-style: solid; }
 .voice-pill.voice-unavailable { color: var(--sec); }
 .voice-pill.voice-nudge { color: var(--slate); border-color: var(--slate); border-style: dashed; }
+/* T-2026-10-20-002, Aegis M (V2d): an attached ambient mic keeps its loud colours when a voice-app condition is appended (dashed edge = the app's trouble) */
+.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 2px dashed var(--fail-edge); }
 .voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
 .voice-progress[hidden] { display: none; }
 .voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--slate); }

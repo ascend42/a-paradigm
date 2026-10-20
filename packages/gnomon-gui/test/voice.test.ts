@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
+import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -239,8 +239,8 @@ describe('voice: palette, blocks and page wiring', () => {
   });
   it('the pill is repainted from status on a voice row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
-    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026)
-    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
+    // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026), and the 2 s re-read while voice is attached or the app is in a transient phase (syncClientPoll, T-2026-10-20-002)
+    expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '').replace(/function syncClientPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
   });
   it('contrast and motion: ambient uses the fixture voice-armed pair, the pulse stops under reduced motion', () => {
     const fx = JSON.parse(readFileSync(path.join(ROOT, '..', '..', 'docs', 'specs', 'gnomon-fixtures', 'contrast.json'), 'utf8'));
@@ -252,5 +252,33 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(css).toContain(`--slate: ${fx.themes.night.text.slate};`);
     expect(css).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}animation: none !important/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+  });
+});
+
+describe('the "decide the pending card" notice clears once its card is decided (T-2026-10-20-002)', () => {
+  const pending = (...ids: string[]) => new Set(ids);
+  it('a card not seen yet keeps the notice; seen then gone clears it', () => {
+    let t = cardNoticeStep({ cardId: 'card:1', seen: false }, pending()).next; // the answer beat the card row
+    expect(t).toEqual({ cardId: 'card:1', seen: false });
+    let s = cardNoticeStep(t, pending('card:1'));
+    expect(s).toEqual({ next: { cardId: 'card:1', seen: true }, clear: false });
+    t = s.next;
+    s = cardNoticeStep(t, pending('card:2')); // another card still pending: ours was decided
+    expect(s).toEqual({ next: null, clear: true });
+    expect(cardNoticeStep({ cardId: 'card:1', seen: true }, pending())).toEqual({ next: null, clear: true }); // pending hit 0
+    expect(cardNoticeStep(null, pending())).toEqual({ next: null, clear: false });
+  });
+  it('the store deletes a decided card (the step sees it gone), and the page wires the step', () => {
+    const store = new GuiStore();
+    let t = cardNoticeStep({ cardId: 'card:1', seen: false }, store.cards).next;
+    store.apply([{ seq: 1, kind: 'approval.request', connId: 'k', payload: { card: { cardId: 'card:1', kind: 'strictness', hsid: A, detail: { op: 'other' } } } } as Row]);
+    t = cardNoticeStep(t, store.cards).next;
+    expect(t).toEqual({ cardId: 'card:1', seen: true });
+    store.apply([{ seq: 2, kind: 'approval.decide', connId: 'k', payload: { cardId: 'card:1', decision: 'allow' } } as Row]);
+    expect(cardNoticeStep(t, store.cards).clear).toBe(true);
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    expect(app).toMatch(/decide the pending card in the stack`\);\s*noticeCard = \{ cardId: r\.cardId, seen: store\.cards\.has\(r\.cardId\) \};/);
+    expect(app).toMatch(/cardNoticeStep\(noticeCard, store\.cards\);\s*if \(step\.clear\) notice\(null\);/);
+    expect(app).toMatch(/function notice\(msg: string \| null, fail = false\): void \{\s*noticeCard = null;/);
   });
 });

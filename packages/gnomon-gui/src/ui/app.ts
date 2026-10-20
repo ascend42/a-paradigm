@@ -24,9 +24,9 @@ import { Follow, isAtBottom } from '../core/follow.js';
 import { chatItems, GuiStore, isLiveState, replyParts, rowOf, UNSCOPED, type ChatItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { menuEntries, modeLabel, modeRequest, nextRunMode, planChange, RUN_MODES, sessionModeOf, type RunMode } from '../core/modes.js';
-import { clientMenuEntries, clientOf, clientPillOf, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
-import { canAttach, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -64,7 +64,10 @@ const shortKeyId = (spki: string): string => {
   }
 };
 
+/** The pending card a "decide the pending card in the stack" notice names (core/voice.ts cardNoticeStep, T-2026-10-20-002). */
+let noticeCard: { cardId: string; seen: boolean } | null = null;
 function notice(msg: string | null, fail = false): void {
+  noticeCard = null; // any new notice (or a clear) replaces the card's
   const n = $('notice');
   n.hidden = !msg;
   n.className = fail ? 'notice fail' : 'notice';
@@ -442,6 +445,12 @@ function schedule(what: Set<string>): void {
     if ([...w].some((x) => x === 'feed' || x.startsWith('transcript:'))) paintTranscript();
     if (w.has('sessions') || w.has('cards')) paintSessions();
     if (w.has('cards')) void paintStack(w);
+    // T-2026-10-20-002: the card the notice names was decided (or swept): the stale notice goes with it
+    if (noticeCard) {
+      const step = cardNoticeStep(noticeCard, store.cards);
+      if (step.clear) notice(null);
+      else noticeCard = step.next;
+    }
     if (w.has('modes') || w.has('voice')) void refreshStatus();
     if (w.has('voice-activity')) {
       kickMeter();
@@ -745,6 +754,7 @@ async function refreshStatus(): Promise<void> {
   syncDictationContext();
   foldVoiceReports();
   syncSpeakPoll();
+  syncClientPoll();
 }
 
 /* ── Stop speaking (T-2026-10-19-026; core/voice.ts) ───────────────── */
@@ -773,6 +783,20 @@ function syncSpeakPoll(): void {
   else if (!want && speakPoll) {
     clearInterval(speakPoll);
     speakPoll = null;
+  }
+}
+let clientPoll: ReturnType<typeof setInterval> | null = null;
+/**
+ * T-2026-10-20-002: the kernel logs no row when the voice app's phase or connection changes, so while voice is
+ * attached (or the app is setting up, starting or in a backoff restart) status is re-read every CLIENT_POLL_MS
+ * (one read in flight, pollStatusOnce) and the pill never goes stale on a crash loop.
+ */
+function syncClientPoll(): void {
+  const want = !!client && clientPollWanted(clientOf(status), voiceStatusOf(status).state !== 'off', canAttach(status));
+  if (want && !clientPoll) clientPoll = setInterval(() => void pollStatusOnce(), CLIENT_POLL_MS);
+  else if (!want && clientPoll) {
+    clearInterval(clientPoll);
+    clientPoll = null;
   }
 }
 /** ⏹ / Esc: one log.append request.voice.client{op:'stop-speaking'} on a trusted gesture. */
@@ -906,21 +930,26 @@ let voicePresenceDone = false;
 let voiceBusy = false;
 let voiceRowOpen = false;
 
-/** The pill is kernel-owned: its state is status.voice only (re-read on a voice.session.* row, store 'voice'). */
+/**
+ * The pill is kernel-owned: its state is status.voice only, re-read on a voice.session.* / voice-app row (store
+ * 'voice') and, since the kernel logs no row for a voice-app phase or connection change, by syncClientPoll while
+ * attached (T-2026-10-20-002).
+ */
 function paintVoice(): void {
   const v = voiceStatusOf(status);
   store.voiceIdleMs = v.ambientIdleMs;
-  const p = pillOf(v);
+  // V2e: with nothing attached, the voice app's lifecycle owns the pill (setup phases, crash, the enrol nudge);
+  // attached, the live state stands and the app's real condition is appended (Aegis M V2d: never under-report)
+  const c = clientOf(status);
+  const cp = clientPillOf(c, v.state !== 'off', canAttach(status));
+  const p = pillOf(v, cp.tail);
   const btn = $('voice-pill');
-  btn.className = p.className;
-  btn.title = p.title;
+  btn.className = cp.tail !== null ? [...new Set(`${p.className} ${cp.className}`.split(' '))].join(' ') : p.className;
+  btn.title = cp.tail !== null ? `${p.title} ${cp.title}` : p.title;
   btn.dataset.state = p.state;
   put($('voice-label'), p.label);
   put($('voice-target'), p.target ? `· ${p.target}` : '');
   $('voice-meter').hidden = p.state !== 'ambient';
-  // V2e: with nothing attached, the voice app's lifecycle owns the pill (setup phases, crash, the enrol nudge)
-  const c = clientOf(status);
-  const cp = clientPillOf(c, v.state !== 'off', canAttach(status));
   if (cp.label !== null) {
     btn.className = `voice-pill kernel-owned ${cp.className}`;
     btn.title = cp.title;
@@ -1043,6 +1072,7 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
       if (!isVoiceWidenCard(store.cards.get(r.cardId), hsid)) {
         focusCard(r.cardId);
         notice(`Ambient for ${sessionName(hsid ?? '')}: decide the pending card in the stack`);
+        noticeCard = { cardId: r.cardId, seen: store.cards.has(r.cardId) };
         return;
       }
       notice(`Ambient for ${sessionName(hsid ?? '')}: confirm with Touch ID`);

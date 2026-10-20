@@ -65,7 +65,10 @@ components:
       guesses); attached with the app not connected keeps the attached
       state's class, label and meter plus "· voice app not connected"
       (never under-reports a live mic); "Voice app not running" only with
-      nothing attached.
+      nothing attached. pillOf(v, clientTail) appends the voice-app
+      lifecycle's tail instead when the kernel reports one (see
+      voice-app-lifecycle; T-2026-10-20-002), and an attached ambient pill
+      keeps its warn colours under any client class (dashed edge).
       planVoice: same | free (Off, narrowing, re-target) | presence (the
       first widening to ambient in a GUI login) | blocked (ceiling, nothing
       focused). voiceRequest builds log.append voice.session.start{hsid,
@@ -78,9 +81,13 @@ components:
       pending card from an ambient request is approved allow in the same
       gesture only when isVoiceWidenCard (kind strictness, detail.op
       voice.widen, the same hsid) holds for the card in the store; else it is
-      focused in the stack (the kernel asks for Touch ID). Status is re-read when the
+      focused in the stack (the kernel asks for Touch ID); the "decide the
+      pending card in the stack" notice remembers that cardId and clears once
+      the card has been seen in the store and is no longer pending (decided,
+      expired or swept; cardNoticeStep, T-2026-10-20-002). Status is re-read when the
       store flags `voice` (voice.session.start / .end / .mode, daemon.start),
-      never on a timer; voice.turn.* rows only kick the meter. The kernel's
+      plus the voice-app lifecycle poll (voice-app-lifecycle); voice.turn.* rows
+      only kick the meter. The kernel's
       idle auto-off (voice.session.end with reason idle) leaves a quiet
       "Ambient turned off after N min idle" note (store.voiceNote) until the
       next attachment. Transcript: a voice turn is the user message
@@ -108,7 +115,18 @@ components:
       voice], "Setting up voice…", "Downloading voice models · N of M MB" with
       a progress bar, "Starting…", "Voice crashed" [Restart], "Voice
       unavailable · <why>", or (running, no enrolled voice) "Teach Gnomon your
-      voice first" [Teach]; an attached live mic keeps its V2d state. The pill
+      voice first" [Teach]. Attached (T-2026-10-20-002), the live mic keeps
+      its V2d class, label and meter and clientPillOf returns a `tail` that is
+      appended (first match): crashed / backoff "· voice crashed: <lastError>"
+      (one line, capped at 60 chars; title capped at 400) [Restart], the
+      setup phases ("· setting up voice…", "· downloading voice models…",
+      "· voice starting…"), "· voice unavailable: <why>", not connected "·
+      voice app not connected" [Start voice], or enrolled [] "· teach Gnomon
+      your voice first" [Teach] (enrolled null = unknown: no nudge). The
+      kernel logs no row on a client phase or connection change, so the page
+      re-reads status every 2 s (CLIENT_POLL_MS, one read in flight) while
+      clientPollWanted: a human connection, a known lifecycle, and voice
+      attached or the app installing / downloading / starting / in backoff. The pill
       menu adds Start / Restart / Stop voice and "Teach Gnomon your voice…";
       palette voice.client.start / voice.client.stop / voice.enrol (never
       block-safe). Gestures are trusted-only log.append rows from a human

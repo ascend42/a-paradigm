@@ -13,7 +13,10 @@ import { canAttach, pillOf, voiceStatusOf } from '../src/core/voice.js';
 import {
   clientMenuEntries,
   clientOf,
+  CLIENT_POLL_MS,
   clientPillOf,
+  clientPollWanted,
+  PILL_ERROR_MAX,
   clientRequest,
   consentText,
   devBannerOf,
@@ -76,7 +79,7 @@ describe('the pill shows every voice-app phase while nothing is attached', () =>
   it('an attached live mic always keeps its louder V2d state (never under-reports)', () => {
     const s = human({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', clientConnected: false, client: { phase: 'crashed' } });
     expect(pill(s).label).toBeNull();
-    expect(pillOf(voiceStatusOf(s)).label).toContain('Listening');
+    expect(pillOf(voiceStatusOf(s), pill(s).tail).label).toMatch(/^Listening/);
   });
   it('unknown phases and stale claims fail toward "not running"', () => {
     expect(clientOf(st({ phase: 'warp-drive' })).phase).toBe('idle');
@@ -90,6 +93,82 @@ describe('the pill shows every voice-app phase while nothing is attached', () =>
     expect(clientOf(human({ clientConnected: true, client: { phase: 'idle' } })).phase).toBe('running');
     expect(clientOf(human({ attached: null })).known).toBe(false); // an older kernel: no lifecycle UI at all
     expect(pill(human({ attached: null })).label).toBeNull();
+  });
+});
+
+describe('attached: the live state stands and the real voice-app condition is appended (T-2026-10-20-002)', () => {
+  const att = (ceiling: string, client: Record<string, unknown> | null, more: Record<string, unknown> = {}) => human({ attached: true, hsid: A, ceiling, voiceSessionId: 'vs:x', ...(client ? { client } : {}), ...more });
+  const shown = (s: unknown) => {
+    const cp = pill(s);
+    return { cp, p: pillOf(voiceStatusOf(s), cp.tail) };
+  };
+  it('crashed (failed): "Listening · voice crashed: <lastError>" with [Restart], ambient class and meter kept', () => {
+    const { cp, p } = shown(att('conversation', { phase: 'failed', lastError: 'the voice app stopped (exit 1): -10875' }, { clientConnected: false }));
+    expect(cp).toMatchObject({ label: null, tail: ' · voice crashed: the voice app stopped (exit 1): -10875', action: 'restart', actionLabel: 'Restart', className: expect.stringContaining('voice-crashed') });
+    expect(p).toMatchObject({ state: 'ambient', label: 'Listening · voice crashed: the voice app stopped (exit 1): -10875', className: expect.stringContaining('voice-ambient') });
+    expect(cp.title).toMatch(/stopped: the voice app stopped/);
+  });
+  it('backoff (a crash loop) reads as crashed even while clientConnected flaps true', () => {
+    const { cp, p } = shown(att('ptt', { phase: 'backoff', lastError: '-10875' }, { clientConnected: true }));
+    expect(p.label).toBe('Hold ⌃⌥Space to talk · voice crashed: -10875');
+    expect(p.state).toBe('ptt');
+    expect(cp.title).toContain('crashed and is restarting');
+    expect(shown(att('conversation', { phase: 'backoff' }, { clientConnected: false })).p.label).toBe('Listening · voice crashed');
+  });
+  it('a long or multi-line lastError is one line, capped in the label (full, still capped, in the title)', () => {
+    const { cp } = shown(att('conversation', { phase: 'backoff', lastError: `boom\n${'x'.repeat(400)}` }, { clientConnected: false }));
+    expect(cp.tail).not.toContain('\n');
+    expect(cp.tail!.length).toBeLessThanOrEqual(' · voice crashed: '.length + PILL_ERROR_MAX);
+    expect(cp.tail!.endsWith('…')).toBe(true);
+  });
+  it('not connected: "· voice app not connected" with [Start voice] (stopped, or a stale running claim)', () => {
+    for (const phase of ['stopped', 'running']) {
+      const { cp, p } = shown(att('conversation', { phase }, { clientConnected: false }));
+      expect(p.label).toBe('Listening · voice app not connected');
+      expect(cp).toMatchObject({ action: 'start', actionLabel: 'Start voice' });
+    }
+    // an older kernel (no client block): pillOf's own V2d tail stands
+    expect(shown(att('conversation', null, { clientConnected: false })).p.label).toBe('Listening · voice app not connected');
+  });
+  it('the setup phases are appended, the live state kept', () => {
+    expect(shown(att('conversation', { phase: 'starting' }, { clientConnected: false })).p.label).toBe('Listening · voice starting…');
+    expect(shown(att('ptt', { phase: 'preparing' }, { clientConnected: false })).p.label).toBe('Hold ⌃⌥Space to talk · setting up voice…');
+    expect(shown(att('conversation', { phase: 'downloading-models', downloadMb: 412 }, { clientConnected: false })).p.label).toBe('Listening · downloading voice models…');
+  });
+  it('enrolled []: "Listening · teach Gnomon your voice first" with [Teach]; null (unknown) or a voice: no nudge', () => {
+    const { cp, p } = shown(att('conversation', { phase: 'running' }, { clientConnected: true, enrolled: [] }));
+    expect(p).toMatchObject({ state: 'ambient', label: 'Listening · teach Gnomon your voice first', className: expect.stringContaining('voice-ambient') });
+    expect(cp).toMatchObject({ action: 'enrol', actionLabel: 'Teach', className: 'voice-nudge' });
+    expect(shown(att('ptt', { phase: 'running' }, { clientConnected: true, enrolled: [] })).p.label).toBe('Hold ⌃⌥Space to talk · teach Gnomon your voice first');
+    const unknown = shown(att('conversation', { phase: 'running' }, { clientConnected: true }));
+    expect(unknown.cp.tail).toBeNull();
+    expect(unknown.p.label).toBe('Listening');
+    expect(shown(att('conversation', { phase: 'running' }, { clientConnected: true, enrolled: ['spk:m/matt'] })).p.label).toBe('Listening');
+  });
+  it('a voice connection sees the condition but no action', () => {
+    const s = voiceConn({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', clientConnected: false, client: { phase: 'backoff', lastError: 'x' } });
+    expect(pill(s)).toMatchObject({ tail: ' · voice crashed: x', action: null, actionLabel: '' });
+  });
+  it('the page re-reads status lightly while attached or in a transient phase (the kernel logs no phase row)', () => {
+    const want = (s: unknown) => clientPollWanted(clientOf(s), voiceStatusOf(s).state !== 'off', canAttach(s));
+    expect(want(att('conversation', { phase: 'running' }, { clientConnected: true }))).toBe(true);
+    expect(want(st({ phase: 'starting' }))).toBe(true);
+    expect(want(st({ phase: 'backoff' }))).toBe(true);
+    expect(want(st({ phase: 'running' }))).toBe(false);
+    expect(want(st({ phase: 'failed' }))).toBe(false);
+    expect(want(st({ phase: 'idle' }))).toBe(false);
+    expect(want(human({ attached: null }))).toBe(false); // an older kernel
+    expect(want(voiceConn({ attached: true, hsid: A, ceiling: 'conversation', voiceSessionId: 'vs:x', client: { phase: 'running' } }))).toBe(false);
+    expect(CLIENT_POLL_MS).toBeGreaterThanOrEqual(1000);
+    expect(APP).toMatch(/function syncClientPoll\(\)[\s\S]{0,200}clientPollWanted\([\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), CLIENT_POLL_MS\)[\s\S]{0,120}clearInterval\(clientPoll\)/);
+  });
+  it('the page appends the tail to the live pill and shows the tail\'s action', () => {
+    const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
+    expect(css).toMatch(/\.voice-pill\.voice-ambient:is\(\.voice-noclient, \.voice-setup, \.voice-crashed, \.voice-unavailable, \.voice-nudge\) \{ color: var\(--warn-ink\); background: var\(--warn-bg\);/);
+    const fn = APP.slice(APP.indexOf('function paintVoice('), APP.indexOf('function kickMeter('));
+    expect(fn).toContain('const p = pillOf(v, cp.tail);');
+    expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('pillOf(v, cp.tail)'));
+    expect(fn).toContain('act.hidden = cp.action === null;');
   });
 });
 
@@ -214,7 +293,7 @@ describe('"Teach Gnomon your voice"', () => {
   });
   it('the page folds status.voice on every status read and polls lightly only while the dialog waits', () => {
     expect(APP).toContain('function foldVoiceReports(');
-    expect(APP).toMatch(/foldVoiceReports\(\);\n\s*syncSpeakPoll\(\);\n\}/);
+    expect(APP).toMatch(/foldVoiceReports\(\);\n\s*syncSpeakPoll\(\);\n\s*syncClientPoll\(\);\n\}/);
     const poll = APP.slice(APP.indexOf('function syncEnrolPoll('), APP.indexOf('function syncEnrolPoll(') + 600);
     expect(poll).toContain("s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase'");
     expect(poll).toContain('ENROL_POLL_MS');

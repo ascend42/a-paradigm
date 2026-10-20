@@ -14,8 +14,11 @@
  *   - The human's gestures are `log.append` rows: `request.voice.client{op: 'start' | 'stop' | 'stop-speaking'}`,
  *     `request.voice.enrol{name, consent}` (the kernel raises a fresh-presence Touch ID card whose effect writes the
  *     root-signed enrolment row), and `request.voice.forget{name}` (no card).
- *   - The pill (core/voice.ts pillOf) is kernel-owned; `clientPillOf` only overrides it while NOTHING is attached (an
- *     attached live mic always keeps its louder state: never under-report).
+ *   - The pill (core/voice.ts pillOf) is kernel-owned; `clientPillOf` replaces it only while NOTHING is attached. While
+ *     attached the live mic keeps its louder state and the client's real condition is APPENDED (`.tail`, T-2026-10-20-002):
+ *     never under-report the mic, never hide a crashed, setting-up or disconnected app, or a missing enrolled voice.
+ *   - The kernel logs no row when the voice app's phase or connection changes, so the page re-reads status lightly
+ *     (`clientPollWanted`, CLIENT_POLL_MS) while voice is attached or the app is passing through a transient phase.
  *   - Only a human-class connection gets any of these controls (`canAttach`); a voice connection never does.
  *
  * THE CONTRACT (the kernel's final V2e shapes, formerly "assumptions"; adjust here only):
@@ -51,6 +54,10 @@ export interface ClientView {
   unavailable: string | null;
   /** enrolled voice names, or null when the kernel does not say (A1) */
   enrolled: string[] | null;
+  /** status.voice.clientConnected, or null when the status does not tell */
+  connected: boolean | null;
+  /** the crash is the kernel's `backoff` (a restart is scheduled), not a terminal `failed` */
+  backoff: boolean;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -108,6 +115,8 @@ export function clientOf(status: unknown): ClientView {
     lastError: str(c?.lastError),
     unavailable: str(c?.unavailable),
     enrolled: list ? [...new Set(list.map(nameOf).filter((x): x is string => x !== null))] : null,
+    connected,
+    backoff: phase === 'crashed' && raw === 'backoff',
   };
 }
 
@@ -118,8 +127,10 @@ export const needsStart = (c: ClientView): boolean => c.known && (c.phase === 'i
 
 export type PillAction = 'start' | 'restart' | 'enrol' | null;
 export interface ClientPill {
-  /** null: keep core/voice.ts pillOf as it is */
+  /** null: keep core/voice.ts pillOf as it is (always null while attached) */
   label: string | null;
+  /** attached only: the client condition appended to the live label (" · voice crashed: …"), or null for none */
+  tail: string | null;
   className: string;
   title: string;
   action: PillAction;
@@ -129,37 +140,86 @@ export interface ClientPill {
 }
 
 const MB = (x: number): string => (x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
+/** The longest lastError shown in the pill label (the kernel's text carries up to 300 chars of the app's stderr). */
+export const PILL_ERROR_MAX = 60;
+const ERROR_TITLE_MAX = 400;
+const oneLine = (s: string, max: number): string => {
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
 
 /**
- * The pill's voice-app overlay while NOTHING is attached (attached: the live state always wins). The phases:
- * "Voice app not running" [Start voice] · "Setting up voice…" · "Downloading voice models · N of M MB" (bar) ·
- * "Starting…" · "Voice crashed · Restart" · "Voice unavailable · <why>" · running with no enrolled voice:
- * "Teach Gnomon your voice first" (unenrolled speech is never forwarded).
+ * The pill's voice-app overlay. With NOTHING attached it replaces the pill: "Voice app not running" [Start voice] ·
+ * "Setting up voice…" · "Downloading voice models · N of M MB" (bar) · "Starting…" · "Voice crashed · Restart" ·
+ * "Voice unavailable · <why>" · running with no enrolled voice: "Teach Gnomon your voice first" (unenrolled speech is
+ * never forwarded). ATTACHED (T-2026-10-20-002), Aegis M (V2d) never under-report a live mic: `label` stays null (the
+ * live class, meter and "Listening" / "Hold … to talk" stand) and the real condition is appended as `tail`, first
+ * match wins: crashed or backoff "· voice crashed: <lastError>" [Restart] · the setup phases · unavailable · not
+ * connected "· voice app not connected" [Start voice] · `enrolled` [] "· teach Gnomon your voice first" [Teach]
+ * (`enrolled` null is unknown: no nudge). A non-human connection sees the same words and no action.
  */
 export function clientPillOf(c: ClientView, attached: boolean, attachable: boolean): ClientPill {
-  const none: ClientPill = { label: null, className: '', title: '', action: null, actionLabel: '', progress: null };
-  if (attached || !c.known) return none;
+  const none: ClientPill = { label: null, tail: null, className: '', title: '', action: null, actionLabel: '', progress: null };
+  if (!c.known) return none;
   const act = (a: PillAction): PillAction => (attachable ? a : null);
+  if (attached) return attachedTailOf(c, act, none);
   switch (c.phase) {
     case 'idle':
-      return { label: 'Voice app not running', className: 'voice-noclient', title: 'The Gnomon voice app is not running. Start it here; no terminal needed.', action: act('start'), actionLabel: 'Start voice', progress: null };
+      return { label: 'Voice app not running', tail: null, className: 'voice-noclient', title: 'The Gnomon voice app is not running. Start it here; no terminal needed.', action: act('start'), actionLabel: 'Start voice', progress: null };
     case 'installing':
-      return { label: 'Setting up voice…', className: 'voice-noclient voice-setup', title: 'Gnomon is setting up the voice app.', action: null, actionLabel: '', progress: null };
+      return { label: 'Setting up voice…', tail: null, className: 'voice-noclient voice-setup', title: 'Gnomon is setting up the voice app.', action: null, actionLabel: '', progress: null };
     case 'downloading': {
       const d = c.download;
-      return { label: d ? `Downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : c.downloadTotal ? `Downloading voice models (${MB(c.downloadTotal)} MB)…` : 'Downloading voice models…', className: 'voice-noclient voice-setup', title: 'The voice models download once, then stay on this Mac.', action: null, actionLabel: '', progress: d ? d.n / d.of : null };
+      return { label: d ? `Downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : c.downloadTotal ? `Downloading voice models (${MB(c.downloadTotal)} MB)…` : 'Downloading voice models…', tail: null, className: 'voice-noclient voice-setup', title: 'The voice models download once, then stay on this Mac.', action: null, actionLabel: '', progress: d ? d.n / d.of : null };
     }
     case 'starting':
-      return { label: 'Starting…', className: 'voice-noclient voice-setup', title: 'The voice app is starting.', action: null, actionLabel: '', progress: null };
+      return { label: 'Starting…', tail: null, className: 'voice-noclient voice-setup', title: 'The voice app is starting.', action: null, actionLabel: '', progress: null };
     case 'crashed':
-      return { label: 'Voice crashed', className: 'voice-noclient voice-crashed', title: c.lastError ? `The voice app stopped: ${c.lastError}` : 'The voice app stopped unexpectedly.', action: act('restart'), actionLabel: 'Restart', progress: null };
+      return { label: 'Voice crashed', tail: null, className: 'voice-noclient voice-crashed', title: c.lastError ? `The voice app stopped: ${c.lastError}` : 'The voice app stopped unexpectedly.', action: act('restart'), actionLabel: 'Restart', progress: null };
     case 'unavailable':
-      return { label: `Voice unavailable${c.unavailable ? ` · ${c.unavailable}` : ''}`, className: 'voice-noclient voice-unavailable', title: c.unavailable ?? 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
+      return { label: `Voice unavailable${c.unavailable ? ` · ${c.unavailable}` : ''}`, tail: null, className: 'voice-noclient voice-unavailable', title: c.unavailable ?? 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
     case 'running':
       if (c.enrolled !== null && c.enrolled.length === 0)
-        return { label: 'Teach Gnomon your voice first', className: 'voice-off voice-nudge', title: 'Gnomon only forwards speech from an enrolled voice. Teach it yours (about a minute).', action: act('enrol'), actionLabel: 'Teach', progress: null };
+        return { label: 'Teach Gnomon your voice first', tail: null, className: 'voice-off voice-nudge', title: 'Gnomon only forwards speech from an enrolled voice. Teach it yours (about a minute).', action: act('enrol'), actionLabel: 'Teach', progress: null };
       return none;
   }
+}
+
+/** The attached overlay (see clientPillOf): the live state stands, the condition is appended. */
+function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none: ClientPill): ClientPill {
+  const t = (tail: string, className: string, title: string, action: PillAction = null, actionLabel = '', progress: number | null = null): ClientPill => ({ label: null, tail: ` · ${tail}`, className, title, action, actionLabel: action ? actionLabel : '', progress });
+  switch (c.phase) {
+    case 'crashed':
+      return t(c.lastError ? `voice crashed: ${oneLine(c.lastError, PILL_ERROR_MAX)}` : 'voice crashed', 'voice-noclient voice-crashed', `The voice app ${c.backoff ? 'crashed and is restarting' : 'stopped'}${c.lastError ? `: ${oneLine(c.lastError, ERROR_TITLE_MAX)}` : '.'} Nothing is heard until it runs.`, act('restart'), 'Restart');
+    case 'installing':
+      return t('setting up voice…', 'voice-noclient voice-setup', 'Gnomon is setting up the voice app; nothing is heard until it runs.');
+    case 'downloading': {
+      const d = c.download;
+      return t(d ? `downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : 'downloading voice models…', 'voice-noclient voice-setup', 'The voice models download once; nothing is heard until the voice app runs.', null, '', d ? d.n / d.of : null);
+    }
+    case 'starting':
+      return t('voice starting…', 'voice-noclient voice-setup', 'The voice app is starting; nothing is heard until it runs.');
+    case 'unavailable':
+      return t(`voice unavailable${c.unavailable ? `: ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, 'voice-noclient voice-unavailable', c.unavailable ?? 'Voice is not available on this machine.');
+    case 'idle':
+      return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
+    case 'running':
+      if (c.connected === false) return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
+      if (c.enrolled !== null && c.enrolled.length === 0) return t('teach Gnomon your voice first', 'voice-nudge', 'No voice is enrolled, so Gnomon drops what it hears. Teach it yours (about a minute).', act('enrol'), 'Teach');
+      return none;
+  }
+}
+
+/** How often the page re-reads status while `clientPollWanted` (the kernel logs no row on a phase change). */
+export const CLIENT_POLL_MS = 2000;
+const TRANSIENT: ReadonlySet<ClientPhase> = new Set(['installing', 'downloading', 'starting']);
+/**
+ * The light status re-read (T-2026-10-20-002): while voice is attached (a crash, a reconnect or a backoff restart must
+ * reach the pill) or while the app passes through a transient phase (setup, starting, a backoff restart). A terminal
+ * phase with nothing attached waits for the next row. Human connections only; an older kernel (no lifecycle) never.
+ */
+export function clientPollWanted(c: ClientView, attached: boolean, attachable: boolean): boolean {
+  return attachable && c.known && (attached || TRANSIENT.has(c.phase) || c.backoff);
 }
 
 export interface ClientMenuEntry {
