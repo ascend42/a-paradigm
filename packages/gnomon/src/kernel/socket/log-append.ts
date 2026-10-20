@@ -48,6 +48,7 @@
 import { KIND_PATTERN as EVENT_KIND_PATTERN, MODNS_KIND_PATTERN, kindOwner } from '@a-company/gnomon-contracts';
 import { RpcRefusal } from './rpc.js';
 import { modNameOf } from './log-read.js';
+import { ownsModKind } from '../manifest/mod-kind.js';
 
 /** §5's `request.*` append exception, human on a first-party human-class connection. */
 export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
@@ -101,7 +102,7 @@ export function refuseAppend(cls: AppendClass, principal: string | undefined, pa
   switch (cls) {
     case 'mod': {
       const name = modNameOf(principal);
-      if (name && isModns && kind.startsWith(`modns.${name}.`)) {
+      if (name && isModns && ownsModKind(name, kind)) {
         throw new RpcRefusal('ENGINE', 'not-implemented', 'a mod appends its own modns kinds with its manifest labels through the mod host; it lands with M1.11', { ...data, milestone: 'M1.11' });
       }
       throw new RpcRefusal('FORBIDDEN', 'modns-not-own', 'a mod appends only its own modns.<name>.* kinds (§5)', data);

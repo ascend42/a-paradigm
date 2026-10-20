@@ -81,14 +81,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
+import { isModId, MOD_ABI_ID, MOD_ABI_V1, type RelayedFor } from '@a-company/gnomon-contracts';
+import { ownsModKind } from '../manifest/mod-kind.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { registerSeams } from '../internal-seams.js';
 import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import type { TrackInput } from '../lifecycle/children.js';
 import { effectiveInstall, readGrants } from '../manifest/grants.js';
 import { loadMod } from '../manifest/install.js';
-import type { ManifestV1, ToolEffect } from '../manifest/manifest.js';
+import type { ManifestV2, ToolEffect } from '../manifest/manifest.js';
 import { noEvents, type ManifestEventSink } from '../manifest/refusal.js';
 import { checkEgressHost } from '../manifest/egress.js';
 import type { TreeDiff } from '../manifest/snapshot.js';
@@ -129,7 +130,8 @@ export const EFFECT_REFUSED_ROWS_PER_WINDOW = 8;
 export const EFFECT_REFUSED_WINDOW_MS = 10_000;
 /** Sessions whose streaming edge the feed remembers (oldest forgotten first; a forgotten one just gets a second edge). */
 export const MAX_STREAMING_TRACKED = 4096;
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name>; the principal label is mod-<publisher>.<name>. */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const FOCUS_HSID = /^[A-Za-z0-9:._-]{1,128}$/;
 /** Relayed-input keys only the HOST composes (a client value is replaced or dropped, never forwarded). */
 export const HOST_INPUT_KEYS: readonly string[] = Object.freeze(['focus', 'hsid', 'paradigm']);
@@ -194,7 +196,7 @@ interface Running {
   name: string;
   child: ChildProcess;
   channel: ModChannel;
-  manifest: ManifestV1;
+  manifest: ManifestV2;
   packageHash: string;
   dev: boolean;
   effects: Set<ToolEffect>;
@@ -819,7 +821,7 @@ export class ModHost {
   /** `event{event:v1}` — the filtered feed. Slice 1 forwards only the mod's own `modns.<name>.*` kinds (grant-bound kinds: slice 2). */
   sendEvent(name: string, event: { kind: string } & Record<string, unknown>): boolean {
     const r = this.#running.get(name);
-    if (!r || typeof event?.kind !== 'string' || !event.kind.startsWith(`modns.${name}.`)) return false;
+    if (!r || typeof event?.kind !== 'string' || !ownsModKind(name, event.kind)) return false;
     r.channel.notify('event', { event });
     return true;
   }
@@ -889,7 +891,7 @@ export class ModHost {
         const vp = params.params && typeof params.params === 'object' && !Array.isArray(params.params) ? (params.params as Record<string, unknown>) : {};
         if (verb === 'log.append') {
           const kind = vp.kind;
-          if (typeof kind !== 'string' || !kind.startsWith(`modns.${name}.`) || !r.manifest.provides?.events?.includes(kind)) throw new ModRefusal('VERB', `${name} may append only its own declared modns.${name}.* kinds`, { name, verb, kind: typeof kind === 'string' ? kind : null });
+          if (typeof kind !== 'string' || !ownsModKind(name, kind) || !r.manifest.provides?.events?.includes(kind)) throw new ModRefusal('VERB', `${name} may append only its own declared modns.${name}.* kinds`, { name, verb, kind: typeof kind === 'string' ? kind : null });
         }
         const hsid = ctx.kind === 'tool' ? ctx.hsid : undefined;
         if (verb === 'session.send') {

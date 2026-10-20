@@ -30,6 +30,7 @@
  *     debounced 250 ms, one render in flight (a row during a render queues
  *     exactly one more), never on a timer.
  */
+import { isModId } from '@a-company/gnomon-contracts';
 import { h, renderBlock, type MiniEl, type RenderCtx } from './render.js';
 
 /** The #mod-host feed kinds (packages/gnomon/src/kernel/modhost/feed.ts FEED_KINDS; test/mod-panels.test.ts holds them equal). */
@@ -63,7 +64,8 @@ export const SLOT_REGIONS: Readonly<Record<string, ModRegion>> = Object.freeze({
 export const MOD_PANEL_DEBOUNCE_MS = 250;
 export const MAX_MOD_PANELS = 16;
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name> (contracts isModId). */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const VIEW_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 
 export interface ModPanelView {

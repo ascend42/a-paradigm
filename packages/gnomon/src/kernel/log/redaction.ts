@@ -47,6 +47,7 @@ import {
   type Sensitivity,
 } from '@a-company/gnomon-contracts';
 import { logRefusal } from './chain.js';
+import { ownsModKind } from '../manifest/mod-kind.js';
 
 export type ReaderClass =
   | { class: 'human' }
@@ -145,7 +146,7 @@ export function mayBeVisible(e: Pick<EventV1, 'kind' | 'sensitivity' | 'session'
     case 'session':
       return e.session === reader.hsid;
     case 'mod':
-      return !columnKind && sens === 'normal' && (e.kind.startsWith(`modns.${reader.name}.`) || (reader.grantedKinds ?? []).includes(e.kind));
+      return !columnKind && sens === 'normal' && (ownsModKind(reader.name, e.kind) || (reader.grantedKinds ?? []).includes(e.kind));
     case 'voice':
       // V2e: voice.* rows of the attached session only (never turn.*, never secret)
       return sens !== 'secret' && reader.hsid != null && e.session === reader.hsid && e.kind.startsWith('voice.');
@@ -188,7 +189,7 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
     }
     case 'mod': {
       if (columnKind || sens !== 'normal') return undefined;
-      const own = e.kind.startsWith(`modns.${reader.name}.`);
+      const own = ownsModKind(reader.name, e.kind);
       if (!own && !(reader.grantedKinds ?? []).includes(e.kind)) return undefined;
       return { seq, view: 'full', event: limitedView(e) };
     }

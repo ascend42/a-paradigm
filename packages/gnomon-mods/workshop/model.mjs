@@ -15,7 +15,9 @@ export const HUES = 6;
 export const WORK_TYPES = Object.freeze(['builder', 'reviewer', 'teacher', 'tender']);
 const ID = /^[A-Za-z0-9:._-]{1,128}$/;
 const KIND = /^[a-z][a-z0-9-]{0,31}$/;
-const MOD = /^[a-z][a-z0-9-]{0,63}$/;
+// S0b: a mod id <publisher>.<name> (contracts MOD_ID_PATTERN; ≤ 60 characters in total)
+const MOD_ID = /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}\.[a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,23}$/;
+const MOD = { test: (s) => typeof s === 'string' && s.length <= 60 && MOD_ID.test(s) };
 
 export function emptyState() {
   return { sessions: new Map(), cards: new Map(), paused: new Map() };

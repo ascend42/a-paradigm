@@ -35,7 +35,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HSID_PATTERN } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, isModId } from '@a-company/gnomon-contracts';
 import { RootVerifier } from '../kernel/identity/root-authority.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
 import { readIdentity } from '../kernel/identity/provision.js';
@@ -70,7 +70,8 @@ usage: gnomon mod <verb> [--home <abs>] …
 Cards are raised by the running kernel (gnomon up) and decided in the GUI with Touch ID.
 `;
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name> (contracts isModId). */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const NO_TRUST: RowVerifier = Object.freeze({ rootKeyId: null, ns: null, verifyRow: () => false });
 
 export interface ModCliIo {

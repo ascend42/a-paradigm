@@ -123,7 +123,7 @@ import { SERVER_FEATURES } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
 import type { SessionPort } from '../supervisor/port.js';
-import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
+import { isModId, MOD_ABI_ID } from '@a-company/gnomon-contracts';
 import type { VoiceControl } from '../voice/voice-control.js';
 
 const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
@@ -404,7 +404,8 @@ export interface ModRelayPort {
 }
 
 /** Relay admission (F1): a mod name, and a view / command id (manifest DOTTED_ID, ≤ 128). */
-export const RELAY_MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: the relayed mod is a mod id <publisher>.<name> (MOD_ID_PATTERN and the 60-character total). */
+export const RELAY_MOD_NAME = { test: (s: string): boolean => isModId(s) };
 export const RELAY_ID = /^(?=.{1,128}$)[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 
 export interface KernelDispatcher {

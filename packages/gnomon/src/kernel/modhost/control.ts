@@ -50,9 +50,10 @@ import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js'
 import { appendGrantRow, effectiveInstall, readGrants, type ResolvedGrants } from '../manifest/grants.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { RowFold } from './fold.js';
-import { HSID_PATTERN, mintId } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, isModId, mintId } from '@a-company/gnomon-contracts';
 
-const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/** S0b: a mod id <publisher>.<name>. */
+const MOD_NAME = { test: (s: string): boolean => isModId(s) };
 const STAGED_FILE = /^card-[0-9A-HJKMNP-TV-Z]{26}\.json$/;
 export const PAUSE_MARKER = 'paused';
 export const START_REQUEST = 'start.request';
