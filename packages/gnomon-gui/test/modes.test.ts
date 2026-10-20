@@ -131,7 +131,6 @@ describe('run modes in the transcript: what auto-edits passed is shown inline', 
   it('approval.auto ⇒ a subtle "auto-approved edit · <path>" line; a rule ⇒ "auto-approved · <tool> (always rule)"; a mode change ⇒ a system line', () => {
     const { items } = chatItems(rows);
     expect(items.map((i) => [i.role, i.text])).toEqual([
-      ['system', 'session opened · claude · /w'],
       ['system', 'run mode ask → auto-edits · Touch ID'],
       ['auto', 'auto-approved edit · /w/src/a.ts'],
       ['auto', 'auto-approved · Write (always rule)'],

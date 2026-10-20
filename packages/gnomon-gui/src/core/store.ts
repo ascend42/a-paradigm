@@ -885,6 +885,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       if (spoken) spoken.item.text = spokenText(spoken);
       continue;
     }
+    // fidelity 2: the chat (the comp) opens with the conversation: "session opened · claude · /path" and "voice
+    // attached · …" are quiet bookkeeping, counted as raw hidden (the raw view and the kernel feed still show them)
+    if ((r.kind === 'session.open' && !objOf(p?.resume)) || r.kind === 'voice.session.start') {
+      hidden++;
+      continue;
+    }
     const v = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs });
     if (v !== undefined) {
       if (v === null) hidden++;

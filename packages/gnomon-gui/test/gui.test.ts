@@ -832,13 +832,15 @@ describe('#gui chat transcript: the conversation, not the raw rows', () => {
   ];
   it('noise is hidden by default: hooks, partials, rate limits, status, tool results, bookkeeping rows', () => {
     const { items, hidden } = chatItems(turn());
-    expect(items.map((i) => i.role)).toEqual(['system', 'user', 'assistant', 'tool', 'result']);
-    expect(hidden).toBe(turn().length - 5);
+    // fidelity 2: "session opened" is bookkeeping too (raw view only)
+    expect(items.map((i) => i.role)).toEqual(['user', 'assistant', 'tool', 'result']);
+    expect(hidden).toBe(turn().length - 4);
+    expect(chatItems(turn(), { raw: true }).items[0]!.text).toMatch(/session\.open/);
     for (const i of items) expect(i.text).not.toMatch(/hook_|stream_event|rate_limit|thinking|hmm/);
   });
   it('the user message, the assistant text and the tool line appear in order; the result is cost and tokens', () => {
     const { items } = chatItems(turn());
-    expect(items.slice(1).map((i) => [i.role, i.text])).toEqual([
+    expect(items.map((i) => [i.role, i.text])).toEqual([
       ['user', 'fix the bug'],
       ['assistant', 'Looking at it.'],
       ['tool', 'Bash · npm test -- --run'],
