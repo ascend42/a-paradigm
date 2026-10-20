@@ -1644,8 +1644,9 @@ export const shQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
  * K1 (TD-2026-10-20-086): the command as the kernel lets it run after a read-only pass — in `root` (the realpath the
  * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked),
  * the original text inside a brace group on its own lines (a heredoc's delimiter line and a trailing `# comment`
- * end before the closing `}`). zsh: `cd -q` (no chpwd hooks); bash: no -q; unknown: picked at run time by
- * ZSH_VERSION. `builtin` skips a function named cd/unset. If the cd or the unset fails nothing runs.
+ * end before the closing `}`). zsh: `cd -q` (no chpwd hooks), then chpwd/cd functions removed, chpwd_functions
+ * emptied and IGNORE_BRACES off (Aegis M2, L1); bash: no -q, a `cd` function removed, `set -B`; unknown: picked at
+ * run time by ZSH_VERSION. `builtin` skips a function named cd/unset/set. If any step fails nothing runs.
  */
 /**
  * Aegis H1 (a): command-scope git config (GIT_CONFIG_COUNT/KEY_n/VALUE_n outrank the repo's config) that turns off
@@ -1671,6 +1672,11 @@ export function anchorGitEnv(): string {
 
 export function anchorCommand(command: string, root: string, flavour: ShellFlavour): string {
   const q = shQuote(root);
-  const cd = flavour === 'zsh' ? `builtin cd -q -- ${q}` : flavour === 'bash' ? `builtin cd -- ${q}` : `if [ -n "\${ZSH_VERSION-}" ]; then builtin cd -q -- ${q}; else builtin cd -- ${q}; fi`;
-  return `${cd} && builtin unset CDPATH && ${anchorGitEnv()} && {\n${command}\n}`;
+  // Aegis M2: no user function runs on a later cd in the command (zsh chpwd hooks, a `cd` function such as rvm's);
+  // L1: brace expansion is on, as the classifier assumed (zsh IGNORE_BRACES off; bash -B)
+  const zsh = `builtin cd -q -- ${q} && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; }`;
+  const bash = `builtin cd -- ${q} && { builtin unset -f cd; builtin set -B; }`;
+  const pre = flavour === 'zsh' ? zsh : flavour === 'bash' ? bash : `if [ -n "\${ZSH_VERSION-}" ]; then ${zsh}; else ${bash}; fi`;
+  // L1 guard: brace expansion must really be on for this command (zsh may fix IGNORE_BRACES at parse time): else nothing runs
+  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\n${command}\n}`;
 }

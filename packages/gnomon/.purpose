@@ -2455,7 +2455,11 @@ components:
       (ANCHOR_GIT_CONFIG: core.fsmonitor=false, core.pager=cat,
       core.hooksPath=/dev/null, core.sshCommand=false, log.showSignature=false,
       gpg[.ssh|.x509].program=false, credential.helper=) plus
-      GIT_NO_LAZY_FETCH=1 and GIT_PAGER=cat. No background/negation/env assignment, output
+      GIT_NO_LAZY_FETCH=1 and GIT_PAGER=cat. Prelude hardening (Aegis M2,
+      L1): zsh unfunction chpwd cd, chpwd_functions=(), setopt
+      no_ignore_braces; bash unset -f cd, set -B; then a runtime guard
+      (set -- x{a,b}; test $# -eq 2) so the command runs only with brace
+      expansion really on. No background/negation/env assignment, output
       redirection only to /dev/null. simpleArgv returns the argv of a single
       literal simple command (prefix always rules; signature unchanged).
     tags: [kernel, security]

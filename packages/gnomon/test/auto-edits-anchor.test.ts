@@ -39,8 +39,8 @@ const HEREDOC = "cat <<'EOF'\nline one\nEOF\ncat a.txt # trailing comment";
 describe('K1 anchorCommand', () => {
   it('quotes the root safely and wraps the command on its own lines', () => {
     expect(shQuote("a'b")).toBe(`'a'\\''b'`);
-    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
-    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
+    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
+    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && { builtin unset -f cd; builtin set -B; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\nls\n}`);
     expect(anchorCommand('ls', '/r', 'unknown')).toContain('ZSH_VERSION');
     expect(shellFlavour('/bin/zsh')).toBe('zsh');
     expect(shellFlavour('/usr/local/bin/bash')).toBe('bash');
@@ -170,6 +170,31 @@ describe('Aegis H1: a repo git config that names a program', () => {
       const r = spawnSync(sh, ['-c', anchorCommand('git status --porcelain >/dev/null; git config core.pager; git config core.fsmonitor; echo "lazy=$GIT_NO_LAZY_FETCH"', fs.realpathSync(d), flavour)], { cwd: elsewhere, encoding: 'utf8' });
       expect(r.stdout.split('\n').slice(0, 3)).toEqual(['cat', 'false', 'lazy=1']);
       expect(fs.existsSync(mark)).toBe(false);
+    });
+  }
+});
+
+describe('Aegis M2/L1: the prelude removes cd hooks and functions and turns brace expansion on', () => {
+  for (const [sh, flavour] of [['/bin/zsh', 'zsh'], ['/bin/bash', 'bash'], ['/bin/zsh', 'unknown'], ['/bin/bash', 'unknown']] as const) {
+    it.skipIf(!have(sh))(`under ${sh} (${flavour} form)`, () => {
+      const marks = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-m2-'));
+      const mark = path.join(marks, 'HOOK');
+      try {
+        const setup = sh === '/bin/zsh'
+          ? `chpwd() { touch '${mark}'; }; h() { touch '${mark}'; }; chpwd_functions=(h); cd() { touch '${mark}'; builtin cd "$@"; }\n`
+          : `cd() { touch '${mark}'; builtin cd "$@"; }; set +B\n`;
+        const r = spawnSync(sh, ['-c', setup + anchorCommand('cd sub && pwd -P && echo {a,b}', real, flavour)], { cwd: elsewhere, encoding: 'utf8' });
+        expect(r.stdout).toBe(`${path.join(real, 'sub')}\na b\n`);
+        expect(fs.existsSync(mark)).toBe(false);
+      } finally {
+        fs.rmSync(marks, { recursive: true, force: true });
+      }
+    });
+  }
+  for (const [sh, off] of [['/bin/zsh', 'setopt ignore_braces'], ['/bin/bash', 'set +B']] as const) {
+    it.skipIf(!have(sh))(`${sh} with brace expansion off beforehand (${off}): the command sees it expanded, or nothing runs`, () => {
+      const r = spawnSync(sh, ['-c', `${off}\neval ${shQuote(anchorCommand('echo {a,b}', real, sh === '/bin/zsh' ? 'zsh' : 'bash'))}`], { cwd: elsewhere, encoding: 'utf8' });
+      expect(['', 'a b\n']).toContain(r.stdout);
     });
   }
 });
