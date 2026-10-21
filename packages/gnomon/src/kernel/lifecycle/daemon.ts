@@ -975,7 +975,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     attributeHumanSend: (human, hsid, parts) => voice.attributeHumanSend(human, hsid, parts),
     releaseAttribution: (attr) => voice.releaseAttribution(attr),
     // TD-2026-10-21-514: the origin of a human voice send (a claim, or the fail-closed send-word backstop)
-    originFor: (connId, human, hsid) => voice.originFor(connId, human, hsid),
+    originFor: (connId, human, hsid, attr) => voice.originFor(connId, human, hsid, attr ?? null),
   });
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({

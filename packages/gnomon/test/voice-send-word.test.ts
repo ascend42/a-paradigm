@@ -51,7 +51,7 @@ function rig(o: { level?: string | null } = {}) {
   };
   const claim = (payload: Record<string, unknown>, connId = 'conn:H1') => v.claimSend(human(connId), { hsid: HSID, ...payload });
   const send = (parts: string[], connId = 'conn:H1') => port.send({ principal: HUMAN, principalClass: 'human', connId, credential: 'gui' }, { hsid: HSID, content: parts.map((text) => ({ text })), source: 'voice' });
-  return { v, rows, presence, supSends, attach, turn, claim, send, clock };
+  return { v, rows, presence, supSends, port, attach, turn, claim, send, clock };
 }
 
 const refusal = async (p: Promise<unknown> | (() => unknown)): Promise<Record<string, unknown>> => {
@@ -73,11 +73,25 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.claim({ by: 'word', turnSeq: w.seq })).toMatchObject({ claimed: true, by: 'word' });
     await r.send(['fix the failing test']);
     expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' }, voiceAttribution: { source: 'voice' } });
-    // the word was consumed: a second claim on it is stale, and the next send is hand
+    // the word was consumed: a second claim on it is stale
     expect(await refusal(() => r.claim({ by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
+    // Aegis M-2: an unclaimed ambient draft sent under a word ceiling is still voice-origin (a piece), never hand
     await r.turn('and the docs');
     await r.send(['and the docs']);
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'piece' } });
+    // a typed send with no voice turns in it is hand
+    await r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: HSID, content: [{ text: 'typed by hand' }] });
     expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');
+  });
+
+  it('Aegis H-1: an emptied draft + typed text + the send word comes out voice-origin (no source hint needed)', async () => {
+    const r = rig();
+    await r.attach('word');
+    await r.turn('a dictated draft the human then deleted');
+    const w = (await r.turn('over and out')) as { seq: number };
+    r.claim({ by: 'word', turnSeq: w.seq });
+    await r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: HSID, content: [{ text: 'typed instead' }] });
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' } });
   });
 
   it('refused: not the word, older than 30 s, before a pending draft turn, over the send ceiling', async () => {
@@ -98,7 +112,7 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(await refusal(() => r.claim({ by: 'shout', turnSeq: 1 }))).toMatchObject({ code: 'BAD_REQUEST' });
   });
 
-  it('an expired claim stamps nothing (dropped); the backstop still stamps voice while an unclaimed word is pending', async () => {
+  it('Aegis M-1: an expired or wrong-session claim still stamps voice (never hand); the backstop stamps voice while an unclaimed word is pending', async () => {
     const r = rig();
     await r.attach('word');
     await r.turn('rename the module');
@@ -106,15 +120,18 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     r.claim({ by: 'word', turnSeq: w.seq });
     r.clock.t += 6_000;
     await r.send(['rename the module']);
-    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin'); // expired and the word already consumed
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' } }); // expired: fail closed, never hand
     // backstop: the GUI sends with an unclaimed word pending ⇒ origin voice anyway, and the word is consumed
     await r.turn('then push it');
     await r.turn('over and out');
     await r.send(['then push it']);
     expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' } });
-    await r.turn('one more');
-    await r.send(['one more']);
-    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');
+    // a claim naming another session also stamps voice on this send
+    await r.turn('third thing');
+    const w3 = (await r.turn('over and out')) as { seq: number };
+    r.claim({ by: 'word', turnSeq: w3.seq });
+    await r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: 'hs:other', content: [{ text: 'elsewhere' }] }).catch(() => undefined);
+    expect(r.supSends.at(-1)).toMatchObject({ hsid: 'hs:other', voiceOrigin: { sentBy: 'word' } });
   });
 
   it('short words by adjacency: accepted only under 1500 ms, matching, and adjacent to (or pending with) the draft speaker', async () => {

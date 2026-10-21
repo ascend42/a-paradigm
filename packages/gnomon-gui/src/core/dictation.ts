@@ -317,7 +317,8 @@ export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSe
 export function sendRequest(s: DictationState): SendRequest | null {
   if (!s.hsid || !hasDraft(s)) return null;
   if (!s.edited && s.parts.length) return { hsid: s.hsid, content: s.parts.map((p) => ({ text: p.send ?? p.text })), source: 'voice' };
-  return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length ? { source: 'voice' as const } : {}) };
+  // Aegis H-1: a send-word (or piece) send always carries the voice hint, even when the draft was emptied and retyped
+  return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length || s.claim ? { source: 'voice' as const } : {}) };
 }
 
 /** TD-2026-10-20-125: an ambient draft waits for the human's key press. */

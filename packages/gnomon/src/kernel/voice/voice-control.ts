@@ -898,20 +898,28 @@ export class VoiceControl {
    * claim (consumed here; an expired one is dropped), else the fail-closed backstop — an unclaimed pending turn of the
    * attachment that is the send word stamps 'word' (and is consumed). null ⇒ hand. NEVER throws.
    */
-  originFor(connId: string | undefined, human: string, hsid: string): { sentBy: VoiceSentBy } | null {
+  originFor(connId: string | undefined, human: string, hsid: string, attr: VoiceAttribution | null = null): { sentBy: VoiceSentBy } | null {
     try {
-      const now = this.#now();
       const c = connId !== undefined ? this.#claims.get(connId) : undefined;
       if (c && connId !== undefined) {
+        // Aegis H-1: any human send on a connection with a claim is voice-origin, whatever its source hint.
+        // Aegis M-1: an EXPIRED claim, or one naming another session, never falls through to hand: it stamps voice
+        // too (its word turn is already consumed), fail closed.
         this.#claims.delete(connId);
-        if (c.hsid === hsid && now <= c.expiresAt) return { sentBy: c.by };
-        if (c.by === 'piece') for (const id of c.turnIds) this.#claimed.delete(id);
+        if (c.by === 'piece' && c.hsid !== hsid) for (const id of c.turnIds) this.#claimed.delete(id);
+        return { sentBy: c.by };
       }
       const got = this.#pendingOf(human, hsid);
       const words = got ? got.pending.filter((t) => t.isWord) : [];
-      if (words.length === 0) return null;
-      for (const t of words) this.#forwarded.add(t.turnId);
-      return { sentBy: 'word' };
+      if (words.length > 0) {
+        for (const t of words) this.#forwarded.add(t.turnId);
+        return { sentBy: 'word' };
+      }
+      // Aegis M-2: under a send ceiling of word or higher, a send whose parts matched an ambient (non-ptt) turn is a
+      // piece unless a claim said otherwise (fail closed: ambient speech sent without a claim is still voice-origin)
+      const a = this.#attachment;
+      if (attr && a && a.hsid === hsid && sendRank(a.send) >= sendRank('word') && attr.turnIds.some((id) => this.#userTurns.get(id)?.mode !== 'ptt')) return { sentBy: 'piece' };
+      return null;
     } catch {
       return { sentBy: 'word' }; // an origin check that fails is a voice origin (the clamp fails closed)
     }
