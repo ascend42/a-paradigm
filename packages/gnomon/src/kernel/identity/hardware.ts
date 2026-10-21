@@ -270,7 +270,7 @@ export interface DecisionBatchRequest {
   /** the presence token to mint in the same touch */
   presence?: { purpose: PresencePurpose; binding: PresenceBinding };
   /** [the gnomon-root-decision:v2 row, ...the rows the commit writes] */
-  rows: readonly Record<string, unknown>[];
+  rows: readonly object[];
   /** the card's detail.rootRows: what rowsDigest commits to (sent as `intent`) */
   intent: readonly unknown[];
   /** the PINNED root key: every root signature is verified against it before it is returned */

@@ -61,7 +61,7 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
-import { appendGrantRow, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
+import { appendGrantRow, appendSignedGrantRows, buildGrantRows, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
 import { COMMAND_UNSAFE, compareVersions, detectWidening, MANIFEST_FILE, readManifest, type ManifestMcpConfig, type ManifestV2, type ReadManifestResult, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
@@ -772,22 +772,47 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
  * token BOUND to `{cardId, contentHash}` of the detail it rendered; tests
  * reach it through the internal test entry.
  */
-export function decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
-  const emit = opts.emit ?? noEvents;
+/** TD-2026-10-20-514: an install decision checked and its rows BUILT (unsigned), ready for one decision.sign. */
+export interface PreparedInstall {
+  home: string;
+  name: string;
+  cardId: string;
+  decision: 'install' | 'deny';
+  /** the rows commitInstall writes, in order, grant.install LAST (empty: deny, or already installed) */
+  rows: GrantRow[];
+  /** the card was already decided this way: commit is a no-op */
+  done: boolean;
+  rec: StagedRecord;
+  events: Array<[string, Record<string, unknown>]>;
+}
+
+export interface PrepareOptions {
+  userMcpServers?: readonly string[];
+  authority: RowVerifier;
+  now?: Date;
+  /** Aegis C1b: the card's detail.rootRows; the built rows (createdAt dropped) must deep-equal them, in order */
+  expectedRootRows?: readonly unknown[];
+}
+
+/**
+ * Check an install decision and BUILD its grant rows (TD-2026-10-20-514): every check decideInstall makes (cardId,
+ * contentHash, the snapshot, the re-derived surface, the publisher binding, the server collision), no presence
+ * consumed, nothing signed, nothing written. Every row carries the cardId (Aegis Q1). With expectedRootRows, the rows
+ * the card SHOWED must be exactly the rows built (C1b), or it refuses INTEGRITY before any prompt.
+ */
+export function prepareInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: PrepareOptions): PreparedInstall {
   const now = opts.now ?? new Date();
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
   if (!isModId(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod id', { name: String(name) });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
   if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
-  // bound presence (T-2026-10-18-008): the token names this card and the hash of THIS detail; trusted clock
-  const verdict = consumeBoundPresence(opts.presenceToken, 'mod.install', installPresenceBinding(cardId, rec.card.contentHash, decision));
-  if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name, cardId, presence: verdict });
-  const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
+  const out: PreparedInstall = { home, name, cardId, decision, rows: [], done: false, rec, events: [] };
   if (rec.card.state !== 'pending') {
-    if (rec.decision?.decision === decision) return rec; // idempotent re-decide
+    if (rec.decision?.decision === decision) return { ...out, done: true }; // idempotent re-decide
     throw new ManifestRefusal('NOT_INSTALLED', `install card ${cardId} is already decided`, { name, cardId });
   }
+  const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
   if (decision === 'install' && !already) {
     const dir = pinnedDir(home, name, rec.detail.packageHash);
     if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
@@ -802,8 +827,7 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
     // the publisher and the server name are re-checked against the grant table as it is NOW (S0b)
     const g = readGrants(home, opts.authority);
     const bind = checkPublisherSource(manifest, source, g, { rebind: rec.detail.rebind !== undefined, tier });
-    // Aegis S0b M2 (TOFU race): the binding must still be what the card showed it replacing; a binding that appeared
-    // (or changed) since stage, or one the card never showed, refuses PUBLISHER and the install must be re-staged
+    // Aegis S0b M2 (TOFU race): the binding must still be what the card showed it replacing
     if (bind) {
       const shown = rec.detail.rebind;
       if (!shown || shown.host !== bind.host || shown.namespace !== bind.namespace || canonicalJson(shown.from ?? null) !== canonicalJson(bind.from)) {
@@ -811,20 +835,64 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
       }
     }
     checkServerCollision(home, manifest, g, opts.userMcpServers);
-    appendGrantRow(home, opts.authority, { kind: 'grant.trust', manifestHash: mh, tier }, now);
-    if (surf.capabilities.length) {
-      appendGrantRow(home, opts.authority, { kind: 'grant.capability', manifestHash: mh, capabilities: surf.capabilities, ...(readPaths.length ? { read: readPaths } : {}) }, now);
-    }
-    if (surf.egress.length) appendGrantRow(home, opts.authority, { kind: 'grant.egress', manifestHash: mh, hosts: surf.egress }, now);
-    if (bind) appendGrantRow(home, opts.authority, { kind: 'grant.publisher', publisher: manifest.publisher, host: bind.host, namespace: bind.namespace }, now);
-    appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source, ...(read.upgradedHash ? { upgradedHash: read.upgradedHash } : {}) }, now); // LAST
-    emit('manifest.installed', { name, manifestHash: mh, packageHash, cardId, source });
-    emit('mod.installed', { name, packageHash, ...(rec.detail.replaces ? { replaces: rec.detail.replaces.packageHash } : {}) });
-    if (source.startsWith('linked:') && !rec.detail.replaces) emit('mod.linked', { name, path: source.slice(7), packageHash });
+    const inputs: GrantRowInput[] = [
+      { kind: 'grant.trust', manifestHash: mh, tier, cardId },
+      ...(surf.capabilities.length ? [{ kind: 'grant.capability' as const, manifestHash: mh, capabilities: surf.capabilities, ...(readPaths.length ? { read: readPaths } : {}), cardId }] : []),
+      ...(surf.egress.length ? [{ kind: 'grant.egress' as const, manifestHash: mh, hosts: surf.egress, cardId }] : []),
+      ...(bind ? [{ kind: 'grant.publisher' as const, publisher: manifest.publisher, host: bind.host, namespace: bind.namespace, cardId }] : []),
+      { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source, ...(read.upgradedHash ? { upgradedHash: read.upgradedHash } : {}) }, // LAST
+    ];
+    out.rows = buildGrantRows(home, opts.authority, inputs, now);
+    out.events.push(['manifest.installed', { name, manifestHash: mh, packageHash, cardId, source }]);
+    out.events.push(['mod.installed', { name, packageHash, ...(rec.detail.replaces ? { replaces: rec.detail.replaces.packageHash } : {}) }]);
+    if (source.startsWith('linked:') && !rec.detail.replaces) out.events.push(['mod.linked', { name, path: source.slice(7), packageHash }]);
   }
-  const decided: StagedRecord = { ...rec, card: { ...rec.card, state: 'decided' }, decision: { decision, at: now.toISOString() } };
-  writeStaged(home, decided);
+  if (opts.expectedRootRows !== undefined && canonicalJson(out.rows.map(rootRowIntent)) !== canonicalJson(opts.expectedRootRows)) {
+    throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the rows it would sign are not the rows the card showed; it must be raised again`, { name, cardId });
+  }
+  return out;
+}
+
+/** A built row as a card shows it (detail.rootRows): createdAt dropped (identity/decision-batch.ts intentOf). */
+function rootRowIntent(r: GrantRow): Record<string, unknown> {
+  const { createdAt: _c, ...rest } = r as GrantRow & { createdAt: string };
+  return rest;
+}
+
+/** The rows an install card shows it will sign (Aegis C1a): detail.rootRows. Throws what prepareInstall throws. */
+export function installRootRows(home: string, name: string, cardId: string, opts: PrepareOptions): Record<string, unknown>[] {
+  return prepareInstall(home, name, cardId, 'install', { ...opts, expectedRootRows: undefined }).rows.map(rootRowIntent);
+}
+
+/**
+ * Commit a prepared install with its root signatures (TD-2026-10-20-514): the bound `mod.install` token is consumed
+ * HERE, inside the decision (Aegis C6); the signed rows are appended through appendSignedGrantRows (one write,
+ * grant.install last, every row re-checked against the table under the lock); then the events and the staged state.
+ */
+export function commitInstall(p: PreparedInstall, rowSigs: ReadonlyArray<{ signer: string; sig: string }>, presenceToken: unknown, opts: { authority: RowVerifier; emit?: ManifestEventSink; now?: Date }): StagedRecord {
+  const emit = opts.emit ?? noEvents;
+  const now = opts.now ?? new Date();
+  const verdict = consumeBoundPresence(presenceToken, 'mod.install', installPresenceBinding(p.cardId, p.rec.card.contentHash, p.decision));
+  if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name: p.name, cardId: p.cardId, presence: verdict });
+  if (p.done) return p.rec;
+  const cur = readStaged(p.home, p.name, p.cardId);
+  if (!cur || cur.card.state !== 'pending') throw new ManifestRefusal('NOT_INSTALLED', `install card ${p.cardId} is already decided`, { name: p.name, cardId: p.cardId });
+  appendSignedGrantRows(p.home, opts.authority, p.rows, rowSigs);
+  for (const [k, v] of p.events) emit(k as Parameters<ManifestEventSink>[0], v);
+  const decided: StagedRecord = { ...p.rec, card: { ...p.rec.card, state: 'decided' }, decision: { decision: p.decision, at: now.toISOString() } };
+  writeStaged(p.home, decided);
   return decided;
+}
+
+/**
+ * Decide a staged install card in one call (the test seam and the legacy single-signer form): prepareInstall, a
+ * root signature per row from the authority, commitInstall. Production reaches install ONLY through
+ * #approval-broker (broker/install-card.ts), which signs the rows in the same decision.sign as the decision.
+ */
+export function decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
+  const p = prepareInstall(home, name, cardId, decision, { authority: opts.authority, ...(opts.userMcpServers ? { userMcpServers: opts.userMcpServers } : {}), ...(opts.now ? { now: opts.now } : {}) });
+  const sigs = p.rows.map((r) => opts.authority.signRow(r));
+  return commitInstall(p, sigs, opts.presenceToken, { authority: opts.authority, ...(opts.emit ? { emit: opts.emit } : {}), ...(opts.now ? { now: opts.now } : {}) });
 }
 
 /** The security-relevant detail fields re-derived on decide. */

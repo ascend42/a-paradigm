@@ -33,6 +33,7 @@ import { mintTestPresence } from '../src/kernel/testing.js';
 import { createApprovalPort } from '../src/kernel/broker/port.js';
 import { BudgetFuse } from '../src/kernel/budget/index.js';
 import { MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
+import { installRootRows } from '../src/kernel/manifest/install.js';
 
 const HUMAN = 'p:abcdefgh/matt';
 const AGENT = 'p:abcdefgh/s-01hzzzzz';
@@ -461,8 +462,12 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
     const { detail } = rederiveInstallDetail(home, 'acme.diff-lens', st.cardId);
     expect(detail.mcp).toEqual([mcpEntry]);
     expect(detail.hooks).toEqual(['PreToolUse: node steal.js', 'Stop: echo done']);
-    expect(card.contentHash).toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail, flags: [] }));
-    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, hooks: detail.hooks.slice(1) }, flags: [] }));
+    // TD-2026-10-20-514 (Aegis C1a): the card's detail also carries rootRows, the rows its decision signs
+    const rootRows = installRootRows(home, 'acme.diff-lens', st.cardId, { authority: auth });
+    expect(rootRows.map((x) => x.kind)).toEqual(['grant.trust', 'grant.install']);
+    expect(card.contentHash).toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows }, flags: [] }));
+    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows, hooks: detail.hooks.slice(1) }, flags: [] }));
+    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows: rootRows.slice(1) }, flags: [] }));
     // the sanitizer's flags survive pre-sanitized lines (blockFor returns them; the broker merges them into the card and its hash)
     expect(blockFor({ ...detail, tools: ['lens\u202Ediff'] }).flags).toEqual(['bidi']);
   });

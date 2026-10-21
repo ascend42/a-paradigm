@@ -73,13 +73,15 @@ import {
   type RefusalData,
   type RefusalGate,
 } from '@a-company/gnomon-contracts';
+import { canonicalJson } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
 import { answerDigest, decisionMessage, usesDecisionV2, type KeyRing, type Signer } from '../log/signer.js';
 import { consumeBoundPresence, PresenceToken, presenceBindingDigest, requestPresence, type PresenceBinding, type PresencePurpose } from '../identity/presence.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
-import { HardwarePresenceDenied, HelperUnlockGone, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
-import { baseClass, validDecisions, type DecisionClass } from './classes.js';
+import { HardwarePresenceDenied, HelperUnlockGone, type DecisionBatchRequest, type DecisionBatchResult, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
+import { decisionRowV2, intentOf, type DecisionRowV2 } from '../identity/decision-batch.js';
+import { baseClass, KIND_DECISIONS, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { helperBoundsOf, UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
 import { SESSION_DISARM_REASON } from './arm-custody.js';
@@ -140,6 +142,10 @@ export interface ApprovalsKey {
    * kernel-signed prompt, minting the bound PresenceToken in the same touch.
    */
   signDecision?(req: DecisionSignRequest): Promise<DecisionSignResult>;
+  /** TD-2026-10-20-514: the helper takes decision.sign (>= 1.8.0, from info.version only) */
+  decisionBatchAvailable?(): Promise<boolean>;
+  /** TD-2026-10-20-514: ONE presence signs the decision and every root row */
+  signDecisionBatch?(req: DecisionBatchRequest): Promise<DecisionBatchResult>;
   /** Drop a connection's unlock where the key lives (the helper). */
   dropUnlock?(connId: string): Promise<void>;
   /** Helper 1.6.0 (`conn.close`): drop the connection's unlock AND close every voice arm naming it. Preferred over dropUnlock on close. */
@@ -162,7 +168,38 @@ export function approvalsKeyFrom(ring: KeyRing, keyIdOf: (principal: string) => 
 export type CliProvenance = { pid: number; ppid: number; pgid: number; tty: string | null };
 
 /** What happens when a card is decided (install: the grant rows; api-token: activation). Runs AFTER approval.decide is logged. */
-export type CardEffect = (decision: string, ctx: { token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; connId: string; decisionSig?: string; presence?: string }) => Promise<void> | void;
+export type CardEffect = (
+  decision: string,
+  ctx: {
+    token: PresenceToken | null;
+    rootSig: { signer: string; sig: string } | null;
+    connId: string;
+    decisionSig?: string;
+    presence?: string;
+    /** TD-2026-10-20-514: the root signature of each prepared row, in order (decision.sign, or the legacy signer) */
+    rowSigs?: ReadonlyArray<{ signer: string; sig: string }>;
+    /** what RaiseInput.prepare returned for this decision */
+    prepared?: PreparedRows;
+  },
+) => Promise<void> | void;
+
+/**
+ * TD-2026-10-20-514: the rows a root-class decision's effect will write, BUILT before the prompt (unsigned), so ONE
+ * presence signs the decision and every row. `release` ends the prepare (its lock); the broker calls it in a finally.
+ */
+export interface PreparedRows {
+  rows: Record<string, unknown>[];
+  release(): void;
+  /** the preparer's own state, handed back to the effect */
+  state?: unknown;
+}
+
+/** The row-table kind (decision-batch.ts ROW_TABLE_KINDS) of a root-class card: its kind, or a grant/strictness card's action. */
+export function rootKindOf(kind: string, detail: Record<string, unknown>): string {
+  if (kind === 'grant') return detail.action === 'mod.uninstall' ? 'uninstall' : detail.action === 'mod.mcp.config' ? 'mod.mcp.config' : 'grant';
+  if (kind === 'strictness' && detail.op === 'voice.enrol') return 'voice.enrol';
+  return kind;
+}
 
 export interface RaiseInput {
   kind: CardKind;
@@ -187,6 +224,13 @@ export interface RaiseInput {
   /** presence purpose/binding override (install: mod.install bound to {cardId, contentHash}) */
   presence?: { purpose: PresencePurpose; binding: (decision: string) => PresenceBinding; consumedByEffect: boolean };
   effect?: CardEffect;
+  /**
+   * TD-2026-10-20-514: build the rows the effect writes for `decision` (unsigned; null = none). Root-class decisions
+   * only. The rows (createdAt dropped) must equal detail.rootRows, which the card shows (Aegis C1).
+   */
+  prepare?: (decision: string) => PreparedRows | null | Promise<PreparedRows | null>;
+  /** Aegis Q3: decisions of this card that are ROOT class whatever the kind's table says (voice.enrol allow) */
+  rootDecisions?: readonly string[];
   /** voice never decides this card, deny included (§14.7); a gate-class card with detail.target 'claude-binary' is always hand-only (TD-2026-10-19-063 M3) */
   handOnly?: boolean;
   /**
@@ -260,6 +304,8 @@ interface CardRecord {
   tool?: string;
   presence?: RaiseInput['presence'];
   effect?: CardEffect;
+  prepare?: RaiseInput['prepare'];
+  rootDecisions?: readonly string[];
   waiters: Array<(d: string) => void>;
   outcome?: string;
   /** Aegis A3: the decision claimed synchronously after approve's last re-check (before approval.decide); cleared if that row or the effect fails */
@@ -412,6 +458,10 @@ export class ApprovalBroker {
       const valid = validDecisions(input.kind);
       if (input.decisions.length === 0 || input.decisions.some((d) => !valid.includes(d))) throw fail('BAD_REQUEST', 'bad-params', `decisions must be a non-empty subset of ${valid.join(', ')}`);
     }
+    // Aegis C1a (TD-2026-10-20-514): every root-class card's detail carries rootRows (what its decision signs, inside
+    // contentHash); a card whose decision writes no row shows an empty list
+    const rootCapable = Object.values((KIND_DECISIONS as Record<string, Record<string, string>>)[input.kind] ?? {}).includes('root') || (input.rootDecisions?.length ?? 0) > 0;
+    if (rootCapable && !input.prepare && !Array.isArray(input.detail.rootRows)) input = { ...input, detail: { ...input.detail, rootRows: [] } };
     const rendered = blockOf(input.lines);
     const flags = [...new Set<CardFlag>([...(input.flags ?? []), ...rendered.flags])].sort();
     const contentHash = input.contentHash ?? contentHashOf({ kind: input.kind, requestedBy: input.requestedBy, ...(input.hsid ? { hsid: input.hsid } : {}), detail: input.detail, flags });
@@ -437,7 +487,7 @@ export class ApprovalBroker {
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
     if (input.standingGrant && input.kind !== 'grant') throw fail('BAD_REQUEST', 'bad-params', 'standingGrant is a grant card');
-    this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.prepare ? { prepare: input.prepare } : {}), ...(input.rootDecisions ? { rootDecisions: [...input.rootDecisions] } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
   }
 
@@ -670,7 +720,8 @@ export class ApprovalBroker {
     const flags = (card.flags ?? []) as string[];
     if (decision === 'always' && flags.includes('peer')) throw fail('FORBIDDEN', 'peer-always', 'a peer-flagged card never takes always', { gate: 'link', cardId });
     // F6 (Aegis open point 1): ONLY the standing-grant card's allow is fresh (one presence, no root key); other grants stay root
-    const cls = r.standingGrant && decision === 'allow' ? 'fresh' : baseClass(String(card.kind), decision, flags);
+    // Aegis Q3: a decision whose effect uses the root key is root class (never standing, never by voice)
+    const cls = r.rootDecisions?.includes(decision) ? 'root' : r.standingGrant && decision === 'allow' ? 'fresh' : baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
     if (r.decisions && decision !== 'withdraw' && !r.decisions.includes(decision)) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not one of this card's actions (${r.decisions.join(', ')})`, { cardId });
     if (decision === 'always' && !r.ruleScope) throw fail('BAD_REQUEST', 'bad-params', 'this card has no rule scope: always is not available on it', { cardId });
@@ -715,7 +766,26 @@ export class ApprovalBroker {
       if (v !== 'ok') throw fail('AUTH', 'bad-signature', 'decisionSig does not verify for this card, decision and approver', { cardId });
     }
 
-    // 4. presence per class
+    // 4. TD-2026-10-20-514: a root-class decision BUILDS its rows first (prepare), so ONE presence signs everything;
+    //    the broker releases the prepare in a finally, whatever happens below
+    let prepared: PreparedRows | null = null;
+    let decisionRow: DecisionRowV2 | null = null;
+    let batch = false;
+    if (cls === 'root') {
+      const rootRows = r.detail.rootRows;
+      if (!Array.isArray(rootRows)) throw fail('BAD_REQUEST', 'bad-params', 'this root-class card shows no rootRows: it cannot be decided (Aegis C1)', { cardId });
+      prepared = r.prepare ? await r.prepare(decision) : null;
+    }
+    try {
+    if (cls === 'root') {
+      const rootRows = r.detail.rootRows as unknown[];
+      if (canonicalJson((prepared?.rows ?? []).map(intentOf)) !== canonicalJson(rootRows)) throw fail('BAD_REQUEST', 'bad-params', 'the rows this decision would sign are not the rows the card shows (Aegis C1b)', { cardId });
+      decisionRow = decisionRowV2({ cardId, cardKind: rootKindOf(String(card.kind), r.detail), decision, contentHash: card.contentHash, approver: ctx.principal, rootRows });
+      // Aegis C6: the path comes from info.version ONLY; a decision.sign error on a >= 1.8.0 helper refuses, never falls back
+      batch = helperSigns && typeof this.#approvals.signDecisionBatch === 'function' && (await this.#approvals.decisionBatchAvailable?.()) === true;
+    }
+
+    // 4b. presence per class
     const isCli = ctx.credential !== 'gui'; // Aegis C1: the credential decides, never the self-declared surface
     const uk = unlockKeyOf(ctx); // F5: the GUI device's unlock (the connId for anything else)
     const live = (): void => {
@@ -761,7 +831,33 @@ export class ApprovalBroker {
         await this.#droppedRow(uk, 'helper-lost');
       }
     }
-    if (standing) {
+    let rootSig: { signer: string; sig: string } | null = null;
+    let rowSigs: Array<{ signer: string; sig: string }> | undefined;
+    if (batch) {
+      // TD-2026-10-20-514: ONE fresh prompt: decisionSig + presence + the decision row + every prepared row
+      const hadUnlock = this.unlocks.has(uk);
+      const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
+      let res: DecisionBatchResult;
+      try {
+        res = await this.#freshPrompt(ctx, cardId, () =>
+          this.#approvals.signDecisionBatch!({ connId: ctx.connId, approver: ctx.principal, message, prompt: prompt.text, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision, digest) }, rows: [decisionRow!, ...(prepared?.rows ?? [])], intent: r.detail.rootRows as unknown[], root: this.#o.root ?? { rootKeyId: null, verifyRow: () => false } }),
+        );
+      } catch (err) {
+        if (err instanceof HardwarePresenceDenied) throw await this.#presenceDenied(card, ctx, err.why, hadUnlock);
+        if (err instanceof RootUnavailableError) throw err;
+        throw this.#helperFailure(err, cardId);
+      }
+      if (!res.token || res.decisionSig === null) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
+      token = res.token;
+      decisionSig = res.decisionSig;
+      presence = isCli ? 'cli' : 'fresh';
+      if (!r.presence?.consumedByEffect) {
+        const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
+        if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
+      }
+      rootSig = res.rootSigs[0]!;
+      rowSigs = res.rootSigs.slice(1);
+    } else if (standing) {
       presence = `standing:${standing.grantId}`;
     } else if (cls === 'none') {
       presence = 'fresh'; // unreachable in M1.6 (no held cards); withdraw takes no presence
@@ -819,13 +915,16 @@ export class ApprovalBroker {
         await this.#o.log('approval.unlock', { connId: ctx.connId, cardId, ...(uk !== ctx.connId ? { scope: 'device' } : {}) }, { connId: ctx.connId });
       }
     }
-    let rootSig: { signer: string; sig: string } | null = null;
-    if (cls === 'root') {
+    if (cls === 'root' && !batch) {
+      // the legacy path (a helper < 1.8.0, a client-supplied decisionSig, a software root): the SAME prepared rows,
+      // the same commit — only the signing step is one root signature per row (Aegis C6)
       const root = this.#o.root;
       if (!root) throw new RootUnavailableError(`the ${decision} decision`);
       try {
-        const row = { schemaVersion: 'gnomon-root-decision:v1', cardId, decision, contentHash: card.contentHash, approver: ctx.principal };
-        rootSig = root.signRowAsync ? await root.signRowAsync(row) : root.signRow(row);
+        const sign = async (row: unknown) => (root.signRowAsync ? await root.signRowAsync(row) : root.signRow(row));
+        rootSig = await sign(decisionRow);
+        rowSigs = [];
+        for (const row of prepared?.rows ?? []) rowSigs.push(await sign(row));
       } catch (err) {
         if (err instanceof RootUnavailableError) throw err;
         throw fail('UNSUPPORTED', 'root-unprovisioned', 'the root key could not sign the decision', { cardId });
@@ -843,7 +942,7 @@ export class ApprovalBroker {
     // Aegis A3: claimed SYNCHRONOUSLY after the re-check — no expire() can interleave from here to the settle
     r.claim = decision;
     try {
-      await this.#decideAndApply(r, ctx, p, { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing });
+      await this.#decideAndApply(r, ctx, p, { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, ...(rowSigs ? { rowSigs } : {}), ...(prepared ? { prepared } : {}), ...(decisionRow ? { decisionRow } : {}) });
     } catch (err) {
       delete r.claim; // the row or the effect failed: the card stays pending (approval.decide is a record, never authority)
       throw err;
@@ -853,18 +952,21 @@ export class ApprovalBroker {
     delete r.claim;
     this.#settle(r, decision);
     return r.card;
+    } finally {
+      prepared?.release();
+    }
   }
 
   async #decideAndApply(
     r: CardRecord,
     ctx: DecideContext,
     p: Record<string, unknown>,
-    d: { prefix: string[] | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1; standing: StandingMatch | null },
+    d: { prefix: string[] | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1; standing: StandingMatch | null; rowSigs?: Array<{ signer: string; sig: string }>; prepared?: PreparedRows; decisionRow?: DecisionRowV2 },
   ): Promise<void> {
-    const { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing } = d;
+    const { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, rowSigs, prepared, decisionRow } = d;
     await this.#o.log(
       'approval.decide',
-      { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(prefix ? { scope: { kind: 'prefix', prefix } } : {}), ...(rootSig ? { rootSig } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
+      { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(prefix ? { scope: { kind: 'prefix', prefix } } : {}), ...(rootSig ? { rootSig } : {}), ...(decisionRow ? { rowsDigest: decisionRow.rowsDigest, rootKind: decisionRow.cardKind } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
       { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) },
     );
     // F6: the notify row of a standing use, right after the record it notifies about (the GUI's feed + Revoke)
@@ -878,7 +980,7 @@ export class ApprovalBroker {
     }
     if (r.effect) {
       try {
-        await r.effect(decision, { token, rootSig, connId: ctx.connId, decisionSig, presence });
+        await r.effect(decision, { token, rootSig, connId: ctx.connId, decisionSig, presence, ...(rowSigs ? { rowSigs } : {}), ...(prepared ? { prepared } : {}) });
       } catch (err) {
         // P8-D98 (slice A2): the honest kind, exactly one row, no suspect row; the card stays pending (approve's catch)
         await this.#o.log('approval.effect.failed', { cardId, decision, effect: effectNameOf(card), reason: effectFailureReason(err) }, { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) }).catch(() => undefined);
