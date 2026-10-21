@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-21T09:07:11.064Z",
+    "generatedAt": "2026-10-21T15:32:17.943Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 108,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 149,
+      "module": 150,
       "cli": 3,
       "tool": 45,
       "tool-group": 10,
@@ -2890,7 +2890,8 @@
         "#ledger-mod",
         "#mod-host",
         "#paradigm-context-mod",
-        "#standing-grant"
+        "#standing-grant",
+        "#gui-wordmark-menu"
       ],
       "componentType": "module"
     },
@@ -2984,7 +2985,7 @@
       "symbol": "#gui-mods-panel",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "The Mods panel (founder dogfood 2026-10-21: \"Install Workshop does nothing; no way to see which mods are on\"). core/mods.ts (PURE): modsViewOf(status, stack cards) gives installed / available / pending; request builders for request.mod.install|link|pause|start|uninstall| config; folderPathError; configRequest (only manifest-declared fields, secrets refused). ui/mods-panel.ts: header Mods key + sheet (created in code, no index.html change), palette mods.open, Esc closes, trusted presses only, every key busy then a result in words (refusals as alerts), \"decide in the stack\" focuses the card. Install Workshop (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts installWorkshop) now sends request.mod.install or opens the panel; it was a disabled constant with the command in title= only.",
+      "description": "The Mods panel (founder dogfood 2026-10-21: \"Install Workshop does nothing; no way to see which mods are on\"). core/mods.ts (PURE): modsViewOf(status, stack cards) gives installed / available / pending; request builders for request.mod.install|link|pause|start|uninstall| config; folderPathError; configRequest (only manifest-declared fields, secrets refused). ui/mods-panel.ts: the sheet (no header key since board header-5b: Gnomon menu, ⌘K, Workshop; created in code, no index.html change), palette mods.open, Esc closes, trusted presses only, every key busy then a result in words (refusals as alerts), \"decide in the stack\" focuses the card. Install Workshop (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts installWorkshop) now sends request.mod.install or opens the panel; it was a disabled constant with the command in title= only.",
       "visualTags": [],
       "related": []
     },
@@ -3010,6 +3011,22 @@
         "tab"
       ],
       "related": [],
+      "componentType": "module"
+    },
+    "gui-wordmark-menu": {
+      "id": "gui-wordmark-menu",
+      "name": "Gui Wordmark Menu",
+      "symbol": "#gui-wordmark-menu",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "#gui-wordmark-menu (board header-5b, Atelier 2026-10-21-gnomon-voice refs/header-5b.html option C; design-system gnomon.voice.header) - the header row is four things: the wordmark menu \"Gnomon ▾\", the ⌘K palette field, quiet kernel status (#conn link dot, word only when not connected; #risk outlined amber chip, \"browser\" below 1040px, full text in title and sr-only) and the kernel-owned voice pill. Every control 28px, nowrap; the row never wraps (palette words, then the pill fact, truncate). PURE core/header.ts: HEADER_ITEMS, appMenuModel (Layout presets, \"Panes and Workshop…\" opening pane toggles + Workshop placement in place, Day/Night/Auto radios, Mods…, Voice settings…, Settings… ⌘,, who line), APP_MENU_RUNS (existing GUI commands only), triggerKey / menuKey (Enter/Space are the click, ↓/↑ open on first / last, arrows/Home/End move, Esc closes and focus returns, Tab closes), linkView, whoLine. The theme switch, ⚙, Mods and ⊞ Layout header keys, the separate Start voice key and the loose voice note are gone: while the voice app can't run the pill IS the action (voice-client.ts pillActionOf: \"Start voice · app not running\", aria-label says what a click does); attached, the action is the ladder's first row; a draft waiting elsewhere is the pill's fact; the idle auto-off is the 6 s toast in ladder words. Palette: menu.gnomon \"Gnomon menu: …\" (not block-safe). Preview fixture app-menu.",
+      "visualTags": [
+        "menu"
+      ],
+      "related": [
+        "#conn",
+        "#risk"
+      ],
       "componentType": "module"
     },
     "gui-voice-ladder": {
@@ -12104,6 +12121,26 @@
       "visualTags": [],
       "related": []
     },
+    "conn": {
+      "id": "conn",
+      "name": "Conn",
+      "symbol": "#conn",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui-wordmark-menu",
+      "visualTags": [],
+      "related": []
+    },
+    "risk": {
+      "id": "risk",
+      "name": "Risk",
+      "symbol": "#risk",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui-wordmark-menu",
+      "visualTags": [],
+      "related": []
+    },
     "gui-voice-settings.": {
       "id": "gui-voice-settings.",
       "name": "Gui Voice Settings.",
@@ -20266,6 +20303,10 @@
       "category": "components",
       "id": "gui-table-talk"
     },
+    "#gui-wordmark-menu": {
+      "category": "components",
+      "id": "gui-wordmark-menu"
+    },
     "#gui-voice-ladder": {
       "category": "components",
       "id": "gui-voice-ladder"
@@ -24865,6 +24906,14 @@
     "#voice-caption": {
       "category": "components",
       "id": "voice-caption"
+    },
+    "#conn": {
+      "category": "components",
+      "id": "conn"
+    },
+    "#risk": {
+      "category": "components",
+      "id": "risk"
     },
     "#gui-voice-settings.": {
       "category": "components",

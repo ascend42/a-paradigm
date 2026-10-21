@@ -1,0 +1,49 @@
+id: L-2026-10-21-ascend-145925-001
+type: agent-session
+timestamp: '2026-10-21T14:59:25.607Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Atelier process refined after a weak header board; rerunning the header board through the new gates
+summary: |-
+  Where things stand on 2026-10-21. The Gnomon voice design pass (Atelier session 2026-10-21-gnomon-voice) is decided, built and merged into feat/gnomon: trust ladder, Voice settings sheet, mode-plus-fact pill, inline teaching with opt-in variants, growing composer. Luna's finish-review fixes are in, the build is ready, and Aegis gave GO on the send-word trial fixes.
+
+  The founder then flagged the header ("no consistent layout or design on these elements"). I added board 5 inline, and the founder found its options "lacking": the same toolbar rearranged.
+
+  Root cause in the process:
+  - the main thread improvised Luna instead of spawning atelier-luna;
+  - no audit before the options;
+  - no check that options were structurally distinct;
+  - no real "Now" column;
+  - Mika didn't vet the options;
+  - the board was added without rescoping.
+
+  Fixes:
+  - the atelier-design skill (a-atelier 4a10f8e, installed to ~/.claude/skills) now has a spawned Luna, an audit gate, a scope gate, a distinctness gate (each option names its structural axis), a real Now column, and Mika vetting with ui-build-protocol;
+  - Luna notebook nb-luna-audit-before-options-001;
+  - Mika has a global ui-build-protocol behaviour (TD-2026-10-21-306), with wiring tracked in T-2026-10-21-017.
+
+  Next: rerun the header board from the founder's problem statement through the new process and compare the results.
+symbols_touched:
+  - '#atelier-design'
+  - '#gui'
+  - '#gui-voice-ladder'
+decisions:
+  - id: TD-2026-10-21-306
+    decision: Mika runs a global ui-build-protocol on every UI change
+    rationale: Header had seven controls in six styles
+learnings:
+  - Restyling the same set of controls is not a design option; options must differ on a structural axis.
+  - Running a persona inline skips its notebooks and gates; spawn the agent.
+  - Audit the zone and show the real Now before writing options.
+tags:
+  - gnomon
+  - atelier
+  - design
+  - process
+  - marathon-2026-10-20
+git_context:
+  ref: 8b3fd36fb4205664a39f6ab57d917402845ff796
+  branch: feat/gnomon
+  dirty: true

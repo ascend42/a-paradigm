@@ -1,0 +1,41 @@
+id: TD-2026-10-21-306
+timestamp: '2026-10-21T14:52:25.241Z'
+title: Mika runs a global UI build protocol on every UI change
+decision: >-
+  Whenever UI is built or changed by any agent in any project, Mika (designer) runs the ui-build-protocol before the
+  work is reported done, and again at finish review. The pass covers:
+
+  - inventory of each element added or changed, where it lives, and what it relates to;
+
+  - consistency with its siblings;
+
+  - zone placement and no duplicate entry points;
+
+  - all states in every theme;
+
+  - copy vocabulary and copy rules;
+
+  - narrow-width behaviour without wrapping inside controls;
+
+  - accessibility;
+
+  - the design record.
+
+  She outputs a verdict plus file:line change proposals to the builder, never silent rewrites. Taste decisions go to
+  Luna or the creator. The protocol lives in the global ~/.paradigm/agents/designer.agent (behaviors.ui-build-protocol)
+  and notebook nb-ui-build-protocol-001.
+rationale: >-
+  Founder, 2026-10-21, on the Gnomon header: "we have no consistent layout or design on these elements". Seven header
+  controls had six styles, because each was added with its own look and nobody checked the zone as a whole. The founder
+  asked for a protocol that is global to Mika, not local to one project.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+status: active
+tags:
+  - design
+  - mika
+  - protocol
+  - founder
+  - global
