@@ -1,0 +1,57 @@
+# Gnomon console: design
+
+The tokens, components, zones and rules are in `design-system.yaml` next to this file. The rendered system is `specimen.html` (every component in every state, day, night and day without motion, drawn with the real `packages/gnomon-gui/static/styles.css`). The spec it serves is `docs/specs/gnomon.md` v3.4, and the colour values are the G-GUI-10 fixture verbatim. The direction was set in session `2026-10-15-gnomon-aesthetic`, the voice in `2026-10-21-gnomon-voice`, and the system was codified in `2026-10-21-design-systems`.
+
+## The read
+
+An instrument for one operator running an armada. You glance at it many times a day and open it a few times a day to decide. It is exact, calm and quietly beautiful: a made object that reads a larger order.
+
+Gnomon is a desktop instrument. Phone layouts are out of scope for now; a true mobile version will come later as its own work, so nothing here is bent to fit a narrow screen.
+
+## Two modes of one object
+
+- **Day is papercraft:** cut-paper sheets on a grained ground, ink lines, folded paper caps, and pressable ink keys with a hard offset shadow. This deliberately overrides the `default-warm-paper` tell, because the founder wants the papercraft feel.
+- **Night is phosphor:** a near-black ground, glowing outlines, bracketed keys and glyph caps. Only the wordmark, the caps, the chosen segment and the tall-view key glow.
+
+## Principles
+
+These settle trade-offs when a new piece of UI doesn't fit what is already here.
+
+1. **Colour means one thing.** The six mineral hues mean *which project* and nothing else. Three semantic colours mean three things: vermilion is failed, amber is a warning (held countdowns, the clamp, GATE), violet is KNOT. Everything else, status included, is ink. A live mic, a connected kernel, an "ok" and the APPROVED stamp read by their mark (a filled or hollow dot, ✓, a word) and their weight, never by a hue.
+2. **The edge says whether it presses.** Anything you can click is a key: at least 24px, with a dark key edge. A chip is a status label nobody clicks: an 18px line, a faint rule edge. Fields sit between them, with an edge in the secondary text colour (5.8:1 on the page, 6.5:1 on the sheet) that turns to ink on hover and focus. Eight small bordered styles have become three looks: the chip, the small key and the reply's labelled part.
+3. **Four sizes, then weight.** Type has four steps: 10.5 for labels, 11.5 for controls, 13.5 for reading and 17 for titles. Past that, hierarchy is weight, case and face: caps for labels, mono uppercase titles at night, Fraunces for titles by day. If something seems to need a fifth size, it needs a different weight.
+4. **A 2px grid.** Every padding, margin, gap and inset is an even number of pixels. The only exceptions are a few fixed layout dimensions (the 76px Workshop column, the 140px pile tail).
+5. **Say what to do.** A label tells you the next move in the product's own words. A card that voice can decide quotes the exact phrase the voice grammar accepts for it, such as `say “claude admin approve card 3” · reversible`, or says `hand only`. A refusal gives its code, the reason in plain words, then `next:`.
+6. **The kernel's regions can't be hidden.** The voice pill, the link status, run mode, the alerts band, handle words, the held countdown and card bodies stay visible whatever preset, pane or mod is in front.
+7. **Model text never looks like a key.** Anything built from the agent's words has a dashed edge and a second cue, and is never drawn as a decision key.
+
+## Type: the mono spine
+
+JetBrains Mono sets everything in both modes. Fraunces appears only on the wordmark and titles by day. Long text gets line-height 1.6 and lines of at most 80 characters. The four-step scale costs two places something, and both are handled on purpose. The Workshop's 76px column grows from 9 to 10.5, so a cap's question truncates at about nine characters and keeps its full text in the tooltip and accessible name. The first-run key digest drops from 34 to 17, and it holds up for comparison by weight, spacing and groups of four rather than by size.
+
+## Motion: the lively workshop
+
+Things move only when something happens, and they move with character. A decision sheet flutters in on a spring. Deciding stamps it APPROVED and flies it off. A failing session droops once and turns its edge vermilion; it never shakes. Caps bob only while their session streams. A voice approval shows its 3-second countdown before the stamp. Reduced motion makes all of it instant.
+
+## The zones
+
+- **Header.** Four things: the Gnomon ▾ wordmark menu, the ⌘K palette field, the quiet kernel status (a link dot, the browser-risk chip) and the voice pill. Every control is 28px and the row never wraps. Rare tools (layout, theme, mods, settings) live in the wordmark menu and the palette, never as keys in the row.
+- **Alerts band.** The strip under the header carries kernel alerts only: a re-pinned kernel key and a voice dev build. They stay until you acknowledge them or the cause goes away.
+- **Toasts.** Everything else that tells you something happened is one toast style, under the voice pill and right-aligned, over the desk so it never pushes the work down. That covers saved, not sent, refusals, voice turning itself off, an update that's ready and standing-grant offers. Outcomes leave after six seconds; failures stay until you close them. Toasts no longer appear bottom-right or bottom-centre, and there is no loose update banner.
+- **Sessions (left).** + New session, search, active sessions grouped by project with a swatch and a state note, past sessions collapsed, and a bounded mod slot at the bottom.
+- **Centre.** The chat header (title, project, model, run mode, more) with its small controls as 24px keys, then the chat with timestamps, durations and a collapsible activity fold. Offer slips sit under their reply, this session's pending cards are pinned above the composer, and there is one composer with one send key.
+- **Stack (right).** The global decision stack as a paper pile, most urgent first, fanning on hover and on keyboard focus so a buried key can always be reached. Each card shows in the stack and pinned in its session, and deciding it in either place removes both.
+- **Workshop.** The caps mod, a footer strip by default or a 76px column on either edge: Needs you, Working, and one quiet status line.
+- **Overlays.** The palette, new session, Settings, Mods and the Voice settings drawer, where teaching happens inline under its row. Toasts step aside while an overlay is open.
+
+## Voice
+
+Voice is one choice, not two. A trust ladder orders the presets by how much voice does on its own (Off, Talk, Dictate, Send word, Pieces), and the mic follows the rung. Each rung says what it does in a line, and what it costs when it costs something. The header pill always names the rung plus one live fact, with a filled ink dot when the mic is open. It turns amber with "edits ask first" while a voice-sent turn is clamped, and shows a vermilion reason when speech wasn't sent. The pill opens only the ladder; everything configured lives in the Voice settings sheet. Nobody is ever asked to say the product name.
+
+## CLI voice: instrument readout
+
+Aligned lowercase labels, numbers first, items joined by ` · `, and ✓ ✕ ◆ marks. There is no emoji. Every refusal ends with a `next:` line.
+
+## What's next
+
+The `migration:` list in `design-system.yaml` is the work that brings the shipped UI onto this system, batched by zone and component (notices and toasts, chips and small keys, the card voice tag, status colour, field edges, type, spacing, radius, copy). Each batch goes through the UI review on its own. Offer slips and the one-offer-per-reply rule stay open until session `2026-10-20-gnomon-mod-invitations` closes.

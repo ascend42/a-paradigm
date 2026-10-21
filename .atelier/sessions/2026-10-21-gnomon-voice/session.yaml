@@ -4,7 +4,7 @@ scope: "Gnomon voice surface: header pill, voice menu, presets x capture, mic ke
 depth: deep
 mode: overhaul
 read: "The voice control surface of Gnomon: one operator steering sessions by voice; glanced at constantly in the header pill, opened a few times a day to switch mode or teach a word; legible at a glance, calm, exact, inside the papercraft/phosphor world."
-inherits: { system: .atelier/design-system.yaml#gnomon }
+inherits: { system: .atelier/systems/gnomon/design-system.yaml }   # repointed 2026-10-21 by system session 2026-10-21-design-systems (was .atelier/design-system.yaml#gnomon)
 scope_changes:
   - { at: "2026-10-21", board: header-5b, line: "Rescoped to include the Gnomon header as board 5b: every element in the top chrome (wordmark, palette, risk, connection, voice pill and its action/notes, Layout, theme, Mods, Settings, narrow toggles), because the voice pill lives there and the creator said \"we have no consistent layout or design on these elements\"", by: creator }
 preserve: [gnomon.colour, gnomon.type, gnomon.style, gnomon.cli-voice, "kernel-owned voice indicator cannot be hidden"]

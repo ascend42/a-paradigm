@@ -1,0 +1,513 @@
+# Paradigm Platform design system (draft, steps 1-2 of the system verb).
+# Product: platform = packages/paradigm/platform-ui, minus sections/warpline
+# (that section's body belongs to the `warpline` system). Platform governs the
+# shell chrome around every section, Warpline included (founder decision).
+# Layers: foundations, components, zones, content, specimen, rules, migration.
+# Every entry carries from: and status: clear | contested. Contested entries are
+# open questions for the reconcile step; nothing here is confirmed yet.
+version: 2
+extends: none
+status: draft
+drafted_by: Mika (designer), 2026-10-21, from the extract of 152 UI files
+read: >-
+  Local control panel for a Paradigm project: lore, tasks, symbols, incidents and
+  the agent team, read by a developer between agent turns. GitHub-dark density,
+  calm, exact; colour carries meaning (symbol type, status), never decoration.
+
+foundations:
+  # Source of truth: packages/paradigm/platform-ui/src/styles/tokens.css (--p-*).
+  # Role name -> CSS custom property -> value per theme. `css` names the variable
+  # the code must use; raw hex in section CSS is drift.
+  color:
+    surface.page:      { css: --p-bg-primary,   dark: "#0d1117", light: "#ffffff", status: clear, from: { extract: 2026-10-21 } }
+    surface.chrome:    { css: --p-bg-secondary, dark: "#161b22", light: "#f6f8fa", status: clear, from: { extract: 2026-10-21 }, note: "sidebar, header, panels; --p-bg-panel is an alias (13 uses), fold into this" }
+    surface.raised:    { css: --p-bg-tertiary,  dark: "#21262d", light: "#eaeef2", status: clear, from: { extract: 2026-10-21 }, note: "active nav, chips, segmented-control selection; --p-bg-card is an alias (23 uses)" }
+    surface.hover:     { css: --p-bg-hover,     dark: "#30363d", light: "#d0d7de", status: clear, from: { extract: 2026-10-21 } }
+    text.primary:      { css: --p-text-primary,   dark: "#e6edf3", light: "#1f2328", status: clear, from: { extract: 2026-10-21 } }
+    text.secondary:    { css: --p-text-secondary, dark: "#8b949e", light: "#656d76", status: clear, from: { extract: 2026-10-21 } }
+    text.muted:
+      css: --p-text-muted
+      dark: "#484f58"
+      light: "#8b949e"
+      proposed: { dark: "#7d8590", light: "#6e7781" }
+      status: contested
+      question: "Most-used token (261 uses, 232 as text colour) fails AA: 2.28:1 on page, 1.84:1 on raised (dark); 3.08:1 (light). Lift it, or demote it to non-text?"
+      from: { extract: 2026-10-21, review: review-checklist-1 }
+    on-accent:         { css: "(new) --p-text-on-accent", dark: "#ffffff", light: "#ffffff", status: clear, from: { extract: 2026-10-21 }, note: "11 raw #fff on filled buttons; only legal on action.fill.*" }
+    border.default:    { css: --p-border,        dark: "#30363d", light: "#d0d7de", status: clear, from: { extract: 2026-10-21 } }
+    border.focus:      { css: --p-border-active, dark: "#58a6ff", light: "#0969da", status: clear, from: { extract: 2026-10-21 }, note: "also the focus ring colour (proposed --p-focus-ring)" }
+    status.info:       { css: --p-accent-blue,   dark: "#58a6ff", light: "#0969da", status: clear, from: { extract: 2026-10-21 }, note: "also the selection/active accent (nav, tabs)" }
+    status.success:    { css: --p-accent-green,  dark: "#3fb950", light: "#1a7f37", status: clear, from: { extract: 2026-10-21 } }
+    status.danger:     { css: --p-accent-red,    dark: "#f85149", light: "#cf222e", status: clear, from: { extract: 2026-10-21 } }
+    status.warning:    { css: --p-accent-orange, dark: "#d29922", light: "#9a6700", status: clear, from: { extract: 2026-10-21 } }
+    status.special:    { css: --p-accent-purple, dark: "#bc8cff", light: "#8250df", status: clear, from: { extract: 2026-10-21 } }
+    status.conflict:   { css: --p-accent-amber,  dark: "#f59e0b", light: "#d97706", status: clear, from: { extract: 2026-10-21 }, note: "28 uses; Tasks sync conflict tone. Light value is 3.19:1 on page: icons/borders only, never body text" }
+    action.fill.primary: { css: "(new) --p-action-primary", dark: "#1f6feb", light: "#0969da", status: clear, from: { review: review-checklist-1, convention: "GitHub Primer emphasis fill" }, note: "white on #58a6ff is 2.5:1 and on #3fb950 2.6:1 (git.css:389-395, symphony.css:536)" }
+    action.fill.success: { css: "(new) --p-action-success", dark: "#238636", light: "#1a7f37", status: clear, from: { review: review-checklist-1, convention: "GitHub Primer" } }
+    accent.extended:
+      note: "Seven extra hues with 1-4 uses each (cyan 4, slate 2, yellow/emerald/pink/lime 1). Kept as categorical data colours only; no new UI meaning may be given to them."
+      cyan:    { css: --p-accent-cyan,    dark: "#06b6d4", light: "#0891b2" }
+      yellow:  { css: --p-accent-yellow,  dark: "#eab308", light: "#ca8a04" }
+      emerald: { css: --p-accent-emerald, dark: "#34d399", light: "#059669" }
+      pink:    { css: --p-accent-pink,    dark: "#ec4899", light: "#db2777" }
+      lime:    { css: --p-accent-lime,    dark: "#84cc16", light: "#65a30d" }
+      slate:   { css: --p-accent-slate,   dark: "#94a3b8", light: "#64748b" }
+      status: clear
+      from: { extract: 2026-10-21 }
+    symbol:
+      status: contested
+      question: "Two symbol colour maps. Text/chips: component blue, flow green, gate red, signal orange, aspect purple (--p-symbol-*, 90 uses). Graph nodes: component green, flow amber, gate red, signal yellow, aspect violet (--p-symbol-node-*, 7 uses). Which map is the symbol colour?"
+      text:
+        component: { css: --p-symbol-component, dark: "#58a6ff" }
+        flow:      { css: --p-symbol-flow,      dark: "#3fb950" }
+        gate:      { css: --p-symbol-gate,      dark: "#f85149" }
+        signal:    { css: --p-symbol-signal,    dark: "#d29922" }
+        aspect:    { css: --p-symbol-aspect,    dark: "#bc8cff" }
+      node:
+        component: { css: --p-symbol-node-component, dark: "#86efac", light: "#16a34a" }
+        flow:      { css: --p-symbol-node-flow,      dark: "#fbbf24", light: "#d97706" }
+        gate:      { css: --p-symbol-node-gate,      dark: "#f87171", light: "#dc2626" }
+        signal:    { css: --p-symbol-node-signal,    dark: "#fde047", light: "#ca8a04" }
+        aspect:    { css: --p-symbol-node-aspect,    dark: "#a78bfa", light: "#7c3aed" }
+      note: "--p-symbol-* has no light-theme values (tokens.css:79-131), so light theme shows #58a6ff/#d29922 at ~2.5:1 on white."
+      from: { extract: 2026-10-21 }
+    lore-type:
+      agent-session: { css: --p-lore-agent-session, dark: "#818cf8", light: "#5c7cfa" }
+      human-note:    { css: --p-lore-human-note,    dark: "#34d399", light: "#20c997" }
+      decision:      { css: --p-lore-decision,      dark: "#fbbf24", light: "#e67700" }
+      review:        { css: --p-lore-review,        dark: "#c084fc", light: "#9775fa" }
+      incident:      { css: --p-lore-incident,      dark: "#f87171", light: "#fa5252" }
+      milestone:     { css: --p-lore-milestone,     dark: "#60a5fa", light: "#339af0" }
+      status: clear
+      from: { extract: 2026-10-21 }
+      note: "Categorical; used with 12-15% tint backgrounds via color-mix."
+    scrim: { dark: "#000000", status: clear, from: { extract: 2026-10-21 }, note: "only as rgba() shadow/backdrop; 6 alpha variants collapse to shadow.* tokens below" }
+  tint:
+    note: "Tinted fills are color-mix(in srgb, <role> N%, transparent). 13 near-duplicate alpha groups (e.g. #58a6ff at 08/0d/0f/14/1f/26/40) collapse to three steps."
+    subtle: "8%"
+    fill:   "15%"
+    border: "30%"
+    status: clear
+    from: { extract: 2026-10-21, note: "Badge.tsx:34-35 and LoreCard.tsx:68-98 already use 15%/30%" }
+  font:
+    chrome: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif"
+    mono: "'SF Mono', 'Fira Code', monospace"
+    status: clear
+    from: { extract: 2026-10-21, note: "chrome = shell.css:18; mono = 37 literal uses; --p-font-mono is referenced 7x in tasks.css but never defined" }
+  type:
+    sizes: [10, 11, 12, 13, 14, 16, 18, 20, 24, 32]
+    roles:
+      micro: 10        # badges, nav labels (42 uses)
+      meta: 11         # timestamps, tags (104)
+      control: 12      # inputs, segmented tabs, small buttons (163)
+      body-dense: 13   # lists, tabs, table cells (142)
+      body: 14         # body default, shell.css:19 (32)
+      heading: 16      # panel headings, empty-state title (23)
+      section-title: 18  # contested with 20 and 16, see zones.section-header
+      page-title: 20
+      stat: 24         # stat-card value
+      glyph: 32        # empty/error glyph only
+    weights: { regular: 400, medium: 500, semibold: 600, bold: 700 }
+    line-height: { body: 1.5, control: "16px" }
+    status: clear
+    from: { extract: 2026-10-21, note: "9px (6 uses) sits below the floor; 12.8/11.2/10.4/13.6/14.4 are rem drift in team.css, graph, sentinel" }
+  space:
+    scale: [0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64, 80]
+    roles: { inline-gap: 4, control-x: 8, row-gap: 8, panel-pad: 16, section-x: 24, section-y: 16, empty-pad: 80 }
+    status: clear
+    from: { extract: 2026-10-21, note: "majority of each near-duplicate group wins: 7->8, 14->12 or 16, 5->6, 3->4, 18->16, 9->10, 22->24, 19->20, 28->32, 36->40, 90->80, 60->64" }
+  radius:
+    sm: 4          # badges, tags, inputs, segmented tabs (41 + 19 at 3px)
+    md: 6          # --p-radius: controls, nav items, panels (69 token + 23 literal)
+    lg: 8          # cards (contested, see components.card)
+    xl: 12         # graph floating panels only
+    pill: 999      # project chip, presence, roster count
+    none: 0
+    status: clear
+    from: { extract: 2026-10-21 }
+  shadow:
+    raised:  "0 4px 12px rgba(0, 0, 0, 0.3)"    # toast (agent.css:27)
+    overlay: "0 16px 48px rgba(0, 0, 0, 0.4)"   # command palette (command-palette.css:20)
+    status: clear
+    from: { extract: 2026-10-21, note: "11 distinct shadows, all single-use; dark-only values (tinted-shadow-missing in light)" }
+  motion:
+    duration: { fast: 120, base: 150, slow: 300 }
+    loop: { pulse: 1500 }
+    easing: { standard: ease }
+    reduced-motion: "none handled today; every loop (pulse, glow, spin) stops and transitions drop to 0ms under prefers-reduced-motion"
+    status: clear
+    from: { extract: 2026-10-21, note: "150ms ease = --p-transition (35 token + 32 literal); 100/120 merge to 120" }
+  layout:
+    sidebar-width: 56     # --p-sidebar-width
+    header-height: 44     # --p-header-height
+    status: clear
+    from: { extract: 2026-10-21 }
+
+components:
+  sidebar-nav-item:
+    role: "One section entry in the left rail: glyph over a short label; the only primary navigation."
+    anatomy: [glyph, label]
+    variants: { section: "one per available section", utility: "theme switch, pinned to sidebar__bottom" }
+    sizes: { rail: { width: 44, glyph: 18, label: 10 } }
+    states: [default, hover, focus, selected]
+    tokens: { text: --p-text-muted, hover-bg: --p-bg-hover, selected-bg: --p-bg-tertiary, selected-text: --p-accent-blue, radius: --p-radius }
+    source: packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+    examples:
+      default: '<button class="sidebar__item" title="Lore"><span class="sidebar__item-icon">◆</span><span class="sidebar__item-label">lore</span></button>'
+      selected: '<button class="sidebar__item sidebar__item--active" title="Overview"><span class="sidebar__item-icon">◉</span><span class="sidebar__item-label">overview</span></button>'
+      utility: '<button class="sidebar__item" title="Switch to light theme"><span class="sidebar__item-icon">◑</span><span class="sidebar__item-label">theme</span></button>'
+    notes:
+      - "Label is 9px uppercase in --p-text-muted (1.84-2.28:1). Floor is 10px; colour follows text.muted decision."
+      - "No aria-current on the selected item; no :focus-visible style."
+      - "memory uses the emoji 🗂 (SidebarNav.tsx:16); every other glyph is a monochrome Unicode shape."
+    status: clear
+    from: { extract: 2026-10-21 }
+  shell-header:
+    role: "Fixed 44px bar over the content: product mark and project on the left, live agent presence on the right."
+    anatomy: [title, project-chip, agent-presence, mute-toggle, section-label]
+    states: [default, agents-present, agents-muted]
+    tokens: { bg: --p-bg-secondary, border: --p-border, title: --p-text-primary }
+    source: packages/paradigm/platform-ui/src/components/PlatformHeader.tsx
+    examples:
+      default: '<header class="header"><div class="header__left"><span class="header__title">Paradigm Platform</span><span class="header__project">a-paradigm</span></div><div class="header__right"><span style="font-size:12px;color:var(--p-text-muted)">Tasks</span></div></header>'
+      agents-present: '<header class="header"><div class="header__left"><span class="header__title">Paradigm Platform</span></div><div class="header__right"><div class="agent-presence"><span class="agent-presence__dot" style="background-color:#58a6ff" title="builder"></span><span>1 agent</span><button class="agent-mute-btn">Mute</button></div></div></header>'
+      agents-muted: '<div class="agent-presence"><span class="agent-presence__dot" style="background-color:#58a6ff"></span><span>1 agent</span><button class="agent-mute-btn agent-mute-btn--muted">Muted</button></div>'
+    notes:
+      - "Right-hand section label repeats the active nav item and the section's own title (PlatformHeader.tsx:43); see zones.shell-header."
+    status: clear
+    from: { extract: 2026-10-21 }
+  section-header:
+    role: "First row of a section: its name, one live fact, and the section's view switch on the right."
+    anatomy: [title, fact, view-switch]
+    states: [default, loading, empty]
+    source: "none; built inline nine times (AcademySection.tsx:27-34, BrainSection.tsx:56-66, MemorySection.tsx:37, LoreSection.tsx:27-35, tasks.css:18, ambient.css:8, classroom.css:16, overview.css:8, team.css:5)"
+    examples:
+      default: '<div class="tasks__header"><div><span class="tasks__title">Tasks</span><span class="tasks__stat">0 open · 0 in-flight · 0 unclaimed</span></div><div class="view-switcher"><button class="view-tab active">Board</button><button class="view-tab">List</button><button class="view-tab">Inbox</button></div></div>'
+    status: contested
+    question: "Title size 20 (ambient, classroom, overview, team: h1), 18 (academy, brain, memory: span), 16 (tasks, lore: span), absent (git, sentinel, symphony, graph, docs). One section header everywhere, or does the shell header own the title?"
+    from: { extract: 2026-10-21 }
+  tabs:
+    role: "Underlined sub-tabs that switch a section's main view (Logs/Incidents/Events/Flows)."
+    anatomy: [tab-bar, tab]
+    sizes: { default: { font: 13, padding: "10px 16px", indicator: "2px bottom" } }
+    states: [default, hover, focus, selected]
+    tokens: { text: --p-text-secondary, selected-text: --p-accent-blue, indicator: --p-accent-blue, rule: --p-border }
+    source: "built four times: git.css:84 (.git-tabs__btn), sentinel.css:28 (.sentinel-tab), symphony.css:27 (.symphony-tab), classroom.css:331 (.classroom__tab)"
+    examples:
+      default: '<div class="sentinel-tabs"><button class="sentinel-tab active">Logs</button><button class="sentinel-tab">Incidents</button><button class="sentinel-tab">Events</button><button class="sentinel-tab">Flows</button></div>'
+      selected: '<div class="git-tabs"><button class="git-tabs__btn git-tabs__btn--active">Files</button><button class="git-tabs__btn">Log</button></div>'
+    notes: ["Only classroom sets role=tablist; padding splits 8px/10px two each, 10px chosen to match the 44px header rhythm."]
+    status: clear
+    from: { extract: 2026-10-21 }
+  segmented-control:
+    role: "Boxed switch between two to five peer views of the same data (Board/List/Inbox, Timeline/Thread)."
+    anatomy: [track, segment]
+    sizes: { default: { font: 12, padding: "4px 12px", track-pad: 2 } }
+    states: [default, hover, focus, selected]
+    tokens: { track-bg: --p-bg-primary, track-border: --p-border, selected-bg: --p-bg-tertiary, text: --p-text-secondary, selected-text: --p-text-primary, radius: "--p-radius / 4" }
+    source: packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:346
+    examples:
+      default: '<div class="view-switcher"><button class="view-tab active">Board</button><button class="view-tab">List</button><button class="view-tab">Inbox</button></div>'
+      selected: '<div class="board-tabs view-switcher" role="tablist" aria-label="Board view"><button class="view-tab active" role="tab" aria-selected="true">State</button><button class="view-tab" role="tab">Claimant</button></div>'
+    notes:
+      - "Defined twice under the same global class: tasks.css:346-370 (12px, 4px 12px, bordered) and lore/styles/index.css:49-94 (13px, 6px 16px, no border). Both sheets are lazy-loaded, so Tasks changes size after Lore has been opened. Tasks version wins (two uses to one)."
+    status: clear
+    from: { extract: 2026-10-21 }
+  card:
+    role: "Bordered container for one record (lore entry, task, agent, thread)."
+    anatomy: [header, title, body, footer]
+    states: [default, hover, selected, agent-active]
+    tokens: { bg: --p-bg-tertiary, border: --p-border, hover-border: --p-border-active }
+    source: "built eight times: tasks.css:76 (+ a second .task-card block at tasks.css:1018), lore/styles/cards.css:2, team.css:45, symphony.css:128 and :599, classroom.css:190 :361 :468, overview.css:27"
+    examples:
+      default: '<div class="lore-card"><div class="lore-card-header"><div class="lore-card-author"><span class="author-badge agent">claude</span></div><span class="lore-card-type agent-session">agent-session</span></div><div class="lore-card-title">Header 5b</div><div class="lore-card-summary">Wordmark menu and risk chip.</div></div>'
+      agent-active: '<div class="task-card task-card--agent" style="--agent-color:#58a6ff">…</div>'
+    status: contested
+    question: "Radius 8px literal (tasks, lore, team, symphony agent-card: 5) vs --p-radius 6px (overview stat-card, classroom: 3); surface bg-card (3) vs bg-secondary (4)."
+    from: { extract: 2026-10-21 }
+  stat-card:
+    role: "One number with its label on the Overview and Ambient boards; clickable when it leads somewhere."
+    anatomy: [icon, value, trend, label, detail]
+    variants: { static: "", clickable: "stat-card--clickable", accented: "2px top border in a status colour" }
+    states: [default, hover, focus]
+    tokens: { bg: --p-bg-secondary, border: --p-border, hover-border: --p-border-active, value: "24/700 --p-text-primary", label: "12 --p-text-secondary" }
+    source: packages/paradigm/platform-ui/src/components/shared/StatCard.tsx
+    examples:
+      default: '<div class="stat-card"><div class="stat-card__value">42</div><div class="stat-card__label">Symbols</div><div class="stat-card__detail">12 components</div></div>'
+      hover: '<div class="stat-card stat-card--clickable" style="border-color:var(--p-border-active)"><div class="stat-card__value">7</div><div class="stat-card__label">Open tasks</div></div>'
+    notes: ["Clickable variant is a div with onClick: no role, no tabindex, unreachable by keyboard (StatCard.tsx:15)."]
+    status: clear
+    from: { extract: 2026-10-21 }
+  badge:
+    role: "Small read-only label for a status, type or count; never clickable."
+    anatomy: [label]
+    variants: { tinted: "status colour text on 15% tint", outline: "status colour text and border", neutral: "secondary text on raised surface" }
+    sizes: { default: { font: 10, padding: "1px 6px", line-height: 16 } }
+    states: [default]
+    source: "shared Badge.tsx exists (radius 8, 10px) with 0 uses; 25+ section copies: ambient.css:166 :289, tasks.css:125 :240 :603 :1058, symphony.css:810, classroom.css:244, lore/cards.css:32 :388 :509, git.css:38, docs.css:176 :238, lore/thread.css:103"
+    examples:
+      default: '<span class="ambient__type-badge ambient__type-badge--file_change">file_change</span>'
+      danger: '<span class="urgency-badge urgent">urgent</span>'
+      neutral: '<span class="docs-page__tag">auth</span>'
+    status: contested
+    question: "Shape: radius 3-4 (task-chip, urgency, ambient, symbol tags: majority) vs 8 (shared Badge, git) vs pill 999 (classroom, docs tags, team). Size 10 vs 11 vs 9."
+    from: { extract: 2026-10-21 }
+  symbol-tag:
+    role: "A Paradigm symbol (#component, $flow, ^gate, !signal, ~aspect) shown inline in mono, coloured by type."
+    anatomy: [label]
+    sizes: { default: { font: 11, family: mono, padding: "1px 6px", radius: 4 } }
+    states: [default, hover-when-linked]
+    source: "lore/components/SymbolTag.tsx + lore/styles/cards.css:128; copies at tasks.css:197 (.task-tag), symphony.css:408 (.message-symbol-tag), git.css:474 (.git-commit-log__symbol-badge)"
+    examples:
+      default: '<span class="symbol-tag component">#checkout</span>'
+      gate: '<span class="symbol-tag gate">^authenticated</span>'
+    notes: ["cards.css:134-138 pairs node-map tints with text-map colours: .symbol-tag.gate is green-tinted with red text, .flow amber-tinted with green text."]
+    status: clear
+    from: { extract: 2026-10-21 }
+  button:
+    role: "An action. One primary per view; secondary for everything else; quiet for chrome."
+    anatomy: [label, "icon (optional)"]
+    variants:
+      primary: "filled action.fill.primary, on-accent text (compose-send-btn, Sentinel Retry)"
+      success: "filled action.fill.success (git commit)"
+      secondary: "bordered, raised surface (EmptyState action, team__bench-btn, file-action-btn)"
+      quiet: "no border, muted text, hover surface (header__btn, toolbar__btn)"
+      toggle: "bordered; pressed state takes a status colour (agent-mute-btn)"
+    sizes: { compact: { font: 12, padding: "2px 8px" }, default: { font: 13, padding: "6px 12px" } }
+    states: [default, hover, focus, pressed, disabled, loading]
+    tokens: { radius: --p-radius, disabled-opacity: 0.4 }
+    source: "12 *-btn classes: shell.css:149, agent.css:199, git.css:84 :373, symphony.css:102 :284 :532 :844, graph/index.css:183, ambient.css:258, team.css:97, EmptyState.tsx:41"
+    examples:
+      primary: '<button class="compose-send-btn">Send</button>'
+      success: '<button class="git-commit-composer__btn git-commit-composer__btn--commit">Commit</button>'
+      disabled: '<button class="git-commit-composer__btn git-commit-composer__btn--push" disabled>Push</button>'
+      quiet: '<button class="header__btn">⌘K</button>'
+      pressed: '<button class="agent-mute-btn agent-mute-btn--muted">Muted</button>'
+    status: clear
+    from: { extract: 2026-10-21 }
+  filter-bar:
+    role: "Row of selects and a search field that narrows the list below it."
+    anatomy: [select, select, search, clear]
+    sizes: { default: { font: 12, padding: "5px 10px", radius: 4 } }
+    states: [default, focus, filled, empty-result]
+    tokens: { bg: --p-bg-primary, border: --p-border, focus-border: --p-border-active }
+    source: packages/paradigm/platform-ui/src/sections/lore/styles/index.css:98
+    examples:
+      default: '<div class="filter-bar"><select><option>All statuses</option></select><select><option>All priorities</option></select><input placeholder="Search blurb…"></div>'
+    notes: [".filter-bar lives only in Lore's lazy sheet; Tasks reuses the class and renders native white controls until Lore has loaded (rendered: tasks-dark-1280.png)."]
+    status: clear
+    from: { extract: 2026-10-21 }
+  empty-state:
+    role: "What a region shows when it has nothing yet: what is missing and the one command or action that fills it."
+    anatomy: ["glyph (optional)", title, description, "action (optional)"]
+    states: [empty, first-run]
+    tokens: { title: "16/600 --p-text-secondary", body: "13 --p-text-muted", pad: "80px 20px" }
+    source: "shared EmptyState.tsx has 0 uses; hand-built 14+ times (lore/cards.css:351, tasks.css:46 :486, symphony.css:215 :239 :689 :885, ambient.css:93 :212, classroom.css:182, docs.css:291, BrainSection.tsx:106-111)"
+    examples:
+      empty: '<div class="empty-state"><h2>No lore entries yet</h2><p>Record your first entry with <code>paradigm lore record</code>.</p></div>'
+    status: clear
+    from: { extract: 2026-10-21 }
+  status-line:
+    role: "One centred line for a region's loading or error state, with Retry when it can be retried."
+    anatomy: [message, "retry (optional)"]
+    states: [loading, error]
+    source: "tasks.css:46 (.tasks__empty), sentinel.css:60 (.s-error-state)"
+    examples:
+      loading: '<p class="tasks__empty">Loading board…</p>'
+      error: '<div class="s-error-state"><div class="s-error-content"><h2>Failed to load logs</h2><p>API error: 500</p><button>Retry</button></div></div>'
+    notes: ["Sentinel's error renders the heading in the mono stack and red; Tasks' is a muted line with no retry. One pattern: secondary text, danger only on the glyph, Retry as secondary button."]
+    status: clear
+    from: { extract: 2026-10-21 }
+  command-palette:
+    role: "Keyboard jump to any section (⌘K); the only global search."
+    anatomy: [backdrop, input, list, item, shortcut, empty]
+    states: [open, active-item, empty]
+    source: packages/paradigm/platform-ui/src/components/CommandPalette.tsx
+    examples:
+      open: '<div class="command-palette"><div class="command-palette__input-wrapper"><input class="command-palette__input" placeholder="Go to section…"></div><ul class="command-palette__list"><li class="command-palette__item command-palette__item--active"><span class="command-palette__item-icon">◆</span><span class="command-palette__item-label">lore</span></li></ul></div>'
+      empty: '<div class="command-palette"><div class="command-palette__empty">No matching sections</div></div>'
+    status: clear
+    from: { extract: 2026-10-21 }
+  agent-toast:
+    role: "Transient notice that an agent did something in the UI; bottom-right, dismissible."
+    anatomy: [glyph, message, dismiss]
+    states: [default, dismissing]
+    source: packages/paradigm/platform-ui/src/components/AgentToast.tsx
+    examples:
+      default: '<div class="agent-toast-container"><div class="agent-toast" style="border-left-color:#58a6ff"><span class="agent-toast__icon">◆</span><span class="agent-toast__message">builder opened Tasks</span><button class="agent-toast__dismiss" aria-label="Dismiss">×</button></div></div>'
+    notes: ["Glyph is the robot emoji &#x1F916; (AgentToast.tsx:17); no role=status/aria-live."]
+    status: clear
+    from: { extract: 2026-10-21 }
+
+zones:
+  shell-sidebar:
+    surface: every screen
+    holds: ["one sidebar-nav-item per available section, in store order", "theme switch pinned to the bottom"]
+    never: [notices, counts, project switching, section-specific actions]
+    overflow: "The rail scrolls vertically; labels stay one word and never wrap."
+    status: clear
+    from: { extract: 2026-10-21 }
+  shell-header:
+    surface: every screen, including Warpline (Platform owns the chrome around it)
+    holds: ["product title", "project chip", "agent presence + mute"]
+    never: [section actions, filters, notices, a second copy of the section name]
+    overflow: "Project chip truncates with a title; presence collapses to the count below 640px."
+    status: contested
+    question: "Does the header's right-hand section label stay (it repeats the nav and the section title)? Bound to section-header."
+    from: { extract: 2026-10-21 }
+  section-header:
+    surface: top of every section's content area
+    holds: ["section title", "one live fact (counts, last scanned)", "segmented-control for peer views"]
+    never: [filters, notices, destructive actions]
+    overflow: "Fact truncates to one line with a title; the view switch stays on the right, wrapping under the title below 640px."
+    status: contested
+    from: { extract: 2026-10-21 }
+  section-tabs:
+    surface: sections with sub-views (git, sentinel, symphony, classroom, tasks board)
+    holds: ["tabs, one row"]
+    never: [filters, actions, counts beyond a per-tab badge]
+    overflow: "Scrolls horizontally with the selected tab kept in view; never clips (tasks-light-375.png clips Calibration)."
+    status: clear
+    from: { extract: 2026-10-21 }
+  section-toolbar:
+    surface: list views (lore, tasks, sentinel logs, docs, graph)
+    holds: ["filter-bar", "view-scoped actions (graph toolbar)"]
+    never: [navigation, notices]
+    overflow: "Controls wrap to a second row; the search field takes the remaining width."
+    status: clear
+    from: { extract: 2026-10-21 }
+  section-footer:
+    surface: Tasks board only (GitHubSyncStrip)
+    holds: ["sync state facts", "Sync primary action", "via CLI fallback"]
+    never: [navigation, unrelated status]
+    overflow: "Facts collapse to one line ('0 synced · 0 pending'); never wrap word by word (tasks-light-375.png)."
+    status: clear
+    from: { extract: 2026-10-21 }
+  overlays:
+    surface: app-wide, fixed
+    holds: ["command palette (centre)", "agent toasts (bottom-right, max 360px)", "agent callouts and navigation prompt"]
+    never: [persistent state, settings]
+    overflow: "Toasts stack upward, newest at the bottom; palette list scrolls."
+    status: clear
+    from: { extract: 2026-10-21 }
+  warpline-section-body:
+    surface: /warpline content area
+    holds: ["governed by the warpline system (.atelier/systems/warpline)"]
+    never: ["Platform components restyled from inside sections/warpline"]
+    overflow: "n/a here"
+    status: clear
+    from: { decision: "founder: Platform governs the shell chrome around Warpline" }
+
+content:
+  vocabulary:
+    use:
+      section: "one top-level area in the sidebar (Lore, Tasks, Sentinel...)"
+      Academy: "the learning-packs section (was University; the CLI keeps `paradigm university`)"
+      lore: "the project's recorded history entries"
+      symbol: "a Paradigm id with a prefix: #component, $flow, ^gate, !signal, ~aspect"
+      task: "one tracked unit of work"
+      claimant: "the agent or human a task is claimed by"
+      incident: "a Sentinel-recorded failure"
+      nomination: "an Ambient proposal awaiting a decision"
+      pack: "an Academy content pack"
+      agent: "a team member running in a session"
+    retired: {}   # nothing retired yet; 'University' stays legal because the CLI command is `paradigm university`
+    status: clear
+    from: { extract: 2026-10-21 }
+  voice:
+    - rule: "Headings and labels use sentence case ('Pending nominations', 'Related symbols')."
+      status: contested
+      question: "Title Case dominates older sections (Ambient, Docs, Graph, Classroom: ~16 labels); sentence case in newer ones (Brain, Academy: ~8)."
+      from: { extract: 2026-10-21 }
+    - rule: "Ellipsis is the single character … ('Loading…', 'Search docs…'), never three dots."
+      status: clear
+      from: { extract: 2026-10-21, note: "27 three-dot vs 21 single-character; newer code uses …" }
+    - rule: "Errors start 'Could not <verb> <thing>' and end with the cause; never 'Failed to'."
+      status: clear
+      from: { extract: 2026-10-21, note: "could not: 9, Failed to: 9; the Brain and Academy stores use 'could not'" }
+    - rule: "Empty states name the command that fills them, in <code>."
+      status: clear
+      from: { extract: 2026-10-21 }
+    - rule: "No emoji in UI; glyphs are monochrome Unicode shapes."
+      status: clear
+      from: { extract: 2026-10-21, note: "two emoji: 🗂 SidebarNav.tsx:16, 🤖 AgentToast.tsx:17" }
+    - rule: "Em dashes in UI copy become a middle dot or a full stop (tell: em-dash)."
+      status: clear
+      from: { tell: em-dash }
+
+specimen:
+  stylesheets:
+    - packages/paradigm/platform-ui/src/styles/tokens.css
+    - packages/paradigm/platform-ui/src/styles/shell.css
+    - packages/paradigm/platform-ui/src/styles/agent.css
+    - packages/paradigm/platform-ui/src/styles/command-palette.css
+    - packages/paradigm/platform-ui/src/sections/overview/styles/overview.css
+    - packages/paradigm/platform-ui/src/sections/lore/styles/index.css
+    - packages/paradigm/platform-ui/src/sections/lore/styles/cards.css
+    - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+    - packages/paradigm/platform-ui/src/sections/git/styles/git.css
+    - packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css
+    - packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css
+    - packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css
+    - packages/paradigm/platform-ui/src/sections/docs/styles/docs.css
+  themes:
+    dark:  { html_attrs: 'data-theme="dark"' }
+    light: { html_attrs: 'data-theme="light"' }
+
+rules:
+  - { id: type-on-scale,    check: type-off-scale,    from: { extract: 2026-10-21 } }
+  - { id: spacing-on-scale, check: spacing-off-scale, from: { extract: 2026-10-21 } }
+  - { id: radius-on-scale,  check: radius-off-scale,  from: { extract: 2026-10-21 } }
+  - { id: colour-on-palette, check: color-off-palette, from: { extract: 2026-10-21 } }
+  - { id: font-on-system,   check: font-off-system,   from: { extract: 2026-10-21 } }
+  - id: shared-idioms-in-shared-css
+    rule: "A class used by more than one section (view-switcher, view-tab, filter-bar, empty-state, tabs) is defined once in src/styles/, never in a lazy section sheet."
+    from: { extract: 2026-10-21 }
+  - id: tokens-defined
+    rule: "Every var(--p-*) referenced is defined in tokens.css for both themes. Undefined today: --p-accent, --p-green, --p-bg-subtle (no fallback: team.css:34 :54 :94 :109 :159 :163 :165 :227, ambient.css:81), --p-font-mono, --p-border-subtle, --p-space-lg, --p-symbol-*-rgb."
+    from: { extract: 2026-10-21 }
+  - id: focus-visible
+    rule: "Every interactive element shows a 2px --p-border-active ring on :focus-visible; outline:none only with a replacement (10 outline:none today, 8 :focus rules, 0 :focus-visible)."
+    from: { review: review-checklist-7 }
+  - id: reduced-motion
+    rule: "Loops (task-agent-pulse, agent-highlight-glow, sentinel live dot) stop under prefers-reduced-motion."
+    from: { review: review-checklist-5 }
+  - id: text-contrast
+    rule: "Text tokens meet 4.5:1 on every surface in both themes; filled buttons use action.fill.* with on-accent text."
+    from: { review: review-checklist-1 }
+
+preserve:
+  - { what: routes, value: "/<section> paths and the #university / #academy redirect (App.tsx:65-72)" }
+  - { what: storage, value: "localStorage paradigm-platform-theme" }
+  - { what: shortcuts, value: "⌘K command palette, section shortcuts (useKeyboardShortcuts)" }
+
+migration:
+  # Baseline, atelier check --product platform, 2026-10-21: 152 files, 0 fail, 176 warn
+  # (61 spacing, 40 radius, 30 type, 24 colour, 15 em-dash, 6 tinted-shadow-missing).
+  # The check misses rem/inline-style drift the extract counted, and var() misuse; those are listed below by hand.
+  # Ordered by user cost. Uses/files from the 2026-10-21 extract and `atelier check --product platform`.
+  - { from: "--p-text-muted #484f58 / #8b949e as text", to: "text.muted decision (proposed #7d8590 / #6e7781)", uses: 232, files: ["platform-ui/src/**"], status: contested }
+  - { from: "undefined --p-accent, --p-green, --p-bg-subtle (render as nothing; team thread tab active is white on page in light theme)", to: "--p-accent-blue, --p-accent-green, --p-bg-tertiary", uses: 9, files: [sections/team/styles/team.css, sections/ambient/styles/ambient.css] }
+  - { from: "white text on --p-accent-blue / --p-accent-green fills (2.5:1)", to: "action.fill.primary / action.fill.success", uses: 6, files: [sections/git/styles/git.css, sections/symphony/styles/symphony.css] }
+  - { from: ".filter-bar, .view-switcher, .view-tab, .empty-state in lazy section sheets (two conflicting .view-switcher definitions)", to: "src/styles/components.css, one definition each", uses: 4, files: [sections/lore/styles/index.css, sections/tasks/styles/tasks.css, sections/lore/styles/cards.css] }
+  - { from: "no :focus-visible", to: "focus-visible ring on every control", uses: "all controls", files: ["platform-ui/src/**/*.css"] }
+  - { from: "section titles at 16/18/20 or absent", to: "one section-header component", uses: 14, files: [AcademySection.tsx, BrainSection.tsx, MemorySection.tsx, LoreSection.tsx, tasks.css, ambient.css, classroom.css, overview.css, team.css], status: contested }
+  - { from: "two symbol colour maps; lore symbol-tag tints from the node map", to: "symbol colour decision", uses: 97, files: [styles/tokens.css, sections/lore/styles/cards.css, sections/graph/types.ts, sections/symphony/styles/symphony.css], status: contested }
+  - { from: "25+ badge classes + unused shared Badge", to: "one badge component", uses: 40, files: [ambient.css, tasks.css, symphony.css, classroom.css, lore/cards.css, git.css, docs.css], status: contested }
+  - { from: "4 underline tab implementations", to: "tabs component", uses: 4, files: [git.css, sentinel.css, symphony.css, classroom.css] }
+  - { from: "14 hand-built empty states; shared EmptyState unused", to: "empty-state component", uses: 14, files: [lore/cards.css, tasks.css, symphony.css, ambient.css, classroom.css, docs.css, BrainSection.tsx] }
+  - { from: "font-size 9", to: 10, uses: 6, files: [styles/shell.css, sections/classroom/styles/classroom.css] }
+  - { from: "rem sizes 0.7/0.8rem, 11.2/12.8/13.6/14.4/10.4px", to: "11 / 13 / 14", uses: 11, files: [team.css, graph/index.css, sentinel.css] }
+  - { from: "font-size 15/17/22/28/40/42/48", to: "14|16 / 16 / 24 / 24|32 / 32", uses: 12, files: [classroom.css, docs.css, tasks.css, BrainSection.tsx] }
+  - { from: "spacing 3/5/7/9/14/18/19/22/28/36/60/90", to: "nearest scale step (see foundations.space)", uses: 63, files: ["platform-ui/src/**"] }
+  - { from: "radius 3/5/9/10", to: "4 / 6 / 8 / 8", uses: 36, files: [ambient.css, docs.css, tasks.css, symphony.css, lore/cards.css] }
+  - { from: "raw hex (#e0586b, #ff4d4f, #faad14, #2563eb, #1d4ed8, rgba literals of token colours)", to: "status.* tokens with tint steps", uses: 67, files: [classroom.css, ambient.css, graph/index.css, lore/cards.css, sentinel.css, symphony.css] }
+  - { from: "'SF Mono', 'Fira Code', monospace literal (37) + undefined --p-font-mono", to: "define --p-font-mono; use it", uses: 44, files: ["platform-ui/src/**/*.css"] }
+  - { from: "'Loading...' three dots", to: "…", uses: 27, files: ["platform-ui/src/**/*.tsx"] }
+  - { from: "'Failed to …'", to: "'Could not …'", uses: 9, files: [graph/store/graphStore.ts, sentinel, symphony] }
+  - { from: "emoji 🗂 and 🤖", to: "monochrome glyphs", uses: 2, files: [components/SidebarNav.tsx, components/AgentToast.tsx] }
+  - { from: "duplicate .task-card block", to: "one block", uses: 1, files: [sections/tasks/styles/tasks.css] }
+  - { from: "dead ComingSoonSection ('Coming in Platform Phase 2')", to: "delete", uses: 1, files: [App.tsx] }
+  - { from: "generated hsl() avatar hues (3)", to: "keep; categorical identity colours, exempt from the palette", uses: 3, files: [sections/tasks/utils/board.ts, sections/tasks/components/TaskCard.tsx, sections/team/TeamSection.tsx] }
+
+decisions: []

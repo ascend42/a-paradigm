@@ -1,0 +1,406 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gnomon console — what you have</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1c1e;--muted:#5d6066;--line:#e3e3df;--warn:#9a5b00;--warn-bg:#fff4e0;--ok:#1f6b3a;--ok-bg:#e6f4ea;--accent:#2b59c3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 8px}
+p,li{max-width:72ch}
+.meta{color:var(--muted);font-size:13px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.swatch{height:56px;border-radius:6px;border:1px solid var(--line);margin-bottom:8px;background-image:linear-gradient(var(--c),var(--c)),conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0);background-size:auto,12px 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.off{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.on{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}
+.bar{height:12px;background:var(--accent);border-radius:2px}
+.where{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.callout{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px 14px;margin:12px 0}
+iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:transparent;height:72px;display:block}
+nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+nav.toc a{color:var(--accent)}
+.theme-toggle{position:fixed;top:12px;right:12px;font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+</style></head><body><button class="theme-toggle" type="button" onclick="(function(r){var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})(document.documentElement)">Theme</button><main><h1>Gnomon console: what you have</h1>
+<p class="meta">Extracted from 56 UI files (product <code>gnomon</code>) on 2026-10-21. Compared with the product's current design system.</p>
+<div class="stats"><div class="card stat"><b>9</b><span>distinct colours</span></div><div class="card stat"><b>3</b><span>font families</span></div><div class="card stat"><b>17</b><span>font sizes</span></div><div class="card stat"><b>27</b><span>spacing values</span></div><div class="card stat"><b>8</b><span>radii</span></div><div class="card stat"><b>60</b><span>tokens defined</span></div><div class="card stat"><b>15</b><span>near-duplicate groups</span></div><div class="card stat"><b>156</b><span>off-system uses</span></div></div>
+<nav class="toc"><a href="#near">Near-duplicates</a><a href="#color">Colour</a><a href="#type">Type</a><a href="#space">Spacing</a><a href="#radius">Radius</a><a href="#effects">Shadow and motion</a><a href="#tokens">Tokens</a><a href="#components">Components</a><a href="#copy">Copy</a></nav>
+<h2 id="near">Near-duplicates: decisions the system hasn't made</h2>
+<p>Each group is values close enough to read as the same thing. Usually one should win.</p><div class="grid">
+<div class="card"><div class="meta">font-size · 61 uses</div><div class="mono">11, 10.5</div></div>
+<div class="card"><div class="meta">font-size · 39 uses</div><div class="mono">12, 11.5</div></div>
+<div class="card"><div class="meta">font-size · 16 uses</div><div class="mono">12.5, 13</div></div>
+<div class="card"><div class="meta">font-size · 8 uses</div><div class="mono">10, 9.5</div></div>
+<div class="card"><div class="meta">font-size · 2 uses</div><div class="mono">13.5, 14</div></div>
+<div class="card"><div class="meta">spacing · 87 uses</div><div class="mono">6, 5</div></div>
+<div class="card"><div class="meta">spacing · 69 uses</div><div class="mono">8, 7</div></div>
+<div class="card"><div class="meta">spacing · 47 uses</div><div class="mono">10, 9, 9.6</div></div>
+<div class="card"><div class="meta">spacing · 53 uses</div><div class="mono">4, 3</div></div>
+<div class="card"><div class="meta">spacing · 40 uses</div><div class="mono">12, 14</div></div>
+<div class="card"><div class="meta">spacing · 15 uses</div><div class="mono">16, 18</div></div>
+<div class="card"><div class="meta">spacing · 11 uses</div><div class="mono">20, 22</div></div>
+<div class="card"><div class="meta">spacing · 7 uses</div><div class="mono">28, 24</div></div>
+<div class="card"><div class="meta">radius · 13 uses</div><div class="mono">2, 3</div></div>
+<div class="card"><div class="meta">radius · 3 uses</div><div class="mono">9, 8</div></div>
+</div>
+<h2 id="color">Colour</h2><div class="grid">
+<div class="card"><div class="swatch" style="--c:#aadddd"></div><div class="mono">#aadddd</div><div class="row meta">4 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-gui/src/core/virtual.ts:34<br>packages/gnomon-gui/src/core/virtual.ts:52<br>packages/gnomon-gui/src/core/virtual.ts:60<br>packages/gnomon-gui/src/core/virtual.ts:81</div></div>
+<div class="card"><div class="swatch" style="--c:#0f111659"></div><div class="mono">#0f111659</div><div class="row meta">2 uses <span class="badge on">in system</span></div><div class="where mono">packages/gnomon-gui/static/styles.css:518<br>packages/gnomon-gui/static/styles.css:603</div></div>
+<div class="card"><div class="swatch" style="--c:#0000002e"></div><div class="mono">#0000002e</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-gui/static/styles.css:611</div></div>
+<div class="card"><div class="swatch" style="--c:#f3ecdc"></div><div class="mono">#f3ecdc</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:2</div></div>
+<div class="card"><div class="swatch" style="--c:#2b2620"></div><div class="mono">#2b2620</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:2</div></div>
+<div class="card"><div class="swatch" style="--c:#0f120e"></div><div class="mono">#0f120e</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:3</div></div>
+<div class="card"><div class="swatch" style="--c:#b8f0a8"></div><div class="mono">#b8f0a8</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:3</div></div>
+<div class="card"><div class="swatch" style="--c:#a3341f"></div><div class="mono">#a3341f</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:7</div></div>
+<div class="card"><div class="swatch" style="--c:#ff8a70"></div><div class="mono">#ff8a70</div><div class="row meta">1 uses <span class="badge off">off system</span></div><div class="where mono">packages/gnomon-wrapper/static/status.css:8</div></div>
+</div>
+<h2 id="type">Type</h2><h3>Families</h3><div class="scroll"><table><tr><th>Family</th><th>Uses</th><th></th><th>Where</th></tr>
+<tr><td style="font-family:&quot;JetBrains Mono&quot;,system-ui">JetBrains Mono</td><td>3</td><td><span class="badge on">in system</span></td><td><div class="where mono">packages/gnomon-gui/static/styles.css:8<br>packages/gnomon-gui/static/styles.css:9<br>packages/gnomon-gui/static/styles.css:10</div></td></tr>
+<tr><td style="font-family:&quot;Fraunces&quot;,system-ui">Fraunces</td><td>1</td><td><span class="badge on">in system</span></td><td><div class="where mono">packages/gnomon-gui/static/styles.css:12</div></td></tr>
+<tr><td style="font-family:&quot;Menlo&quot;,system-ui">Menlo</td><td>1</td><td><span class="badge off">off system</span></td><td><div class="where mono">packages/gnomon-gui/static/styles.css:588</div></td></tr>
+</table></div><h3>Sizes</h3><div class="scroll"><table><tr><th>Size</th><th>Sample</th><th>Uses</th><th></th></tr>
+<tr><td class="mono">9px</td><td style="font-size:9px;line-height:1.2">Ambient voice off</td><td>3</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">9.5px</td><td style="font-size:9.5px;line-height:1.2">Ambient voice off</td><td>4</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">10px</td><td style="font-size:10px;line-height:1.2">Ambient voice off</td><td>4</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">10.5px</td><td style="font-size:10.5px;line-height:1.2">Ambient voice off</td><td>20</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">11px</td><td style="font-size:11px;line-height:1.2">Ambient voice off</td><td>41</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">11.5px</td><td style="font-size:11.5px;line-height:1.2">Ambient voice off</td><td>18</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">12px</td><td style="font-size:12px;line-height:1.2">Ambient voice off</td><td>21</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">12.5px</td><td style="font-size:12.5px;line-height:1.2">Ambient voice off</td><td>9</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">13px</td><td style="font-size:13px;line-height:1.2">Ambient voice off</td><td>7</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">13.5px</td><td style="font-size:13.5px;line-height:1.2">Ambient voice off</td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">14px</td><td style="font-size:14px;line-height:1.2">Ambient voice off</td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">15px</td><td style="font-size:15px;line-height:1.2">Ambient voice off</td><td>2</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">17px</td><td style="font-size:17px;line-height:1.2">Ambient voice off</td><td>2</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">18px</td><td style="font-size:18px;line-height:1.2">Ambient voice off</td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">20px</td><td style="font-size:20px;line-height:1.2">Ambient voice off</td><td>2</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">22px</td><td style="font-size:22px;line-height:1.2">Ambient voice off</td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">34px</td><td style="font-size:34px;line-height:1.2">Ambient voice off</td><td>1</td><td><span class="badge on">in system</span></td></tr>
+</table></div>
+<h2 id="space">Spacing</h2><div class="scroll"><table><tr><th>Value</th><th></th><th>Uses</th><th></th></tr>
+<tr><td class="mono">2px</td><td style="width:50%"><div class="bar" style="width:2px;max-width:100%"></div></td><td>33</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">3px</td><td style="width:50%"><div class="bar" style="width:3px;max-width:100%"></div></td><td>12</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">4px</td><td style="width:50%"><div class="bar" style="width:4px;max-width:100%"></div></td><td>41</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">4.8px</td><td style="width:50%"><div class="bar" style="width:4.8px;max-width:100%"></div></td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">5px</td><td style="width:50%"><div class="bar" style="width:5px;max-width:100%"></div></td><td>9</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">6px</td><td style="width:50%"><div class="bar" style="width:6px;max-width:100%"></div></td><td>78</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">6.4px</td><td style="width:50%"><div class="bar" style="width:6.4px;max-width:100%"></div></td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">7px</td><td style="width:50%"><div class="bar" style="width:7px;max-width:100%"></div></td><td>5</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">8px</td><td style="width:50%"><div class="bar" style="width:8px;max-width:100%"></div></td><td>64</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">9px</td><td style="width:50%"><div class="bar" style="width:9px;max-width:100%"></div></td><td>4</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">9.6px</td><td style="width:50%"><div class="bar" style="width:9.6px;max-width:100%"></div></td><td>1</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">10px</td><td style="width:50%"><div class="bar" style="width:10px;max-width:100%"></div></td><td>42</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">11px</td><td style="width:50%"><div class="bar" style="width:11px;max-width:100%"></div></td><td>2</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">12px</td><td style="width:50%"><div class="bar" style="width:12px;max-width:100%"></div></td><td>22</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">14px</td><td style="width:50%"><div class="bar" style="width:14px;max-width:100%"></div></td><td>18</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">16px</td><td style="width:50%"><div class="bar" style="width:16px;max-width:100%"></div></td><td>9</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">18px</td><td style="width:50%"><div class="bar" style="width:18px;max-width:100%"></div></td><td>6</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">20px</td><td style="width:50%"><div class="bar" style="width:20px;max-width:100%"></div></td><td>9</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">22px</td><td style="width:50%"><div class="bar" style="width:22px;max-width:100%"></div></td><td>2</td><td><span class="badge off">off system</span></td></tr>
+<tr><td class="mono">24px</td><td style="width:50%"><div class="bar" style="width:24px;max-width:100%"></div></td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">28px</td><td style="width:50%"><div class="bar" style="width:28px;max-width:100%"></div></td><td>6</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">36px</td><td style="width:50%"><div class="bar" style="width:36px;max-width:100%"></div></td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">48px</td><td style="width:50%"><div class="bar" style="width:48px;max-width:100%"></div></td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">64px</td><td style="width:50%"><div class="bar" style="width:64px;max-width:100%"></div></td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">76px</td><td style="width:50%"><div class="bar" style="width:76px;max-width:100%"></div></td><td>2</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">110px</td><td style="width:50%"><div class="bar" style="width:110px;max-width:100%"></div></td><td>2</td><td><span class="badge on">in system</span></td></tr>
+<tr><td class="mono">140px</td><td style="width:50%"><div class="bar" style="width:140px;max-width:100%"></div></td><td>1</td><td><span class="badge on">in system</span></td></tr>
+</table></div>
+<h2 id="radius">Radius</h2><div class="grid">
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:2px;margin-bottom:8px"></div><div class="mono">2px</div><div class="row meta">8 uses <span class="badge off">off system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:3px;margin-bottom:8px"></div><div class="mono">3px</div><div class="row meta">5 uses <span class="badge on">in system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:4px;margin-bottom:8px"></div><div class="mono">4px</div><div class="row meta">5 uses <span class="badge off">off system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:0px;margin-bottom:8px"></div><div class="mono">0px</div><div class="row meta">5 uses <span class="badge on">in system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:14px;margin-bottom:8px"></div><div class="mono">14px</div><div class="row meta">2 uses <span class="badge off">off system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:9px;margin-bottom:8px"></div><div class="mono">9px</div><div class="row meta">2 uses <span class="badge off">off system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:24px;margin-bottom:8px"></div><div class="mono">999px</div><div class="row meta">2 uses <span class="badge on">in system</span></div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:8px;margin-bottom:8px"></div><div class="mono">8px</div><div class="row meta">1 uses <span class="badge off">off system</span></div></div>
+</div>
+<h2 id="effects">Shadow and motion</h2><div class="scroll"><table><tr><th>Kind</th><th>Value</th><th>Uses</th><th></th></tr>
+<tr><td>shadow</td><td class="mono">0 4px 16px rgba(0, 0, 0, 0.18)</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">120ms</td><td>3</td><td><span class="badge on">in system</span></td></tr>
+<tr><td>duration</td><td class="mono">320ms</td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td>duration</td><td class="mono">900ms</td><td>1</td><td><span class="badge on">in system</span></td></tr>
+<tr><td>easing</td><td class="mono">linear</td><td>4</td><td><span class="badge on">in system</span></td></tr>
+<tr><td>easing</td><td class="mono">cubic-bezier(.3,.7,.3,1)</td><td>1</td><td><span class="badge on">in system</span></td></tr>
+</table></div>
+<h2 id="tokens">Tokens (custom properties)</h2>
+<div class="callout"><b>1 defined but never used:</b> <span class="mono">--t-walk</span></div>
+<div class="scroll"><table><tr><th>Token</th><th>Value</th><th>Uses</th><th>Defined</th></tr>
+<tr><td class="mono">--sec</td><td class="mono">#5A5850</td><td>88</td><td class="where mono">packages/gnomon-gui/static/styles.css:20</td></tr>
+<tr><td class="mono">--ink</td><td class="mono">#16150F</td><td>55</td><td class="where mono">packages/gnomon-gui/static/styles.css:18</td></tr>
+<tr><td class="mono">--rule</td><td class="mono">#D9D5CB</td><td>55</td><td class="where mono">packages/gnomon-gui/static/styles.css:21</td></tr>
+<tr><td class="mono">--key-edge</td><td class="mono">#2A2925</td><td>36</td><td class="where mono">packages/gnomon-gui/static/styles.css:27</td></tr>
+<tr><td class="mono">--ink2</td><td class="mono">#2A2925</td><td>31</td><td class="where mono">packages/gnomon-gui/static/styles.css:19</td></tr>
+<tr><td class="mono">--sheet</td><td class="mono">#F8F5EE</td><td>30</td><td class="where mono">packages/gnomon-gui/static/styles.css:17</td></tr>
+<tr><td class="mono">--warn-ink</td><td class="mono">#6E4700</td><td>27</td><td class="where mono">packages/gnomon-gui/static/styles.css:24</td></tr>
+<tr><td class="mono">--radius</td><td class="mono">3px</td><td>22</td><td class="where mono">packages/gnomon-gui/static/styles.css:118</td></tr>
+<tr><td class="mono">--warn-edge</td><td class="mono">#A8730C</td><td>15</td><td class="where mono">packages/gnomon-gui/static/styles.css:28</td></tr>
+<tr><td class="mono">--fail</td><td class="mono">#B4382A</td><td>14</td><td class="where mono">packages/gnomon-gui/static/styles.css:23</td></tr>
+<tr><td class="mono">--warn-bg</td><td class="mono">#F6E3B8</td><td>10</td><td class="where mono">packages/gnomon-gui/static/styles.css:25</td></tr>
+<tr><td class="mono">--fail-edge</td><td class="mono">#B4382A</td><td>8</td><td class="where mono">packages/gnomon-gui/static/styles.css:29</td></tr>
+<tr><td class="mono">--on-ink</td><td class="mono">#F8F5EE</td><td>8</td><td class="where mono">packages/gnomon-gui/static/styles.css:44</td></tr>
+<tr><td class="mono">--live</td><td class="mono">#3F6664</td><td>7</td><td class="where mono">packages/gnomon-gui/static/styles.css:56</td></tr>
+<tr><td class="mono">--p-slate-fill</td><td class="mono">#8C9DBB</td><td>6</td><td class="where mono">packages/gnomon-gui/static/styles.css:34</td></tr>
+<tr><td class="mono">--fold</td><td class="mono">#E1DBCC</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:22</td></tr>
+<tr><td class="mono">--knot</td><td class="mono">#5B4FD6</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:26</td></tr>
+<tr><td class="mono">--p-terracotta-fill</td><td class="mono">#C08A73</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:32</td></tr>
+<tr><td class="mono">--p-sage-fill</td><td class="mono">#9DAF8C</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:33</td></tr>
+<tr><td class="mono">--p-ochre-fill</td><td class="mono">#D2B074</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:35</td></tr>
+<tr><td class="mono">--p-rose-clay-fill</td><td class="mono">#C9949A</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:36</td></tr>
+<tr><td class="mono">--p-sea-grey-fill</td><td class="mono">#8FB0AE</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:37</td></tr>
+<tr><td class="mono">--mono</td><td class="mono">JetBrains Mono&quot;, ui-monospace, &quot;SF Mono&quot;, Menlo, Consolas, monospace</td><td>5</td><td class="where mono">packages/gnomon-gui/static/styles.css:115</td></tr>
+<tr><td class="mono">--slate</td><td class="mono">#44577C</td><td>4</td><td class="where mono">packages/gnomon-gui/static/styles.css:31</td></tr>
+<tr><td class="mono">--sheet-shadow</td><td class="mono">0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14)</td><td>4</td><td class="where mono">packages/gnomon-gui/static/styles.css:47</td></tr>
+<tr><td class="mono">--ground</td><td class="mono">#EDE8DC</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:16</td></tr>
+<tr><td class="mono">--knot-edge</td><td class="mono">#5B4FD6</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:30</td></tr>
+<tr><td class="mono">--p-terracotta-ink</td><td class="mono">#8E4E38</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:38</td></tr>
+<tr><td class="mono">--p-sage-ink</td><td class="mono">#56663F</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:39</td></tr>
+<tr><td class="mono">--p-slate-ink</td><td class="mono">#44577C</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:40</td></tr>
+<tr><td class="mono">--p-ochre-ink</td><td class="mono">#7A5A1C</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:41</td></tr>
+<tr><td class="mono">--p-rose-clay-ink</td><td class="mono">#874B54</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:42</td></tr>
+<tr><td class="mono">--p-sea-grey-ink</td><td class="mono">#3F6664</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:43</td></tr>
+<tr><td class="mono">--shadow</td><td class="mono">2px 3px 0 rgba(22, 21, 15, 0.18)</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:45</td></tr>
+<tr><td class="mono">--wm-glow</td><td class="mono">none</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:51</td></tr>
+<tr><td class="mono">--stamp</td><td class="mono">#3F6664</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:54</td></tr>
+<tr><td class="mono">--reflow</td><td class="mono">220ms</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:117</td></tr>
+<tr><td class="mono">--r</td><td class="mono">1.2deg</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:369</td></tr>
+<tr><td class="mono">--level</td><td class="mono">0</td><td>3</td><td class="where mono">packages/gnomon-gui/static/styles.css:642</td></tr>
+<tr><td class="mono">--edge-w</td><td class="mono">4px</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:48</td></tr>
+<tr><td class="mono">--title-font</td><td class="mono">Fraunces&quot;, Georgia, serif</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:57</td></tr>
+<tr><td class="mono">--display-wght</td><td class="mono">600</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:58</td></tr>
+<tr><td class="mono">--slip-tilt</td><td class="mono">1</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:62</td></tr>
+<tr><td class="mono">--fly</td><td class="mono">550ms cubic-bezier(.3, .7, .3, 1)</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:116</td></tr>
+<tr><td class="mono">--t-droop</td><td class="mono">500ms ease-out</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:121</td></tr>
+<tr><td class="mono">--edge</td><td class="mono">var(--knot-edge)</td><td>2</td><td class="where mono">packages/gnomon-gui/static/styles.css:326</td></tr>
+<tr><td class="mono">--key-shadow</td><td class="mono">2px 2px 0 var(--key-edge)</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:46</td></tr>
+<tr><td class="mono">--grain</td><td class="mono">url(&quot;grain.svg&quot;)</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:49</td></tr>
+<tr><td class="mono">--grain-opacity</td><td class="mono">.3</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:50</td></tr>
+<tr><td class="mono">--cap-shadow</td><td class="mono">rgba(40, 30, 15, .22)</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:52</td></tr>
+<tr><td class="mono">--cap-glow</td><td class="mono">none</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:53</td></tr>
+<tr><td class="mono">--title-transform</td><td class="mono">none</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:59</td></tr>
+<tr><td class="mono">--title-spacing</td><td class="mono">0</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:60</td></tr>
+<tr><td class="mono">--slip-shadow</td><td class="mono">1px 2px 0 rgba(22, 21, 15, .08)</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:61</td></tr>
+<tr><td class="mono">--t-stamp</td><td class="mono">400ms cubic-bezier(.3, 1.4, .5, 1)</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:119</td></tr>
+<tr><td class="mono">--t-flyout</td><td class="mono">450ms ease-in</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:120</td></tr>
+<tr><td class="mono">--t-bob</td><td class="mono">1.1s ease-in-out</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:123</td></tr>
+<tr><td class="mono">--t-hold</td><td class="mono">3s linear</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:124</td></tr>
+<tr><td class="mono">--progress</td><td class="mono">0</td><td>1</td><td class="where mono">packages/gnomon-gui/static/styles.css:680</td></tr>
+<tr><td class="mono">--t-walk</td><td class="mono">900ms ease-in-out</td><td>0</td><td class="where mono">packages/gnomon-gui/static/styles.css:122</td></tr>
+</table></div>
+<h2 id="components">Components and class families</h2>
+<h3>Class families</h3><p class="meta">Classes grouped by their first word. A family with many classes and few uses is often one component written several ways.</p><div class="scroll"><table><tr><th>Family</th><th>Classes</th><th>Uses</th><th>Members</th></tr>
+<tr><td class="mono">meta</td><td>1</td><td>61</td><td class="mono where">meta</td></tr>
+<tr><td class="mono">key</td><td>3</td><td>57</td><td class="mono where">key key-always key-prefix</td></tr>
+<tr><td class="mono">vs</td><td>23</td><td>43</td><td class="mono where">vs-check vs-prompt vs-row vs-custom vs-counter vs-variants vs-variant-list vs-hint vs-risk vs-risk-text vs-acked vs-label</td></tr>
+<tr><td class="mono">voice</td><td>18</td><td>33</td><td class="mono where">voice-noclient voice-setup voice-crashed voice-unavailable voice-off voice-nudge voice-pill voice-wrap voice-dot voice-rung voice-fact voice-meter</td></tr>
+<tr><td class="mono">mod</td><td>19</td><td>31</td><td class="mono where">mod-fence-head mod-label mod-dev mod-fence-body mod-slot-head mod-pending mod-config mod-field mod-result mod-keys mod-head mod-name</td></tr>
+<tr><td class="mono">blk</td><td>16</td><td>30</td><td class="mono where">blk blk-text blk-title blk-list blk-table blk-md blk-diff blk-progress blk-button-inert blk-button blk-image blk-root-rows</td></tr>
+<tr><td class="mono">mode</td><td>8</td><td>18</td><td class="mono where">mode-note mode-scope-head mode-name mode-item mode-kbd mode-wrap mode-menu mode-btn</td></tr>
+<tr><td class="mono">settings</td><td>9</td><td>18</td><td class="mono where">settings-sec settings-h settings-how settings-card settings-head settings-body settings-label settings-note settings-value</td></tr>
+<tr><td class="mono">kernel</td><td>1</td><td>17</td><td class="mono where">kernel-owned</td></tr>
+<tr><td class="mono">quiet</td><td>1</td><td>17</td><td class="mono where">quiet</td></tr>
+<tr><td class="mono">field</td><td>1</td><td>16</td><td class="mono where">field</td></tr>
+<tr><td class="mono">card</td><td>15</td><td>15</td><td class="mono where">card-sep card-arg-line card-nl card-arg card-quote-label card-head card-kind card-requester card-voice card-voice-origin card-arg-capped card-root-rows</td></tr>
+<tr><td class="mono">pri</td><td>1</td><td>10</td><td class="mono where">pri</td></tr>
+<tr><td class="mono">composer</td><td>7</td><td>9</td><td class="mono where">composer-foot composer composer-main composer-ghost composer-ctrls composer-tall composer-lines</td></tr>
+<tr><td class="mono">title</td><td>1</td><td>9</td><td class="mono where">title</td></tr>
+<tr><td class="mono">slip</td><td>8</td><td>9</td><td class="mono where">slip-tab slip-g slip slip-q slip-ctx slip-hint slip-acts slip-meta</td></tr>
+<tr><td class="mono">overlay</td><td>1</td><td>7</td><td class="mono where">overlay</td></tr>
+<tr><td class="mono">sheet</td><td>1</td><td>7</td><td class="mono where">sheet-card</td></tr>
+<tr><td class="mono">pane</td><td>3</td><td>7</td><td class="mono where">pane-toggle pane pane-head</td></tr>
+<tr><td class="mono">capture</td><td>5</td><td>6</td><td class="mono where">capture-idle capture-hearing capture-transcribing capture-dropped capture-captured</td></tr>
+<tr><td class="mono">md</td><td>5</td><td>6</td><td class="mono where">md-code md-p md-pre md-list md</td></tr>
+<tr><td class="mono">workshop</td><td>6</td><td>6</td><td class="mono where">workshop-install workshop-install-result workshop-absent workshop-col workshop workshop-host</td></tr>
+<tr><td class="mono">standing</td><td>6</td><td>6</td><td class="mono where">standing-feed standing-offer standing-list standing-items standing-revoke standing-toast</td></tr>
+<tr><td class="mono">rung</td><td>5</td><td>5</td><td class="mono where">rung-tag rung-r rung-text rung-name rung-line</td></tr>
+<tr><td class="mono">link</td><td>3</td><td>5</td><td class="mono where">link link-dot link-word</td></tr>
+<tr><td class="mono">ask</td><td>4</td><td>4</td><td class="mono where">ask-picker ask-q ask-opt ask-free</td></tr>
+<tr><td class="mono">menu</td><td>4</td><td>4</td><td class="mono where">menu-h menu-rule menu-who menu-theme</td></tr>
+<tr><td class="mono">pal</td><td>4</td><td>4</td><td class="mono where">pal-title pal-kbd pal-ph pal-ph2</td></tr>
+<tr><td class="mono">fail</td><td>1</td><td>4</td><td class="mono where">fail</td></tr>
+<tr><td class="mono">model</td><td>4</td><td>4</td><td class="mono where">model-switch-lines model-wrap model-btn model-menu</td></tr>
+<tr><td class="mono">wordmark</td><td>3</td><td>4</td><td class="mono where">wordmark-btn wordmark wordmark-menu</td></tr>
+<tr><td class="mono">choice</td><td>3</td><td>3</td><td class="mono where">choice-k choice-t choice-again</td></tr>
+<tr><td class="mono">badge</td><td>1</td><td>3</td><td class="mono where">badge</td></tr>
+<tr><td class="mono">root</td><td>3</td><td>3</td><td class="mono where">root-rows-title root-rows-missing root-digest-mismatch</td></tr>
+<tr><td class="mono">refusal</td><td>1</td><td>3</td><td class="mono where">refusal</td></tr>
+<tr><td class="mono">stack</td><td>3</td><td>3</td><td class="mono where">stack-wide stack stack-scope</td></tr>
+<tr><td class="mono">body</td><td>1</td><td>3</td><td class="mono where">body</td></tr>
+<tr><td class="mono">sec</td><td>2</td><td>3</td><td class="mono where">sec-head sec-toggle</td></tr>
+<tr><td class="mono">rename</td><td>2</td><td>3</td><td class="mono where">rename-input rename-btn</td></tr>
+<tr><td class="mono">pile</td><td>3</td><td>3</td><td class="mono where">pile-more pile-meta pile</td></tr>
+<tr><td class="mono">ladder</td><td>3</td><td>3</td><td class="mono where">ladder-start ladder-target ladder-foot</td></tr>
+<tr><td class="mono">mods</td><td>3</td><td>3</td><td class="mono where">mods-sec mods-card mods-body</td></tr>
+<tr><td class="mono">seg</td><td>1</td><td>3</td><td class="mono where">seg</td></tr>
+<tr><td class="mono">sr</td><td>1</td><td>3</td><td class="mono where">sr-only</td></tr>
+<tr><td class="mono">notice</td><td>1</td><td>3</td><td class="mono where">notice</td></tr>
+<tr><td class="mono">chead</td><td>3</td><td>3</td><td class="mono where">chead chead-l chead-meta</td></tr>
+<tr><td class="mono">more</td><td>3</td><td>3</td><td class="mono where">more-wrap more-btn more-menu</td></tr>
+<tr><td class="mono">empty</td><td>3</td><td>3</td><td class="mono where">empty empty-sheet empty-title</td></tr>
+<tr><td class="mono">dictation</td><td>3</td><td>3</td><td class="mono where">dictation dictation-ring dictation-live</td></tr>
+<tr><td class="mono">ring</td><td>3</td><td>3</td><td class="mono where">ring-track ring-arc ring-secs</td></tr>
+<tr><td class="mono">cap</td><td>2</td><td>2</td><td class="mono where">cap-glyph cap-word</td></tr>
+<tr><td class="mono">bar</td><td>2</td><td>2</td><td class="mono where">bar bar-i</td></tr>
+<tr><td class="mono">no</td><td>2</td><td>2</td><td class="mono where">no-sessions no-stack</td></tr>
+<tr><td class="mono">ws</td><td>2</td><td>2</td><td class="mono where">ws-left ws-right</td></tr>
+<tr><td class="mono">chip</td><td>2</td><td>2</td><td class="mono where">chip chip-label</td></tr>
+<tr><td class="mono">live</td><td>1</td><td>2</td><td class="mono where">live-clock</td></tr>
+<tr><td class="mono">t</td><td>1</td><td>2</td><td class="mono where">t</td></tr>
+<tr><td class="mono">said</td><td>2</td><td>2</td><td class="mono where">said said-tag</td></tr>
+<tr><td class="mono">ghost</td><td>2</td><td>2</td><td class="mono where">ghost-committed ghost-tail</td></tr>
+<tr><td class="mono">wm</td><td>2</td><td>2</td><td class="mono where">wm-wrap wm-caret</td></tr>
+<tr><td class="mono">spacer</td><td>2</td><td>2</td><td class="mono where">spacer spacer-v</td></tr>
+<tr><td class="mono">risk</td><td>2</td><td>2</td><td class="mono where">risk-chip risk-long</td></tr>
+<tr><td class="mono">list</td><td>1</td><td>2</td><td class="mono where">list</td></tr>
+<tr><td class="mono">status</td><td>2</td><td>2</td><td class="mono where">status-line status</td></tr>
+<tr><td class="mono">choices</td><td>1</td><td>1</td><td class="mono where">choices-hint</td></tr>
+<tr><td class="mono">q</td><td>1</td><td>1</td><td class="mono where">q</td></tr>
+<tr><td class="mono">sh</td><td>1</td><td>1</td><td class="mono where">sh</td></tr>
+<tr><td class="mono">k</td><td>1</td><td>1</td><td class="mono where">k</td></tr>
+<tr><td class="mono">handle</td><td>1</td><td>1</td><td class="mono where">handle</td></tr>
+<tr><td class="mono">helper</td><td>1</td><td>1</td><td class="mono where">helper-batch-note</td></tr>
+<tr><td class="mono">content</td><td>1</td><td>1</td><td class="mono where">content-hash</td></tr>
+<tr><td class="mono">stamp</td><td>1</td><td>1</td><td class="mono where">stamp</td></tr>
+<tr><td class="mono">setup</td><td>1</td><td>1</td><td class="mono where">setup</td></tr>
+<tr><td class="mono">fan</td><td>1</td><td>1</td><td class="mono where">fan</td></tr>
+<tr><td class="mono">slim</td><td>1</td><td>1</td><td class="mono where">slim</td></tr>
+<tr><td class="mono">clamp</td><td>1</td><td>1</td><td class="mono where">clamp-chip</td></tr>
+<tr><td class="mono">plain</td><td>1</td><td>1</td><td class="mono where">plain</td></tr>
+<tr><td class="mono">trow</td><td>1</td><td>1</td><td class="mono where">trow</td></tr>
+<tr><td class="mono">role</td><td>1</td><td>1</td><td class="mono where">role-working</td></tr>
+<tr><td class="mono">spin</td><td>1</td><td>1</td><td class="mono where">spin</td></tr>
+</table></div>
+<h2 id="copy">Copy</h2><p class="meta">628 distinct user-visible strings. The vocabulary layer is decided from these.</p><div class="scroll"><table><tr><th>Text</th><th>Where</th></tr>
+<tr><td>Too short to catch. Hold a little longer, or say it again</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:77</td></tr>
+<tr><td>Not sent: it overlapped my spoken reply</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:78</td></tr>
+<tr><td>Not sent: you talked over my reply, so I stopped</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:79</td></tr>
+<tr><td>Heard sound, but no words</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:80</td></tr>
+<tr><td>Not sent: speaker not recognised</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:81</td></tr>
+<tr><td>Not sent: voice is not attached to this session</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:82</td></tr>
+<tr><td>Not sent: the kernel refused it</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:83</td></tr>
+<tr><td>Mic off · ⌃` to listen</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:85</td></tr>
+<tr><td>Claude was still finishing</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:96</td></tr>
+<tr><td>it overlapped my spoken reply</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:98</td></tr>
+<tr><td>speaker not recognised</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:100</td></tr>
+<tr><td>voice is not attached to this session</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:102</td></tr>
+<tr><td>another voice app is connected</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:104</td></tr>
+<tr><td>it was too old to send</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:106</td></tr>
+<tr><td>handled as a command</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:108</td></tr>
+<tr><td>no echo cancellation (use headphones or the built-in mic)</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:110</td></tr>
+<tr><td>the open mic timed out</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:110</td></tr>
+<tr><td>above the attached voice mode</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:110</td></tr>
+<tr><td>dictated speech waits in the box</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:110</td></tr>
+<tr><td>voice is off for this turn</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:110</td></tr>
+<tr><td>Not sent: Claude was still finishing its reply. Say it again</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:120</td></tr>
+<tr><td>Hearing you…</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:215</td></tr>
+<tr><td>Hearing you</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:215</td></tr>
+<tr><td>Catching that…</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:217</td></tr>
+<tr><td>Catching that</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:217</td></tr>
+<tr><td>Heard, but not confirmed: check the transcript</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:222</td></tr>
+<tr><td>Got it</td><td class="where mono">packages/gnomon-gui/src/core/capture.ts:225</td></tr>
+<tr><td>Reply with one of these options</td><td class="where mono">packages/gnomon-gui/src/core/choices.ts:174</td></tr>
+<tr><td>Options (no longer live)</td><td class="where mono">packages/gnomon-gui/src/core/choices.ts:174</td></tr>
+<tr><td>reply with</td><td class="where mono">packages/gnomon-gui/src/core/choices.ts:175</td></tr>
+<tr><td>you replied</td><td class="where mono">packages/gnomon-gui/src/core/choices.ts:175</td></tr>
+<tr><td>Click or press Enter again to send it</td><td class="where mono">packages/gnomon-gui/src/core/choices.ts:179</td></tr>
+<tr><td>websocket error</td><td class="where mono">packages/gnomon-gui/src/core/client.ts:53</td></tr>
+<tr><td>the connection is closed</td><td class="where mono">packages/gnomon-gui/src/core/client.ts:186</td></tr>
+<tr><td>hello failed</td><td class="where mono">packages/gnomon-gui/src/core/client.ts:234</td></tr>
+<tr><td>auth failed</td><td class="where mono">packages/gnomon-gui/src/core/client.ts:245</td></tr>
+<tr><td>Command palette</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:31</td></tr>
+<tr><td>New session</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:32</td></tr>
+<tr><td>Rename session</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:33</td></tr>
+<tr><td>double-click the title / F2 in the list</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:33</td></tr>
+<tr><td>Focus the composer</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:34</td></tr>
+<tr><td>Mods… (installed, available, add from folder)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:38</td></tr>
+<tr><td>Kernel feed: every raw log row (S2.3: a view, never the default centre)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:39</td></tr>
+<tr><td>Theme: Auto (follow the Mac&#39;s appearance)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:42</td></tr>
+<tr><td>Motion: follow the OS</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:44</td></tr>
+<tr><td>Layout: Focus (the chat only)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:46</td></tr>
+<tr><td>Layout: Decide (the stack wide)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:47</td></tr>
+<tr><td>Pane: show/hide sessions</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:48</td></tr>
+<tr><td>Pane: show/hide decision stack</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:49</td></tr>
+<tr><td>Pane: show/hide the Workshop (needs you / working caps)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:50</td></tr>
+<tr><td>Workshop: footer strip (default)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:52</td></tr>
+<tr><td>Workshop: right column</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:53</td></tr>
+<tr><td>Workshop: left column</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:54</td></tr>
+<tr><td>Decision stack: this project / all projects</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:55</td></tr>
+<tr><td>Voice: Off (the mic is closed)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:59</td></tr>
+<tr><td>hold ⌃⌥Space (voice app)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:60</td></tr>
+<tr><td>Voice: set up your send word…</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:64</td></tr>
+<tr><td>Voice settings…</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:65</td></tr>
+<tr><td>Voice: mic on / off</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:66</td></tr>
+<tr><td>⌃` · ` in Gnomon</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:66</td></tr>
+<tr><td>Mode: manual (this folder) — writes and commands wait on a plan</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:69</td></tr>
+<tr><td>Mode: ask (this folder) — every write and command asks</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:70</td></tr>
+<tr><td>Mode: auto-edits (this folder) — edits in this folder pass</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:71</td></tr>
+<tr><td>⇧Tab cycles</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:71</td></tr>
+<tr><td>Mode: manual (this session only)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:72</td></tr>
+<tr><td>Mode: ask (this session only)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:73</td></tr>
+<tr><td>Mode: auto-edits (this session only)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:74</td></tr>
+<tr><td>Voice: start the voice app</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:76</td></tr>
+<tr><td>Voice: stop the voice app</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:77</td></tr>
+<tr><td>Voice: teach Gnomon your voice</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:78</td></tr>
+<tr><td>Dictation: Talk auto-sends after 3 s of silence</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:81</td></tr>
+<tr><td>Dictation: Talk auto-sends after 5 s of silence (default)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:82</td></tr>
+<tr><td>Dictation: Talk auto-sends after 8 s of silence</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:83</td></tr>
+<tr><td>Dictation: Talk auto-sends after 15 s of silence</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:84</td></tr>
+<tr><td>Dictation: Talk never auto-sends (Send or Enter only)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:85</td></tr>
+<tr><td>Dictation: hold / resume the auto-send</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:86</td></tr>
+<tr><td>⌃⌥H (voice app)</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:86</td></tr>
+<tr><td>Gnomon menu: layout, theme, mods, voice settings, settings</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:88</td></tr>
+<tr><td>Send a diagnostic note to gui.log</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:90</td></tr>
+<tr><td>not served</td><td class="where mono">packages/gnomon-gui/src/core/commands.ts:166</td></tr>
+<tr><td>Edited draft: press Enter to send</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:351</td></tr>
+<tr><td>draft · Enter sends (an open-mic draft never sends itself)</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:362</td></tr>
+<tr><td>Sending… Esc keeps it</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:397</td></tr>
+<tr><td>draft waiting</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:413</td></tr>
+<tr><td>draft held · voice detached</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:414</td></tr>
+<tr><td>piece held · Enter sends</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:419</td></tr>
+<tr><td>piece waiting · Claude is answering</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:419</td></tr>
+<tr><td>sending in pieces · edits ask first</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:419</td></tr>
+<tr><td>draft held</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:421</td></tr>
+<tr><td>draft · auto-send off</td><td class="where mono">packages/gnomon-gui/src/core/dictation.ts:422</td></tr>
+<tr><td>the chat only</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:36</td></tr>
+<tr><td>the stack wide</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:36</td></tr>
+<tr><td>Panes and Workshop…</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:43</td></tr>
+<tr><td>show or hide a pane, move the Workshop</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:43</td></tr>
+<tr><td>a strip under the desk</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:49</td></tr>
+<tr><td>installed, available, add from folder</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:54</td></tr>
+<tr><td>not connected</td><td class="where mono">packages/gnomon-gui/src/core/header.ts:103</td></tr>
+<tr><td>no pinned kernel key on this page: run `gnomon` (or `gnomon up`) in a terminal</td><td class="where mono">packages/gnomon-gui/src/core/launch.ts:182</td></tr>
+<tr><td>s own seconds: the heartbeat</td><td class="where mono">packages/gnomon-gui/src/core/live-turn.ts:22</td></tr>
+<tr><td>workshop not installed · gnomon mod install packages/gnomon-mods/workshop</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:115</td></tr>
+<tr><td>Install Workshop</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:130</td></tr>
+<tr><td>Install the first-party Workshop: the kernel raises its install card in the stack, and you allow it there with Touch ID</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:130</td></tr>
+<tr><td>This kernel lists no shipped Workshop: open Mods to see why and to add a mod from a folder</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:131</td></tr>
+<tr><td>a kit.Button is not allowed in the panel slot or the Workshop (they sit beside the decision keys)</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:165</td></tr>
+<tr><td>dev-linked mod (tier local)</td><td class="where mono">packages/gnomon-gui/src/core/mod-panels.ts:181</td></tr>
+<tr><td>pick a model</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:47</td></tr>
+<tr><td>type a model id, e.g. claude-opus-5-5</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:49</td></tr>
+<tr><td>no session focused</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:159</td></tr>
+<tr><td>local model (gnomon-local): no Claude model to switch</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:160</td></tr>
+<tr><td>The conversation continues in the same Claude process: the context comes with it.</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:178</td></tr>
+<tr><td>The prompt cache restarts for the new model, so the next turn is slower and bills its input once more.</td><td class="where mono">packages/gnomon-gui/src/core/model-picker.ts:179</td></tr>
+<tr><td>writes and commands wait on an approved plan</td><td class="where mono">packages/gnomon-gui/src/core/modes.ts:112</td></tr>
+<tr><td>every write and command raises a card</td><td class="where mono">packages/gnomon-gui/src/core/modes.ts:113</td></tr>
+<tr><td>this folder</td><td class="where mono">packages/gnomon-gui/src/core/modes.ts:132</td></tr>
+<tr><td>this session only</td><td class="where mono">packages/gnomon-gui/src/core/modes.ts:132</td></tr>
+<tr><td>type the folder that holds the mod (it has a gnomon-manifest.json)</td><td class="where mono">packages/gnomon-gui/src/core/mods.ts:172</td></tr>
+<tr><td>the path holds a control or line-separator character</td><td class="where mono">packages/gnomon-gui/src/core/mods.ts:176</td></tr>
+<tr><td>a network (UNC) path is not accepted: use a local folder</td><td class="where mono">packages/gnomon-gui/src/core/mods.ts:177</td></tr>
+<tr><td>change at least one field</td><td class="where mono">packages/gnomon-gui/src/core/mods.ts:220</td></tr>
+<tr><td>uninstall requested</td><td class="where mono">packages/gnomon-gui/src/core/mods.ts:232</td></tr>
+</table></div></main></body></html>

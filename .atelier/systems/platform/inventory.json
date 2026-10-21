@@ -1,0 +1,4530 @@
+{
+  "root": "/Users/ascend/Documents/GitHub/a-paradigm",
+  "product": "platform",
+  "name": "Paradigm Platform",
+  "generated": "2026-10-21T15:51:52.355Z",
+  "files": 152,
+  "hasSystem": true,
+  "values": {
+    "color": [
+      {
+        "value": "#ffffff",
+        "count": 11,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:392",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:397",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:203",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1101",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1153"
+        ],
+        "tokens": [
+          "--p-bg-primary"
+        ]
+      },
+      {
+        "value": "#e0586b",
+        "count": 8,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:206",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:270",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:319",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:394",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:394"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f851491a",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:279",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:276",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:566",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1383",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:779"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ffffff0d",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:489",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:212",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:344",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:413",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:784"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff",
+        "count": 5,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:365",
+          "packages/paradigm/platform-ui/src/styles/agent.css:229",
+          "packages/paradigm/platform-ui/src/styles/agent.css:232",
+          "packages/paradigm/platform-ui/src/styles/agent.css:233",
+          "packages/paradigm/platform-ui/src/styles/agent.css:239"
+        ],
+        "tokens": [
+          "--p-border-active",
+          "--p-accent-blue",
+          "--p-symbol-component"
+        ]
+      },
+      {
+        "value": "#d29922",
+        "count": 4,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:375",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:459",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:470",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:770"
+        ],
+        "tokens": [
+          "--p-accent-orange",
+          "--p-symbol-signal"
+        ]
+      },
+      {
+        "value": "#3fb9501a",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:274",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:207",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:349"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000066",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:158",
+          "packages/paradigm/platform-ui/src/styles/agent.css:124",
+          "packages/paradigm/platform-ui/src/styles/command-palette.css:20"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ff4d4f",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:301",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:302"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#faad14",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:311",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:312"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2563eb",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:202",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:207"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ffffff08",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:510",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:261"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d3991a",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:43",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:126"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#818cf81a",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:52",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:131"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#818cf826",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:68",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:87"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff08",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:322",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1245"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff26",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:438",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:65"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ffffff0a",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:763",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:130"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#0000004d",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1345",
+          "packages/paradigm/platform-ui/src/styles/agent.css:27"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff14",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:284"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#1d4ed8",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:201"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#1e293b80",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:304"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#0f172acc",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:316"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000099",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:361"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f871711a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:479"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f8717133",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:481"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#86efac1a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:485"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#86efac33",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:487"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ffffff0f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:511"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ffffff14",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:521"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7dd3fc4d",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:522"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#20c9971f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:48"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#5c7cfa1f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:57"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d39926",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:69"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#fbbf2426",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:70"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#c084fc26",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:71"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f8717126",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:72"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#60a5fa26",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:73"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7dd3fc1f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:137"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#86efac1f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:138"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#fbbf241f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:139"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#fde0471f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:140"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#a78bfa1f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:141"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000033",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:162"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#fbbf241a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:600"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f851490f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:272"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#d299220a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:280"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff40",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:899"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff0d",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1233"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f851490d",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1237"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#d2992208",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1241"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff1f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:364"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#8be9fd",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:370"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#d299221f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:374"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f85149",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:380"
+        ],
+        "tokens": [
+          "--p-accent-red",
+          "--p-symbol-gate"
+        ]
+      },
+      {
+        "value": "#bd93f9",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:385"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#3fb9501f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:389"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#3fb950",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:390"
+        ],
+        "tokens": [
+          "--p-accent-green",
+          "--p-symbol-flow"
+        ]
+      },
+      {
+        "value": "#3fb95066",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:637"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#58a6ff0f",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:660"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#d299221a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:769"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "hsl(${math.abs(hashcode(ref)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx:28"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#0000002e",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1013"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000040",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1261"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "hsl(${hue}, ${sat}%, ${light}%)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts:59"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "hsl(${math.abs(hashcode(role)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/team/TeamSection.tsx:16"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#eab3081a",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:238"
+        ],
+        "tokens": []
+      }
+    ],
+    "font": [
+      {
+        "value": "SF Mono",
+        "count": 37,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:261",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:436",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:138",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:290",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:415"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "Segoe UI",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:16",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:15",
+          "packages/paradigm/platform-ui/src/styles/shell.css:18"
+        ],
+        "tokens": []
+      }
+    ],
+    "font-size": [
+      {
+        "value": "12",
+        "count": 163,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:43",
+          "packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:11",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:39",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:42",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:44"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13",
+        "count": 142,
+        "where": [
+          "packages/paradigm/platform-ui/src/App.tsx:45",
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:32",
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:40",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:35",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:50"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11",
+        "count": 104,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:114",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:134",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:149",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:159",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:242"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 42,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:18",
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:30",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:168",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:291",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:121"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14",
+        "count": 32,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:17",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:38",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:33",
+          "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:52",
+          "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:82"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 23,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:28",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:50",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:63",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:69",
+          "packages/paradigm/platform-ui/src/sections/brain/components/styles.ts:13"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "18",
+        "count": 16,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:29",
+          "packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:10",
+          "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:39",
+          "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:58",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:251"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "24",
+        "count": 7,
+        "where": [
+          "packages/paradigm/platform-ui/src/App.tsx:43",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:52",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:28",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:396",
+          "packages/paradigm/platform-ui/src/sections/overview/styles/overview.css:44"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "20",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:9",
+          "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:109",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:17",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:112",
+          "packages/paradigm/platform-ui/src/sections/overview/styles/overview.css:9"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "9",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:246",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:312",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:499",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:175",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:782"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "15",
+        "count": 5,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:487",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:226",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:494",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:264",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:945"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "32",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:28",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:25",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:225"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11.2",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:98",
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:199",
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:213"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12.8",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:193",
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:219",
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:236"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "28",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:209",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:940"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13.6",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:492",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1452"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14.4",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:527",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:105"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "48",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/App.tsx:42"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "40",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:106"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "42",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:46"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "17",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:303"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "22",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:662"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "8",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:778"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10.4",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:205"
+        ],
+        "tokens": []
+      }
+    ],
+    "spacing": [
+      {
+        "value": "8",
+        "count": 232,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:38",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:30",
+          "packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:9",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:21",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:10"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12",
+        "count": 144,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:25",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:25",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:28",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:49",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:82"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "6",
+        "count": 141,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:38",
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:16",
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:28",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:45",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:10"
+        ],
+        "tokens": [
+          "--p-radius"
+        ]
+      },
+      {
+        "value": "4",
+        "count": 134,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:42",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:34",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:35",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:70",
+          "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:40"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 121,
+        "where": [
+          "packages/paradigm/platform-ui/src/App.tsx:41",
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:38",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:44",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:45",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:27"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2",
+        "count": 86,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:39",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:44",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:116",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:145",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:255"
+        ],
+        "tokens": [
+          "--p-spine-width"
+        ]
+      },
+      {
+        "value": "10",
+        "count": 75,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:33",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:28",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:222",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:261",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:329"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "24",
+        "count": 49,
+        "where": [
+          "packages/paradigm/platform-ui/src/App.tsx:33",
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:26",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:27",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:42",
+          "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:43"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "20",
+        "count": 25,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:20",
+          "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:72",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:11",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:25",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:100"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14",
+        "count": 16,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:90",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:129",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:194",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:291",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:339"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "5",
+        "count": 15,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:476",
+          "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:86",
+          "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:96",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:480",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/index.css:110"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "3",
+        "count": 13,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:58",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:261",
+          "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:21",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:303",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:115"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "48",
+        "count": 7,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:22",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:412",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1428",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:691",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:887"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "32",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:12",
+          "packages/paradigm/platform-ui/src/sections/lore/LoreSection.tsx:40",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1219",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:35",
+          "packages/paradigm/platform-ui/src/sections/team/styles/team.css:15"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "7",
+        "count": 5,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:505",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:357",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:247",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:465",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1392"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "40",
+        "count": 4,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:37",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:243",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:748",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:216"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "18",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:36",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:162",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:472"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "80",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:20",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:356"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "22",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:100",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:327"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "64",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:37"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "28",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:140"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "26",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:160"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "90",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:28"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "19",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:190"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "36",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:870"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "9",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:142"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "60",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:68"
+        ],
+        "tokens": []
+      }
+    ],
+    "radius": [
+      {
+        "value": "4",
+        "count": 41,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:273",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:315",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:357",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:482",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:122"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "8",
+        "count": 30,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:17",
+          "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:29",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:159",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:478",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:232"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "6",
+        "count": 23,
+        "where": [
+          "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:40",
+          "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:48",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:59",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:190",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:475"
+        ],
+        "tokens": [
+          "--p-radius"
+        ]
+      },
+      {
+        "value": "3",
+        "count": 19,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:173",
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:296",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:217",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:548",
+          "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailReview.tsx:57"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 13,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:153",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:181",
+          "packages/paradigm/platform-ui/src/sections/docs/styles/docs.css:241",
+          "packages/paradigm/platform-ui/src/sections/git/styles/git.css:41",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:51"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "999",
+        "count": 12,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:20",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:127",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:137",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:251",
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:302"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12",
+        "count": 12,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:306",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:315",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:315",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:371",
+          "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailMeta.tsx:102"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2",
+        "count": 4,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:18",
+          "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:19",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:346",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1334"
+        ],
+        "tokens": [
+          "--p-spine-width"
+        ]
+      },
+      {
+        "value": "5",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:724",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1297",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1721"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:315",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:315"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "9",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:57"
+        ],
+        "tokens": []
+      }
+    ],
+    "shadow": [
+      {
+        "value": "0 0 0 3px color-mix(in srgb, currentColor 18%, transparent)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:389"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 16px rgba(88, 166, 255, 0.15)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:438"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 16px rgba(88, 166, 255, 0.25)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:899"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 8px 24px rgba(0, 0, 0, 0.3)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1345"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 6px rgba(63, 185, 80, 0.4)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:637"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 2px 12px rgba(0, 0, 0, 0.18)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1013"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 6px 24px rgba(0, 0, 0, 0.25)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1261"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 4px 12px rgba(0, 0, 0, 0.3)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:27"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 4px 16px rgba(0, 0, 0, 0.4)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:124"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 4px var(--agent-highlight-color, #58a6ff)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:229"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 16px 48px rgba(0, 0, 0, 0.4)",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/command-palette.css:20"
+        ],
+        "tokens": []
+      }
+    ],
+    "duration": [
+      {
+        "value": "150",
+        "count": 32,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:63",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:168",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:192",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:280",
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:517"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "100",
+        "count": 4,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/graph/styles/index.css:124",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:303",
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:460",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1229"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "120",
+        "count": 4,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:730",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1508",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1508",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1508"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2000",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:205",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:638",
+          "packages/paradigm/platform-ui/src/styles/agent.css:190"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "300",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:26",
+          "packages/paradigm/platform-ui/src/styles/agent.css:85",
+          "packages/paradigm/platform-ui/src/styles/agent.css:125"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "200",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:172",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:806"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "1000",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:80",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:832"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "400",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/overview/styles/overview.css:114"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "1400",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1029"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "700",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1158"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "1500",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/styles/agent.css:224"
+        ],
+        "tokens": []
+      }
+    ],
+    "easing": [
+      {
+        "value": "ease",
+        "count": 10,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/overview/styles/overview.css:114",
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:37",
+          "packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:36",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:806",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1508"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "linear",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:80",
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1158"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "ease-in-out",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1029",
+          "packages/paradigm/platform-ui/src/styles/agent.css:224"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "ease-out",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:172"
+        ],
+        "tokens": []
+      }
+    ]
+  },
+  "nearDuplicates": [
+    {
+      "kind": "color",
+      "values": [
+        "#f851491a",
+        "#f851490f",
+        "#f851490d"
+      ],
+      "count": 8
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#ffffff0d",
+        "#ffffff08",
+        "#ffffff0a",
+        "#ffffff0f",
+        "#ffffff14"
+      ],
+      "count": 12
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#3fb9501a",
+        "#3fb9501f",
+        "#3fb95066"
+      ],
+      "count": 5
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#00000066",
+        "#0000004d",
+        "#00000099",
+        "#00000033",
+        "#0000002e",
+        "#00000040"
+      ],
+      "count": 9
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#ff4d4f",
+        "#f85149"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#34d3991a",
+        "#34d39926"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#818cf81a",
+        "#818cf826"
+      ],
+      "count": 4
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#58a6ff08",
+        "#58a6ff26",
+        "#58a6ff14",
+        "#60a5fa26",
+        "#58a6ff40",
+        "#58a6ff0d",
+        "#58a6ff1f",
+        "#58a6ff0f"
+      ],
+      "count": 10
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#f871711a",
+        "#f8717133",
+        "#f8717126"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#86efac1a",
+        "#86efac33",
+        "#86efac1f"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#7dd3fc4d",
+        "#7dd3fc1f"
+      ],
+      "count": 2
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#fbbf2426",
+        "#fbbf241f",
+        "#fbbf241a"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#d299220a",
+        "#d2992208",
+        "#d299221f",
+        "#d299221a"
+      ],
+      "count": 4
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "13",
+        "12.8"
+      ],
+      "count": 145
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "11",
+        "11.2"
+      ],
+      "count": 107
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "10",
+        "10.4"
+      ],
+      "count": 43
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "14",
+        "13.6"
+      ],
+      "count": 34
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "8",
+        "7"
+      ],
+      "count": 237
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "12",
+        "14"
+      ],
+      "count": 160
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "6",
+        "5"
+      ],
+      "count": 156
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "4",
+        "3"
+      ],
+      "count": 147
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "16",
+        "18"
+      ],
+      "count": 124
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "10",
+        "9"
+      ],
+      "count": 76
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "24",
+        "22"
+      ],
+      "count": 51
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "20",
+        "19"
+      ],
+      "count": 26
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "32",
+        "28"
+      ],
+      "count": 7
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "40",
+        "36"
+      ],
+      "count": 5
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "80",
+        "90"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "64",
+        "60"
+      ],
+      "count": 2
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "4",
+        "3"
+      ],
+      "count": 60
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "8",
+        "9"
+      ],
+      "count": 31
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "6",
+        "5"
+      ],
+      "count": 26
+    },
+    {
+      "kind": "duration",
+      "values": [
+        "100",
+        "120"
+      ],
+      "count": 8
+    },
+    {
+      "kind": "duration",
+      "values": [
+        "1400",
+        "1500"
+      ],
+      "count": 2
+    }
+  ],
+  "tokens": [
+    {
+      "name": "--p-text-muted",
+      "value": "#484f58",
+      "uses": 261,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:14"
+    },
+    {
+      "name": "--p-border",
+      "value": "#30363d",
+      "uses": 191,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:17"
+    },
+    {
+      "name": "--p-text-primary",
+      "value": "#e6edf3",
+      "uses": 171,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:12"
+    },
+    {
+      "name": "--p-text-secondary",
+      "value": "#8b949e",
+      "uses": 137,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:13"
+    },
+    {
+      "name": "--p-accent-green",
+      "value": "#3fb950",
+      "uses": 101,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:22"
+    },
+    {
+      "name": "--p-accent-blue",
+      "value": "#58a6ff",
+      "uses": 92,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:21"
+    },
+    {
+      "name": "--p-bg-tertiary",
+      "value": "#21262d",
+      "uses": 80,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:8"
+    },
+    {
+      "name": "--p-radius",
+      "value": "6px",
+      "uses": 69,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:69"
+    },
+    {
+      "name": "--p-accent-red",
+      "value": "#f85149",
+      "uses": 55,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:23"
+    },
+    {
+      "name": "--p-bg-secondary",
+      "value": "#161b22",
+      "uses": 54,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:7"
+    },
+    {
+      "name": "--p-accent-orange",
+      "value": "#d29922",
+      "uses": 41,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:24"
+    },
+    {
+      "name": "--p-bg-hover",
+      "value": "#30363d",
+      "uses": 38,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:9"
+    },
+    {
+      "name": "--p-transition",
+      "value": "150ms ease",
+      "uses": 35,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:70"
+    },
+    {
+      "name": "--p-accent-purple",
+      "value": "#bc8cff",
+      "uses": 34,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:25"
+    },
+    {
+      "name": "--p-symbol-component",
+      "value": "#58a6ff",
+      "uses": 33,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:37"
+    },
+    {
+      "name": "--p-accent-amber",
+      "value": "#f59e0b",
+      "uses": 28,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:29"
+    },
+    {
+      "name": "--p-bg-primary",
+      "value": "#0d1117",
+      "uses": 27,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:6"
+    },
+    {
+      "name": "--p-border-active",
+      "value": "#58a6ff",
+      "uses": 23,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:18"
+    },
+    {
+      "name": "--p-bg-card",
+      "value": "#21262d",
+      "uses": 23,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:51"
+    },
+    {
+      "name": "--p-symbol-flow",
+      "value": "#3fb950",
+      "uses": 17,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:38"
+    },
+    {
+      "name": "--p-symbol-gate",
+      "value": "#f85149",
+      "uses": 17,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:39"
+    },
+    {
+      "name": "--p-symbol-signal",
+      "value": "#d29922",
+      "uses": 15,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:40"
+    },
+    {
+      "name": "--p-bg-panel",
+      "value": "#161b22",
+      "uses": 13,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:52"
+    },
+    {
+      "name": "--p-lore-agent-session",
+      "value": "#818cf8",
+      "uses": 10,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:55"
+    },
+    {
+      "name": "--p-symbol-aspect",
+      "value": "#bc8cff",
+      "uses": 8,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:41"
+    },
+    {
+      "name": "--p-lore-human-note",
+      "value": "#34d399",
+      "uses": 8,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:56"
+    },
+    {
+      "name": "--p-lore-milestone",
+      "value": "#60a5fa",
+      "uses": 7,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:60"
+    },
+    {
+      "name": "--p-lore-incident",
+      "value": "#f87171",
+      "uses": 5,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:59"
+    },
+    {
+      "name": "--p-accent-cyan",
+      "value": "#06b6d4",
+      "uses": 4,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:28"
+    },
+    {
+      "name": "--p-symbol-node-component",
+      "value": "#86efac",
+      "uses": 3,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:44"
+    },
+    {
+      "name": "--p-accent-slate",
+      "value": "#94a3b8",
+      "uses": 2,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:34"
+    },
+    {
+      "name": "--p-lore-decision",
+      "value": "#fbbf24",
+      "uses": 2,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:57"
+    },
+    {
+      "name": "--p-spine-color",
+      "value": "#30363d",
+      "uses": 2,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:63"
+    },
+    {
+      "name": "--p-sidebar-width",
+      "value": "56px",
+      "uses": 2,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:67"
+    },
+    {
+      "name": "--p-header-height",
+      "value": "44px",
+      "uses": 2,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:68"
+    },
+    {
+      "name": "--p-accent-yellow",
+      "value": "#eab308",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:30"
+    },
+    {
+      "name": "--p-accent-emerald",
+      "value": "#34d399",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:31"
+    },
+    {
+      "name": "--p-accent-pink",
+      "value": "#ec4899",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:32"
+    },
+    {
+      "name": "--p-accent-lime",
+      "value": "#84cc16",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:33"
+    },
+    {
+      "name": "--p-symbol-node-flow",
+      "value": "#fbbf24",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:45"
+    },
+    {
+      "name": "--p-symbol-node-gate",
+      "value": "#f87171",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:46"
+    },
+    {
+      "name": "--p-symbol-node-signal",
+      "value": "#fde047",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:47"
+    },
+    {
+      "name": "--p-symbol-node-aspect",
+      "value": "#a78bfa",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:48"
+    },
+    {
+      "name": "--p-lore-review",
+      "value": "#c084fc",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:58"
+    },
+    {
+      "name": "--p-spine-width",
+      "value": "2px",
+      "uses": 1,
+      "where": "packages/paradigm/platform-ui/src/styles/tokens.css:64"
+    }
+  ],
+  "unusedTokens": [],
+  "undefinedTokens": [
+    "--p-accent",
+    "--p-border-subtle",
+    "--log-cols",
+    "--evt-cols",
+    "--p-symbol-component-rgb",
+    "--p-symbol-aspect-rgb",
+    "--lane-color",
+    "--cell-color",
+    "--cell-progress",
+    "--pill-color",
+    "--p-font-mono",
+    "--agent-color",
+    "--p-space-lg",
+    "--p-bg-subtle",
+    "--p-green",
+    "--agent-highlight-color"
+  ],
+  "components": [
+    {
+      "name": "App",
+      "where": "packages/paradigm/platform-ui/src/App.tsx:50"
+    },
+    {
+      "name": "AgentCalloutOverlay",
+      "where": "packages/paradigm/platform-ui/src/components/AgentCallout.tsx:11"
+    },
+    {
+      "name": "AgentNavigationPrompt",
+      "where": "packages/paradigm/platform-ui/src/components/AgentCallout.tsx:33"
+    },
+    {
+      "name": "AgentToastContainer",
+      "where": "packages/paradigm/platform-ui/src/components/AgentToast.tsx:30"
+    },
+    {
+      "name": "CommandPalette",
+      "where": "packages/paradigm/platform-ui/src/components/CommandPalette.tsx:37"
+    },
+    {
+      "name": "ErrorBoundary",
+      "where": "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:13"
+    },
+    {
+      "name": "PlatformHeader",
+      "where": "packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:5"
+    },
+    {
+      "name": "SidebarNav",
+      "where": "packages/paradigm/platform-ui/src/components/SidebarNav.tsx:23"
+    },
+    {
+      "name": "Badge",
+      "where": "packages/paradigm/platform-ui/src/components/shared/Badge.tsx:9"
+    },
+    {
+      "name": "EmptyState",
+      "where": "packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:13"
+    },
+    {
+      "name": "StatCard",
+      "where": "packages/paradigm/platform-ui/src/components/shared/StatCard.tsx:13"
+    },
+    {
+      "name": "AcademySection",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:14"
+    },
+    {
+      "name": "NoteView",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:6"
+    },
+    {
+      "name": "PackList",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:11"
+    },
+    {
+      "name": "PackSkills",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:8"
+    },
+    {
+      "name": "PathList",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:13"
+    },
+    {
+      "name": "PathView",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:45"
+    },
+    {
+      "name": "QuizRunner",
+      "where": "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:9"
+    },
+    {
+      "name": "AmbientSection",
+      "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:133"
+    },
+    {
+      "name": "BrainSection",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:18"
+    },
+    {
+      "name": "BrainMapPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:29"
+    },
+    {
+      "name": "FindPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:7"
+    },
+    {
+      "name": "HealthPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:24"
+    },
+    {
+      "name": "LockedPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:7"
+    },
+    {
+      "name": "PrivacyBadge",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:7"
+    },
+    {
+      "name": "SuggestionsPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:15"
+    },
+    {
+      "name": "ClassroomSection",
+      "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:538"
+    },
+    {
+      "name": "DocsSection",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/DocsSection.tsx:11"
+    },
+    {
+      "name": "DocsCustomPage",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsCustomPage.tsx:5"
+    },
+    {
+      "name": "DocsFlowPage",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:6"
+    },
+    {
+      "name": "DocsPortalPage",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:6"
+    },
+    {
+      "name": "DocsSearch",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx:5"
+    },
+    {
+      "name": "DocsSidebar",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSidebar.tsx:24"
+    },
+    {
+      "name": "DocsSymbolPage",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:6"
+    },
+    {
+      "name": "FlowSteps",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/FlowSteps.tsx:18"
+    },
+    {
+      "name": "GateChain",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/GateChain.tsx:6"
+    },
+    {
+      "name": "PropertyTable",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/PropertyTable.tsx:5"
+    },
+    {
+      "name": "SymbolLink",
+      "where": "packages/paradigm/platform-ui/src/sections/docs/components/SymbolLink.tsx:12"
+    },
+    {
+      "name": "GitSection",
+      "where": "packages/paradigm/platform-ui/src/sections/git/GitSection.tsx:15"
+    },
+    {
+      "name": "BranchBar",
+      "where": "packages/paradigm/platform-ui/src/sections/git/components/BranchBar.tsx:4"
+    },
+    {
+      "name": "CommitComposer",
+      "where": "packages/paradigm/platform-ui/src/sections/git/components/CommitComposer.tsx:6"
+    },
+    {
+      "name": "CommitLog",
+      "where": "packages/paradigm/platform-ui/src/sections/git/components/CommitLog.tsx:26"
+    },
+    {
+      "name": "DiffViewer",
+      "where": "packages/paradigm/platform-ui/src/sections/git/components/DiffViewer.tsx:43"
+    },
+    {
+      "name": "FileList",
+      "where": "packages/paradigm/platform-ui/src/sections/git/components/FileList.tsx:44"
+    },
+    {
+      "name": "GraphSection",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/GraphSection.tsx:11"
+    },
+    {
+      "name": "Canvas",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/components/Canvas.tsx:24"
+    },
+    {
+      "name": "ExportDialog",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/components/ExportDialog.tsx:4"
+    },
+    {
+      "name": "LoadDialog",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:15"
+    },
+    {
+      "name": "SymbolPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/components/SymbolPanel.tsx:8"
+    },
+    {
+      "name": "Toolbar",
+      "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:4"
+    },
+    {
+      "name": "LoreSection",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/LoreSection.tsx:14"
+    },
+    {
+      "name": "DateSeparator",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/DateSeparator.tsx:9"
+    },
+    {
+      "name": "DetailPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/DetailPanel.tsx:9"
+    },
+    {
+      "name": "FilterBar",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:16"
+    },
+    {
+      "name": "LoreCard",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:17"
+    },
+    {
+      "name": "ReviewStars",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/ReviewStars.tsx:3"
+    },
+    {
+      "name": "SymbolTag",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/SymbolTag.tsx:11"
+    },
+    {
+      "name": "VerificationBadge",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/VerificationBadge.tsx:3"
+    },
+    {
+      "name": "ViewSwitcher",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/ViewSwitcher.tsx:11"
+    },
+    {
+      "name": "DetailBody",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailBody.tsx:10"
+    },
+    {
+      "name": "DetailDecisions",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailDecisions.tsx:8"
+    },
+    {
+      "name": "DetailFiles",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailFiles.tsx:8"
+    },
+    {
+      "name": "DetailMeta",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailMeta.tsx:8"
+    },
+    {
+      "name": "DetailReview",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailReview.tsx:10"
+    },
+    {
+      "name": "AuthorView",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/views/AuthorView.tsx:5"
+    },
+    {
+      "name": "SessionView",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/views/SessionView.tsx:115"
+    },
+    {
+      "name": "SymbolView",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/views/SymbolView.tsx:6"
+    },
+    {
+      "name": "ThreadView",
+      "where": "packages/paradigm/platform-ui/src/sections/lore/views/ThreadView.tsx:6"
+    },
+    {
+      "name": "MemorySection",
+      "where": "packages/paradigm/platform-ui/src/sections/memory/MemorySection.tsx:14"
+    },
+    {
+      "name": "SUGGESTION_HEADINGS",
+      "where": "packages/paradigm/platform-ui/src/sections/memory/components/LedgerGroup.tsx:7"
+    },
+    {
+      "name": "LedgerGroup",
+      "where": "packages/paradigm/platform-ui/src/sections/memory/components/LedgerGroup.tsx:17"
+    },
+    {
+      "name": "LedgerRow",
+      "where": "packages/paradigm/platform-ui/src/sections/memory/components/LedgerRow.tsx:20"
+    },
+    {
+      "name": "SyncPreviewPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/memory/components/SyncPreviewPanel.tsx:10"
+    },
+    {
+      "name": "OverviewSection",
+      "where": "packages/paradigm/platform-ui/src/sections/overview/OverviewSection.tsx:23"
+    },
+    {
+      "name": "ActivityFeed",
+      "where": "packages/paradigm/platform-ui/src/sections/overview/components/ActivityFeed.tsx:23"
+    },
+    {
+      "name": "HealthBar",
+      "where": "packages/paradigm/platform-ui/src/sections/overview/components/HealthBar.tsx:15"
+    },
+    {
+      "name": "SentinelSection",
+      "where": "packages/paradigm/platform-ui/src/sections/sentinel/SentinelSection.tsx:25"
+    },
+    {
+      "name": "EventsTab",
+      "where": "packages/paradigm/platform-ui/src/sections/sentinel/components/EventsTab.tsx:395"
+    },
+    {
+      "name": "FlowsTab",
+      "where": "packages/paradigm/platform-ui/src/sections/sentinel/components/FlowsTab.tsx:235"
+    },
+    {
+      "name": "IncidentsTab",
+      "where": "packages/paradigm/platform-ui/src/sections/sentinel/components/IncidentsTab.tsx:24"
+    },
+    {
+      "name": "LogsTab",
+      "where": "packages/paradigm/platform-ui/src/sections/sentinel/components/LogsTab.tsx:120"
+    },
+    {
+      "name": "SymphonySection",
+      "where": "packages/paradigm/platform-ui/src/sections/symphony/SymphonySection.tsx:23"
+    },
+    {
+      "name": "FilesTab",
+      "where": "packages/paradigm/platform-ui/src/sections/symphony/components/FilesTab.tsx:109"
+    },
+    {
+      "name": "NetworkTab",
+      "where": "packages/paradigm/platform-ui/src/sections/symphony/components/NetworkTab.tsx:20"
+    },
+    {
+      "name": "ThreadsTab",
+      "where": "packages/paradigm/platform-ui/src/sections/symphony/components/ThreadsTab.tsx:292"
+    },
+    {
+      "name": "TasksSection",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx:20"
+    },
+    {
+      "name": "BoardHealth",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/BoardHealth.tsx:29"
+    },
+    {
+      "name": "BoardTabs",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/BoardTabs.tsx:15"
+    },
+    {
+      "name": "BoardView",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx:46"
+    },
+    {
+      "name": "CalibrationBlock",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationBlock.tsx:40"
+    },
+    {
+      "name": "CalibrationStrip",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx:26"
+    },
+    {
+      "name": "CellGrid",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/CellGrid.tsx:107"
+    },
+    {
+      "name": "FilterBar",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/FilterBar.tsx:15"
+    },
+    {
+      "name": "GitHubSyncStrip",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/GitHubSyncStrip.tsx:46"
+    },
+    {
+      "name": "InboxView",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx:130"
+    },
+    {
+      "name": "ListView",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/ListView.tsx:12"
+    },
+    {
+      "name": "SwimLane",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/SwimLane.tsx:39"
+    },
+    {
+      "name": "TaskActions",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/TaskActions.tsx:26"
+    },
+    {
+      "name": "TaskCard",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx:37"
+    },
+    {
+      "name": "TaskDetailPanel",
+      "where": "packages/paradigm/platform-ui/src/sections/tasks/components/TaskDetailPanel.tsx:32"
+    },
+    {
+      "name": "TeamSection",
+      "where": "packages/paradigm/platform-ui/src/sections/team/TeamSection.tsx:62"
+    }
+  ],
+  "classFamilies": [
+    {
+      "family": "classroom",
+      "classes": 68,
+      "uses": 114,
+      "members": [
+        "classroom__badge",
+        "classroom__badge--survived",
+        "classroom__badge--overturned",
+        "classroom__badge--pending",
+        "classroom__card-top",
+        "classroom__card-agent",
+        "classroom__card-line",
+        "classroom__card",
+        "classroom__card-role",
+        "classroom__card-meta",
+        "classroom__track",
+        "classroom__track--ghost"
+      ]
+    },
+    {
+      "family": "docs",
+      "classes": 53,
+      "uses": 85,
+      "members": [
+        "docs-page__body",
+        "docs__loading",
+        "docs__welcome",
+        "docs__stats",
+        "docs__stat-item",
+        "docs",
+        "docs__content",
+        "docs-page",
+        "docs-page--custom",
+        "docs-page__header",
+        "docs-page__title",
+        "docs-page__description"
+      ]
+    },
+    {
+      "family": "detail",
+      "classes": 15,
+      "uses": 54,
+      "members": [
+        "detail-overlay",
+        "detail-backdrop",
+        "detail-panel",
+        "detail-header",
+        "detail-close",
+        "detail-body",
+        "detail-section",
+        "detail-meta",
+        "detail-error",
+        "detail-learning",
+        "detail-decision",
+        "detail-files"
+      ]
+    },
+    {
+      "family": "git",
+      "classes": 48,
+      "uses": 50,
+      "members": [
+        "git-section",
+        "git-tabs",
+        "git-files-layout",
+        "git-files-layout__sidebar",
+        "git-files-layout__main",
+        "git-log-layout",
+        "git-branch-bar",
+        "git-branch-bar__left",
+        "git-branch-bar__icon",
+        "git-branch-bar__name",
+        "git-branch-bar__badge",
+        "git-branch-bar__badge--ahead"
+      ]
+    },
+    {
+      "family": "task",
+      "classes": 34,
+      "uses": 45,
+      "members": [
+        "task-calibration",
+        "task-calibration__meta",
+        "task-calibration__meta--prior",
+        "task-calibration__prior-label",
+        "task-calibration__points",
+        "task-calibration__badge",
+        "task-calibration__n",
+        "task-calibration__band",
+        "task-calibration__cell",
+        "task-calibration__prior-row",
+        "task-calibration__points--prior",
+        "task-actions"
+      ]
+    },
+    {
+      "family": "ambient",
+      "classes": 33,
+      "uses": 38,
+      "members": [
+        "ambient__event-item",
+        "ambient__event-body",
+        "ambient__event-top-row",
+        "ambient__event-context",
+        "ambient__event-path",
+        "ambient__event-symbols",
+        "ambient__event-symbol",
+        "ambient__event-time",
+        "ambient__nom-item",
+        "ambient__nom-header",
+        "ambient__nom-agent",
+        "ambient__nom-type"
+      ]
+    },
+    {
+      "family": "team",
+      "classes": 30,
+      "uses": 37,
+      "members": [
+        "team",
+        "team__title",
+        "team__roster",
+        "team__roster-header",
+        "team__roster-label",
+        "team__roster-count",
+        "team__empty",
+        "team__agent-grid",
+        "team__benched",
+        "team__benched-label",
+        "team__threads",
+        "team__threads-header"
+      ]
+    },
+    {
+      "family": "agent",
+      "classes": 27,
+      "uses": 36,
+      "members": [
+        "agent-callout-overlay",
+        "agent-callout",
+        "agent-callout__symbol",
+        "agent-callout__message",
+        "agent-nav-prompt",
+        "agent-nav-prompt__icon",
+        "agent-nav-prompt__text",
+        "agent-nav-prompt__accept",
+        "agent-nav-prompt__dismiss",
+        "agent-toast",
+        "agent-toast__icon",
+        "agent-toast__message"
+      ]
+    },
+    {
+      "family": "symbol",
+      "classes": 24,
+      "uses": 28,
+      "members": [
+        "symbol-link",
+        "symbol-node",
+        "symbol-node__name",
+        "symbol-node__desc",
+        "symbol-panel",
+        "symbol-panel__header",
+        "symbol-panel__count",
+        "symbol-panel__search",
+        "symbol-panel__list",
+        "symbol-panel__section",
+        "symbol-panel__section-header",
+        "symbol-panel__section-arrow"
+      ]
+    },
+    {
+      "family": "flow",
+      "classes": 25,
+      "uses": 26,
+      "members": [
+        "flow-steps",
+        "flow-steps__step",
+        "flow-steps__connector",
+        "flow-steps__dot",
+        "flow-steps__line",
+        "flow-steps__content",
+        "flow-steps__type",
+        "flow-steps__desc",
+        "flow-card-header",
+        "flow-card-id",
+        "flow-card-trigger",
+        "flow-card-name"
+      ]
+    },
+    {
+      "family": "tdp",
+      "classes": 22,
+      "uses": 26,
+      "members": [
+        "tdp",
+        "tdp__id-row",
+        "tdp__id",
+        "tdp__actions",
+        "tdp__blurb",
+        "tdp-estimate__points",
+        "tdp-estimate__band",
+        "tdp-estimate__prov",
+        "tdp-estimate__prov--learned",
+        "tdp-estimate__prov--prior",
+        "tdp-deps",
+        "tdp-dep"
+      ]
+    },
+    {
+      "family": "board",
+      "classes": 16,
+      "uses": 25,
+      "members": [
+        "board-health",
+        "board-health__bar",
+        "board-health__chevron",
+        "board-health__icon",
+        "board-health__title",
+        "board-health__summary",
+        "board-health__detail",
+        "board-health__group",
+        "board-health__group-label",
+        "board-health__row",
+        "board-health__kind",
+        "board-health__row-detail"
+      ]
+    },
+    {
+      "family": "sync",
+      "classes": 22,
+      "uses": 24,
+      "members": [
+        "sync-strip",
+        "sync-strip__counts",
+        "sync-strip__provider",
+        "sync-strip__stat",
+        "sync-strip__stat--synced",
+        "sync-strip__sep",
+        "sync-strip__stat--pending",
+        "sync-strip__action",
+        "sync-strip__sync",
+        "sync-strip__spinner",
+        "sync-strip__cli-toggle",
+        "sync-strip__backdrop"
+      ]
+    },
+    {
+      "family": "sidebar",
+      "classes": 10,
+      "uses": 23,
+      "members": [
+        "sidebar",
+        "sidebar__nav",
+        "sidebar__item-icon",
+        "sidebar__item-label",
+        "sidebar__bottom",
+        "sidebar__item",
+        "sidebar-view",
+        "sidebar-item-name",
+        "sidebar-item-count",
+        "sidebar-content"
+      ]
+    },
+    {
+      "family": "calib",
+      "classes": 19,
+      "uses": 21,
+      "members": [
+        "calib-tab__header",
+        "calib-tab__stat",
+        "calib-tab__pct",
+        "calib-tab__stat-label",
+        "calib-strip__badge",
+        "calib-strip__cta",
+        "calib-tab__grid",
+        "calib-strip__header",
+        "calib-strip__chevron",
+        "calib-strip__title",
+        "calib-strip__summary",
+        "calib-strip__summary-pct"
+      ]
+    },
+    {
+      "family": "toolbar",
+      "classes": 6,
+      "uses": 19,
+      "members": [
+        "toolbar__btn",
+        "toolbar__btn--primary",
+        "toolbar",
+        "toolbar__name",
+        "toolbar__actions",
+        "toolbar__divider"
+      ]
+    },
+    {
+      "family": "network",
+      "classes": 6,
+      "uses": 18,
+      "members": [
+        "network-view",
+        "network-status-bar",
+        "network-stat",
+        "network-stat-value",
+        "network-stat-label",
+        "network-empty"
+      ]
+    },
+    {
+      "family": "events",
+      "classes": 14,
+      "uses": 17,
+      "members": [
+        "events-loading",
+        "events-empty-state",
+        "events-schema-select",
+        "events-scope-nav",
+        "events-scope-label",
+        "events-scope-list",
+        "events-category-filters",
+        "events-table",
+        "events-table-actions",
+        "events-count",
+        "events-table-header",
+        "events-table-body"
+      ]
+    },
+    {
+      "family": "tasks",
+      "classes": 8,
+      "uses": 16,
+      "members": [
+        "tasks",
+        "tasks__header",
+        "tasks__title",
+        "tasks__stat",
+        "tasks__board-tabs",
+        "tasks__empty",
+        "tasks-filter-bar",
+        "tasks__list"
+      ]
+    },
+    {
+      "family": "inbox",
+      "classes": 15,
+      "uses": 16,
+      "members": [
+        "inbox",
+        "inbox__pill-row",
+        "inbox-pill__glyph",
+        "inbox__column",
+        "inbox__calib-header",
+        "inbox__calib-who",
+        "inbox__calib-stat",
+        "inbox__zero",
+        "inbox__zero-glyph",
+        "inbox__zero-title",
+        "inbox__zero-sub",
+        "inbox__hero"
+      ]
+    },
+    {
+      "family": "load",
+      "classes": 10,
+      "uses": 15,
+      "members": [
+        "load-dialog",
+        "load-dialog__body",
+        "load-dialog__section",
+        "load-dialog__label",
+        "load-dialog__loading",
+        "load-dialog__graph-list",
+        "load-dialog__graph-item",
+        "load-dialog__graph-name",
+        "load-dialog__graph-meta",
+        "load-dialog__divider"
+      ]
+    },
+    {
+      "family": "logs",
+      "classes": 12,
+      "uses": 15,
+      "members": [
+        "logs-view",
+        "logs-toolbar",
+        "logs-filters",
+        "logs-select",
+        "logs-search",
+        "logs-actions",
+        "logs-count",
+        "logs-clear-btn",
+        "logs-table",
+        "logs-header",
+        "logs-body",
+        "logs-empty"
+      ]
+    },
+    {
+      "family": "cell",
+      "classes": 14,
+      "uses": 15,
+      "members": [
+        "cell-grid__cell",
+        "cell-grid__cell--empty",
+        "cell-grid__band",
+        "cell-grid__learned-dot",
+        "cell-grid__n",
+        "cell-grid__prior",
+        "cell-grid__prior-ramp",
+        "cell-grid__prior-tick",
+        "cell-grid__loading",
+        "cell-grid__scroll",
+        "cell-grid",
+        "cell-grid__corner"
+      ]
+    },
+    {
+      "family": "event",
+      "classes": 8,
+      "uses": 13,
+      "members": [
+        "event-time",
+        "event-severity",
+        "event-type",
+        "event-category-badge",
+        "event-service",
+        "event-scope",
+        "event-depth",
+        "event-data"
+      ]
+    },
+    {
+      "family": "s",
+      "classes": 5,
+      "uses": 13,
+      "members": [
+        "s-loading-state",
+        "s-loading-content",
+        "s-loading-spinner",
+        "s-error-state",
+        "s-error-content"
+      ]
+    },
+    {
+      "family": "export",
+      "classes": 6,
+      "uses": 12,
+      "members": [
+        "export-overlay",
+        "export-dialog",
+        "export-dialog__header",
+        "export-dialog__close",
+        "export-dialog__content",
+        "export-dialog__actions"
+      ]
+    },
+    {
+      "family": "log",
+      "classes": 7,
+      "uses": 12,
+      "members": [
+        "log-time",
+        "log-level",
+        "log-symbol",
+        "log-service",
+        "log-message",
+        "log-duration",
+        "log-data"
+      ]
+    },
+    {
+      "family": "file",
+      "classes": 9,
+      "uses": 12,
+      "members": [
+        "file-request-card",
+        "file-request-header",
+        "file-request-path",
+        "file-request-requester",
+        "file-request-body",
+        "file-request-snippet",
+        "file-request-meta",
+        "file-request-actions",
+        "file-action-btn"
+      ]
+    },
+    {
+      "family": "message",
+      "classes": 12,
+      "uses": 12,
+      "members": [
+        "message-bubble",
+        "message-bubble-header",
+        "message-sender",
+        "message-text",
+        "message-symbols",
+        "message-symbol-tag",
+        "message-diff",
+        "message-diff-toggle",
+        "message-diff-content",
+        "message-decision",
+        "message-decision-label",
+        "message-time"
+      ]
+    },
+    {
+      "family": "session",
+      "classes": 9,
+      "uses": 11,
+      "members": [
+        "session-sidebar-info",
+        "session-sidebar-meta",
+        "session-sidebar-stats",
+        "session-detail",
+        "session-detail-header",
+        "session-detail-meta",
+        "session-detail-section",
+        "session-symbols",
+        "session-date-header"
+      ]
+    },
+    {
+      "family": "overview",
+      "classes": 6,
+      "uses": 11,
+      "members": [
+        "overview",
+        "overview__title",
+        "overview__cards",
+        "overview__section-title",
+        "overview__health",
+        "overview__activity"
+      ]
+    },
+    {
+      "family": "flows",
+      "classes": 10,
+      "uses": 11,
+      "members": [
+        "flows-view",
+        "flows-toolbar",
+        "flows-toolbar-left",
+        "flows-count",
+        "flows-toolbar-right",
+        "flows-content",
+        "flows-list",
+        "flows-empty",
+        "flows-detail",
+        "flows-empty-detail"
+      ]
+    },
+    {
+      "family": "exclusion",
+      "classes": 3,
+      "uses": 10,
+      "members": [
+        "exclusion-bar",
+        "exclusion-chip",
+        "exclusion-clear"
+      ]
+    },
+    {
+      "family": "incident",
+      "classes": 10,
+      "uses": 10,
+      "members": [
+        "incident-header",
+        "incident-id",
+        "incident-status",
+        "incident-error",
+        "incident-meta",
+        "incident-env",
+        "incident-time",
+        "incident-symbols",
+        "incident-patterns",
+        "incident-detail"
+      ]
+    },
+    {
+      "family": "command",
+      "classes": 9,
+      "uses": 9,
+      "members": [
+        "command-palette-backdrop",
+        "command-palette",
+        "command-palette__input-wrapper",
+        "command-palette__input",
+        "command-palette__list",
+        "command-palette__item-icon",
+        "command-palette__item-label",
+        "command-palette__item-shortcut",
+        "command-palette__empty"
+      ]
+    },
+    {
+      "family": "lore",
+      "classes": 8,
+      "uses": 9,
+      "members": [
+        "lore-card-title",
+        "lore-card",
+        "lore-card-header",
+        "lore-card-author",
+        "lore-card-summary",
+        "lore-card-symbols",
+        "lore-card-footer",
+        "lore-card-stats"
+      ]
+    },
+    {
+      "family": "thread",
+      "classes": 9,
+      "uses": 9,
+      "members": [
+        "thread-list-sidebar",
+        "thread-list-toolbar",
+        "thread-list-items",
+        "thread-list-empty",
+        "thread-card-topic",
+        "thread-card-meta",
+        "thread-card-participants",
+        "thread-card-stats",
+        "thread-card-count"
+      ]
+    },
+    {
+      "family": "conversation",
+      "classes": 8,
+      "uses": 9,
+      "members": [
+        "conversation",
+        "conversation-empty",
+        "conversation-header",
+        "conversation-header-left",
+        "conversation-topic",
+        "conversation-participants",
+        "conversation-actions",
+        "conversation-messages"
+      ]
+    },
+    {
+      "family": "depends",
+      "classes": 6,
+      "uses": 8,
+      "members": [
+        "depends-chain",
+        "depends-chain__arrow",
+        "depends-chain__id",
+        "depends-chain__dot",
+        "depends-chain__dot--this",
+        "depends-chain__id--this"
+      ]
+    },
+    {
+      "family": "breadcrumb",
+      "classes": 7,
+      "uses": 7,
+      "members": [
+        "breadcrumb-list",
+        "breadcrumb-item",
+        "breadcrumb-phase",
+        "breadcrumb-context",
+        "breadcrumb-time",
+        "breadcrumb-decisions",
+        "breadcrumb-decision"
+      ]
+    },
+    {
+      "family": "column",
+      "classes": 4,
+      "uses": 7,
+      "members": [
+        "column-label-group",
+        "column-author-pill",
+        "column-label-text",
+        "column-author-selector"
+      ]
+    },
+    {
+      "family": "activity",
+      "classes": 7,
+      "uses": 7,
+      "members": [
+        "activity-feed__empty",
+        "activity-feed",
+        "activity-feed__item",
+        "activity-feed__content",
+        "activity-feed__summary",
+        "activity-feed__symbol",
+        "activity-feed__time"
+      ]
+    },
+    {
+      "family": "composer",
+      "classes": 6,
+      "uses": 7,
+      "members": [
+        "composer-field",
+        "composer-steps",
+        "composer-step",
+        "composer-remove",
+        "composer-add-buttons",
+        "composer-actions"
+      ]
+    },
+    {
+      "family": "incidents",
+      "classes": 5,
+      "uses": 7,
+      "members": [
+        "incidents-view",
+        "incidents-filters",
+        "incidents-content",
+        "incidents-list",
+        "incidents-empty"
+      ]
+    },
+    {
+      "family": "swim",
+      "classes": 7,
+      "uses": 7,
+      "members": [
+        "swim-lane__header",
+        "swim-lane__chevron",
+        "swim-lane__label",
+        "swim-lane__count",
+        "swim-lane__points",
+        "swim-lane__cards",
+        "swim-lane__empty"
+      ]
+    },
+    {
+      "family": "group",
+      "classes": 5,
+      "uses": 6,
+      "members": [
+        "group-node",
+        "group-handle",
+        "group-node__header",
+        "group-node__input",
+        "group-node__label"
+      ]
+    },
+    {
+      "family": "filter",
+      "classes": 4,
+      "uses": 6,
+      "members": [
+        "filter-bar",
+        "filter-clear",
+        "filter-group",
+        "filter-stats"
+      ]
+    },
+    {
+      "family": "health",
+      "classes": 6,
+      "uses": 6,
+      "members": [
+        "health-bar",
+        "health-bar__header",
+        "health-bar__label",
+        "health-bar__value",
+        "health-bar__track",
+        "health-bar__fill"
+      ]
+    },
+    {
+      "family": "files",
+      "classes": 6,
+      "uses": 6,
+      "members": [
+        "files-view",
+        "files-toolbar",
+        "files-filter-group",
+        "files-count",
+        "files-list",
+        "files-empty"
+      ]
+    },
+    {
+      "family": "header",
+      "classes": 5,
+      "uses": 5,
+      "members": [
+        "header",
+        "header__left",
+        "header__title",
+        "header__project",
+        "header__right"
+      ]
+    },
+    {
+      "family": "stat",
+      "classes": 5,
+      "uses": 5,
+      "members": [
+        "stat-card__value",
+        "stat-card__icon",
+        "stat-card__trend",
+        "stat-card__label",
+        "stat-card__detail"
+      ]
+    },
+    {
+      "family": "hint",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "hint"
+      ]
+    },
+    {
+      "family": "compose",
+      "classes": 5,
+      "uses": 5,
+      "members": [
+        "compose-box",
+        "compose-row",
+        "compose-intent-select",
+        "compose-textarea",
+        "compose-send-btn"
+      ]
+    },
+    {
+      "family": "gate",
+      "classes": 4,
+      "uses": 4,
+      "members": [
+        "gate-chain--empty",
+        "gate-chain",
+        "gate-chain__separator",
+        "gate"
+      ]
+    },
+    {
+      "family": "date",
+      "classes": 3,
+      "uses": 4,
+      "members": [
+        "date-separator",
+        "date-count",
+        "date-badge"
+      ]
+    },
+    {
+      "family": "view",
+      "classes": 2,
+      "uses": 4,
+      "members": [
+        "view-switcher-row",
+        "view-switcher"
+      ]
+    },
+    {
+      "family": "empty",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "empty-state"
+      ]
+    },
+    {
+      "family": "action",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "action-btn"
+      ]
+    },
+    {
+      "family": "pattern",
+      "classes": 4,
+      "uses": 4,
+      "members": [
+        "pattern-match",
+        "pattern-item",
+        "pattern-name",
+        "pattern-confidence"
+      ]
+    },
+    {
+      "family": "sentinel",
+      "classes": 3,
+      "uses": 3,
+      "members": [
+        "sentinel-section",
+        "sentinel-tabs",
+        "sentinel-tab-content"
+      ]
+    },
+    {
+      "family": "symphony",
+      "classes": 3,
+      "uses": 3,
+      "members": [
+        "symphony-section",
+        "symphony-tabs",
+        "symphony-tab-content"
+      ]
+    },
+    {
+      "family": "deny",
+      "classes": 2,
+      "uses": 3,
+      "members": [
+        "deny",
+        "deny-reason-input"
+      ]
+    },
+    {
+      "family": "app",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "app",
+        "app__main"
+      ]
+    },
+    {
+      "family": "component",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "component"
+      ]
+    },
+    {
+      "family": "decision",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "decision-text",
+        "decision-rationale"
+      ]
+    },
+    {
+      "family": "timeline",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "timeline-spine",
+        "timeline-column-labels"
+      ]
+    },
+    {
+      "family": "col",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "col-resize-handle"
+      ]
+    },
+    {
+      "family": "scope",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "scope-value",
+        "scope-count"
+      ]
+    },
+    {
+      "family": "context",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "context-menu"
+      ]
+    },
+    {
+      "family": "error",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "error-message",
+        "error-type"
+      ]
+    },
+    {
+      "family": "resolve",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "resolve",
+        "resolve-btn"
+      ]
+    },
+    {
+      "family": "tab",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "tab-badge"
+      ]
+    },
+    {
+      "family": "approve",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "approve",
+        "approve-redacted"
+      ]
+    },
+    {
+      "family": "shell",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "shell"
+      ]
+    },
+    {
+      "family": "main",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "main"
+      ]
+    },
+    {
+      "family": "content",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "content"
+      ]
+    },
+    {
+      "family": "canvas",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "canvas-wrapper"
+      ]
+    },
+    {
+      "family": "paradigm",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "paradigm-flow"
+      ]
+    },
+    {
+      "family": "human",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "human"
+      ]
+    },
+    {
+      "family": "author",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "author-type-toggle"
+      ]
+    },
+    {
+      "family": "review",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "review-stars"
+      ]
+    },
+    {
+      "family": "pass",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "pass"
+      ]
+    },
+    {
+      "family": "fail",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "fail"
+      ]
+    },
+    {
+      "family": "partial",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "partial"
+      ]
+    },
+    {
+      "family": "left",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "left"
+      ]
+    },
+    {
+      "family": "active",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "active"
+      ]
+    },
+    {
+      "family": "right",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "right"
+      ]
+    },
+    {
+      "family": "cancel",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "cancel"
+      ]
+    },
+    {
+      "family": "signal",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "signal"
+      ]
+    },
+    {
+      "family": "status",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "status-badge"
+      ]
+    },
+    {
+      "family": "symbols",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "symbols-list"
+      ]
+    },
+    {
+      "family": "patterns",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "patterns-list"
+      ]
+    },
+    {
+      "family": "urgency",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "urgency-badge"
+      ]
+    },
+    {
+      "family": "urgent",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "urgent"
+      ]
+    },
+    {
+      "family": "participant",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "participant-avatar"
+      ]
+    },
+    {
+      "family": "threads",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "threads-layout"
+      ]
+    },
+    {
+      "family": "prior",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "prior"
+      ]
+    },
+    {
+      "family": "is",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "is-filled"
+      ]
+    }
+  ],
+  "copy": {
+    "distinct": 441,
+    "samples": [
+      {
+        "text": "Paradigm Platform",
+        "where": "packages/paradigm/platform-ui/index.html:6"
+      },
+      {
+        "text": "Coming in Platform Phase 2",
+        "where": "packages/paradigm/platform-ui/src/App.tsx:45"
+      },
+      {
+        "text": "Go to section...",
+        "where": "packages/paradigm/platform-ui/src/components/CommandPalette.tsx:132"
+      },
+      {
+        "text": "No matching sections",
+        "where": "packages/paradigm/platform-ui/src/components/CommandPalette.tsx:159"
+      },
+      {
+        "text": "An unexpected error occurred",
+        "where": "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:33"
+      },
+      {
+        "text": "1px solid var(--p-border)",
+        "where": "packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:40"
+      },
+      {
+        "text": "Unmute agent actions",
+        "where": "packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:37"
+      },
+      {
+        "text": "Mute agent actions",
+        "where": "packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:37"
+      },
+      {
+        "text": "theme",
+        "where": "packages/paradigm/platform-ui/src/components/SidebarNav.tsx:52"
+      },
+      {
+        "text": "Academy",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:29"
+      },
+      {
+        "text": "learning packs for this project",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:33"
+      },
+      {
+        "text": "240px minmax(0, 1fr) minmax(0, 1.4fr)",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:41"
+      },
+      {
+        "text": "Packs",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:50"
+      },
+      {
+        "text": "Loading packs…",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:52"
+      },
+      {
+        "text": "paradigm university init",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:55"
+      },
+      {
+        "text": "Loading…",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:66"
+      },
+      {
+        "text": "Open a step to read it or take its quiz.",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:83"
+      },
+      {
+        "text": "no content yet",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:8"
+      },
+      {
+        "text": "(external — not active)",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:14"
+      },
+      {
+        "text": "Skill",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:23"
+      },
+      {
+        "text": "Version",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:24"
+      },
+      {
+        "text": "Status",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:25"
+      },
+      {
+        "text": "Tools",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:26"
+      },
+      {
+        "text": "Scripts",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:27"
+      },
+      {
+        "text": "This pack has no learning paths yet.",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:15"
+      },
+      {
+        "text": " (not found in this pack)",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:89"
+      },
+      {
+        "text": "· optional",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:92"
+      },
+      {
+        "text": "Nice — you passed!",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:83"
+      },
+      {
+        "text": "Not quite yet.",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:83"
+      },
+      {
+        "text": "Check my answers",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:91"
+      },
+      {
+        "text": "Answer every question to check",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:91"
+      },
+      {
+        "text": "could not load packs",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:208"
+      },
+      {
+        "text": "could not load pack",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:235"
+      },
+      {
+        "text": "could not load path",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:247"
+      },
+      {
+        "text": "could not load note",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:265"
+      },
+      {
+        "text": "could not load quiz",
+        "where": "packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:281"
+      },
+      {
+        "text": "just now",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:19"
+      },
+      {
+        "text": "Ambient",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:178"
+      },
+      {
+        "text": "Loading...",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:179"
+      },
+      {
+        "text": "Events (last hour)",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:192"
+      },
+      {
+        "text": "Pending Nominations",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:197"
+      },
+      {
+        "text": "Active Debates",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:202"
+      },
+      {
+        "text": "Event Stream",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:212"
+      },
+      {
+        "text": "All types",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:218"
+      },
+      {
+        "text": "No events recorded yet",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:226"
+      },
+      {
+        "text": "Nominations",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:236"
+      },
+      {
+        "text": "No pending nominations",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:239"
+      },
+      {
+        "text": "Debates",
+        "where": "packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:252"
+      },
+      {
+        "text": "Brain",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:58"
+      },
+      {
+        "text": "your notes, organised on this Mac",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:65"
+      },
+      {
+        "text": "1px solid var(--p-accent-amber)",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:93"
+      },
+      {
+        "text": "No notes folder yet",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:109"
+      },
+      {
+        "text": "paradigm brain init &lt;folder&gt;",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:111"
+      },
+      {
+        "text": "; labels: Record",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:6"
+      },
+      {
+        "text": "Your notes at a glance",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:32"
+      },
+      {
+        "text": "Last changed",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:36"
+      },
+      {
+        "text": "Find",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:16"
+      },
+      {
+        "text": "Ask for something, e.g. \"lease\"",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:21"
+      },
+      {
+        "text": "Searching…",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:33"
+      },
+      {
+        "text": "Nothing found.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:34"
+      },
+      {
+        "text": "0 && count",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:7"
+      },
+      {
+        "text": "Health",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:27"
+      },
+      {
+        "text": "Checking…",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:29"
+      },
+      {
+        "text": "Broken links",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:32"
+      },
+      {
+        "text": "Links that point to a note that isn't there.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:32"
+      },
+      {
+        "text": "Loose notes",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:39"
+      },
+      {
+        "text": "Notes nothing links to and that link to nothing.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:39"
+      },
+      {
+        "text": "Same-name notes",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:44"
+      },
+      {
+        "text": "Different notes with the same name or title — links may land on the wrong one.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:44"
+      },
+      {
+        "text": "Private &amp; Locked",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:10"
+      },
+      {
+        "text": "Nothing locked.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:14"
+      },
+      {
+        "text": "see what left",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:32"
+      },
+      {
+        "text": "No details recorded.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:38"
+      },
+      {
+        "text": "a cloud helper",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:42"
+      },
+      {
+        "text": "an AI assistant on this Mac",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:42"
+      },
+      {
+        "text": "Suggestions",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:48"
+      },
+      {
+        "text": "keep ·",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:50"
+      },
+      {
+        "text": "dismiss ·",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:50"
+      },
+      {
+        "text": "Looking for patterns…",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:55"
+      },
+      {
+        "text": "No suggestions right now — check back after you add notes.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:57"
+      },
+      {
+        "text": "top folder",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:84"
+      },
+      {
+        "text": "Not now",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:111"
+      },
+      {
+        "text": "Health records",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:8"
+      },
+      {
+        "text": "Other people's messages",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:10"
+      },
+      {
+        "text": "Individual files",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:21"
+      },
+      {
+        "text": "Text files",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:26"
+      },
+      {
+        "text": "Other files",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:26"
+      },
+      {
+        "text": "This week",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:29"
+      },
+      {
+        "text": "This month",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:30"
+      },
+      {
+        "text": "This year",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:31"
+      },
+      {
+        "text": "Nothing has left this Mac",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:40"
+      },
+      {
+        "text": "Suggestions paused (too many dismissed). Turn back on with `paradigm brain suggestions on`.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:71"
+      },
+      {
+        "text": "Suggestions are turned off for this folder. Turn back on with `paradigm brain suggestions on`.",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/labels.ts:72"
+      },
+      {
+        "text": "could not load your notes",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:204"
+      },
+      {
+        "text": "could not check your notes",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:226"
+      },
+      {
+        "text": "could not load suggestions",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:246"
+      },
+      {
+        "text": "could not save that",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:292"
+      },
+      {
+        "text": "search failed",
+        "where": "packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:331"
+      },
+      {
+        "text": "(url: string, fallback: T): Promise",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:108"
+      },
+      {
+        "text": "Unnamed learning",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:121"
+      },
+      {
+        "text": "SURVIVED",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:139"
+      },
+      {
+        "text": "OVERTURNED",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:140"
+      },
+      {
+        "text": "PENDING",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:141"
+      },
+      {
+        "text": "syllabus valid · cleared to study",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:254"
+      },
+      {
+        "text": "syllabus aged out · re-ratify the sources",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:255"
+      },
+      {
+        "text": "syllabus references missing — study-hall refuses",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:256"
+      },
+      {
+        "text": "term TTL elapsed · renew to resume",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:257"
+      },
+      {
+        "text": "No agents enrolled — author a syllabus to fill the roster.",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:262"
+      },
+      {
+        "text": "no field breaks recorded — untested, not proven",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:333"
+      },
+      {
+        "text": "never applied — no field evidence yet",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:334"
+      },
+      {
+        "text": "untested",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:354"
+      },
+      {
+        "text": "private",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:382"
+      },
+      {
+        "text": "enrolled",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:399"
+      },
+      {
+        "text": "— provisional &amp; external; the field hasn't earned these yet",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:417"
+      },
+      {
+        "text": "Nothing in the backlog.",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:419"
+      },
+      {
+        "text": "Vetted",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:437"
+      },
+      {
+        "text": "Backlog",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:438"
+      },
+      {
+        "text": "Your team has been working — but never been to class.",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:451"
+      },
+      {
+        "text": "Seed a breaking scenario",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:459"
+      },
+      {
+        "text": "Author the process syllabus",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:463"
+      },
+      {
+        "text": "Run study-hall",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:467"
+      },
+      {
+        "text": "Term Board",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:488"
+      },
+      {
+        "text": "Nothing staged yet — run study-hall or an expedition",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:502"
+      },
+      {
+        "text": "Nothing on trial",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:511"
+      },
+      {
+        "text": "Nothing settled yet",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:519"
+      },
+      {
+        "text": "Rap Sheet",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:534"
+      },
+      {
+        "text": "Agent Locker",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:535"
+      },
+      {
+        "text": "The Classroom",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:582"
+      },
+      {
+        "text": "gated learning · the field is the examiner",
+        "where": "packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:592"
+      },
+      {
+        "text": "Select a symbol from the sidebar to view its documentation.",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/DocsSection.tsx:30"
+      },
+      {
+        "text": "Trigger:",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:19"
+      },
+      {
+        "text": "Steps",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:25"
+      },
+      {
+        "text": "Success:",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:32"
+      },
+      {
+        "text": "Error:",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:38"
+      },
+      {
+        "text": "Portal — Gates & Routes",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:11"
+      },
+      {
+        "text": "Gates",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:16"
+      },
+      {
+        "text": "Gate",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:19"
+      },
+      {
+        "text": "Description",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:19"
+      },
+      {
+        "text": "Routes",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:19"
+      },
+      {
+        "text": "Method",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:39"
+      },
+      {
+        "text": "Route",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:39"
+      },
+      {
+        "text": "Gate Chain",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:39"
+      },
+      {
+        "text": "No portal.yaml found. Add one to document your API authorization.",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:55"
+      },
+      {
+        "text": "Searching...",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx:12"
+      },
+      {
+        "text": "No matching documentation found.",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx:19"
+      },
+      {
+        "text": "Search docs...",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSidebar.tsx:62"
+      },
+      {
+        "text": "Related Symbols",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:32"
+      },
+      {
+        "text": "Referenced By",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:41"
+      },
+      {
+        "text": "References",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:50"
+      },
+      {
+        "text": "Flows",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:59"
+      },
+      {
+        "text": "Related Guides",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:77"
+      },
+      {
+        "text": "none",
+        "where": "packages/paradigm/platform-ui/src/sections/docs/components/GateChain.tsx:7"
+      },
+      {
+        "text": "Commit message...",
+        "where": "packages/paradigm/platform-ui/src/sections/git/components/CommitComposer.tsx:101"
+      },
+      {
+        "text": "No staged files to commit",
+        "where": "packages/paradigm/platform-ui/src/sections/git/components/CommitComposer.tsx:101"
+      },
+      {
+        "text": "No commits found",
+        "where": "packages/paradigm/platform-ui/src/sections/git/components/CommitLog.tsx:35"
+      },
+      {
+        "text": "Working tree clean",
+        "where": "packages/paradigm/platform-ui/src/sections/git/components/FileList.tsx:58"
+      },
+      {
+        "text": "(no diff available)",
+        "where": "packages/paradigm/platform-ui/src/sections/git/store/gitStore.ts:171"
+      },
+      {
+        "text": "(error loading diff)",
+        "where": "packages/paradigm/platform-ui/src/sections/git/store/gitStore.ts:174"
+      },
+      {
+        "text": "Group label:",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Canvas.tsx:96"
+      },
+      {
+        "text": "Export Markdown",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/ExportDialog.tsx:53"
+      },
+      {
+        "text": "Invalid graph: missing \"version\" or \"nodes\" array.",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:66"
+      },
+      {
+        "text": "Invalid JSON.",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:75"
+      },
+      {
+        "text": "Invalid graph file.",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:98"
+      },
+      {
+        "text": "Load Graph",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:133"
+      },
+      {
+        "text": "Saved Graphs",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:142"
+      },
+      {
+        "text": "or",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:166"
+      },
+      {
+        "text": "Upload File",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:171"
+      },
+      {
+        "text": "Paste JSON",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:190"
+      },
+      {
+        "text": "Paste GraphState JSON here...",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:199"
+      },
+      {
+        "text": "Symbols",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/SymbolPanel.tsx:50"
+      },
+      {
+        "text": "Search symbols...",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/SymbolPanel.tsx:56"
+      },
+      {
+        "text": "Start a new graph? Current graph will be cleared.",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:29"
+      },
+      {
+        "text": "Graph name",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:42"
+      },
+      {
+        "text": "Group selected (Ctrl+G)",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:45"
+      },
+      {
+        "text": "Ungroup selected",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:48"
+      },
+      {
+        "text": "Remove selected from group",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:52"
+      },
+      {
+        "text": "Export markdown (Ctrl+E)",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:57"
+      },
+      {
+        "text": "Save as .graph.json",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:60"
+      },
+      {
+        "text": "Load .graph.json or paste JSON",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:63"
+      },
+      {
+        "text": "New empty graph",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:66"
+      },
+      {
+        "text": "Untitled Graph",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:67"
+      },
+      {
+        "text": "Failed to fetch symbols:",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:77"
+      },
+      {
+        "text": "Failed to save to localStorage:",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:325"
+      },
+      {
+        "text": "Failed to load from localStorage:",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:340"
+      },
+      {
+        "text": "Imported Graph",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:369"
+      },
+      {
+        "text": "### Ungrouped Symbols",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:425"
+      },
+      {
+        "text": "### Symbol Reference",
+        "where": "packages/paradigm/platform-ui/src/sections/graph/store/graphStore.ts:436"
+      },
+      {
+        "text": "Lore",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/LoreSection.tsx:30"
+      },
+      {
+        "text": "Human Only",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:12"
+      },
+      {
+        "text": "All authors",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:78"
+      },
+      {
+        "text": "All tags",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:103"
+      },
+      {
+        "text": "Filter by symbol...",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:117"
+      },
+      {
+        "text": "From date",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:171"
+      },
+      {
+        "text": "To date",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:177"
+      },
+      {
+        "text": "color-mix(in srgb, var(--p-lore-milestone) 15%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:68"
+      },
+      {
+        "text": "1px solid color-mix(in srgb, var(--p-lore-milestone) 30%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:69"
+      },
+      {
+        "text": "color-mix(in srgb, var(--p-accent-purple) 15%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:87"
+      },
+      {
+        "text": "1px solid color-mix(in srgb, var(--p-accent-purple) 30%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:88"
+      },
+      {
+        "text": "color-mix(in srgb, var(--p-accent-green) 15%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:97"
+      },
+      {
+        "text": "color-mix(in srgb, var(--p-accent-orange) 15%, transparent)",
+        "where": "packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:98"
+      }
+    ]
+  },
+  "drift": {}
+}
