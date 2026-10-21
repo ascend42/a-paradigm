@@ -2237,7 +2237,10 @@ components:
       speculative, hook_response needs --include-hook-events) retires the
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
-      one settles without a row. Re-review M-2: a retired offer that was
+      one settles without a row. Re-review L-1: with replay lines an
+      unconsumed queued turn is not "streaming"; without them a message after
+      every outstanding turn is evaluated continues the previous message's
+      turn. Re-review M-2: a retired offer that was
       still undecided is the kernel row offer.retired{offerId, hsid,
       why:'continued'} (OFFER_SEED_KINDS: folded at boot), and a decide on
       it is refused 'retired'. Review C2: gnomon desk stats folds only

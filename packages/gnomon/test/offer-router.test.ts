@@ -632,6 +632,34 @@ describe('#offer-router: a Stop-hook continuation replaces the evaluation (revie
     expect(rows.map((r) => r.kind)).toEqual(['offer.retired']);
     await expect(t.r.decide(GUI, { offerId: first[0]!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'retired' } } });
   });
+  it('re-review L-1: with replay lines a queued turn not yet consumed does not suppress the reply as streaming', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(ev(replayOf('hi')));
+    t.commit(ev(messageStartLine('msg_1')));
+    t.commit(ev(assistantLineOf(offerReply('a', BLOCK), { id: 'msg_1' })));
+    t.commit(sent(2)); // queued: Claude Code has not replayed it
+    expect(reply(t, 'msg_1', offerReply('a', BLOCK)).map((r) => r.kind)).toEqual(['offer.shown']);
+    // without replay lines the same shape still counts turn 2 as streaming (started marks are not trustworthy)
+    const u = rig();
+    u.commit(sent(1));
+    u.commit(ev(messageStartLine('msg_1')));
+    u.commit(sent(2));
+    expect(reply(u, 'msg_1', offerReply('a', BLOCK))).toEqual([]);
+    expect(u.suppressed.map((x) => x.why)).toEqual(['turn-streaming']);
+  });
+  it('re-review L-1: with no replay lines a continuation of the newest evaluated turn stays in that turn', () => {
+    const t = rig();
+    t.commit(sent(1));
+    reply(t, 'msg_1', 'plain');
+    t.commit(sent(2));
+    const shown = reply(t, 'msg_2', offerReply('b', BLOCK));
+    expect(shown.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(shown[0]!.payload.replyTurnId).toBe(`turn:${HSID}/2`);
+    // the Stop hook continues turn 2 before either result: turn 2's offer is retired, turn 1 is untouched
+    const cont = t.commit(ev(messageStartLine('msg_3')));
+    expect(cont).toEqual([{ kind: 'offer.retired', session: HSID, payload: { offerId: shown[0]!.payload.offerId, hsid: HSID, why: 'continued' } }]);
+  });
   it('re-review M-4: the Stop hook block match is exact (outcome blocked, decision block or exit_code 2)', () => {
     const hook = (o: Record<string, unknown>) => ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', ...o }));
     for (const [o, retires] of [

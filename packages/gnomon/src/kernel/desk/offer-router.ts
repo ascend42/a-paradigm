@@ -496,12 +496,15 @@ export class OfferRouter {
       const started = s.turns.filter((t) => t.started);
       if (started.length) return started[started.length - 1];
     }
-    return s.turns.find((t) => !t.evaluated) ?? s.turns[0];
+    // re-review L-1: every outstanding turn evaluated (a continuation of the newest reply): the message continues the
+    // same chain's turn (the previous message's), not the oldest outstanding one
+    return s.turns.find((t) => !t.evaluated) ?? s.turns.find((t) => t.id === s.msgTurn) ?? s.turns[0];
   }
 
   /** The outstanding turns other than `rec` still streaming (their reply has not ended): the budget's "others". */
   #streaming(s: SessionState, rec: TurnRec): number {
-    return s.turns.filter((t) => t !== rec && !t.evaluated).length;
+    // re-review L-1: with replay lines a turn Claude Code has not consumed yet (no replay) is queued, not streaming
+    return s.turns.filter((t) => t !== rec && !t.evaluated && (!s.replays || t.started)).length;
   }
 
   /** Evaluate one turn's reply, once (each turn is evaluated exactly once). */
