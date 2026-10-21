@@ -133,6 +133,31 @@ describe.skipIf(!SANDBOX_OK)('G-VOX-17 the voice-origin clamp in a live session 
   }, 40_000);
 });
 
+describe.skipIf(!SANDBOX_OK)('Aegis M-3 live fold (fake claude foldPairs): a voice turn folded behind a hand turn', () => {
+  it('is clamped while it runs inside the hand turn, and closes only with the shared result after its replay', async () => {
+    const r = clampRig();
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
+    const req = (id: string, tool: string, input: Record<string, unknown>) => ({ request: { id, tool, input } });
+    // foldPairs: message 1 is replayed and held; message 2 is replayed mid-turn and ONE result answers both
+    setMode(w, { foldPairs: true, permissionAsk: { steps: [req('f1', 'Write', { file_path: path.join(w.cwd, 'f.txt'), content: 'f' })], hold: false } });
+    const s = (await r.port.open({ principal: HUMAN, principalClass: 'human', connId: 'conn:gui', credential: 'gui' }, { cwd: w.cwd, attended: true })) as { hsid: string };
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'hand first' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'then voice', voiceOrigin: { sentBy: 'word' } });
+    // the folded voice turn's Write is clamped (a card), though the oldest outstanding turn is the hand one
+    const ok = await waitFor(() => r.pending().length >= 1, 10_000);
+    if (!ok) throw new Error(JSON.stringify(r.rows.map((x) => [x.kind, x.payload.answer ?? x.payload.modeRef ?? x.payload.origin ?? ''])) + JSON.stringify(trace(w).slice(-12)));
+    expect(JSON.stringify(r.pending()[0]!.block)).toContain('Asked during a voice-sent turn');
+    expect(r.kinds('approval.auto').map((a) => a.modeRef)).not.toContain('mode:auto-edits');
+    await r.approve(r.pending()[0]!.cardId, 'deny');
+    expect(await waitFor(() => r.kinds('turn.result').length >= 1, 10_000)).toBe(true);
+    // the shared result closed both (both replays were seen first): the next hand turn's Write auto-passes
+    // (the fake reads its mode once: message 3 is held, message 4 runs the same Write again, now in a hand pair)
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'after' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'after, again' });
+    expect(await waitFor(() => r.kinds('approval.auto').some((a) => a.modeRef === 'mode:auto-edits'), 10_000)).toBe(true);
+  }, 40_000);
+});
+
 describe('G-VOX-17 (pure): the clamp book', () => {
   it('opens on a voice turn, closes only with the result that closes that turn; a turn that never closes stays clamped', () => {
     const b = new VoiceClampBook();
