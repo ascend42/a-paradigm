@@ -236,6 +236,31 @@ describe('read-only command policy', () => {
     }
   }, 120_000);
 
+  it.concurrent('task show / lore show never read a file outside the project through a crafted id', async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-ro-ids-'));
+    try {
+      const proj = path.join(base, 'proj');
+      const home = path.join(base, 'home');
+      fs.cpSync(path.join(template, 'proj'), proj, { recursive: true });
+      fs.mkdirSync(home);
+      // Planted next to the project: reachable from entries/<date>/ by `../../../../..`
+      fs.writeFileSync(path.join(base, 'planted.yaml'), 'id: T-2026-10-01-999\nblurb: PLANTED-SECRET\nstatus: open\npriority: low\ncreated: "2026-10-01T00:00:00.000Z"\n');
+      fs.writeFileSync(path.join(base, 'planted.lore'), 'id: L-x\ntitle: PLANTED-SECRET\nsummary: s\ntimestamp: "2026-10-01T00:00:00Z"\nauthor: a\n');
+      const run = (argv: string[]) => new Promise<string>((resolve) => {
+        execFile(process.execPath, [...RUNNER, ...argv], { cwd: proj, env: childEnv(home) },
+          (_e, so, se) => resolve(String(so) + String(se)));
+      });
+      for (const argv of [
+        ['task', 'show', 'T-2026-10-01-/../../../../../../planted', '--json'],
+        ['lore', 'show', 'L-2026-10-01-/../../../../../../planted', '--json'],
+      ]) {
+        expect(await run(argv), argv.join(' ')).not.toContain('PLANTED-SECRET');
+      }
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it.concurrent('`paradigm notices ack v6.0.4` writes the marker and silences the notice', async () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-ro-ack-'));
     try {

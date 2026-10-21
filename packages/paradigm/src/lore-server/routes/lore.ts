@@ -49,6 +49,8 @@ function normalizeEntry(raw: Record<string, unknown>): LoreEntry {
 
 /** Resolve the file path for a lore entry ID, trying .lore first then .yaml */
 function resolveEntryPath(projectDir: string, dateStr: string, entryId: string): string | null {
+  // The id and date become a file path: never one with a separator, a dot or `..`.
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(entryId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
   const dirPath = path.join(projectDir, LORE_DIR, ENTRIES_DIR, dateStr);
   const lorePath = path.join(dirPath, `${entryId}.lore`);
   if (fs.existsSync(lorePath)) return lorePath;

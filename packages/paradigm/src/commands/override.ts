@@ -130,6 +130,11 @@ function truncate(str: string, max = 60): string {
 /** `paradigm override <id>` — clear a single remediation. */
 export async function overrideClearOne(id: string): Promise<void> {
   const cwd = process.cwd();
+  // The id becomes a file name: refuse a separator, a dot or `..`.
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) {
+    error(`Invalid remediation id "${id}": ids use letters, digits, - and _ only.`);
+    process.exit(1);
+  }
   const sourcePath = path.join(cwd, REMEDIATIONS_DIR, `${id}.yaml`);
 
   try {
