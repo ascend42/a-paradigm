@@ -106,7 +106,7 @@ import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MO
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
@@ -432,9 +432,32 @@ export function ensureTranscriptDir(userClaudeDir: string): void {
   ensureClaudeDir(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
 }
 
-/** The session-env carve-back root exists before the spawn too (its literal re-deny then names a real dir: Claude Code creates `<id>/` inside it, never the root). */
-export function ensureSessionEnvDir(userClaudeDir: string): void {
-  ensureClaudeDir(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+/**
+ * Aegis H1/M1: pre-create THIS session's `session-env/<uuid>` (0700) before the spawn, so both literal re-denies name
+ * real dirs and the session never has to create (or can remove/swap) them. lstat first: a link, or a non-directory, at
+ * `session-env` or `session-env/<uuid>` is refused and left alone (the policy then withholds the carve-back, fail
+ * closed). Returns the refusal reason, or null.
+ */
+export function ensureSessionEnvDir(userClaudeDir: string, uuid: string): string | null {
+  if (!SESSION_UUID_RE.test(uuid)) return 'malformed session uuid';
+  const root = path.join(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+  for (const dir of [root, path.join(root, uuid)]) {
+    let st: fs.Stats | null = null;
+    try {
+      st = fs.lstatSync(dir);
+    } catch {
+      st = null;
+    }
+    if (st && (st.isSymbolicLink() || !st.isDirectory())) return `${dir} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}`;
+    if (!st) {
+      try {
+        fs.mkdirSync(dir, { mode: 0o700 });
+      } catch (e) {
+        return `cannot create ${dir}: ${(e as NodeJS.ErrnoException).code ?? 'error'}`;
+      }
+    }
+  }
+  return null;
 }
 
 function ensureClaudeDir(userClaudeDir: string, rel: string): void {
@@ -671,7 +694,7 @@ export class SessionSupervisor {
       // names a real dir (the session can then neither remove, rename nor replace it). Never over an existing entry:
       // a link there is the policy's fail-closed case, not ours to repair.
       ensureTranscriptDir(userClaudeDir);
-      ensureSessionEnvDir(userClaudeDir);
+      const sessionEnvPrep = ensureSessionEnvDir(userClaudeDir, uuid);
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,
@@ -690,12 +713,12 @@ export class SessionSupervisor {
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
         claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
-        claudeSessionEnv: true, // Claude Code mkdirs ~/.claude/session-env/<id> before any command hook runs (else every hook: EPERM)
+        claudeSessionEnv: uuid, // Aegis H1: only THIS session's ~/.claude/session-env/<uuid> (Claude Code mkdirs it before any command hook)
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
       // fail closed, reported: no session-env carve-back means Claude Code's command hooks cannot run in this session
-      if (policy.sessionEnvRefused) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-withheld', reason: policy.sessionEnvRefused }, { session: hsid });
+      if (policy.sessionEnvRefused || sessionEnvPrep) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-withheld', reason: policy.sessionEnvRefused ?? sessionEnvPrep }, { session: hsid });
       if (r && policy.allowWriteRefused) throw new PreflightRefusal('spawn_failed', 'a resume needs its transcript dir writable', { resume: 'transcripts-withheld' });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
@@ -992,6 +1015,9 @@ export class SessionSupervisor {
     switch (ev.kind) {
       case 'init':
         s.replayLive = true; // re-review L-2
+        // L1: the session-env carve-back covers only the uuid it was spawned with. A different live id (/clear mints one;
+        // a forking resume would too) means Claude Code's command hooks are back on fail-closed EPERM — say so.
+        if (ev.sessionId !== null && ev.sessionId !== s.uuid) await this.#o.log('session.sandbox', { hsid: s.hsid, phase: 'session-env-mismatch', uuid: s.uuid, sessionId: ev.sessionId, hooks: 'fail-closed' }, { session: s.hsid });
         if (ev.model !== null) s.seenModel = ev.model;
         if (ev.apiKeySource !== null && ev.apiKeySource !== 'none') {
           await this.#o.log('billing.api.refused', { hsid: s.hsid, where: ['init.apiKeySource'], keys: [ev.apiKeySource] }, { session: s.hsid });

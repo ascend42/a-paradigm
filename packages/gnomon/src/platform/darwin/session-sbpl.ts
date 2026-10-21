@@ -16,7 +16,7 @@
  *     policy.denyWrite + the T-008 git denies (a `.git` POINTER FILE literal,
  *     `<gitDir>/config.worktree`, `<commonDir>/modules/**​/{hooks,config,info}`
  *     by regex), then `allow file-write*` on policy.allowWrite (only
- *     `~/.claude/projects`, TD-2026-10-19-814, and `~/.claude/session-env`) and `file-write*` deny again on
+ *     `~/.claude/projects`, TD-2026-10-19-814, and this session's `~/.claude/session-env/<uuid>`) and `file-write*` deny again on
  *     policy.denyWriteAlways (the projects / session-env dirs themselves as literals, so they can
  *     be neither removed, renamed nor swapped for a link; the denies inside
  *     it; the steering regex re-rooted at it). A hardlink planted into it
@@ -69,7 +69,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 7; // 7: ~/.claude/session-env write carve-back (command hooks run; root literal-denied like projects); 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back; 6: its root literal-denied (Aegis M1) and the steering regex re-rooted inside it (Aegis L3)
+export const SESSION_PROFILE_VERSION = 8; // 8: Aegis H1/M1 — the session-env carve-back is scoped to session-env/<uuid> (both dirs literal-denied); 7: ~/.claude/session-env write carve-back; 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back; 6: its root literal-denied (Aegis M1) and the steering regex re-rooted inside it (Aegis L3)
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
