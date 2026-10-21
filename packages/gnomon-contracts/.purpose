@@ -541,7 +541,14 @@ components:
       on very common words), canonicalSendWord, matchSendWord gives exact,
       variant, near (same word count, Metaphone key within Levenshtein 2;
       never sent, never appended) or none (a sentence that merely contains
-      the word), isSendWord, acceptableVariant (enrolment).
+      the word), isSendWord, acceptableVariant (enrolment). The attended
+      send-word trial (spec §14.7 trial semantics) is pure here too:
+      startSendWordTrial, classifyTrialTake (correct, variant within the bound
+      and never a command phrase, unlike, unclear when too long), the ONE take
+      counter recordTrialTake (at most SEND_WORD_TRIAL_MAX_TAKES = 4; stops at
+      ready or exhausted), trialTakeNumber ("Take n of up to 4") and the save
+      rule trialSaveable (at least one correct take). SEND_WORD_SUGGESTIONS
+      never names the product.
     path: src/voice-modes.ts
     type: module
     tags: [gnomon, contracts, voice, paradigm-8]

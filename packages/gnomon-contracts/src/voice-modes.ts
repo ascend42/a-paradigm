@@ -126,7 +126,8 @@ export const SEND_WORD_COMMON = Object.freeze([
   'ok', 'okay', 'right', 'so', 'well', 'yeah', 'yep', 'thanks', 'thank you', 'done', 'go', 'next', 'and', 'the', 'now',
   'please', 'sure', 'good', 'great', 'cool', 'alright', 'send',
 ] as const);
-export const SEND_WORD_SUGGESTIONS = Object.freeze(['over', 'send it', 'ship it', 'over and out', 'go ahead gnomon'] as const);
+/** Never the product name: nobody should have to say (or know how to pronounce) "Gnomon" to use voice. */
+export const SEND_WORD_SUGGESTIONS = Object.freeze(['send', 'send it', 'over', 'ship it', 'over and out'] as const);
 
 export interface SendWord {
   text: string;
@@ -199,6 +200,82 @@ export function acceptableVariant(heard: unknown, word: string): boolean {
   const a = phoneticKey(t);
   const b = phoneticKey(w);
   return a !== '' && b !== '' && levenshtein(a, b) <= SEND_WORD_NEAR_DISTANCE;
+}
+
+// ---- the attended send-word trial ("Teach your send word"; spec §14.7 "Voice submodes", trial semantics) -----------
+
+/** A trial asks for at most this many takes (one, plus up to three retries after a mishearing). */
+export const SEND_WORD_TRIAL_MAX_TAKES = 4;
+/**
+ * What one take of the word being taught was:
+ *   correct  it cleans to the word itself (a save needs at least one)
+ *   variant  a mishearing within the near-miss bound that is not an approval or command phrase: kept as a variant
+ *   unlike   heard, but not like the word (shown, never kept)
+ *   unclear  no words, or longer than a send word can be (its text is never kept or shown)
+ */
+export type TrialTakeVerdict = 'correct' | 'variant' | 'unlike' | 'unclear';
+export interface SendWordTrialState {
+  /** the word being taught (cleaned) */
+  word: string;
+  /** takes counted so far (the ONE take counter; the take being asked for is takes + 1) */
+  takes: number;
+  maxTakes: number;
+  /** takes heard as the word itself */
+  correct: number;
+  /** mishearings kept as variants (in order, unique, at most SEND_WORD_MAX_VARIANTS) */
+  variants: string[];
+  /** the last take: what was heard (cleaned; null when unclear) and its verdict */
+  last: { heard: string | null; verdict: TrialTakeVerdict } | null;
+  /** listening (say it) · ready (a correct take: save) · exhausted (maxTakes, none correct: pick again or retry) */
+  state: 'listening' | 'ready' | 'exhausted';
+}
+
+/** The text of a take that may be kept or shown: cleaned, at most SEND_WORD_MAX_WORDS words and 2×MAX_CHARS, else null. */
+export function trialTakeText(heard: unknown): string | null {
+  const t = normalizeUtterance(heard);
+  if (!t || t.length > SEND_WORD_MAX_CHARS * 2 || t.split(' ').length > SEND_WORD_MAX_WORDS) return null;
+  return t;
+}
+
+/** Classify one take of `word`. */
+export function classifyTrialTake(heard: unknown, word: string): { heard: string | null; verdict: TrialTakeVerdict } {
+  const t = trialTakeText(heard);
+  const w = normalizeUtterance(word);
+  if (t === null || !w) return { heard: null, verdict: 'unclear' };
+  if (t === w) return { heard: t, verdict: 'correct' };
+  // a variant is never an approval or command phrase (validateSendWord), and is within the phonetic bound
+  if (acceptableVariant(t, w) && validateSendWord(t).ok) return { heard: t, verdict: 'variant' };
+  return { heard: t, verdict: 'unlike' };
+}
+
+/** A fresh trial of a valid word (null for a word validateSendWord refuses). */
+export function startSendWordTrial(word: unknown, maxTakes = SEND_WORD_TRIAL_MAX_TAKES): SendWordTrialState | null {
+  const v = validateSendWord(word);
+  if (!v.ok) return null;
+  return { word: v.text, takes: 0, maxTakes, correct: 0, variants: [], last: null, state: 'listening' };
+}
+
+/**
+ * Count one take (PURE; the kernel's VoiceControl is the one place it runs for a live trial, status.voice.sendWordTrial
+ * shows the result). Once ready or exhausted, a take changes nothing: the counter never runs past maxTakes.
+ */
+export function recordTrialTake(s: SendWordTrialState, heard: unknown): SendWordTrialState {
+  if (s.state !== 'listening') return s;
+  const c = classifyTrialTake(heard, s.word);
+  const takes = s.takes + 1;
+  const correct = s.correct + (c.verdict === 'correct' ? 1 : 0);
+  const variants = c.verdict === 'variant' && c.heard && !s.variants.includes(c.heard) && s.variants.length < SEND_WORD_MAX_VARIANTS ? [...s.variants, c.heard] : s.variants;
+  const state = correct > 0 ? 'ready' : takes >= s.maxTakes ? 'exhausted' : 'listening';
+  return { ...s, takes, correct, variants, last: c, state };
+}
+
+/** The take being asked for (1-based), or null when the trial is not listening: "Take {n} of up to {maxTakes}". */
+export const trialTakeNumber = (s: SendWordTrialState): number | null => (s.state === 'listening' ? s.takes + 1 : null);
+
+/** The save rule: the word and its collected variants, or null when no take was heard as the word itself. */
+export function trialSaveable(s: SendWordTrialState): SendWord | null {
+  if (s.correct < 1) return null;
+  return canonicalSendWord({ text: s.word, variants: s.variants });
 }
 
 /** Levenshtein distance (small strings only). */
