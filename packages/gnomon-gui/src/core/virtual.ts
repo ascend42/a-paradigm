@@ -53,6 +53,16 @@ export class HeightIndex {
     for (let i = idx + 1; i < this.#tree.length; i += i & -i) this.#tree[i] += delta;
   }
 
+  /** Drop the rows from `len` on (a changed tail, T-2026-10-21-007): O(dropped · log n), the prefix keeps its measurements. */
+  truncate(len: number): void {
+    const to = Math.max(0, Math.min(len, this.#n));
+    for (let idx = this.#n - 1; idx >= to; idx--) {
+      this.#add(idx, -this.#h[idx]!);
+      this.#h[idx] = 0;
+    }
+    this.#n = to;
+  }
+
   height(idx: number): number {
     return this.#h[idx] ?? this.estimate;
   }

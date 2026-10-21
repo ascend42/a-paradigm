@@ -408,6 +408,25 @@ components:
       app.ts passes none). Droop: a failed card droops once as it lands, a
       rail row droops once when its session flips to failed in this page;
       never a shake. Tests: test/desk.test.ts.
+    live-turn: >-
+      T-2026-10-21-007 (founder dogfood 2026-10-21, session hsid:v1:01M5E2G1TRBTMST63ZAY9V0W7D seq 4683-4791).
+      Turn anchoring (core/store.ts chatItems): turn.sent carries the turn id and turn.result none, and the
+      backend answers turns in send order, so a result pairs with the OLDEST open turn.sent (FIFO). A message
+      sent while an earlier turn runs WAITS (composer echo, sent voice turn; a refused send stays with it); the
+      running turn's output, cards and result are placed before the first waiting message, so a result shows
+      under its own turn and never under the next message; the waiting message starts when the earlier result
+      lands (or claude replays it); session.exited / orphaned / drained / open settle everything. Nothing
+      waiting = plain append. Running state: chatItems({live}) (the page passes isLiveState of the session)
+      adds one `working` row (key work:<seq>) under the running turn with a LiveClock {since, progress} from
+      the turn start and the latest tool_progress heartbeat (elapsed_time_seconds, tool_name) or
+      system.task_started; foldActivity makes that turn's latest activity line live (no "of work" yet), and a
+      reply or result closes the segment so the line freezes at the real end (a card between the tool and the
+      reply no longer freezes it at the last tool row). core/live-turn.ts (pure): liveSecs / toolSecs /
+      liveText ("working… · 2m 6s"; " · running 2m 10s · Bash 1m 33s"), hasLive, LiveTicker (ONE interval
+      while the focused transcript has a running turn, cleared when it ends; each tick rewrites only the mounted
+      .live-clock spans). ui/app.ts paintTranscript keeps the common key prefix mounted and measured and
+      rebuilds only the changed tail (HeightIndex.truncate), so the working row moving down costs no full
+      remount. CSS .trow.role-working (spinner, still under reduced motion) and .role-activity.live.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a
@@ -526,6 +545,7 @@ components:
       - test/choices.test.ts
       - test/fonts.test.ts
       - test/desk.test.ts
+      - test/live-turn.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:
