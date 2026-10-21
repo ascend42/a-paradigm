@@ -651,8 +651,13 @@ components:
       for the preset's send ceiling (with liabilityAck once the in-app
       acknowledgement dialog recorded it). Labels: sentLabel(turn.sent) on
       voice messages and CLAMP_CHIP in the session header; the guided
-      "Teach Gnomon your send word" dialog (core/send-word-teach.ts: pick,
-      lead-in, 3 takes, test, save); Pieces (gap 1500 / cap 8000 ms, hold
+      "Teach your send word" dialog (core/send-word-teach.ts, a pure reducer
+      over the kernel's attended trial: pick, then "Say <word> once to test ·
+      Take n of up to 4" from status.voice.sendWordTrial (the ONE take
+      counter), "I heard …", save via request.voice.sendword{op:'save'} once
+      a take was heard as the word; no lead-in, never the product name);
+      a trialTake row is never a transcript line (store voiceItem) and never
+      a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold
       while busy, piece claim, piece ring); Mic key switch, Listening
       (open / toggle) choice sent as the client's capture kind, voice.preset.*
       palette commands, in-app bare `, send-now from the voice app.

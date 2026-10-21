@@ -16,7 +16,7 @@
  * reaches the DOM through core/render.ts as a text node.
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
-import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
+import { initialTeach, reduceTeach, teachCommit, teachHeardLine, teachLine, teachVariantsLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
 import { ACK_TEXT, acked, attachSend, captureOf, CAPTURE_KEY, clampedFrom, CLAMP_CHIP, parseCapturePref, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
@@ -1367,7 +1367,7 @@ function submitAck(trusted: boolean): void {
   void chooseVoicePreset(p, true);
 }
 
-/* ── "Teach Gnomon your send word" (guided: pick, validate, lead-in, 3 takes, test, done) ── */
+/* ── "Teach your send word" (pick, validate, takes counted by the kernel's attended trial, save) ── */
 let teach: TeachState | null = null;
 let teachFor: typeof voicePreset | null = null;
 function teachOpen(): boolean {
@@ -1390,37 +1390,52 @@ async function closeTeach(): Promise<void> {
   const was = teach;
   teach = null;
   teachFor = null;
-  // a trial word never outlives the dialog
-  if (client && was && was.step !== 'pick' && was.step !== 'done') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined); // Aegis L-2: only the trial; the held word stays
+  // a trial word never outlives the dialog (an unsaved 'done' included)
+  if (client && was && was.step !== 'pick' && was.step !== 'confirm-common') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined); // Aegis L-2: only the trial; the held word stays
 }
 function paintTeach(): void {
   const s = teach;
   if (!s) return;
   const attached = voiceStatusOf(status).hsid !== null;
-  put($('sendword-line'), !attached && s.step !== 'pick' && s.step !== 'confirm-common' && s.step !== 'done' ? 'Attach voice to a session first (the takes are heard through it).' : teachLine(s));
+  put($('sendword-line'), !attached && s.step === 'takes' ? 'Attach voice to a session first (the takes are heard through it).' : teachLine(s));
   $('sendword-pick').hidden = s.step !== 'pick';
-  put($('sendword-heard'), s.heard === null ? '' : `I heard: “${s.heard}”`);
-  put($('sendword-hint'), s.hint ?? (s.step === 'takes' || s.step === 'test' ? `${s.takes.length} of ${TAKES_NEEDED} takes${s.variants.length ? ` · also heard as ${s.variants.map((v) => `“${v}”`).join(', ')}` : ''}` : ''));
+  put($('sendword-heard'), teachHeardLine(s));
+  // one counter only: "Take n of up to 4" is in the line above (the kernel's status.voice.sendWordTrial)
+  put($('sendword-hint'), s.hint ?? teachVariantsLine(s));
   const go = $<HTMLButtonElement>('sendword-go');
-  go.hidden = !(s.step === 'pick' || s.step === 'confirm-common' || s.step === 'done');
-  put(go, s.step === 'done' ? 'Save' : s.step === 'confirm-common' ? 'Use it' : 'Continue');
+  go.hidden = !(s.step === 'pick' || s.step === 'confirm-common' || s.step === 'done' || s.step === 'exhausted');
+  put(go, s.step === 'done' ? 'Save' : s.step === 'exhausted' ? 'Try again' : s.step === 'confirm-common' ? 'Use it' : 'Continue');
   $('sendword-no').hidden = s.step !== 'confirm-common';
 }
 async function teachStep(e: TeachEvent): Promise<void> {
   if (!teach) return;
   const prev = teach;
   teach = reduceTeach(teach, e);
-  // entering the lead-in (or each heard take): the kernel holds the word as a trial so the short takes are attributed
-  if (client && teach.step !== 'pick' && teach.step !== 'confirm-common' && teach.step !== 'done' && (prev.step !== teach.step || e.type === 'heard'))
-    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word: teach.word, trial: true } }).catch((err: unknown) => {
+  // entering the takes: the kernel starts the attended trial (it counts every take; status.voice.sendWordTrial)
+  if (client && teach.step === 'takes' && prev.step !== 'takes' && e.type !== 'status') await startTrial(teach.word);
+  paintTeach();
+}
+async function startTrial(word: string): Promise<void> {
+  if (!client) return;
+  await client
+    .call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word, trial: true } })
+    .then(() => refreshStatus())
+    .catch((err: unknown) => {
       if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the voice app could not be told the word' };
     });
-  paintTeach();
 }
 async function submitTeach(trusted: boolean): Promise<void> {
   if (!trusted || !teach || !client) return;
   if (teach.step === 'pick') return teachStep({ type: 'pick', text: $<HTMLInputElement>('sendword-custom').value });
   if (teach.step === 'confirm-common') return teachStep({ type: 'confirmCommon', yes: true });
+  if (teach.step === 'exhausted') {
+    // a fresh trial of the same word (the kernel keeps a live trial's count, so it is cleared first)
+    const word = teach.word;
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined);
+    teach = { ...initialTeach(), step: 'takes', word };
+    paintTeach();
+    return startTrial(word);
+  }
   const commit = teachCommit(teach);
   if (!commit) return;
   try {
@@ -1437,24 +1452,22 @@ async function submitTeach(trusted: boolean): Promise<void> {
     paintTeach();
   }
 }
-/** While the dialog listens, a voice turn is a take (never a draft): its text, or null when it was withheld. */
-function teachHeard(p: Record<string, unknown> | null): void {
-  // a take of the word being taught is stamped trialTake (never forwardable, Aegis L-3); the lead-in is a normal turn
-  const text = p && (p.forwardable === true || p.trialTake === true) && typeof p.text === 'string' && p.text.trim() ? p.text : null;
-  void teachStep({ type: 'heard', text });
+/** While the dialog listens, a voice turn is a take (never a draft): the kernel counted it; re-read its trial. */
+function teachHeard(): void {
+  void refreshStatus();
 }
 
 /** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
 function dictationRow(r: Row): void {
+  // the send-word dialog is listening: this turn is a take (the kernel stamps trialTake), never a draft
+  if (r.kind === 'voice.turn.user' && teachOpen()) {
+    if (r.seq > dict.lastSeq) dict = { ...dict, lastSeq: r.seq };
+    return teachHeard();
+  }
   if (!dictationOn()) return;
   const now = Date.now();
   if (r.kind === 'voice.turn.user') {
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
-    // the send-word dialog is listening: this turn is a take, never a draft
-    if (teachOpen() && r.seq > dict.lastSeq) {
-      dict = { ...dict, lastSeq: r.seq };
-      return teachHeard(p);
-    }
     dispatchDictation({ type: 'turnRow', seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, now });
   }
   if (dict.hsid && r.session === dict.hsid) dispatchDictation({ type: 'busy', busy: store.sessions.get(dict.hsid)?.state === 'streaming', now });
@@ -1579,6 +1592,7 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  if (teach) teach = reduceTeach(teach, { type: 'status', status }); // the kernel's one take counter
   paintTeach();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
