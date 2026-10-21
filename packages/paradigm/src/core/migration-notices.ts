@@ -7,7 +7,13 @@
  * `compliance` archetype on their roster. Without a claimant, the Stop
  * hook no longer enforces aspect coverage/drift — users in this cohort
  * silently lose enforcement they previously had, so we surface the
- * change once and write a marker file so the message never repeats.
+ * change and record an acknowledgement marker so the message stops.
+ *
+ * Read-only commands (core/command-policy.ts) never write: they print the
+ * notice to stderr and leave the marker alone. The marker is written by the
+ * first write command that shows the notice, or explicitly by
+ * `paradigm notices ack <id>`. `PARADIGM_NO_NOTICES=1` hides notices for a
+ * process without writing anything.
  *
  * The cohort-C predicate is exported so `paradigm shift` can reuse it
  * for its Step 2c-nominate-compliance prompt without duplicating the
@@ -97,28 +103,26 @@ export function isCohortC(projectRoot: string): boolean {
 }
 
 /**
- * Emit the v6.0.4 migration notice once for cohort-C projects.
- *
- * No-ops when:
- * - Marker file `.paradigm/.v6-0-4-migration-acknowledged` exists
- * - `.paradigm/` directory does not exist (uninitialized project)
- * - Project is not in cohort C (compliance rostered, or no aspects defined)
- *
- * Writes the marker file after the first emission so the notice never
- * repeats. Failures are silent — this is advisory, never blocking.
+ * A one-time notice. `applies` is a pure read of the project; the notice is
+ * pending while it applies and its marker file is absent.
  */
-export async function checkAndEmitMigrationNotices(projectRoot: string): Promise<void> {
-  try {
-    const paradigmDir = path.join(projectRoot, '.paradigm');
-    if (!fs.existsSync(paradigmDir)) return;
+export interface MigrationNotice {
+  /** Stable id a user passes to `paradigm notices ack <id>`. */
+  id: string;
+  /** Marker file under `.paradigm/` that records the acknowledgement. */
+  marker: string;
+  summary: string;
+  applies(projectRoot: string): boolean;
+  lines(): string[];
+}
 
-    const markerPath = path.join(paradigmDir, MIGRATION_MARKER);
-    if (fs.existsSync(markerPath)) return;
-
-    if (!isCohortC(projectRoot)) return;
-
-    const notice = [
-      '',
+export const MIGRATION_NOTICES: readonly MigrationNotice[] = Object.freeze([
+  {
+    id: 'v6.0.4',
+    marker: MIGRATION_MARKER,
+    summary: 'Enforcement model changed: aspects are not enforced without a compliance agent on the roster',
+    applies: isCohortC,
+    lines: () => [
       chalk.yellow('[paradigm 6.0.4] Enforcement model changed.'),
       '',
       'This project defines ~aspects but has no compliance-archetype agent on',
@@ -135,23 +139,111 @@ export async function checkAndEmitMigrationNotices(projectRoot: string): Promise
       'checked via paradigm_aspect_check or paradigm_aspect_drift. v6.0.5+',
       'fixes the reader to resolve under both project-root and .purpose-dir',
       'bases. No data migration required.',
-      '',
-      chalk.dim('This message will not appear again.'),
-      '',
-    ].join('\n');
-    console.log(notice);
+    ],
+  },
+]);
 
-    try {
-      fs.writeFileSync(
-        markerPath,
-        `Acknowledged at ${new Date().toISOString()}\n`,
-        'utf8'
-      );
-    } catch {
-      // If we cannot write the marker, the notice will fire again next run —
-      // annoying but not broken. Stay silent.
+/** Env var that hides every notice for the process (no print, no write). */
+export const NO_NOTICES_ENV = 'PARADIGM_NO_NOTICES';
+
+function noticesSuppressed(): boolean {
+  const v = process.env[NO_NOTICES_ENV];
+  return v !== undefined && v !== '' && v !== '0' && v.toLowerCase() !== 'false';
+}
+
+/**
+ * Notices that apply to the project and are not yet acknowledged. Pure read:
+ * never writes, safe from read-only commands.
+ */
+export function pendingNotices(projectRoot: string): MigrationNotice[] {
+  try {
+    const paradigmDir = path.join(projectRoot, '.paradigm');
+    if (!fs.existsSync(paradigmDir)) return [];
+    return MIGRATION_NOTICES.filter((n) => {
+      if (fs.existsSync(path.join(paradigmDir, n.marker))) return false;
+      try {
+        return n.applies(projectRoot);
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function findNotice(id: string): MigrationNotice | undefined {
+  return MIGRATION_NOTICES.find((n) => n.id === id);
+}
+
+/**
+ * Record the acknowledgement of one notice (writes its marker). Returns false
+ * when the project has no `.paradigm/` directory or the write fails. Only
+ * write paths call this.
+ */
+export function acknowledgeNotice(projectRoot: string, notice: MigrationNotice): boolean {
+  const paradigmDir = path.join(projectRoot, '.paradigm');
+  if (!fs.existsSync(paradigmDir)) return false;
+  try {
+    fs.writeFileSync(
+      path.join(paradigmDir, notice.marker),
+      `Acknowledged at ${new Date().toISOString()}\n`,
+      'utf8'
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Ids already printed by this process (a notice prints at most once per process). */
+const printedThisProcess = new Set<string>();
+
+export interface EmitOptions {
+  /**
+   * True when the running command is read-only (core/command-policy.ts). The
+   * notice still prints, but nothing is written: the acknowledgement waits for
+   * a write command or `paradigm notices ack <id>`.
+   */
+  readOnly: boolean;
+  /** Where the notice goes. Default: stderr, so stdout (`--json`) stays clean. */
+  write?: (text: string) => void;
+}
+
+/**
+ * Print each pending notice (once per process) to stderr.
+ *
+ * - Read-only command: print only. The footer says how to silence it.
+ * - Write command: print and write the marker, so it never repeats.
+ * - `PARADIGM_NO_NOTICES=1`: do nothing.
+ *
+ * Failures are silent: this is advisory, never blocking.
+ */
+export async function checkAndEmitMigrationNotices(
+  projectRoot: string,
+  options: EmitOptions = { readOnly: false }
+): Promise<void> {
+  try {
+    if (noticesSuppressed()) return;
+    const write = options.write ?? ((text: string) => { process.stderr.write(text); });
+    for (const notice of pendingNotices(projectRoot)) {
+      if (printedThisProcess.has(notice.id)) continue;
+      printedThisProcess.add(notice.id);
+      const footer = options.readOnly
+        ? chalk.dim(
+            `Shown until acknowledged: run \`paradigm notices ack ${notice.id}\` (or any write command). ` +
+            `${NO_NOTICES_ENV}=1 hides notices without writing.`
+          )
+        : chalk.dim('This message will not appear again.');
+      write(['', ...notice.lines(), '', footer, '', ''].join('\n'));
+      if (!options.readOnly) acknowledgeNotice(projectRoot, notice);
     }
   } catch {
     // Never let migration-notice machinery crash the CLI.
   }
+}
+
+/** Test hook: forget which notices this process has printed. */
+export function resetPrintedNoticesForTests(): void {
+  printedThisProcess.clear();
 }

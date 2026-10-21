@@ -4,6 +4,20 @@ description: |
   Contains agent management, budget tracking, IDE adapters, provider registry,
   and all internal logic that powers the CLI commands.
 components:
+  command-policy:
+    description: Declares the CLI's read-only commands (READ_ONLY_COMMANDS). A read-only command performs no filesystem writes (project or HOME) and no network calls, global hooks included; every entry is proven byte-identical by src/__tests__/readonly-commands.test.ts. Gnomon's auto-edits classifier relies on it.
+    type: utility
+    tags:
+      - cli
+      - policy
+    path: command-policy.ts
+  migration-notices:
+    description: One-time migration notices (v6.0.4 cohort C). Prints to stderr once per process; on a read-only command it writes nothing, on a write command it writes the acknowledgement marker. Silenced by `paradigm notices ack <id>`, any write command, or PARADIGM_NO_NOTICES=1 (no write).
+    type: utility
+    tags:
+      - cli
+      - migration
+    path: migration-notices.ts
   pipeline-types:
     description: Spec pipeline type definitions — 5 stages, 3 gate modes, pipeline state, templates
     type: model
