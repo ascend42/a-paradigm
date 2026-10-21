@@ -15,6 +15,22 @@ components:
     signals:
       - '!compliance-violation'
       - '!hook-installed'
+  stop-hook-timing:
+    description: |
+      7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
+      a hook's stdout/stderr, not for its exit, until the hook timeout (Stop: 30 s).
+      Rules: (1) never background a command without </dev/null >/dev/null 2>&1;
+      (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
+      --exclude-standard` (nested agent worktrees and node_modules are skipped)
+      and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
+      Check 4 anchors); (3) no network (npx --no-install). Enforced by
+      tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
+      lint check on background jobs).
+    type: utility
+    file: scripts/paradigm-common.sh
+    tags:
+      - hooks
+      - performance
   has-compliance-claimant:
     description: |
       v6.0.4 POSIX sh helper in paradigm-common.sh that reads
