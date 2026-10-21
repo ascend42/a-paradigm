@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { DevTestRootAuthority, DEV_TEST_ROOT_ACK } from '../src/kernel/identity/root-authority.js';
-import { consentHashOf, readEnrolled, enrolSpeaker } from '../src/kernel/voice/enrolment.js';
+import { consentHashOf, forgetSpeaker, readEnrolled, enrolSpeaker } from '../src/kernel/voice/enrolment.js';
 import { intentOf } from '../src/kernel/identity/decision-batch.js';
 import { VoiceEnrolCards } from '../src/kernel/voice/voice-requests.js';
 import { VoiceControl, type VoiceAppendRow } from '../src/kernel/voice/voice-control.js';
@@ -65,7 +65,7 @@ describe('#gnomon-voice V2e: GUI enrolment (request.voice.enrol / forget)', () =
     prepared.release();
     await enrolSpeaker(home, root, { name: 'other', consent: 'other consents' }); // takes the seq
     const effect = c.effect as (d: string, ctx: Record<string, unknown>) => Promise<void>;
-    await expect(effect('allow', { prepared, rowSigs: [root.signRow(prepared.rows[0])] })).rejects.toThrow(/moved since this decision was signed/);
+    await expect(effect('allow', { prepared, rowSigs: [root.signRow(prepared.rows[0])] })).rejects.toThrow(/moved since this enrol was signed/);
     expect([...readEnrolled(home, root)]).toEqual([`spk:${root.ns}/other`]);
   });
   it('refuses a bad name or empty consent before any card (TypeError ⇒ BAD_REQUEST at the dispatcher)', async () => {
@@ -111,5 +111,31 @@ describe('#gnomon-voice V2e: speakerEnrolled is the kernel\'s call (readEnrolled
     await enrolSpeaker(home, other, { name: 'intruder', consent: 'x' });
     expect(await turn(`spk:${other.ns}/intruder`)).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
     expect(v.status().enrolled).toEqual(['founder']);
+  });
+});
+
+describe('Aegis M2: the CLI enrol / forget share the locked, seq-checked write path', () => {
+  it('a forget whose seq was taken by a racing card enrol refuses LOUDLY (never silently dropped); re-run, it lands', async () => {
+    const { home, root, raised, cards } = setup();
+    await enrolSpeaker(home, root, { name: 'founder', consent: 'I consent' });
+    await cards.enrol({ connId: 'conn:H', principal: `p:${root.ns}/founder` }, { name: 'ana', consent: 'ana consents' });
+    const c = raised[0]!;
+    // the forget computes its seq, then the card enrol commits while the forget waits on its root signature
+    const racing = {
+      ns: root.ns,
+      rootKeyId: root.rootKeyId,
+      verifyRow: (s: string, r: unknown, g: string) => root.verifyRow(s, r, g),
+      signRow: (r: unknown) => root.signRow(r),
+      signRowAsync: async (r: unknown) => {
+        const prepared = (c.prepare as (d: string) => { rows: Record<string, unknown>[]; release(): void })('allow');
+        prepared.release();
+        await (c.effect as (d: string, ctx: Record<string, unknown>) => Promise<void>)('allow', { prepared, rowSigs: [root.signRow(prepared.rows[0])] });
+        return root.signRow(r);
+      },
+    };
+    await expect(forgetSpeaker(home, racing as never, { name: 'founder' })).rejects.toThrow(/moved since this forget was signed/);
+    expect([...readEnrolled(home, root)].sort()).toEqual([`spk:${root.ns}/ana`, `spk:${root.ns}/founder`]);
+    await forgetSpeaker(home, root, { name: 'founder' });
+    expect([...readEnrolled(home, root)]).toEqual([`spk:${root.ns}/ana`]);
   });
 });

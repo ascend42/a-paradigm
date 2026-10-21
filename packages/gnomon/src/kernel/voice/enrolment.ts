@@ -93,24 +93,8 @@ function verifiedRows(home: string, trust: RowVerifier): VoiceEnrolRow[] {
   return out;
 }
 
-function nextSeq(home: string, root: RootAuthority): number {
-  const rows = verifiedRows(home, root);
-  return (rows.at(-1)?.seq ?? 0) + 1;
-}
-
 async function sign(root: RootAuthority, row: unknown): Promise<{ signer: string; sig: string }> {
   return root.signRowAsync ? root.signRowAsync(row) : root.signRow(row);
-}
-
-function appendLine(home: string, line: unknown): void {
-  fs.mkdirSync(voiceDir(home), { recursive: true, mode: 0o700 });
-  const fd = fs.openSync(enrolmentsPath(home), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND, 0o600);
-  try {
-    fs.writeSync(fd, `${JSON.stringify(line)}\n`);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
 }
 
 /** sha256:<hex> of the consent text (utf8): what a card-decided enrol row signs. */
@@ -137,38 +121,54 @@ export function enrolIntent(ns: string, p: { name: string; consent: string; card
 export function prepareEnrol(home: string, root: RowVerifier & { ns: string | null }, p: { name: string; consent: string; cardId: string; now?: Date }): VoiceEnrolRow {
   if (root.ns === null) throw new TypeError('#gnomon-voice: this home has no root identity yet (gnomon setup)');
   if (typeof p.consent !== 'string' || p.consent.trim().length === 0 || p.consent.length > 1024) throw new TypeError('#gnomon-voice: enrolment needs recorded consent (1..1024 chars)');
-  const seq = withHomeFileLock(home, 'enrolments', () => (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1);
+  const seq = lockedNextSeq(home, root);
   return { ...(enrolIntent(root.ns, p) as Omit<VoiceEnrolRow, 'seq' | 'at'>), seq, at: (p.now ?? new Date()).toISOString() };
+}
+
+/**
+ * Aegis M2: the ONE write path of enrolments.jsonl. The root sig is verified; then, under the enrolments lock, the
+ * seq is recomputed and must still be this row's (a moved seq refuses LOUDLY: verifiedRows would silently skip a
+ * non-increasing one, dropping e.g. a forget that raced an enrol); `before` runs under the lock; one durable append.
+ */
+function appendSignedEnrolRow(home: string, root: RowVerifier, row: VoiceEnrolRow, sig: { signer: string; sig: string }, before?: () => void): void {
+  if (!root.verifyRow(sig.signer, row, sig.sig)) throw new Error(`#gnomon-voice: the ${row.op} row's root signature does not verify; nothing was written`);
+  withHomeFileLock(home, 'enrolments', () => {
+    const want = (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1;
+    if (row.seq !== want) throw new Error(`#gnomon-voice: the enrolments moved since this ${row.op} was signed (seq ${row.seq}, next is ${want}); nothing was written, run it again`);
+    before?.();
+    appendLinesDurably(enrolmentsPath(home), [JSON.stringify({ row, ...sig })]);
+  });
 }
 
 /** Commit a prepared, root-signed enrol row: signature verified, seq re-checked under the lock, one durable write. */
 export function commitEnrol(home: string, root: RowVerifier, row: VoiceEnrolRow, sig: { signer: string; sig: string }, consent: string): void {
-  if (!root.verifyRow(sig.signer, row, sig.sig)) throw new Error('#gnomon-voice: the enrol row\'s root signature does not verify; nothing was written');
   if (row.consentHash !== consentHashOf(consent)) throw new Error('#gnomon-voice: the consent does not match the signed consentHash; nothing was written');
-  withHomeFileLock(home, 'enrolments', () => {
-    const want = (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1;
-    if (row.seq !== want) throw new Error(`#gnomon-voice: the enrolments moved since this decision was signed (seq ${row.seq}, next is ${want}); nothing was written, decide again`);
+  appendSignedEnrolRow(home, root, row, sig, () => {
     const cp = consentPath(home, row.consentHash!);
     fs.mkdirSync(path.dirname(cp), { recursive: true, mode: 0o700 });
     fs.writeFileSync(cp, consent, { mode: 0o600 });
-    appendLinesDurably(enrolmentsPath(home), [JSON.stringify({ row, ...sig })]);
   });
+}
+
+/** seq for a row about to be signed, read under the enrolments lock (re-checked at append). */
+function lockedNextSeq(home: string, root: RowVerifier): number {
+  return withHomeFileLock(home, 'enrolments', () => (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1);
 }
 
 /** Root-signed enrolment of a speaker (recorded consent): the CLI path (`gnomon voice enrol`). */
 export async function enrolSpeaker(home: string, root: RootAuthority, p: { name: string; consent: string; printRef?: string; now?: Date }): Promise<VoiceEnrolRow> {
   if (root.ns === null) root.signRow(null); // refuses with the unprovisioned-root refusal
   if (typeof p.consent !== 'string' || p.consent.trim().length === 0 || p.consent.length > 1024) throw new TypeError('#gnomon-voice: enrolment needs recorded consent (1..1024 chars)');
-  const row: VoiceEnrolRow = { schemaVersion: VOICE_ENROL_ROW_SCHEMA, op: 'enrol', seq: nextSeq(home, root), speakerId: speakerIdFor(root.ns!, p.name), consent: p.consent, ...(p.printRef ? { printRef: p.printRef } : {}), at: (p.now ?? new Date()).toISOString() };
-  appendLine(home, { row, ...(await sign(root, row)) });
+  const row: VoiceEnrolRow = { schemaVersion: VOICE_ENROL_ROW_SCHEMA, op: 'enrol', seq: lockedNextSeq(home, root), speakerId: speakerIdFor(root.ns!, p.name), consent: p.consent, ...(p.printRef ? { printRef: p.printRef } : {}), at: (p.now ?? new Date()).toISOString() };
+  appendSignedEnrolRow(home, root, row, await sign(root, row));
   return row;
 }
 
 /** Root-signed deletion of a speaker; removes its print file (if any). */
 export async function forgetSpeaker(home: string, root: RootAuthority, p: { name: string; now?: Date }): Promise<VoiceEnrolRow> {
   if (root.ns === null) root.signRow(null);
-  const row: VoiceEnrolRow = { schemaVersion: VOICE_ENROL_ROW_SCHEMA, op: 'forget', seq: nextSeq(home, root), speakerId: speakerIdFor(root.ns!, p.name), at: (p.now ?? new Date()).toISOString() };
-  appendLine(home, { row, ...(await sign(root, row)) });
+  const row: VoiceEnrolRow = { schemaVersion: VOICE_ENROL_ROW_SCHEMA, op: 'forget', seq: lockedNextSeq(home, root), speakerId: speakerIdFor(root.ns!, p.name), at: (p.now ?? new Date()).toISOString() };
+  appendSignedEnrolRow(home, root, row, await sign(root, row));
   fs.rmSync(path.join(printsDir(home), p.name), { recursive: true, force: true });
   return row;
 }
