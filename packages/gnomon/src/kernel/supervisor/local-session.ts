@@ -62,7 +62,7 @@ import { buildSessionPolicy, policyHash, type SessionPolicy } from '../manifest/
 import { defaultClaudeJson } from '../manifest/layers.js';
 import { sessionLaunchPlan, type SessionLaunchInput, type SessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv } from '../runner/env.js';
+import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -102,6 +102,10 @@ export interface LocalLaneOptions {
   kernelPrincipal: string;
   sock: string;
   env?: () => Readonly<Record<string, string | undefined>>;
+  /** the OS identity for USER/LOGNAME/SHELL/TMPDIR (runner/env.ts); default sessionIdentity() */
+  identity?: SessionIdentity | null;
+  /** TD-2026-10-21-077: the joined session PATH the supervisor resolved (a value; default: the built-in per-platform PATH) */
+  sessionPath?: string | null;
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
@@ -180,10 +184,19 @@ export class LocalLane {
   readonly #usedTurnPermits = new Set<string>();
   readonly #probes = new Map<string, { at: number; caps: LocalCapabilities }>();
   readonly #platform: string;
+  readonly #identity: SessionIdentity | null;
+  readonly #sessionPath: string | null;
 
   constructor(o: LocalLaneOptions) {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
+    this.#identity = o.identity !== undefined ? o.identity : sessionIdentity();
+    this.#sessionPath = o.sessionPath !== undefined ? o.sessionPath : sessionPathFor(null, { nodeDir: path.dirname(process.execPath), ...(this.#identity?.home ? { home: this.#identity.home } : {}) });
+  }
+
+  /** Aegis L2: the OS home (passwd), never $HOME; the userHome seam still wins */
+  #userHome(): string {
+    return this.#o.userHome ?? this.#identity?.home ?? os.homedir();
   }
 
   has(hsid: unknown): boolean {
@@ -329,7 +342,7 @@ export class LocalLane {
         }
       };
       const gh = rp(this.#o.home);
-      const uh = rp(this.#o.userHome ?? os.homedir());
+      const uh = rp(this.#userHome());
       for (const r of rootsReal) {
         const under = (a: string, b: string): boolean => a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
         // slice 2: a root INSIDE the Gnomon home (keys/, sessions/) is refused too — the tools would otherwise confine to it
@@ -350,11 +363,11 @@ export class LocalLane {
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;
     const repo = repoIdOf(cwdReal);
-    const userHome = this.#o.userHome ?? os.homedir();
+    const userHome = this.#userHome();
     await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
     await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
-    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath });
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
@@ -398,7 +411,7 @@ export class LocalLane {
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: rootsReal };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: env.TMPDIR ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
       const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
       const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });

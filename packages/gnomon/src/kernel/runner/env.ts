@@ -10,13 +10,160 @@
  * CLAUDE_CONFIG_DIR NODE_OPTIONS GNOMON_* *_BASE_URL`), then the kernel adds
  * `GNOMON_HSID GNOMON_SOCK GNOMON_SESSION_KEY`. `envKeys[]` (names only, never
  * values) is what the supervisor logs.
+ *
+ * IDENTITY FROM THE OS, NEVER FROM THE ACTIVATOR. A session's env must be the
+ * same however the daemon was launched (terminal `gnomon up`, `gnomon daemon
+ * --detach`, the upgrade successor, Gnomon.app). The clean re-exec
+ * (lifecycle/env.ts) keeps no USER, and Claude Code looks its keychain
+ * credentials up by `$USER`: without it every session on a re-exec'd daemon
+ * was refused `not_subscription_auth`. So on POSIX the identity names
+ * (IDENTITY_KEYS) are never copied from the daemon's env:
+ *   - `USER` and `LOGNAME` = os.userInfo().username;
+ *   - `SHELL` = os.userInfo().shell, when it is absolute;
+ *   - `TMPDIR` (darwin) = the per-user temp dir, from `/usr/bin/getconf
+ *     DARWIN_USER_TEMP_DIR` run by absolute path with an EMPTY env, accepted
+ *     only as an absolute directory owned by this uid and not group- or
+ *     world-writable (linux: none, absent).
+ * A value the OS cannot give is OMITTED, never back-filled from the env (fail
+ * closed: a missing USER is a visible auth refusal; a borrowed one could name
+ * another user's keychain item). resolveSessionIdentity runs once at daemon
+ * start (the supervisor's constructor), which logs one
+ * session.sandbox{phase:'identity', missing} row (names only) when it is
+ * incomplete. win32 keeps the allowlist as-is: USERPROFILE is in
+ * WINDOWS_EXTRA (USERNAME is not allowlisted), and none of these names is a
+ * Windows identity source.
+ *
+ * PATH (TD-2026-10-21-077) is NEVER the daemon's on POSIX either: it is the
+ * root-signed `config.sessions.path` when set, else defaultSessionPath — on
+ * darwin the running node's dir, <os home>/.local/bin, /opt/homebrew/bin,
+ * /usr/local/bin, /usr/bin, /bin, /usr/sbin, /sbin (linux: the same without
+ * /opt/homebrew/bin). win32 keeps today's behaviour (the allowlisted PATH):
+ * its system PATH lives in the registry and has no clean fixed equivalent.
  */
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 export const ENV_ALLOWLIST = Object.freeze(['HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'PATH', 'SHELL']);
 export const WINDOWS_EXTRA = Object.freeze(['USERPROFILE', 'SYSTEMROOT', 'WINDIR', 'SystemDrive', 'ProgramFiles', 'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'CLAUDE_CODE_GIT_BASH_PATH']);
+/** The POSIX identity names a session gets from the OS, never from the daemon's env. */
+export const IDENTITY_KEYS = Object.freeze(['USER', 'LOGNAME', 'SHELL', 'TMPDIR']);
 const SCRUB = [/^ANTHROPIC_/i, /^CLAUDE_CODE_USE_/i, /^CLAUDE_CODE_OAUTH/i, /^CLAUDE_CONFIG_DIR$/i, /^NODE_OPTIONS$/i, /^GNOMON_/i, /_BASE_URL$/i];
 
 export function isScrubbed(name: string): boolean {
   return SCRUB.some((r) => r.test(name));
+}
+
+export interface SessionIdentity {
+  /** os.userInfo().username: becomes USER and LOGNAME */
+  user?: string;
+  /** os.userInfo().shell, when absolute */
+  shell?: string;
+  /** darwin: the per-user temp dir (getconf DARWIN_USER_TEMP_DIR), validated */
+  tmpdir?: string;
+  /** os.userInfo().homedir, when absolute (the passwd home, never $HOME) */
+  home?: string;
+}
+
+/** The identity names the OS did not give (logged at daemon start, names only); [] on win32 (null identity). */
+export function missingIdentity(id: SessionIdentity | null, platform: NodeJS.Platform = process.platform): string[] {
+  if (!id) return [];
+  const out: string[] = [];
+  if (!id.user) out.push('USER', 'LOGNAME');
+  if (!id.shell) out.push('SHELL');
+  if (platform === 'darwin' && !id.tmpdir) out.push('TMPDIR');
+  if (!id.home) out.push('HOME');
+  return out;
+}
+
+/** Aegis L1: the screen-socket deny's dir when the session has no TMPDIR — a literal, never the daemon's env (darwin) */
+export const DARWIN_SCREEN_TMP_FALLBACK = '/private/tmp';
+
+/** The darwin system dirs of the default session PATH, after the node dir and ~/.local/bin (TD-2026-10-21-077). */
+export const DARWIN_SESSION_PATH_TAIL = Object.freeze(['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']);
+export const LINUX_SESSION_PATH_TAIL = Object.freeze(['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']);
+
+/**
+ * TD-2026-10-21-077: the built-in session PATH when `config.sessions.path` is unset; null on win32 (today's
+ * behaviour: the allowlisted PATH). `nodeDir` is the dir of the node running the kernel (process.execPath, an OS
+ * fact), `home` the OS home (os.userInfo().homedir). Never reads process.env. Entries holding `:` are skipped.
+ */
+export function defaultSessionPath(o: { platform?: NodeJS.Platform; nodeDir?: string; home?: string } = {}): string[] | null {
+  const platform = o.platform ?? process.platform;
+  if (platform === 'win32') return null;
+  const tail = platform === 'darwin' ? DARWIN_SESSION_PATH_TAIL : LINUX_SESSION_PATH_TAIL;
+  const head = [o.nodeDir, o.home ? path.posix.join(o.home, '.local', 'bin') : undefined].filter((d): d is string => typeof d === 'string' && path.posix.isAbsolute(d) && !d.includes(':'));
+  return [...new Set([...head, ...tail])];
+}
+
+/** The session PATH: the configured list, else the default; null ⇒ keep the allowlisted PATH (win32 only). */
+export function sessionPathFor(configured: readonly string[] | null | undefined, o: { platform?: NodeJS.Platform; nodeDir?: string; home?: string } = {}): string | null {
+  const platform = o.platform ?? process.platform;
+  const dirs = configured && configured.length ? [...configured] : defaultSessionPath(o);
+  return dirs ? dirs.join(platform === 'win32' ? ';' : ':') : null;
+}
+
+export interface IdentityDeps {
+  platform?: NodeJS.Platform;
+  userInfo?: () => { username: string; shell: string | null; homedir?: string };
+  /** darwin: what `/usr/bin/getconf DARWIN_USER_TEMP_DIR` prints (throws on failure) */
+  darwinUserTempDir?: () => string;
+  uid?: () => number | undefined;
+}
+
+/** A value fit for an env var: non-empty, one line, no NUL. */
+function envSafe(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0 && !/[\0\r\n]/.test(v);
+}
+
+function getconfDarwinUserTempDir(): string {
+  // absolute binary, empty env: confstr(_CS_DARWIN_USER_TEMP_DIR) is keyed by the uid, not by anything inherited
+  return execFileSync('/usr/bin/getconf', ['DARWIN_USER_TEMP_DIR'], { env: {}, encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'] });
+}
+
+/** The darwin per-user temp dir, or undefined: absolute, a real dir owned by `uid`, not group- or world-writable. */
+export function validTempDir(raw: string, uid: number | undefined): string | undefined {
+  const v = raw.replace(/\r?\n$/, '');
+  if (!envSafe(v) || !path.isAbsolute(v) || uid === undefined) return undefined;
+  try {
+    const st = fs.statSync(fs.realpathSync.native(v));
+    if (!st.isDirectory() || st.uid !== uid || (st.mode & 0o022) !== 0) return undefined;
+  } catch {
+    return undefined;
+  }
+  return v; // verbatim, as macOS itself sets TMPDIR (the /var form, trailing slash)
+}
+
+/** The session identity from the OS (spec §3.3 "Environment"); null on win32. Never reads process.env. */
+export function resolveSessionIdentity(d: IdentityDeps = {}): SessionIdentity | null {
+  const platform = d.platform ?? process.platform;
+  if (platform === 'win32') return null;
+  const id: SessionIdentity = {};
+  try {
+    const u = (d.userInfo ?? (() => os.userInfo()))();
+    if (envSafe(u.username)) id.user = u.username;
+    if (envSafe(u.shell) && path.isAbsolute(u.shell)) id.shell = u.shell;
+    if (envSafe(u.homedir) && path.isAbsolute(u.homedir)) id.home = u.homedir;
+  } catch {
+    /* no passwd entry for this uid: USER, LOGNAME and SHELL stay absent (fail closed) */
+  }
+  if (platform === 'darwin') {
+    try {
+      const t = validTempDir((d.darwinUserTempDir ?? getconfDarwinUserTempDir)(), (d.uid ?? (() => process.getuid?.()))());
+      if (t) id.tmpdir = t;
+    } catch {
+      /* getconf failed: TMPDIR stays absent */
+    }
+  }
+  return id;
+}
+
+let resolved: SessionIdentity | null | undefined;
+/** resolveSessionIdentity, once per process (the daemon resolves it at start). */
+export function sessionIdentity(): SessionIdentity | null {
+  if (resolved === undefined) resolved = resolveSessionIdentity();
+  return resolved;
 }
 
 export interface SessionEnvInput {
@@ -27,6 +174,13 @@ export interface SessionEnvInput {
   sessionKeyPath: string;
   /** names the kernel adds after the scrub (an api-token card's one key); never a scrubbed name otherwise */
   inject?: Readonly<Record<string, string>>;
+  /**
+   * The OS identity (resolveSessionIdentity). Non-null: USER LOGNAME SHELL TMPDIR come ONLY from it (a name it
+   * lacks is absent, whatever the daemon inherited). null (win32): the allowlist alone.
+   */
+  identity: SessionIdentity | null;
+  /** TD-2026-10-21-077: the session PATH (sessionPathFor); non-null REPLACES any daemon PATH. null (win32): the allowlist's. */
+  path: string | null;
 }
 
 export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
@@ -35,6 +189,16 @@ export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, strin
     const v = i.from[k];
     if (typeof v === 'string' && !isScrubbed(k)) env[k] = v;
   }
+  if (i.identity) {
+    for (const k of IDENTITY_KEYS) delete env[k];
+    if (i.identity.user) {
+      env.USER = i.identity.user;
+      env.LOGNAME = i.identity.user;
+    }
+    if (i.identity.shell) env.SHELL = i.identity.shell;
+    if (i.identity.tmpdir) env.TMPDIR = i.identity.tmpdir;
+  }
+  if (i.path !== null) env.PATH = i.path;
   env.GNOMON_HSID = i.hsid;
   env.GNOMON_SOCK = i.sock;
   env.GNOMON_SESSION_KEY = i.sessionKeyPath;

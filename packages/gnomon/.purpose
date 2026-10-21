@@ -2354,6 +2354,33 @@ components:
     oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]
 
   session-runner:
+    session-identity-env: >-
+      Fix 2026-10-20 (not_subscription_auth after a self-upgrade). runner/env.ts
+      resolveSessionIdentity / sessionIdentity (once per process; the
+      supervisor resolves it in its constructor and hands it to LocalLane):
+      on POSIX buildSessionEnv{identity} drops IDENTITY_KEYS (USER LOGNAME
+      SHELL TMPDIR) from the daemon-env copy and sets USER=LOGNAME=
+      os.userInfo().username, SHELL=os.userInfo().shell (absolute only),
+      TMPDIR (darwin) = /usr/bin/getconf DARWIN_USER_TEMP_DIR run with an
+      empty env, validTempDir: absolute, realpath a dir owned by the uid,
+      mode & 022 == 0. Anything the OS cannot give is OMITTED, never taken
+      from the env. win32: identity null, allowlist unchanged. The darwin
+      profile extras.tmpdir (screen-socket deny) is the session's TMPDIR,
+      else DARWIN_SCREEN_TMP_FALLBACK '/private/tmp' (Aegis L1). Identity
+      also carries home = os.userInfo().homedir: the user home is never $HOME
+      (Aegis L2). missingIdentity ⇒ one session.sandbox{phase:'identity',
+      missing} row at daemon start, names only; not_subscription_auth with
+      no USER names the cause (Aegis ruling 3). PATH (TD-2026-10-21-077):
+      buildSessionEnv{path} REPLACES any daemon PATH with sessionPathFor =
+      root-signed config.sessions.path (budget/config.ts parseSessionPath:
+      1..32 absolute dirs, <= 1024 chars, no NUL/CR/LF, no ':' POSIX / ';'
+      win32; invalid ⇒ whole config falls back, logged, default PATH) else
+      defaultSessionPath (darwin: node dir, <os home>/.local/bin,
+      /opt/homebrew/bin /usr/local/bin /usr/bin /bin /usr/sbin /sbin; linux
+      without /opt/homebrew/bin; win32 null = the allowlisted PATH). Tests:
+      test/session-env-identity.test.ts, test/session-supervisor.test.ts
+      ("session env identity from the OS"), test/local-lane-spawn.test.ts
+      (Aegis L1/L2), test/budget-fuse.test.ts (config.sessions.path).
     model-picker: >-
       Founder ask 2026-10-20 ("is there no way to change the model?").
       session.open{model}: anything other than the routing values
@@ -2527,6 +2554,13 @@ components:
     oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]
 
   supervisor:
+    session-identity-env: >-
+      SupervisorOptions.identity (seam; default runner/env.ts
+      sessionIdentity()) is resolved ONCE in the constructor and passed to
+      buildSessionEnv for both lanes (LocalLaneOptions.identity), so a
+      session's USER/LOGNAME/SHELL/TMPDIR come from the OS whatever env the
+      daemon inherited (#session-runner session-identity-env). The darwin
+      profile extras.tmpdir is env.TMPDIR ?? os.tmpdir().
     usage-split: >-
       #ledger-mod (K2 feed v2): the Claude turn.result row additionally
       records split {in, out, cacheRead, cacheWrite} (the turn's own totals

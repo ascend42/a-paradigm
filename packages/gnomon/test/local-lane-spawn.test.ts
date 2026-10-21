@@ -226,3 +226,39 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     }
   });
 });
+
+describe('Aegis L1 / L2 + TD-2026-10-21-077 (LocalLane env and profile extras)', () => {
+  async function capture(identity: { user?: string; tmpdir?: string; home?: string }, withUserHome: boolean) {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    srv = await fakeOpenAI({ tools: true, script: [{ content: 'ok' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    let seen: { tmpdir: string; home: string } | null = null;
+    const lane = new LocalLane({
+      log, children, fuse, home, ...(withUserHome ? { userHome: root } : {}), kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      env: () => ({ HOME: '/daemon-home-probe', PATH: '/daemon/path/probe', TMPDIR: '/daemon-tmp-probe/' }),
+      identity, sessionPath: '/cfg/bin:/usr/bin:/bin',
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => {
+        seen = { tmpdir: i.extras.tmpdir, home: i.extras.home };
+        throw new Error('captured (test stops before the spawn)');
+      },
+    });
+    await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => { throw new Error('claude must not be opened'); }).catch(() => undefined);
+    return seen as { tmpdir: string; home: string } | null;
+  }
+  it('L1: no OS TMPDIR ⇒ the screen deny dir is the literal /private/tmp, never the daemon TMPDIR; an OS TMPDIR is used as given', async () => {
+    expect((await capture({ user: 'a' }, true))?.tmpdir).toBe('/private/tmp');
+    expect((await capture({ user: 'a', tmpdir: '/var/folders/zz/T/' }, true))?.tmpdir).toBe('/var/folders/zz/T/');
+  });
+  it('L2: with no userHome seam the user home is the OS identity home, never the daemon $HOME', async () => {
+    const r = await capture({ user: 'a', home: '/os-home-probe' }, false);
+    expect(r?.home).toBe('/os-home-probe');
+  });
+});

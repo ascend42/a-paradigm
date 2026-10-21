@@ -930,6 +930,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(localCfg.config ? { local: localCfg.config } : {}),
     // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
     hooksMode: fuseCfg.sessions.hooks,
+    // TD-2026-10-21-077: the session PATH — the root-signed `config.sessions.path`, else the built-in default; never the daemon PATH
+    sessionPath: fuseCfg.sessions.path,
     // P8-D94: per-hook decisions, read back from KERNEL-signed gate-class.decided rows only (the last one per hook wins)
     repoHookDecisions: (repoKey, setHash) =>
       repoHookDecisionsFrom(
