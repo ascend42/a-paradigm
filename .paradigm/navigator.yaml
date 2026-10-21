@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T15:32:17.951Z'
+generated: '2026-10-21T20:21:44.104Z'
 structure: {}
 key_files:
   config:
@@ -279,6 +279,10 @@ symbols:
   '#purpose-component-gui-wordmark-menu': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-voice-ladder': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-voice-settings': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-chip': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-type': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-space-radius': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-toast': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-composer': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-settings': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gnomon-helper': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-helper/.purpose
@@ -1429,6 +1433,11 @@ symbols:
   '#purpose-ref-component-voice-caption': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-conn': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-risk': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-toasts': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-repin': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-voice-dev': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-toast-say': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-toast-alert': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-gui-voice-settings.': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   $purpose-ref-flow-XDG_RUNTIME_DIR: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-ref-flow-RUNNER_TEMP: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
@@ -2083,6 +2092,10 @@ symbolsByComponentType:
     - '#gui-wordmark-menu'
     - '#gui-voice-ladder'
     - '#gui-voice-settings'
+    - '#gui-chip'
+    - '#gui-type'
+    - '#gui-space-radius'
+    - '#gui-toast'
     - '#gui-composer'
     - '#gui-settings'
     - '#gnomon-helper'

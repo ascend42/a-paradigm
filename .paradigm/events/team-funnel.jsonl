@@ -114,3 +114,11 @@
 {"timestamp":"2026-10-21T15:09:50Z","type":"eligible","source":"prompt-gate","matched":"fix "}
 {"timestamp":"2026-10-21T15:29:53Z","type":"eligible","source":"prompt-gate","matched":"Implement"}
 {"timestamp":"2026-10-21T15:31:14Z","type":"eligible","source":"prompt-gate","matched":"build "}
+{"timestamp":"2026-10-21T15:32:45Z","type":"eligible","source":"prompt-gate","matched":"build "}
+{"timestamp":"2026-10-21T15:39:05Z","type":"eligible","source":"prompt-gate","matched":"fix "}
+{"timestamp":"2026-10-21T17:19:56Z","type":"eligible","source":"prompt-gate","matched":"FIX "}
+{"timestamp":"2026-10-21T18:47:57Z","type":"eligible","source":"prompt-gate","matched":"fix "}
+{"timestamp":"2026-10-21T18:53:21Z","type":"edit-advisory","source":"team-gate","file":"mh-shoot.mjs"}
+{"timestamp":"2026-10-21T18:56:35Z","type":"eligible","source":"prompt-gate","matched":"build "}
+{"timestamp":"2026-10-21T20:12:22Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
+{"timestamp":"2026-10-21T20:12:37.078Z","type":"solo-declared","source":"cli","reason":"user-directed","note":"Founder-reported Dictate bug; team engaged directly via builder + Aegis subagents, not orchestrate_inline"}
