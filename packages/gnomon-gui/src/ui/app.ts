@@ -1819,7 +1819,10 @@ function paintVoice(): void {
   btn.className = cp.tail !== null ? [...new Set(`${p.className} ${cp.className}`.split(' '))].join(' ') : p.className;
   btn.title = cp.tail !== null ? `${p.title} ${cp.title}` : p.title;
   btn.dataset.state = p.state;
-  put($('voice-label'), p.label);
+  // privacy (Aegis): with the bare ` mic key on, the pill always says when the mic is live
+  const bareLive = micKeyBareOf(status) && (status as { voice?: { micWanted?: unknown } } | null)?.voice?.micWanted !== false && v.state !== 'off';
+  put($('voice-label'), bareLive ? `${p.label} · mic live` : p.label);
+  btn.classList.toggle('mic-live', bareLive);
   put($('voice-target'), p.target ? `· ${p.target}` : '');
   if (cp.label !== null) {
     btn.className = `voice-pill kernel-owned ${cp.className}`;
