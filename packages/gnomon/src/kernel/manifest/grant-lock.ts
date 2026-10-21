@@ -3,7 +3,7 @@
  *
  * #manifest-loader root-row write discipline (TD-2026-10-20-514, Aegis C5):
  *
- *   withHomeFileLock   a CROSS-PROCESS lock file (`<home>/<name>.lock`, O_CREAT|O_EXCL, holder pid inside) around
+ *   withHomeFileLock   a CROSS-PROCESS lock file (`<home>/<name>.lock`, taken by hard-linking a temp file holding pid:nonce, Aegis L1; O_EXCL where links are unsupported) around
  *                      re-check + write + fsync + read-back of an append-only root-signed file (grants.jsonl,
  *                      voice/enrolments.jsonl). The daemon and CLI `once` writers take the same lock. A holder
  *                      whose pid is gone is a stale lock; an empty holder (being created) is live for 10 s. A stale
@@ -35,7 +35,7 @@ function alive(pid: number): boolean {
   }
 }
 
-/** Aegis F1: an empty or unparsable holder is a lock being created (O_EXCL open, then its write): live this long. */
+/** Aegis F1/L1: an unparsable holder (only on the no-hard-link fallback, between O_EXCL open and write): live this long. */
 export const LOCK_UNWRITTEN_GRACE_MS = 10_000;
 
 /** Test seams for withHomeFileLock (never set in production). */
@@ -52,19 +52,20 @@ function holderPid(content: string): number {
 
 /**
  * Break a stale lock without ever deleting a live one (Aegis F1): rename it to a unique name, then confirm that what
- * was moved is the SAME file judged stale (inode + content). Anything else (another breaker removed it and a live
- * holder created a fresh one in between) is put back with a no-clobber link and left alone.
+ * was moved is the SAME lock judged stale. Every holder writes a unique pid:nonce (L1), so equal content is the same
+ * acquisition; anything else (another breaker removed it and a live holder linked a fresh one in between) is put back
+ * with a no-clobber link and left alone.
  */
-function breakStale(file: string, seen: { ino: number; content: string }): void {
+function breakStale(file: string, seen: string): void {
   const moved = `${file}.stale-${process.pid}-${randomBytes(6).toString('hex')}`;
   try {
     fs.renameSync(file, moved);
   } catch {
-    return; // gone already: the caller retries the open
+    return; // gone already: the caller retries
   }
   let same = false;
   try {
-    same = fs.statSync(moved).ino === seen.ino && fs.readFileSync(moved, 'utf8') === seen.content;
+    same = fs.readFileSync(moved, 'utf8') === seen;
   } catch {
     same = false;
   }
@@ -78,42 +79,67 @@ function breakStale(file: string, seen: { ino: number; content: string }): void 
   fs.rmSync(moved, { force: true });
 }
 
+/** Link errors meaning "this filesystem has no hard links": the O_EXCL fallback is used. */
+const NO_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV', 'EINVAL']);
+
+/**
+ * Aegis L1: take the lock in ONE atomic step that never overwrites. The holder's complete pid:nonce is written to a
+ * private temp file, then hard-linked as the lock (link fails with EEXIST if it exists), so the lock is never
+ * seen empty. On a filesystem without hard links: O_EXCL create + write (an empty holder is then live for
+ * LOCK_UNWRITTEN_GRACE_MS). Returns false when the lock is held.
+ */
+function tryAcquire(file: string, me: string): boolean {
+  const tmp = `${file}.${process.pid}-${randomBytes(6).toString('hex')}.tmp`;
+  fs.writeFileSync(tmp, me, { mode: 0o600, flag: 'wx' });
+  try {
+    fs.linkSync(tmp, file);
+    return true;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code ?? '';
+    if (code === 'EEXIST') return false;
+    if (!NO_LINKS.has(code)) throw e;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+  try {
+    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+    try {
+      fs.writeSync(fd, me);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return true;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw e;
+  }
+}
+
 /** Run `fn` holding the cross-process lock `<home>/<name>.lock`. Throws GRANT{busy} after LOCK_WAIT_MS. */
 export function withHomeFileLock<T>(home: string, name: string, fn: () => T, opts: LockOptions = {}): T {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
   const file = path.join(home, `${name}.lock`);
   const me = `${process.pid}:${randomBytes(8).toString('hex')}`; // unique per acquisition, so release removes only its own
   const deadline = Date.now() + (opts.waitMs ?? LOCK_WAIT_MS);
-  for (;;) {
+  while (!tryAcquire(file, me)) {
+    let content: string;
+    let st: fs.Stats;
     try {
-      const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
-      try {
-        fs.writeSync(fd, me);
-      } finally {
-        fs.closeSync(fd);
-      }
-      break;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-      let content: string;
-      let st: fs.Stats;
-      try {
-        st = fs.statSync(file);
-        content = fs.readFileSync(file, 'utf8');
-      } catch {
-        continue; // released between open and read
-      }
-      const holder = holderPid(content);
-      // Aegis F1: no pid yet (between the holder's O_EXCL open and its write) is LIVE until the file is old
-      const stale = Number.isNaN(holder) ? Date.now() - st.mtimeMs > LOCK_UNWRITTEN_GRACE_MS : !alive(holder);
-      if (stale) {
-        opts.beforeBreak?.(file);
-        breakStale(file, { ino: st.ino, content });
-        continue;
-      }
-      if (Date.now() >= deadline) throw new ManifestRefusal('GRANT', `${name} is being written by another process (${Number.isNaN(holder) ? 'a lock being created' : `pid ${holder}`}); try again`, { lock: name, busy: true });
-      Atomics.wait(sleeper, 0, 0, LOCK_STEP_MS);
+      st = fs.statSync(file);
+      content = fs.readFileSync(file, 'utf8');
+    } catch {
+      continue; // released between the link and the read
     }
+    const holder = holderPid(content);
+    // an unparsable holder exists only on the no-hard-link fallback (between its O_EXCL open and its write): live while young
+    const stale = Number.isNaN(holder) ? Date.now() - st.mtimeMs > LOCK_UNWRITTEN_GRACE_MS : !alive(holder);
+    if (stale) {
+      opts.beforeBreak?.(file);
+      breakStale(file, content);
+      continue;
+    }
+    if (Date.now() >= deadline) throw new ManifestRefusal('GRANT', `${name} is being written by another process (${Number.isNaN(holder) ? 'a lock being created' : `pid ${holder}`}); try again`, { lock: name, busy: true });
+    Atomics.wait(sleeper, 0, 0, LOCK_STEP_MS);
   }
   try {
     return fn();

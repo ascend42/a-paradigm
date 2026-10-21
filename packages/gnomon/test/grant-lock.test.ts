@@ -1,7 +1,8 @@
 /**
- * Aegis F1 (TD-2026-10-20-514): the cross-process lock is never broken while live. An empty holder (between the
- * holder's O_EXCL open and its write) is live until it is older than LOCK_UNWRITTEN_GRACE_MS; a stale lock is broken
- * by rename + re-check, so a second breaker never deletes the fresh lock a live holder took meanwhile.
+ * Aegis F1 + L1 (TD-2026-10-20-514): the cross-process lock is never broken while live. It is taken by hard-linking
+ * a temp file that already holds pid:nonce (never seen empty, never overwrites); an unparsable holder (only on the
+ * no-hard-link O_EXCL fallback) is live until older than LOCK_UNWRITTEN_GRACE_MS; a stale lock is broken by rename +
+ * content re-check, so a second breaker never deletes the fresh lock a live holder took meanwhile.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -69,6 +70,16 @@ describe('Aegis F1: withHomeFileLock', () => {
     expect(ran).toBe(false);
     expect(fs.readFileSync(file, 'utf8')).toBe(fresh);
     expect(fs.readdirSync(home).sort()).toEqual(['grants.lock']);
+  });
+
+  it('L1: the lock is linked whole (pid:nonce, never empty) and no temp file is left, held or released', () => {
+    const home = tmp();
+    const file = path.join(home, 'grants.lock');
+    withHomeFileLock(home, 'grants', () => {
+      expect(fs.readFileSync(file, 'utf8')).toMatch(new RegExp(`^${process.pid}:[0-9a-f]{16}$`));
+      expect(fs.readdirSync(home)).toEqual(['grants.lock']);
+    });
+    expect(fs.readdirSync(home)).toEqual([]);
   });
 
   it('release removes only its own lock', () => {
