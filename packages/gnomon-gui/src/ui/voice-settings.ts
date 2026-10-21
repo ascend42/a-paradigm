@@ -8,7 +8,8 @@
  *
  *   - The pill's popover is the ladder only (role menu, rungs are menuitemradio), a foot line with the mic key and
  *     the listen mode, and a "voice settings…" link. A rung that is not ready opens the sheet at its section.
- *   - The sheet is a right-side drawer (role dialog): your voice, send word, keys, listen, timing, risk. Teaching
+ *   - The sheet is a right-side drawer (role dialog, aria-modal: Tab stays inside it while open, trapNext, and focus
+ *     returns to where it came from on close): your voice, send word, keys, listen, timing, risk. Teaching
  *     opens inline under its row (one prompt, a live "I heard", one counter, then the risk check right before save:
  *     the sentence naming the word, then the ACK_TEXT box, or "acknowledged · <date>" once this user acknowledged);
  *     there is no modal over the sheet.
@@ -216,6 +217,21 @@ export function sheetKey(v: SheetView): string {
 
 /* ── mounting ──────────────────────────────────────────────────────── */
 
+/**
+ * Luna #11: the drawer is aria-modal, so Tab stays inside it. Given the sheet's focusable controls in order, the one
+ * focused now and the direction, where focus must go instead of leaving (wrapping at either end, or entering from
+ * outside), or null to let the browser move it.
+ */
+export function trapNext<T>(items: readonly T[], active: T | null, back: boolean): T | null {
+  if (!items.length) return null;
+  const i = active === null ? -1 : items.indexOf(active);
+  if (i < 0) return back ? items[items.length - 1]! : items[0]!;
+  if (back && i === 0) return items[items.length - 1]!;
+  if (!back && i === items.length - 1) return items[0]!;
+  return null;
+}
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
 export interface VoiceSheetDeps {
   view: () => SheetView;
   /** a press in the sheet: the action and its value; `trusted` is the browser's flag (G-GUI-04) */
@@ -237,6 +253,7 @@ export interface VoiceSheet {
 export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceSheet {
   const overlay = document.getElementById('voice-settings')!;
   const body = document.getElementById('voice-settings-body')!;
+  const card = (overlay.querySelector('.voice-sheet') as HTMLElement | null) ?? overlay;
   let back: HTMLElement | null = null;
   let shown = '';
   const repaint = (force = false): void => {
@@ -311,6 +328,18 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
     } else if (t.dataset.vsEnrolName !== undefined) {
       e.preventDefault();
       d.act('enrol', 'go', e.isTrusted);
+    }
+  });
+  // Luna #11: Tab is trapped inside the open drawer (aria-modal); closing hands focus back to where it came from
+  // (on the document, so a focus that fell outside the drawer, e.g. to the page after a repaint, is brought back too)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || overlay.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const items = [...card.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    const a = document.activeElement as HTMLElement | null;
+    const to = trapNext(items, a && card.contains(a) ? a : null, e.shiftKey);
+    if (to) {
+      e.preventDefault();
+      to.focus();
     }
   });
   document.getElementById('voice-settings-close')?.addEventListener('click', close);

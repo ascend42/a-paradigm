@@ -15,7 +15,7 @@ import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../
 import { enrolStart } from '../src/core/voice-client.js';
 import { ACK_TEXT, CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
 import { renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
-import { ladderEls, sheetEls, sheetKey, type SheetView } from '../src/ui/voice-settings.js';
+import { ladderEls, sheetEls, sheetKey, trapNext, type SheetView } from '../src/ui/voice-settings.js';
 import { voiceStatusOf } from '../src/core/voice.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -193,6 +193,11 @@ describe('the ladder replaces the pill menu (design-system gnomon.voice.model)',
     expect(APP).toMatch(/e\.key === 'Escape' && !\$\('voice-menu'\)\.hidden\) \{\s*closeVoiceMenu\(true\);/);
     expect(APP).toMatch(/e\.key === 'Escape' && voiceSheet\.isOpen\(\)\) \{\s*voiceSheet\.close\(\);/);
     expect(HTML).toMatch(/<div id="voice-settings" class="overlay vs-drawer" hidden>\s*<div class="sheet-card settings-card voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-settings-title">/);
+    // Luna #11: aria-modal is kept true, so Tab is trapped inside the drawer and focus returns on close
+    const VS = readFileSync(path.join(ROOT, 'src', 'ui', 'voice-settings.ts'), 'utf8');
+    expect(VS).toMatch(/document\.addEventListener\('keydown', \(e\) => \{\s*if \(e\.key !== 'Tab' \|\| overlay\.hidden/);
+    expect(VS).toMatch(/const to = trapNext\(items, a && card\.contains\(a\) \? a : null, e\.shiftKey\);\s*if \(to\) \{\s*e\.preventDefault\(\);\s*to\.focus\(\);/);
+    expect(VS).toMatch(/d\.onClose\(\);\s*back\?\.focus\(\);/);
     expect(CSS).toMatch(/\.rung:focus-visible \{ outline: 2px solid var\(--key-edge\)/);
     expect(CSS).toMatch(/\.link:focus-visible \{ outline: 2px solid var\(--key-edge\)/);
     // kernel-owned: no layout preset can hide the pill
@@ -421,5 +426,18 @@ describe('labels: spoken · sent by …, edits ask first, the chip and the card 
   it('reduced motion: the meters only follow the real level and every transition is instant', () => {
     expect(CSS).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}transition: none !important/);
     expect(CSS).not.toMatch(/\.(rung|voice-ladder|vs-[a-z-]+)[^{]*\{[^}]*animation/);
+  });
+});
+
+describe('the Voice settings drawer traps Tab (Luna #11)', () => {
+  it('wraps at either end, enters from outside, and leaves the middle to the browser', () => {
+    const items = ['close', 'teach', 'save'];
+    expect(trapNext(items, 'save', false)).toBe('close'); // Tab off the last wraps to the first
+    expect(trapNext(items, 'close', true)).toBe('save'); // ⇧Tab off the first wraps to the last
+    expect(trapNext(items, 'teach', false)).toBeNull();
+    expect(trapNext(items, 'teach', true)).toBeNull();
+    expect(trapNext(items, null, false)).toBe('close'); // focus outside the drawer comes back in
+    expect(trapNext(items, 'elsewhere', true)).toBe('save');
+    expect(trapNext([], null, false)).toBeNull();
   });
 });
