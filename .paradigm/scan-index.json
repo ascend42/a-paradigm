@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-af407996e098e9f08",
-    "generatedAt": "2026-10-21T06:07:32.307Z",
+    "generatedAt": "2026-10-21T06:19:01.419Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -13633,6 +13633,59 @@
         }
       ]
     },
+    "send-by-word": {
+      "id": "send-by-word",
+      "name": "Send By Word",
+      "symbol": "$send-by-word",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af407996e098e9f08/packages/gnomon/.purpose",
+      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway.",
+      "steps": [
+        {
+          "id": "send-by-word-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "send-by-word-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "send-by-word-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "send-by-word-step-3",
+          "name": "Step 4",
+          "order": 3
+        }
+      ]
+    },
+    "send-by-pieces": {
+      "id": "send-by-pieces",
+      "name": "Send By Pieces",
+      "symbol": "$send-by-pieces",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af407996e098e9f08/packages/gnomon/.purpose",
+      "description": "$send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's pieces send ceiling (voice.session.start{send:'pieces'}, one fresh presence per GUI login, refused at strictness L2 or above) → the GUI batches finalized segments by gap/cap (1500 / 8000 ms) and holds while the session is busy → request.voice.send.claim{by:'piece', turnSeqs} → session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the piece guidance note on the per-turn guidance block → ^voice-origin-clamp.",
+      "steps": [
+        {
+          "id": "send-by-pieces-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "send-by-pieces-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "send-by-pieces-step-2",
+          "name": "Step 3",
+          "order": 2
+        }
+      ]
+    },
     "offer-handoff": {
       "id": "offer-handoff",
       "name": "Offer Handoff",
@@ -15207,6 +15260,19 @@
       "description": "File path passes trust config deny-lists and auto-approve globs",
       "related": []
     },
+    "voice-origin-clamp": {
+      "id": "voice-origin-clamp",
+      "name": "Voice Origin Clamp",
+      "symbol": "^voice-origin-clamp",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af407996e098e9f08",
+      "description": "Gnomon voice-origin clamp (spec §14.7 \"Voice submodes\", TD-2026-10-21-514): while a turn sent by a spoken send word or as a piece is outstanding, nothing write-capable auto-passes (no auto-edits pass, no always rule); only provably read-only commands pass; every other tool call raises a card marked origin voice, and approving it by voice needs readback + confirm.",
+      "related": [
+        "#supervisor",
+        "#shell-readonly",
+        "#approval-broker"
+      ]
+    },
     "offer-accept": {
       "id": "offer-accept",
       "name": "Offer Accept",
@@ -15896,6 +15962,18 @@
       "description": "Completed/failed tasks archived to JSONL and removed from active store",
       "related": [
         "#task-store"
+      ]
+    },
+    "voice-clamp-applied": {
+      "id": "voice-clamp-applied",
+      "name": "Voice Clamp Applied",
+      "symbol": "!voice-clamp-applied",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af407996e098e9f08/packages/gnomon/.purpose",
+      "description": "!voice-clamp-applied (TD-2026-10-21-514): a permission request was raised under ^voice-origin-clamp. Carried as clamp:'voice' on the answer's session.inject{channel:'permission'} row (an opaque payload field, no new log kind, so clientApiId does not move) and as detail.origin 'voice' on the card; the supervisor logs it on the #supervisor component.",
+      "related": [
+        "^voice-origin-clamp",
+        "#supervisor"
       ]
     },
     "log-emitted": {
@@ -22901,6 +22979,10 @@
       "category": "gates",
       "id": "^file-request-allowed"
     },
+    "^voice-origin-clamp": {
+      "category": "gates",
+      "id": "voice-origin-clamp"
+    },
     "^offer-accept": {
       "category": "gates",
       "id": "offer-accept"
@@ -23048,6 +23130,14 @@
     "$voice-turn": {
       "category": "flows",
       "id": "voice-turn"
+    },
+    "$send-by-word": {
+      "category": "flows",
+      "id": "send-by-word"
+    },
+    "$send-by-pieces": {
+      "category": "flows",
+      "id": "send-by-pieces"
     },
     "$offer-handoff": {
       "category": "flows",
@@ -23396,6 +23486,10 @@
     "!!tasks-archived": {
       "category": "signals",
       "id": "!tasks-archived"
+    },
+    "!voice-clamp-applied": {
+      "category": "signals",
+      "id": "voice-clamp-applied"
     },
     "!log-emitted": {
       "category": "signals",

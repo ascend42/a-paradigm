@@ -34,6 +34,11 @@ import type { VoiceAttribution } from '../voice/voice-control.js';
 export interface VoiceAttributionPort {
   attributeHumanSend(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
   releaseAttribution(attr: VoiceAttribution): void;
+  /**
+   * TD-2026-10-21-514: the origin of this human voice send — the connection's live request.voice.send.claim, or the
+   * fail-closed backstop (a pending send-word turn). null ⇒ hand. Never throws.
+   */
+  originFor?(connId: string | undefined, human: string, hsid: string): { sentBy: 'word' | 'piece' } | null;
 }
 
 export interface SessionCallContext {
@@ -116,6 +121,15 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
       gateResumed(sup, ctx, p.hsid, 'session.send');
       let attr: VoiceAttribution | null = null;
+      // TD-2026-10-21-514: a voice send's origin (hand unless claimed by send word / as a piece, or the backstop)
+      let origin: { sentBy: 'word' | 'piece' } | null = null;
+      if (p.source === 'voice' && voice?.originFor) {
+        try {
+          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid);
+        } catch {
+          origin = { sentBy: 'word' }; // fail closed: an origin check that throws clamps the turn
+        }
+      }
       if (p.source === 'voice' && voice) {
         try {
           attr = voice.attributeHumanSend(ctx.principal, p.hsid, texts as string[]);
@@ -125,7 +139,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       }
       const text = texts.join(attr?.source === 'voice' ? ' ' : '\n');
       try {
-        return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}) });
+        return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}), ...(origin ? { voiceOrigin: origin } : {}) });
       } catch (err) {
         if (attr) voice?.releaseAttribution(attr);
         throw err;

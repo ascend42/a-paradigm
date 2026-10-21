@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-21T06:07:32.339Z",
+  "generatedAt": "2026-10-21T06:19:01.452Z",
   "flows": {
     "$voice-turn": {
       "id": "$voice-turn",
@@ -18,6 +18,55 @@
         }
       ],
       "definedIn": "packages/gnomon-voice/.purpose"
+    },
+    "$send-by-word": {
+      "id": "$send-by-word",
+      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#gui-dictation",
+          "symbol": "#gui-dictation"
+        },
+        {
+          "id": "step-2",
+          "action": "#gnomon-voice",
+          "symbol": "#gnomon-voice"
+        },
+        {
+          "id": "step-3",
+          "action": "#send-word-matcher",
+          "symbol": "#send-word-matcher"
+        },
+        {
+          "id": "step-4",
+          "action": "#supervisor",
+          "symbol": "#supervisor"
+        }
+      ],
+      "definedIn": "packages/gnomon/.purpose"
+    },
+    "$send-by-pieces": {
+      "id": "$send-by-pieces",
+      "description": "$send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's pieces send ceiling (voice.session.start{send:'pieces'}, one fresh presence per GUI login, refused at strictness L2 or above) → the GUI batches finalized segments by gap/cap (1500 / 8000 ms) and holds while the session is busy → request.voice.send.claim{by:'piece', turnSeqs} → session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the piece guidance note on the per-turn guidance block → ^voice-origin-clamp.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#gui-dictation",
+          "symbol": "#gui-dictation"
+        },
+        {
+          "id": "step-2",
+          "action": "#gnomon-voice",
+          "symbol": "#gnomon-voice"
+        },
+        {
+          "id": "step-3",
+          "action": "#supervisor",
+          "symbol": "#supervisor"
+        }
+      ],
+      "definedIn": "packages/gnomon/.purpose"
     },
     "$offer-handoff": {
       "id": "$offer-handoff",
@@ -864,10 +913,23 @@
   },
   "symbolToFlows": {
     "#gnomon-voice": [
-      "$voice-turn"
+      "$voice-turn",
+      "$send-by-word",
+      "$send-by-pieces"
     ],
     "#gnomon-voice-io": [
       "$voice-turn"
+    ],
+    "#gui-dictation": [
+      "$send-by-word",
+      "$send-by-pieces"
+    ],
+    "#send-word-matcher": [
+      "$send-by-word"
+    ],
+    "#supervisor": [
+      "$send-by-word",
+      "$send-by-pieces"
     ],
     "#desk-guidance": [
       "$offer-handoff"

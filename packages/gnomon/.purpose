@@ -3548,6 +3548,34 @@ components:
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]
 flows:
+  send-by-word:
+    description: >-
+      $send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends
+      the spoken send word as its own voice.turn.user (short words by
+      adjacency: speakerBasis 'adjacent', accepted only under 1500 ms,
+      matching, within 2 s of / pending with the draft speaker) → the kernel
+      stamps isWord at receipt (#send-word-matcher, never the text) → the GUI
+      (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the
+      1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked,
+      consumed atomically, bound to the connection for 5 s) →
+      session.send{source:'voice'} gets origin 'voice', sentBy 'word' →
+      ^voice-origin-clamp until its turn.result. Backstop: an unclaimed
+      pending word turn stamps voice anyway.
+    steps: ["#gui-dictation", "#gnomon-voice", "#send-word-matcher", "#supervisor"]
+    tags: [gnomon, voice]
+    oracles: [G-VOX-20, G-VOX-20b]
+  send-by-pieces:
+    description: >-
+      $send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's
+      pieces send ceiling (voice.session.start{send:'pieces'}, one fresh
+      presence per GUI login, refused at strictness L2 or above) → the GUI
+      batches finalized segments by gap/cap (1500 / 8000 ms) and holds while
+      the session is busy → request.voice.send.claim{by:'piece', turnSeqs} →
+      session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the
+      piece guidance note on the per-turn guidance block → ^voice-origin-clamp.
+    steps: ["#gui-dictation", "#gnomon-voice", "#supervisor"]
+    tags: [gnomon, voice]
+    oracles: [G-VOX-21]
   offer-handoff:
     description: >-
       $offer-handoff (TD-2026-10-20-812, spec §12.9): a reply ends with one
@@ -3840,6 +3868,23 @@ flows:
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 gates:
+  voice-origin-clamp:
+    description: >-
+      ^voice-origin-clamp (TD-2026-10-21-514, spec §14.7 "Voice submodes";
+      src/kernel/supervisor/voice-clamp.ts): every turn.sent carries a
+      kernel-stamped origin (hand | voice, sentBy word | piece). While a
+      voice-origin turn is outstanding (turn.sent to the turn.result that
+      closes it; never closed ⇒ until the session ends) #supervisor skips the
+      auto-edits pass and every always rule (exact and prefix); only the
+      *:read-only modeRefs (#shell-readonly) still pass (clampAllows, default
+      deny for any new modeRef). Every other tool call raises a card with
+      detail.origin 'voice', detail.sentBy and the line "Asked during a
+      voice-sent turn (…). Check this was you."; #approval-broker refuses a
+      by-voice approve of such a card without readback + confirm
+      (voice-readback-missing, cause voice-origin-confirm); deny unchanged.
+    prizes: []
+    tags: [gnomon, voice, security]
+    oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
   offer-accept:
     description: >-
       ^offer-accept (TD-2026-10-20-812, spec §12.9; Aegis D1): request.offer.decide
@@ -3884,6 +3929,18 @@ gates:
     tags: [gnomon, law-7, billing, paradigm-8, m1.6]
     oracles: [G-SUB-02, G-SUB-03, G-SUB-04]
 
+signals:
+  voice-clamp-applied:
+    description: >-
+      !voice-clamp-applied (TD-2026-10-21-514): a permission request was
+      raised under ^voice-origin-clamp. Carried as clamp:'voice' on the
+      answer's session.inject{channel:'permission'} row (an opaque payload
+      field, no new log kind, so clientApiId does not move) and as
+      detail.origin 'voice' on the card; the supervisor logs it on the
+      #supervisor component.
+    emitters: ["#supervisor"]
+    tags: [gnomon, voice, security]
+    oracles: [G-VOX-17]
 aspects:
   ~ample-internal-logs:
     description: >-

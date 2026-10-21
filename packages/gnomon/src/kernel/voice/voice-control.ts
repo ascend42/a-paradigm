@@ -66,9 +66,25 @@
  *   decision/control turn is never forwarded) · voice-echo (t0 inside a playback window + tail) · voice-off
  *   (a turn above the attachment's ceiling, or an ambient turn without aec) · voice-playback (V2a: the model is busy
  *   by the kernel's clock) · a stop without interrupt ⇒ BAD_REQUEST{bad-params}.
+ *
+ * Voice submodes (TD-2026-10-21-514, spec §14.7 "Voice submodes"; $send-by-word, $send-by-pieces):
+ *   - the kernel HOLDS the send word (request.voice.sendword; persisted by the daemon at ~/.gnomon/voice/send-word.json)
+ *     and stamps, at receipt, whether each accepted turn IS the send word (#send-word-matcher; never its text);
+ *   - short words by ADJACENCY: a voice.turn.user{speakerBasis:'adjacent'} is accepted only when it is under
+ *     SEND_WORD_SHORT_MS, is the held send word, and starts within SEND_WORD_ADJACENT_MS of a forwardable turn of that
+ *     speaker or while that speaker's draft turns are pending; else it is refused voice-speaker at receipt (hash only);
+ *   - request.voice.send.claim{hsid, by, turnSeq|turnSeqs} (human, gui/device): checks and CONSUMES the cited turns
+ *     atomically (a second tab gets voice-stale-utterance) and binds {connId, hsid, by, expiresAt: now + 5 s};
+ *     originFor() hands the binding to the next session.send{source:'voice'} of that connection, which gets
+ *     origin 'voice' + sentBy (and the supervisor's clamp). An expired claim is dropped. Backstop (fail closed): a voice
+ *     send while an unclaimed pending turn of the attachment is the send word is stamped origin 'voice' anyway;
+ *   - the attachment's SEND CEILING (voice.session.start{send?}): key (default) < word < pieces; word and pieces need a
+ *     conversation ceiling; pieces takes one fresh presence per GUI login (the voice.widen strictness card with
+ *     send:'pieces') and is refused voice-strictness at strictness L2 or above.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, isSendWord, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -93,6 +109,12 @@ export function ambientIdleMsOf(v: unknown): number {
   return Math.min(VOICE_AMBIENT_IDLE_MAX_MS, Math.max(VOICE_AMBIENT_IDLE_MIN_MS, Math.floor(v)));
 }
 export const VOICE_MODES_V1 = ['ptt', 'conversation'] as const;
+/** TD-2026-10-21-514: the attachment's send ceiling, in widening order */
+export const VOICE_SEND_CEILINGS = ['key', 'word', 'pieces'] as const;
+export type VoiceSendCeiling = (typeof VOICE_SEND_CEILINGS)[number];
+const sendRank = (c: VoiceSendCeiling): number => VOICE_SEND_CEILINGS.indexOf(c);
+/** at most this many turns per piece claim */
+export const PIECE_CLAIM_MAX_TURNS = 64;
 export type VoiceMode = (typeof VOICE_MODES_V1)[number];
 
 const SPEAKER_ID = /^spk:(?:[0-9a-z]{8}\/[a-z0-9][a-z0-9._-]{0,63}|unknown-[1-9][0-9]{0,5})$/;
@@ -140,6 +162,8 @@ export interface VoicePresenceRequest {
   hsid: string;
   from: VoiceMode | null;
   to: 'conversation';
+  /** TD-2026-10-21-514: the card also grants the pieces send ceiling (detail.send 'pieces') */
+  send?: 'pieces';
   /** run on allow (after Touch ID); rejects if the attachment could not be made */
   onAllow: () => Promise<void>;
 }
@@ -235,6 +259,10 @@ export interface VoiceControlOptions {
   presenceState?: (cardId: string) => string | undefined;
   /** V2a M2: the kernel's idle end row could not be written (daemon: diagnostics + a kernel log row) */
   onIdleEndFailed?: (err: unknown) => void;
+  /** TD-2026-10-21-514: the held send word's source (daemon: <home>/voice/send-word.json via a stat-keyed cache) */
+  sendWordSource?: () => SendWord | null;
+  /** TD-2026-10-21-514: the strictness level of the session's repo (pieces is refused at L2 or above); absent ⇒ not built */
+  strictnessLevel?: (hsid: string) => string | null;
   /** V2a: arm the idle timer (default setTimeout, unref'd); tests drive checkIdle() instead */
   setTimer?: (fn: () => void, ms: number) => { clear(): void };
 }
@@ -260,6 +288,8 @@ interface UserTurn {
   aec: string | undefined;
   /** V2a: refused at receipt (stored without text): never forwardable */
   refused: RefusedError | undefined;
+  /** TD-2026-10-21-514: the whole utterance is the held send word (#send-word-matcher at receipt; the text is not kept) */
+  isWord: boolean;
 }
 interface Attachment {
   voiceSessionId: string;
@@ -273,6 +303,8 @@ interface Attachment {
   lastForwardAt: number;
   /** the first-party connection that attached (its presence grant) */
   connId: string;
+  /** TD-2026-10-21-514: the send ceiling (key unless the human attached with send word or pieces) */
+  send: VoiceSendCeiling;
 }
 
 export function voiceRefusal(reason: string, message: string, data: Record<string, unknown> = {}, code: RefusalCode = 'FORBIDDEN'): RefusedError {
@@ -290,7 +322,7 @@ export function turnIdAfter(next: string, prev: string | undefined): boolean {
 }
 
 /** V2a: the fields a hash-only voice.turn.user row keeps (no text, no free-form client field). */
-const HASH_ONLY_KEEP = ['turnId', 'speakerId', 'speakerEnrolled', 't0', 't1', 'mode', 'aec', 'intercepted', 'asrModel', 'confidence', 'speakerScore', 'gatedSpeechMs'];
+const HASH_ONLY_KEEP = ['turnId', 'speakerId', 'speakerEnrolled', 't0', 't1', 'mode', 'aec', 'intercepted', 'asrModel', 'confidence', 'speakerScore', 'gatedSpeechMs', 'speakerBasis'];
 /**
  * Calibration (voice drops fix 2026-10-20): the client's speaker-verification score, COARSE (a bucket, never the
  * number), and how much speech survived its speech gate (ms, rounded to 10). Numbers only, no text, no audio; kept on
@@ -319,7 +351,7 @@ export class VoiceControl {
   /** V2a: first-party human connections that gave the widening presence (one GUI login each); dropped on close */
   readonly #widened = new Set<string>();
   /** V2a: a pending widening card per asking connection */
-  readonly #pendingWiden = new Map<string, { cardId: string; hsid: string }>();
+  readonly #pendingWiden = new Map<string, { cardId: string; hsid: string; send?: 'pieces' }>();
   /** connections with a widening card out that have not closed (a grant never lands on a closed login) */
   readonly #liveConn = new Set<string>();
   readonly #past = new Map<string, string>();
@@ -328,6 +360,14 @@ export class VoiceControl {
   #idleTimer: { clear(): void } | null = null;
   /** Aegis V2a M2: idle end rows that could not be written (surfaced in status.voice) */
   #idleEndFailures = 0;
+  /** TD-2026-10-21-514: the held send word (the daemon loads and persists it) */
+  #sendWord: SendWord | null = null;
+  /** first-party human connections that gave the pieces presence (one GUI login each) */
+  readonly #piecesGranted = new Set<string>();
+  /** turns cited by a live piece claim (a second claim citing one is stale) */
+  readonly #claimed = new Set<string>();
+  /** the one live send claim per human connection */
+  readonly #claims = new Map<string, { hsid: string; by: VoiceSentBy; expiresAt: number; turnIds: string[] }>();
 
   constructor(o: VoiceControlOptions) {
     this.#o = o;
@@ -365,6 +405,7 @@ export class VoiceControl {
       if (this.#userTurns.size <= VOICE_WINDOW_CAP && (t.receivedAt >= horizon || this.#pendingDictation(t))) continue;
       this.#userTurns.delete(id);
       this.#forwarded.delete(id);
+      this.#claimed.delete(id);
     }
     while (this.#playback.length > VOICE_WINDOW_CAP || (this.#playback.length > 0 && this.#playback[0]!.receivedAt < horizon)) this.#playback.shift();
   }
@@ -411,6 +452,9 @@ export class VoiceControl {
       echoTailMs: this.echoTailMs,
       ambientIdleMs: this.ambientIdleMs,
       idleEndFailures: { n: this.#idleEndFailures },
+      // TD-2026-10-21-514: the send ceiling and the held send word (voiceStatusFor shows sendWord to the human class only)
+      send: a?.send ?? null,
+      sendWord: ((w) => (w ? { text: w.text, variants: [...w.variants] } : null))(this.#word()),
       // V2e: an explicit boolean (never absent) plus the supervised child's phase for the GUI pill
       clientConnected: this.#o.clientStatus?.().clientConnected === true,
       ...(this.#o.clientStatus ? { client: this.#o.clientStatus() } : {}),
@@ -437,11 +481,16 @@ export class VoiceControl {
       return this.#end(a, asker.connId, asker.principal);
     }
     if (kind !== 'voice.session.start') throw new RefusedError(refuse({ code: 'FORBIDDEN', data: { reason: 'ungranted' } }), `#gnomon-voice: ${kind} is the voice principal's (§4.10)`);
-    const extra = Object.keys(p).filter((k) => k !== 'hsid' && k !== 'mode' && k !== 'continues');
-    if (extra.length) throw bad(`voice.session.start takes {hsid, mode?, continues?} from the human (unknown: ${extra.slice(0, 4).join(', ')})`);
+    const extra = Object.keys(p).filter((k) => k !== 'hsid' && k !== 'mode' && k !== 'continues' && k !== 'send');
+    if (extra.length) throw bad(`voice.session.start takes {hsid, mode?, continues?, send?} from the human (unknown: ${extra.slice(0, 4).join(', ')})`);
     if (typeof p.hsid !== 'string') throw bad('voice.session.start needs hsid');
     const mode = (p.mode ?? 'ptt') as VoiceMode;
     if (!VOICE_MODES_V1.includes(mode)) throw bad('mode is ptt or conversation');
+    // TD-2026-10-21-514: the send ceiling; word and pieces need ambient capture (a conversation ceiling)
+    const send = (p.send ?? 'key') as VoiceSendCeiling;
+    if (!VOICE_SEND_CEILINGS.includes(send)) throw bad('send is key, word or pieces');
+    if (send !== 'key' && mode !== 'conversation') throw bad('send word and pieces need mode conversation (ambient capture)');
+    if (send === 'pieces') this.#refusePiecesByLevel(p.hsid);
     if (p.continues !== undefined && typeof p.continues !== 'string') throw bad('continues names a prior voiceSessionId');
     const owner = this.#o.sessions.ownerOf(p.hsid);
     if (owner === undefined || owner !== asker.principal) throw new RefusedError(refuse({ code: 'NOT_FOUND', data: { reason: 'not-found' } }), '#gnomon-voice: no such live session for this principal');
@@ -455,15 +504,16 @@ export class VoiceControl {
     const prev = this.#attachment;
     // Aegis L4: a human replaces only their own attachment (a gone session's attachment is anyone's to replace)
     if (prev && prev.owner !== asker.principal && this.#o.sessions.ownerOf(prev.hsid) === prev.owner) throw voiceRefusal('voice-target', "voice is attached to another human's session");
-    // V2a widening: a conversation ceiling takes one fresh presence per first-party connection (one GUI login)
-    if (mode === 'conversation' && !this.#widened.has(asker.connId)) {
+    // V2a widening: a conversation ceiling takes one fresh presence per first-party connection (one GUI login);
+    // TD-2026-10-21-514: so does the pieces send ceiling (the same card, detail.send 'pieces')
+    if ((mode === 'conversation' && !this.#widened.has(asker.connId)) || (send === 'pieces' && !this.#piecesGranted.has(asker.connId))) {
       // Aegis V2a L1: a pending card is reused only while it is still pending and for the same session; a denied or
       // expired card is dropped and a new one raised
       // a card the broker no longer knows counts as not pending (Aegis re-check); only an unwired presenceState
       // keeps the old reuse behaviour
       const live = (id: string): boolean => (this.#o.presenceState ? this.#o.presenceState(id) === 'pending' : true);
       const still = this.#pendingWiden.get(asker.connId);
-      if (still && live(still.cardId) && still.hsid === p.hsid) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
+      if (still && live(still.cardId) && still.hsid === p.hsid && still.send === (send === 'pieces' ? 'pieces' : undefined)) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
       if (still && still.hsid !== p.hsid && live(still.cardId)) {
         throw bad(`a widening card for session ${still.hsid} is pending on this connection; decide it first`);
       }
@@ -476,38 +526,55 @@ export class VoiceControl {
         hsid,
         from: prev && prev.owner === asker.principal ? prev.mode : null,
         to: 'conversation',
+        ...(send === 'pieces' ? { send: 'pieces' as const } : {}),
         onAllow: async () => {
           this.#pendingWiden.delete(asker.connId);
           if (!this.#liveConn.has(asker.connId)) return; // the login closed while the card waited: nothing is granted
           this.#widened.add(asker.connId);
-          await this.#start(asker, hsid, 'conversation', continues);
+          if (send === 'pieces') {
+            this.#refusePiecesByLevel(hsid); // re-checked at the effect (a level may have tightened meanwhile)
+            this.#piecesGranted.add(asker.connId);
+          }
+          await this.#start(asker, hsid, 'conversation', continues, send);
         },
       });
-      if (this.#liveConn.has(asker.connId) && !this.#widened.has(asker.connId)) this.#pendingWiden.set(asker.connId, { cardId: card.cardId, hsid });
+      const granted = this.#widened.has(asker.connId) && (send !== 'pieces' || this.#piecesGranted.has(asker.connId));
+      if (this.#liveConn.has(asker.connId) && !granted) this.#pendingWiden.set(asker.connId, { cardId: card.cardId, hsid, ...(send === 'pieces' ? { send: 'pieces' as const } : {}) });
       return { pending: true, cardId: card.cardId, hsid, mode };
     }
-    return this.#start(asker, p.hsid, mode, continues);
+    return this.#start(asker, p.hsid, mode, continues, send);
   }
 
-  async #start(asker: HumanAsker, hsid: string, mode: VoiceMode, continues: string | undefined): Promise<unknown> {
+  /** TD-2026-10-21-514: pieces is refused at strictness L2 or above (an unreadable level refuses: fail closed). */
+  #refusePiecesByLevel(hsid: string): void {
+    let level: string | null;
+    try {
+      level = this.#o.strictnessLevel?.(hsid) ?? null;
+    } catch {
+      level = 'L3';
+    }
+    if (level === 'L2' || level === 'L3') throw voiceRefusal('voice-strictness', 'pieces is refused at strictness L2 or above', { send: 'pieces', level, ceiling: level });
+  }
+
+  async #start(asker: HumanAsker, hsid: string, mode: VoiceMode, continues: string | undefined, send: VoiceSendCeiling = 'key'): Promise<unknown> {
     const owner = this.#o.sessions.ownerOf(hsid);
     if (owner === undefined || owner !== asker.principal) throw new RefusedError(refuse({ code: 'NOT_FOUND', data: { reason: 'not-found' } }), '#gnomon-voice: no such live session for this principal');
     const prev = this.#attachment;
     if (prev && prev.owner !== asker.principal && this.#o.sessions.ownerOf(prev.hsid) === prev.owner) throw voiceRefusal('voice-target', "voice is attached to another human's session");
     if (prev) await this.#end(prev, asker.connId, asker.principal);
     const now = this.#now();
-    const a: Attachment = { voiceSessionId: `vs:${ulid()}`, hsid, owner, mode, turns: 0, startedAt: now, lastForwardAt: now, connId: asker.connId };
+    const a: Attachment = { voiceSessionId: `vs:${ulid()}`, hsid, owner, mode, turns: 0, startedAt: now, lastForwardAt: now, connId: asker.connId, send };
     const r = await this.#o.append({
       kind: 'voice.session.start',
       principal: owner,
-      payload: { voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, ...(continues ? { continues } : {}), engines: null, device: null, audioRetention: 'none' },
+      payload: { voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, ...(send !== 'key' ? { send } : {}), ...(continues ? { continues } : {}), engines: null, device: null, audioRetention: 'none' },
       connId: asker.connId,
       session: a.hsid,
     });
     this.#attachment = a; // only after the row is written (log before effect)
     this.#armIdle();
     this.#o.onAttachmentChange?.();
-    return { ...r, voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode };
+    return { ...r, voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, send };
   }
 
   async #end(a: Attachment, connId: string | undefined, principal: string, reason?: 'idle'): Promise<unknown> {
@@ -604,7 +671,12 @@ export class VoiceControl {
         // V2e item 4: the kernel decides who is enrolled. speakerEnrolled:true counts ONLY when speakerId is in the
         // root-signed consented registry (readEnrolled); any other claim — an unknown-N label, a forgotten or never
         // enrolled name — is treated as an unknown speaker: stored hash-only (no text) and never forwardable
-        const enrolledNow = p.speakerEnrolled === true && !p.speakerId.startsWith('spk:unknown-') && this.#o.enrolled().has(p.speakerId);
+        let enrolledNow = p.speakerEnrolled === true && !p.speakerId.startsWith('spk:unknown-') && this.#o.enrolled().has(p.speakerId);
+        // TD-2026-10-21-514 short words by adjacency: the speaker is the draft speaker's, never verified on the segment
+        if (p.speakerBasis !== undefined) {
+          if (p.speakerBasis !== 'adjacent') throw bad("speakerBasis is 'adjacent'");
+          if (enrolledNow && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
+        }
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
@@ -632,6 +704,7 @@ export class VoiceControl {
           attachment: a?.voiceSessionId ?? '',
           aec: p.aec as string | undefined,
           refused: undefined,
+          isWord: typeof p.text === 'string' && isSendWord(p.text, this.#word()),
         };
         // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
         // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
@@ -691,6 +764,137 @@ export class VoiceControl {
     }
     if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true };
     return r;
+  }
+
+  /**
+   * TD-2026-10-21-514: an adjacent short word is accepted only when it is under SEND_WORD_SHORT_MS, is the held send
+   * word, and starts within SEND_WORD_ADJACENT_MS of an accepted turn of that speaker in this attachment, or while that
+   * speaker has pending draft turns.
+   */
+  #adjacentOk(p: Record<string, unknown>, receivedAt: number): boolean {
+    const a = this.#attachment;
+    if (!a || !num(p.t0) || !num(p.t1) || p.t1 < p.t0 || p.t1 - p.t0 >= SEND_WORD_SHORT_MS) return false;
+    if (typeof p.text !== 'string' || !isSendWord(p.text, this.#word())) return false;
+    const start = receivedAt - (p.t1 - p.t0);
+    for (const t of this.#userTurns.values()) {
+      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.attachment !== a.voiceSessionId || t.isWord) continue;
+      if (this.#pendingDictation(t) || Math.abs(start - t.receivedAt) <= SEND_WORD_ADJACENT_MS) return true;
+    }
+    return false;
+  }
+
+  /** TD-2026-10-21-514: the held send word (null = none). The daemon persists it; this only holds it. */
+  setSendWord(w: unknown): SendWord | null {
+    if (w === null) {
+      this.#sendWord = null;
+      return null;
+    }
+    const c = canonicalSendWord(w);
+    if (!c) throw bad('the send word is 1-3 words, never an approval or command phrase (validateSendWord)');
+    this.#sendWord = c;
+    return c;
+  }
+
+  sendWord(): SendWord | null {
+    return this.#word();
+  }
+
+  /** the held word: the daemon's file source when wired (the CLI and the GUI land in one file), else setSendWord's */
+  #word(): SendWord | null {
+    if (!this.#o.sendWordSource) return this.#sendWord;
+    try {
+      return this.#o.sendWordSource();
+    } catch {
+      return null; // an unreadable word never makes a word send
+    }
+  }
+
+  /** The human's pending dictation turns of the live attachment on hsid (forwardable, unforwarded, unclaimed). */
+  #pendingOf(human: string, hsid: string): { a: Attachment; pending: UserTurn[] } | null {
+    const a = this.#attachment;
+    const vp = voicePrincipalOf(human);
+    if (!a || !vp || a.hsid !== hsid || a.owner !== human || this.#o.sessions.ownerOf(hsid) !== a.owner) return null;
+    const pending = [...this.#userTurns.values()].filter((t) => t.principal === vp && t.attachment === a.voiceSessionId && t.receivedAt >= a.startedAt && t.seq > 0 && this.#pendingDictation(t) && !this.#claimed.has(t.turnId));
+    return { a, pending };
+  }
+
+  /**
+   * `request.voice.send.claim{hsid, by:'word'|'piece', turnSeq|turnSeqs}` from a first-party human connection
+   * ($send-by-word, $send-by-pieces). Checks, consumes atomically and binds the connection's next voice send.
+   */
+  claimSend(asker: HumanAsker, payload: unknown): { claimed: true; by: VoiceSentBy; expiresAt: string } {
+    if (asker.principalClass !== 'human' || !asker.principal || (asker.credential !== 'gui' && asker.credential !== 'device')) {
+      throw new RefusedError(refuse({ code: 'FORBIDDEN', data: { reason: 'kernel-owned', needs: 'first-party human-class connection' } }), '#gnomon-voice: a send claim is a human gesture on a first-party connection');
+    }
+    if (!isObj(payload)) throw bad('request.voice.send.claim takes {hsid, by, turnSeq | turnSeqs}');
+    const extra = Object.keys(payload).filter((k) => !['hsid', 'by', 'turnSeq', 'turnSeqs'].includes(k));
+    if (extra.length) throw bad(`request.voice.send.claim takes {hsid, by, turnSeq | turnSeqs} (unknown: ${extra.slice(0, 4).join(', ')})`);
+    const { hsid, by } = payload;
+    if (typeof hsid !== 'string') throw bad('hsid is required');
+    const seqOk = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
+    if (by === 'word') {
+      if (!seqOk(payload.turnSeq) || payload.turnSeqs !== undefined) throw bad("by 'word' cites one turnSeq");
+    } else if (by === 'piece') {
+      const ts = payload.turnSeqs;
+      if (!Array.isArray(ts) || ts.length === 0 || ts.length > PIECE_CLAIM_MAX_TURNS || !ts.every(seqOk) || new Set(ts).size !== ts.length || payload.turnSeq !== undefined) throw bad(`by 'piece' cites turnSeqs (1..${PIECE_CLAIM_MAX_TURNS} distinct seqs)`);
+    } else throw bad("by is 'word' or 'piece'");
+    const got = this.#pendingOf(asker.principal, hsid);
+    if (!got) throw voiceRefusal('voice-target', 'voice is not attached to that session of yours');
+    const { a, pending } = got;
+    const now = this.#now();
+    const stale = (why: string, data: Record<string, unknown> = {}): RefusedError => voiceRefusal('voice-stale-utterance', why, { ...data, by });
+    let turnIds: string[];
+    if (by === 'word') {
+      if (sendRank(a.send) < sendRank('word')) throw voiceRefusal('voice-off', "the attachment's send ceiling does not allow a send word", { send: a.send, cause: 'send-ceiling' });
+      const t = pending.find((x) => x.seq === payload.turnSeq);
+      if (!t) throw stale('the cited turn is not a pending turn of this attachment (already consumed by another send?)', { turnSeq: payload.turnSeq });
+      if (!t.isWord) throw stale('the cited turn is not the send word', { turnSeq: t.seq, cause: 'not-send-word' });
+      if (now - t.receivedAt > SEND_WORD_CLAIM_MAX_AGE_MS) throw stale(`the send word was received more than ${SEND_WORD_CLAIM_MAX_AGE_MS} ms ago`, { turnSeq: t.seq, maxAgeMs: SEND_WORD_CLAIM_MAX_AGE_MS });
+      if (pending.some((x) => x !== t && !x.isWord && x.receivedAt > t.receivedAt)) throw stale('the send word must come after every pending draft turn', { turnSeq: t.seq, cause: 'order' });
+      // consumed: never claimable, attributable or sendable again
+      this.#forwarded.add(t.turnId);
+      turnIds = [t.turnId];
+    } else {
+      if (sendRank(a.send) < sendRank('pieces')) throw voiceRefusal('voice-off', "the attachment's send ceiling does not allow pieces", { send: a.send, cause: 'send-ceiling' });
+      this.#refusePiecesByLevel(hsid);
+      const seqs = payload.turnSeqs as number[];
+      const ts = seqs.map((q) => pending.find((x) => x.seq === q));
+      if (ts.some((x) => x === undefined || x.isWord)) throw stale('every cited turn must be a pending draft turn of this attachment');
+      turnIds = (ts as UserTurn[]).map((x) => x.turnId);
+      for (const id of turnIds) this.#claimed.add(id);
+    }
+    // one live claim per connection: a replaced piece claim hands its turns back
+    const prev = this.#claims.get(asker.connId);
+    if (prev && prev.by === 'piece') for (const id of prev.turnIds) this.#claimed.delete(id);
+    const expiresAt = now + SEND_CLAIM_TTL_MS;
+    this.#claims.set(asker.connId, { hsid, by, expiresAt, turnIds });
+    a.lastForwardAt = now;
+    this.#armIdle();
+    return { claimed: true, by, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  /**
+   * The origin of a human `session.send{source:'voice'}` (#supervisor stamps it on turn.sent): the connection's live
+   * claim (consumed here; an expired one is dropped), else the fail-closed backstop — an unclaimed pending turn of the
+   * attachment that is the send word stamps 'word' (and is consumed). null ⇒ hand. NEVER throws.
+   */
+  originFor(connId: string | undefined, human: string, hsid: string): { sentBy: VoiceSentBy } | null {
+    try {
+      const now = this.#now();
+      const c = connId !== undefined ? this.#claims.get(connId) : undefined;
+      if (c && connId !== undefined) {
+        this.#claims.delete(connId);
+        if (c.hsid === hsid && now <= c.expiresAt) return { sentBy: c.by };
+        if (c.by === 'piece') for (const id of c.turnIds) this.#claimed.delete(id);
+      }
+      const got = this.#pendingOf(human, hsid);
+      const words = got ? got.pending.filter((t) => t.isWord) : [];
+      if (words.length === 0) return null;
+      for (const t of words) this.#forwarded.add(t.turnId);
+      return { sentBy: 'word' };
+    } catch {
+      return { sentBy: 'word' }; // an origin check that fails is a voice origin (the clamp fails closed)
+    }
   }
 
   #checkTurnCommon(p: Record<string, unknown>, kind: string): { turnId: string; t0: number; t1: number } {
@@ -822,7 +1026,10 @@ export class VoiceControl {
 
   /** The human send an attribution was made for failed: its turns are pending again. */
   releaseAttribution(attr: VoiceAttribution): void {
-    for (const id of attr.turnIds) this.#forwarded.delete(id);
+    for (const id of attr.turnIds) {
+      this.#forwarded.delete(id);
+      this.#claimed.delete(id);
+    }
   }
 
   /** `session.stop` from the voice principal: interrupt only, attached session only. */
@@ -840,6 +1047,10 @@ export class VoiceControl {
   connectionClosed(connId: string): void {
     this.#latestByConn.delete(connId);
     this.#widened.delete(connId);
+    this.#piecesGranted.delete(connId);
+    const c = this.#claims.get(connId);
+    if (c?.by === 'piece') for (const id of c.turnIds) this.#claimed.delete(id);
+    this.#claims.delete(connId);
     this.#liveConn.delete(connId);
     this.#pendingWiden.delete(connId);
   }

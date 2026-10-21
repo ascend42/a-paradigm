@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T06:07:32.324Z'
+generated: '2026-10-21T06:19:01.436Z'
 structure: {}
 key_files:
   config:
@@ -986,6 +986,7 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
+  ^gate-voice-origin-clamp: ./
   ^purpose-gate-offer-accept: packages/gnomon/
   ^gate-setup-token: ./
   ^gate-unprovisioned-only: ./
@@ -1023,6 +1024,8 @@ symbols:
   $purpose-flow-$task-archive: packages/conductor/
   $purpose-flow-$sentinel-investigation: packages/conductor/
   $purpose-flow-voice-turn: packages/gnomon-voice/
+  $purpose-flow-send-by-word: packages/gnomon/
+  $purpose-flow-send-by-pieces: packages/gnomon/
   $purpose-flow-offer-handoff: packages/gnomon/
   $purpose-flow-first-run: packages/gnomon/
   $purpose-flow-daemon-lifecycle: packages/gnomon/
@@ -1110,6 +1113,7 @@ symbols:
   '!purpose-signal-!task-cancelled': packages/conductor/
   '!purpose-signal-!task-reassigned': packages/conductor/
   '!purpose-signal-!tasks-archived': packages/conductor/
+  '!purpose-signal-voice-clamp-applied': packages/gnomon/
   '!purpose-signal-log-emitted': packages/logger/
   '!purpose-signal-context-loaded': packages/paradigm-mcp/
   '!purpose-signal-context-error': packages/paradigm-mcp/

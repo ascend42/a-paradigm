@@ -1,0 +1,230 @@
+/**
+ * $send-by-word / $send-by-pieces (TD-2026-10-21-514, spec §14.7 "Voice submodes"): the kernel side of the send word and
+ * pieces — the held word, request.voice.send.claim (check, consume, bind), the origin of the next human voice send,
+ * the fail-closed backstop, short words by adjacency and the pieces ceiling. G-VOX-20, G-VOX-20b, G-VOX-21. Pure (no
+ * daemon); the send-word file store is exercised against a temp dir.
+ */
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { RefusedError } from '@a-company/gnomon-contracts';
+import { VoiceControl, type VoiceAppendRow, type VoicePresenceRequest } from '../src/kernel/voice/voice-control.js';
+import { createSessionPort } from '../src/kernel/supervisor/port.js';
+import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord } from '../src/kernel/voice/send-word-store.js';
+import { voiceStatusFor } from '../src/kernel/voice/voice-requests.js';
+
+const HUMAN = 'p:abcdefgh/founder';
+const VOICE = 'p:abcdefgh/voice';
+const SPK = 'spk:abcdefgh/founder';
+const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
+
+function rig(o: { level?: string | null } = {}) {
+  const clock = { t: 100_000 };
+  const rows: VoiceAppendRow[] = [];
+  const presence: VoicePresenceRequest[] = [];
+  const v = new VoiceControl({
+    sessions: { ownerOf: (h) => (h === HSID ? HUMAN : undefined), send: async () => ({}), stop: async () => ({}) },
+    append: async (row) => (rows.push(row), { seq: rows.length, hash: `h${rows.length}` }),
+    enrolled: () => new Set([SPK]),
+    voiceConnections: () => ['conn:V'],
+    now: () => clock.t,
+    presence: async (req) => {
+      presence.push(req);
+      await req.onAllow();
+      return { cardId: `card:01HZZZZZZZZZZZZZZZZZZZZZ${presence.length}0` };
+    },
+    strictnessLevel: () => o.level ?? null,
+  });
+  v.setSendWord({ text: 'over and out', variants: ['over an out'] });
+  const supSends: Array<Record<string, unknown>> = [];
+  const sup = { resumed: () => false, send: async (_p: string, p: Record<string, unknown>) => (supSends.push(p), { turn: `t${supSends.length}` }) };
+  const port = createSessionPort(sup as never, undefined, v);
+  const human = (connId = 'conn:H1') => ({ connId, principal: HUMAN, principalClass: 'human', credential: 'gui' });
+  const vc = { connId: 'conn:V', principal: VOICE };
+  const attach = (send: 'key' | 'word' | 'pieces' = 'word', connId = 'conn:H1') => v.humanAppend(human(connId), 'voice.session.start', { hsid: HSID, mode: 'conversation', send });
+  let n = 0;
+  const turn = async (text: string, p: Record<string, unknown> = {}) => {
+    const r = (await v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: String(++n), speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: clock.t - 2000, t1: clock.t, text, mode: 'conversation', aec: 'vpio', ...p } })) as Record<string, unknown>;
+    clock.t += 100;
+    return r;
+  };
+  const claim = (payload: Record<string, unknown>, connId = 'conn:H1') => v.claimSend(human(connId), { hsid: HSID, ...payload });
+  const send = (parts: string[], connId = 'conn:H1') => port.send({ principal: HUMAN, principalClass: 'human', connId, credential: 'gui' }, { hsid: HSID, content: parts.map((text) => ({ text })), source: 'voice' });
+  return { v, rows, presence, supSends, attach, turn, claim, send, clock };
+}
+
+const refusal = async (p: Promise<unknown> | (() => unknown)): Promise<Record<string, unknown>> => {
+  try {
+    await (typeof p === 'function' ? p() : p);
+  } catch (e) {
+    if (e instanceof RefusedError) return { code: e.refusal.code, ...(e.refusal.data as Record<string, unknown>) };
+    throw e;
+  }
+  throw new Error('expected a refusal');
+};
+
+describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
+  it('the word after the draft is claimed and the next voice send is origin voice / sent by word', async () => {
+    const r = rig();
+    await r.attach('word');
+    await r.turn('fix the failing test');
+    const w = (await r.turn('Over and out.')) as { seq: number };
+    expect(r.claim({ by: 'word', turnSeq: w.seq })).toMatchObject({ claimed: true, by: 'word' });
+    await r.send(['fix the failing test']);
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' }, voiceAttribution: { source: 'voice' } });
+    // the word was consumed: a second claim on it is stale, and the next send is hand
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
+    await r.turn('and the docs');
+    await r.send(['and the docs']);
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');
+  });
+
+  it('refused: not the word, older than 30 s, before a pending draft turn, over the send ceiling', async () => {
+    const r = rig();
+    await r.attach('key');
+    await r.turn('draft one');
+    const w0 = (await r.turn('over and out')) as { seq: number };
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: w0.seq }))).toMatchObject({ reason: 'voice-off', cause: 'send-ceiling' });
+    await r.attach('word');
+    const d = (await r.turn('draft two')) as { seq: number };
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: d.seq }))).toMatchObject({ reason: 'voice-stale-utterance', cause: 'not-send-word' });
+    const w = (await r.turn('over and out')) as { seq: number };
+    await r.turn('one more thing'); // a draft turn after the word
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-stale-utterance', cause: 'order' });
+    const w2 = (await r.turn('over an out')) as { seq: number }; // an enrolled variant
+    r.clock.t += 31_000;
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: w2.seq }))).toMatchObject({ reason: 'voice-stale-utterance', maxAgeMs: 30_000 });
+    expect(await refusal(() => r.claim({ by: 'shout', turnSeq: 1 }))).toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('an expired claim stamps nothing (dropped); the backstop still stamps voice while an unclaimed word is pending', async () => {
+    const r = rig();
+    await r.attach('word');
+    await r.turn('rename the module');
+    const w = (await r.turn('over and out')) as { seq: number };
+    r.claim({ by: 'word', turnSeq: w.seq });
+    r.clock.t += 6_000;
+    await r.send(['rename the module']);
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin'); // expired and the word already consumed
+    // backstop: the GUI sends with an unclaimed word pending ⇒ origin voice anyway, and the word is consumed
+    await r.turn('then push it');
+    await r.turn('over and out');
+    await r.send(['then push it']);
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'word' } });
+    await r.turn('one more');
+    await r.send(['one more']);
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');
+  });
+
+  it('short words by adjacency: accepted only under 1500 ms, matching, and adjacent to (or pending with) the draft speaker', async () => {
+    const r = rig();
+    await r.attach('word');
+    await r.turn('add a changelog entry');
+    const ok = await r.turn('over and out', { speakerBasis: 'adjacent', t0: r.clock.t - 900, t1: r.clock.t });
+    expect(ok.forwardable).toBe(true);
+    expect(r.rows.at(-1)!.payload).toMatchObject({ speakerBasis: 'adjacent', forwardable: true });
+    const long = await r.turn('over and out', { speakerBasis: 'adjacent', t0: r.clock.t - 1600, t1: r.clock.t });
+    expect(long).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    const notWord = await r.turn('ship', { speakerBasis: 'adjacent', t0: r.clock.t - 500, t1: r.clock.t });
+    expect(notWord).toMatchObject({ refused: 'voice-speaker' });
+    expect(await refusal(r.turn('x', { speakerBasis: 'verified' }))).toMatchObject({ code: 'BAD_REQUEST' });
+    // no draft pending and nothing within 2 s ⇒ refused
+    const r2 = rig();
+    await r2.attach('word');
+    const d = (await r2.turn('draft')) as { seq: number };
+    const w = (await r2.turn('over and out')) as { seq: number };
+    r2.claim({ by: 'word', turnSeq: w.seq });
+    await r2.send(['draft']);
+    expect(d.seq).toBeGreaterThan(0);
+    r2.clock.t += 5_000;
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+  });
+
+  it('the held word is shown to the human class only', async () => {
+    const r = rig();
+    const st = r.v.status();
+    expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });
+    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
+    expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWord');
+    expect(() => r.v.setSendWord({ text: 'approve' })).toThrow(RefusedError);
+  });
+});
+
+describe('G-VOX-20b two tabs, one word: exactly one send', () => {
+  it('the second tab is refused voice-stale-utterance and its send stays hand', async () => {
+    const r = rig();
+    await r.attach('word');
+    await r.turn('refactor the parser');
+    const w = (await r.turn('over and out')) as { seq: number };
+    const results = await Promise.allSettled([Promise.resolve().then(() => r.claim({ by: 'word', turnSeq: w.seq }, 'conn:H1')), Promise.resolve().then(() => r.claim({ by: 'word', turnSeq: w.seq }, 'conn:H2'))]);
+    expect(results.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect((rejected.reason as RefusedError).refusal.data).toMatchObject({ reason: 'voice-stale-utterance' });
+    await r.send(['refactor the parser'], 'conn:H1');
+    await r.send(['refactor the parser'], 'conn:H2');
+    expect(r.supSends.filter((s) => s.voiceOrigin !== undefined)).toHaveLength(1);
+  });
+});
+
+describe('G-VOX-21 pieces', () => {
+  it('needs the pieces ceiling, granted by one fresh presence card (voice.widen, send pieces) per login', async () => {
+    const r = rig();
+    await r.attach('word');
+    const a = (await r.turn('so the idea is')) as { seq: number };
+    expect(await refusal(() => r.claim({ by: 'piece', turnSeqs: [a.seq] }))).toMatchObject({ reason: 'voice-off', cause: 'send-ceiling' });
+    await r.attach('pieces');
+    expect(r.presence.map((p) => p.send ?? null)).toEqual([null, 'pieces']);
+    const b = (await r.turn('we split the module')) as { seq: number };
+    const c = (await r.turn('in two')) as { seq: number };
+    expect(r.claim({ by: 'piece', turnSeqs: [b.seq, c.seq] })).toMatchObject({ claimed: true, by: 'piece' });
+    // a second claim citing a claimed turn is stale
+    expect(await refusal(() => r.claim({ by: 'piece', turnSeqs: [c.seq] }, 'conn:H1'))).toMatchObject({ reason: 'voice-stale-utterance' });
+    await r.send(['we split the module', 'in two']);
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'piece' }, voiceAttribution: { source: 'voice' } });
+    // the same login re-attaching at pieces takes no new card
+    await r.attach('pieces');
+    expect(r.presence).toHaveLength(2);
+  });
+
+  it('is refused at strictness L2 or above (voice-strictness)', async () => {
+    const r = rig({ level: 'L2' });
+    expect(await refusal(r.attach('pieces'))).toMatchObject({ reason: 'voice-strictness', send: 'pieces', level: 'L2' });
+    const r1 = rig({ level: 'L1' });
+    await r1.attach('pieces');
+    expect(r1.v.status().send).toBe('pieces');
+  });
+
+  it('send word and pieces need ambient capture', async () => {
+    const r = rig();
+    expect(await refusal(r.v.humanAppend({ connId: 'conn:H1', principal: HUMAN, principalClass: 'human', credential: 'gui' }, 'voice.session.start', { hsid: HSID, mode: 'ptt', send: 'word' }))).toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
+  it('writes canonically with mode 0600, reads back, clears; a broken file holds no word', () => {
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-sw-')));
+    try {
+      const src = cachedSendWordSource(home);
+      expect(src()).toBeNull();
+      writeSendWord(home, { text: 'Ship it!', variants: ['shipped'] });
+      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['shipped'] });
+      if (process.platform !== 'win32') expect(fs.statSync(sendWordPath(home)).mode & 0o777).toBe(0o600);
+      expect(src()).toEqual({ text: 'ship it', variants: ['shipped'] });
+      expect(() => writeSendWord(home, { text: 'deny' })).toThrow(TypeError);
+      fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"allow"}\n');
+      expect(readSendWord(home)).toBeNull();
+      writeSendWord(home, null);
+      expect(fs.existsSync(sendWordPath(home))).toBe(false);
+      expect(src()).toBeNull();
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+  it('the request shape is strict', () => {
+    expect(parseSendWordRequest({ op: 'clear' })).toEqual({ op: 'clear' });
+    expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [] });
+    for (const bad of [null, { op: 'set' }, { op: 'clear', word: 'x' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
+  });
+});
