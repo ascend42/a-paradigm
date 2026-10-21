@@ -402,6 +402,17 @@ describe('virtualized transcript (G-GUI-01 unit proxy)', () => {
     expect(w.restore('hsid:A', 400, 12).offsetOf(4)).toBe(80);
     expect(w.restore('hsid:B', 800, 12).offsetOf(4)).toBe(80); // I1: another transcript never inherits these heights
   });
+  it('re-review L-4: invalidate drops a remounted row back to the estimate; the page invalidates each stale index', () => {
+    const h = new HeightIndex(20);
+    h.push(5);
+    h.set(1, 90);
+    h.invalidate(1);
+    expect(h.height(1)).toBe(20);
+    expect(h.offsetOf(2)).toBe(40);
+    h.invalidate(9); // out of range: ignored
+    expect(h.total()).toBe(100);
+    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8')).toMatch(/for \(const i of stale\) if \(i < lcp\) heights\.invalidate\(i\);/);
+  });
   it('property: offsetOf / indexAt equal naive prefix sums under random batched push + set, across grows and restore() (B2)', () => {
     let seed = 7;
     const rnd = (n: number): number => ((seed = (seed * 1103515245 + 12345) >>> 0) % n);

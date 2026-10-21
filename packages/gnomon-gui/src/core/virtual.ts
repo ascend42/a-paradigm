@@ -67,6 +67,11 @@ export class HeightIndex {
     return this.#h[idx] ?? this.estimate;
   }
 
+  /** re-review L-4: forget a row's measurement (it was remounted with new content): back to the estimate until measured. */
+  invalidate(idx: number): void {
+    this.set(idx, this.estimate);
+  }
+
   /** Record a measured height. */
   set(idx: number, h: number): void {
     if (idx < 0 || idx >= this.#n || !(h >= 0)) return;

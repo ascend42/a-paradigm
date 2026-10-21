@@ -466,6 +466,8 @@ function paintTranscript(remeasure = false): void {
         el.remove();
         mounted.delete(i);
       }
+    // re-review L-4: a stale kept item is remounted with new content: its old measured height no longer holds
+    for (const i of stale) if (i < lcp) heights.invalidate(i);
     if (lcp < items.length) {
       // the tail changed (a turn's result anchored under its turn, the working row moving down): keep the prefix
       // mounted and measured, rebuild only from the first changed item
