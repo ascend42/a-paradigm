@@ -194,8 +194,19 @@ describe('voice in the transcript', () => {
     expect(voiceRefusalNote('voice-off', { cause: 'aec' })).toContain('echo cancellation');
     expect(voiceRefusalNote('voice-off', { cause: 'ceiling' })).toContain('ceiling');
     expect(voiceRefusalNote('voice-off', { cause: 'presence' })).toContain('Touch ID');
-    expect(voiceRefusalNote('voice-playback', { clock: 'kernel', streaming: true })).toBe('the voice app is still speaking; try again when it finishes (voice-playback · streaming)');
+    expect(voiceRefusalNote('voice-playback', { clock: 'kernel', streaming: true })).toBe('Claude is still finishing its reply; try again when it is done (voice-playback · streaming)');
     expect(voiceRefusalNote('budget', null)).toBeNull();
+  });
+  it('voice drops fix: a hash-only turn the kernel refused at receipt is a refused row with the reason in words and its length, never dropped', () => {
+    const refusedRow = (seq: number, extra: Record<string, unknown>): Row => ({ seq, kind: 'voice.turn.user', session: A, view: 'full', payload: { turnId: String(seq), speakerId: 'spk:abcd1234/matt', speakerEnrolled: true, forwarded: false, mode: 'conversation', t0: 1000, t1: 5838, textHash: 'hmac-sha256:' + 'a'.repeat(64), durationMs: 4838, ...extra } });
+    expect(chatItems([refusedRow(1, { refusedReason: 'voice-playback' })]).items).toEqual([expect.objectContaining({ role: 'voice-refused', text: 'voice not sent · Claude was still finishing · 4.8 s' })]);
+    expect(chatItems([refusedRow(2, { refusedReason: 'voice-speaker', speakerId: 'spk:unknown-1', speakerEnrolled: false, durationMs: 2100 })]).items[0]).toMatchObject({ role: 'voice-refused', text: 'voice not sent · speaker not recognised · 2.1 s' });
+    expect(chatItems([refusedRow(3, { refusedReason: 'voice-off', refusedCause: 'aec' })]).items[0]?.text).toContain('no echo cancellation');
+    expect(chatItems([refusedRow(4, { refusedReason: 'voice-echo', durationMs: undefined })]).items[0]?.text).toBe('voice not sent · it overlapped my spoken reply · 4.8 s');
+    // never a text leak: a row that somehow carries text and a refusal shows the refusal only
+    expect(chatItems([refusedRow(5, { refusedReason: 'voice-playback', text: 'secret words' })]).items[0]?.text).not.toContain('secret');
+    // an accepted empty-text row is still hidden noise
+    expect(chatItems([refusedRow(6, { text: '' })]).items).toEqual([]);
   });
   it('the voice app\'s claims (forwarded, intercepted) never make a user message; only the kernel\'s turn.sent does', () => {
     expect(chatItems([user(1, '1', 'yes', { forwarded: false, intercepted: 'decision' })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “yes” · voice app says: handled as a decision' });

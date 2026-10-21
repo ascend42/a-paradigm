@@ -337,8 +337,20 @@ interface Session {
    * turn sent): a replay before it (a resumed session's history) never marks an outstanding turn consumed
    */
   replayLive: boolean;
-  /** kernel clock (ms) when the last model turn closed (its result), for the #gnomon-voice busy guard (V2a) */
+  /**
+   * kernel clock (ms) when the last model reply ended, for the #gnomon-voice busy guard (V2a): the main-chain
+   * message_stop after an end_turn stop_reason, or the turn's result when that end was not seen
+   */
   lastTurnEndAt?: number;
+  /**
+   * #gnomon-voice busy guard (voice drops fix, 2026-10-20): the main-chain reply of the turn in flight has ENDED
+   * (message_stop after an end_turn delta, or an assistant line carrying end_turn). Claude Code can write the turn's
+   * result ~30 s later (a Stop hook), so the model is not "streaming" between the two. Cleared by a new main-chain
+   * message_start (a Stop-hook continuation streams again), a turn sent, and a result.
+   */
+  replyDone?: boolean;
+  /** the current main-chain message's message_delta said end_turn; its message_stop ends the reply */
+  replyEnding?: boolean;
   watchHash: string;
   gitHash: string;
   layerInput: Law7Input;
@@ -986,6 +998,7 @@ export class SessionSupervisor {
         }
         return;
       case 'partial':
+        if (ev.parentToolUseId === null) this.#replyEdge(s, ev.type, ev.stopReason);
         await this.#o.log('turn.partial', { hsid: s.hsid, bytes: ev.bytes }, { session: s.hsid });
         if (ev.usage) await usage('turn.usage', s.meter.message(ev.usage.messageId, ev.usage.tokens));
         return;
@@ -999,6 +1012,12 @@ export class SessionSupervisor {
           if (t.name === 'Write' && typeof inp.file_path === 'string' && PLAN_FILE.test(inp.file_path) && typeof inp.content === 'string' && inp.content.length <= MAX_ATTACHED_PLAN_CHARS) s.lastPlanFile = inp.content;
         }
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
+        if (ev.parentToolUseId === null && ev.stopReason !== null) {
+          // voice busy guard: an assistant line carrying its stop_reason (no partial stream): end_turn ends the reply,
+          // any other stop (tool_use) means the turn goes on
+          if (ev.stopReason === 'end_turn') this.#replyEnded(s);
+          else s.replyDone = false;
+        }
         if (ev.parentToolUseId === null) {
           // 8.0:model-switch: the main chain's context (a subagent's message is not) and the model that actually ran
           if (ev.tokens !== null) s.contextTokens = ev.tokens;
@@ -1025,7 +1044,11 @@ export class SessionSupervisor {
         s.consumedTurns = Math.max(0, s.consumedTurns - k);
         const turn = closedIds[closedIds.length - 1];
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
-        s.lastTurnEndAt = Date.now();
+        // voice busy guard: the reply's end is its message_stop when it was seen (the result may be ~30 s late);
+        // the result is the fallback end. A turn still outstanding after this result streams next (re-armed).
+        if (!s.replyDone) s.lastTurnEndAt = Date.now();
+        s.replyDone = false;
+        s.replyEnding = false;
         for (const head of closedPermits) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         this.#wake(); // §2.4 rule 11: a turn boundary
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
@@ -1293,13 +1316,35 @@ export class SessionSupervisor {
   }
 
   /**
-   * #gnomon-voice V2a kernel-side busy (TD-2026-10-19-298): is the session's model turn streaming now (from turn.sent
-   * until its result), and when (kernel clock) did the last turn close. The supervisor's own state, never a client claim.
+   * #gnomon-voice V2a kernel-side busy (TD-2026-10-19-298): is the session's model turn streaming now, and when (kernel
+   * clock) did the last reply end. Streaming runs from turn.sent until the main-chain reply ENDS (message_stop after an
+   * end_turn stop_reason), re-armed by every new main-chain message_start (a Stop-hook continuation); the turn's result
+   * ends it only when that end was not seen (voice drops fix 2026-10-20: Claude Code's result can come ~30 s after the
+   * reply, which refused every utterance in between as voice-playback). The supervisor's own state, never a client claim.
    */
   turnBusy(hsid: string): { streaming: boolean; endedAt: number | null } {
     const s = this.#sessions.get(hsid);
-    if (s) return { streaming: s.state === 'running' && s.turnPermits.length > 0, endedAt: s.lastTurnEndAt ?? null };
+    if (s) return { streaming: s.state === 'running' && s.turnPermits.length > 0 && s.replyDone !== true, endedAt: s.lastTurnEndAt ?? null };
     return this.#local.turnBusy(hsid);
+  }
+
+  /** Voice busy guard: one main-chain stream_event edge (message_start re-arms; end_turn delta + message_stop ends). */
+  #replyEdge(s: Session, type: string, stopReason: string | null): void {
+    if (type === 'stream_event.message_start') {
+      s.replyDone = false;
+      s.replyEnding = false;
+    } else if (type === 'stream_event.message_delta' && stopReason !== null) {
+      s.replyEnding = stopReason === 'end_turn';
+    } else if (type === 'stream_event.message_stop' && s.replyEnding) {
+      this.#replyEnded(s);
+    }
+  }
+
+  #replyEnded(s: Session): void {
+    s.replyEnding = false;
+    if (s.turnPermits.length === 0) return; // no turn in flight (a resumed history line): nothing ends
+    s.replyDone = true;
+    s.lastTurnEndAt = Date.now();
   }
 
   /** The owner principal of a live session (Claude or local), or undefined (#gnomon-voice attachment, V1). */
@@ -1499,6 +1544,8 @@ export class SessionSupervisor {
     }
     this.#usedTurnPermits.add(permit.permitId);
     s.turnPermits.push(permit.permitId);
+    s.replyDone = false; // voice busy guard: a turn sent streams until its reply ends
+    s.replyEnding = false;
     const n = ++s.turns;
     s.turnIds.push(turnId(s.hsid, n));
     s.replayLive = true; // re-review L-2: the first turn sent makes the stream live too

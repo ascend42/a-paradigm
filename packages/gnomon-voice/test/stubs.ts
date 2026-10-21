@@ -1,7 +1,7 @@
 /** Stub engines and a fake kernel link for the pipeline tests (no models, no network, no audio device). */
 import { encodeWav } from '../src/fake-audio-io.js';
 import { SpeakableProjector } from '../src/speakable.js';
-import type { KernelLink, KernelRow, PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceAttachment, VoiceEngines } from '../src/types.js';
+import type { AppendResult, KernelLink, KernelRow, PcmFrame, SpeakerEngine, SttEngine, TtsEngine, VadEngine, VadSegment, VoiceAttachment, VoiceEngines } from '../src/types.js';
 
 export const SR = 16_000;
 /** the fake kernel's principal (the tests' voice namespace is abcd1234) */
@@ -130,12 +130,14 @@ export class FakeLink implements KernelLink {
   /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */
   readonly dictation: Array<{ activity: string; holdToggles: number }> = [];
   /** request.voice.report{capture} reports (T-2026-10-20-005 A1), kept apart from the log rows */
-  readonly capture: Array<{ state: string; segId: string; reason?: string; level?: number }> = [];
+  readonly capture: Array<{ state: string; segId: string; reason?: string; refusal?: string; cause?: string; level?: number }> = [];
   /** request.voice.report{prints} reports (stale voice prints, 2026-10-20) */
   readonly prints: Array<{ stale: string[] }> = [];
   /** while set, every capture report waits on it (a slow kernel) */
   captureGate: Promise<void> | undefined;
-  async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
+  /** the kernel's verdict on the next voice.turn.user rows (voice drops fix): refused at receipt, hash-only */
+  turnVerdict: { refused: string; refusedCause?: string } | undefined;
+  async append(kind: string, payload: Record<string, unknown>): Promise<AppendResult> {
     if (this.appendError) throw this.appendError;
     if (kind === 'request.voice.report' && payload.playback) {
       this.playback.push((payload.playback as { playing: boolean }).playing);
@@ -155,7 +157,8 @@ export class FakeLink implements KernelLink {
       return { seq: 0 };
     }
     this.appends.push({ kind, payload });
-    return { seq: ++this.#seq };
+    if (kind === 'voice.turn.user' && this.turnVerdict) return { seq: ++this.#seq, forwardable: false, ...this.turnVerdict };
+    return { seq: ++this.#seq, ...(kind === 'voice.turn.user' ? { forwardable: true } : {}) };
   }
   async send(hsid: string, text: string): Promise<unknown> {
     if (this.sendError) throw this.sendError;

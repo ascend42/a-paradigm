@@ -31,6 +31,7 @@ import { MODE_ROW_KINDS } from './modes.js';
 import { rootRowsOf, rowsDigestCheck } from './render.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
+import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
 
 export interface Row {
@@ -680,6 +681,20 @@ function isPartial(r: Row, p: Record<string, unknown> | null): boolean {
   return r.kind === 'voice.turn.partial' || (r.kind === 'voice.turn.user' && p?.partial === true);
 }
 
+/**
+ * The KERNEL's refusal at receipt on a voice.turn.user row (voice-control.ts writes `refusedReason` and, for V2a,
+ * `refusedCause` on the hash-only row), or null. Voice drops fix: this is the kernel's fact, never the app's claim.
+ */
+function kernelRefusalOf(p: Record<string, unknown>): { reason: string; cause: string | null } | null {
+  if (typeof p.refusedReason !== 'string' || !p.refusedReason) return null;
+  return { reason: p.refusedReason, cause: typeof p.refusedCause === 'string' ? p.refusedCause : null };
+}
+/** A refused turn's length, e.g. "4.8 s" (durationMs on the hash-only row, else t1 - t0), or null. */
+function voiceSecondsOf(p: Record<string, unknown>): string | null {
+  const ms = typeof p.durationMs === 'number' ? p.durationMs : typeof p.t0 === 'number' && typeof p.t1 === 'number' ? p.t1 - p.t0 : null;
+  return ms !== null && Number.isFinite(ms) && ms >= 0 ? `${(ms / 1000).toFixed(1)} s` : null;
+}
+
 /** A refusal reason a voice row carries (`refusal: {reason} | string`, or `reason`), or null. */
 function voiceReasonOf(p: Record<string, unknown>): string | null {
   const ref = p.refusal ?? p.refused;
@@ -726,6 +741,13 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
   if (isPartial(r, p)) return null;
   switch (r.kind) {
     case 'voice.turn.user': {
+      // voice drops fix: a turn the kernel refused at receipt is stored hash-only (no text), so it is checked BEFORE
+      // the empty-text rule: "voice not sent · Claude was still finishing · 4.8 s" (the reason in words, never text)
+      const k = kernelRefusalOf(p);
+      if (k) {
+        const secs = voiceSecondsOf(p);
+        return { role: 'voice-refused', text: `voice not sent · ${refusalPhrase(k.reason, k.cause)}${secs ? ` · ${secs}` : ''}` };
+      }
       if (!text.trim()) return null;
       // sent: the kernel's turn.sent cites this row ⇒ the user's message (one line: spoken text has no layout)
       if (ctx.sentSeqs.has(r.seq)) return { role: 'user', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker, voice: 'voice' };

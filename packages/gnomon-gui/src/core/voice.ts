@@ -237,7 +237,7 @@ export const SPEAKER_MAX = 32;
 
 /**
  * A voice refusal as one plain line (V2a reasons): voice-off with data.cause aec | ceiling | presence, and the busy
- * voice-playback (the kernel is still speaking). Null for any other refusal (the page shows it as given).
+ * voice-playback (Claude's reply is still streaming, or inside its echo tail). Null for any other refusal (the page shows it as given).
  */
 export function voiceRefusalNote(reason: string | null, data: Record<string, unknown> | null): string | null {
   const cause = data && typeof data.cause === 'string' ? data.cause : null;
@@ -247,7 +247,7 @@ export function voiceRefusalNote(reason: string | null, data: Record<string, unk
     if (cause === 'presence') return 'Ambient needs Touch ID first (voice-off · presence)';
     return 'voice is off for this session (voice-off)';
   }
-  if (reason === 'voice-playback') return `the voice app is still speaking; try again when it finishes (voice-playback${data?.streaming === true ? ' · streaming' : ''})`;
+  if (reason === 'voice-playback') return `Claude is still finishing its reply; try again when it is done (voice-playback${data?.streaming === true ? ' · streaming' : ''})`;
   return null;
 }
 

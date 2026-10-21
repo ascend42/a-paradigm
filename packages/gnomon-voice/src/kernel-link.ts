@@ -17,7 +17,7 @@
  */
 import * as net from 'node:net';
 import type { Duplex } from 'node:stream';
-import type { KernelLink, KernelRow, VoiceAttachment } from './types.js';
+import type { AppendResult, KernelLink, KernelRow, VoiceAttachment } from './types.js';
 
 export const GNOMON_RPC_V1 = 'gnomon-rpc:v1' as const;
 export const MAX_RPC_FRAME = 4 * 1024 * 1024;
@@ -273,8 +273,15 @@ export class GnomonKernelLink implements KernelLink {
   stopSpeakingSeq(): number | null {
     return this.#stopSpeakingSeq;
   }
-  async append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }> {
-    return (await this.client.call('log.append', { kind, payload })) as { seq: number };
+  async append(kind: string, payload: Record<string, unknown>): Promise<AppendResult> {
+    const r = (await this.client.call('log.append', { kind, payload })) as Record<string, unknown> | null;
+    // the kernel's verdict on a voice.turn.user (voice drops fix): kept when well-typed, never trusted beyond display
+    return {
+      seq: Number(r?.seq ?? 0),
+      ...(typeof r?.forwardable === 'boolean' ? { forwardable: r.forwardable } : {}),
+      ...(typeof r?.refused === 'string' ? { refused: r.refused } : {}),
+      ...(typeof r?.refusedCause === 'string' ? { refusedCause: r.refusedCause } : {}),
+    };
   }
   send(hsid: string, text: string): Promise<unknown> {
     return this.client.call('session.send', { hsid, content: [{ text }] });

@@ -36,7 +36,7 @@ import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
-import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
+import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, mountModPanels } from './mod-panels-mount.js';
@@ -1591,8 +1591,8 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
   const ghost = $('composer-ghost');
   ghost.hidden = !d.ghost;
   paintGhost(ghost, d.ghost ? d.ghostText : null);
-  if (d.state !== captionState) {
-    captionState = d.state;
+  if (d.caption !== captionState) {
+    captionState = d.caption;
     put($('voice-caption'), d.caption);
   }
   if (captureFlash) clearTimeout(captureFlash);
@@ -1651,9 +1651,12 @@ function paintVoiceMenu(): void {
   menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃⌥H holds the dictation`) as unknown as Node);
 }
 function openVoiceMenu(): void {
+  // voice drops fix: opening the menu is the human's dismiss of a sticky drop on the pill (core/capture.ts)
+  captureTrack = captureDismiss(captureTrack, Date.now());
   $('voice-menu').hidden = false;
   $('voice-pill').setAttribute('aria-expanded', 'true');
   paintVoiceMenu();
+  paintVoice();
 }
 function closeVoiceMenu(): void {
   $('voice-menu').hidden = true;

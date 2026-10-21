@@ -8,8 +8,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeAudioIO } from '../src/fake-audio-io.js';
-import { PRINT_SCHEMA, readPrints, type VoicePrint } from '../src/speaker.js';
-import { CAPTURE_DROP_REASONS, CAPTURE_REPORT_MIN_MS, levelOf, VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
+import { gatedSpeechMsOf, PRINT_SCHEMA, readPrints, speakerScoreBucket, type VoicePrint } from '../src/speaker.js';
+import { captureRefusalOf, CAPTURE_DROP_REASONS, CAPTURE_REPORT_MIN_MS, levelOf, VoiceClient, type ClientMode, type Delivery, type Notice } from '../src/voice-client.js';
 import { recordEnrolment } from '../src/enrol.js';
 import { FakeLink, refusal, stubEngines, StubSpeaker, StubVad, tone, toneWav } from './stubs.js';
 
@@ -356,6 +356,52 @@ describe('capture states (T-2026-10-20-005 A1, TD-2026-10-20-086)', () => {
     ptt(audio, 800, 0.5);
     await client.idle();
     expect(dropReasons(link)).toEqual(['refused']);
+  });
+
+  it('voice drops fix: a turn the kernel refused at receipt ends as dropped with its reason, never captured (composer delivery)', async () => {
+    const { audio, link, client } = await setup({ texts: ['and the docs too'], delivery: 'composer', mode: 'ambient', attachMode: 'conversation' });
+    link.turnVerdict = { refused: 'voice-playback' };
+    audio.captureWav(toneWav(900, 0.5));
+    audio.silence(900);
+    await client.idle();
+    const end = link.capture.filter((c) => c.state === 'dropped' || c.state === 'captured');
+    expect(end).toEqual([{ state: 'dropped', segId: expect.any(String), reason: 'refused', refusal: 'voice-playback' }]);
+    expect(dropReasons(link)).toEqual(['refused']);
+    expect(link.sends).toHaveLength(0);
+  });
+
+  it('voice drops fix: a V2a cause rides with the refusal; a direct send is never tried after a refused turn', async () => {
+    const { audio, link, client } = await setup({ texts: ['hi'] });
+    link.turnVerdict = { refused: 'voice-off', refusedCause: 'aec' };
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    expect(link.capture.find((c) => c.state === 'dropped')).toMatchObject({ reason: 'refused', refusal: 'voice-off', cause: 'aec' });
+    expect(link.sends).toHaveLength(0);
+  });
+
+  it('voice drops fix: a send refusal carries its voice-* reason; a malformed reason is left out', async () => {
+    const { audio, link, client } = await setup({ texts: ['hi'] });
+    link.sendError = refusal('voice-echo');
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    expect(link.capture.find((c) => c.state === 'dropped')).toMatchObject({ reason: 'refused', refusal: 'voice-echo' });
+    expect(captureRefusalOf('voice-playback', 'Bad Cause')).toEqual({ refusal: 'voice-playback' });
+    expect(captureRefusalOf('budget')).toEqual({});
+  });
+
+  it('calibration: voice.turn.user carries the coarse speaker score bucket, never the number or audio', async () => {
+    const { audio, link, client } = await setup({ texts: ['run the tests'] });
+    ptt(audio, 800, 0.5);
+    await client.idle();
+    const p = link.appends.find((x) => x.kind === 'voice.turn.user')!.payload;
+    expect(p.speakerScore).toBe('ge0.8');
+    expect(speakerScoreBucket(-1)).toBe('none');
+    expect(speakerScoreBucket(0.49)).toBe('lt0.5');
+    expect(speakerScoreBucket(0.5)).toBe('0.5-0.65');
+    expect(speakerScoreBucket(0.65)).toBe('0.65-0.8');
+    expect(speakerScoreBucket(0.8)).toBe('ge0.8');
+    expect(gatedSpeechMsOf(1234.4)).toBe(1230);
+    expect(gatedSpeechMsOf(undefined)).toBeUndefined();
   });
 
   it('every reason of the closed enum is emitted by some drop site', () => {

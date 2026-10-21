@@ -176,6 +176,26 @@ export interface SpeakerVerdict {
   /** 'unknown-N' label when not matched */
   unknownLabel?: string;
   score: number;
+  /** the speech that survived the speech gate (ms), when the engine measures it (calibration, never audio) */
+  speechMs?: number;
+}
+
+/**
+ * Calibration (voice drops fix 2026-10-20): the verdict's score as a COARSE bucket for the log (never the number):
+ * 'none' when no print was compared (score -1), else lt0.5 | 0.5-0.65 | 0.65-0.8 | ge0.8.
+ */
+export type SpeakerScoreBucket = 'none' | 'lt0.5' | '0.5-0.65' | '0.65-0.8' | 'ge0.8';
+export function speakerScoreBucket(score: number): SpeakerScoreBucket {
+  if (!Number.isFinite(score) || score < -0.999) return 'none';
+  if (score < 0.5) return 'lt0.5';
+  if (score < 0.65) return '0.5-0.65';
+  if (score < 0.8) return '0.65-0.8';
+  return 'ge0.8';
+}
+/** gated speech for the log: rounded to 10 ms, bounded (the kernel refuses anything else) */
+export function gatedSpeechMsOf(ms: number | undefined): number | undefined {
+  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return undefined;
+  return Math.min(600_000, Math.round(ms / 10) * 10);
 }
 
 /** Matches utterances against the enrolled prints; numbers unknown voices consistently within one run. */
@@ -228,12 +248,14 @@ export class SpeakerVerifier {
       const s = cosine(e, p.embedding);
       if (!best || s > best.score) best = { name: p.name, score: s };
     }
-    if (best && best.score >= this.#threshold && !this.#tooShort(samples, sampleRate, MIN_VERIFY_SPEECH_MS)) return { name: best.name, score: best.score };
+    const speechMs = this.#engine.speechMs?.(samples, sampleRate);
+    const gated = speechMs !== undefined ? { speechMs } : {};
+    if (best && best.score >= this.#threshold && (speechMs === undefined || speechMs >= MIN_VERIFY_SPEECH_MS)) return { name: best.name, score: best.score, ...gated };
     let idx = this.#unknowns.findIndex((u) => cosine(u, e) >= this.#threshold);
     if (idx < 0) {
       this.#unknowns.push(e);
       idx = this.#unknowns.length - 1;
     }
-    return { unknownLabel: `unknown-${Math.min(idx + 1, 999_999)}`, score: best?.score ?? -1 };
+    return { unknownLabel: `unknown-${Math.min(idx + 1, 999_999)}`, score: best?.score ?? -1, ...gated };
   }
 }

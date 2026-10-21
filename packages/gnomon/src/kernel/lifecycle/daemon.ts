@@ -1049,7 +1049,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       ownerOf: (hsid) => supervisor.ownerOf(hsid),
       send: (owner, p) => supervisor.send(owner, p),
       stop: (owner, p) => supervisor.stop(owner, p),
-      // V2a kernel-side busy: the supervisor's own turn state (turn.sent until its result)
+      // V2a kernel-side busy: the supervisor's own turn state (turn.sent until the main-chain reply's end_turn message_stop)
       busy: (hsid) => supervisor.turnBusy(hsid),
     },
     append: async (row) => {
@@ -1067,6 +1067,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     reportStatus: () => voiceReports.status(),
     // Aegis M1 (T-2026-10-20-005): the kernel's acceptances cross-check the client's capture claims
     onAccepted: (connId, kind) => voiceReports.accepted(connId, kind),
+    // calibration (voice drops fix): client-local capture drops, as counts, on the next voice row
+    localDrops: () => voiceReports.takeLocalDrops(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),

@@ -20,7 +20,9 @@
  *   ⌃⌥H hold-toggle hotkey increments holdToggles (the GUI holds or releases its countdown).
  *   CAPTURE (T-2026-10-20-005 A1, TD-2026-10-20-086): every segment runs `idle → hearing → transcribing → captured |
  *   dropped{reason}` (PTT: key-down is hearing; AMBIENT: VAD start is hearing), reason from the closed
- *   CAPTURE_DROP_REASONS, set at each drop site. Reported as `request.voice.report{capture: {state, segId, reason?,
+ *   CAPTURE_DROP_REASONS, set at each drop site. Voice drops fix (2026-10-20): the kernel's append verdict is read; a
+ *   turn it refused at receipt (log.append → {refused, refusedCause}) ends DROPPED (reason 'refused' with
+ *   {refusal, cause}, or not-enrolled / not-attached for voice-speaker / voice-target), never captured. Reported as `request.voice.report{capture: {state, segId, reason?,
  *   level?}}` on the same serialized #reports chain: non-terminal reports ≤ 5 Hz (CAPTURE_REPORT_MIN_MS, the latest
  *   wins), terminal ones always sent. `level` (0..1, from the binary's level events) rides hearing reports only. No
  *   words in A1: the later partial text (B) gets its own field, projected by the kernel to the gui credential only.
@@ -47,10 +49,10 @@
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
 import { kernelSpeakable, sentences } from './speakable.js';
-import { SpeakerVerifier, type VoicePrint } from './speaker.js';
+import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
 import { capPartial, LiveAgreement, PARTIAL_ANCHOR_MARGIN_MS, PARTIAL_FULL_WINDOW_MS, PARTIAL_GATE_MS, PARTIAL_MAX_SEGMENT_MS, PARTIAL_MAX_WINDOW_MS, PARTIAL_PREROLL_MS, PARTIAL_TAIL_WINDOW_MS, PARTIAL_TICK_MS, type PartialText } from './partials.js';
-import type { AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
+import type { AppendResult, AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
 import { silentLogger } from './types.js';
 
 export type ClientMode = 'off' | 'ptt' | 'ambient';
@@ -63,7 +65,19 @@ export type CaptureState = (typeof CAPTURE_STATES)[number];
 /** Why a segment was not captured (status.voice.capture.reason). Closed; the kernel refuses any other value. */
 export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
 export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
-export interface CaptureReport {
+/** voice drops fix: on reason 'refused', the kernel's verdict (a voice-* refusal reason) and its V2a cause */
+export interface CaptureRefusal {
+  refusal?: string;
+  cause?: string;
+}
+const VOICE_REFUSAL = /^voice-[a-z-]{1,40}$/;
+const REFUSAL_CAUSE = /^[a-z][a-z-]{0,31}$/;
+/** The kernel's refusal as capture fields (only well-formed names; anything else is left out, never invented). */
+export function captureRefusalOf(reason: unknown, cause?: unknown): CaptureRefusal {
+  if (typeof reason !== 'string' || !VOICE_REFUSAL.test(reason)) return {};
+  return { refusal: reason, ...(typeof cause === 'string' && REFUSAL_CAUSE.test(cause) ? { cause } : {}) };
+}
+export interface CaptureReport extends CaptureRefusal {
   state: CaptureState;
   segId: string;
   reason?: CaptureDropReason;
@@ -370,11 +384,12 @@ export class VoiceClient {
   }
 
   /** End a segment: dropped{reason}, captured, or idle (abandoned by a mode change or pause). Always sent. */
-  #endCapture(segId: string, state: 'captured' | 'dropped' | 'idle', reason?: CaptureDropReason): void {
+  #endCapture(segId: string, state: 'captured' | 'dropped' | 'idle', reason?: CaptureDropReason, why: CaptureRefusal = {}): void {
     if (this.#cap?.segId === segId) this.#cap = null;
     if (this.#live?.segId === segId) this.#live = null; // the segment's audio and words go with it
-    if (state === 'dropped') this.#flow.info('capture dropped', { segId, reason });
-    this.#capture({ state, segId, ...(state === 'dropped' && reason ? { reason } : {}) });
+    const refusal = state === 'dropped' && reason === 'refused' ? why : {};
+    if (state === 'dropped') this.#flow.info('capture dropped', { segId, reason, ...refusal });
+    this.#capture({ state, segId, ...(state === 'dropped' && reason ? { reason } : {}), ...refusal });
   }
 
   /** Abandon a live hearing segment: dropped{reason} (a detach, a barge-in) or idle (a mode change, a pause). */
@@ -422,7 +437,7 @@ export class VoiceClient {
     this.#capLastSent = this.#now();
     // B1: the live words ride hearing / transcribing reports only, and only once the speaker provisionally matched (V1)
     const text = r.state === 'hearing' || r.state === 'transcribing' ? this.#textFor(r.segId) : null;
-    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level, ...(text ? { text } : {}) } : r.state === 'transcribing' ? { state: r.state, segId: r.segId, ...(text ? { text } : {}) } : { state: r.state, segId: r.segId, ...(r.reason ? { reason: r.reason } : {}) };
+    const capture: CaptureReport = r.state === 'hearing' ? { state: r.state, segId: r.segId, level: this.#level, ...(text ? { text } : {}) } : r.state === 'transcribing' ? { state: r.state, segId: r.segId, ...(text ? { text } : {}) } : { state: r.state, segId: r.segId, ...(r.reason ? { reason: r.reason } : {}), ...(r.refusal ? { refusal: r.refusal, ...(r.cause ? { cause: r.cause } : {}) } : {}) };
     this.#lastCapture = capture;
     // Aegis L4: a slow kernel never builds a backlog: the newest report replaces a waiting one of the same segment and
     // state (a level update or keepalive). A state change is queued, so every edge, and every terminal state, still
@@ -943,10 +958,10 @@ export class VoiceClient {
     }
     this.#capture({ state: 'transcribing', segId });
     let ended = false;
-    const end = (state: 'captured' | 'dropped', reason?: CaptureDropReason): void => {
+    const end = (state: 'captured' | 'dropped', reason?: CaptureDropReason, why?: CaptureRefusal): void => {
       if (ended) return;
       ended = true;
-      this.#endCapture(segId, state, reason);
+      this.#endCapture(segId, state, reason, why);
     };
     this.#pending++;
     this.#recompute();
@@ -963,7 +978,7 @@ export class VoiceClient {
       });
   }
 
-  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason) => void): Promise<void> {
+  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason, why?: CaptureRefusal) => void): Promise<void> {
     // the final transcript is always the FULL-segment decode (never the live words)
     this.#sttBusy++;
     let text: string;
@@ -989,17 +1004,29 @@ export class VoiceClient {
     // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262). TD-2026-10-20-125:
     // an ambient turn is never sent by the client, whatever the delivery (it fills the composer; a human sends it)
     const direct = this.#delivery === 'direct' && mode === 'ptt';
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
+    // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
+    const gatedMs = gatedSpeechMsOf(who.speechMs);
+    const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...calib };
+    let verdict: AppendResult;
     try {
-      await this.#o.link.append('voice.turn.user', payload);
+      verdict = await this.#o.link.append('voice.turn.user', payload);
     } catch (err) {
       this.#refused(err, 'log.append');
-      return end('dropped', 'refused');
+      return end('dropped', 'refused', captureRefusalOf(toRefusal(err).reason));
     }
-    this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
+    this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode, ...calib });
     if (!enrolled) {
       this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');
+    }
+    // voice drops fix: the kernel refused the turn at receipt (stored hash-only, never forwardable). The capture ends
+    // as dropped with the kernel's reason, never as captured: the GUI says why instead of "Heard, not confirmed".
+    if (verdict?.refused !== undefined) {
+      this.#flow.info('turn refused at receipt', { turnId, refused: verdict.refused, ...(verdict.refusedCause ? { cause: verdict.refusedCause } : {}) });
+      // voice-speaker is the not-enrolled drop (its own words); every other verdict rides reason 'refused' + refusal,
+      // so the kernel's local-drop tally never counts a kernel refusal as a client-local drop
+      return end('dropped', verdict.refused === 'voice-speaker' ? 'not-enrolled' : 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
     }
     if (!direct) {
       this.#flow.info('turn dictated (composer)', { turnId });
@@ -1012,7 +1039,7 @@ export class VoiceClient {
       end('captured');
     } catch (err) {
       this.#refused(err, 'session.send'); // never retried blindly
-      end('dropped', 'refused');
+      end('dropped', 'refused', captureRefusalOf(toRefusal(err).reason));
     }
   }
 

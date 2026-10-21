@@ -712,6 +712,47 @@ describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
     expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
     expect(r.kinds('turn.result')[1]!.payload.turn).toBe(`turn:${s.hsid}/4`);
   });
+  it('voice busy guard: the reply ends at its main-chain message_stop, not a 30 s-late result; a sub-agent stop does not end it', async () => {
+    const r = rig();
+    setMode(w, { endTurn: { resultDelayMs: 1_500 } });
+    const s = await open(r.sup);
+    expect(r.sup.turnBusy(s.hsid)).toEqual({ streaming: false, endedAt: null });
+    const before = Date.now();
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    // the sub-agent's end_turn comes first and ends nothing; the main chain's message_stop ends the reply
+    expect(await waitFor(() => !r.sup.turnBusy(s.hsid).streaming)).toBe(true);
+    expect(r.kinds('turn.result')).toHaveLength(0); // the result is still on its way
+    const endedAt = r.sup.turnBusy(s.hsid).endedAt!;
+    expect(endedAt).toBeGreaterThanOrEqual(before);
+    // the late result keeps the reply's end time (a result is not a second end)
+    expect(await waitFor(() => r.kinds('turn.result').length === 1, 4_000)).toBe(true);
+    expect(r.sup.turnBusy(s.hsid)).toEqual({ streaming: false, endedAt });
+  });
+  it('voice busy guard: a Stop-hook continuation (a new main-chain message_start before the result) streams again', async () => {
+    const r = rig();
+    setMode(w, { endTurn: { continueAtMs: 500, continueEndMs: 1_100, resultDelayMs: 1_700 } });
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    expect(await waitFor(() => !r.sup.turnBusy(s.hsid).streaming)).toBe(true);
+    const first = r.sup.turnBusy(s.hsid).endedAt!;
+    expect(await waitFor(() => r.sup.turnBusy(s.hsid).streaming, 3_000)).toBe(true); // re-armed
+    expect(r.kinds('turn.result')).toHaveLength(0);
+    expect(await waitFor(() => !r.sup.turnBusy(s.hsid).streaming, 3_000)).toBe(true);
+    expect(r.kinds('turn.result')).toHaveLength(0);
+    expect(r.sup.turnBusy(s.hsid).endedAt!).toBeGreaterThan(first);
+    expect(await waitFor(() => r.kinds('turn.result').length === 1, 4_000)).toBe(true);
+  });
+  it('voice busy guard: with no end seen (no message_delta end_turn) the result ends the turn, as before', async () => {
+    const r = rig();
+    setMode(w, { endTurn: { noMainStop: true, resultDelayMs: 600 } });
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    expect(await waitFor(() => r.kinds('turn.event').some((e) => e.payload.type === 'stream_event.message_stop'))).toBe(true);
+    expect(r.sup.turnBusy(s.hsid).streaming).toBe(true); // only the sub-agent stopped
+    expect(await waitFor(() => r.kinds('turn.result').length === 1, 3_000)).toBe(true);
+    expect(r.sup.turnBusy(s.hsid).streaming).toBe(false);
+    expect(r.sup.turnBusy(s.hsid).endedAt).not.toBeNull();
+  });
   it('re-review M-1: a result with no outstanding turn writes session.anomaly{why:result-without-turn}, names only', async () => {
     const r = rig();
     setMode(w, { extraLines: [{ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: [], result: 'stray' }] });

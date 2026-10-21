@@ -2032,6 +2032,12 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain
+      end_turn message_stop (supervisor turnBusy), re-armed by message_start;
+      the append result carries refused/refusedCause; capture reports carry
+      refusal/cause; voice.turn.user keeps speakerScore (bucket) and
+      gatedSpeechMs; the kernel stamps localDrops counts (VoiceReports
+      takeLocalDrops) on voice.turn.user and voice.session.end.
       Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes
       through appendSignedEnrolRow (sig verified, seq recomputed under the
       lock, moved seq refused loudly, durable append). A missing `consent` is

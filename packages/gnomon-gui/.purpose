@@ -703,6 +703,11 @@ components:
       - test/preview.test.ts
   gui-voice-capture:
     description: >-
+      Voice drops fix (2026-10-20): a drop names its reason in words
+      (dropLabelOf, refusalPhrase) and stays on the pill until the next capture
+      or a dismiss (captureDismiss on opening the voice menu); the store renders
+      kernel-refused hash-only voice.turn.user rows (refusedReason,
+      refusedCause) as voice-refused.
       #gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live
       capture feedback. core/capture.ts is PURE: captureStatusOf is the one
       adapter over status.voice.capture{state, segId, reason?, level?, at}

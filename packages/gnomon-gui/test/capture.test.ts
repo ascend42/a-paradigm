@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, DROP_LABEL, DROPPED_FLASH_MS } from '../src/core/capture.js';
+import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, captureDismiss, DROP_LABEL, dropLabelOf, refusalPhrase } from '../src/core/capture.js';
 import { clientOf, clientPillOf, oneLine } from '../src/core/voice-client.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +23,7 @@ const show = (capture: unknown, ageMs = 0) => {
 
 describe('captureStatusOf: the one adapter over status.voice.capture', () => {
   it('reads every state; level only while hearing (clamped), reason only on dropped', () => {
-    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, level: 0.4, kernel: null, text: null });
+    expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 0.4, at: 'x' }))).toEqual({ state: 'hearing', segId: 's1', reason: null, refusal: null, cause: null, level: 0.4, kernel: null, text: null });
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1', level: 7 }))!.level).toBe(1);
     expect(captureStatusOf(st({ state: 'hearing', segId: 's1' }))!.level).toBe(0);
     expect(captureStatusOf(st({ state: 'transcribing', segId: 's1', level: 0.9 }))!.level).toBeNull();
@@ -42,19 +42,48 @@ describe('the pill words (V4: a drop says its reason only)', () => {
     expect(show({ state: 'transcribing', segId: 's1' })).toMatchObject({ label: 'Catching that…', meter: 0, ghost: true });
     expect(show({ state: 'captured', segId: 's1' })).toMatchObject({ label: 'Got it', ghost: false });
   });
-  it('each drop reason has its plain words, never text or a count', () => {
-    expect(show({ state: 'dropped', segId: 's1', reason: 'too-short' }).label).toBe('Too short, say it again');
-    expect(show({ state: 'dropped', segId: 's1', reason: 'echo' }).label).toBe('Not sent: I was speaking');
-    expect(show({ state: 'dropped', segId: 's1', reason: 'barge-in' }).label).toBe('Not sent: I was speaking');
-    expect(show({ state: 'dropped', segId: 's1', reason: 'no-words' }).label).toBe('Heard no words');
-    expect(show({ state: 'dropped', segId: 's1', reason: 'not-enrolled' }).label).toBe("Ignored a voice that isn't enrolled");
+  it('each drop reason has its own readable words, never text or a count', () => {
+    expect(show({ state: 'dropped', segId: 's1', reason: 'too-short' }).label).toBe('Too short to catch. Hold a little longer, or say it again');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'echo' }).label).toBe('Not sent: it overlapped my spoken reply');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'barge-in' }).label).toBe('Not sent: you talked over my reply, so I stopped');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'no-words' }).label).toBe('Heard sound, but no words');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'not-enrolled' }).label).toBe('Not sent: speaker not recognised');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'not-attached' }).label).toBe('Not sent: voice is not attached to this session');
+    expect(new Set(CAPTURE_DROP_REASONS.map((r) => DROP_LABEL[r])).size).toBe(CAPTURE_DROP_REASONS.length);
     for (const r of CAPTURE_DROP_REASONS) expect(DROP_LABEL[r]).not.toMatch(/\d/);
   });
-  it('captured flashes for 1.2 s and dropped for 2.5 s, timed from when this page first saw them', () => {
+  it('voice drops fix: a refused drop names the kernel verdict (busy, speaker, echo, a V2a cause)', () => {
+    expect(show({ state: 'dropped', segId: 's1', reason: 'refused', refusal: 'voice-playback' }).label).toBe('Not sent: Claude was still finishing its reply. Say it again');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'refused', refusal: 'voice-echo' }).label).toBe('Not sent: it overlapped my spoken reply');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'refused', refusal: 'voice-off', cause: 'aec' }).label).toContain('no echo cancellation');
+    expect(show({ state: 'dropped', segId: 's1', reason: 'refused' }).label).toBe('Not sent: the kernel refused it');
+    // a malformed refusal is ignored (the client reason stands), and only reason refused carries one
+    expect(captureStatusOf(st({ state: 'dropped', segId: 's1', reason: 'refused', refusal: '<b>x</b>' }))!.refusal).toBeNull();
+    expect(captureStatusOf(st({ state: 'dropped', segId: 's1', reason: 'echo', refusal: 'voice-echo' }))!.refusal).toBeNull();
+    expect(refusalPhrase('voice-speaker')).toBe('speaker not recognised');
+    expect(refusalPhrase('voice-new-thing', 'x')).toBe('voice-new-thing · x');
+    expect(dropLabelOf({ reason: 'refused', refusal: 'voice-target', cause: null })).toBe('Not sent: voice is not attached to this session');
+  });
+  it('voice drops fix: a drop (and an unconfirmed capture) stays until the next capture or a dismiss; captured flashes 1.2 s', () => {
     expect(show({ state: 'captured', segId: 's1' }, CAPTURED_FLASH_MS - 1).label).toBe('Got it');
     expect(show({ state: 'captured', segId: 's1' }, CAPTURED_FLASH_MS).label).toBeNull();
-    expect(show({ state: 'dropped', segId: 's1', reason: 'echo' }, DROPPED_FLASH_MS - 1).flashLeftMs).toBe(1);
-    expect(show({ state: 'dropped', segId: 's1', reason: 'echo' }, DROPPED_FLASH_MS).label).toBeNull();
+    expect(show({ state: 'dropped', segId: 's1', reason: 'echo' }, 60_000)).toMatchObject({ label: 'Not sent: it overlapped my spoken reply', flashLeftMs: null });
+    // the kernel's 5 s capture TTL expires (a null read) or the client goes idle: the drop is kept
+    const d = captureStep(null, captureStatusOf(st({ state: 'dropped', segId: 's1', reason: 'too-short' })), 0);
+    expect(captureStep(d, null, 9_000)).toBe(d);
+    expect(captureStep(d, captureStatusOf(st({ state: 'idle', segId: 's1' })), 9_000)).toBe(d);
+    // the next capture replaces it
+    expect(captureStep(d, captureStatusOf(st({ state: 'hearing', segId: 's2' })), 9_000).cap!.state).toBe('hearing');
+    // a dismiss hides it, and a re-read of the same report stays hidden; a new one shows
+    const gone = captureDismiss(d, 9_000)!;
+    expect(captureDisplayOf(gone, 9_000, true).label).toBeNull();
+    const again = captureStep(gone, captureStatusOf(st({ state: 'dropped', segId: 's1', reason: 'too-short' })), 9_500);
+    expect(captureDisplayOf(again, 9_500, true).label).toBeNull();
+    expect(captureDisplayOf(captureStep(again, captureStatusOf(st({ state: 'dropped', segId: 's2', reason: 'no-words' })), 9_600), 9_600, true).label).toBe('Heard sound, but no words');
+    // a captured that flashed is not sticky (it clears at the TTL as before)
+    const c = captureStep(null, captureStatusOf(st({ state: 'captured', segId: 's3' })), 0);
+    expect(captureStep(c, null, 9_000).cap).toBeNull();
+    expect(captureDismiss(c, 1)).toBe(c);
     // the same report re-read keeps its clock; a new segment or state restarts it
     const a = captureStep(null, captureStatusOf(st({ state: 'captured', segId: 's1' })), 0);
     expect(captureStep(a, captureStatusOf(st({ state: 'captured', segId: 's1' })), 900).since).toBe(0);
@@ -71,7 +100,7 @@ describe('the pill words (V4: a drop says its reason only)', () => {
 
 describe('Aegis M1 / L2 follow-ups', () => {
   it('M1: a captured the kernel did not confirm is not "Got it"; a kernel-overridden drop shows Got it', () => {
-    expect(show({ state: 'captured', segId: 's1', claim: 'client', kernel: 'unconfirmed' }).label).toBe('Heard, not confirmed');
+    expect(show({ state: 'captured', segId: 's1', claim: 'client', kernel: 'unconfirmed' }, 60_000)).toMatchObject({ label: 'Heard, but not confirmed: check the transcript', flashLeftMs: null });
     expect(show({ state: 'captured', segId: 's1', claim: 'client', kernel: 'accepted', clientReason: 'no-words' }).label).toBe('Got it');
     expect(captureStatusOf(st({ state: 'captured', segId: 's1', kernel: 'bogus' }))!.kernel).toBeNull();
   });
@@ -111,7 +140,9 @@ describe('the page', () => {
     expect(HTML).toMatch(/<div id="composer-ghost" class="composer-ghost meta" aria-hidden="true" hidden>…<\/div>/);
     expect(HTML).toMatch(/<span id="voice-caption" class="sr-only" aria-live="polite"><\/span>/);
     expect(APP).not.toMatch(/composer-text'\)[^;\n]*(ghost|capture)/);
-    expect(APP).toMatch(/if \(d\.state !== captionState\) \{\s*captionState = d\.state;\s*put\(\$\('voice-caption'\), d\.caption\);/);
+    expect(APP).toMatch(/if \(d\.caption !== captionState\) \{\s*captionState = d\.caption;\s*put\(\$\('voice-caption'\), d\.caption\);/);
+    // voice drops fix: opening the voice menu dismisses a sticky drop
+    expect(APP).toMatch(/function openVoiceMenu\(\)[\s\S]{0,400}captureTrack = captureDismiss\(captureTrack, Date\.now\(\)\);/);
   });
   it('the meter is the real level only: no infinite meter animation, no row kick', () => {
     expect(CSS).not.toMatch(/\.voice-meter i \{[^}]*animation/);

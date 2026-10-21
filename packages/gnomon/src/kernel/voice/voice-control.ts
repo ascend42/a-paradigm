@@ -23,7 +23,9 @@
  *   - an `aec` claim on its voice.turn.user (`vpio` | `headphones`), else voice-off{cause: 'aec'};
  *   - an enrolled speaker (as for ptt);
  *   - the attached session's model not busy by the kernel's own clock: refused voice-playback{clock: 'kernel'} while
- *     the supervisor has a turn in flight (turn.sent until its result) and through echoTailMs after it closed
+ *     the supervisor has a turn in flight (turn.sent until the main-chain reply ends: its message_stop after an end_turn
+ *     stop_reason, re-armed by a Stop-hook continuation's message_start; the result only when no end was seen) and
+ *     through echoTailMs after it ended
  *     (VoiceSessionsPort.busy, from supervisor state). This window covers model streaming plus the tail ONLY: client
  *     TTS that plays longer, a client that logs no voice.turn.agent, or a claimed turn duration of 0 can still get an
  *     echo past it (spec §14.7 residual risk); the client playback rows and the AEC claim are the rest of the defence.
@@ -126,8 +128,8 @@ export interface VoiceSessionsPort {
   send(owner: string, p: { hsid: string; text: string; source: 'voice'; voice: VoiceTurnLink }): Promise<unknown>;
   stop(owner: string, p: { hsid: string; interrupt: true }): Promise<unknown>;
   /**
-   * V2a kernel-side busy: is the session's model turn streaming now (turn.sent until its result), and when (kernel
-   * clock, ms) did its last turn close. From supervisor state, never a client claim. Absent ⇒ never busy (tests).
+   * V2a kernel-side busy: is the session's model turn streaming now (turn.sent until the main-chain reply's
+   * end_turn message_stop, re-armed by a new main-chain message_start), and when (kernel clock, ms) did its last reply end. From supervisor state, never a client claim. Absent ⇒ never busy (tests).
    */
   busy?(hsid: string): { streaming: boolean; endedAt: number | null };
 }
@@ -218,6 +220,11 @@ export interface VoiceControlOptions {
   onAttachmentChange?: () => void;
   /** Aegis M1 (T-2026-10-20-005): the kernel accepted a voice turn (not refused, not intercepted) or a direct send on this voice connection (VoiceReports.accepted). */
   onAccepted?: (connId: string, kind: 'turn' | 'send') => void;
+  /**
+   * Calibration (voice drops fix): take (and reset) the kernel's tally of client-local capture drops since the last
+   * take (VoiceReports.takeLocalDrops), or undefined when there were none. Stamped as `localDrops` on rows.
+   */
+  localDrops?: () => Record<string, number> | undefined;
   /** V2a: raise the fresh-presence card for widening to conversation; resolves with its cardId. Absent ⇒ widening refused. */
   presence?: (req: VoicePresenceRequest) => Promise<{ cardId: string }>;
   /** V2a: idle auto-off for a conversation ceiling (clamped by ambientIdleMsOf; default 10 min) */
@@ -283,7 +290,20 @@ export function turnIdAfter(next: string, prev: string | undefined): boolean {
 }
 
 /** V2a: the fields a hash-only voice.turn.user row keeps (no text, no free-form client field). */
-const HASH_ONLY_KEEP = ['turnId', 'speakerId', 'speakerEnrolled', 't0', 't1', 'mode', 'aec', 'intercepted', 'asrModel', 'confidence'];
+const HASH_ONLY_KEEP = ['turnId', 'speakerId', 'speakerEnrolled', 't0', 't1', 'mode', 'aec', 'intercepted', 'asrModel', 'confidence', 'speakerScore', 'gatedSpeechMs'];
+/**
+ * Calibration (voice drops fix 2026-10-20): the client's speaker-verification score, COARSE (a bucket, never the
+ * number), and how much speech survived its speech gate (ms, rounded to 10). Numbers only, no text, no audio; kept on
+ * refused hash-only rows too, so the verifier threshold can be calibrated against real turns.
+ */
+export const VOICE_SPEAKER_SCORE_BUCKETS = ['none', 'lt0.5', '0.5-0.65', '0.65-0.8', 'ge0.8'] as const;
+export const VOICE_GATED_SPEECH_MAX_MS = 10 * 60_000;
+/**
+ * Calibration: the client-local drop reasons the kernel tallies from capture reports (request.voice.report{capture},
+ * dropped, not contradicted, no kernel refusal) and stamps as `localDrops{reason: n}` on the next voice.turn.user and
+ * voice.session.end row. Counts only (hash-only by construction): no text, no audio, no segment ids.
+ */
+export const VOICE_LOCAL_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'barge-in'] as const;
 /** bounded memory of past attachments (voiceSessionId → owner) for `continues` */
 const PAST_CAP = 64;
 
@@ -491,7 +511,8 @@ export class VoiceControl {
   }
 
   async #end(a: Attachment, connId: string | undefined, principal: string, reason?: 'idle'): Promise<unknown> {
-    const r = await this.#o.append({ kind: 'voice.session.end', principal, payload: { voiceSessionId: a.voiceSessionId, turns: a.turns, compactedTo: null, ...(reason ? { reason } : {}) }, ...(connId ? { connId } : {}), session: a.hsid });
+    const drops = this.#o.localDrops?.();
+    const r = await this.#o.append({ kind: 'voice.session.end', principal, payload: { voiceSessionId: a.voiceSessionId, turns: a.turns, compactedTo: null, ...(reason ? { reason } : {}), ...(drops ? { localDrops: drops } : {}) }, ...(connId ? { connId } : {}), session: a.hsid });
     this.#past.set(a.voiceSessionId, a.owner);
     while (this.#past.size > PAST_CAP) this.#past.delete(this.#past.keys().next().value!);
     if (this.#attachment === a) {
@@ -570,6 +591,8 @@ export class VoiceControl {
     if (Object.hasOwn(p, 'receivedAt')) throw bad('receivedAt is stamped by the kernel');
     // TD-2026-10-20-262: forwardable is the kernel's verdict on the row, never a client claim
     if (Object.hasOwn(p, 'forwardable')) throw bad('forwardable is stamped by the kernel');
+    // calibration: the local-drop tally is the kernel's (from capture reports), never a client claim
+    if (Object.hasOwn(p, 'localDrops')) throw bad('localDrops is stamped by the kernel');
     const receivedAt = this.#now();
     let stamped: Record<string, unknown> = kind === 'voice.turn.user' || kind === 'voice.turn.agent' ? { ...p, receivedAt } : { ...p };
     let refusedAtReceipt: RefusedError | undefined;
@@ -591,6 +614,8 @@ export class VoiceControl {
         // Aegis V2a L3: the free-form ASR metadata is bounded on every row
         if (p.asrModel !== undefined && (typeof p.asrModel !== 'string' || !ASR_MODEL.test(p.asrModel))) throw bad('asrModel is ≤ 64 of [A-Za-z0-9_.-]');
         if (p.confidence !== undefined && (typeof p.confidence !== 'number' || !Number.isFinite(p.confidence) || p.confidence < 0 || p.confidence > 1)) throw bad('confidence is a number in 0..1');
+        if (p.speakerScore !== undefined && !(VOICE_SPEAKER_SCORE_BUCKETS as readonly unknown[]).includes(p.speakerScore)) throw bad(`speakerScore is a bucket: ${VOICE_SPEAKER_SCORE_BUCKETS.join(' | ')}`);
+        if (p.gatedSpeechMs !== undefined && (typeof p.gatedSpeechMs !== 'number' || !Number.isSafeInteger(p.gatedSpeechMs) || p.gatedSpeechMs < 0 || p.gatedSpeechMs > VOICE_GATED_SPEECH_MAX_MS || p.gatedSpeechMs % 10 !== 0)) throw bad(`gatedSpeechMs is an integer 0..${VOICE_GATED_SPEECH_MAX_MS}, a multiple of 10`);
         const turn: UserTurn = {
           turnId: t.turnId,
           connId: c.connId,
@@ -614,12 +639,14 @@ export class VoiceControl {
         else if (!turn.intercepted) {
           refusedAtReceipt = a ? this.#guards(turn, a) : voiceRefusal('voice-target', 'voice is not attached (attach is a human gesture)', { turnId: turn.turnId });
         }
+        const drops = this.#o.localDrops?.();
+        if (drops) stamped = { ...stamped, localDrops: drops };
         if (refusedAtReceipt) {
           turn.refused = refusedAtReceipt;
           const kept: Record<string, unknown> = {};
           for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
           const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
-          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}) };
+          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}), ...(drops ? { localDrops: drops } : {}) };
         } else {
           // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send)
           stamped = { ...stamped, forwardable: !turn.intercepted };
@@ -657,7 +684,11 @@ export class VoiceControl {
     this.#prune();
     const r = await this.#o.append({ kind, principal: c.principal, payload: stamped, connId: c.connId, ...(a ? { session: a.hsid } : {}), ...(typeof sensitivity === 'string' ? { sensitivity } : {}) });
     for (const f of commit) f(r.seq);
-    if (refusedAtReceipt) return { ...r, forwardable: false, refused: ((refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>).reason };
+    if (refusedAtReceipt) {
+      // voice drops fix: the verdict and its V2a cause go back to the client, which ends the capture as dropped with them
+      const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
+      return { ...r, forwardable: false, refused: d.reason, ...(typeof d.cause === 'string' ? { refusedCause: d.cause } : {}) };
+    }
     if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true };
     return r;
   }
