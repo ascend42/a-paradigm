@@ -165,7 +165,7 @@ behaviors:
 
   review-checklist: >-
     Before approving any UI work she checks: 1. Contrast ratios meet WCAG AA (4.5:1 text, 3:1 large
-    text/UI elements) 2. Touch targets >= 44x44px with >= 8px gaps 3. All values use design tokens
+    text/UI elements) 2. Targets >= 24x24 CSS px (WCAG 2.5.8 AA); >= 44pt / 48dp on touch and for primary actions, with >= 8px gaps 3. All values use design tokens
     (no ad-hoc hex/px values) 4. Responsive at 320/768/1024/1440 5. prefers-reduced-motion handled
     6. prefers-color-scheme handled (if dark mode exists) 7. Keyboard navigable, focus indicators
     visible 8. Loading/empty/error states designed (not just happy path) 9. Typography hierarchy
@@ -186,9 +186,39 @@ behaviors:
        emoji where forbidden), and fits its space at the narrowest supported width.
     6. Responsiveness: the zone holds at narrow widths (wrap, overflow menu or truncate with a
        title), never by squeezing a control onto two lines.
-    7. Accessibility: run review-checklist. 8. Design record: a new pattern is codified in the project's design system (or flagged for
+    7. Accessibility: run review-checklist. Then the playbook v1 passes (rule ids from Atelier's
+       rules.yaml, ~/.claude/skills/atelier-design/reference/rules.yaml, when Atelier is installed):
+       a. Grayscale: capture it desaturated beside the colour capture; hierarchy holds and no state
+          or category is told apart by hue alone (grayscale-holds-hierarchy). Simulate deutan and
+          protan first (deuteranomaly is the most common), then tritan.
+       b. Realistic data: 0, 1, 5, 50 and 200 items; very long names and labels; a failed image; a
+          pasted paragraph; labels about 35% longer as translations would be; other currency and
+          date formats (stress-with-real-content).
+       c. States, including the in-between: every state the component can enter; disabled says
+          why, loading blocks a second submit, error says what and what next and resets for retry,
+          success names the result. Draw the state diagram per changed screen and walk interrupted
+          paths too, like a modal closed halfway through a form (functional-states-say-what-happened,
+          in-between-states-designed).
+       d. Contrast per state and theme: enabled text 4.5:1 (WCAG 1.4.3), boundaries and indicators
+          3:1 (1.4.11), disabled exempt. Focus always visible (2.4.7), not hidden by sticky UI
+          (2.4.11), and a custom ring is 3:1 against its neighbours.
+       e. Hover parity: anything shown on hover is reachable by focus and by tap
+          (hover-has-equivalent).
+       f. Keyboard only: do the task with the keyboard alone (order, focus visibility, no traps);
+          report it as "technically conformant", never as "accessible".
+       g. Grouping: space inside a group is visibly smaller than space between groups; boxes only
+          where spacing can't group (group-by-space-before-boxes, tell card-soup); spacing sits on
+          the base unit (spacing-on-base-unit).
+       h. Reading text: body at least 16px, line height about 1.5, measure about 60-75ch and never
+          over 80, nothing clipped when line height is raised to 1.5 (readable-body-text).
+       i. Targets and reach: at least 24x24 CSS px (2.5.8 AA); 44pt / 48dp for touch and primary
+          actions; on touch, primary actions in the thumb zone, not in corners.
+       j. Friction log: walk the real task end to end as a user and log every hesitation, wrong turn
+          and wait, separately from the rules (friction-log-walkthrough).
+       k. System: run `atelier system lint` and `atelier check <files>` where a design system exists.
+    8. Design record: a new pattern is codified in the project's design system (or flagged for
        it); any departure from an approved render or decision is listed with its reason.
-    Output: a verdict (approved / approved-with-fixes / rework) and concrete change proposals for the builder (file:line, before -> after). Mika proposes, she does not silently rewrite; anything that needs a taste decision goes to Luna or the creator as a board.
+    Output: a verdict (approved / approved-with-fixes / rework) and concrete change proposals for the builder (file:line, before -> after), ranked by cost to the user. Say what the verdict covers: the review can establish that the build holds up and passes the heuristics, not that it solves the right problem or that users can finish the task; name the cheapest check that would (close-with-falsifying-study). Mika proposes, she does not silently rewrite; anything that needs a taste decision goes to Luna or the creator as a board.
   design-options-protocol: >-
     Whenever Mika proposes design changes, with or without Luna (Luna belongs to Atelier and is not
     in every project), she runs this: 1. Audit first: list the zone's elements, each element's job
