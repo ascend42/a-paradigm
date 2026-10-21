@@ -228,6 +228,12 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(rows({ acked: true })[5]).toMatchObject({ value: 'acknowledged', tone: 'ok', action: null });
     expect(rows({ enrolled: [] })[0]).toMatchObject({ tone: 'warn', action: { label: 'teach' } });
   });
+  it('ok reads by its mark and weight (board gnomon-status-colour): an ok value carries ✓, warn and plain do not', () => {
+    const r = root(sheetEls(fdoc, view()));
+    const vals = r.all((e) => /\bvs-v\b/.test(e.className));
+    expect(vals.find((e) => e.className === 'vs-v ok')!.text).toBe('✓ taught · matt');
+    for (const e of vals.filter((x) => x.className !== 'vs-v ok')) expect(e.text).not.toContain('✓');
+  });
   it('timing: the Talk delay 3/5/8/15/off is a segmented control with a selected state', () => {
     const r = root(sheetEls(fdoc, view({ delayMs: 8000, rows: rows({ delayMs: 8000 }) })));
     const keys = r.all((e) => e.attrs.has('data-vs-delay'));
@@ -242,11 +248,10 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-checked="true"\]::after[^{]*\{ content: "\]"/);
     expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-pressed="true"\] \{ text-shadow: var\(--wm-glow\)/);
   });
-  it('the open mic is the --live token (an alias of --stamp in both themes) for the dot and the meter', () => {
-    expect(CSS.match(/--stamp: (#[0-9A-F]+);\n[^\n]*\n?\s*--live: (#[0-9A-F]+);/g)?.length).toBe(2);
-    for (const [, a, b] of CSS.matchAll(/--stamp: (#[0-9A-F]+);\n(?:\s*\/\*[^\n]*\*\/\n)?\s*--live: (#[0-9A-F]+);/g)) expect(b).toBe(a);
-    expect(CSS).toMatch(/\.voice-pill\.live \.voice-dot \{ background: var\(--live\)/);
-    expect(CSS).toMatch(/\.voice-meter i \{[^}]*background: var\(--live\)/);
+  it('the open mic is ink (board gnomon-status-colour) for the dot and the meter; --live and --stamp are retired', () => {
+    expect(CSS).not.toMatch(/--(live|stamp)\b/);
+    expect(CSS).toMatch(/\.voice-pill\.live \.voice-dot \{ background: var\(--ink\)/);
+    expect(CSS).toMatch(/\.voice-meter i \{[^}]*background: var\(--ink\)/);
     expect(APP).not.toContain('mic-live');
   });
   it('the send word teaches INLINE under its row: pick, say once, I heard, one counter, risk check, save', () => {

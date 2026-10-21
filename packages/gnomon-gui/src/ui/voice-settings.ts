@@ -196,7 +196,8 @@ export function sheetEls(doc: MiniDoc, v: SheetView): MiniEl[] {
         'div',
         { class: 'vs-head' },
         h(doc, 'span', { class: 'vs-k' }, r.label),
-        h(doc, 'span', { class: `vs-v${r.tone === 'ok' ? ' ok' : r.tone === 'warn' ? ' warn' : ''}` }, r.value),
+        // ok reads by its mark and weight, in ink (board gnomon-status-colour)
+        h(doc, 'span', { class: `vs-v${r.tone === 'ok' ? ' ok' : r.tone === 'warn' ? ' warn' : ''}` }, r.tone === 'ok' ? `✓ ${r.value}` : r.value),
         r.action && open !== r.id ? btn(doc, { class: 'link', 'data-vs-act': r.action.act, 'data-vs-focus': `act-${r.id}` }, r.action.label) : h(doc, 'span', null),
       ),
     );

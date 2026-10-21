@@ -416,7 +416,7 @@ components:
       path with no opacity, settling at the pile rotation; a pinned card
       takes one of four preset tilts (.r-a..d by cardId; never inline
       style). Approve: ONLY after the kernel accepted the decision (a
-      refusal throws first), flyOff stamps APPROVED (--stamp ink), adds
+      refusal throws first), flyOff stamps APPROVED (--ink; board gnomon-status-colour), adds
       .out after a fixed stamp hold, a design constant set in flyOff (flyout) and removes the sheet on its animationend,
       with a fixed fallback timer (a design constant, not a measurement); a departing card is kept out of fresh paints and
       re-inserted at its place. Reduced motion (in-app or OS): nothing
@@ -973,7 +973,7 @@ components:
       <B> · voice is on <A>" (ladderTargetLine / ladderAria); a crash's fact is
       just "voice crashed", its cause in the title and aria name
       (crashCauseOf); the risk row says when it was acknowledged; the mic dot
-      and meter use the --live token (an alias of --stamp's value); the pill
+      and meter are --ink (board gnomon-status-colour retired --live and --stamp); the pill
       meter shows only while capture is `hearing` (capture.ts meterShownOf);
       night selected segments are [bracketed] with the glow; the tall-view
       key has a pressed state. Copy retirement (T-2026-10-21-016): the

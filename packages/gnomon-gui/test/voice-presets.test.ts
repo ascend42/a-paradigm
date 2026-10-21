@@ -77,11 +77,12 @@ describe('voice presets', () => {
 });
 
 describe('voice-sent labels in words (Luna #10)', () => {
-  it('"you · spoken · sent by <how>", "said aloud", "spoken part"; no glyph in the page sites', () => {
-    expect(voiceWho({ speaker: 'you', edited: false, sent: 'spoken · sent by send word' })).toEqual({ who: 'you', sent: '· spoken · sent by send word' });
-    expect(voiceWho({ speaker: 'matt', edited: false, sent: null })).toEqual({ who: 'matt', sent: '· spoken' });
+  it('"you · voice · spoken · sent by <how>", "voice · said aloud", "voice · spoken part"; no glyph in the page sites', () => {
+    expect(voiceWho({ speaker: 'you', edited: false, sent: 'spoken · sent by send word' })).toEqual({ who: 'you · voice', sent: '· spoken · sent by send word' });
+    expect(voiceWho({ speaker: 'matt', edited: false, sent: null })).toEqual({ who: 'matt · voice', sent: '· spoken' });
+    expect(voiceWho({ speaker: 'voice', edited: false, sent: null }).who).toBe('voice'); // the unnamed-speaker fallback (store speakerName) never doubles
     expect(voiceWho({ speaker: 'you', edited: true, sent: 'spoken · sent by you' }).sent).toBe('· spoken · sent by you · edited');
-    expect([saidTag('kernel'), saidTag('reply')]).toEqual(['said aloud', 'spoken part']);
+    expect([saidTag('kernel'), saidTag('reply')]).toEqual(['voice · said aloud', 'voice · spoken part']); // board gnomon-status-colour: the word, never a hue
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     const app = readFileSync(path.join(root, 'src', 'ui', 'app.ts'), 'utf8');
     const html = readFileSync(path.join(root, 'static', 'index.html'), 'utf8');

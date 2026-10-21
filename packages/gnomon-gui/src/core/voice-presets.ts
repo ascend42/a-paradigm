@@ -115,10 +115,11 @@ export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | n
  * the sent label, or plain "spoken" when the kernel signed no turn.sent label), "· edited" when the human edited it.
  */
 export function voiceWho(o: { speaker: string; edited: boolean; sent: string | null }): { who: string; sent: string } {
-  return { who: o.speaker, sent: `· ${o.sent ?? 'spoken'}${o.edited ? ' · edited' : ''}` };
+  // board gnomon-status-colour: a voice turn reads by the word "voice", never by a hue
+  return { who: o.speaker === 'voice' ? 'voice' : `${o.speaker} · voice`, sent: `· ${o.sent ?? 'spoken'}${o.edited ? ' · edited' : ''}` };
 }
-/** Luna #10: the tag before a reply's spoken part, in words. */
-export const saidTag = (by: 'kernel' | 'reply'): string => (by === 'kernel' ? 'said aloud' : 'spoken part');
+/** Luna #10: the tag before a reply's spoken part, in words ("voice" carries it, never a hue: board gnomon-status-colour). */
+export const saidTag = (by: 'kernel' | 'reply'): string => (by === 'kernel' ? 'voice · said aloud' : 'voice · spoken part');
 
 /** The session header chip while a voice-origin turn of that session is outstanding (Atelier 2026-10-21 direction). */
 export const CLAMP_CHIP = 'voice turn · edits ask first';

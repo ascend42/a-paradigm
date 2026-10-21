@@ -511,7 +511,7 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/(?<![-a-z])(color|border(-[a-z]+)?|outline):[^;}]*--p-sage-fill/);
   });
   it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
-    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'stamp', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
+    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
     for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
@@ -528,6 +528,31 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     expect(css).toMatch(/\.key\.pri \{ background: var\(--ink\); color: var\(--on-ink\); \}/);
     expect(css).not.toMatch(/--glow\b/);
     expect(css).toMatch(/\[data-theme="night"\] \.wordmark \{[^}]*text-shadow: var\(--wm-glow\);/);
+  });
+  it.each(['day', 'night'])('%s field edges (board gnomon-field-border): --sec at rest is >= 3:1 on the page and the sheet', (theme) => {
+    const t = tokens(theme);
+    const lum = (hex: string): number => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!; };
+    const ratio = (a: string, b: string): number => { const [x, y] = [lum(a), lum(b)]; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    expect(ratio(t['sec']!, t['ground']!)).toBeGreaterThanOrEqual(5.5);
+    expect(ratio(t['sec']!, t['sheet']!)).toBeGreaterThanOrEqual(5.5);
+  });
+  it('field edges: --sec at rest, --key-edge on hover, a 2px --key-edge focus ring; never --rule', () => {
+    const flat = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = (sel: string): string => [...flat.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => m[1]!.trim() === sel).map((m) => m[2]!).join(';');
+    for (const sel of ['.field', '.palfield', '.composer', '.rename-input']) expect(rule(sel), sel).toMatch(/border: 1px solid var\(--sec\)/);
+    for (const sel of ['.field:hover', '.palfield:hover', '.composer:hover']) expect(rule(sel), sel).toMatch(/border-color: var\(--key-edge\)/);
+    expect(flat).toMatch(/\.field:focus-visible[^{]*\{ outline: 2px solid var\(--key-edge\)/);
+    expect(rule('.palfield:focus-visible')).toMatch(/outline: 2px solid var\(--key-edge\)/);
+    expect(rule('#session-search')).not.toMatch(/border/);
+  });
+  it('status is ink (board gnomon-status-colour): no project hue, --slate, --live or --stamp on a status rule', () => {
+    const flat = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(flat).not.toMatch(/--(live|stamp)\b/);
+    const STATUS = /voice-dot|voice-meter|vs-meter|link-dot|\.stamp|vs-v\.ok|vs-heard|\.said|trow\.voice/;
+    for (const m of flat.matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (STATUS.test(m[1]!)) expect(m[2], m[1]!.trim()).not.toMatch(/--(slate|p-[a-z-]+-(ink|fill))\b/);
+    expect(flat).toMatch(/\.vs-v\.ok \{ color: var\(--ink\); font-weight: 600; \}/);
+    expect(flat).toMatch(/\.trow\.voice \.who \{ color: var\(--ink2\); \}/);
+    expect(flat).toMatch(/\.trow\.role-assistant \.said \{[^}]*border-left: 3px solid var\(--ink2\)/);
   });
   it('check-contrast.mjs passes', () => {
     expect(execFileSync(process.execPath, [path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'check-contrast.mjs')], { encoding: 'utf8' })).toContain('all pairs pass');

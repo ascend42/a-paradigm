@@ -157,7 +157,7 @@ describe('quiet kernel status', () => {
     expect(whoLine('none', null, 9)).toBe('kernel not connected');
     expect(APP).toContain("w.className = lv.wordShown ? 'link-word' : 'link-word sr-only';");
     expect(HEAD).toMatch(/<span id="conn" class="link-dot kernel-owned" role="status" aria-live="polite"/);
-    expect(rule('.link-dot.ok .ld')).toMatch(/background: var\(--live\)/);
+    expect(rule('.link-dot.ok .ld')).toMatch(/background: var\(--ink\)/);
   });
 });
 

@@ -391,7 +391,7 @@ describe('composer: one container, not a box inside a box (founder report 2026-1
   const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8').replace(/\/\*[^]*?\*\//g, '');
   const rules = (sel: RegExp): string[] => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => sel.test(m[1]!.trim())).map((m) => m[2]!);
   it('the composer carries the border; the textarea draws no border, outline or shadow of its own', () => {
-    expect(rules(/^\.composer$/).some((b) => /border:\s*1px solid var\(--key-edge\)/.test(b))).toBe(true);
+    expect(rules(/^\.composer$/).some((b) => /border:\s*1px solid var\(--sec\)/.test(b))).toBe(true); // the field edge (board gnomon-field-border)
     const ta = rules(/^\.composer textarea\.field$/).join(';');
     expect(ta).toMatch(/border:\s*0/);
     expect(ta).toMatch(/outline:\s*none/);

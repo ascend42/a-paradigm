@@ -51,9 +51,6 @@
   --wm-glow: none;
   --cap-shadow: rgba(40, 30, 15, .22);
   --cap-glow: none;
-  --stamp: #3F6664;
-  /* the open mic (the comp's --live): an alias of --stamp's value, for the pill's dot and meter */
-  --live: #3F6664;
   --title-font: "Fraunces", Georgia, serif;
   --display-wght: 600;
   --title-transform: none;
@@ -101,8 +98,6 @@
   --wm-glow: 0 0 6px rgba(200, 255, 235, .35);
   --cap-shadow: transparent;
   --cap-glow: 0 0 8px 1px rgba(160, 255, 220, .22);
-  --stamp: #A8CFCB;
-  --live: #A8CFCB;
   --title-font: var(--mono);
   --display-wght: 500;
   --title-transform: uppercase;
@@ -199,11 +194,14 @@ html, body {
 .field {
   font: inherit; color: var(--ink);
   background: var(--sheet);
-  border: 1px solid var(--key-edge);
+  border: 1px solid var(--sec);
   border-radius: var(--radius);
   padding: 4px 8px;
   width: 100%;
 }
+/* field edge (board gnomon-field-border): --sec at rest (>= 3:1 on page and sheet), --key-edge on hover, the 2px
+   --key-edge focus ring above */
+.field:hover { border-color: var(--key-edge); }
 
 .desk { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(300px, 340px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; }
 .desk.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(300px, 340px); }
@@ -249,7 +247,7 @@ html, body {
 .trow .who { display: flex; gap: 8px; align-items: baseline; font-size: 11px; color: var(--sec); }
 .trow.role-user .body { color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 4px 8px; }
 .trow.role-assistant .body { color: var(--ink); }
-.trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--slate); border-radius: 3px; padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
+.trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--ink2); border-radius: 3px; padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
 .trow.role-assistant .said .said-tag { color: var(--sec); font-size: 11px; font-weight: 400; }
 /* Aegis L2: an agent's bold-label line is plain prose with a quiet rule, never a box that could pass for a kernel chip */
 .trow.role-assistant .body .chip { border: 0; border-left: 2px solid var(--rule); border-radius: 0; padding: 0 0 0 8px; margin: 3px 0; }
@@ -408,7 +406,7 @@ html, body {
 .pinned .card.r-c { --r: -.3deg; }
 .pinned .card.r-d { --r: .7deg; }
 /* approved: the stamp lands, then the sheet flies off (removed on animationend; at once under reduced motion) */
-.card .stamp { color: var(--stamp); }
+.card .stamp { color: var(--ink); }
 .card .stamp.on { animation: stamp var(--t-stamp) forwards; }
 @keyframes stamp {
   0% { opacity: 0; transform: rotate(-8deg) scale(1.9); }
@@ -617,8 +615,8 @@ html, body {
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
 /* #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.pill): the header
-   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --live
-   dot (an alias of --stamp's value) with a soft ring, a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
+   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --ink
+   dot with a soft ring (status is ink, board gnomon-status-colour), a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
    --warn-ink, speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
    only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
@@ -626,7 +624,7 @@ html, body {
 [data-theme="night"] .voice-pill { border-radius: 0; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
 .voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--sec); background: transparent; flex: none; }
-.voice-pill.live .voice-dot { background: var(--live); border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
+.voice-pill.live .voice-dot { background: var(--ink); border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 22%, transparent); }
 .voice-fact { color: var(--sec); font-weight: 400; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .voice-fact:empty { display: none; }
 .voice-fact.fail { color: var(--fail); }
@@ -641,7 +639,7 @@ html, body {
    the capture state is `hearing` (Luna #9: hidden otherwise, never a still meter); no decorative animation */
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
 .voice-meter[hidden] { display: none; }
-.voice-meter i { display: block; width: 2px; background: var(--live); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+.voice-meter i { display: block; width: 2px; background: var(--ink); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
 .voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
 /* the ladder (the pill's popover, role menu): Off, Talk, Dictate, Send word, Pieces, one line each, a cost tag */
 .voice-ladder { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px; max-width: calc(100vw - 24px); padding: 8px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
@@ -670,8 +668,8 @@ html, body {
 .composer-ghost .ghost-committed { font-style: normal; color: var(--ink); }
 .composer-ghost .ghost-tail { opacity: 0.55; transition: opacity 0.12s linear; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-/* the transcript's voice turns */
-.trow.voice .who { color: var(--slate); }
+/* the transcript's voice turns: ink2 and the word "voice" (board gnomon-status-colour: status is ink, never a hue) */
+.trow.voice .who { color: var(--ink2); }
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
 .trow.role-voice-refused { color: var(--sec); font-size: 11px; padding-left: 28px; border-left: 2px solid var(--fail-edge); }
 .mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }
@@ -694,7 +692,8 @@ html, body {
 .vs-head { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
 .vs-k { color: var(--sec); font-size: 12px; }
 .vs-v { font-size: 12.5px; }
-.vs-v.ok { color: var(--stamp); }
+/* ok reads by its mark and weight (✓ + 600), in ink (board gnomon-status-colour) */
+.vs-v.ok { color: var(--ink); font-weight: 600; }
 .vs-v.warn { color: var(--warn-ink); }
 .vs-flow { margin: 10px 0 2px 110px; display: flex; flex-direction: column; gap: 10px; border-left: 2px solid var(--ink); padding-left: 12px; }
 .vs-flow p, .vs-sec > p { margin: 0; }
@@ -702,7 +701,7 @@ html, body {
 .vs-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .vs-counter { font-size: 11.5px; color: var(--sec); }
 .vs-heard { font-size: 15px; font-weight: 600; }
-.vs-heard.ok { color: var(--stamp); }
+.vs-heard.ok { color: var(--ink); }
 .vs-risk { font-size: 12px; color: var(--ink2); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 8px 10px; border-radius: var(--radius); }
 .vs-risk .vs-risk-text { margin: 0 0 6px; }
 .vs-check { display: flex; gap: 6px; align-items: center; }
@@ -716,7 +715,7 @@ html, body {
 /* phrase N of 3: the REAL input level only (still otherwise; reduced motion: the global rule makes it instant) */
 .vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
 .vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
-.vs-meter.recording span { background: var(--live); }
+.vs-meter.recording span { background: var(--ink); }
 @media (max-width: 560px) { .vs-flow, .vs-sec > .vs-timing { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
@@ -752,7 +751,7 @@ html, body {
 .key.newb { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; font-size: 12.5px; text-align: left; }
 .key.newb kbd { font: inherit; font-size: 11px; color: var(--sec); }
 #session-search-wrap { padding: 0 0 6px; }
-#session-search { border-color: var(--rule); background: transparent; }
+#session-search { background: transparent; }
 .sec-head { display: flex; justify-content: space-between; width: 100%; margin: 8px 0 4px; padding: 0 6px; font: inherit; font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); background: transparent; border: 0; text-align: left; }
 .sec-toggle { cursor: pointer; }
 .sessions .group-head { padding: 6px 6px 2px; font-size: 11.5px; }
@@ -797,8 +796,8 @@ html, body {
 .menu-theme .seg-key:hover:not(.current) { background: var(--fold); }
 .menu-theme .seg-key:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 /* the palette field: the most-used control, so it grows (to 460px) and only its words truncate */
-.palfield { box-sizing: border-box; height: 28px; flex: 0 1 460px; min-width: 150px; display: inline-flex; align-items: center; gap: 10px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; }
-.palfield:hover { border-color: var(--sec); }
+.palfield { box-sizing: border-box; height: 28px; flex: 0 1 460px; min-width: 150px; display: inline-flex; align-items: center; gap: 10px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; }
+.palfield:hover { border-color: var(--key-edge); }
 .palfield .pal-ph { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .palfield kbd { margin-left: auto; flex: none; font: inherit; font-size: 11px; color: var(--sec); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
 .palfield:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
@@ -806,7 +805,7 @@ html, body {
 .kstat { display: inline-flex; align-items: center; gap: 10px; flex: none; }
 .link-dot { height: 28px; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink2); white-space: nowrap; flex: none; }
 .link-dot .ld { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--sec); flex: none; }
-.link-dot.ok .ld { background: var(--live); border-color: var(--live); }
+.link-dot.ok .ld { background: var(--ink); border-color: var(--ink); }
 .risk-chip { box-sizing: border-box; height: 28px; display: inline-flex; align-items: center; padding: 0 9px; font-size: 11.5px; color: var(--warn-ink); background: transparent; border: 1px solid var(--warn-edge); border-radius: var(--radius); white-space: nowrap; flex: none; }
 .risk-chip[hidden] { display: none; }
 .voice-wrap { flex: 0 1 auto; }
@@ -862,7 +861,8 @@ html, body {
 .pinned { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 8px; }
 .pinned .lbl { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
 .pinned .card { margin: 0; }
-.composer { margin: 10px 20px 14px; padding: 10px 12px; border: 1px solid var(--key-edge); border-radius: var(--radius); background: var(--sheet); }
+.composer { margin: 10px 20px 14px; padding: 10px 12px; border: 1px solid var(--sec); border-radius: var(--radius); background: var(--sheet); }
+.composer:hover { border-color: var(--key-edge); }
 /* ONE container (founder report 2026-10-20, "box inside a box"): the composer carries the only border and the focus
    ring; the textarea draws no border, outline or shadow of its own. The ring shows while the text field has keyboard
    focus (a11y: a visible focus state), on the same token as every other focus ring. */
@@ -963,7 +963,7 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
 /* #gui-session-rename: the ✎ beside the title and the inline name input (header and session list) */
 .chead .rename-btn { flex: none; font-size: 11px; padding: 0 5px; line-height: 18px; border-color: var(--rule); }
-.rename-input { font: inherit; font-size: 13px; color: var(--ink); background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); padding: 1px 6px; min-width: 0; }
+.rename-input { font: inherit; font-size: 13px; color: var(--ink); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); padding: 1px 6px; min-width: 0; }
 .chead .rename-input { flex: 0 1 45%; min-width: 16ch; }
 .session-row.renaming { cursor: text; }
 .session-row.renaming .rename-input { width: 100%; font-size: 12.5px; }
