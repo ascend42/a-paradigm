@@ -1208,7 +1208,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const dispatcherCommon = {
     voice,
     voiceClient: {
-      start: () => voiceChild.start(),
+      start: (capture?: 'ptt' | 'open' | 'toggle') => voiceChild.start(capture),
       stop: () => voiceChild.stop(),
       connectionClosed: (connId: string) => {
         voiceReports.connectionClosed(connId); // Aegis L3: the closed connection's capture slot goes with it

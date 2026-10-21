@@ -210,14 +210,14 @@ describe('start / stop / auto-start send the right appends', () => {
     const fn = APP.slice(APP.indexOf('async function setVoice('), APP.indexOf('/* ── voice app lifecycle'));
     const auto = fn.indexOf("to !== 'off' && needsStart(clientOf(status))");
     expect(auto).toBeGreaterThan(0);
-    expect(fn.indexOf("clientRequest('start')")).toBeGreaterThan(auto);
-    expect(fn.indexOf("client.call<Record<string, unknown>>('log.append', req)")).toBeGreaterThan(fn.indexOf("clientRequest('start')"));
+    expect(fn.indexOf("clientRequest('start', currentCapture())")).toBeGreaterThan(auto);
+    expect(fn.indexOf("client.call<Record<string, unknown>>('log.append', req)")).toBeGreaterThan(fn.indexOf("clientRequest('start', currentCapture())"));
   });
   it('the page: Start / Stop are trusted gestures from a human connection only; the pill action and menu route to them', () => {
     const fn = APP.slice(APP.indexOf('async function voiceClientOp('), APP.indexOf('function openEnrol('));
     expect(fn).toMatch(/if \(!trusted\) return;/);
     expect(fn).toMatch(/if \(!canAttach\(status\)\) return notice/);
-    expect(fn).toContain("client.call('log.append', clientRequest(op))");
+    expect(fn).toContain("client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op))"); // TD-2026-10-21-514: the start carries the capture kind
     expect(APP).toContain("void voiceClientOp(id === 'voice.client.stop' ? 'stop' : 'start', e.isTrusted)");
     expect(APP).toContain("if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted)");
   });

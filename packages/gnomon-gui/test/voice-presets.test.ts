@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { ACK_TEXT, acked, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
 import { chatItems } from '../src/core/store.js';
+import { captureOf, parseCapturePref } from '../src/core/voice-presets.js';
+import { clientRequest } from '../src/core/voice-client.js';
 
 const mem = () => {
   const m = new Map<string, string>();
@@ -29,6 +31,13 @@ describe('voice presets', () => {
     expect(choosePreset('send-word', { acked: true, sendWord: null })).toBe('needs-word');
     expect(choosePreset('send-word', { acked: true, sendWord: { text: 'over', variants: [] } })).toBe('apply');
     expect(choosePreset('pieces', { acked: true, sendWord: null })).toBe('apply');
+  });
+  it('the capture kind the voice app starts with: Talk is ptt; ambient presets follow the listening choice', () => {
+    expect(captureOf('talk', 'toggle')).toBe('ptt');
+    expect(captureOf('send-word', parseCapturePref('toggle'))).toBe('toggle');
+    expect(captureOf('dictate', parseCapturePref(null))).toBe('open');
+    expect(clientRequest('start', 'toggle')).toEqual({ kind: 'request.voice.client', payload: { op: 'start', capture: 'toggle' } });
+    expect(clientRequest('stop', 'toggle')).toEqual({ kind: 'request.voice.client', payload: { op: 'stop' } });
   });
   it('the clamp chip shows while a voice-origin turn of the session is open (display only)', () => {
     const H = 'hs:1';

@@ -326,7 +326,8 @@ export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send
 /** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
 /** V2e: the kernel-spawned voice client, started and stopped only by the human (request.voice.client{op}). */
 export interface VoiceClientPort {
-  start(): Promise<unknown>;
+  /** TD-2026-10-21-514: an optional capture kind (ptt | open | toggle) the client is (re)started with */
+  start(capture?: 'ptt' | 'open' | 'toggle'): Promise<unknown>;
   stop(): Promise<unknown>;
   connectionClosed(connId: string): void;
   /**
@@ -883,6 +884,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const stopSpeaking = o.voiceClient.stopSpeaking;
         const vcp = (pa.payload ?? {}) as Record<string, unknown>;
         // TD-2026-10-21-514: the in-app mic key and the Mic key switch (the human's own gestures; no card: a bare key is a local binding)
+        if (op === 'start' && Object.keys(vcp).length === 2 && !extra.length) {
+          if (vcp.capture !== 'ptt' && vcp.capture !== 'open' && vcp.capture !== 'toggle') throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start', capture?: 'ptt'|'open'|'toggle'}}`);
+          return { voiceClient: await o.voiceClient.start(vcp.capture) };
+        }
         if (op === 'mic-toggle' && o.voiceClient.micToggle && Object.keys(vcp).length === 1 && !extra.length) return { voiceClient: o.voiceClient.micToggle() };
         if (op === 'mic-key' && o.voiceClient.micKey && Object.keys(vcp).length === 2 && typeof vcp.bare === 'boolean' && !extra.length) return { voiceClient: o.voiceClient.micKey(vcp.bare) };
         if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'|'mic-toggle'} | {op:'mic-key', bare}}`);

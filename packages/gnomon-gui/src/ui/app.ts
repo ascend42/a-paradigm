@@ -17,7 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { ACK_TEXT, acked, attachSend, clampedFrom, CLAMP_CHIP, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
+import { ACK_TEXT, acked, attachSend, captureOf, CAPTURE_KEY, clampedFrom, CLAMP_CHIP, parseCapturePref, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -1233,6 +1233,14 @@ function focus(hsid: string | null): void {
 let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
 /** TD-2026-10-21-514: the voice preset (per machine) and a pending double-rAF visibility stamp */
 let voicePreset = parsePreset(localStorage.getItem(PRESET_KEY));
+let capturePref = parseCapturePref(localStorage.getItem(CAPTURE_KEY));
+/** TD-2026-10-21-514: the capture kind the voice app is (re)started with, from the preset and the listening choice */
+const currentCapture = (): 'ptt' | 'open' | 'toggle' => captureOf(voicePreset, capturePref);
+/** a running voice app is restarted with the new capture kind (the kernel restarts it only when the kind changed) */
+async function applyCapture(): Promise<void> {
+  if (!client || !canAttach(status) || needsStart(clientOf(status))) return;
+  await client.call('log.append', clientRequest('start', currentCapture())).catch((err: unknown) => notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not restarted with the new listening mode', true));
+}
 /** the last ⌃⌥Return count seen (a baseline first: presses before this page never send) */
 let sendNowsSeen: { n: number; epoch: string | null } | null = null;
 
@@ -1328,6 +1336,7 @@ function applyVoicePreset(p: typeof voicePreset): void {
   voicePreset = p;
   localStorage.setItem(PRESET_KEY, p);
   syncVoicePolicy();
+  void applyCapture();
   notice(`voice: ${PRESET_LABELS[p]} · ${PRESET_NOTES[p]}${attachSend(p) ? ' (re-attach voice to apply its send ceiling)' : ''}`);
   if (!$('voice-menu').hidden) paintVoiceMenu();
 }
@@ -1928,6 +1937,9 @@ function paintVoiceMenu(): void {
     for (const p of VOICE_PRESET_IDS)
       seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
     menu.appendChild(seg);
+    // TD-2026-10-21-514: how the ambient presets listen — always on, or the mic key toggles listening (toggle capture)
+    if (voicePreset !== 'talk')
+      menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(capturePref === 'toggle'), 'data-capture': capturePref === 'toggle' ? 'open' : 'toggle' }, h(doc, 'span', { class: 'mode-name' }, `Listening: ${capturePref === 'toggle' ? 'the mic key turns it on and off' : 'always on while attached'}`), h(doc, 'span', { class: 'mode-note' }, capturePref === 'toggle' ? 'switch to always on' : 'let the mic key toggle listening (starts off)')) as unknown as Node);
     // the Mic key switch (TD-2026-10-21-514): ⌃` by default; a bare ` everywhere only by opt-in, with the warning
     const bare = micKeyBareOf(status);
     menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(bare), 'data-mic-key': bare ? 'ctrl' : 'bare' }, h(doc, 'span', { class: 'mode-name' }, `Mic key: ${bare ? '` everywhere' : '⌃` (` inside Gnomon)'}`), h(doc, 'span', { class: 'mode-note' }, bare ? 'switch back to ⌃`' : 'use a bare ` everywhere: while Gnomon voice runs, ` will not type in any app')) as unknown as Node);
@@ -1975,7 +1987,7 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   try {
     // V2e seamless: attaching (or choosing Ambient) while the voice app is not running starts it in the same gesture
     if (to !== 'off' && needsStart(clientOf(status))) {
-      await client.call('log.append', clientRequest('start'));
+      await client.call('log.append', clientRequest('start', currentCapture()));
       notice('Starting voice…');
     }
     const r = await client.call<Record<string, unknown>>('log.append', req);
@@ -2017,7 +2029,7 @@ async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<vo
   if (!client) return notice('not connected: the voice app was not changed', true);
   if (!canAttach(status)) return notice('only a human connection starts or stops the voice app', true);
   try {
-    await client.call('log.append', clientRequest(op));
+    await client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op));
     notice(null);
   } catch (err) {
     notice(err instanceof RpcError ? refusalText(err.refusal) : `the voice app was not ${op === 'start' ? 'started' : 'stopped'}`, true);
@@ -2080,7 +2092,7 @@ async function submitEnrol(trusted: boolean): Promise<void> {
     if (!v.ok) return void put($('enrol-line'), v.reason);
     try {
       // the voice app records the phrases (it watches for this enrolment); start it first if it is not running
-      if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start'));
+      if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start', currentCapture()));
       const r = await client.call<Record<string, unknown>>('log.append', v.req);
       store.enrol = enrolSent(s, (v.req.payload as { name: string }).name, typeof r.cardId === 'string' ? r.cardId : null);
     } catch (err) {
@@ -2456,6 +2468,13 @@ function wire(): void {
     const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
     if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
     if ((e.target as HTMLElement).closest('[data-voice-sendword]') && e.isTrusted) return openTeach(null);
+    const cp = (e.target as HTMLElement).closest('[data-capture]') as HTMLElement | null;
+    if (cp && e.isTrusted) {
+      capturePref = parseCapturePref(cp.dataset.capture ?? null);
+      localStorage.setItem(CAPTURE_KEY, capturePref);
+      void applyCapture();
+      return paintVoiceMenu();
+    }
     const mk = (e.target as HTMLElement).closest('[data-mic-key]') as HTMLElement | null;
     if (mk) return void setMicKey(mk.dataset.micKey === 'bare', e.isTrusted);
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;

@@ -14,6 +14,13 @@
 import { canonicalSendWord, LIABILITY_SEND_POLICIES, VOICE_LIABILITY_ACK_TEXT, VOICE_PRESETS, type SendPolicy, type SendWord, type VoicePreset } from '@a-company/gnomon-contracts';
 
 export const PRESET_KEY = 'gnomon.voice.preset';
+/** TD-2026-10-21-514: how ambient presets listen: always on ('open') or toggled by the mic key ('toggle'), per machine */
+export const CAPTURE_KEY = 'gnomon.voice.capture';
+export const parseCapturePref = (v: string | null): 'open' | 'toggle' => (v === 'toggle' ? 'toggle' : 'open');
+/** The capture kind the kernel-spawned voice client runs with: Talk is push-to-talk; the ambient presets use the preference. */
+export function captureOf(p: VoicePreset, pref: 'open' | 'toggle'): 'ptt' | 'open' | 'toggle' {
+  return VOICE_PRESETS[p].capture === 'ptt' ? 'ptt' : pref;
+}
 export const ACK_KEY_PREFIX = 'gnomon.voice.liabilityAck.';
 export const PRESET_LABELS: Readonly<Record<VoicePreset, string>> = Object.freeze({ talk: 'Talk', dictate: 'Dictate', 'send-word': 'Send word', pieces: 'Pieces' });
 export const PRESET_NOTES: Readonly<Record<VoicePreset, string>> = Object.freeze({
