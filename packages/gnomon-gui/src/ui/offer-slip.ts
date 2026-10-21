@@ -33,7 +33,7 @@ export interface SlipState {
 export function renderOfferSlip(doc: MiniDoc, v: SlipView, st: SlipState): MiniEl {
   const s = v.slip;
   const tab = (label: string): MiniEl => h(doc, 'div', { class: 'slip-tab' }, h(doc, 'span', { class: 'slip-g', 'aria-hidden': 'true' }, glyphOf(s.mod)), ' ', label);
-  if (s.decided !== null) return h(doc, 'div', { class: 'slip gone', 'data-offer': s.offerId }, tab(traceText(s, st.publisher)));
+  if (s.decided !== null || s.retired) return h(doc, 'div', { class: 'slip gone', 'data-offer': s.offerId }, tab(traceText(s, st.publisher)));
   const on = v.live;
   const attrs: Record<string, string> = { class: `slip${on ? ' live' : ' inert'}${st.armed && on ? ' armed' : ''}${st.arrive ? ' arrive' : ''}`, role: 'group', 'aria-label': `offer from mod:${s.mod}`, 'data-offer': s.offerId };
   const btn = (cls: string, act: string, ...kids: Array<MiniEl | string>): MiniEl => {

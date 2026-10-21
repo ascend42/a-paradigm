@@ -617,18 +617,43 @@ describe('#offer-router: a Stop-hook continuation replaces the evaluation (revie
       const stale = first[0]!.payload.offerId as string;
       // the Stop hook blocked: Claude continues in the same turn
       const second = reply(t, 'msg_2', 'Fixed the purpose file.');
-      expect(second).toEqual([]);
+      // re-review M-2: the retirement is a kernel row (ids only), not only in memory
+      expect(second).toEqual([{ kind: 'offer.retired', session: HSID, payload: { offerId: stale, hsid: HSID, why: 'continued' } }]);
       expect(t.suppressed).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'no-block' }]);
       expect(t.commit(resultOf(1))).toEqual([]);
-      await expect(t.r.decide(GUI, { offerId: stale, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'superseded' } } });
+      await expect(t.r.decide(GUI, { offerId: stale, decision: 'open' })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST', data: { reason: 'retired' } } });
     });
   }
   it('a Stop hook block line retires the offer at once', async () => {
     const t = rig();
     t.commit(sent(1));
     const first = reply(t, 'msg_1', offerReply('a', BLOCK));
-    t.commit(ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', exit_code: 2, outcome: 'error' })));
-    await expect(t.r.decide(GUI, { offerId: first[0]!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'superseded' } } });
+    const rows = t.commit(ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', exit_code: 2, outcome: 'error' })));
+    expect(rows.map((r) => r.kind)).toEqual(['offer.retired']);
+    await expect(t.r.decide(GUI, { offerId: first[0]!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'retired' } } });
+  });
+  it('re-review M-2: a decided offer is not retired by a continuation; seed() replays offer.retired after a restart', async () => {
+    const t = rig();
+    t.commit(sent(1));
+    const first = reply(t, 'msg_1', offerReply('a', BLOCK));
+    const id = first[0]!.payload.offerId as string;
+    await t.r.decide(GUI, { offerId: id, decision: 'not-now' });
+    expect(reply(t, 'msg_2', 'More.').filter((r) => r.kind === 'offer.retired')).toEqual([]);
+    // a restart: the persistent rows seed a fresh router; the retired offer stays undecidable
+    const t2 = rig();
+    const shown = { ...first[0]!.payload };
+    t2.r.seed([
+      { kind: 'offer.shown', principal: KERNEL, session: HSID, payload: shown },
+      { kind: 'offer.retired', principal: KERNEL, session: HSID, payload: { offerId: id, hsid: HSID, why: 'continued' } },
+    ]);
+    await expect(t2.r.decide(GUI, { offerId: id, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'retired' } } });
+    // a non-kernel offer.retired is not folded
+    const t3 = rig();
+    t3.r.seed([
+      { kind: 'offer.shown', principal: KERNEL, session: HSID, payload: shown },
+      { kind: 'offer.retired', principal: HUMAN, session: HSID, payload: { offerId: id, hsid: HSID, why: 'continued' } },
+    ]);
+    await expect(t3.r.decide(GUI, { offerId: id, decision: 'not-now' })).resolves.toMatchObject({ decision: 'not-now' });
   });
   it('with replay lines, a queued message folded mid-turn settles the earlier turn without a row; the reply is evaluated for the folded-in turn', () => {
     const t = rig();

@@ -2235,7 +2235,10 @@ components:
       Stop-hook continuation) or a blocking Stop hook_response retires the
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
-      one settles without a row. Review C2: gnomon desk stats folds only
+      one settles without a row. Re-review M-2: a retired offer that was
+      still undecided is the kernel row offer.retired{offerId, hsid,
+      why:'continued'} (OFFER_SEED_KINDS: folded at boot), and a decide on
+      it is refused 'retired'. Review C2: gnomon desk stats folds only
       kernel-principal offer.shown / offer.suppressed rows. Review C3
       (verified): desk stats key on offerId (ULID), mod and hsid, the GUI
       slips on offerId anchored by seq, and the router and the GUI drop

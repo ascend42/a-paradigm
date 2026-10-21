@@ -366,7 +366,7 @@ function syncSlips(cur: readonly ChatItem[]): void {
   slipsAt = next;
   const keys = new Set([...next.keys(), ...slipSig.keys()]);
   for (const k of keys) {
-    const sig = (next.get(k) ?? []).map((v) => `${v.slip.offerId}:${v.slip.decided}:${v.live}:${armedOffer?.offerId === v.slip.offerId}:${v.slip.openHint}:${v.slip.ambientHint}`).join('|');
+    const sig = (next.get(k) ?? []).map((v) => `${v.slip.offerId}:${v.slip.decided}:${v.slip.retired}:${v.live}:${armedOffer?.offerId === v.slip.offerId}:${v.slip.openHint}:${v.slip.ambientHint}`).join('|');
     if ((slipSig.get(k) ?? '') !== sig) remountItem(k);
     if (sig) slipSig.set(k, sig);
     else slipSig.delete(k);
@@ -408,7 +408,7 @@ function offerVoiceRow(r: Row): void {
   if (r.kind !== 'voice.turn.user' || !(r.seq > offerLiveSince)) return;
   const hsid = r.session ?? null;
   if (!hsid) return;
-  const s = store.offers(hsid).slips.find((x) => x.voiceDismiss === r.seq && x.decided === null);
+  const s = store.offers(hsid).slips.find((x) => x.voiceDismiss === r.seq && x.decided === null && !x.retired);
   if (s && !voiceDismissed.has(s.offerId)) {
     voiceDismissed.add(s.offerId);
     void sendOfferDecision(s.offerId, 'not-now');

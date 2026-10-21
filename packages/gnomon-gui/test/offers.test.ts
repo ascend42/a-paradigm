@@ -102,6 +102,24 @@ describe('#gui-offer-slip model: folded only from kernel offer.shown rows', () =
     const forged = foldOffers([reply(1), shown(2, 1), { ...decided(3, 1, 'open'), principal: 'p:7k2m9q4x/claude' }] as OfferRow[], HSID);
     expect(forged.slips[0]!.decided).toBeNull();
   });
+  it('re-review M-2: a kernel offer.retired closes the slip (never live) and leaves a "retired" trace', () => {
+    const retired = (seq: number, n: number, extra: Record<string, unknown> = {}): Row => ({ seq, kind: 'offer.retired', session: HSID, principal: KERNEL, payload: { offerId: id(n), hsid: HSID, why: 'continued', ...extra } });
+    const v = views([reply(1), shown(2, 1), retired(3, 1)]);
+    expect(v).toHaveLength(1);
+    expect(v[0]!.slip.retired).toBe(true);
+    expect(v[0]!.live).toBe(false);
+    const el = renderOfferSlip(fdoc, v[0]!, { armed: false, voiceHint: false, ambientHint: false, arrive: false }) as FEl;
+    expect(el.className).toBe('slip gone');
+    expect(el.text).toBe('⁂ retired · the reply continued · mod:constellation');
+    // a non-kernel row, another hsid or an unknown reason does not retire; a decided slip stays decided
+    expect(views([reply(1), shown(2, 1), { ...retired(3, 1), principal: 'p:7k2m9q4x/claude' }])[0]!.live).toBe(true);
+    expect(views([reply(1), shown(2, 1), retired(3, 1, { hsid: 'hsid:v1:01JZZZZZZZZZZZZZZZZZZZZZZZ' })])[0]!.live).toBe(true);
+    expect(views([reply(1), shown(2, 1), retired(3, 1, { why: 'other' })])[0]!.live).toBe(true);
+    const book = foldOffers([reply(1), shown(2, 1), decided(3, 1, 'not-now'), retired(4, 1)] as OfferRow[], HSID);
+    expect(book.slips[0]!.retired).toBe(false);
+    // a heard "not now" never targets a retired slip
+    expect(foldOffers([reply(1), shown(2, 1), retired(3, 1), heard(4, 'not now')] as OfferRow[], HSID).slips[0]!.voiceDismiss).toBeNull();
+  });
   it('the store folds offer rows and names the conversation that changed', () => {
     const store = new GuiStore();
     const wire = (r: Row) => ({ seq: r.seq, view: 'full', event: { schemaVersion: 'event:v1', seq: r.seq, kind: r.kind, session: r.session, principal: r.principal ?? 'p:7k2m9q4x/claude', payload: r.payload } });

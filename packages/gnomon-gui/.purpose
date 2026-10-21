@@ -749,7 +749,9 @@ components:
       quiets that mod for the rest of the conversation (L4), stop-here
       quiets all; voiceOfferIntent: a heard "not now" dismisses (one request
       per offer, live rows only), a heard "open" only shows "click or ↵ to
-      open" (L1). Aegis fixes: M1 openStep refuses key repeats and
+      open" (L1). Re-review M-2: a kernel offer.retired{why:'continued'}
+      closes an undecided slip (never live, no voice dismissal) and leaves
+      the trace "retired · the reply continued · mod:<name>". Aegis fixes: M1 openStep refuses key repeats and
       multi-clicks, waits OFFER_ARM_GAP_MS (400) after the arm, and drops an
       arm after OFFER_ARM_TTL_MS (15 s); M2 only a forwardable,
       non-intercepted push-to-talk row (pttDismissable) dismisses, only the

@@ -66,10 +66,10 @@ import { serverNameOf, type DeskMod } from './mcp-passthrough.js';
 /** The rows the router folds. */
 export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
   'turn.sent', 'turn.event', 'turn.result', 'session.exited', 'session.open', 'session.drained',
-  'offer.shown', 'offer.decided', 'offer.kept', 'offer.muted',
+  'offer.shown', 'offer.decided', 'offer.kept', 'offer.muted', 'offer.retired',
 ]);
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
-export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.muted']);
+export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.muted', 'offer.retired']);
 
 /** The kernel template of an `open` turn (manifest fields only; the tool fully qualified, mcp__<server>__<tool>, H1c). */
 export function openText(title: string, qualifiedTool: string): string {
@@ -134,6 +134,8 @@ interface OfferState {
   kind: string;
   decided: OfferDecision | null;
   kept: boolean;
+  /** re-review M-2: offer.retired (the reply it answered continued); never decidable again */
+  retired: boolean;
   /** the namespaced handoff tool, set on `open` */
   watchTool: string[] | null;
 }
@@ -329,7 +331,7 @@ export class OfferRouter {
         if (!this.#kernel(e) || validateKindPayload('offer.shown', p).length) return [];
         if (this.#offers.size >= MAX_OFFERS) this.#offers.delete(this.#offers.keys().next().value!);
         const id = p.offerId as string;
-        this.#offers.set(id, { offerId: id, hsid: p.hsid as string, mod: p.mod as string, kind: p.kind as string, decided: null, kept: false, watchTool: null });
+        this.#offers.set(id, { offerId: id, hsid: p.hsid as string, mod: p.mod as string, kind: p.kind as string, decided: null, kept: false, retired: false, watchTool: null });
         this.#s(p.hsid as string).latest = id;
         return [];
       }
@@ -344,6 +346,15 @@ export class OfferRouter {
         }
         if (d === 'not-now' && o) s.muted.add(o.mod);
         if (d === 'stop-here') s.stopped = true;
+        return [];
+      }
+      case 'offer.retired': {
+        // re-review M-2: the kernel retired a shown offer (a continuation): it stops being the latest, never decidable
+        if (!this.#kernel(e) || validateKindPayload('offer.retired', p).length) return [];
+        const o = this.#offers.get(p.offerId as string);
+        if (o) o.retired = true;
+        const s = this.#s(p.hsid as string);
+        if (s.latest === p.offerId) s.latest = null;
         return [];
       }
       case 'offer.kept': {
@@ -397,7 +408,8 @@ export class OfferRouter {
       }
       if (c.hookBlock) {
         // review R2: a Stop hook blocked the stop: the turn continues, its offer (if one was shown) is retired
-        this.#reopen(s, s.turns.find((t) => t.id === s.msgTurn));
+        const retired = this.#reopen(s, s.turns.find((t) => t.id === s.msgTurn));
+        if (retired) out.push(retired);
         return out;
       }
       if (c.start || (c.msgId !== null && c.msgId !== s.msgId)) {
@@ -409,7 +421,8 @@ export class OfferRouter {
         s.msgTurn = rec?.id ?? null;
         // review R2: a new message in a turn already evaluated (a Stop-hook continuation, before its turn.result)
         // replaces that evaluation: its offer is retired and the continuation's own end is evaluated
-        this.#reopen(s, rec);
+        const retired = this.#reopen(s, rec);
+        if (retired) out.push(retired);
       }
       if (c.text !== null && s.texts.reduce((n, t) => n + t.length, 0) + c.text.length <= MAX_TURN_TEXT) s.texts.push(c.text);
       // T-2026-10-21-006 + review R2: the reply ended (end_turn, not tool_use). An assistant line carrying it (no partial
@@ -449,12 +462,23 @@ export class OfferRouter {
     return row ? [row] : [];
   }
 
-  /** review R2: re-open an evaluated turn (a Stop-hook continuation): retire its offer so it is no longer decidable. */
-  #reopen(s: SessionState, rec: TurnRec | undefined): void {
-    if (!rec || !rec.evaluated) return;
-    if (rec.offer !== null && s.latest === rec.offer) s.latest = null;
+  /**
+   * review R2: re-open an evaluated turn (a Stop-hook continuation): retire its offer so it is no longer decidable.
+   * Re-review M-2: a shown, undecided offer is retired on the signed log too (offer.retired{why:'continued'}), so a
+   * restart (seed), desk stats and the GUI see it; one already decided (or being decided) took effect and stays.
+   */
+  #reopen(s: SessionState, rec: TurnRec | undefined): RouterRow | null {
+    if (!rec || !rec.evaluated) return null;
+    const id = rec.offer;
+    if (id !== null && s.latest === id) s.latest = null;
     rec.offer = null;
     rec.evaluated = false;
+    const o = id !== null ? this.#offers.get(id) : undefined;
+    if (!o || o.decided !== null || o.retired || this.#deciding.has(o.offerId)) return null;
+    o.retired = true; // at once, before the row commits: a decide racing it is refused 'retired'
+    const payload = { offerId: o.offerId, hsid: o.hsid, why: 'continued' };
+    if (validateKindPayload('offer.retired', payload).length) return null;
+    return { kind: 'offer.retired', payload, session: o.hsid };
   }
 
   /**
@@ -581,6 +605,8 @@ export class OfferRouter {
     const o = this.#offers.get(p.offerId);
     if (!o) throw new RpcRefusal('NOT_FOUND', 'not-found', 'no such offer');
     if (o.decided !== null || this.#deciding.has(o.offerId)) throw new RpcRefusal('BAD_REQUEST', 'replay', 'this offer was already decided', { offerId: o.offerId });
+    // re-review M-2: Claude kept working on the reply this offer answered (a Stop-hook continuation), so it was withdrawn
+    if (o.retired) throw new RpcRefusal('BAD_REQUEST', 'retired', 'this offer was withdrawn: Claude continued the reply it was shown for', { offerId: o.offerId });
     const owner = this.#o.ownerOf(o.hsid);
     if (owner === undefined) throw new RpcRefusal('NOT_FOUND', 'not-found', 'the offer\'s session is not running', { offerId: o.offerId });
     if (owner !== asker.principal) throw new RpcRefusal('FORBIDDEN', 'not-owner', 'the offer belongs to another human\'s session', { offerId: o.offerId });

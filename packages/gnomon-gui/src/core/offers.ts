@@ -91,7 +91,7 @@ export interface OfferDecideRequest {
   payload: { offerId: string; decision: OfferDecision };
 }
 /** The offer row kinds a store folds. */
-export const OFFER_ROW_KINDS: ReadonlySet<string> = new Set(['offer.shown', 'offer.decided', 'offer.kept']);
+export const OFFER_ROW_KINDS: ReadonlySet<string> = new Set(['offer.shown', 'offer.decided', 'offer.kept', 'offer.retired']);
 
 const KERNEL = /^p:[0-9a-z]{8}\/kernel$/;
 const VOICE = /^p:[0-9a-z]{8}\/voice$/;
@@ -109,6 +109,8 @@ export interface Slip extends OfferShown {
   seq: number;
   decided: OfferDecision | null;
   kept: boolean;
+  /** re-review M-2: the kernel's offer.retired (the reply it answered continued): closed, never live, a trace only */
+  retired: boolean;
   /** shown after a not-now for this mod (or a stop-here): never drawn (L4) */
   quiet: boolean;
   /** a heard "open" after it: show the hint (L1) */
@@ -188,7 +190,7 @@ export function foldOffers(rows: readonly OfferRow[], hsid: string): OfferBook {
     if (r.kind === 'offer.shown') {
       const s = shownOf(r, hsid);
       if (!s || byId.has(s.offerId)) continue;
-      const slip: Slip = { ...s, seq: r.seq, decided: null, kept: false, quiet: book.stopped || book.muted.has(s.mod), openHint: false, ambientHint: false, voiceDismiss: null };
+      const slip: Slip = { ...s, seq: r.seq, decided: null, kept: false, retired: false, quiet: book.stopped || book.muted.has(s.mod), openHint: false, ambientHint: false, voiceDismiss: null };
       byId.set(s.offerId, slip);
       book.slips.push(slip);
       if (!slip.quiet) live = slip;
@@ -207,11 +209,20 @@ export function foldOffers(rows: readonly OfferRow[], hsid: string): OfferBook {
       if (live === slip) live = null;
       if (slip.decided === 'not-now') book.muted.add(slip.mod);
       if (slip.decided === 'stop-here') book.stopped = true;
+    } else if (r.kind === 'offer.retired') {
+      // re-review M-2: a continuation retired an undecided offer: the slip closes and leaves a "retired" trace
+      if (typeof r.principal !== 'string' || !KERNEL.test(r.principal)) continue;
+      const p = obj(r.payload);
+      if (!p || p.hsid !== hsid || typeof p.offerId !== 'string' || p.why !== 'continued') continue;
+      const slip = byId.get(p.offerId);
+      if (!slip || slip.decided !== null) continue;
+      slip.retired = true;
+      if (live === slip) live = null;
     } else if (r.kind === 'voice.turn.user') {
       const p = obj(r.payload);
       if (!p || p.partial === true || typeof p.text !== 'string' || typeof r.principal !== 'string' || !VOICE.test(r.principal)) continue;
       const open = live;
-      if (!open || open.decided !== null) continue;
+      if (!open || open.decided !== null || open.retired) continue;
       const intent = voiceOfferIntent(p.text);
       if (intent === 'dismiss') {
         if (pttDismissable(p)) {
@@ -254,7 +265,7 @@ export function slipViews(book: OfferBook, items: readonly AnchorItem[]): SlipVi
     if (anchor) out.push({ slip, itemKey: anchor.key, live: false });
   }
   const last = out[out.length - 1];
-  if (last && last.slip.decided === null) {
+  if (last && last.slip.decided === null && !last.slip.retired) {
     let lastReply: AnchorItem | null = null;
     let userAfter = false;
     for (const it of items) {
@@ -315,8 +326,9 @@ export function decideRequest(offerId: string, decision: OfferDecision): OfferDe
 }
 
 /** A closed slip's trace text (the comp's `.slip.gone`). */
-export function traceText(s: Pick<Slip, 'decided' | 'mod' | 'kept'>, pd?: PublisherDisplay | null): string {
+export function traceText(s: Pick<Slip, 'decided' | 'mod' | 'kept'> & { retired?: boolean }, pd?: PublisherDisplay | null): string {
   const label = modLabel(s.mod, pd);
+  if (s.decided === null && s.retired === true) return `retired · the reply continued · mod:${label}`;
   if (s.decided === 'open') return `${s.kept ? 'kept in' : 'opened'} mod:${label}`;
   if (s.decided === 'stop-here') return `offers off in this thread · mod:${label}`;
   if (s.decided === 'not-now') return `not now · mod:${label}`;
