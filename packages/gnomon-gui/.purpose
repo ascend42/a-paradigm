@@ -1060,8 +1060,8 @@ components:
       --fs-reading 13.5 (body, replies, reply choices, card titles, section
       heads, night titles, the heard phrase at 600) and --fs-title 17
       (wordmark, sheet and pane titles incl. the stack head, chat, empty and
-      setup titles, the setup digest); at night the stack and settings
-      titles are 13.5, carried by typeface and case. A setup card's title is
+      setup titles, the setup digest); at night the stack, settings and
+      setup titles are 13.5, carried by typeface and case. A setup card's title is
       13.5 at 600. Every font-size uses one; no literal
       remains, and none is set inline from TS. Hierarchy beyond size is
       weight, case and face (card title and settings section head at 600).
@@ -1075,6 +1075,23 @@ components:
     path: static/styles.css
     type: module
     tags: [gnomon, gui, design-system, type]
+    tests:
+      - test/desk.test.ts
+  gui-space-radius:
+    description: >-
+      #gui-space-radius (board gnomon-spacing, choice 2px-grid; design-system
+      foundations.space and foundations.radius; migration batches spacing
+      and radius) - every padding, margin and gap in static/styles.css is an
+      even number of pixels (no odd px, no rem; .sr-only keeps its -1px clip).
+      A key is padding 4px 10px with an 18px line, 28px tall; quiet keys
+      2px 8px at min 24. Radius is var(--radius) 3 (keys, fields, cards,
+      sheets, menus, chips, toasts, code, swatches), var(--radius-pill) 999
+      only for the voice pill, reply choices, the slip's open key and their
+      kbd pills, 0 at night where the system squares them, and 50% for dots.
+      gnomon-wrapper/static/status.css declares its own --radius 3.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, spacing, radius]
     tests:
       - test/desk.test.ts
   gui-toast:

@@ -63,7 +63,10 @@ components:
       ephemeral setup key speaking gnomon-setup:v1; nav.rs Phase::Setup{port}
       locks navigation to that one origin; the page reaches no Tauri command
       (G-GUI-12). After success the channel's {t:up} continues into the
-      normal launch. refusal_text no longer says "In Terminal".
+      normal launch. refusal_text no longer says "In Terminal". The bundled
+      status page (static/status.css) uses the GUI's type tokens
+      (--fs-reading, --fs-title) and base radius (--radius 3), see
+      #gui-type and #gui-space-radius.
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]

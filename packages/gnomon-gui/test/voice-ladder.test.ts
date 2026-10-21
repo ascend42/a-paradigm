@@ -398,10 +398,10 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
     expect(composer).toMatch(/<button id="composer-tall" class="key quiet composer-tall" type="button" aria-pressed="false" aria-controls="composer-text"[^>]*>⤢<\/button>/);
     expect(composer).toContain('<span id="composer-lines" class="meta composer-lines">1 line</span>');
     expect(CSS).not.toMatch(/\.composer textarea \{[^}]*max-height: 40vh/);
-    // Luna #4: the tall view has a pressed state in both themes; #8: the send key at the comp's size
+    // Luna #4: the tall view has a pressed state in both themes; #8: the send key on the 2px grid (a key's 4px 10px)
     expect(CSS).toMatch(/\.composer-tall\[aria-pressed="true"\] \{ background: var\(--ink\); color: var\(--on-ink\)/);
     expect(CSS).toMatch(/\[data-theme="night"\] \.composer-tall\[aria-pressed="true"\]::before \{ content: "\["/);
-    expect(CSS).toMatch(/\.composer-ctrls \.key\.pri \{ min-height: 24px; padding: 3px 9px; font-size: var\(--fs-control\);/);
+    expect(CSS).toMatch(/\.composer-ctrls \.key\.pri \{ min-height: 24px; padding: 4px 10px; font-size: var\(--fs-control\);/);
   });
 });
 

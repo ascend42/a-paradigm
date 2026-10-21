@@ -528,11 +528,11 @@ describe('board gnomon-type-scale (batch type): four steps, 10.5 label · 11.5 c
     const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.ts') ? [path.join(d, e.name)] : []));
     for (const f of walk(path.join(ROOT, 'src'))) expect(readFileSync(f, 'utf8'), f).not.toMatch(/fontSize|font-size/);
   });
-  it('roles: controls at 11.5, the choice key at 10.5, reply choices at 13.5, night stack and settings titles at 13.5, the stack title at 17, the heard phrase at 13.5 and 600', () => {
+  it('roles: controls at 11.5, the choice key at 10.5, reply choices at 13.5, night stack, settings and setup titles at 13.5, the stack title at 17, the heard phrase at 13.5 and 600', () => {
     for (const sel of ['.key.quiet', '.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope']) expect(rule(sel)).toContain('font-size: var(--fs-control)');
     expect(rule('.choice .choice-k')).toContain('font-size: var(--fs-label)');
     expect(rule('.choice')).toContain('font-size: var(--fs-reading)');
-    expect(rule('[data-theme="night"] .pilehead .title, [data-theme="night"] .settings-head .title')).toContain('font-size: var(--fs-reading)');
+    expect(rule('[data-theme="night"] .pilehead .title, [data-theme="night"] .settings-head .title, [data-theme="night"] .setup-title')).toContain('font-size: var(--fs-reading)');
     expect(rule('.setup-card > .title')).toContain('font-size: var(--fs-reading); font-weight: 600;');
     expect(rule('.pilehead .title')).toContain('font-size: var(--fs-title)');
     expect(rule('.vs-heard')).toMatch(/font-size: var\(--fs-reading\); font-weight: 600;/);
@@ -549,5 +549,31 @@ describe('board gnomon-type-scale (batch type): four steps, 10.5 label · 11.5 c
   });
   it('the setup digest: 17, weight 600, .08em, one unbroken line of groups of four', () => {
     expect(rule('.setup-digest')).toMatch(/font-size: var\(--fs-title\); font-weight: 600; letter-spacing: 0\.08em; white-space: nowrap;/);
+  });
+});
+
+describe('board gnomon-spacing and the radius batch: a strict 2px grid, radius 3 or the pill', () => {
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  const wrapper = readFileSync(path.join(ROOT, '..', 'gnomon-wrapper', 'static', 'status.css'), 'utf8');
+  const decls = (sheet: string, props: RegExp): string[] => [...sheet.matchAll(/([a-z-]+):\s*([^;{}]+)/g)].filter((m) => props.test(m[1])).map((m) => `${m[1]}: ${m[2]}`);
+  it('every padding, margin and gap is an even number of pixels (no odd px, no rem); .sr-only keeps its -1px clip idiom', () => {
+    for (const d of decls(css.replace(/\.sr-only \{[^}]*\}/, ''), /^(padding|margin|gap|row-gap|column-gap)(-[a-z]+)?$/)) {
+      expect(d, d).not.toMatch(/(^|[^0-9.])-?(1|3|5|7|9|11|13|15|17|19)px/);
+      expect(d, d).not.toMatch(/[0-9.]+rem/);
+    }
+  });
+  it('a key is 4px 10px with an 18px line: 28px tall', () => {
+    const key = css.slice(css.indexOf('\n.key {'), css.indexOf('}', css.indexOf('\n.key {')));
+    expect(key).toMatch(/padding: 4px 10px;\s*line-height: 18px;[^}]*min-height: 28px;/);
+  });
+  it('radius is the --radius token (3), the --radius-pill token (999), 0 or a 50% dot; never 2 / 4 / 8 / 9 / 14', () => {
+    expect(css).toContain('--radius: 3px;');
+    expect(css).toContain('--radius-pill: 999px;');
+    for (const sheet of [css, wrapper]) for (const d of decls(sheet, /^border-radius$/)) expect(d, d).toMatch(/^border-radius: (var\(--radius(-pill)?\)|0|50%)$/);
+    for (const sel of ['.choice {', '.choice .choice-k {', '.slip-open {', '.slip-open kbd {', '.voice-pill {']) {
+      const i = css.indexOf(`\n${sel}`);
+      expect(css.slice(i, css.indexOf('}', i)), sel).toContain('border-radius: var(--radius-pill)');
+    }
+    expect(wrapper).toContain('--radius: 3px;');
   });
 });

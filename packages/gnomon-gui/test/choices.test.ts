@@ -177,7 +177,7 @@ describe('#gui-table-talk a pick (Aegis)', () => {
     expect(night[1]).toMatch(/background: var\(--ink\);/);
     expect(night[1]).toMatch(/color: var\(--on-ink\);/);
     expect(night[1]).not.toMatch(/transparent|padding: 0/);
-    expect(CSS).toMatch(/\.choice \.choice-k \{[^}]*border-radius: 9px;[^}]*background: var\(--ink\);/);
+    expect(CSS).toMatch(/\.choice \.choice-k \{[^}]*border-radius: var\(--radius-pill\);[^}]*background: var\(--ink\);/);
     // the stale comment (night [ ] caps carrying the key) is gone
     expect(CSS).not.toContain('none at night where the [ ] caps carry the key');
   });
