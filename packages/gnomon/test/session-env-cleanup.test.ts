@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { emptySessionEnvDir } from '../src/kernel/supervisor/supervisor.js';
+import { emptySessionEnvDir, ensureSessionEnvDir } from '../src/kernel/supervisor/supervisor.js';
 
 const UUID = '0bac96b2-a05d-4b48-9f5f-d9bab166a40c';
 const dirs: string[] = [];
@@ -23,6 +23,33 @@ const world = (): { claude: string; env: string; outside: string } => {
   fs.writeFileSync(path.join(outside, 'precious-dir', 'inner.txt'), 'keep\n');
   return { claude, env, outside };
 };
+
+describe('ensureSessionEnvDir ownership and mode (Aegis L-2)', () => {
+  it('withholds when an existing session-env or session-env/<uuid> is group- or world-writable', () => {
+    const { claude, env } = world();
+    fs.chmodSync(env, 0o777);
+    expect(ensureSessionEnvDir(claude, UUID)).toMatch(/group- or world-writable \(mode 777\)/);
+    fs.chmodSync(env, 0o720);
+    expect(ensureSessionEnvDir(claude, UUID)).toMatch(/group- or world-writable/);
+    fs.chmodSync(env, 0o700);
+    fs.chmodSync(path.join(claude, 'session-env'), 0o757);
+    expect(ensureSessionEnvDir(claude, UUID)).toMatch(/session-env is group- or world-writable/);
+    fs.chmodSync(path.join(claude, 'session-env'), 0o755);
+    expect(ensureSessionEnvDir(claude, UUID)).toBeNull();
+  });
+
+  it('withholds when the dir is owned by another uid', () => {
+    const { claude, env } = world();
+    const real = process.getuid;
+    // simulate a foreign owner without root: the check compares lstat uid against process.getuid()
+    (process as { getuid?: () => number }).getuid = () => fs.lstatSync(env).uid + 1;
+    try {
+      expect(ensureSessionEnvDir(claude, UUID)).toMatch(/is owned by uid \d+, not \d+/);
+    } finally {
+      (process as { getuid?: () => number }).getuid = real;
+    }
+  });
+});
 
 describe('emptySessionEnvDir (Aegis M-B)', () => {
   it('removes files, links (not their targets) and real sub-dirs; keeps the <uuid> dir', () => {

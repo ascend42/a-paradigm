@@ -2605,7 +2605,7 @@ components:
       is sourced as shell by that session (host Claude Code included).
       session-env and session-env/<uuid> are literal re-denied; siblings stay
       under the ~/.claude deny. ensureSessionEnvDir pre-creates both at 0700,
-      lstat-refusing links. Withheld fail closed (sessionEnvRefused, logged
+      lstat-refusing links, foreign-uid or group/world-writable dirs (L-2). Withheld fail closed (sessionEnvRefused, logged
       session.sandbox{phase:'session-env-withheld'}). A new live id (/clear)
       is logged session.sandbox{phase:'session-env-mismatch'}: hooks fail
       closed again. Probe p-session-env: hook -> CLAUDE_ENV_FILE -> Bash sees

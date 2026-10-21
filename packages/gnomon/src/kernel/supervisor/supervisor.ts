@@ -449,6 +449,10 @@ export function ensureSessionEnvDir(userClaudeDir: string, uuid: string): string
       st = null;
     }
     if (st && (st.isSymbolicLink() || !st.isDirectory())) return `${dir} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}`;
+    // Aegis L-2: an existing dir must be ours and not group/world-writable, else another user could plant an env file
+    const uid = process.getuid?.();
+    if (st && uid !== undefined && st.uid !== uid) return `${dir} is owned by uid ${st.uid}, not ${uid}`;
+    if (st && (st.mode & 0o022) !== 0) return `${dir} is group- or world-writable (mode ${(st.mode & 0o777).toString(8)})`;
     if (!st) {
       try {
         fs.mkdirSync(dir, { mode: 0o700 });
