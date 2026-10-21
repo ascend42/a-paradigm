@@ -2176,10 +2176,16 @@ components:
       #offer-router (TD-2026-10-20-812, slice S1; spec §12.9).
       src/kernel/desk/offer-router.ts: a fold over committed rows (daemon
       log.onCommit, like the speakable projector; seed() replays offer.* and
-      request.offer.mute at boot). At turn.result it parses the turn's
-      main-chain assistant text with offerBlockOf; at most one per reply, none
-      while another turn is outstanding, none while the session has a pending
-      card; the mod must be installed, granted, unpaused (DeskMods), not muted
+      request.offer.mute at boot). When the main-chain reply ends
+      (message_delta or an assistant line with stop_reason end_turn,
+      parent_tool_use_id null; T-2026-10-21-006, since Claude Code can emit
+      turn.result ~30 s later, after the next turn was sent) it parses the
+      text of the turn's FINAL main-chain assistant message with
+      offerBlockOf; a tool_use stop never evaluates, a sub-agent message is
+      ignored, turn.result evaluates only a turn whose end was not seen, and
+      each turn is evaluated once. At most one per reply, none while another
+      turn sent before the reply ended is outstanding (a turn sent after it
+      does not suppress it), none while the session has a pending card; the mod must be installed, granted, unpaused (DeskMods), not muted
       for the hsid (offer.decided not-now / stop-here) nor its repo
       (request.offer.mute, repo:<16 hex> from the session's repoKey), and the
       kind one of its declared offers; phase, title and contextIn are copied
@@ -2198,7 +2204,11 @@ components:
       offer; decided once the request row commits (a retry is a replay, no
       second request row), send failures reported (diag send.failed); a mod
       paused or muted after open never counts as kept (diag kept.refused);
-      mutes survive session exit until the bounded state is evicted. Pause
+      mutes survive session exit until the bounded state is evicted. Every
+      evaluation that shows nothing emits diag offer.suppressed{hsid, turn,
+      why, name?, offerKind?} on the daemon.desk channel, why in no-block |
+      turn-streaming | pending-card | not-offerable | kind-undeclared |
+      malformed (names only, never message text). Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/open/not-now/

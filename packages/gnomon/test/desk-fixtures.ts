@@ -35,3 +35,26 @@ export function toolUseLine(id: string, name: string): string {
 export function toolResultLine(id: string, isError = false): string {
   return JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok', is_error: isError }] } });
 }
+
+/** A stream_event line (Claude Code --include-partial-messages); `parent` is parent_tool_use_id (a sub-agent when set). */
+export function streamEventLine(event: Record<string, unknown>, parent: string | null = null): string {
+  return JSON.stringify({ type: 'stream_event', event, session_id: '11111111-1111-4111-8111-111111111111', parent_tool_use_id: parent });
+}
+
+export function messageStartLine(id: string, parent: string | null = null): string {
+  return streamEventLine({ type: 'message_start', message: { id, type: 'message', role: 'assistant', content: [] } }, parent);
+}
+
+/** message_delta carrying the message's stop_reason (end_turn ends the reply; tool_use does not). */
+export function messageDeltaLine(stopReason: string, parent: string | null = null): string {
+  return streamEventLine({ type: 'message_delta', delta: { stop_reason: stopReason }, usage: { output_tokens: 10 } }, parent);
+}
+
+export function messageStopLine(parent: string | null = null): string {
+  return streamEventLine({ type: 'message_stop' }, parent);
+}
+
+/** An assistant text line with an explicit message id, stop_reason and parent_tool_use_id. */
+export function assistantLineOf(text: string, opts: { id?: string; stopReason?: string | null; parent?: string | null } = {}): string {
+  return JSON.stringify({ type: 'assistant', parent_tool_use_id: opts.parent ?? null, message: { id: opts.id ?? 'msg_1', role: 'assistant', content: [{ type: 'text', text }], stop_reason: opts.stopReason ?? null } });
+}

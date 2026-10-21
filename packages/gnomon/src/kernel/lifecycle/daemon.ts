@@ -173,7 +173,9 @@ export type DaemonEvent =
   /**
    * TD-2026-10-20-812 (the Desk): mcp.added {hsid, server, launchHash, overridden} per desk server at spawn (L2);
    * mcp.needs-config (a non-absolute command, not launched); mcp.reserved (a repo server using a reserved desk prefix,
-   * dropped, H1a); mcp.unbound (the router not bound yet: no desk servers, L3); kept.refused (M3); send.failed (L5)
+   * dropped, H1a); mcp.unbound (the router not bound yet: no desk servers, L3); kept.refused (M3); send.failed (L5);
+   * offer.suppressed {hsid, turn, why, name?, offerKind?} (T-2026-10-21-006: an evaluated reply that showed no offer, why
+   * one of OFFER_SUPPRESS_REASONS; ids and names only)
    */
   | { kind: 'daemon.desk'; event: string; hsid?: string; name?: string; server?: string | null; [k: string]: unknown }
   | SocketEvent;

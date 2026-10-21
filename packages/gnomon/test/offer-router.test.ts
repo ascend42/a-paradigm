@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { OfferRouter, deskRepoScope, openText, type CommittedRow, type OfferAsker, type RouterRow } from '../src/kernel/desk/offer-router.js';
 import { serverNameOf, type DeskMod } from '../src/kernel/desk/mcp-passthrough.js';
-import { HSID, HSID2, HUMAN, KERNEL, assistantLine, deskMod, offerReply, toolResultLine, toolUseLine } from './desk-fixtures.js';
+import { HSID, HSID2, HUMAN, KERNEL, assistantLine, assistantLineOf, deskMod, messageDeltaLine, messageStartLine, messageStopLine, offerReply, toolResultLine, toolUseLine } from './desk-fixtures.js';
 
 const GUI: OfferAsker = { connId: 'conn-1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
 const REPO = 'repo:0123456789abcdef';
@@ -323,5 +323,131 @@ describe('#offer-router: guidance roster', () => {
     expect(g).not.toContain('quiet');
     t.setMods([]);
     expect(t.r.guidanceFor(HSID)).toBeNull();
+  });
+});
+
+describe('#offer-router: evaluated when the reply ends, not at turn.result (T-2026-10-21-006)', () => {
+  const ev = (line: string): CommittedRow => ({ kind: 'turn.event', session: HSID, payload: { hsid: HSID, line } });
+  const sent = (k: number): CommittedRow => ({ kind: 'turn.sent', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}` } });
+  const result: CommittedRow = { kind: 'turn.result', session: HSID, payload: { hsid: HSID } };
+  /** one streamed main-chain message: message_start, its text, message_delta(stop), message_stop; returns every row produced */
+  const reply = (t: ReturnType<typeof rig>, id: string, text: string, stop = 'end_turn'): RouterRow[] => [
+    ...t.commit(ev(messageStartLine(id))),
+    ...t.commit(ev(assistantLineOf(text, { id }))),
+    ...t.commit(ev(messageDeltaLine(stop))),
+    ...t.commit(ev(messageStopLine())),
+  ];
+  const suppressions = (t: ReturnType<typeof rig>) => t.diags.filter((d) => d.event === 'offer.suppressed').map((d) => d.data);
+
+  it('the founder\'s timing: reply 2 ends, turn 3 is sent before turn 2\'s turn.result ⇒ the offer is shown', () => {
+    const t = rig();
+    t.turn(HSID, 1, 'Hello.');
+    t.commit(sent(2));
+    const rows = reply(t, 'msg_2', offerReply('Here are three directions.', BLOCK));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.kind).toBe('offer.shown');
+    expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/2`);
+    t.commit(sent(3)); // 8 s after message_stop, 22 s before turn 2's turn.result
+    expect(t.commit(result)).toEqual([]); // turn 2's turn.result, ~30 s late
+    expect(suppressions(t).filter((d) => d.turn === `turn:${HSID}/2`)).toEqual([]);
+  });
+
+  it('a turn.result arriving after the evaluation is not counted again (shown once; a suppression once)', () => {
+    const t = rig();
+    t.commit(sent(1));
+    const shown = reply(t, 'msg_1', offerReply('a', BLOCK));
+    expect(shown).toHaveLength(1);
+    expect(t.commit(result)).toEqual([]);
+    t.commit(sent(2));
+    expect(reply(t, 'msg_2', 'plain')).toEqual([]);
+    expect(t.commit(result)).toEqual([]);
+    expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/2`, why: 'no-block' }]);
+    // an assistant line carrying stop_reason AND the message_delta: still one evaluation
+    t.commit(sent(3));
+    const third = [
+      ...t.commit(ev(assistantLineOf(offerReply('b', BLOCK), { id: 'msg_3', stopReason: 'end_turn' }))),
+      ...t.commit(ev(messageDeltaLine('end_turn'))),
+      ...t.commit(ev(messageStopLine())),
+      ...t.commit(result),
+    ];
+    expect(third.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(suppressions(t)).toHaveLength(1);
+  });
+
+  it('an assistant line with stop_reason end_turn ends the reply too', () => {
+    const t = rig();
+    t.commit(sent(1));
+    expect(t.commit(ev(assistantLineOf(offerReply('a', BLOCK), { stopReason: 'end_turn' })))[0]?.kind).toBe('offer.shown');
+  });
+
+  it('a tool_use stop does not evaluate; the final message of the turn is the reply', () => {
+    const t = rig();
+    t.commit(sent(1));
+    // an offer block before a tool call is not the reply's end
+    expect(reply(t, 'msg_1', offerReply('a', BLOCK), 'tool_use')).toEqual([]);
+    expect(suppressions(t)).toEqual([]);
+    t.commit(ev(toolResultLine('t1')));
+    expect(reply(t, 'msg_2', 'Done, no offer.')).toEqual([]);
+    expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'no-block' }]);
+    // a later final message with the block is shown
+    t.commit(result);
+    t.commit(sent(2));
+    t.commit(ev(messageStartLine('msg_3')));
+    t.commit(ev(assistantLineOf('Thinking.', { id: 'msg_3' })));
+    t.commit(ev(messageDeltaLine('tool_use')));
+    expect(reply(t, 'msg_4', offerReply('Here.', BLOCK))[0]?.payload.replyTurnId).toBe(`turn:${HSID}/2`);
+  });
+
+  it('a sub-agent message (parent_tool_use_id set) is ignored, even with end_turn', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(ev(messageStartLine('msg_sub', 'toolu_task')));
+    t.commit(ev(assistantLineOf(offerReply('sub', BLOCK), { id: 'msg_sub', parent: 'toolu_task', stopReason: 'end_turn' })));
+    expect(t.commit(ev(messageDeltaLine('end_turn', 'toolu_task')))).toEqual([]);
+    expect(suppressions(t)).toEqual([]);
+    // the main chain's own end evaluates its own text, not the sub-agent's
+    expect(reply(t, 'msg_main', 'Main reply.')).toEqual([]);
+    expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'no-block' }]);
+  });
+
+  it('a turn sent while this reply is still streaming suppresses it (turn-streaming)', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(ev(messageStartLine('msg_1')));
+    t.commit(ev(assistantLineOf(offerReply('a', BLOCK), { id: 'msg_1' })));
+    t.commit(sent(2)); // before the reply ended
+    expect(t.commit(ev(messageDeltaLine('end_turn')))).toEqual([]);
+    expect(t.commit(result)).toEqual([]);
+    expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'turn-streaming', name: BLOCK.mod, offerKind: BLOCK.kind }]);
+  });
+
+  it('every suppression reason writes its row, with names only (never the question or reply text)', () => {
+    const cases: Array<[string, ReturnType<typeof rig>, string, Record<string, unknown>]> = [
+      ['no-block', rig(), 'plain text', { why: 'no-block' }],
+      ['pending-card', rig({ pending: true }), offerReply('a', BLOCK), { why: 'pending-card', name: BLOCK.mod, offerKind: BLOCK.kind }],
+      ['not-offerable (uninstalled)', rig(), offerReply('a', { ...BLOCK, mod: 'acme.neurons' }), { why: 'not-offerable', name: 'acme.neurons', offerKind: BLOCK.kind }],
+      ['not-offerable (no declared offers)', rig({ mods: [deskMod('constellation', { offers: false })] }), offerReply('a', BLOCK), { why: 'not-offerable', name: BLOCK.mod, offerKind: BLOCK.kind }],
+      ['kind-undeclared', rig(), offerReply('a', { ...BLOCK, kind: 'delete-repo' }), { why: 'kind-undeclared', name: BLOCK.mod, offerKind: 'delete-repo' }],
+      ['malformed (bad JSON)', rig(), offerReply('a', '{not json'), { why: 'malformed' }],
+      ['malformed (two blocks)', rig(), `${offerReply('a', BLOCK)}\n\n${offerReply('b', BLOCK)}`, { why: 'malformed' }],
+      ['malformed (closed keys)', rig(), offerReply('a', { ...BLOCK, title: 'Run rm -rf' }), { why: 'malformed' }],
+    ];
+    for (const [label, t, text, want] of cases) {
+      t.commit(sent(1));
+      expect(reply(t, 'msg_1', text), label).toEqual([]);
+      const rows = suppressions(t);
+      expect(rows, label).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, ...want }]);
+      expect(JSON.stringify(rows), label).not.toContain(BLOCK.question);
+      expect(JSON.stringify(rows), label).not.toContain('plain text');
+    }
+  });
+
+  it('the turn-streaming suppression is written on the turn.result fallback too', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(sent(2));
+    t.commit(ev(assistantLine(offerReply('a', BLOCK))));
+    expect(t.commit(result)).toEqual([]);
+    expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'turn-streaming', name: BLOCK.mod, offerKind: BLOCK.kind }]);
   });
 });

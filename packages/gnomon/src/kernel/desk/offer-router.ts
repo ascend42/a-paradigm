@@ -7,10 +7,16 @@
  * the speakable projector) plus the two human requests.
  *
  * $offer-handoff:
- *   1. A turn ends (turn.result). The main-chain assistant text of that turn is parsed with offerBlockOf (S0, the one
- *      parser shared with the GUI). No block, two blocks, or a malformed block ⇒ nothing (the reply is plain text).
- *   2. BUDGET: at most one per reply (one evaluation per turn end); none while the session still has a turn streaming
- *      (another turn.sent is outstanding); none while the session has a pending approval card.
+ *   1. A reply ends: the MAIN-CHAIN assistant message stops with stop_reason end_turn (the stream_event message_delta,
+ *      or an assistant line carrying stop_reason; parent_tool_use_id null). T-2026-10-21-006: this is the moment, not
+ *      turn.result, which Claude Code can emit ~30 s later, after the human already sent the next turn. A tool_use
+ *      stop never evaluates; a sub-agent's message (parent_tool_use_id set) is never the reply. turn.result is the
+ *      fallback only for a turn whose end was not seen (no partial messages, max_tokens). The text of the FINAL
+ *      assistant message of the turn (its text blocks, joined by a blank line) is parsed with offerBlockOf (S0, the
+ *      one parser shared with the GUI). No block, two blocks, or a malformed block ⇒ nothing (the reply is plain text).
+ *   2. BUDGET: at most one per reply (each turn is evaluated exactly once: at its end, or at turn.result if its end
+ *      was not seen); none while another turn sent BEFORE this reply ended is outstanding (a turn sent after the reply
+ *      ended does not suppress it); none while the session has a pending approval card.
  *   3. GATE (Aegis D3): the mod is installed, granted, unpaused (DeskMods), not muted for this hsid (not-now / stop-here)
  *      nor for the session's repo (request.offer.mute), and `kind` is one of ITS declared offers. phase, title and
  *      contextIn are COPIED from the manifest offer spec, never taken from the block; only the question is model text.
@@ -22,6 +28,10 @@
  *      ("Open <title>: use the <handoffTool> tool.", from the manifest, never model text; session.inject origin kernel).
  *   6. offer.kept (the founder's definition, the A6 metric): after `open`, the mod's declared handoffTool, called on that
  *      mod's own server (`mcp__<mcpServerName(id)>__<handoffTool>`), completes without error in the same hsid. Once per offer.
+ *
+ * SUPPRESSIONS: every evaluation that shows nothing writes one diag row offer.suppressed{hsid, turn, why} (why ∈
+ * OFFER_SUPPRESS_REASONS), with name (the mod id) and offerKind when the block named them. Ids and names only, never
+ * message text. The daemon emits it on its daemon.desk diag channel.
  *
  * MUTES: offer.decided{not-now} quiets that mod for the rest of the hsid (L4); {stop-here} quiets every mod for the
  * hsid; request.offer.mute{mod, scope:'repo', hsid, muted} (A3; S0b: the human names a LIVE session they own, the
@@ -51,6 +61,10 @@ export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
 ]);
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
 export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.muted']);
+
+/** offer.suppressed{why} (diag): why an evaluated reply showed no offer. */
+export const OFFER_SUPPRESS_REASONS = ['no-block', 'turn-streaming', 'pending-card', 'not-offerable', 'kind-undeclared', 'malformed'] as const;
+export type OfferSuppressReason = (typeof OFFER_SUPPRESS_REASONS)[number];
 
 /** The kernel template of an `open` turn (manifest fields only; the tool fully qualified, mcp__<server>__<tool>, H1c). */
 export function openText(title: string, qualifiedTool: string): string {
@@ -104,7 +118,7 @@ export interface OfferRouterOptions {
    * name-taken mods never are).
    */
   sessionServers: (hsid: string) => ReadonlySet<string> | undefined;
-  /** kernel diagnostics (the daemon's diag channel): kept refused, send failed */
+  /** kernel diagnostics (the daemon's daemon.desk diag channel): offer.suppressed, kept.refused, send.failed */
   diag?: (event: string, data: Record<string, unknown>) => void;
 }
 
@@ -122,8 +136,14 @@ interface OfferState {
 interface SessionState {
   /** the session exited; its mutes stay until the state is evicted (L7) */
   exited: boolean;
+  /** outstanding turn ids, oldest first (turn.result closes the head) */
   turns: string[];
+  /** the text blocks of the current main-chain assistant message */
   texts: string[];
+  /** that message's id (a new id starts a new message) */
+  msgId: string | null;
+  /** the turn id already evaluated (at its end), so turn.result never evaluates it again */
+  evaluated: string | null;
   muted: Set<string>;
   stopped: boolean;
   latest: string | null;
@@ -136,19 +156,47 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-/** The main-chain assistant text of one stream line (null for anything else). */
-function assistantText(line: string): string | null {
+/** What one MAIN-CHAIN stream line means to the router (sub-agent lines, parent_tool_use_id set, are ignored). */
+interface ChainLine {
+  /** message_start or an assistant line: the message id it belongs to */
+  msgId: string | null;
+  /** message_start: a new message begins */
+  start: boolean;
+  /** an assistant line's text blocks, joined by a blank line */
+  text: string | null;
+  /** the message's stop_reason, when this line carries it (message_delta, or an assistant line) */
+  stop: string | null;
+}
+
+function chainLine(line: string): ChainLine | null {
   let o: unknown;
   try {
     o = JSON.parse(line);
   } catch {
     return null;
   }
-  if (!isObj(o) || o.type !== 'assistant' || (o.parent_tool_use_id !== undefined && o.parent_tool_use_id !== null)) return null;
-  const content = isObj(o.message) ? o.message.content : undefined;
-  if (!Array.isArray(content)) return null;
-  const t = content.filter((b) => isObj(b) && b.type === 'text' && typeof b.text === 'string').map((b) => (b as { text: string }).text);
-  return t.length ? t.join('\n\n') : null;
+  if (!isObj(o) || (o.parent_tool_use_id !== undefined && o.parent_tool_use_id !== null)) return null;
+  if (o.type === 'assistant') {
+    const m = isObj(o.message) ? o.message : {};
+    const content = Array.isArray(m.content) ? (m.content as unknown[]) : [];
+    const t = content.filter((b) => isObj(b) && b.type === 'text' && typeof b.text === 'string').map((b) => (b as { text: string }).text);
+    return { msgId: typeof m.id === 'string' ? m.id : null, start: false, text: t.length ? t.join('\n\n') : null, stop: typeof m.stop_reason === 'string' ? m.stop_reason : null };
+  }
+  if (o.type !== 'stream_event' || !isObj(o.event)) return null;
+  const ev = o.event;
+  if (ev.type === 'message_start') {
+    const m = isObj(ev.message) ? ev.message : {};
+    return { msgId: typeof m.id === 'string' ? m.id : null, start: true, text: null, stop: null };
+  }
+  if (ev.type === 'message_delta' && isObj(ev.delta) && typeof ev.delta.stop_reason === 'string') {
+    return { msgId: null, start: false, text: null, stop: ev.delta.stop_reason };
+  }
+  return null;
+}
+
+/** A model reply holding an ```offer fence line that offerBlockOf refused (vs no block at all). */
+function hasOfferFence(reply: string): boolean {
+  return reply.split('\n').some((l) => l.replace(/[ \t\r]+$/, '') === '```offer');
 }
 
 const MAX_TURN_TEXT = 262_144;
@@ -172,7 +220,7 @@ export class OfferRouter {
     let s = this.#sessions.get(hsid);
     if (!s) {
       if (this.#sessions.size >= MAX_SESSIONS) this.#sessions.delete(this.#sessions.keys().next().value!);
-      s = { exited: false, turns: [], texts: [], muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      s = { exited: false, turns: [], texts: [], msgId: null, evaluated: null, muted: new Set(), stopped: false, latest: null, calls: new Map() };
       this.#sessions.set(hsid, s);
     } else {
       // LRU: a touched session moves to the back of the eviction order
@@ -278,16 +326,34 @@ export class OfferRouter {
     }
     if (e.kind === 'turn.event') {
       if (typeof p.line !== 'string') return [];
-      const text = assistantText(p.line);
-      if (text !== null && s.texts.reduce((n, t) => n + t.length, 0) + text.length <= MAX_TURN_TEXT) s.texts.push(text);
-      return this.#kept(hsid, s, p.line);
+      const out = this.#kept(hsid, s, p.line);
+      const c = chainLine(p.line);
+      if (!c) return out;
+      if (c.start || (c.msgId !== null && c.msgId !== s.msgId)) {
+        // a new main-chain message: only the FINAL message of the turn is the reply
+        s.texts = [];
+        s.msgId = c.msgId;
+      }
+      if (c.text !== null && s.texts.reduce((n, t) => n + t.length, 0) + c.text.length <= MAX_TURN_TEXT) s.texts.push(c.text);
+      // T-2026-10-21-006: the reply ended (end_turn, not tool_use) ⇒ evaluate now, once, for the oldest outstanding turn
+      const head = s.turns[0];
+      if (c.stop === 'end_turn' && head !== undefined && s.evaluated !== head) {
+        s.evaluated = head;
+        const row = this.#offerFor(hsid, s.texts.join('\n\n'), head, s.turns.length - 1);
+        if (row) out.push(row);
+      }
+      return out;
     }
     // turn.result: the turn that ended is the oldest outstanding one (FIFO, as the supervisor releases permits)
     const replyTurnId = s.turns.shift() ?? null;
     const reply = s.texts.join('\n\n');
+    const done = replyTurnId !== null && s.evaluated === replyTurnId;
     s.texts = [];
-    if (replyTurnId === null) return [];
-    const row = this.#offerFor(hsid, s, reply, replyTurnId);
+    s.msgId = null;
+    s.evaluated = null;
+    if (replyTurnId === null || done) return [];
+    // fallback: the turn's end was not seen (no message_delta end_turn); evaluated here, with today's streaming rule
+    const row = this.#offerFor(hsid, reply, replyTurnId, s.turns.length);
     return row ? [row] : [];
   }
 
@@ -338,16 +404,24 @@ export class OfferRouter {
     return out;
   }
 
-  #offerFor(hsid: string, s: SessionState, reply: string, replyTurnId: string): RouterRow | null {
-    if (!reply) return null;
-    const block = offerBlockOf(reply);
-    if (!block) return null;
-    if (s.turns.length > 0) return null; // another turn is still streaming
-    if (this.#o.pendingCard(hsid)) return null;
+  /** Every evaluation that shows nothing says why on the diag channel (ids and names only, never message text). */
+  #suppressed(hsid: string, turn: string, why: OfferSuppressReason, named?: { mod: string; kind: string }): null {
+    this.#o.diag?.('offer.suppressed', { hsid, turn, why, ...(named ? { name: named.mod, offerKind: named.kind } : {}) });
+    return null;
+  }
+
+  /** `others`: the outstanding turns other than this reply's (sent before the reply ended, or before turn.result on the fallback). */
+  #offerFor(hsid: string, reply: string, replyTurnId: string, others: number): RouterRow | null {
+    const block = reply ? offerBlockOf(reply) : null;
+    if (!block) return this.#suppressed(hsid, replyTurnId, reply && hasOfferFence(reply) ? 'malformed' : 'no-block');
     const { mod, kind, question } = block.offer;
-    if (!this.offerable(hsid).some((m) => m.name === mod)) return null; // uninstalled, ungranted, paused or muted
+    const named = { mod, kind };
+    if (others > 0) return this.#suppressed(hsid, replyTurnId, 'turn-streaming', named); // another turn is still streaming
+    if (this.#o.pendingCard(hsid)) return this.#suppressed(hsid, replyTurnId, 'pending-card', named);
+    // uninstalled, ungranted, paused or muted
+    if (!this.offerable(hsid).some((m) => m.name === mod)) return this.#suppressed(hsid, replyTurnId, 'not-offerable', named);
     const spec = this.#specOf(mod, kind);
-    if (!spec) return null; // not one of that mod's declared offers
+    if (!spec) return this.#suppressed(hsid, replyTurnId, 'kind-undeclared', named); // not one of that mod's declared offers
     const payload = {
       offerId: this.#o.mintOfferId?.() ?? mintId('offer'),
       hsid,
@@ -359,7 +433,7 @@ export class OfferRouter {
       question,
       replyTurnId,
     };
-    if (validateKindPayload('offer.shown', payload).length) return null;
+    if (validateKindPayload('offer.shown', payload).length) return this.#suppressed(hsid, replyTurnId, 'malformed', named);
     return { kind: 'offer.shown', payload, session: hsid };
   }
 
