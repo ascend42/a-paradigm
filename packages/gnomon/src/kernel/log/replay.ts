@@ -64,6 +64,8 @@
  */
 import { canonicalJson, EVENT_KINDS, isPlainObject, parseApproveScope, scopeDigest, sha256Tagged } from '@a-company/gnomon-contracts';
 import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
+import { contentHashOf } from '../broker/card.js';
+import { decisionRowV2, rowsDigestOf } from '../identity/decision-batch.js';
 import { answerDigest, approveMessage, decisionMessage, usesDecisionV2, type KeyRing } from './signer.js';
 
 export const REPLAY_PROJECTION = 'gnomon-replay:v1' as const;
@@ -89,7 +91,7 @@ export interface ReplayProjection {
 
 export interface ReplayDivergence {
   seq: number;
-  reason: 'input-mismatch' | 'inject-plaintext' | 'malformed-envelope' | DecisionSigDivergence;
+  reason: 'input-mismatch' | 'inject-plaintext' | 'malformed-envelope' | DecisionSigDivergence | RootDecisionDivergence;
   detail: string;
 }
 
@@ -244,6 +246,63 @@ export function checkDecisionSigs(rows: Iterable<Row>, keyRing: KeyRing, keys: D
   return { divergences, ...(cutoverSeq !== undefined ? { cutoverSeq } : {}) };
 }
 
+/** Aegis C1f (TD-2026-10-20-514): divergences of the v2 root-decision check. */
+export type RootDecisionDivergence = 'root-rows-missing' | 'root-rows-digest' | 'root-sig-bad';
+
+/**
+ * Aegis C1f: every approval.decide carrying a rowsDigest (a v2 root decision) is checked against the card the log
+ * showed. Its approval.request card's root-rows node detail must hash to the card's contentHash, and
+ * sha256(canonicalJson(detail.rootRows)) must be the logged rowsDigest. With `root` (the pinned root key), the
+ * logged rootSig must verify over the gnomon-root-decision:v2 row rebuilt from the logged fields. Pure over the rows.
+ */
+export function checkRootDecisions(rows: Iterable<Row>, root?: { readonly rootKeyId: string | null; verifyRow(signer: string, row: unknown, sigB64: string): boolean }): ReplayDivergence[] {
+  const out: ReplayDivergence[] = [];
+  const cards = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    if (r.kind !== 'approval.request' && r.kind !== 'approval.decide') continue;
+    let pl: Record<string, unknown>;
+    try {
+      const e = JSON.parse(r.envelope) as Record<string, unknown>;
+      pl = isPlainObject(e.payload) ? (e.payload as Record<string, unknown>) : {};
+    } catch {
+      continue; // foldReplay reports a malformed envelope
+    }
+    if (r.kind === 'approval.request') {
+      const c = pl.card;
+      if (isPlainObject(c) && typeof (c as Record<string, unknown>).cardId === 'string') cards.set((c as Record<string, unknown>).cardId as string, c as Record<string, unknown>);
+      continue;
+    }
+    if (typeof pl.rowsDigest !== 'string') continue; // not a v2 root decision
+    const div = (reason: RootDecisionDivergence, detail: string): void => void out.push({ seq: r.seq, reason, detail });
+    const cardId = str(pl.cardId);
+    const card = cardId ? cards.get(cardId) : undefined;
+    const kids = card && isPlainObject(card.block) && Array.isArray((card.block as Record<string, unknown>).children) ? ((card.block as Record<string, unknown>).children as unknown[]) : [];
+    const nodes = kids.filter((k) => isPlainObject(k) && (k as Record<string, unknown>).type === 'root-rows') as Array<Record<string, unknown>>;
+    const detail = nodes.length === 1 && isPlainObject(nodes[0]!.detail) ? (nodes[0]!.detail as Record<string, unknown>) : null;
+    if (!card || !detail || !Array.isArray(detail.rootRows)) {
+      div('root-rows-missing', `the v2 root decision of ${cardId ?? '?'} has no logged card showing its rootRows`);
+      continue;
+    }
+    const flags = Array.isArray(card.flags) ? (card.flags as string[]) : [];
+    const shownHash = contentHashOf({ kind: String(card.kind), requestedBy: String(card.requestedBy), ...(typeof card.hsid === 'string' ? { hsid: card.hsid } : {}), detail, flags });
+    if (shownHash !== card.contentHash || shownHash !== pl.contentHash) {
+      div('root-rows-digest', `the root-rows detail of ${cardId} does not hash to the card's contentHash`);
+      continue;
+    }
+    const rootRows = detail.rootRows as unknown[];
+    if (rowsDigestOf(rootRows) !== pl.rowsDigest) {
+      div('root-rows-digest', `the logged rowsDigest of ${cardId} is not the digest of the rows its card showed`);
+      continue;
+    }
+    if (root && root.rootKeyId !== null) {
+      const sig = isPlainObject(pl.rootSig) ? (pl.rootSig as Record<string, unknown>) : null;
+      const row = decisionRowV2({ cardId: cardId!, cardKind: String(pl.rootKind), decision: String(pl.decision), contentHash: String(pl.contentHash), approver: String(pl.by), rootRows });
+      if (!sig || typeof sig.signer !== 'string' || typeof sig.sig !== 'string' || !root.verifyRow(sig.signer, row, sig.sig)) div('root-sig-bad', `the rootSig of ${cardId} does not verify over its v2 decision row`);
+    }
+  }
+  return out;
+}
+
 export function replayProjectionHash(p: ReplayProjection): string {
   return sha256Tagged(canonicalJson(p));
 }
@@ -252,13 +311,15 @@ export function replayProjectionHash(p: ReplayProjection): string {
  * verifyLog with the fold (and, given decisionKeys, the decisionSig check) inside its single pass; `expect`
  * compares the projection hash. ok ⇔ verified ∧ no divergence ∧ (no expect ∨ it matches).
  */
-export function replayLog(home: string, opts: Omit<VerifyLogOptions, 'onRow'> & { expect?: string; decisionKeys?: DecisionKeys }): ReplayReport {
-  const { expect, decisionKeys, ...verifyOpts } = opts;
+export function replayLog(home: string, opts: Omit<VerifyLogOptions, 'onRow'> & { expect?: string; decisionKeys?: DecisionKeys; root?: Parameters<typeof checkRootDecisions>[1] }): ReplayReport {
+  const { expect, decisionKeys, root, ...verifyOpts } = opts;
   const decisionSigs = decisionKeys ? 'verified' : 'unchecked';
   const seen: Row[] = [];
   const verify = verifyLog(home, { ...verifyOpts, onRow: (r) => void seen.push(r) });
   if (!verify.ok) return { ok: false, verify, divergences: [], decisionSigs, ...(expect ? { expected: { hash: expect, matches: false } } : {}) };
   const { projection, divergences } = foldReplay(seen);
+  divergences.push(...checkRootDecisions(seen, root)); // Aegis C1f
+  divergences.sort((a, b) => a.seq - b.seq);
   let cutover: number | undefined;
   if (decisionKeys) {
     const d = checkDecisionSigs(seen, opts.keyRing, decisionKeys);

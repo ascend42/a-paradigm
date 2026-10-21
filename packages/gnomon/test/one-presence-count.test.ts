@@ -15,6 +15,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
 import { grantsPath, MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
 import { CountingFakeHelper, FakeHelper } from './helper-fake.js';
+import { checkRootDecisions } from '../src/kernel/log/replay.js';
 
 const HUMAN = 'p:abcdefgh/matt';
 const GEN = 'test0001';
@@ -129,5 +130,30 @@ describe('Q2: status.helper.batch', () => {
     expect(b.helperBatch()).toBeNull();
     expect(await b.refreshHelperBatch()).toBe('unavailable (helper <1.8.0)');
     expect(b.helperBatch()).toBe('unavailable (helper <1.8.0)');
+  });
+});
+
+describe('Aegis C1f: replay checks the v2 root decision against the card the log showed', () => {
+  const asRows = (rows: Array<{ kind: string; payload: Record<string, unknown> }>) => rows.map((x, i) => ({ seq: i + 1, kind: x.kind, envelope: JSON.stringify({ kind: x.kind, payload: x.payload }) }) as never);
+  async function decided() {
+    const r = rig();
+    await decide(r, mcpConfig(), 'allow');
+    return r;
+  }
+  it('a clean log: no divergence (digest and rootSig verify)', async () => {
+    const r = await decided();
+    expect(checkRootDecisions(asRows(r.rows), r.root)).toEqual([]);
+  });
+  it('a rowsDigest that is not the shown rows, a missing card, a forged rootSig: each is a divergence', async () => {
+    const r = await decided();
+    const at = r.rows.findIndex((x) => x.kind === 'approval.decide');
+    const edit = (f: (p: Record<string, unknown>) => void, drop = false) => {
+      const rows = structuredClone(r.rows);
+      f(rows[at]!.payload);
+      return asRows(drop ? rows.filter((x) => x.kind !== 'approval.request') : rows);
+    };
+    expect(checkRootDecisions(edit((p) => void (p.rowsDigest = `sha256:${'0'.repeat(64)}`)), r.root).map((d) => d.reason)).toEqual(['root-rows-digest']);
+    expect(checkRootDecisions(edit(() => undefined, true), r.root).map((d) => d.reason)).toEqual(['root-rows-missing']);
+    expect(checkRootDecisions(edit((p) => void (p.rootKind = 'install')), r.root).map((d) => d.reason)).toEqual(['root-sig-bad']);
   });
 });
