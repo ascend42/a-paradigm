@@ -18,7 +18,7 @@ import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
 import { isClaudeModel } from './claude-model.js';
 import { GIT_COMMIT_PATTERN, isModId } from './mod-id.js';
-import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferTitle } from './offer.js';
+import { OFFER_DECISIONS, OFFER_MOD_PATTERN, OFFER_SUPPRESS_REASONS, OFFER_SUPPRESS_UNNAMED, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFER_LIMITS, contextInProblems, isOfferQuestion, isOfferTitle } from './offer.js';
 
 export const EVENT_V1 = 'event:v1' as const;
 
@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -79,6 +79,8 @@ const STANDING = '8.0:TD-2026-10-20-086' as const;
 const MODEL_SWITCH = '8.0:model-switch' as const;
 /** The Desk (TD-2026-10-20-812: offers, the in-GUI mod install, mute) + the context meter: one clientApiId move. */
 const DESK = '8.0:TD-2026-10-20-812' as const;
+/** T-2026-10-21-006 (founder ruling: the Desk's suppressions go on the signed log, a deliberate clientApiId move). */
+const OFFER_SUPPRESS = '8.0:T-2026-10-21-006' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -150,6 +152,10 @@ const TABLE: Row[] = [
   // muted, hsid} — the kernel-written result of a mute: the repo scope it derived from the live session (S0b).
   // `mod` is a mod id <publisher>.<name> (S0b) everywhere in the Desk kinds.
   ['offer', 'kernel', 'shown decided kept muted', DESK],
+  // T-2026-10-21-006: offer.suppressed{hsid, turn, why, name?, offerKind?} — a completed main-chain reply the #offer-router
+  // evaluated showed no offer, and why (OFFER_SUPPRESS_REASONS). Ids and names only, never message text; at most one per
+  // completed turn (no-block only while the session has an offerable mod).
+  ['offer', 'kernel', 'suppressed', OFFER_SUPPRESS],
   ['request', 'kernel', 'offer.decide offer.mute mod.install', DESK],
   // the context meter (TD-2026-10-20-812): session.context.threshold{hsid, usedTokens, windowTokens, ratio} — a Paradigm
   // session crossed the meter's threshold (Claude checkpoints, then the human is ASKED); request.session.restart{hsid,
@@ -399,6 +405,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'request.offer.decide': Object.freeze(['offerId', 'decision']),
   'request.offer.mute': Object.freeze(['mod', 'scope', 'hsid', 'muted']),
   'offer.muted': Object.freeze(['mod', 'repo', 'muted', 'hsid']),
+  // T-2026-10-21-006: names only (name = the block's mod id, offerKind = its kind; both absent for no-block / malformed)
+  'offer.suppressed': Object.freeze(['hsid', 'turn', 'why', 'name', 'offerKind']),
   // source 'git' carries url (https only) and optionally commit (40 hex), 'folder' carries path (absolute); the other keys are refused
   'request.mod.install': Object.freeze(['source', 'url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['hsid', 'checkpointRef']),
@@ -409,6 +417,7 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
 export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'request.mod.install': Object.freeze(['url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['checkpointRef']),
+  'offer.suppressed': Object.freeze(['name', 'offerKind']),
 });
 
 /** request.offer.mute{scope} (CLOSED): a mod is muted per repo (A3: Neurons on everywhere, mute per repo). */
@@ -630,6 +639,20 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('mod' in v) modId(c, v.mod);
       if ('tool' in v) c.str('tool', v.tool, OFFER_TOOL_PATTERN, 'an MCP tool name');
       break;
+    case 'offer.suppressed': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('turn' in v) c.str('turn', v.turn, TURN_ID_PATTERN, 'turn:<hsid>/<n>');
+      if ('why' in v) c.closedEnum('why', v.why, OFFER_SUPPRESS_REASONS);
+      if ('name' in v) {
+        c.str('name', v.name, OFFER_MOD_PATTERN, 'a mod id <publisher>.<name>');
+        if (typeof v.name === 'string' && OFFER_MOD_PATTERN.test(v.name) && !isModId(v.name)) c.fail('name', 'a mod id is at most 60 characters');
+      }
+      if ('offerKind' in v) c.str('offerKind', v.offerKind, OFFER_TOKEN_PATTERN, 'an offer kind (kebab, ≤ 64)');
+      const unnamed = (OFFER_SUPPRESS_UNNAMED as readonly unknown[]).includes(v.why);
+      if (unnamed && ('name' in v || 'offerKind' in v)) c.fail('', `why ${String(v.why)} names no mod or kind`);
+      if (!unnamed && typeof v.why === 'string' && (OFFER_SUPPRESS_REASONS as readonly string[]).includes(v.why) && (!('name' in v) || !('offerKind' in v))) c.fail('', `why ${v.why} names the block's mod (name) and kind (offerKind)`);
+      break;
+    }
     case 'request.offer.decide':
       if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
       if ('decision' in v) c.closedEnum('decision', v.decision, OFFER_DECISIONS);

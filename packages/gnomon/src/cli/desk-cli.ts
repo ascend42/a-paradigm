@@ -7,7 +7,9 @@
  *   gnomon desk stats [<home>] [--json]
  *       Verifies the kernel log (as `gnomon replay` does) and folds offer.shown / offer.decided / offer.kept per mod:
  *       shown, open, not-now, stop-here, kept, and kept/shown (the A6 metric; the kill line is 15% after two weeks of
- *       daily use). Read-only; runs with or without a daemon. An unverified log is refused.
+ *       daily use). offer.suppressed (T-2026-10-21-006) counts per mod with a per-reason breakdown; no-block and
+ *       malformed name no mod and are counted per session. Read-only; runs with or without a daemon. An unverified
+ *       log is refused.
  *
  *   gnomon mod config <mod> [--server <name>] [--command <abs>] [--args <a> <b> …] [--env NAME=value …]
  *       Asks for a per-user launch override of one of the mod's provides.mcp servers (Aegis D2). Accepted only for
@@ -21,7 +23,7 @@ import { kernelPrincipalOf, resolveGnomonHome } from '../kernel/lifecycle/index.
 import { readKernelPubs } from '../kernel/identity/index.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
 import { daemonState } from '../kernel/lifecycle/pidfile.js';
-import { isModId } from '@a-company/gnomon-contracts';
+import { isModId, OFFER_SUPPRESS_REASONS } from '@a-company/gnomon-contracts';
 import { deskLaunchKey, launchCardLines, readDeskMods, requestMcpConfig, serverNameOf } from '../kernel/desk/mcp-passthrough.js';
 import { resolveMcpLaunch } from '../kernel/manifest/manifest.js';
 import type { RowVerifier } from '../kernel/identity/registry.js';
@@ -34,7 +36,8 @@ export const DESK_EXIT_USAGE = 64;
 
 export const DESK_USAGE = `gnomon ${GNOMON_VERSION} desk — the Desk (mod playbook offers)
 usage: gnomon desk stats [<home>] [--json]
-  stats   per mod: offers shown, opened, not now, stop here, kept, and kept/shown
+  stats   per mod: offers shown, suppressed (by reason), opened, not now, stop here, kept, and kept/shown;
+          replies with no offer block (or a malformed one) per session
 `;
 
 export interface DeskModStats {
@@ -43,15 +46,50 @@ export interface DeskModStats {
   notNow: number;
   stopHere: number;
   kept: number;
+  /** offer.suppressed rows naming this mod */
+  suppressed: number;
+  /** …by reason (OFFER_SUPPRESS_REASONS) */
+  suppressedBy: Record<string, number>;
+}
+
+/** offer.suppressed rows that name no mod (no-block, malformed), per reason and per session. */
+export interface DeskUnnamedStats {
+  byReason: Record<string, number>;
+  /** hsid → reason → count */
+  bySession: Record<string, Record<string, number>>;
+}
+
+const bump = (m: Record<string, number>, k: string): void => void (m[k] = (m[k] ?? 0) + 1);
+
+/** offer.suppressed rows (in log order) that name no mod, folded per reason and per session. */
+export function foldDeskUnnamed(rows: Iterable<{ kind: string; payload: unknown }>): DeskUnnamedStats {
+  const out: DeskUnnamedStats = { byReason: {}, bySession: {} };
+  for (const r of rows) {
+    if (r.kind !== 'offer.suppressed') continue;
+    const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
+    if (typeof p.name === 'string' || typeof p.why !== 'string' || typeof p.hsid !== 'string') continue;
+    bump(out.byReason, p.why);
+    bump((out.bySession[p.hsid] ??= {}), p.why);
+  }
+  return out;
 }
 
 /** Fold offer rows (in log order) into per-mod counts. Decisions and kept rows count once per offer. */
 export function foldDeskStats(rows: Iterable<{ kind: string; payload: unknown }>): Record<string, DeskModStats> {
   const byOffer = new Map<string, { mod: string; decided: boolean; kept: boolean }>();
   const out: Record<string, DeskModStats> = {};
-  const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0 });
+  const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 0, suppressedBy: {} });
   for (const r of rows) {
     const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
+    if (r.kind === 'offer.suppressed') {
+      // one row per evaluated turn (the router evaluates each turn once); the unnamed ones fold in foldDeskUnnamed
+      if (typeof p.name === 'string' && typeof p.why === 'string') {
+        const s = of(p.name);
+        s.suppressed++;
+        bump(s.suppressedBy, p.why);
+      }
+      continue;
+    }
     const id = typeof p.offerId === 'string' ? p.offerId : null;
     if (!id) continue;
     if (r.kind === 'offer.shown' && typeof p.mod === 'string' && !byOffer.has(id)) {
@@ -73,6 +111,12 @@ export function foldDeskStats(rows: Iterable<{ kind: string; payload: unknown }>
     }
   }
   return out;
+}
+
+/** " (pending-card 2, turn-streaming 1)", in the closed reason order; "" when empty. */
+function byReason(m: Record<string, number>): string {
+  const parts = OFFER_SUPPRESS_REASONS.filter((r) => m[r]).map((r) => `${r} ${m[r]}`);
+  return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
 const pct = (kept: number, shown: number): string => (shown === 0 ? '-' : `${Math.round((kept / shown) * 100)}%`);
@@ -126,20 +170,28 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
     return DESK_EXIT_REFUSED;
   }
   const stats = foldDeskStats(rows);
+  const unnamed = foldDeskUnnamed(rows);
   const mods = Object.keys(stats).sort();
+  const sessions = Object.keys(unnamed.bySession).sort();
   if (json) {
-    io.stdout.write(`${JSON.stringify({ rows: report.rows, mods: Object.fromEntries(mods.map((m) => [m, { ...stats[m], keptPerShown: stats[m]!.shown ? stats[m]!.kept / stats[m]!.shown : null }])) })}\n`);
+    io.stdout.write(`${JSON.stringify({ rows: report.rows, mods: Object.fromEntries(mods.map((m) => [m, { ...stats[m], keptPerShown: stats[m]!.shown ? stats[m]!.kept / stats[m]!.shown : null }])), unnamed })}\n`);
     return DESK_EXIT_OK;
   }
   heading(io.stdout, 'desk', `${mods.length} mod(s) offered`);
-  if (!mods.length) {
-    io.stdout.write('  no offer shown yet\n');
+  if (!mods.length && !sessions.length) {
+    io.stdout.write('  no offer shown or suppressed yet\n');
     return DESK_EXIT_OK;
   }
-  readout(io.stdout, mods.map((m) => {
-    const s = stats[m]!;
-    return [m, `shown ${s.shown} · open ${s.open} · not now ${s.notNow} · stop here ${s.stopHere} · kept ${s.kept} · kept/shown ${pct(s.kept, s.shown)}`] as const;
-  }));
+  if (mods.length) {
+    readout(io.stdout, mods.map((m) => {
+      const s = stats[m]!;
+      return [m, `shown ${s.shown} · suppressed ${s.suppressed}${byReason(s.suppressedBy)} · open ${s.open} · not now ${s.notNow} · stop here ${s.stopHere} · kept ${s.kept} · kept/shown ${pct(s.kept, s.shown)}`] as const;
+    }));
+  }
+  if (sessions.length) {
+    heading(io.stdout, 'no offer named', `${sessions.length} session(s)${byReason(unnamed.byReason)}`);
+    readout(io.stdout, sessions.map((h) => [h, byReason(unnamed.bySession[h]!).replace(/^ \(|\)$/g, '')] as const));
+  }
   return DESK_EXIT_OK;
 }
 

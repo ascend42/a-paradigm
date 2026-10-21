@@ -20,7 +20,7 @@ describe('standing grant contracts (F6)', () => {
   it('closed values ride the clientApiId descriptor', () => {
     expect((CLIENT_API_DESCRIPTOR as unknown as { standingGrant: unknown }).standingGrant).toEqual({ tuples: [...STANDING_TUPLES], repoTuples: [...STANDING_REPO_TUPLES], revokeReasons: [...STANDING_REVOKE_REASONS], presencePrefix: STANDING_PRESENCE_PREFIX, maxMs: STANDING_GRANT_MAX_MS });
     expect(STANDING_GRANT_MAX_MS).toBe(12 * 3600_000);
-    expect(CLIENT_API_ID).toBe('sha256:4d8830585b5f676ee43c6d5d4a2cff35282344a0019526b2e66358c50599ccd8');
+    expect(CLIENT_API_ID).toBe('sha256:eda8c627b60d11408b7c21ee45db889eb068cf135e6a362e293a46880c561114');
   });
   it('approval.auto.miss is a sensitive kind whose why and inputHash are sensitive fields; approval.auto gains anchoredInputHash', () => {
     expect(defaultLabelsFor('approval.auto.miss').sensitivity).toBe('sensitive');

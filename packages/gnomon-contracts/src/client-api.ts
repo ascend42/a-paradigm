@@ -51,7 +51,7 @@ import {
 } from './rpc.js';
 import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
 import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
-import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
+import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_SUPPRESS_REASONS, OFFER_SUPPRESS_UNNAMED, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
 import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 import { FIRST_PARTY_DISPLAY_NAMES, FOUNDER_BRANDS, GIT_COMMIT_PATTERN, MANIFEST_FORMAT, MCP_SERVER_NAME_MAX, MOD_ID_LIMITS, MOD_ID_PATTERN, MOD_NAME_PATTERN, MOD_REFUSAL_ROUTES, PUBLISHER_PATTERN, QUALIFIED_TOOL_NAME_MAX, RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES } from './mod-id.js';
@@ -180,6 +180,8 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
       block: { fence: '```offer', format: 'json', keys: [...OFFER_BLOCK_KEYS], maxChars: OFFER_BLOCK_MAX, maxReplyChars: OFFER_TEXT_MAX, questionMax: OFFER_QUESTION_MAX, onePerReply: true },
     },
     muteScopes: [...OFFER_MUTE_SCOPES],
+    // 8.0:T-2026-10-21-006: offer.suppressed{why}, and the reasons that name no mod (a deliberate clientApiId move)
+    suppress: { reasons: [...OFFER_SUPPRESS_REASONS], unnamed: [...OFFER_SUPPRESS_UNNAMED] },
     install: { sources: [...MOD_INSTALL_SOURCES], urlPattern: MOD_INSTALL_URL_PATTERN.source, limits: MOD_INSTALL_LIMITS, commitPattern: GIT_COMMIT_PATTERN.source },
     // S0b (mod naming and versioning, inside this same move): the mod id grammar and limits, the reserved publishers,
     // the derived MCP server/tool name limits, the manifest formats and the published manifest refusal codes

@@ -50,7 +50,13 @@ components:
       262144-char reply cap, the block must END the reply, bare CR refused, CommonMark-nested
       fences ignored, other fences indentable up to 3 spaces; isInstallPath refuses UNC/device
       prefixes, ':' past the drive and dot/space-only segments),
-      shared by the kernel and the GUI.
+      shared by the kernel and the GUI. 8.0:T-2026-10-21-006 (founder ruling, one
+      deliberate clientApiId move, sha256:4d883058...ccd8 ->
+      sha256:eda8c627b60d11408b7c21ee45db889eb068cf135e6a362e293a46880c561114):
+      kernel-owned, normal offer.suppressed{hsid, turn, why, name?, offerKind?}, why in
+      OFFER_SUPPRESS_REASONS (no-block, turn-streaming, pending-card, not-offerable,
+      kind-undeclared, malformed); name/offerKind present exactly when why is not in
+      OFFER_SUPPRESS_UNNAMED (no-block, malformed); descriptor desk.suppress.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

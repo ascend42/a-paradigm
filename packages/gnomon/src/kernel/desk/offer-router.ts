@@ -29,9 +29,11 @@
  *   6. offer.kept (the founder's definition, the A6 metric): after `open`, the mod's declared handoffTool, called on that
  *      mod's own server (`mcp__<mcpServerName(id)>__<handoffTool>`), completes without error in the same hsid. Once per offer.
  *
- * SUPPRESSIONS: every evaluation that shows nothing writes one diag row offer.suppressed{hsid, turn, why} (why ∈
- * OFFER_SUPPRESS_REASONS), with name (the mod id) and offerKind when the block named them. Ids and names only, never
- * message text. The daemon emits it on its daemon.desk diag channel.
+ * SUPPRESSIONS (founder ruling, T-2026-10-21-006): every evaluation that shows nothing returns one KERNEL row
+ * offer.suppressed{hsid, turn, why, name?, offerKind?} (why ∈ OFFER_SUPPRESS_REASONS; name = the block's mod id and
+ * offerKind its kind, exactly when the block named them), appended to the signed log like offer.shown. Ids and names
+ * only, never message text. At most one per completed main-chain turn (each turn is evaluated once); no-block is
+ * written only while the session has an offerable mod (a session with no Desk mod writes nothing).
  *
  * MUTES: offer.decided{not-now} quiets that mod for the rest of the hsid (L4); {stop-here} quiets every mod for the
  * hsid; request.offer.mute{mod, scope:'repo', hsid, muted} (A3; S0b: the human names a LIVE session they own, the
@@ -47,6 +49,7 @@ import {
   offerBlockOf,
   validateKindPayload,
   type OfferDecision,
+  type OfferSuppressReason,
   type OfferSpecV1,
 } from '@a-company/gnomon-contracts';
 import { parseStreamLine } from '../../adapters/claude-code/adapter.js';
@@ -61,10 +64,6 @@ export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
 ]);
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
 export const OFFER_SEED_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.muted']);
-
-/** offer.suppressed{why} (diag): why an evaluated reply showed no offer. */
-export const OFFER_SUPPRESS_REASONS = ['no-block', 'turn-streaming', 'pending-card', 'not-offerable', 'kind-undeclared', 'malformed'] as const;
-export type OfferSuppressReason = (typeof OFFER_SUPPRESS_REASONS)[number];
 
 /** The kernel template of an `open` turn (manifest fields only; the tool fully qualified, mcp__<server>__<tool>, H1c). */
 export function openText(title: string, qualifiedTool: string): string {
@@ -118,7 +117,7 @@ export interface OfferRouterOptions {
    * name-taken mods never are).
    */
   sessionServers: (hsid: string) => ReadonlySet<string> | undefined;
-  /** kernel diagnostics (the daemon's daemon.desk diag channel): offer.suppressed, kept.refused, send.failed */
+  /** kernel diagnostics (the daemon's daemon.desk diag channel): kept.refused, send.failed */
   diag?: (event: string, data: Record<string, unknown>) => void;
 }
 
@@ -404,16 +403,21 @@ export class OfferRouter {
     return out;
   }
 
-  /** Every evaluation that shows nothing says why on the diag channel (ids and names only, never message text). */
-  #suppressed(hsid: string, turn: string, why: OfferSuppressReason, named?: { mod: string; kind: string }): null {
-    this.#o.diag?.('offer.suppressed', { hsid, turn, why, ...(named ? { name: named.mod, offerKind: named.kind } : {}) });
-    return null;
+  /** Every evaluation that shows nothing says why: the kernel offer.suppressed row (ids and names only, never text). */
+  #suppressed(hsid: string, turn: string, why: OfferSuppressReason, named?: { mod: string; kind: string }): RouterRow | null {
+    const payload = { hsid, turn, why, ...(named ? { name: named.mod, offerKind: named.kind } : {}) };
+    if (validateKindPayload('offer.suppressed', payload).length) return null;
+    return { kind: 'offer.suppressed', payload, session: hsid };
   }
 
   /** `others`: the outstanding turns other than this reply's (sent before the reply ended, or before turn.result on the fallback). */
   #offerFor(hsid: string, reply: string, replyTurnId: string, others: number): RouterRow | null {
     const block = reply ? offerBlockOf(reply) : null;
-    if (!block) return this.#suppressed(hsid, replyTurnId, reply && hasOfferFence(reply) ? 'malformed' : 'no-block');
+    if (!block) {
+      if (reply && hasOfferFence(reply)) return this.#suppressed(hsid, replyTurnId, 'malformed');
+      // volume: a plain reply in a session with nothing to offer is not a suppression (the roster note was not sent)
+      return this.offerable(hsid).length ? this.#suppressed(hsid, replyTurnId, 'no-block') : null;
+    }
     const { mod, kind, question } = block.offer;
     const named = { mod, kind };
     if (others > 0) return this.#suppressed(hsid, replyTurnId, 'turn-streaming', named); // another turn is still streaming

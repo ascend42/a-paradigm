@@ -2205,14 +2205,19 @@ components:
       second request row), send failures reported (diag send.failed); a mod
       paused or muted after open never counts as kept (diag kept.refused);
       mutes survive session exit until the bounded state is evicted. Every
-      evaluation that shows nothing emits diag offer.suppressed{hsid, turn,
-      why, name?, offerKind?} on the daemon.desk channel, why in no-block |
-      turn-streaming | pending-card | not-offerable | kind-undeclared |
-      malformed (names only, never message text). Pause
+      evaluation that shows nothing returns a kernel offer.suppressed{hsid,
+      turn, why, name?, offerKind?} row for the signed log (founder ruling,
+      contracts 8.0:T-2026-10-21-006; closed, checked at append by
+      #kernel-log), why in no-block | turn-streaming | pending-card |
+      not-offerable | kind-undeclared | malformed; name/offerKind only when
+      the block named them; names only, never message text; at most one per
+      completed turn, no-block only while the session has an offerable mod.
+      Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
-      `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/open/not-now/
-      stop-here/kept per mod from the verified log.
+      `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by
+      reason)/open/not-now/stop-here/kept per mod from the verified log, and
+      the unnamed suppressions (no-block, malformed) per session.
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]
@@ -2221,6 +2226,7 @@ components:
     signals: []
     tests:
       - test/offer-router.test.ts
+      - test/desk-stats.test.ts
     oracles: [G-DSK-02, G-DSK-03, G-DSK-04]
 
   mcp-passthrough:

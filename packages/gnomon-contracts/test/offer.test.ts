@@ -14,6 +14,7 @@ import {
   OFFER_DECISIONS,
   OFFER_PHASES,
   OFFER_QUESTION_MAX,
+  OFFER_SUPPRESS_REASONS,
   OFFER_TEXT_MAX,
   OFFERS_PER_MOD_MAX,
   RESERVATION_TAGS,
@@ -299,5 +300,41 @@ describe('isOfferTitle (Aegis S1 M1)', () => {
     expect(validateOfferSpecV1(spec).some((e) => e.includes('title'))).toBe(true);
     const shown = { offerId: 'offer:01J00000000000000000000001', hsid: 'hsid:v1:01J00000000000000000000000', mod: 'acme.m', kind: 'map', phase: 'diverge', title: 'a "b"', contextIn: [], question: 'q?', replyTurnId: 'turn:hsid:v1:01J00000000000000000000000/1' };
     expect(validateKindPayload('offer.shown', shown).some((e) => e.includes('title'))).toBe(true);
+  });
+});
+
+describe('8.0:T-2026-10-21-006 offer.suppressed (founder ruling: suppressions on the signed log)', () => {
+  const hsid = mintHsid();
+  const turn = `turn:${hsid}/7`;
+  const ok = (p: unknown) => expect(validateKindPayload('offer.suppressed', p)).toEqual([]);
+  const bad = (p: unknown) => expect(validateKindPayload('offer.suppressed', p).length).toBeGreaterThan(0);
+  it('is registered kernel-owned, normal, under its own tag, and its reasons ride the descriptor', () => {
+    expect(RESERVATION_TAGS).toContain('8.0:T-2026-10-21-006');
+    expect(EVENT_KINDS['offer.suppressed']).toMatchObject({ owner: 'kernel', sensitivity: 'normal', reserved: '8.0:T-2026-10-21-006' });
+    expect(defaultLabelsFor('offer.suppressed')).toEqual({ audience: 'private', sensitivity: 'normal' });
+    expect(KIND_PAYLOADS['offer.suppressed']).toEqual(['hsid', 'turn', 'why', 'name', 'offerKind']);
+    const d = CLIENT_API_DESCRIPTOR as unknown as { desk: { suppress: { reasons: string[]; unnamed: string[] } } };
+    expect(d.desk.suppress.reasons).toEqual([...OFFER_SUPPRESS_REASONS]);
+    expect(d.desk.suppress.unnamed).toEqual(['no-block', 'malformed']);
+  });
+  it.each(['no-block', 'malformed'])('%s names no mod or kind', (why) => {
+    ok({ hsid, turn, why });
+    bad({ hsid, turn, why, name: 'gnomon.constellation', offerKind: 'map-the-idea' });
+    bad({ hsid, turn, why, name: 'gnomon.constellation' });
+  });
+  it.each(['turn-streaming', 'pending-card', 'not-offerable', 'kind-undeclared'])('%s names the mod and the kind', (why) => {
+    ok({ hsid, turn, why, name: 'gnomon.constellation', offerKind: 'map-the-idea' });
+    bad({ hsid, turn, why });
+    bad({ hsid, turn, why, name: 'gnomon.constellation' });
+    bad({ hsid, turn, why, offerKind: 'map-the-idea' });
+  });
+  it('closed: names only, never text; a closed reason; a real hsid and turn', () => {
+    bad({ hsid, turn, why: 'no-block', question: 'Want me to map this?' });
+    bad({ hsid, turn, why: 'bored' });
+    bad({ hsid, turn, why: 'not-offerable', name: 'Map it on the board!', offerKind: 'map-the-idea' });
+    bad({ hsid, turn, why: 'kind-undeclared', name: 'gnomon.constellation', offerKind: 'Delete The Repo' });
+    bad({ hsid: 'h', turn, why: 'no-block' });
+    bad({ hsid, turn: 'turn:x', why: 'no-block' });
+    bad({ hsid, why: 'no-block' });
   });
 });

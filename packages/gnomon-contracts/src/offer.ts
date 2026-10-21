@@ -33,6 +33,14 @@ export type OfferPhase = (typeof OFFER_PHASES)[number];
 /** What the human did with a shown offer (CLOSED). L4: `not-now` quiets that mod for the rest of the conversation. */
 export const OFFER_DECISIONS = ['open', 'not-now', 'stop-here'] as const;
 export type OfferDecision = (typeof OFFER_DECISIONS)[number];
+/**
+ * offer.suppressed{why} (CLOSED, T-2026-10-21-006): why a completed main-chain reply showed no offer. `no-block` and
+ * `malformed` name no mod (the block named none, or could not be read); the others carry the block's mod and kind.
+ */
+export const OFFER_SUPPRESS_REASONS = ['no-block', 'turn-streaming', 'pending-card', 'not-offerable', 'kind-undeclared', 'malformed'] as const;
+export type OfferSuppressReason = (typeof OFFER_SUPPRESS_REASONS)[number];
+/** The suppression reasons that carry no mod or kind (offer.suppressed{name, offerKind} absent). */
+export const OFFER_SUPPRESS_UNNAMED: readonly OfferSuppressReason[] = Object.freeze(['no-block', 'malformed']);
 /** How an offer reaches its mod (CLOSED): the mod's local MCP server (A2). */
 export const OFFER_REACHES = ['mcp'] as const;
 

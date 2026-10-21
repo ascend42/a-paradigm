@@ -152,6 +152,7 @@
     "offer.kept",
     "offer.muted",
     "offer.shown",
+    "offer.suppressed",
     "oracle.result",
     "oracle.run",
     "paradigm.doodle.exported",
@@ -310,6 +311,7 @@
     "offer.kept": "8.0:TD-2026-10-20-812",
     "offer.muted": "8.0:TD-2026-10-20-812",
     "offer.shown": "8.0:TD-2026-10-20-812",
+    "offer.suppressed": "8.0:T-2026-10-21-006",
     "permit.reattributed": "8.0:P8-D98",
     "request.brief.send": "M1.1:P8-R9",
     "request.cowork.allow": "M1.1:P8-R9",
@@ -625,6 +627,13 @@
       "repo",
       "muted",
       "hsid"
+    ],
+    "offer.suppressed": [
+      "hsid",
+      "turn",
+      "why",
+      "name",
+      "offerKind"
     ],
     "request.mod.install": [
       "source",

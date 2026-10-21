@@ -38,18 +38,21 @@ function rig(opts: { mods?: DeskMod[]; pending?: boolean; owner?: string | undef
     },
     mintOfferId: () => `offer:01J000000000000000000000${String(++n).padStart(2, '0')}`,
   });
-  // the daemon appends what observe returns and feeds the committed row back
+  // the daemon appends what observe returns and feeds the committed row back; offer.suppressed rows (T-2026-10-21-006)
+  // are collected in `suppressed` so a test reads "no offer" as [] (the raw return is checked in its own test)
+  const suppressed: Array<Record<string, unknown>> = [];
   const commit = (e: CommittedRow): RouterRow[] => {
     const rows = r.observe({ principal: KERNEL, ...e });
     for (const row of rows) r.observe({ kind: row.kind, principal: KERNEL, session: row.session, payload: row.payload });
-    return rows;
+    for (const row of rows) if (row.kind === 'offer.suppressed') suppressed.push(row.payload);
+    return rows.filter((row) => row.kind !== 'offer.suppressed');
   };
   const turn = (hsid: string, k: number, text: string | null): RouterRow[] => {
     commit({ kind: 'turn.sent', session: hsid, payload: { hsid, turn: `turn:${hsid}/${k}` } });
     if (text !== null) commit({ kind: 'turn.event', session: hsid, payload: { hsid, type: 'assistant', line: assistantLine(text) } });
     return commit({ kind: 'turn.result', session: hsid, payload: { hsid } });
   };
-  return { r, written, sent, diags, commit, turn, setMods: (m: DeskMod[]) => (mods = m) };
+  return { r, written, sent, diags, suppressed, commit, turn, setMods: (m: DeskMod[]) => (mods = m) };
 }
 
 const BLOCK = { mod: 'acme.constellation', kind: 'map-the-idea', question: 'Want me to map this on the board?' };
@@ -337,7 +340,7 @@ describe('#offer-router: evaluated when the reply ends, not at turn.result (T-20
     ...t.commit(ev(messageDeltaLine(stop))),
     ...t.commit(ev(messageStopLine())),
   ];
-  const suppressions = (t: ReturnType<typeof rig>) => t.diags.filter((d) => d.event === 'offer.suppressed').map((d) => d.data);
+  const suppressions = (t: ReturnType<typeof rig>) => t.suppressed;
 
   it('the founder\'s timing: reply 2 ends, turn 3 is sent before turn 2\'s turn.result ⇒ the offer is shown', () => {
     const t = rig();
@@ -449,5 +452,37 @@ describe('#offer-router: evaluated when the reply ends, not at turn.result (T-20
     t.commit(ev(assistantLine(offerReply('a', BLOCK))));
     expect(t.commit(result)).toEqual([]);
     expect(suppressions(t)).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'turn-streaming', name: BLOCK.mod, offerKind: BLOCK.kind }]);
+  });
+});
+
+describe('#offer-router: offer.suppressed is a kernel log row (T-2026-10-21-006, founder ruling)', () => {
+  it('observe returns the offer.suppressed row itself (the daemon appends it like offer.shown), valid against contracts', async () => {
+    const { validateKindPayload } = await import('@a-company/gnomon-contracts');
+    const t = rig({ pending: true });
+    t.r.observe({ kind: 'turn.sent', principal: KERNEL, session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1` } });
+    t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: assistantLineOf(offerReply('a', BLOCK)) } });
+    const rows = t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: messageDeltaLine('end_turn') } });
+    expect(rows).toEqual([{ kind: 'offer.suppressed', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1`, why: 'pending-card', name: BLOCK.mod, offerKind: BLOCK.kind } }]);
+    expect(validateKindPayload('offer.suppressed', rows[0]!.payload)).toEqual([]);
+    // the committed row folds into nothing (it is not a router input)
+    expect(t.r.observe({ kind: 'offer.suppressed', principal: KERNEL, session: HSID, payload: rows[0]!.payload })).toEqual([]);
+    expect(t.diags).toEqual([]);
+  });
+
+  it('volume: at most one row per completed turn; a plain reply in a session with no offerable mod writes nothing', () => {
+    const none = rig({ mods: [deskMod('constellation', { offers: false })] });
+    for (let k = 1; k <= 3; k++) none.turn(HSID, k, 'plain');
+    expect(none.suppressed).toEqual([]);
+    // ...but a block there is still a named suppression (the model offered something it could not)
+    none.turn(HSID, 4, offerReply('a', BLOCK));
+    expect(none.suppressed).toEqual([{ hsid: HSID, turn: `turn:${HSID}/4`, why: 'not-offerable', name: BLOCK.mod, offerKind: BLOCK.kind }]);
+    const t = rig();
+    for (let k = 1; k <= 3; k++) {
+      t.commit({ kind: 'turn.sent', session: HSID, payload: { turn: `turn:${HSID}/${k}` } });
+      t.commit({ kind: 'turn.event', session: HSID, payload: { line: assistantLineOf('plain', { id: `m${k}`, stopReason: 'end_turn' }) } });
+      t.commit({ kind: 'turn.event', session: HSID, payload: { line: messageDeltaLine('end_turn') } });
+      t.commit({ kind: 'turn.result', session: HSID, payload: {} });
+    }
+    expect(t.suppressed.map((p) => p.turn)).toEqual([1, 2, 3].map((k) => `turn:${HSID}/${k}`));
   });
 });

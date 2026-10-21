@@ -250,7 +250,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by TD-2026-10-19-194 (voice V0, founder ruling: VOICE_DISARM_REASONS, voice-strictness ceiling, status.arms/armCustody): was sha256:f27ecb8b…11a4.
 // Moved once by TD-2026-10-19-063 (self-update pickup, founder ruling "ONE Touch ID": the GUI resume auth form + gui.resume): was sha256:99d5c152…97d1.
 // Moved once by 8.0:TD-2026-10-20-812 (the Desk: offer kinds + offer-spec:v1 + mute + in-GUI install; the context meter's threshold + restart): was sha256:69e8db86…cc0e.
-const PINNED_CLIENT_API_ID = 'sha256:4d8830585b5f676ee43c6d5d4a2cff35282344a0019526b2e66358c50599ccd8';
+// Moved once by 8.0:T-2026-10-21-006 (founder ruling: offer.suppressed on the signed log + desk.suppress closed values): was sha256:4d883058…ccd8.
+const PINNED_CLIENT_API_ID = 'sha256:eda8c627b60d11408b7c21ee45db889eb068cf135e6a362e293a46880c561114';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
