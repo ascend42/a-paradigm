@@ -39,8 +39,8 @@ const HEREDOC = "cat <<'EOF'\nline one\nEOF\ncat a.txt # trailing comment";
 describe('K1 anchorCommand', () => {
   it('quotes the root safely and wraps the command on its own lines', () => {
     expect(shQuote("a'b")).toBe(`'a'\\''b'`);
-    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH && ${anchorGitEnv()} && {\nls\n}`);
-    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && { builtin unset -f cd; builtin set -B; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH && ${anchorGitEnv()} && {\nls\n}`);
+    expect(anchorCommand('ls', "/r/it's", 'zsh')).toBe(`builtin cd -q -- '/r/it'\\''s' && { builtin unfunction chpwd cd 2>/dev/null; chpwd_functions=(); builtin setopt no_ignore_braces; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && ${anchorGitEnv()} && {\nls\n}`);
+    expect(anchorCommand('ls', '/r', 'bash')).toBe(`builtin cd -- '/r' && { builtin unset -f cd; builtin set -B; } && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && ${anchorGitEnv()} && {\nls\n}`);
     expect(anchorCommand('ls', '/r', 'unknown')).toContain('ZSH_VERSION');
     expect(shellFlavour('/bin/zsh')).toBe('zsh');
     expect(shellFlavour('/usr/local/bin/bash')).toBe('bash');

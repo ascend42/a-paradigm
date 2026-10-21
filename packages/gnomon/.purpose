@@ -2812,7 +2812,7 @@ components:
       operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
       path-checked; H3 + K1 (TD-2026-10-20-086) ctx.cwd is the anchored
       root's realpath (the caller runs anchorCommand: builtin cd [-q] --
-      'root' && builtin unset CDPATH RIPGREP_CONFIG_PATH && {\n<cmd>\n}); a cd is a whole
+      'root' && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && {\n<cmd>\n}); a cd is a whole
       top-level item to an absolute path or (with a known cwd) a relative
       existing directory, no .. segment, never -, + or = led, inside a session
       root as given and at realpath; the top-level list tracks the SET of

@@ -1859,7 +1859,8 @@ export const shQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
 /**
  * K1 (TD-2026-10-20-086): the command as the kernel lets it run after a read-only pass — in `root` (the realpath the
  * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked)
- * and RIPGREP_CONFIG_PATH unset (RW: an rg config file may add any flag, --pre included),
+ * and RIPGREP_CONFIG_PATH and GREP_OPTIONS unset (RW: an rg config file may add any flag, --pre included; Aegis
+ * L1: an older GNU grep reads extra flags, -R included, from GREP_OPTIONS),
  * the original text inside a brace group on its own lines (a heredoc's delimiter line and a trailing `# comment`
  * end before the closing `}`). zsh: `cd -q` (no chpwd hooks), then chpwd/cd functions removed, chpwd_functions
  * emptied and IGNORE_BRACES off (Aegis M2, L1); bash: no -q, a `cd` function removed, `set -B`; unknown: picked at
@@ -1895,5 +1896,5 @@ export function anchorCommand(command: string, root: string, flavour: ShellFlavo
   const bash = `builtin cd -- ${q} && { builtin unset -f cd; builtin set -B; }`;
   const pre = flavour === 'zsh' ? zsh : flavour === 'bash' ? bash : `if [ -n "\${ZSH_VERSION-}" ]; then ${zsh}; else ${bash}; fi`;
   // L1 guard: brace expansion must really be on for this command (zsh may fix IGNORE_BRACES at parse time): else nothing runs
-  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH && ${anchorGitEnv()} && {\n${command}\n}`;
+  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && ${anchorGitEnv()} && {\n${command}\n}`;
 }

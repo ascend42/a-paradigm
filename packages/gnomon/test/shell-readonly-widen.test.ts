@@ -304,11 +304,11 @@ describe("#shell-readonly RW: paradigm's one-time notice marker", () => {
   });
 });
 
-describe('#shell-readonly RW: the anchor unsets RIPGREP_CONFIG_PATH', () => {
+describe('#shell-readonly RW: the anchor unsets RIPGREP_CONFIG_PATH and GREP_OPTIONS (Aegis L1)', () => {
   const shells = ['/bin/zsh', '/bin/bash'].filter((s) => fs.existsSync(s));
   it.each(shells)('%s', (sh) => {
     const flavour = sh.endsWith('zsh') ? 'zsh' : 'bash';
-    const r = spawnSync(sh, ['-c', anchorCommand('echo "rg=${RIPGREP_CONFIG_PATH-unset}"', real, flavour)], { cwd: outside, env: { ...process.env, RIPGREP_CONFIG_PATH: path.join(outside, 'rc') }, encoding: 'utf8' });
-    expect(r.stdout.trim()).toBe('rg=unset');
+    const r = spawnSync(sh, ['-c', anchorCommand('echo "rg=${RIPGREP_CONFIG_PATH-unset} grep=${GREP_OPTIONS-unset}"', real, flavour)], { cwd: outside, env: { ...process.env, RIPGREP_CONFIG_PATH: path.join(outside, 'rc'), GREP_OPTIONS: '-R' }, encoding: 'utf8' });
+    expect(r.stdout.trim()).toBe('rg=unset grep=unset');
   });
 });
