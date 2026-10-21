@@ -1,5 +1,7 @@
 /** #gui-session-rename (8.0:session-rename): the inline-edit core and the store fold of session.renamed. */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { BLOCK_SAFE_COMMANDS, GUI_COMMANDS } from '../src/core/commands.js';
 import { bindInlineRename, planRename, renameRequest } from '../src/core/rename.js';
 import { derivedTitle, GuiStore, sessionFullTitle, sessionTitle, TITLE_MAX } from '../src/core/store.js';
 
@@ -77,5 +79,29 @@ describe('the store folds session.renamed into the listing', () => {
     st.apply([row(5, 'session.renamed', { hsid: HSID, name: '' })]);
     expect(s().name).toBeNull();
     expect(sessionTitle(s())).toBe(derived);
+  });
+});
+
+describe('page wiring (source read; no DOM in the repo)', () => {
+  const app = readFileSync(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../static/index.html', import.meta.url), 'utf8');
+  it('the header has a labelled pencil and a labelled name input; the title tooltip carries the full title', () => {
+    expect(html).toMatch(/<button id="rename-btn"[^>]*aria-label="Rename session"/);
+    expect(html).toMatch(/<input id="rename-input"[^>]*aria-label="Session name"/);
+    expect(app).toContain("$('transcript-title').title = s ? `${sessionFullTitle(s)}");
+    expect(app).toContain('input.placeholder = derivedTitle(s);');
+  });
+  it('double-click / pencil in the header, double-click / F2 in the list, all trusted gestures; the rail holds still while renaming', () => {
+    expect(app).toContain("$('transcript-title').addEventListener('dblclick', (e) => startRename(focused, 'head', e.isTrusted));");
+    expect(app).toContain("$('rename-btn').addEventListener('click', (e) => startRename(focused, 'head', e.isTrusted));");
+    expect(app).toContain("$('session-list').addEventListener('dblclick'");
+    expect(app).toContain("=== 'F2'");
+    expect(app).toContain("if (renaming?.where === 'list') return void (sessionsDirty = true);");
+    expect(app).toContain('if (!trusted || !s || renaming) return;');
+  });
+  it('the palette has "Rename session", and no block can press it', () => {
+    expect(GUI_COMMANDS.find((c) => c.id === 'session.rename')?.title).toBe('Rename session');
+    expect(BLOCK_SAFE_COMMANDS.has('session.rename')).toBe(false);
+    expect(app).toContain("else if (id === 'session.rename') startRename(focused, 'head', trusted);");
   });
 });

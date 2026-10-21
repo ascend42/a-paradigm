@@ -30,6 +30,7 @@ export interface Command {
 export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'palette.open', title: 'Command palette', keys: '⌘K / Ctrl+K' },
   { id: 'session.new', title: 'New session', keys: '⌘N / Ctrl+N' },
+  { id: 'session.rename', title: 'Rename session', keys: 'double-click the title / F2 in the list' },
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
   // #gui-settings: the sheet that gathers every setting (also the header ⚙ key)
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
@@ -88,7 +89,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
   // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.')),
+  // #gui-session-rename: nor session.rename (it opens an edit that writes request.session.rename on blur)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
