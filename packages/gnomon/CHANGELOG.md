@@ -25,6 +25,7 @@ Gnomon changes on `feat/gnomon` before they reach a Paradigm release. Format: [K
 
 ### Fixed
 
+- **The working row is announced once, not every second** (review a11y, `#gui`). It is now `role="status"` with the label "Claude is working", and its ticking clock span is `aria-live="off"`.
 - **`gnomon desk stats` counts only the kernel's offer rows** (review C2, `#offer-router`). The fold counted any `offer.shown` / `offer.suppressed` row in the verified log; it now counts only rows whose envelope principal is the kernel principal.
 - **`offer.suppressed` names a turn of its own session** (review C1, `#gnomon-contracts`, no `clientApiId` move). The closed check now refuses a `turn` whose id does not embed the payload's `hsid`.
 - **A Stop-hook continuation no longer leaves the wrong message's offer** (review R2, `#offer-router`, `G-DSK-02`). The router evaluated at the first `end_turn`, so when a Stop hook blocked and Claude continued in the same turn, the offer belonged to a message that was no longer the reply. The evaluation now runs at `message_stop`; a new main-chain message in that turn before its `turn.result` (or a blocking Stop `hook_response`) retires the shown offer and the continuation's own end is evaluated. Replay lines mark which turn the stream is in, so a queued turn folded into a later one settles without a row. Spec §12.9 updated.

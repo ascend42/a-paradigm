@@ -320,7 +320,8 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}${it.live ? ' live' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`, clock) as unknown as HTMLElement;
   }
   if (it.role === 'working') {
-    return h(doc, 'div', { class: 'trow role-working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock' }, liveText(it, Date.now()))) as unknown as HTMLElement;
+    // a11y: one status ("Claude is working"); the ticking clock is not announced every second (aria-live off)
+    return h(doc, 'div', { class: 'trow role-working', role: 'status', 'aria-label': 'Claude is working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock', 'aria-live': 'off' }, liveText(it, Date.now()))) as unknown as HTMLElement;
   }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';

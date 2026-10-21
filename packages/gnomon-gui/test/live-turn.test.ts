@@ -361,3 +361,11 @@ describe('review M2: a result pairs with the turn it names; a folded queued turn
     expect(f.filter((x) => x.role === 'user')).toHaveLength(2);
   });
 });
+
+describe('review a11y: the working row', () => {
+  it('is a status labelled "Claude is working" and its clock span is aria-live off', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    expect(app).toMatch(/\{ class: 'trow role-working', role: 'status', 'aria-label': 'Claude is working' \}/);
+    expect(app).toMatch(/h\(doc, 'span', \{ class: 'live-clock', 'aria-live': 'off' \}, liveText\(it, Date\.now\(\)\)\)/);
+  });
+});

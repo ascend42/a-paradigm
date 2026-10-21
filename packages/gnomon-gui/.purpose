@@ -437,7 +437,9 @@ components:
       Review M2: open turns are tracked by id (openTurns); turn.result{turn} closes every open turn up to the one
       it names (a queued message Claude Code folded into the running turn settles with it, no working row left
       ticking); a waiting message stamped for a closed turn is dropped, and the next waiting message starts only
-      when it is unstamped or its turn is the next open one; a row without turn (older logs) closes the oldest. CSS .trow.role-working
+      when it is unstamped or its turn is the next open one; a row without turn (older logs) closes the oldest.
+      A11y: the working row is role=status, aria-label "Claude is working"; its .live-clock span is
+      aria-live=off (the per-second tick is never announced). CSS .trow.role-working
       (spinner, still under reduced motion) and .role-activity.live.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
