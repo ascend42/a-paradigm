@@ -13,7 +13,8 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import { ApprovalBroker, raiseInstallCard } from '../src/kernel/broker/index.js';
-import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { decisionMessage, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { sign as cryptoSign } from 'node:crypto';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
 import { appendGrantRow, appendSignedGrantRows, effectiveInstall, grantsPath, MANIFEST_FILE, readGrants, readStaged, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
 import { prepareInstall } from '../src/kernel/manifest/install.js';
@@ -298,5 +299,20 @@ describe('G-ID-09: voice.enrol is root class at ONE presence (Aegis Q3/F3)', () 
     await r.broker.approve(gui(), { cardId, decision: 'deny' });
     expect(r.helper.evaluations).toBe(1);
     expect(readEnrolled(home, r.root).size).toBe(0);
+  });
+});
+
+describe('Aegis F6: a client-supplied decisionSig takes the root-only decision.sign form', () => {
+  it('install with a client decisionSig: ONE prompt (presence + every root row), the client sig is the logged one', async () => {
+    const home = tmp();
+    const r = rig();
+    const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId: stage(home), authority: r.root });
+    const message = decisionMessage({ cardId: card.cardId, decision: 'install', cardContentHash: card.contentHash, approverPrincipalId: HUMAN });
+    const decisionSig = cryptoSign('sha256', signaturePreimage('approve', message), { key: r.helper.keys.get(`${GEN}.approvals`)!.priv, dsaEncoding: 'ieee-p1363' }).toString('base64');
+    expect(r.approvals.verify(HUMAN, message, decisionSig)).toBe('ok');
+    await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install', decisionSig });
+    expect(r.helper.evaluations).toBe(1);
+    expect(readGrants(home, r.root).installs).toHaveLength(1);
+    expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload.decisionSig).toBe(decisionSig);
   });
 });

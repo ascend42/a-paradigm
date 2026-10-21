@@ -799,7 +799,9 @@ export class ApprovalBroker {
       if (canonicalJson((prepared?.rows ?? []).map(intentOf)) !== canonicalJson(rootRows)) throw fail('BAD_REQUEST', 'bad-params', 'the rows this decision would sign are not the rows the card shows (Aegis C1b)', { cardId });
       decisionRow = decisionRowV2({ cardId, cardKind: rootKindOf(String(card.kind), r.detail), decision, contentHash: card.contentHash, approver: ctx.principal, rootRows });
       // Aegis C6: the path comes from info.version ONLY; a decision.sign error on a >= 1.8.0 helper refuses, never falls back
-      batch = helperSigns && typeof this.#approvals.signDecisionBatch === 'function' && (await this.#approvals.decisionBatchAvailable?.()) === true;
+      // Aegis F6: a client-supplied decisionSig (verified above) takes the ROOT-ONLY form: no approve message, the
+      // presence and every root row still in the ONE touch
+      batch = typeof this.#approvals.signDecisionBatch === 'function' && (await this.#approvals.decisionBatchAvailable?.()) === true;
     }
 
     // 4b. presence per class
@@ -857,16 +859,16 @@ export class ApprovalBroker {
       let res: DecisionBatchResult;
       try {
         res = await this.#freshPrompt(ctx, cardId, () =>
-          this.#approvals.signDecisionBatch!({ connId: ctx.connId, approver: ctx.principal, message, prompt: prompt.text, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision, digest) }, rows: [decisionRow!, ...(prepared?.rows ?? [])], intent: r.detail.rootRows as unknown[], root: this.#o.root ?? { rootKeyId: null, verifyRow: () => false } }),
+          this.#approvals.signDecisionBatch!({ connId: ctx.connId, approver: ctx.principal, ...(helperSigns ? { message } : {}), prompt: prompt.text, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision, digest) }, rows: [decisionRow!, ...(prepared?.rows ?? [])], intent: r.detail.rootRows as unknown[], root: this.#o.root ?? { rootKeyId: null, verifyRow: () => false } }),
         );
       } catch (err) {
         if (err instanceof HardwarePresenceDenied) throw await this.#presenceDenied(card, ctx, err.why, hadUnlock);
         if (err instanceof RootUnavailableError) throw err;
         throw this.#helperFailure(err, cardId);
       }
-      if (!res.token || res.decisionSig === null) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
+      if (!res.token || (helperSigns && res.decisionSig === null)) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
       token = res.token;
-      decisionSig = res.decisionSig;
+      if (helperSigns) decisionSig = res.decisionSig!; // the root-only form keeps the client's verified decisionSig
       presence = isCli ? 'cli' : 'fresh';
       if (!r.presence?.consumedByEffect) {
         const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
