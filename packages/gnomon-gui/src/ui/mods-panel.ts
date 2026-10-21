@@ -79,7 +79,7 @@ function resultEl(doc: MiniDoc, r: ModResult | undefined): MiniEl | null {
 const PENDING_WORDS: Record<ModPending['what'], string> = { install: 'install card waiting', update: 'update card waiting', uninstall: 'uninstall card waiting', configure: 'launch-change card waiting' };
 
 function pendingEls(doc: MiniDoc, pending: readonly ModPending[]): MiniEl[] {
-  return pending.map((p) => h(doc, 'p', { class: 'meta mod-pending' }, h(doc, 'span', { class: 'badge flag' }, PENDING_WORDS[p.what]), ' ', h(doc, 'button', { class: 'key quiet', type: 'button', 'data-mod-act': 'decide', 'data-card-id': p.cardId, title: 'Show this card in the decision stack (deciding takes Touch ID there)' }, 'decide in the stack')));
+  return pending.map((p) => h(doc, 'p', { class: 'meta mod-pending' }, h(doc, 'span', { class: 'chip warn flag' }, PENDING_WORDS[p.what]), ' ', h(doc, 'button', { class: 'key quiet', type: 'button', 'data-mod-act': 'decide', 'data-card-id': p.cardId, title: 'Show this card in the decision stack (deciding takes Touch ID there)' }, 'decide in the stack')));
 }
 
 function configForm(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
@@ -104,8 +104,8 @@ function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
       { class: 'mod-head' },
       h(doc, 'strong', { class: 'mod-name' }, m.name),
       ` ${m.version ?? '?'} `,
-      h(doc, 'span', { class: `badge mod-tier tier-${m.tier}` }, m.tier),
-      m.dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null,
+      h(doc, 'span', { class: `chip mod-tier tier-${m.tier}` }, m.tier),
+      m.dev ? h(doc, 'span', { class: 'chip warn mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null,
       ' ',
       h(doc, 'span', { class: `mod-run state-${m.state}`, role: 'status' }, stateText(m)),
     ),
@@ -148,7 +148,7 @@ export function paintMods(doc: MiniDoc, body: { firstChild: unknown; removeChild
   for (const m of v.installed) inst.appendChild(installedEl(doc, m, ui));
   const avail = sec('available', 'Available', v.available.length ? 'First-party mods shipped with this Gnomon. Install raises the install card in the stack.' : v.catalogRoot ? 'Every first-party mod shipped with this Gnomon is installed.' : 'This kernel found no first-party mods beside it (the gnomon-mods folder). Add one from a folder below.');
   for (const a of v.available) {
-    const row = h(doc, 'div', { class: 'mod-row', role: 'group', 'aria-label': a.name, 'data-mod': a.name }, h(doc, 'p', { class: 'mod-head' }, h(doc, 'strong', { class: 'mod-name' }, a.name), ` ${a.version} `, h(doc, 'span', { class: `badge mod-tier tier-${a.tier}` }, a.tier)));
+    const row = h(doc, 'div', { class: 'mod-row', role: 'group', 'aria-label': a.name, 'data-mod': a.name }, h(doc, 'p', { class: 'mod-head' }, h(doc, 'strong', { class: 'mod-name' }, a.name), ` ${a.version} `, h(doc, 'span', { class: `chip mod-tier tier-${a.tier}` }, a.tier)));
     if (a.description) row.appendChild(h(doc, 'p', { class: 'meta mod-desc' }, a.description));
     for (const p of pendingEls(doc, a.pending)) row.appendChild(p);
     if (!a.pending.length) row.appendChild(h(doc, 'div', { class: 'mod-keys' }, key(doc, 'install', 'Install', { 'data-mod-name': a.name, 'data-path': a.path }, ui, `install:${a.name}`)));

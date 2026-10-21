@@ -240,7 +240,7 @@ function paintChatHead(): void {
     meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}`));
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
     // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
-    if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
+    if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'chip warn clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
     meta.appendChild(document.createTextNode(`${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
   }
   const t = s ? sessionTitle(s) : '';
@@ -261,7 +261,7 @@ function replyBody(it: ChatItem): MiniEl {
   const parts = replyParts(text);
   const chips = ch ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null }) : null;
   if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, text), chips);
-  return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'chip' }, h(doc, 'strong', { class: 'chip-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
+  return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'reply-part' }, h(doc, 'strong', { class: 'reply-part-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
 }
 /** #gui-table-talk choices: the live reply's item key, and each reply's picked option (this page only). */
 let liveChoice: string | null = null;

@@ -87,8 +87,8 @@ components:
       is its project's ink (pe-hN). Rail: one line per session, no project heading rows; voice attaches
       from the header pill menu only. Header: the connection readout is a quiet chip ("connected"; the
       identity in its title= and Settings → About), glyph-only theme switch, night keys without [ ] caps
-      except + New session. Chat header: meta line kept whole, run mode as a compact kernel-owned chip
-      (modes.ts modeChip), counts and raw toggle in a ⋯ menu. Transcript: session.open (not resumed) and
+      except + New session. Chat header: meta line kept whole, run mode as a compact kernel-owned 24px quiet key
+      (modes.ts modeChip; board gnomon-chip: a key, never a chip), counts and raw toggle in a ⋯ menu. Transcript: session.open (not resumed) and
       voice.session.start are raw-only. Composer: one row, ⌘↵ hint, small send, the target/mode in title=.
       Stack head: "Stack · N · hover to fan" + a small filter key. Footer: an "Install Workshop" key,
       DISABLED with the CLI command in its tooltip because install has no GUI request kind
@@ -138,7 +138,7 @@ components:
       right (decisions) pane, below the kernel-owned stack. Every other slot
       (status.mod, tool.view:*, card.detail:*) and every kernel-owned region
       is never a mod slot. renderModFence wraps the kit renderer output in a
-      <section class=mod-fence> labelled mod:<name> with a `dev` badge for a
+      <section class=mod-fence> labelled mod:<name> with a warn `dev` chip for a
       dev-linked (tier local) mod or a dev result; a refusal shows verbatim
       in the fence. ModPanelScheduler: re-render only on a LIVE store row of
       a MOD_FEED_KINDS kind (held equal to the kernel FEED_KINDS by test),
@@ -871,7 +871,8 @@ components:
       highlighted "said aloud" line at the top of the reply and is removed
       from the body; a reply without one (heuristic) gets no highlight. Lines
       that start with a bold label, in whatever scheme the agent chose
-      (letters, numbers, short names), render as subtle chips (replyParts).
+      (letters, numbers, short names), render as .reply-part lines (replyParts: a quiet left rule and a bold
+      label; board gnomon-chip renamed them from .chip, they were never chips).
       Aegis L3: when the kernel's speakable row (principal p:<ns>/kernel) for
       that reply exists, the line is its text (from block, "said aloud";
       heuristic shows none); otherwise the GUI's own parse ("spoken part").
@@ -1023,6 +1024,26 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/voice-client.test.ts
+  gui-chip:
+    description: >-
+      #gui-chip (board gnomon-chip, design-system rule chip-is-not-a-key,
+      migration batch chips-and-small-keys) - a chip is a status label nobody
+      clicks: <span class="chip">, 18px, 10.5, the faint --rule edge, radius 3
+      by day and square at night; tones plain (card voice tag, mod tier), ink
+      (.chip.ink and the mod-kit `chip` tone .tone-chip) and warn (.chip.warn:
+      card flags, mod pending, dev, the voice clamp). The gate handle in the
+      voice tag keeps its warn fill at radius 3. It replaces .badge,
+      .card-voice's own edge, .tone-chip's own look and the clamp pill. Never
+      a <button>, never focusable. Anything clickable is a key: every
+      .key.quiet is at least 24 x 24 (⋯, ⤢, Hold, Stop speaking, close), and
+      ✎ rename, the run mode ▾ and the stack filter are 24px quiet keys with
+      the --key-edge at 11.5 (the chat header row grows 6px); all keep the
+      .key:focus-visible ring.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, chip]
+    tests:
+      - test/desk.test.ts
   gui-composer:
     description: >-
       #gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the

@@ -420,8 +420,11 @@ describe('Aegis S2/S3 review fixes', () => {
     s.apply([ev(3, 'voice.turn.user', { text: 'fix the build', turnId: 't2' }), ev(4, 'turn.sent', { source: 'voice', voiceTurnSeqs: [3] })]);
     expect(s.sessions.get('hsid:v1:V')!.firstUser).toBe('fix the build');
   });
-  it('L2: an agent\'s bold-label chip is plain prose with a quiet rule, not a boxed chip', () => {
-    expect(css).toMatch(/\.trow\.role-assistant \.body \.chip \{ border: 0; border-left: 2px solid var\(--rule\); border-radius: 0;/);
+  it('L2: an agent\'s bold-label line is a .reply-part (plain prose, a quiet left rule), never a .chip', () => {
+    expect(css).toMatch(/\.trow\.role-assistant \.body \.reply-part \{ border-left: 2px solid var\(--rule\); padding: 0 0 0 8px;/);
+    expect(css).not.toMatch(/\.body \.chip\b|chip-label/);
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toContain("h(doc, 'div', { class: 'reply-part' }, h(doc, 'strong', { class: 'reply-part-label' }, x.label)");
   });
   it('5/6: every hue in the GUI and the preview comes from projectHue (one modulus, 0..5); hue classes cover it', () => {
     const ws = readFileSync(path.join(ROOT, 'src', 'preview', 'workshop.ts'), 'utf8');
@@ -441,5 +444,65 @@ describe('Aegis S2/S3 review fixes', () => {
     expect(runs).toEqual(['layout.desk', 'layout.focus', 'layout.decide', 'menu.panes', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.footer', 'workshop.right', 'workshop.left', 'theme.day', 'theme.night', 'theme.auto', 'mods.open', 'voice.settings.open', 'settings.open']);
     expect([...APP_MENU_RUNS].sort()).toEqual([...runs].sort());
     expect(app).toMatch(/if \(!id \|\| !APP_MENU_RUNS\.has\(id\)\) return;/);
+  });
+});
+
+describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status label nobody clicks; anything clickable is a key', () => {
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
+  const src = ['src/ui/app.ts', 'src/core/render.ts', 'src/ui/mods-panel.ts', 'src/core/mod-panels.ts'].map((f) => readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const rule = (sel: string): string => {
+    const i = css.indexOf(`\n${sel} {`);
+    expect(i, sel).toBeGreaterThan(-1);
+    return css.slice(i, css.indexOf('}', i));
+  };
+  it('one chip: 18px, 10.5, the faint --rule edge, radius 3 by day and square at night; tones plain, ink, warn', () => {
+    const chip = rule('.chip, .tone-chip');
+    for (const d of ['height: 18px', 'font-size: 10.5px', 'border: 1px solid var(--rule)', 'border-radius: var(--radius)', 'color: var(--sec)']) expect(chip).toContain(d);
+    expect(css).toContain('[data-theme="night"] .chip, [data-theme="night"] .tone-chip { border-radius: 0; }');
+    expect(css).toContain('.chip.ink, .tone-chip { color: var(--ink); }');
+    expect(css).toContain('.chip.warn { color: var(--warn-ink); border-color: var(--warn-edge); background: var(--warn-bg); }');
+    expect(chip).not.toMatch(/cursor|key-edge/);
+  });
+  it('the eight looks are three: .badge, the card-voice edge, .tone-chip\'s own look and the clamp pill are gone', () => {
+    expect(css).not.toMatch(/\.badge\b/);
+    expect(src).not.toMatch(/class: [`'"]badge\b/);
+    expect(css).not.toMatch(/\n\.card-voice \{|\n\.tone-chip \{|\n\.mod-dev \{/);
+    expect(rule('.clamp-chip')).not.toMatch(/999px|border/);
+    expect(src).toContain("class: 'chip warn clamp-chip', role: 'status'");
+    expect(src).toContain("class: 'chip card-voice kernel-owned'");
+    expect(src).toContain('class: `chip warn flag flag-${');
+    expect(src).toContain("class: 'chip warn mod-dev'");
+    expect(src).toContain('class: `chip mod-tier tier-${m.tier}`');
+    // the handle keeps its warn fill, at radius 3
+    expect(rule('.card-voice .handle')).toMatch(/border-radius: var\(--radius\); background: var\(--warn-bg\); color: var\(--warn-ink\)/);
+  });
+  it('no chip is ever clickable or focusable: never a <button>, no tabindex, no click handler', () => {
+    expect(src).not.toMatch(/h\(doc, 'button', \{ class: [`'"][^`'"]*\bchip\b/);
+    expect(src).not.toMatch(/class: [`'"][^`'"]*\bchip\b[^}]*tabindex/);
+    expect(html).not.toMatch(/<button[^>]*class="[^"]*\bchip\b/);
+  });
+  it('✎ rename, run mode ▾ and the stack filter are 24px quiet keys with the --key-edge and 11.5 type', () => {
+    const k = rule('.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope');
+    for (const d of ['height: 24px', 'min-height: 24px', 'min-width: 24px', 'font-size: 11.5px', 'border-color: var(--key-edge)']) expect(k).toContain(d);
+    expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope)[^{]*\{[^}]*border-color: var\(--rule\)/);
+    for (const id of ['rename-btn', 'mode-btn', 'stack-scope']) expect(html).toMatch(new RegExp(`<button id="${id}" class="key quiet [^"]*${id}`));
+  });
+  it('hover (menus-and-hover, pulled forward): keys and session rows fill --fold; filled keys keep a distinct ink hover', () => {
+    expect(css).toContain('.key:hover:not([disabled]) { background: var(--fold); }');
+    expect(css).toContain('.session-row:hover { background: var(--fold); }');
+    expect(css).toContain('.key.pri:hover:not([disabled]) { background: var(--ink2); }');
+    expect(css).toMatch(/\.seg-key\.current:hover:not\(\[disabled\]\)[^{]*\{ background: var\(--ink2\); \}/);
+    expect(css).toContain('.composer-tall[aria-pressed="true"]:hover:not([disabled]) { background: var(--ink2); }');
+    // the filled hovers come after the plain key hover, so the cascade never flattens them to --fold
+    expect(css.indexOf('.key.pri:hover')).toBeGreaterThan(css.indexOf('.key:hover:not'));
+    expect(css.indexOf('.seg-key.current:hover')).toBeGreaterThan(css.indexOf('.key:hover:not'));
+    expect(css).toContain('.voice-pill:hover { background: var(--fold); }');
+  });
+  it('every quiet key (⋯, ⤢, Hold, Stop speaking, close) is at least 24 × 24 and keeps the focus ring', () => {
+    expect(rule('.key.quiet')).toMatch(/min-height: 24px; min-width: 24px/);
+    expect(css).not.toMatch(/\.(composer-tall|more-btn|key\.quiet)[^{]*\{[^}]*min-height: 0/);
+    expect(css).toMatch(/\.key:focus-visible[^{]*\{ outline: 2px solid var\(--key-edge\)/);
+    expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope|more-btn|composer-tall)[^{]*:focus-visible[^{]*\{[^}]*outline: (none|0)/);
   });
 });

@@ -20,14 +20,14 @@
  * `[block <name>]` with its strings as text — never dropped.
  *
  * Kernel cards (`inbox.card` regions): kind, requester, session, the body
- * block, flags as visible badges beside the decision keys, and the
+ * block, flags as visible warn chips beside the decision keys, and the
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
 import { BIDI_GLYPHS, canonicalJson, checkCap, hex, PRINCIPAL_ID_PATTERN, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
 import { CARD_VOICE_LINE } from './voice-presets.js';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
-/** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
+/** Legend for the `bidi` card flag chip: the glyphs the contracts sanitizer shows in place of bidi controls. */
 export const BIDI_LEGEND = Object.values(BIDI_GLYPHS).join(' ');
 
 /** The display text of any value: strings through the contracts sanitizer; others stringified first. */
@@ -766,7 +766,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ' · ',
       h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy, v.localNs)}`),
       tag ? ' ' : null,
-      tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
+      tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
     v.voiceOrigin ? h(doc, 'small', { class: 'card-voice-origin kernel-owned' }, CARD_VOICE_LINE) : null,
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
@@ -786,7 +786,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       doc,
       'div',
       { class: 'card-keys' },
-      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
+      ...v.flags.map((f) => h(doc, 'span', { class: `chip warn flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
       ...keys.flatMap((d) =>
         d === 'always' && v.prefixOptions?.length
           ? [

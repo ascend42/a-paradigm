@@ -14,7 +14,7 @@
  *     mode control) is NEVER a mod slot.
  *   - A view renders through `mod.view` (the relay stamps relayedFor) and the
  *     kit renderer (core/render.ts, text nodes only) inside a fence labelled
- *     `mod:<name>`, with a `dev` badge for a dev-linked (tier local) mod. The
+ *     `mod:<name>`, with a `dev` chip for a dev-linked (tier local) mod. The
  *     input is display context only: {focus:{hsid}} of the focused session
  *     (K3); the HOST joins that hsid to the live session repo server-side,
  *     the GUI never names a repo or a path. A focus change re-renders.
@@ -167,7 +167,7 @@ export const PANEL_BUTTON_REFUSAL = 'a kit.Button is not allowed in the panel sl
 /** The heading the right-pane mod region always shows, outside the stack's scroll area (Aegis M2). */
 export const PANEL_HEADING = 'mods';
 
-/** One fenced mod view: the label and dev badge are the GUI's; the body is the kit renderer over the mod's block. */
+/** One fenced mod view: the label and dev chip are the GUI's; the body is the kit renderer over the mod's block. */
 export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?: unknown; dev?: unknown } | null, refusal: string | null = null): MiniEl {
   const { doc } = ctx;
   const dev = v.dev || result?.dev === true;
@@ -178,7 +178,7 @@ export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?
     doc,
     'section',
     { class: `mod-fence mod-region-${v.region}`, role: 'group', 'aria-label': `${fenceLabel(v.name)} ${v.viewId}`, 'data-mod': v.name, 'data-view': v.viewId },
-    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, `mod:${modLabel(v.name, v.publisherDisplay)}`), dev ? h(doc, 'span', { class: 'badge mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
+    h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, `mod:${modLabel(v.name, v.publisherDisplay)}`), dev ? h(doc, 'span', { class: 'chip warn mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
     h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true }, result?.block ?? null)),
   );
 }
