@@ -141,6 +141,45 @@ describe('#gnomon-voice capture: VoiceReports', () => {
     expect(seen).toEqual(['conn:V:turn', 'conn:V:turn', 'conn:V:send']);
   });
 
+  it('voice drops fix: a refused drop carries the kernel refusal and cause to status; bad or misplaced ones are refused', () => {
+    const rep = new VoiceReports(() => 1_000_000);
+    rep.report({ capture: { state: 'dropped', segId: 's1', reason: 'refused', refusal: 'voice-playback' } }, 'conn:V');
+    expect(rep.status().capture).toMatchObject({ state: 'dropped', reason: 'refused', refusal: 'voice-playback', claim: 'client' });
+    rep.report({ capture: { state: 'dropped', segId: 's2', reason: 'refused', refusal: 'voice-off', cause: 'aec' } }, 'conn:V');
+    expect(rep.status().capture).toMatchObject({ refusal: 'voice-off', cause: 'aec' });
+    expect(voiceStatusFor({ capture: rep.status().capture }, { principalClass: 'human', credential: 'device' }).capture).toMatchObject({ refusal: 'voice-off', cause: 'aec' });
+    for (const c of [
+      { state: 'dropped', segId: 's3', reason: 'echo', refusal: 'voice-echo' }, // refusal on reason refused only
+      { state: 'dropped', segId: 's3', reason: 'refused', refusal: 'budget' }, // a voice-* reason only
+      { state: 'dropped', segId: 's3', reason: 'refused', refusal: 'voice-off', cause: 'Some Words' },
+      { state: 'dropped', segId: 's3', reason: 'refused', cause: 'aec' }, // a cause needs its refusal
+      { state: 'captured', segId: 's3', refusal: 'voice-playback' },
+    ]) expect(() => rep.report({ capture: c }, 'conn:V'), JSON.stringify(c)).toThrow(TypeError);
+  });
+
+  it('voice drops fix: a turn refused at receipt returns its reason and V2a cause to the client', async () => {
+    const { VoiceControl } = await import('../src/kernel/voice/voice-control.js');
+    const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
+    const SPK = 'spk:abcdefgh/founder';
+    const clock = 10_000;
+    const v = new VoiceControl({
+      sessions: { ownerOf: () => 'p:abcdefgh/founder', send: async () => ({ turn: 't' }), stop: async () => ({ signals: [], exited: false }), busy: () => ({ streaming: true, endedAt: null }) },
+      append: async () => ({ seq: 1, hash: 'h' }),
+      enrolled: () => new Set([SPK]),
+      voiceConnections: () => ['conn:V'],
+      now: () => clock,
+      presence: async (req) => (await req.onAllow(), { cardId: 'card:1' }),
+    });
+    const human = { connId: 'conn:H', principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
+    await v.humanAppend(human, 'voice.session.start', { hsid: HSID, mode: 'conversation' });
+    const vc = { connId: 'conn:V', principal: 'p:abcdefgh/voice' };
+    const busy = (await v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: '1', speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: clock - 500, t1: clock, text: 'go', mode: 'conversation', aec: 'vpio' } })) as Record<string, unknown>;
+    expect(busy).toMatchObject({ forwardable: false, refused: 'voice-playback' });
+    expect(busy).not.toHaveProperty('refusedCause');
+    const aec = (await v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: '2', speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: clock - 500, t1: clock, text: 'go', mode: 'conversation' } })) as Record<string, unknown>;
+    expect(aec).toMatchObject({ forwardable: false, refused: 'voice-off', refusedCause: 'aec' });
+  });
+
   it('Aegis L3: the capture slot remembers its connection and clears when that connection closes', () => {
     const rep = new VoiceReports(() => 1_000_000);
     rep.report({ capture: { state: 'hearing', segId: 's1' } }, 'conn:V');

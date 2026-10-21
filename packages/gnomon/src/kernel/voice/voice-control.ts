@@ -659,7 +659,11 @@ export class VoiceControl {
     this.#prune();
     const r = await this.#o.append({ kind, principal: c.principal, payload: stamped, connId: c.connId, ...(a ? { session: a.hsid } : {}), ...(typeof sensitivity === 'string' ? { sensitivity } : {}) });
     for (const f of commit) f(r.seq);
-    if (refusedAtReceipt) return { ...r, forwardable: false, refused: ((refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>).reason };
+    if (refusedAtReceipt) {
+      // voice drops fix: the verdict and its V2a cause go back to the client, which ends the capture as dropped with them
+      const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
+      return { ...r, forwardable: false, refused: d.reason, ...(typeof d.cause === 'string' ? { refusedCause: d.cause } : {}) };
+    }
     if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true };
     return r;
   }

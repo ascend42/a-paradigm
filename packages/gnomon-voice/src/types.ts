@@ -161,6 +161,17 @@ export interface KernelRow {
 }
 
 /** The voice principal's kernel connection (kernel-link.ts wraps the #gnomon-ts-client GnomonClient). */
+/**
+ * What log.append returns. For voice.turn.user the kernel adds its verdict: `forwardable`, and for a turn it refused at
+ * receipt (stored hash-only) `refused` (the voice-* reason, e.g. voice-playback) and `refusedCause` (its V2a cause).
+ */
+export interface AppendResult {
+  seq: number;
+  forwardable?: boolean;
+  refused?: string;
+  refusedCause?: string;
+}
+
 export interface KernelLink {
   /** status → voice.attached (null when nothing is attached) */
   attachment(): Promise<VoiceAttachment | null>;
@@ -169,7 +180,7 @@ export interface KernelLink {
    * playback when it changes). null when the kernel does not report it. Optional for stubs.
    */
   stopSpeakingSeq?(): number | null;
-  append(kind: string, payload: Record<string, unknown>): Promise<{ seq: number }>;
+  append(kind: string, payload: Record<string, unknown>): Promise<AppendResult>;
   send(hsid: string, text: string): Promise<unknown>;
   /** session.stop{interrupt: true} — the only stop voice may make */
   interrupt(hsid: string): Promise<unknown>;

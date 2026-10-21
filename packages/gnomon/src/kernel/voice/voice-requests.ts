@@ -24,7 +24,9 @@
  *                                       as status.voice.playback{playing, at} (the GUI's ⏹ Stop speaking). In memory.
  *   request.voice.report{capture}       T-2026-10-20-005 A1 (TD-2026-10-20-086): the client's per-segment capture state
  *                                       {state: idle | hearing | transcribing | captured | dropped, segId, reason?
- *                                       (dropped only, closed CAPTURE_DROP_REASONS), level? (hearing only, 0..1)},
+ *                                       (dropped only, closed CAPTURE_DROP_REASONS), refusal? + cause? (reason
+ *                                       'refused' only: the kernel's voice-* verdict on the turn and its V2a cause,
+ *                                       voice drops fix), level? (hearing only, 0..1)},
  *                                       relayed as status.voice.capture{…, at} with the SHORT VOICE_CAPTURE_TTL_MS so a
  *                                       crashed client never leaves "hearing" lit. In memory only.
  *                                       B1 (T-2026-10-20-005, V1/V2/V4): capture.text{committed, tail} = the live
@@ -77,6 +79,12 @@ export interface CaptureReport {
   segId: string;
   /** dropped only */
   reason?: CaptureDropReason;
+  /**
+   * voice drops fix: reason 'refused' only, the kernel's own refusal reason for the turn (a `voice-*` reason, e.g.
+   * voice-playback) and its V2a cause (aec | ceiling | idle | composer), so the GUI can say why in words
+   */
+  refusal?: string;
+  cause?: string;
   /** hearing only: the measured mic level, 0..1 (A2) */
   level?: number;
   /** B1: hearing / transcribing only, the live partial words (in memory only; projected to the gui credential only) */
@@ -98,7 +106,10 @@ export const VOICE_CAPTURE_ACCEPT_WINDOW_MS = 5_000;
 /** status.voice.capture goes stale this fast: a crashed client never leaves "hearing" lit (the client re-reports ≤ 1 s) */
 export const VOICE_CAPTURE_TTL_MS = 5_000;
 const SEG_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const CAPTURE_KEYS = ['state', 'segId', 'reason', 'level', 'text'];
+const CAPTURE_KEYS = ['state', 'segId', 'reason', 'refusal', 'cause', 'level', 'text'];
+/** voice drops fix: capture.refusal is a voice refusal reason, capture.cause its V2a cause (names only, bounded) */
+const CAPTURE_REFUSAL = /^voice-[a-z-]{1,40}$/;
+const CAPTURE_CAUSE = /^[a-z][a-z-]{0,31}$/;
 /** B1: the live partial words of one segment (committed + tail) are capped at this many characters together */
 export const CAPTURE_TEXT_MAX = 600;
 /** B1: the live partial words; `committed` never shrinks within a segment (client-side LocalAgreement-2), `tail` may */
@@ -107,7 +118,7 @@ export interface CaptureText {
   tail: string;
 }
 /** the fields status.voice.capture may carry for every viewer (the kernel's own cross-check fields included; never `text`) */
-const CAPTURE_STATUS_KEYS = ['state', 'segId', 'reason', 'level', 'claim', 'kernel', 'clientReason', 'at'];
+const CAPTURE_STATUS_KEYS = ['state', 'segId', 'reason', 'refusal', 'cause', 'level', 'claim', 'kernel', 'clientReason', 'at'];
 /** B1 (V2): `text` is added to the allow-list for a human-class connection on the gui credential only */
 const CAPTURE_GUI_KEYS = [...CAPTURE_STATUS_KEYS, 'text'];
 
@@ -246,10 +257,12 @@ export class VoiceReports {
       if (!(CAPTURE_STATES as readonly unknown[]).includes(c.state)) throw bad(`capture.state is ${CAPTURE_STATES.join(' | ')}`);
       if (typeof c.segId !== 'string' || !SEG_ID.test(c.segId)) throw bad('capture.segId is ≤ 32 of [a-z0-9-]');
       if (c.state === 'dropped' ? !(CAPTURE_DROP_REASONS as readonly unknown[]).includes(c.reason) : c.reason !== undefined) throw bad(`capture.reason is ${CAPTURE_DROP_REASONS.join(' | ')}, on dropped only`);
+      if (c.refusal !== undefined && (c.reason !== 'refused' || typeof c.refusal !== 'string' || !CAPTURE_REFUSAL.test(c.refusal))) throw bad('capture.refusal is a voice-* refusal reason, on reason refused only');
+      if (c.cause !== undefined && (c.refusal === undefined || typeof c.cause !== 'string' || !CAPTURE_CAUSE.test(c.cause))) throw bad('capture.cause is ≤ 32 of [a-z-], with capture.refusal only');
       if (c.level !== undefined && (c.state !== 'hearing' || typeof c.level !== 'number' || !Number.isFinite(c.level) || c.level < 0 || c.level > 1)) throw bad('capture.level is 0..1, on hearing only');
       if (c.text !== undefined && c.state !== 'hearing' && c.state !== 'transcribing') throw bad('capture.text is on hearing / transcribing only');
       const text = c.text !== undefined ? captureText(c.text) : undefined;
-      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), ...(text && (text.committed || text.tail) ? { text } : {}), at };
+      capture = { state: c.state as CaptureState, segId: c.segId, ...(c.reason !== undefined ? { reason: c.reason as CaptureDropReason } : {}), ...(c.refusal !== undefined ? { refusal: c.refusal as string } : {}), ...(c.cause !== undefined ? { cause: c.cause as string } : {}), ...(c.level !== undefined ? { level: Math.round((c.level as number) * 100) / 100 } : {}), ...(text && (text.committed || text.tail) ? { text } : {}), at };
       capture = this.#crossCheck(capture, connId);
     }
     let prints: PrintsReport | undefined;
