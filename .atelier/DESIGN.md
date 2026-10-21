@@ -83,3 +83,13 @@ Aligned lowercase labels, numbers first, items joined by ` · `, and ✓ ✕ ◆
 ## Open
 - The Workshop mod's vertical (sidebar) variant has not been rendered against the desk layout yet.
 - Warpline's open failure-colour item could adopt Gnomon's vermilion. That needs Warpline's own board, because its hues are preserved.
+
+## Gnomon voice (session 2026-10-21-gnomon-voice)
+
+Voice is one choice, not two. A trust ladder orders the presets by how much voice does on its own (Off, Talk, Dictate, Send word, Pieces), and the mic follows the rung. Each rung says what it does in a line and what it costs when it costs something. The header pill always names the rung plus one live fact, with a filled dot when the mic is open; it turns amber with "edits ask first" while a voice-sent turn is clamped, and shows a vermilion reason when speech wasn't sent.
+
+Using voice and configuring it are separate. The pill opens only the ladder. Everything configured lives in one Voice settings sheet: your voice, the send word, keys, listening, timing and the risk acknowledgement. Teaching happens inline under its row in that sheet, with one prompt, a live "I heard", one counter and the risk check right before save. A send word is said once; only a mishearing asks again. Nobody is ever asked to say the product name, and nothing from teaching reaches the transcript or composer.
+
+The composer grows with the text to 12 lines, then scrolls; ⤢ switches to a 24-line tall view and back.
+
+Direction render: `.atelier/sessions/2026-10-21-gnomon-voice/refs/direction.html` (approved by the founder).

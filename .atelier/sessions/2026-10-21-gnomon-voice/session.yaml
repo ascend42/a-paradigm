@@ -1,0 +1,36 @@
+id: 2026-10-21-gnomon-voice
+verb: direct
+scope: "Gnomon voice surface: header pill, voice menu, presets x capture, mic key, risk acknowledgement, teach-voice and teach-send-word flows, dropped-speech feedback, voice-sent labels and clamp chip (T-2026-10-21-015)"
+depth: deep
+mode: overhaul
+read: "The voice control surface of Gnomon: one operator steering sessions by voice; glanced at constantly in the header pill, opened a few times a day to switch mode or teach a word; legible at a glance, calm, exact, inside the papercraft/phosphor world."
+inherits: { system: .atelier/design-system.yaml#gnomon }
+preserve: [gnomon.colour, gnomon.type, gnomon.style, gnomon.cli-voice, "kernel-owned voice indicator cannot be hidden"]
+founder_feedback:
+  - "the ui ux of how this is displayed and interacted with by the user needs a serious pass"
+  - "the steps feel very broken for both the 'teaching voice' and 'send word'"
+  - "you are making the user say \"Gnomon\" which there is NO reference to how it supposed to be said in the first place"
+boards:
+  - id: mode-model
+    options: [one-dial, two-questions, trust-ladder]
+    decision: trust-ladder
+    decided_by: creator
+    note: "trust ladder is the closes but there is a part of how the mic mode is one aspect and the \"settings\" of the training the voice, the button to use for toggling, the send word. we need something that actually fits this"
+  - id: setup-home
+    options: [rungs-carry-setup, ladder-plus-settings-sheet, two-pane]
+    decision: ladder-plus-settings-sheet
+    decided_by: creator
+  - id: pill
+    options: [mode-plus-live-fact, instrument-readout, dial-glyph]
+    decision: mode-plus-live-fact
+    decided_by: creator
+  - id: composer
+    decision: autogrow-12-tall-24
+    decided_by: creator
+    note: "also the text box does not grow in size as there are more lines (to a limit of course, would also be good to have a shrink and grow button so they can see the context window as well.)"
+  - id: teach
+    options: [inline-in-sheet, focused-step-card]
+    decision: inline-in-sheet
+    decided_by: creator
+references_rendered: [mode-model, setup-home, pill, teach, direction]
+direction: { ref: refs/direction.html, approved: true, by: creator, note: "yeah this works for me" }

@@ -139,3 +139,38 @@ gnomon:
       - "A card appears both in the global stack and pinned in its own session's chat; deciding it in either place removes it from both"
       - "Kernel-owned regions (voice-armed indicator, handle words, held countdown) cannot be hidden by any layout preset"
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, ref: refs/layout.html, note: "desk is totally it" }
+  voice:
+    model:
+      choice: trust-ladder
+      rules:
+        - "Voice is one choice: a ladder of presets ordered by how much voice does on its own: Off, Talk, Dictate, Send word, Pieces. The mic follows the preset; there is no separate capture menu"
+        - "Each rung states what it does in one line and what it costs (edits ask first, Touch ID) where it costs something"
+      from: { session: 2026-10-21-gnomon-voice, board: mode-model, note: "trust ladder is the closes but there is a part of how the mic mode is one aspect and the \"settings\" of the training the voice, the button to use for toggling, the send word. we need something that actually fits this" }
+    setup:
+      choice: ladder-plus-settings-sheet
+      rules:
+        - "The pill opens only the ladder (live switching). Everything configured lives in one Voice settings sheet: your voice, keys, send word, timing, risk"
+        - "The ladder links to the sheet; a rung that isn't ready (no send word, risk not acknowledged) says so and opens the sheet at that section"
+      from: { session: 2026-10-21-gnomon-voice, board: setup-home }
+    pill:
+      choice: mode-plus-live-fact
+      rules:
+        - "Header pill = mic dot (filled + soft ring when the mic is open) + rung name + one live fact ('say “send”', 'mic off · ⌃`', 'heard 4s ago'). Never only a glyph"
+        - "Clamped voice-sent turn: 2px amber (warning) edge and the fact 'edits ask first'. Speech not sent: vermilion fact with the reason in words. No other colour"
+        - "The pill is kernel-owned and cannot be hidden by any layout preset"
+      from: { session: 2026-10-21-gnomon-voice, board: pill, ref: refs/pill.html }
+    composer:
+      choice: autogrow
+      rules:
+        - "The composer wraps and grows with its text up to 12 lines, then scrolls; a ⤢ key toggles a tall view of 24 lines and back; a line count shows beside it"
+        - "Exactly one send control in the composer region"
+      from: { session: 2026-10-21-gnomon-voice, board: composer, note: "also the text box does not grow in size as there are more lines (to a limit of course, would also be good to have a shrink and grow button so they can see the context window as well.)" }
+    teach:
+      choice: inline-in-sheet
+      rules:
+        - "Teaching opens inline under its row in the Voice settings sheet: one prompt, a live 'I heard: …' line, one counter ('take 1 of up to 4' / 'phrase 2 of 3'), then save. No modal over the sheet"
+        - "Send word: pick (send, send it, over, or your own), say it once; done when heard right; only a mishearing asks again and is kept as an accepted variant"
+        - "The risk check (exact text plus an 'I understand' box) sits right before save for Send word, and before turning on Pieces"
+        - "Never ask the user to say the product name. Spoken phrases are plain sentences"
+        - "Takes and phrases never appear in the transcript or the composer"
+      from: { session: 2026-10-21-gnomon-voice, board: teach, ref: refs/teach.html, note: "also you are making the user say \"Gnomon\" which there is NO reference to how it supposed to be said in the first place." }
