@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-af92fbc6aa63cfd9e",
-    "generatedAt": "2026-10-21T06:04:11.424Z",
+    "generatedAt": "2026-10-21T06:04:33.170Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -44,7 +44,7 @@
       "types": 9,
       "command-group": 8,
       "route": 3,
-      "hook": 1,
+      "hook": 2,
       "storage": 1
     }
   },
@@ -9865,6 +9865,19 @@
         "#session-markers-gitignore"
       ],
       "componentType": "utility"
+    },
+    "hook-health-warning": {
+      "id": "hook-health-warning",
+      "name": "Hook Health Warning",
+      "symbol": "#hook-health-warning",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af92fbc6aa63cfd9e/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "7.15.2 SessionStart hook (scripts/claude-code-session-start.sh, plugin\nparadigm-session-start.sh, hooks.json SessionStart, timeout 10 s). One\nawk pass over the #hook-monitor ring; for each hook killed (start with no\nend older than timeout + 5 s, or a recorded SIGTERM) or over its budget\nsince the last warning it prints ONE line to stdout (added to the agent's\ncontext), e.g. \"Paradigm Stop hook timed out 11 time(s) since <date>;\nenforcement did not run. Run `paradigm doctor`.\" Once per session\n(.paradigm/.hook-health-warned = \"<session_id> <ms>\"); also trims the\nring to its cap. Always exits 0.\n",
+      "visualTags": [],
+      "related": [
+        "#hook-monitor"
+      ],
+      "componentType": "hook"
     },
     "stop-hook-timing": {
       "id": "stop-hook-timing",
@@ -22132,6 +22145,10 @@
     "#hook-monitor": {
       "category": "components",
       "id": "hook-monitor"
+    },
+    "#hook-health-warning": {
+      "category": "components",
+      "id": "hook-health-warning"
     },
     "#stop-hook-timing": {
       "category": "components",
