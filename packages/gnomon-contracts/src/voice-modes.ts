@@ -190,16 +190,53 @@ export function isSendWord(text: unknown, word: SendWord | null | undefined): bo
   return m === 'exact' || m === 'variant';
 }
 
-/** Enrolment: may this heard take become a stored variant (cleaned, and phonetically within the bound)? */
+/** A variant is at least this many characters (cleaned): "so", "of", "or" are never a variant. */
+export const SEND_WORD_VARIANT_MIN_CHARS = 3;
+/** At or below this phonetic key length (spaces not counted) a variant must be within distance 1; above it, 2. */
+export const SEND_WORD_VARIANT_SHORT_KEY = 3;
+/**
+ * Function words and lone fillers an ASR emits on their own all the time (Aegis H-1): never a variant, unless the
+ * variant IS the word. Within Metaphone distance 2, "send" (SNT) reached "and", "end", "so", and "over" (OFR) reached
+ * "of", "or", "for"; a stored variant matches exactly (isSendWord), so a lone "and" would have sent in word mode.
+ */
+export const SEND_WORD_VARIANT_STOP = Object.freeze([
+  'a', 'an', 'and', 'end', 'the', 'of', 'or', 'for', 'nor', 'to', 'too', 'in', 'on', 'at', 'it', 'is', 'as', 'be', 'by',
+  'if', 'so', 'but', 'not', 'off', 'up', 'yet', 'all', 'any', 'are', 'was', 'were', 'has', 'had', 'have', 'do', 'did',
+  'does', 'can', 'will', 'just', 'that', 'this', 'then', 'than', 'there', 'here', 'what', 'when', 'who', 'how', 'why',
+  'you', 'your', 'me', 'my', 'we', 'our', 'they', 'them', 'he', 'she', 'his', 'her', 'its', 'with', 'from', 'into',
+  'um', 'uh', 'er', 'erm', 'ah', 'oh', 'hm', 'hmm', 'mm', 'mhm', 'huh', 'eh', 'hey', 'hi', 'like', 'see', 'say', 'said',
+] as const);
+
+/**
+ * The variant guard (Aegis H-1 / M-3; spec §14.7 trial semantics): may `heard` be stored as a variant of `word`? The
+ * word itself always may. Any other utterance must:
+ *   - have the SAME word count as the word;
+ *   - be at least SEND_WORD_VARIANT_MIN_CHARS characters (cleaned);
+ *   - not be a very common word (SEND_WORD_COMMON), nor made only of common words, function words and fillers
+ *     (SEND_WORD_VARIANT_STOP);
+ *   - not be an approval or command phrase (validateSendWord);
+ *   - be within the RELATIVE phonetic bound: Levenshtein ≤ 1 on the Metaphone key when the word's key is at most
+ *     SEND_WORD_VARIANT_SHORT_KEY characters, else ≤ SEND_WORD_NEAR_DISTANCE.
+ * Decided: a real mishearing that passes ("sand", "sent", "set" for "send") is kept; the human can drop any collected
+ * variant at save ({op:'save', dropVariants}).
+ */
 export function acceptableVariant(heard: unknown, word: string): boolean {
   const t = normalizeUtterance(heard);
   const w = normalizeUtterance(word);
   if (!t || !w || t.length > SEND_WORD_MAX_CHARS * 2) return false;
   if (t === w) return true;
-  if (t.split(' ').length > SEND_WORD_MAX_WORDS) return false;
+  const tw = t.split(' ');
+  if (tw.length !== w.split(' ').length) return false;
+  if (t.length < SEND_WORD_VARIANT_MIN_CHARS) return false;
+  const common = SEND_WORD_COMMON as readonly string[];
+  const stop = SEND_WORD_VARIANT_STOP as readonly string[];
+  if (common.includes(t) || tw.every((x) => stop.includes(x) || common.includes(x))) return false;
+  if (!validateSendWord(t).ok) return false;
   const a = phoneticKey(t);
   const b = phoneticKey(w);
-  return a !== '' && b !== '' && levenshtein(a, b) <= SEND_WORD_NEAR_DISTANCE;
+  if (a === '' || b === '') return false;
+  const bound = b.replace(/ /g, '').length <= SEND_WORD_VARIANT_SHORT_KEY ? 1 : SEND_WORD_NEAR_DISTANCE;
+  return levenshtein(a, b) <= bound;
 }
 
 // ---- the attended send-word trial ("Teach your send word"; spec §14.7 "Voice submodes", trial semantics) -----------
@@ -209,7 +246,7 @@ export const SEND_WORD_TRIAL_MAX_TAKES = 4;
 /**
  * What one take of the word being taught was:
  *   correct  it cleans to the word itself (a save needs at least one)
- *   variant  a mishearing within the near-miss bound that is not an approval or command phrase: kept as a variant
+ *   variant  a mishearing that passes the variant guard (acceptableVariant): kept as a variant
  *   unlike   heard, but not like the word (shown, never kept)
  *   unclear  no words, or longer than a send word can be (its text is never kept or shown)
  */
@@ -243,8 +280,8 @@ export function classifyTrialTake(heard: unknown, word: string): { heard: string
   const w = normalizeUtterance(word);
   if (t === null || !w) return { heard: null, verdict: 'unclear' };
   if (t === w) return { heard: t, verdict: 'correct' };
-  // a variant is never an approval or command phrase (validateSendWord), and is within the phonetic bound
-  if (acceptableVariant(t, w) && validateSendWord(t).ok) return { heard: t, verdict: 'variant' };
+  // the variant guard: never an approval, command, common or function word; same word count; the relative bound
+  if (acceptableVariant(t, w)) return { heard: t, verdict: 'variant' };
   return { heard: t, verdict: 'unlike' };
 }
 
@@ -272,10 +309,14 @@ export function recordTrialTake(s: SendWordTrialState, heard: unknown): SendWord
 /** The take being asked for (1-based), or null when the trial is not listening: "Take {n} of up to {maxTakes}". */
 export const trialTakeNumber = (s: SendWordTrialState): number | null => (s.state === 'listening' ? s.takes + 1 : null);
 
-/** The save rule: the word and its collected variants, or null when no take was heard as the word itself. */
-export function trialSaveable(s: SendWordTrialState): SendWord | null {
+/**
+ * The save rule: the word and its collected variants minus any the human dropped (`dropVariants`, compared cleaned; an
+ * entry that is not a collected variant is ignored), or null when no take was heard as the word itself.
+ */
+export function trialSaveable(s: SendWordTrialState, dropVariants: readonly string[] = []): SendWord | null {
   if (s.correct < 1) return null;
-  return canonicalSendWord({ text: s.word, variants: s.variants });
+  const drop = new Set(dropVariants.map((x) => normalizeUtterance(x)));
+  return canonicalSendWord({ text: s.word, variants: s.variants.filter((v) => !drop.has(v)) });
 }
 
 /** Levenshtein distance (small strings only). */

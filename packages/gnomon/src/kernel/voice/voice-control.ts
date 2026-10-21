@@ -873,13 +873,14 @@ export class VoiceControl {
     return { word: s.word, state: s.state, take: trialTakeNumber(s), takes: s.takes, maxTakes: s.maxTakes, correct: s.correct, variants: [...s.variants], last: s.last ? { ...s.last } : null, until: new Date(t.until).toISOString() };
   }
   /**
-   * {op:'save'}: the save rule — the word and the variants its takes collected, only after a take heard as the word
-   * itself (#send-word-matcher trialSaveable). Ends the trial; the daemon persists the result. BAD_REQUEST otherwise.
+   * {op:'save', dropVariants?}: the save rule — the word and the variants its takes collected, minus any the human
+   * dropped (Aegis H-1), only after a take heard as the word itself (#send-word-matcher trialSaveable). Ends the
+   * trial; the daemon persists the result. BAD_REQUEST otherwise.
    */
-  saveTrial(): SendWord {
+  saveTrial(dropVariants: readonly string[] = []): SendWord {
     const t = this.#liveTrial();
     if (!t) throw bad('no send word is being taught (the trial ended or expired)', 'sendword-no-trial');
-    const w = trialSaveable(t.state);
+    const w = trialSaveable(t.state, dropVariants);
     if (!w) throw bad('no take was heard as the word itself yet', 'sendword-no-correct-take');
     this.#trial = null;
     return w;

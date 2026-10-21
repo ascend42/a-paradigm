@@ -920,7 +920,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // TD-2026-10-21-514: the human sets or clears the held send word (narrowing or a liability the GUI acknowledged)
       if (pa?.kind === VOICE_SENDWORD_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.sendWord) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
-        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_SENDWORD_REQUEST}', payload:{op:'start', word, variants?} | {op:'clear'}}`);
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_SENDWORD_REQUEST}', payload:{op:'start', word, variants?, trial?} | {op:'save', dropVariants?} | {op:'clear', trial?}}`);
         try {
           return await o.voiceClient.sendWord(pa.payload);
         } catch (err) {

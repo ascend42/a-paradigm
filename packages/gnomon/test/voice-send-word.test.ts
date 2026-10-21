@@ -203,6 +203,29 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.v.status().sendWordTrial).toBeNull();
   });
 
+  it('Aegis H-1: a poisoning take ("and" for send) is never collected; a lone "and" never sends; the human drops a variant at save', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    for (const heard of ['and', 'sand', 'sent']) await r.turn(heard, { t0: r.clock.t - 400, t1: r.clock.t });
+    expect(r.v.status().sendWordTrial).toMatchObject({ takes: 3, correct: 0, variants: ['sand', 'sent'], last: { heard: 'sent', verdict: 'variant' } });
+    await r.turn('send', { t0: r.clock.t - 400, t1: r.clock.t });
+    const saved = r.v.saveTrial(['sent']);
+    expect(saved).toEqual({ text: 'send', variants: ['sand'] });
+    r.v.setSendWord(saved);
+    // a lone "and" is no send word (isWord false): a pending draft plus "and" claimed as the word is refused
+    await r.turn('fix the build');
+    const and = (await r.turn('and')) as { seq: number };
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: and.seq }))).toMatchObject({ reason: 'voice-stale-utterance', cause: 'not-send-word' });
+    // the same for "over": "of", "or" and "for" are never collected
+    const r2 = rig();
+    await r2.attach('word');
+    r2.v.setTrialWord({ text: 'over' }, 120_000);
+    for (const heard of ['of', 'or', 'for']) await r2.turn(heard, { t0: r2.clock.t - 400, t1: r2.clock.t });
+    expect(r2.v.status().sendWordTrial).toMatchObject({ takes: 3, variants: [], last: { verdict: 'unlike' } });
+  });
+
   it('the trial is time-boxed; after it a short unverified word is refused again', async () => {
     const r = rig();
     r.v.setSendWord(null);
@@ -232,8 +255,7 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
   it('the held word is shown to the human class only', async () => {
     const r = rig();
     const st = r.v.status();
-    expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });
-    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
+    expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
     expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWord');
     expect(() => r.v.setSendWord({ text: 'approve' })).toThrow(RefusedError);
   });
@@ -342,9 +364,9 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     try {
       const src = cachedSendWordSource(home);
       expect(src()).toBeNull();
-      writeSendWord(home, { text: 'Ship it!', variants: ['shipped'] });
-      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['shipped'] });
-      expect(src()).toEqual({ text: 'ship it', variants: ['shipped'] });
+      writeSendWord(home, { text: 'Ship it!', variants: ['ship at'] });
+      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['ship at'] });
+      expect(src()).toEqual({ text: 'ship it', variants: ['ship at'] });
       expect(() => writeSendWord(home, { text: 'deny' })).toThrow(TypeError);
       fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"allow"}\n');
       expect(readSendWord(home)).toBeNull();
@@ -376,7 +398,9 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     expect(parseSendWordRequest({ op: 'clear', trial: true })).toEqual({ op: 'clear', trial: true }); // Aegis L-2
     expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [], trial: false });
     expect(parseSendWordRequest({ op: 'start', word: 'over', trial: true })).toMatchObject({ trial: true });
-    expect(parseSendWordRequest({ op: 'save' })).toEqual({ op: 'save' });
+    expect(parseSendWordRequest({ op: 'save' })).toEqual({ op: 'save', dropVariants: [] });
+    expect(parseSendWordRequest({ op: 'save', dropVariants: ['sent'] })).toEqual({ op: 'save', dropVariants: ['sent'] }); // Aegis H-1
+    for (const bad of [{ op: 'save', dropVariants: 'sent' }, { op: 'save', dropVariants: [1] }, { op: 'save', dropVariants: new Array(9).fill('x') }, { op: 'save', dropVariants: ['x'.repeat(65)] }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
     for (const bad of [null, { op: 'set' }, { op: 'save', word: 'x' }, { op: 'clear', word: 'x' }, { op: 'clear', trial: 'yes' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
   });
 });

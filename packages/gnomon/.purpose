@@ -3594,8 +3594,10 @@ flows:
       word's length; the kernel is the ONE take counter
       (status.voice.sendWordTrial, human class only: word, state, take,
       takes, maxTakes 4, correct, variants, last, until) and
-      request.voice.sendword{op:'save'} commits the word and the variants
-      its mishearings collected only after a correct take. request.voice.client mic-toggle /
+      request.voice.sendword{op:'save', dropVariants?} commits the word and
+      the variants its mishearings collected (each passing the variant guard,
+      #send-word-matcher acceptableVariant), minus the ones the human dropped,
+      only after a correct take. request.voice.client mic-toggle /
       mic-key / start{capture} drive the mic, the Mic key and the capture
       kind of the kernel-spawned client (--capture ptt|open|toggle).
     steps: ["#gui-dictation", "#gnomon-voice", "#send-word-matcher", "#supervisor"]

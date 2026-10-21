@@ -1234,7 +1234,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         }
         if (r.op === 'save') {
           // the save rule (a correct take) is the kernel's; a refusal leaves the trial running
-          const saved = voice.saveTrial();
+          const saved = voice.saveTrial(r.dropVariants);
           writeTrialWord(home, null);
           const w = writeSendWord(home, saved);
           return { trial: null, sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
