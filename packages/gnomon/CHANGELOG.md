@@ -25,6 +25,7 @@ Gnomon changes on `feat/gnomon` before they reach a Paradigm release. Format: [K
 
 ### Fixed
 
+- **G-GUI-12 deflaked** (re-review L-5, T-2026-10-21-008, `test/wrapper-channel.test.ts`). The real-process falsifier captures the child's exit promise at spawn, records non-JSON stdout lines instead of throwing in the data handler (and asserts there are none), waits up to 45 s for `up`, and has a 90 s budget. A sequential/singleFork vitest project is deferred: the config has one project, and splitting it would touch the platform-registry include/exclude.
 - **A repainted kept item is measured again** (re-review L-4, T-2026-10-21-008, `#gui`). The H1 repaint remounted a stale kept item but kept its old measured height; `HeightIndex.invalidate(i)` now resets each remounted stale index to the estimate until it is measured.
 - **A network-failed send says it may not have been sent** (re-review L-3, T-2026-10-21-008, `#gui`). The kernel may have received a send whose answer was lost, so the line reads "may not have been sent: the connection to the kernel failed".
 - **Replay lines before the stream is live are ignored** (re-review L-2, T-2026-10-21-008, `#offer-router`, `#supervisor`). A replay before the first `system.init` or `turn.sent` (a resumed session's history) no longer switches the router to started marks or counts as a consumed turn.

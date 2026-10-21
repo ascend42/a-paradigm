@@ -202,26 +202,33 @@ function psAll(): string {
   return r.stdout ?? '';
 }
 
-function readLines(child: ChildProcess): { lines: Record<string, unknown>[]; next(t: string, ms?: number): Promise<Record<string, unknown>> } {
+function readLines(child: ChildProcess): { lines: Record<string, unknown>[]; bad: string[]; next(t: string, ms?: number): Promise<Record<string, unknown>> } {
   const lines: Record<string, unknown>[] = [];
+  const bad: string[] = []; // re-review L-5: a non-JSON stdout line is recorded, never thrown inside the data handler
   let buf = '';
   child.stdout!.setEncoding('utf8');
   child.stdout!.on('data', (s: string) => {
     buf += s;
     let i;
     while ((i = buf.indexOf('\n')) >= 0) {
-      lines.push(JSON.parse(buf.slice(0, i)) as Record<string, unknown>);
+      const l = buf.slice(0, i);
       buf = buf.slice(i + 1);
+      try {
+        lines.push(JSON.parse(l) as Record<string, unknown>);
+      } catch {
+        bad.push(l.slice(0, 200));
+      }
     }
   });
   return {
     lines,
+    bad,
     async next(t, ms = 20_000) {
       const end = Date.now() + ms;
       for (;;) {
         const hit = lines.find((l) => l.t === t);
         if (hit) return hit;
-        if (Date.now() > end) throw new Error(`no ${t} line (got ${JSON.stringify(lines.map((l) => l.t))})`);
+        if (Date.now() > end) throw new Error(`no ${t} line (got ${JSON.stringify(lines.map((l) => l.t))}; non-JSON ${JSON.stringify(bad)})`);
         await new Promise((r) => setTimeout(r, 25));
       }
     },
@@ -253,11 +260,13 @@ describe('#gnomon-wrapper channel (real process, no token on any argv or env)', 
     if (wantEnv) expect(seen, 'control in env').toContain(ctlEnv);
 
     const child = spawn(process.execPath, [...APP_NODE_FLAGS, CLI, 'dev', 'up', '--home', w.devHome, '--wrapper'], { env: APP_ENV(w.userHome), stdio: ['pipe', 'pipe', 'pipe'] });
+    // re-review L-5: the exit promise is captured at spawn, so an exit before the await is not missed
+    const exited = new Promise<number | null>((r) => child.on('exit', (c) => r(c)));
     cleanups.push(() => child.kill('SIGKILL'));
     let err = '';
     child.stderr!.setEncoding('utf8').on('data', (s: string) => (err += s));
     const ch = readLines(child);
-    await ch.next('up');
+    await ch.next('up', 45_000); // re-review L-5: a cold kernel start under full-suite load
     child.stdin!.write('launch\n');
     const g = await ch.next('launch');
     const token = g.launchToken as string;
@@ -269,9 +278,9 @@ describe('#gnomon-wrapper channel (real process, no token on any argv or env)', 
     }
     expect(err).not.toContain(token);
     child.stdin!.write('quit\n');
-    const code = await new Promise<number | null>((r) => child.on('exit', (c) => r(c)));
-    expect(code).toBe(0);
-  }, 60_000);
+    expect(await exited).toBe(0);
+    expect(ch.bad).toEqual([]);
+  }, 90_000);
 
   it('FALSIFIER (T-2026-10-18-030): spawned WITHOUT --disable-sigusr1 the child refuses unsafe-env on the channel, naming the app rebuild', async () => {
     expect(fs.existsSync(CLI)).toBe(true);
