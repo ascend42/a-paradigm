@@ -38,10 +38,17 @@ program.enablePositionalOptions();
 // but no compliance archetype on the roster). preAction fires before any
 // subcommand action; commander short-circuits before this for --version /
 // --help, so those invocations stay quiet.
-program.hook('preAction', async () => {
+//
+// Read-only commands (core/command-policy.ts) write nothing: the notice is
+// printed to stderr and the acknowledgement waits for a write command or
+// `paradigm notices ack`. The `notices` commands handle notices themselves.
+program.hook('preAction', async (_thisCommand, actionCommand) => {
   try {
+    const { commandPath, isReadOnlyCommand } = await import('./core/command-policy.js');
+    const cmdPath = commandPath(actionCommand);
+    if (cmdPath === 'notices' || cmdPath.startsWith('notices ')) return;
     const { checkAndEmitMigrationNotices } = await import('./core/migration-notices.js');
-    await checkAndEmitMigrationNotices(process.cwd());
+    await checkAndEmitMigrationNotices(process.cwd(), { readOnly: isReadOnlyCommand(cmdPath) });
   } catch {
     // Never let migration-notice machinery interfere with command execution.
   }
@@ -156,6 +163,25 @@ program
   .action(async () => {
     const { statusCommand } = await import('./commands/status.js');
     await statusCommand();
+  });
+
+// paradigm notices — list (read-only) and acknowledge one-time migration notices
+const noticesCmd = program
+  .command('notices')
+  .description('List pending one-time notices (read-only); `notices ack <id>` silences one')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { noticesListCommand } = await import('./commands/notices.js');
+    await noticesListCommand(options);
+  });
+
+noticesCmd
+  .command('ack <id>')
+  .description('Acknowledge a notice so it stops printing (id from `paradigm notices`, or "all")')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { noticesAckCommand } = await import('./commands/notices.js');
+    await noticesAckCommand(id, options);
   });
 
 // paradigm purpose <command>
