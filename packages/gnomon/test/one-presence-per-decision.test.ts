@@ -15,7 +15,8 @@ import { RefusedError } from '@a-company/gnomon-contracts';
 import { ApprovalBroker, raiseInstallCard } from '../src/kernel/broker/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
-import { appendGrantRow, appendSignedGrantRows, grantsPath, MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
+import { appendGrantRow, appendSignedGrantRows, effectiveInstall, grantsPath, MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
+import { requestUninstall, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
 import { CountingFakeHelper, FakeHelper } from './helper-fake.js';
 
 const HUMAN = 'p:abcdefgh/matt';
@@ -193,5 +194,60 @@ describe('G-ID-10: nothing appended on failure; the card stays pending', () => {
     appendGrantRow(home, root, { kind: 'grant.trust', manifestHash: `sha256:${'2'.repeat(64)}`, tier: 'local' });
     const g = readGrants(home, root);
     expect(g.trust.get(`sha256:${'2'.repeat(64)}`)).toBe('local'); // the new row did not fuse with the torn line
+  });
+});
+
+describe('G-ID-09: one presence per uninstall decision', () => {
+  async function installedRig() {
+    const home = tmp();
+    const r = rig();
+    const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId: stage(home), authority: r.root });
+    await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install' });
+    const pin = effectiveInstall(readGrants(home, r.root), 'acme.diff-lens')!;
+    const calls: string[] = [];
+    const host = { running: () => [] as string[], start: async (n: string) => void calls.push(`start ${n}`), stop: async (n: string, why: string) => void calls.push(`stop ${n} ${why}`) };
+    const pickup = new StagedCardPickup({ home, broker: r.broker, authority: r.root, host: host as never, userHome: tmp() });
+    requestUninstall(home, 'acme.diff-lens', pin.packageHash);
+    await pickup.scan();
+    const card2 = r.broker.cards().find((c) => c.kind === 'grant')!;
+    const base = r.helper.evaluations;
+    return { home, r, card: card2, calls, pickup, prompts: () => r.helper.evaluations - base };
+  }
+
+  it('allow: ONE prompt signs the decision and the grant.uninstall row shown in detail.rootRows', async () => {
+    const { home, r, card, calls, prompts } = await installedRig();
+    const node = (card.block.children as Array<{ type: string; rootDecisions?: string[]; detail?: { rootRows: Array<Record<string, unknown>> } }>).find((n) => n.type === 'root-rows')!;
+    expect(node.rootDecisions).toEqual(['allow']);
+    const shown = node.detail!.rootRows;
+    expect(shown.map((x) => x.kind)).toEqual(['grant.uninstall']);
+    await r.broker.approve(gui(), { cardId: card.cardId, decision: 'allow' });
+    expect(prompts()).toBe(1);
+    expect(r.onceCalls()).toBe(0);
+    expect(effectiveInstall(readGrants(home, r.root), 'acme.diff-lens')).toBeUndefined();
+    expect(readGrants(home, r.root).rejected).toEqual([]);
+    expect(calls).toContain('stop acme.diff-lens uninstalled');
+    expect(r.rows.find((x) => x.kind === 'approval.decide' && x.payload.cardId === card.cardId)!.payload.rootKind).toBe('uninstall');
+  });
+
+  it('deny: ONE prompt, no row, the request is dropped', async () => {
+    const { home, r, card, prompts } = await installedRig();
+    const before = grantsBytes(home);
+    await r.broker.approve(gui(), { cardId: card.cardId, decision: 'deny' });
+    expect(prompts()).toBe(1);
+    expect(grantsBytes(home)).toBe(before);
+    expect(uninstallRequested(home, 'acme.diff-lens')).toBeNull();
+  });
+
+  it('a re-pin between raise and decide refuses before any prompt; the next scan expires the card', async () => {
+    const { home, r, card, pickup, prompts } = await installedRig();
+    const other = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: r.helper.publicPem('root') }, { once: (req) => r.helper.handle(req) });
+    appendGrantRow(home, other, { kind: 'grant.install', name: 'acme.diff-lens', manifestHash: `sha256:${'1'.repeat(64)}`, packageHash: `sha256:${'2'.repeat(64)}`, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZQ', source: 'package' });
+    const at = prompts();
+    const before = grantsBytes(home);
+    await refusal(r.broker.approve(gui(), { cardId: card.cardId, decision: 'allow' }));
+    expect(prompts() - at).toBe(0);
+    expect(grantsBytes(home)).toBe(before);
+    await pickup.scan();
+    expect(r.broker.card(card.cardId)!.state).toBe('expired');
   });
 });

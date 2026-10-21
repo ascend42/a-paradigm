@@ -444,7 +444,7 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
     const r = rig({ presence: touching(), root: auth });
     const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId: st.cardId, authority: auth });
     expect(validateCardV1(card, { mode: 'strict' })).toEqual([]);
-    const texts = (card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+    const texts = (card.block as { children: Array<{ text?: string }> }).children.filter((c) => typeof c.text === 'string').map((c) => c.text!); // the root-rows node carries no text
     // each hook is its own line, whatever the mcp entry's length
     expect(texts).toContain(`hooks: ${hook}`);
     expect(texts).toContain('hooks: Stop: echo done');

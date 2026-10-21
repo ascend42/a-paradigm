@@ -24,7 +24,8 @@
  *   - UNINSTALL. `gnomon mod uninstall <name>` writes `uninstall.request`
  *     naming the pin it removes; the pickup raises a ROOT-class `grant` card
  *     (fresh presence + the root key, §3.1 I3) whose `allow` appends a
- *     root-signed `grant.uninstall` row, stops the mod and logs
+ *     root-signed `grant.uninstall` row (TD-2026-10-20-514: shown in detail.rootRows, built by `prepare`, signed
+ *     with the decision in ONE presence, committed by appendSignedGrantRows), stops the mod and logs
  *     `manifest.uninstall{name, diff}` (+ `mod.unlinked` for a linked
  *     folder). Snapshots are kept (rollback). A request whose pin is no
  *     longer the effective one is dropped. `deny` drops the request.
@@ -49,7 +50,9 @@ import type { ApprovalBroker } from '../broker/broker.js';
 import { raiseInstallCard } from '../broker/install-card.js';
 import type { ManifestEventSink } from '../manifest/refusal.js';
 import { STAGED_RECORD_SCHEMA, type StagedRecord } from '../manifest/install.js';
-import { appendGrantRow, effectiveInstall, readGrants, type ResolvedGrants } from '../manifest/grants.js';
+import { appendSignedGrantRows, buildGrantRow, effectiveInstall, readGrants, type GrantRow, type ResolvedGrants } from '../manifest/grants.js';
+import { beginRootDecision } from '../manifest/grant-lock.js';
+import { intentOf } from '../identity/decision-batch.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { RowFold } from './fold.js';
 import { HSID_PATTERN, isModId, mintId } from '@a-company/gnomon-contracts';
@@ -306,7 +309,11 @@ export class StagedCardPickup {
     const { home, host, broker, authority } = this.#o;
     for (const [name, id] of [...this.#uninstallCards]) {
       const c = broker.card(id);
-      if (!c || c.state !== 'pending' || !uninstallRequested(home, name)) this.#uninstallCards.delete(name);
+      if (!c || c.state !== 'pending' || !uninstallRequested(home, name)) {
+        this.#uninstallCards.delete(name);
+        // its request is gone (dropped as stale): a still-pending card would decide nothing
+        if (c && c.state === 'pending') await broker.expire(id, 'uninstall-request-dropped').catch(() => false);
+      }
     }
     for (const name of modNames(home)) {
       const req = uninstallRequested(home, name);
@@ -319,6 +326,14 @@ export class StagedCardPickup {
       }
       const source = row.source;
       const cardId = mintId('card'); // Aegis C4: the grant.uninstall row names exactly this card, never a fallback
+      const input = { kind: 'grant.uninstall' as const, name, packageHash: row.packageHash, cardId };
+      // TD-2026-10-20-514 (Aegis C1a): the row this decision signs, shown on the card (createdAt is volatile)
+      let rootRows: Record<string, unknown>[];
+      try {
+        rootRows = [intentOf(buildGrantRow(home, authority, input, new Date(), [], grants) as unknown as Record<string, unknown>)];
+      } catch {
+        continue; // a row the reader would refuse is never offered
+      }
       const card = await broker
         .raise({
           kind: 'grant',
@@ -327,16 +342,34 @@ export class StagedCardPickup {
           // Aegis C4: never asserted by the kernel; the request's claim, shown as a claim
           attended: req.attended,
           ...(req.hsid ? { hsid: req.hsid } : {}),
-          detail: { action: 'mod.uninstall', name, packageHash: row.packageHash, manifestHash: row.manifestHash, source, claimed: { attended: req.attended, hsid: req.hsid } },
+          detail: { action: 'mod.uninstall', name, packageHash: row.packageHash, manifestHash: row.manifestHash, source, claimed: { attended: req.attended, hsid: req.hsid }, rootRows },
           lines: [`Uninstall mod ${name}`, `packageHash ${row.packageHash}`, `source ${source}`, 'removes its install grant; its snapshots are kept for rollback', claimLine('the uninstall request', `p:${authority.ns ?? '00000000'}/cli`, req.hsid, req.attended)],
           decisions: ['allow', 'deny'],
-          effect: async (decision) => {
+          // TD-2026-10-20-514: ONE presence signs the decision row and the grant.uninstall row (built here, unsigned)
+          prepare: (decision) => {
+            if (decision !== 'allow') return null; // deny is fresh class: no row
+            const release = beginRootDecision(home); // C5d: one in-flight root decision per home
+            try {
+              const now = effectiveInstall(readGrants(home, authority), name);
+              if (!now || now.packageHash !== row.packageHash) {
+                dropUninstall(home, name); // re-pinned meanwhile: the next scan expires this card
+                throw new ManifestRefusal('GRANT', `${name} was re-pinned since this uninstall was requested; nothing to remove`, { name, stale: true });
+              }
+              return { rows: [buildGrantRow(home, authority, input) as unknown as Record<string, unknown>], release };
+            } catch (e) {
+              release();
+              throw e;
+            }
+          },
+          effect: async (decision, ctx) => {
+            if (decision !== 'allow') {
+              dropUninstall(home, name);
+              return;
+            }
+            if (!ctx.prepared || !ctx.rowSigs) throw new ManifestRefusal('GRANT', 'an uninstall commits only its prepared, signed row', { name });
+            // re-checked under the grants lock; throws unless the row is the effective pin: then the card stays pending
+            appendSignedGrantRows(home, authority, ctx.prepared.rows as unknown as GrantRow[], ctx.rowSigs);
             dropUninstall(home, name);
-            if (decision !== 'allow') return;
-            const now = effectiveInstall(readGrants(home, authority), name);
-            if (!now || now.packageHash !== row.packageHash) return; // re-pinned meanwhile: nothing to remove
-            // throws unless the row is the effective pin (grants.ts read-back): then the card stays pending, nothing is reported
-            appendGrantRow(home, authority, { kind: 'grant.uninstall', name, packageHash: row.packageHash, cardId });
             if (effectiveInstall(readGrants(home, authority), name)) throw new ManifestRefusal('GRANT', `the uninstall of ${name} did not take effect`, { name });
             await host.stop(name, 'uninstalled').catch(() => undefined);
             emit('manifest.uninstall', { name, diff: { removed: [row.packageHash] }, manifestHash: row.manifestHash });

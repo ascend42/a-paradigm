@@ -194,6 +194,23 @@ export interface PreparedRows {
   state?: unknown;
 }
 
+/** The decisions of `kind` that are root class (the kind's table, plus RaiseInput.rootDecisions). */
+export function rootDecisionsOf(kind: string, extra: readonly string[] = []): string[] {
+  const t = (KIND_DECISIONS as Record<string, Record<string, string>>)[kind] ?? {};
+  return [...new Set([...Object.keys(t).filter((d) => t[d] === 'root'), ...extra])].sort();
+}
+
+/**
+ * Aegis C1e (TD-2026-10-20-514): a root-capable card's block carries a {type:'root-rows', rootDecisions, detail} node
+ * with the card's FULL structured detail, so the GUI verifies it against contentHash and renders detail.rootRows (what
+ * the decision signs) in full; it shows no root-class Approve without it.
+ */
+function rootBlock(block: Record<string, unknown>, detail: Record<string, unknown> | null, rootDecisions: string[]): Record<string, unknown> {
+  if (!detail || !Array.isArray(detail.rootRows)) return block;
+  const children = [...((block.children as unknown[]) ?? []), { type: 'root-rows', rootDecisions, detail: structuredClone(detail) }];
+  return { ...block, children };
+}
+
 /** The row-table kind (decision-batch.ts ROW_TABLE_KINDS) of a root-class card: its kind, or a grant/strictness card's action. */
 export function rootKindOf(kind: string, detail: Record<string, unknown>): string {
   if (kind === 'grant') return detail.action === 'mod.uninstall' ? 'uninstall' : detail.action === 'mod.mcp.config' ? 'mod.mcp.config' : 'grant';
@@ -475,7 +492,7 @@ export class ApprovalBroker {
       ...(input.hsid ? { hsid: input.hsid } : {}),
       attended: input.attended,
       approverPolicy: { kind: 'self' },
-      block: input.block ?? rendered.block,
+      block: rootBlock(input.block ?? rendered.block, rootCapable ? input.detail : null, rootDecisionsOf(input.kind, input.rootDecisions).filter((d) => !(input.standingGrant && d === 'allow'))),
       contentHash,
       ...(flags.length ? { flags } : {}),
       actions: signActions(this.#o.kernel, cardId, input.kind, contentHash, input.decisions),
