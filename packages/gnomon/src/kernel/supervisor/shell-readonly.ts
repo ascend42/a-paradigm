@@ -124,15 +124,18 @@
  *   -L/--follow); tree (no -o, -R, -l, --fromfile, --fromtabfile, --output);
  *   `git remote -v`; and the project CLIs' read verbs, each an exact grammar:
  *   `paradigm status|st`, `doctor [--context] [--explain]`, `ripple SYMBOL
- *   [PATH] …`, `purpose validate [PATH]`, `task ls [STATUS] …`, `task show REF`
- *   (the cwd at a session root; a card while `.paradigm/` lacks the one-time
- *   notice marker the CLI's preAction hook would write); `gnomon desk stats`,
+ *   [PATH] …`, `purpose validate [PATH]`, `task ls [STATUS] …`, `task show REF`,
+ *   `lore list|ls …`, `lore show ID` (the cwd at a session root; the CLI's
+ *   declared read-only commands, proven to write nothing); `gnomon desk stats`,
  *   `daemon status`, `mod list`, `mod status [NAME]`, `rules list`, `trace
  *   status`, `replay [--json] [--expect H]` (default home only).
  *   RESIDUAL (RW): the paradigm and gnomon binaries are found on $PATH (as git
  *   is) and read their own config and, for gnomon, the Gnomon home (the verbs
- *   print counts, names, hashes and state); rg, fd and grep -r read every file
- *   below an in-root operand, the repo's `.git/**` and `.env` included.
+ *   print counts, names, hashes and state); the paradigm verbs are read-only
+ *   from @a-company/paradigm 7.15.2 (an older CLI on $PATH writes its one-time
+ *   notice marker under .paradigm/ and moves legacy lore entries on lore reads);
+ *   rg, fd and grep -r read every file below an in-root operand, the repo's
+ *   `.git/**` and `.env` included.
  *   A glob is expanded at classification time: a file planted between the
  *   check and the run (by a concurrent process) is not seen. A planted file
  *   NAME inside a session root can still steer which in-root file a literal
@@ -1783,33 +1786,12 @@ const treeRule: Rule = (args, env, name) => {
 
 /**
  * RW: the project CLIs' read verbs, each checked read-only in its source (packages/paradigm/src, packages/gnomon/src/cli).
- * An exact grammar per verb: any other verb, flag or operand is a card.
+ * An exact grammar per verb: any other verb, flag or operand is a card. The paradigm verbs are the CLI's declared
+ * read-only commands (paradigm src/core/command-policy.ts READ_ONLY_COMMANDS), each proven byte-identical on the
+ * project tree and HOME by paradigm src/__tests__/readonly-commands.test.ts (@a-company/paradigm >= 7.15.2).
  */
-const PARADIGM_MARKER = '.v6-0-4-migration-acknowledged';
-/**
- * The notice (and its marker write) fires only when the roster's `active` list lacks `compliance`
- * (paradigm core/migration-notices.ts isCohortC). Read strictly: a block-style `active:` list of plain `- name`
- * items only; any other shape reads as "no compliance" (the card).
- */
-function rosterHasCompliance(file: string): boolean {
-  let text: string;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    return false;
-  }
-  const lines = text.split(/\r?\n/);
-  const at = lines.findIndex((l) => /^active:\s*$/.test(l));
-  if (at < 0) return false;
-  for (const l of lines.slice(at + 1)) {
-    if (/^\s*(#.*)?$/.test(l)) continue;
-    const m = /^\s+-\s+['"]?([a-z0-9-]+)['"]?\s*$/.exec(l);
-    if (!m) return false;
-    if (m[1] === 'compliance') return true;
-  }
-  return false;
-}
-const TASK_LS_STATUS =new Set(['active', 'open', 'done', 'shelved', 'all']);
+const LORE_ID = /^L-[A-Za-z0-9_-]{1,160}$/;
+const TASK_LS_STATUS = new Set(['active', 'open', 'done', 'shelved', 'all']);
 /** `NAME VALUE` pairs and bare flags of one verb; returns the operands. A value never starts with `-`. */
 function verbArgs(rest: readonly string[], what: string, bare: readonly string[], valued: readonly string[] = [], value: RegExp = /^[^-]/): string[] {
   const ops: string[] = [];
@@ -1826,11 +1808,11 @@ function verbArgs(rest: readonly string[], what: string, bare: readonly string[]
  * `paradigm` (the cwd must be a session root: the CLI reads the project from process.cwd()):
  *   status | st; doctor [--context] [--explain]; ripple SYMBOL [PATH] [-d|--depth N] [--json] [-q|--quiet];
  *   purpose validate [PATH]; task ls [active|open|done|shelved|all] [--json] [--mine] [-p|--priority V] [-t|--tag V]
- *   [-n|--limit N]; task show REF [--json].
- * NOT: lore list/show (loadLoreEntries migrates legacy entries, moving files), index (writes probe-index.json),
- * `task ls --board` / `--project`, and every other verb. The CLI's preAction hook writes
- * `.paradigm/.v6-0-4-migration-acknowledged` once (cohort-C projects), so the command is a card while `.paradigm/`
- * exists without that marker.
+ *   [-n|--limit N]; task show REF [--json]; lore list|ls [--author V] [--type V] [--symbol V] [--tags V] [--from V]
+ *   [--to V] [-l|--limit N] [--json]; lore show ID [--json].
+ * The CLI's one-time notice prints on these verbs (stderr) and writes nothing; lore list/show read legacy entries
+ * without migrating them (7.15.2). NOT: index (writes probe-index.json), `task ls --board` / `--project` (another
+ * root), and every other verb.
  */
 const paradigmRule: Rule = (args, env, name) => {
   anchoredOnly(env, name);
@@ -1838,8 +1820,6 @@ const paradigmRule: Rule = (args, env, name) => {
   needCwd(env, name);
   if (!rootForms(env).some((r) => env.fold(r) === env.fold(env.cwd!))) no('paradigm: only with the cwd at a session root');
   if (!env.native) no('paradigm: a foreign path flavour');
-  const dir = env.pp.join(env.cwd!, '.paradigm');
-  if (fs.existsSync(dir) && !fs.existsSync(env.pp.join(dir, PARADIGM_MARKER)) && !rosterHasCompliance(env.pp.join(dir, 'roster.yaml'))) no(`paradigm: its one-time notice would write .paradigm/${PARADIGM_MARKER}`);
   const [sub, ...rest] = args.map((a) => a.lit!);
   if ((sub === 'status' || sub === 'st') && rest.length === 0) return;
   if (sub === 'doctor') {
@@ -1864,8 +1844,23 @@ const paradigmRule: Rule = (args, env, name) => {
     return;
   }
   if (sub === 'task' && rest[0] === 'show') {
-    if (verbArgs(rest.slice(1), 'paradigm task show', ['--json']).length === 1) return;
-    no('paradigm task show: one REF');
+    const ops = verbArgs(rest.slice(1), 'paradigm task show', ['--json']);
+    if (ops.length !== 1) no('paradigm task show: one REF');
+    // The CLI joins a dated id into a file path: a separator could reach a .yaml outside the roots.
+    if (/[/\\]/.test(ops[0]!)) no('paradigm task show: a path separator in REF');
+    return;
+  }
+  if (sub === 'lore' && (rest[0] === 'list' || rest[0] === 'ls')) {
+    const ops = verbArgs(rest.slice(1), 'paradigm lore list', ['--json'], ['--author', '--type', '--symbol', '--tags', '--from', '--to', '-l', '--limit']);
+    if (ops.length === 0) return;
+    no('paradigm lore list: an operand');
+  }
+  if (sub === 'lore' && rest[0] === 'show') {
+    const ops = verbArgs(rest.slice(1), 'paradigm lore show', ['--json']);
+    if (ops.length !== 1) no('paradigm lore show: one ID');
+    // The CLI joins a dated id into a file path: only a plain lore id (no separator, no dot).
+    if (!LORE_ID.test(ops[0]!)) no('paradigm lore show: an ID of L- and letters, digits, - or _');
+    return;
   }
   no(`paradigm: ${sub === undefined ? 'no verb' : `verb ${[sub, ...rest.slice(0, 1)].join(' ')}`} is not a read verb`);
 };

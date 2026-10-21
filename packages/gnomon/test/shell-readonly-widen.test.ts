@@ -129,6 +129,12 @@ const FAMILIES: string[] = [
   'paradigm task ls open --json -n 5 -p high --mine',
   'paradigm task show 004',
   'paradigm task show @last --json',
+  'paradigm task show T-2026-10-20-001',
+  'paradigm lore list',
+  'paradigm lore ls --json',
+  'paradigm lore list --type insight --symbol x --tags a,b --author me --from 2026-10-01 --to 2026-10-20 -l 5',
+  'paradigm lore show L-2026-10-20-ascend-120000-001',
+  'paradigm lore show L-2026-02-21-001 --json',
   'gnomon desk stats',
   'gnomon desk stats --json',
   'gnomon daemon status',
@@ -224,9 +230,14 @@ const REFUSALS: Array<[string, RegExp]> = [
   ['paradigm shift', /paradigm: verb shift is not a read verb/],
   ['paradigm init', /paradigm: verb init/],
   ['paradigm index', /paradigm: verb index/],
-  ['paradigm lore list', /paradigm: verb lore/],
-  ['paradigm lore show L-2026-10-20-001', /paradigm: verb lore/],
-  ['paradigm lore record --title x', /paradigm: verb lore/],
+  ['paradigm lore record --title x', /paradigm: verb lore record/],
+  ['paradigm lore list stray', /paradigm lore list: an operand/],
+  ['paradigm lore list --limit', /paradigm lore list: --limit/],
+  ['paradigm lore show', /paradigm lore show: one ID/],
+  ['paradigm lore show L-2026-10-20-/../../../etc/hosts', /paradigm lore show: an ID/],
+  ['paradigm lore show L-2026-10-20-x.y', /paradigm lore show: an ID/],
+  ['paradigm lore show x --body', /paradigm lore show: --body/],
+  ['paradigm task show T-2026-10-20-/../../../etc/x', /paradigm task show: a path separator/],
   ['paradigm task add fix it', /paradigm: verb task add/],
   ['paradigm task done 4', /paradigm: verb task done/],
   ['paradigm task ls --board', /paradigm task ls: --board/],
@@ -374,21 +385,16 @@ describe("#shell-readonly RW (Aegis L3): fd's pattern and tree's -P/-I values ar
   });
 });
 
-describe("#shell-readonly RW: paradigm's one-time notice marker", () => {
-  it('a card while .paradigm/ exists without the marker; a pass once it exists', () => {
+describe("#shell-readonly RW: paradigm read verbs pass on their grammar alone", () => {
+  it('a .paradigm/ without the one-time notice marker or a compliance roster no longer makes a card (paradigm 7.15.2: read verbs write nothing)', () => {
     const dir = path.join(repo, '.paradigm');
     fs.mkdirSync(dir);
     try {
-      expect(ro('paradigm status')).toMatchObject({ ok: false, why: 'paradigm: its one-time notice would write .paradigm/.v6-0-4-migration-acknowledged' });
-      // a roster whose active list holds compliance never fires the notice (no marker is ever written)
-      fs.writeFileSync(path.join(dir, 'roster.yaml'), "version: '1.0'\nactive:\n  - builder\n  - compliance\nbench: []\n");
-      expect(ro('paradigm status')).toEqual({ ok: true });
-      fs.writeFileSync(path.join(dir, 'roster.yaml'), "version: '1.0'\nactive:\n  - builder\nbench:\n  - compliance\n");
-      expect(ro('paradigm status')).toMatchObject({ ok: false });
-      fs.writeFileSync(path.join(dir, 'roster.yaml'), 'active: [builder, compliance]\n');
-      expect(ro('paradigm status')).toMatchObject({ ok: false });
-      fs.writeFileSync(path.join(dir, '.v6-0-4-migration-acknowledged'), 'Acknowledged\n');
-      expect(ro('paradigm status')).toEqual({ ok: true });
+      fs.writeFileSync(path.join(dir, 'roster.yaml'), "version: '1.0'\nactive:\n  - builder\n");
+      for (const c of ['paradigm status', 'paradigm doctor', 'paradigm task ls', 'paradigm lore list']) {
+        expect(ro(c)).toEqual({ ok: true });
+      }
+      expect(fs.existsSync(path.join(dir, '.v6-0-4-migration-acknowledged'))).toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

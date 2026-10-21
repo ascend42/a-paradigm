@@ -2905,9 +2905,11 @@ components:
       --exec -X --exec-batch -l --list-details -L --follow); tree (no -o -R -l
       --fromfile --fromtabfile --output; fd's pattern and tree -P/-I values are patterns); git remote -v / get-url NAME (Aegis M1: a card when any repo/global/system config scope has an insteadOf/pushInsteadOf key or a userinfo URL; gitRemoteUrlRisk); paradigm status|st,
       doctor [--context] [--explain], ripple SYMBOL [PATH], purpose validate
-      [PATH], task ls [STATUS], task show REF (cwd at a session root; a card
-      while .paradigm/ lacks the preAction notice marker; never lore, index or
-      a write verb); gnomon desk stats, daemon status, mod list, mod status
+      [PATH], task ls [STATUS], task show REF (no path separator), lore
+      list|ls [filters], lore show L-ID (cwd at a session root; they pass on
+      their grammar alone: paradigm's declared READ_ONLY_COMMANDS, proven
+      byte-identical by its readonly-commands harness from paradigm 7.15.2;
+      never index, task ls --board/--project or a write verb); gnomon desk stats, daemon status, mod list, mod status
       [NAME], rules list, trace status, replay [--json] [--expect H] (default
       home only; never bare trace or a write verb).
     tags: [kernel, security]
