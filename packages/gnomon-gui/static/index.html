@@ -10,6 +10,7 @@
 <script src="/app.js" defer></script>
 </head>
 <body>
+<h1 class="sr-only">Gnomon</h1>
 <div id="gnomon" class="shell">
 <header class="chrome">
 <button id="toggle-sessions" class="key pane-toggle" type="button" aria-controls="pane-sessions" aria-expanded="false" title="Sessions">sessions</button>
@@ -77,13 +78,13 @@
 </div>
 <div id="settings" class="overlay" hidden>
 <div class="sheet-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-<div class="settings-head"><p id="settings-title" class="title">Settings</p><span class="meta">kept in this browser unless it says the kernel owns it</span><button id="settings-close" class="key quiet" type="button" title="Close (Esc)">close</button></div>
+<div class="settings-head"><h2 id="settings-title" class="title">Settings</h2><span class="meta">kept in this browser unless it says the kernel owns it</span><button id="settings-close" class="key quiet" type="button" title="Close (Esc)">close</button></div>
 <div id="settings-body" class="settings-body"></div>
 </div>
 </div>
 <div id="voice-settings" class="overlay vs-drawer" hidden>
 <div class="sheet-card settings-card voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-settings-title">
-<div class="settings-head"><p id="voice-settings-title" class="title">Voice settings</p><span class="meta">kept on this Mac; the kernel holds the send word and your voice</span><button id="voice-settings-close" class="key quiet" type="button" title="Close (Esc)">done</button></div>
+<div class="settings-head"><h2 id="voice-settings-title" class="title">Voice settings</h2><span class="meta">kept on this Mac; the kernel holds the send word and your voice</span><button id="voice-settings-close" class="key quiet" type="button" title="Close (Esc)">done</button></div>
 <div id="voice-settings-body" class="settings-body vs-body"></div>
 </div>
 </div>

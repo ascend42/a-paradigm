@@ -134,7 +134,7 @@ function installedEl(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
 export function paintMods(doc: MiniDoc, body: { firstChild: unknown; removeChild(c: unknown): unknown; appendChild(c: unknown): unknown }, v: ModsView, ui: ModsUi): void {
   while (body.firstChild) body.removeChild(body.firstChild);
   const sec = (id: string, title: string, note?: string): MiniEl => {
-    const s = h(doc, 'section', { class: 'settings-sec mods-sec', 'data-section': id, 'aria-label': title }, h(doc, 'p', { class: 'title settings-h' }, title));
+    const s = h(doc, 'section', { class: 'settings-sec mods-sec', 'data-section': id, 'aria-label': title }, h(doc, 'h3', { class: 'title settings-h' }, title));
     if (note) s.appendChild(h(doc, 'p', { class: 'meta' }, note));
     body.appendChild(s);
     return s;
@@ -189,7 +189,7 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
   card.setAttribute('aria-labelledby', 'mods-title');
   const head = document.createElement('div');
   head.className = 'settings-head';
-  const title = document.createElement('p');
+  const title = document.createElement('h2');
   title.id = 'mods-title';
   title.className = 'title';
   title.textContent = 'Mods';

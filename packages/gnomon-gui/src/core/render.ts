@@ -61,7 +61,9 @@ export interface MiniEl {
   className: string;
 }
 
-const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small', 'details', 'summary']);
+// h2/h3 are for the GUI's own sheet titles and section heads (trusted strings). If markdown ever gains headings,
+// render them as a styled p or strong, never h2/h3: model text must not enter the page outline (Aegis).
+const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small', 'details', 'summary', 'h2', 'h3']);
 const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */

@@ -137,14 +137,13 @@ foundations:
     status: clear
     from: { session: 2026-10-20-gnomon-gui-fidelity, board: s1-tokens-themes, note: "material, never a state signal (world rule)", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   motion:
-    durations: [120, 220, 320, 360, 400, 450, 500, 550, 900, 1100, 3000]
+    durations: [120, 220, 320, 360, 400, 450, 500, 550, 1100, 3000]
     easings: ["cubic-bezier(.3, .7, .3, 1)", "cubic-bezier(.3, 1.4, .5, 1)", "cubic-bezier(.2, .8, .2, 1)", "ease-in", "ease-out", "ease-in-out", "linear"]
     tokens:
       fly: "550ms cubic-bezier(.3,.7,.3,1)"     # card-in flutter
       stamp: "400ms cubic-bezier(.3,1.4,.5,1)"  # APPROVED stamp
       flyout: "450ms ease-in"
       droop: "500ms ease-out"
-      walk: "900ms ease-in-out"                 # cap walks Working -> Needs you (defined, unused: --t-walk)
       bob: "1100ms ease-in-out"                 # cap bob, only while streaming
       hold: "3000ms linear"                     # held voice countdown
       reflow: "220ms"                           # stack close-up

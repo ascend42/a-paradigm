@@ -66,7 +66,7 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
 export function paintSettings(doc: MiniDoc, body: { firstChild: unknown; removeChild(c: unknown): unknown; appendChild(c: unknown): unknown }, sections: SettingsSection[]): void {
   while (body.firstChild) body.removeChild(body.firstChild);
   for (const s of sections) {
-    const sec = h(doc, 'section', { class: 'settings-sec', 'data-section': s.id, 'aria-label': s.title }, h(doc, 'p', { class: 'title settings-h' }, s.title));
+    const sec = h(doc, 'section', { class: 'settings-sec', 'data-section': s.id, 'aria-label': s.title }, h(doc, 'h3', { class: 'title settings-h' }, s.title));
     for (const r of s.rows) sec.appendChild(rowEl(doc, r));
     body.appendChild(sec);
   }

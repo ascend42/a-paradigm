@@ -1069,9 +1069,12 @@ components:
       absent note wrap (overflow-wrap anywhere), a cap question truncates
       with … at 64px and keeps its full text in title= and aria-label; the
       host and slot drop their cap and padding inside the column. The setup
-      digest is 17, weight 600, .08em, one unbroken line of groups of four.
+      digest is 17, weight 600, .08em, one unbroken line of groups of four,
+      in var(--mono). Sheet titles (Settings, Voice settings, Mods) are
+      <h2 class=title> and their section heads <h3 class="title
+      settings-h"> (render.ts h() allows h2/h3), same look as before.
       gnomon-wrapper/static/status.css carries --fs-reading and --fs-title
-      for its standalone page.
+      for its standalone page, plus copied ground/ink/fail and --mono.
     path: static/styles.css
     type: module
     tags: [gnomon, gui, design-system, type]

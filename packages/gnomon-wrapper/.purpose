@@ -66,7 +66,10 @@ components:
       normal launch. refusal_text no longer says "In Terminal". The bundled
       status page (static/status.css) uses the GUI's type tokens
       (--fs-reading, --fs-title) and base radius (--radius 3), see
-      #gui-type and #gui-space-radius.
+      #gui-type and #gui-space-radius, and copies the GUI's --ground,
+      --ink, --fail per theme (light / prefers-color-scheme dark) and its
+      --mono stack (JetBrains Mono): it cannot import styles.css, so the
+      values are duplicated and must change with it.
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]
