@@ -359,7 +359,7 @@ export function sendRequest(s: DictationState): SendRequest | null {
 }
 
 /** TD-2026-10-20-125: an ambient draft waits for the human's key press. */
-export const AMBIENT_DRAFT_NOTE = 'draft · Enter sends (ambient never auto-sends)';
+export const AMBIENT_DRAFT_NOTE = 'draft · Enter sends (an open-mic draft never sends itself)';
 
 /**
  * The draft's state as the controls see it (founder report 2026-10-20: one send control, Hold only beside a countdown).

@@ -17,7 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
+import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
 import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
@@ -50,7 +50,7 @@ import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mo
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
-import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -1607,8 +1607,8 @@ function setDictationDelay(d: number | null): void {
   dispatchDictation({ type: 'setDelay', delayMs: d, now: Date.now() });
   if (!$('voice-menu').hidden) paintVoiceMenu();
   voiceSheet.repaint();
-  // TD-2026-10-20-125: the delay applies to push-to-talk only; ambient speech always waits for Enter / Send
-  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: push-to-talk auto-sends after ${delayLabel(d)} of silence; ambient speech waits for Enter`);
+  // TD-2026-10-20-125: the delay applies to Talk (push-to-talk) only; open-mic speech always waits for Enter / Send
+  notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: Talk auto-sends after ${delayLabel(d)} of silence; Dictate waits for Enter`);
 }
 
 /** While a draft exists: tick the ring (100 ms) and re-read status about every 300 ms (the ENROL_POLL_MS precedent). */
@@ -2121,7 +2121,9 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
   if (!canAttach(status)) return notice('only a human connection attaches voice', true);
   const v = voiceStatusOf(status);
   const plan = planVoice(v, to, hsid, voicePresenceDone);
-  if (plan.kind === 'blocked') return notice(`${VOICE_TITLE[to]} is not allowed: ${plan.reason}`, true);
+  // the ladder's words in every notice (Off, Talk, Dictate, Send word, Pieces), never "ambient" / "push-to-talk"
+  const toName = rungNameOf(to, send);
+  if (plan.kind === 'blocked') return notice(`${toName} is not allowed: ${plan.reason}`, true);
   // the ladder: Dictate, Send word and Pieces share the ambient state, so a rung change on the same session re-attaches
   // with the new send ceiling (the kernel reports the current one as status.voice.send)
   if (plan.kind === 'same' && !(to === 'ambient' && v.send !== null && v.send !== (send ?? 'key'))) return;
@@ -2135,7 +2137,7 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
   if (voiceBusy) return;
   voiceBusy = true;
   try {
-    // V2e seamless: attaching (or choosing Ambient) while the voice app is not running starts it in the same gesture
+    // V2e seamless: attaching (or choosing an open-mic rung) while the voice app is not running starts it in the same gesture
     if (to !== 'off' && needsStart(clientOf(status))) {
       await client.call('log.append', clientRequest('start', currentCapture()));
       notice('Starting voice…');
@@ -2145,11 +2147,11 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
       // Aegis L (V2d): approve in this gesture ONLY the voice-widen presence card for this session; else the stack decides
       if (!isVoiceWidenCard(store.cards.get(r.cardId), hsid)) {
         focusCard(r.cardId);
-        notice(`Ambient for ${sessionName(hsid ?? '')}: decide the pending card in the stack`);
+        notice(`${toName} for ${sessionName(hsid ?? '')}: decide the pending card in the stack`);
         noticeCard = { cardId: r.cardId, seen: store.cards.has(r.cardId) };
         return;
       }
-      notice(`Ambient for ${sessionName(hsid ?? '')}: confirm with Touch ID`);
+      notice(`${toName} for ${sessionName(hsid ?? '')}: confirm with Touch ID`);
       try {
         await client.call('approve', { cardId: r.cardId, decision: 'allow' });
         voicePresenceDone = true;
@@ -2157,7 +2159,8 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
       } catch (err) {
         // the widen card (strictness, detail.op voice.widen) stays in the stack: focus it so the human can decide it there
         focusCard(r.cardId);
-        notice(err instanceof RpcError ? `voice stays ${VOICE_TITLE[v.state].toLowerCase()}: ${voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)}` : `voice stays ${VOICE_TITLE[v.state].toLowerCase()}`, true);
+        const was = rungNameOf(v.state, v.send);
+        notice(err instanceof RpcError ? `voice stays ${was}: ${voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)}` : `voice stays ${was}`, true);
       }
     } else {
       if (to === 'ambient') voicePresenceDone = true; // the kernel already held this login's presence
@@ -2381,7 +2384,7 @@ function run(id: string, trusted: boolean): void {
   $('palette').hidden = true;
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
-  else if (id.startsWith('voice.preset.')) void chooseRungUi(RUNG_OF_PRESET[parsePreset(id.slice('voice.preset.'.length))], trusted);
+  else if (id.startsWith('voice.preset.')) void chooseRungUi(rungOfPresetCommand(id) ?? RUNG_OF_PRESET[parsePreset(id.slice('voice.preset.'.length))], trusted);
   else if (id === 'voice.sendword.teach') {
     openVoiceSettings('sendword');
     startTeachFlow();
@@ -2426,7 +2429,6 @@ function run(id: string, trusted: boolean): void {
     if (hasDraft(dict) && draftControls(dict).hold === null) notice('nothing to hold: this draft never sends itself (Enter sends it)');
     else dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() });
   }
-  else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), trusted);
   else if (id === 'gui.reconnect' && trusted) void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && trusted && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
   else if (id === 'verb.status' && client) void client.call('status').then((s) => (status = s as Record<string, unknown>));

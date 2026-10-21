@@ -54,8 +54,10 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'workshop.left', title: 'Workshop: left column' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
   // TD-2026-10-21-514 + Atelier 2026-10-21 (#gui-voice-ladder): the ladder's rungs (a rung not ready opens Voice
-  // settings at its section), the send word, the sheet, the mic
-  { id: 'voice.preset.talk', title: 'Voice: Talk (hold to speak; sends after release)' },
+  // settings at its section), the send word, the sheet, the mic. The retired voice.off / voice.ptt / voice.ambient
+  // ("push-to-talk", "ambient") are gone: voice.preset.off and voice.preset.talk carry Off and the Talk hotkey now
+  { id: 'voice.preset.off', title: 'Voice: Off (the mic is closed)' },
+  { id: 'voice.preset.talk', title: 'Voice: Talk (hold to speak; sends after release)', keys: 'hold ⌃⌥Space (voice app)' },
   { id: 'voice.preset.dictate', title: 'Voice: Dictate (open mic fills the box; you press Enter)' },
   { id: 'voice.preset.send-word', title: 'Voice: Send word (say your word to send; edits ask first)' },
   { id: 'voice.preset.pieces', title: 'Voice: Pieces (each pause sends; edits ask first)' },
@@ -70,21 +72,17 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'mode.manual', title: 'Mode: manual (this session only)' },
   { id: 'mode.ask', title: 'Mode: ask (this session only)' },
   { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session only)' },
-  // V2d voice (TD-2026-10-19-298): the focused session (or the attached one); the global hotkeys live in the voice app
-  { id: 'voice.off', title: 'Voice: off — close the mic' },
-  { id: 'voice.ptt', title: 'Voice: push-to-talk — hold the hotkey to talk', keys: 'hold ⌃⌥Space (voice app)' },
-  { id: 'voice.ambient', title: 'Voice: ambient — the mic stays open (Touch ID the first time)' },
   // V2e (T-2026-10-19-026): the voice app's lifecycle and enrolment, no terminal step
   { id: 'voice.client.start', title: 'Voice: start the voice app' },
   { id: 'voice.client.stop', title: 'Voice: stop the voice app' },
   { id: 'voice.enrol', title: 'Voice: teach Gnomon your voice' },
-  // dictation (TD-2026-10-20-262): the PUSH-TO-TALK auto-send delay after silence, per machine (the pill menu has the
-  // same picks). TD-2026-10-20-125: ambient speech never auto-sends; it waits in the composer for Enter / Send
-  { id: 'voice.delay.3000', title: 'Dictation: auto-send push-to-talk after 3 s of silence' },
-  { id: 'voice.delay.5000', title: 'Dictation: auto-send push-to-talk after 5 s of silence (default)' },
-  { id: 'voice.delay.8000', title: 'Dictation: auto-send push-to-talk after 8 s of silence' },
-  { id: 'voice.delay.15000', title: 'Dictation: auto-send push-to-talk after 15 s of silence' },
-  { id: 'voice.delay.off', title: 'Dictation: never auto-send push-to-talk (Send or Enter only)' },
+  // dictation (TD-2026-10-20-262): the Talk rung's (push-to-talk) auto-send delay after silence, per machine.
+  // TD-2026-10-20-125: open-mic (ambient) speech never auto-sends; it waits in the composer for Enter / Send
+  { id: 'voice.delay.3000', title: 'Dictation: Talk auto-sends after 3 s of silence' },
+  { id: 'voice.delay.5000', title: 'Dictation: Talk auto-sends after 5 s of silence (default)' },
+  { id: 'voice.delay.8000', title: 'Dictation: Talk auto-sends after 8 s of silence' },
+  { id: 'voice.delay.15000', title: 'Dictation: Talk auto-sends after 15 s of silence' },
+  { id: 'voice.delay.off', title: 'Dictation: Talk never auto-sends (Send or Enter only)' },
   { id: 'voice.dictation.hold', title: 'Dictation: hold / resume the auto-send', keys: '⌃⌥H (voice app)' },
   // board header-5b (#gui-wordmark-menu): the rare tools live in the "Gnomon ▾" menu and here, never as header keys
   { id: 'menu.gnomon', title: 'Gnomon menu: layout, theme, mods, voice settings, settings' },

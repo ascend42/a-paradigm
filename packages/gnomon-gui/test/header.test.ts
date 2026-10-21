@@ -83,7 +83,7 @@ describe('the wordmark menu', () => {
   it('holds Layout presets, Day / Night / Auto, Mods…, Voice settings…, Settings… ⌘, and the who line, in that order', () => {
     const r = rows();
     const labels = r.map((x) => (x.kind === 'item' ? x.name : x.kind === 'head' ? `[${x.label}]` : x.kind === 'theme' ? x.options.map((o) => o.label).join('|') : x.kind === 'who' ? `who:${x.text}` : '—'));
-    expect(labels).toEqual(['[layout]', 'Desk', 'Focus', 'Decide', 'Panes and Workshop…', '—', '[theme]', '☀ Day|☾ Night|◐ Auto', '—', 'Mods…', 'Voice settings…', 'Settings…', '—', 'who:kernel connected · ascend · conn …4f2a91c0 · log 1204']);
+    expect(labels).toEqual(['[layout]', 'Desk', 'Focus', 'Decide', 'Panes and Workshop…', '—', '[theme]', 'Day|Night|Auto', '—', 'Mods…', 'Voice settings…', 'Settings…', '—', 'who:kernel connected · ascend · conn …4f2a91c0 · log 1204']);
     expect(r.find((x) => x.kind === 'item' && x.run === 'layout.desk')).toMatchObject({ radio: true, checked: true });
     expect(r.find((x) => x.kind === 'item' && x.run === PANES_RUN)).toMatchObject({ expands: true, expanded: false });
     // the panes and Workshop rows open in place

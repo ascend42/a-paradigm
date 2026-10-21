@@ -190,7 +190,7 @@ describe('S3 the card sheet and the stack pile', () => {
     const el = renderCard({ doc: fdoc }, { ...v, project: { name: 'billing', hue: 0 }, raisedAt: '2026-10-20T14:06:00Z', now: Date.parse('2026-10-20T14:09:30Z'), voice: { eligible: 'reversible', label: 'card 3' } }, block) as FEl;
     const kids = el.children.filter((c): c is FEl => c instanceof FEl);
     expect(kids.map((k) => k.className)).toEqual(['card-head k', 'card-title', 'meta card-raised', 'card-keys', 'meta content-hash', 'card-details', 'bar', 'stamp']);
-    expect(kids[0]!.text).toBe('■ billing · permission · by claude 🎙 reversible · card 3');
+    expect(kids[0]!.text).toBe('■ billing · permission · by claude voice · reversible · card 3');
     expect(kids[0]!.attrs.get('title')).toBe('requested by p:7k2m9q4x/claude · hsid:v1:A · billing');
     expect(kids[0]!.children.filter((c): c is FEl => c instanceof FEl)[0]!.className).toBe('card-project pink h0');
     expect(kids[1]!.text).toBe('The session asks to run Bash');
@@ -310,7 +310,7 @@ describe('S3 the card sheet and the stack pile', () => {
     expect(kids.find((k) => k.tag === 'details')!.text).not.toContain('command: pnpm test');
   });
   it('the voice tag is the kernel handle: reversible · label, gate + the handle word, else hand-only', () => {
-    expect(voiceTagOf({ eligible: 'gate', label: 'LANTERN' })).toEqual({ text: '🎙 gate', handle: 'LANTERN' });
+    expect(voiceTagOf({ eligible: 'gate', label: 'LANTERN' })).toEqual({ text: 'voice · gate', handle: 'LANTERN' });
     expect(voiceTagOf({ eligible: 'none', label: 'KNOT' })).toEqual({ text: 'hand-only', handle: null });
     expect(voiceTagOf(null)).toBeNull();
     expect(raisedLine('2026-10-20T14:06:00Z', Date.parse('2026-10-20T14:06:20Z'))).toBe('raised 14:06 · waiting just now');

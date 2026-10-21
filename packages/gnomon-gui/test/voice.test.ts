@@ -11,7 +11,7 @@ import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
 import { TOAST_MS } from '../src/core/voice-client.js';
 import { canAttach, cardNoticeStep, idleNoteOf, startRungName, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
-import { ladderEntries } from '../src/core/voice-ladder.js';
+import { ladderEntries, rungNameOf, rungOfPresetCommand } from '../src/core/voice-ladder.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -99,7 +99,7 @@ describe('voice: attach and switch send the right appends', () => {
   });
   it('a ceiling blocks a louder state with its reason; nothing focused blocks an attach', () => {
     const capped = voiceStatusOf(v2aAttached('ptt', { maxMode: 'ptt' }));
-    expect(planVoice(capped, 'ambient', A, true)).toEqual({ kind: 'blocked', reason: 'voice ceiling push-to-talk' });
+    expect(planVoice(capped, 'ambient', A, true)).toEqual({ kind: 'blocked', reason: 'voice ceiling Talk' });
     expect(planVoice(voiceStatusOf(off()), 'ptt', null, false)).toEqual({ kind: 'blocked', reason: 'no session focused' });
   });
 });
@@ -189,10 +189,10 @@ describe('voice in the transcript', () => {
     expect(chatItems([p1, p2, user(3, '7', 'run the tests'), sent(4, 3)]).items.map((i) => [i.role, i.text])).toEqual([['user', 'run the tests']]);
     expect(VOICE_ACTIVITY_KINDS.has('voice.turn.partial')).toBe(false);
   });
-  it('a reply the voice app spoke gets a 🔊 marker (· stopped when it stopped early)', () => {
+  it('a reply the voice app spoke gets a spoken-aloud marker (· stopped when it stopped early)', () => {
     const agent = (spoken: string): Row => ({ seq: 9, kind: 'voice.turn.agent', session: A, view: 'full', payload: { turnId: '1', t0: 1, t1: 2, textPlanned: 'all tests pass', textSpoken: spoken } });
-    expect(chatItems([agent('all tests pass')]).items.map((i) => [i.role, i.text])).toEqual([['spoken', '🔊 spoken aloud']]);
-    expect(chatItems([agent('all')]).items[0]?.text).toBe('🔊 spoken aloud · stopped');
+    expect(chatItems([agent('all tests pass')]).items.map((i) => [i.role, i.text])).toEqual([['spoken', 'spoken aloud']]);
+    expect(chatItems([agent('all')]).items[0]?.text).toBe('spoken aloud · stopped');
   });
   it('a refused voice turn shows the refusal reason inline, subtly: the kernel\'s refusal as fact, the app\'s as an attributed hint', () => {
     expect(chatItems([user(1, '1', 'deploy it', { forwarded: false, refusal: { reason: 'voice-stale-utterance' } })]).items[0]).toMatchObject({ role: 'voice-heard', text: 'matt: “deploy it” · voice app says: not sent · voice-stale-utterance' });
@@ -244,9 +244,17 @@ describe('voice: palette, blocks and page wiring', () => {
   const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
   const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
   const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
-  it('the palette carries Voice: off / push-to-talk / ambient; no block button can change voice', () => {
-    const ids = paletteEntries(null).map((c) => c.id);
-    for (const id of ['voice.off', 'voice.ptt', 'voice.ambient']) expect(ids).toContain(id);
+  it('the palette carries the ladder (Off, Talk, Dictate, Send word, Pieces), never the retired off / push-to-talk / ambient; no block button can change voice', () => {
+    const all = paletteEntries(null);
+    const ids = all.map((c) => c.id);
+    for (const id of ['voice.preset.off', 'voice.preset.talk', 'voice.preset.dictate', 'voice.preset.send-word', 'voice.preset.pieces']) expect(ids).toContain(id);
+    for (const id of ['voice.off', 'voice.ptt', 'voice.ambient']) expect(ids).not.toContain(id);
+    for (const c of all) expect(c.title, c.id).not.toMatch(/ambient|push-to-talk/i);
+    // the Talk hotkey rides its rung now; every rung command names its rung, and nothing in the page calls the retired ids
+    expect(all.find((c) => c.id === 'voice.preset.talk')?.keys).toBe('hold ⌃⌥Space (voice app)');
+    expect(['off', 'talk', 'dictate', 'send-word', 'pieces'].map((x) => rungOfPresetCommand(`voice.preset.${x}`))).toEqual(['off', 'talk', 'dictate', 'word', 'pieces']);
+    expect(rungOfPresetCommand('voice.ambient')).toBeNull();
+    expect(app).not.toMatch(/'voice\.(off|ptt|ambient)'|VOICE_STATES/);
     for (const id of BLOCK_SAFE_COMMANDS) expect(id.startsWith('voice.')).toBe(false);
   });
   it('the header carries the kernel-owned pill, always visible (not hidden), with its menu and meter', () => {

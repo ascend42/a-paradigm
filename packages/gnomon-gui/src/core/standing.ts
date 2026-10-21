@@ -19,7 +19,7 @@ export { STANDING_TUPLES, type StandingTuple };
 export const STANDING_TUPLE_TEXT: Readonly<Record<StandingTuple, string>> = Object.freeze({
   'mode.loosen:auto-edits': 'switched a folder to auto-edits',
   'permission:always': 'made an "always" rule',
-  'voice.widen': 'widened voice to ambient listening',
+  'voice.widen': 'opened the mic past Talk (Dictate, Send word, Pieces)',
   'voice-arm:allow': 'armed voice approvals',
   'daemon-stop:restart': 'restarted Gnomon (same build)',
 });

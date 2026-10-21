@@ -107,7 +107,7 @@ export function refusalPhrase(reason: string, cause?: string | null): string {
     case 'voice-grammar':
       return 'handled as a command';
     case 'voice-off':
-      return cause === 'aec' ? 'no echo cancellation (use headphones or the built-in mic)' : cause === 'idle' ? 'ambient voice timed out' : cause === 'ceiling' ? 'above the attached voice mode' : cause === 'composer' ? 'ambient speech goes to the composer' : 'voice is off for this turn';
+      return cause === 'aec' ? 'no echo cancellation (use headphones or the built-in mic)' : cause === 'idle' ? 'the open mic timed out' : cause === 'ceiling' ? 'above the attached voice mode' : cause === 'composer' ? 'dictated speech waits in the box' : 'voice is off for this turn';
     default:
       return cause ? `${reason} · ${cause}` : reason;
   }

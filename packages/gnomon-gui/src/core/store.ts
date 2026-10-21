@@ -806,21 +806,21 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
  * (voice.turn.agent{t0, t1, textPlanned, textSpoken, interrupted?}), after the kernel's one speakable row
  * (source kernel-speakable). The kernel row opens the marker; every later playback row and a voice.bargein fold into
  * it (played seconds, `stopped` when any chunk was cut off) until the next reply. A playback row with no open marker
- * (an older kernel with no speakable row) opens one itself; a barge-in with none is the lone `🔊 interrupted` line.
+ * (an older kernel with no speakable row) opens one itself; a barge-in with none is the lone `interrupted` line.
  */
 interface SpokenGroup {
   item: ChatItem;
   ms: number;
   stopped: boolean;
-  /** the lone `🔊 interrupted` line: never folds anything */
+  /** the lone `interrupted` line: never folds anything */
   solo?: boolean;
 }
 
-/** The marker's text: `🔊 spoken aloud · 6s · stopped`. */
+/** The marker's text, in words (gnomon cli-voice: no emoji): `spoken aloud · 6s · stopped`. */
 export function spokenText(g: Pick<SpokenGroup, 'ms' | 'stopped' | 'solo'>): string {
-  if (g.solo) return '🔊 interrupted';
+  if (g.solo) return 'interrupted';
   const s = Math.round(g.ms / 1000);
-  return `🔊 spoken aloud${s >= 1 ? ` · ${s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}` : ''}${g.stopped ? ' · stopped' : ''}`;
+  return `spoken aloud${s >= 1 ? ` · ${s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`}` : ''}${g.stopped ? ' · stopped' : ''}`;
 }
 
 /** Fold one voice.turn.agent / voice.bargein row: 'folded' into the open marker, a new group to show, or null (hidden). */

@@ -973,13 +973,26 @@ components:
       and meter use the --live token (an alias of --stamp's value); the pill
       meter shows only while capture is `hearing` (capture.ts meterShownOf);
       night selected segments are [bracketed] with the glow; the tall-view
-      key has a pressed state.
+      key has a pressed state. Copy retirement (T-2026-10-21-016): the
+      palette's voice.off / voice.ptt / voice.ambient are gone; the ladder's
+      voice.preset.off|talk|dictate|send-word|pieces are the only voice rung
+      commands (rungOfPresetCommand), the Talk hotkey rides voice.preset.talk,
+      and every user-facing string speaks the rungs (rungNameOf: Off, Talk,
+      Dictate, Send word, Pieces; "open mic" for the shared ambient state),
+      never "Ambient" / "push-to-talk"; the store's spoken markers ("spoken
+      aloud", "interrupted") and the card voice tag ("voice · reversible",
+      "voice · gate") are words, no emoji (gnomon cli-voice); the Gnomon
+      menu's theme row is Day / Night / Auto without glyphs. Wire values and
+      identifiers ('ambient', 'ptt', 'conversation', voice-ambient) are
+      unchanged. test/copy-vocabulary.test.ts walks every string literal in
+      core/ for the retired words and the emoji set.
     path: src/core/voice-ladder.ts
     type: module
     tags: [gnomon, gui, voice]
     tests:
       - test/voice-ladder.test.ts
       - test/voice.test.ts
+      - test/copy-vocabulary.test.ts
   gui-voice-settings:
     description: >-
       #gui-voice-settings (Atelier 2026-10-21, setup-home.html + teach.html) -

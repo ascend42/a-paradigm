@@ -43,6 +43,15 @@ const PRESET_OF: Readonly<Record<Exclude<Rung, 'off'>, VoicePreset>> = Object.fr
 export const presetOfRung = (r: Rung): VoicePreset | null => (r === 'off' ? null : PRESET_OF[r]);
 /** The voice session state a rung asks the kernel for. */
 export const stateOfRung = (r: Rung): VoiceState => (r === 'off' ? 'off' : r === 'talk' ? 'ptt' : 'ambient');
+/** The rung a palette command `voice.preset.<x>` names (off, talk, dictate, send-word, pieces), or null. */
+export function rungOfPresetCommand(id: string): Rung | null {
+  if (!id.startsWith('voice.preset.')) return null;
+  const x = id.slice('voice.preset.'.length);
+  return x === 'off' ? 'off' : x === 'talk' ? 'talk' : x === 'dictate' ? 'dictate' : x === 'send-word' ? 'word' : x === 'pieces' ? 'pieces' : null;
+}
+/** A voice state plus the send ceiling in the ladder's words (Off, Talk, Dictate, Send word, Pieces): never "ambient". */
+export const rungNameOf = (state: VoiceState, send: 'word' | 'pieces' | 'key' | null): string =>
+  state === 'off' ? 'Off' : state === 'ptt' ? 'Talk' : send === 'word' ? 'Send word' : send === 'pieces' ? 'Pieces' : 'Dictate';
 /** The send ceiling a rung's attach carries (voice.session.start{send}); null is the kernel's default 'key'. */
 export const sendOfRung = (r: Rung): 'word' | 'pieces' | null => (r === 'word' ? 'word' : r === 'pieces' ? 'pieces' : null);
 

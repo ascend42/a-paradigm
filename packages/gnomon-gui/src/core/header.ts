@@ -49,7 +49,7 @@ export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: rea
     for (const p of WORKSHOP_PLACES) rows.push({ kind: 'item', run: `workshop.${p}`, name: `Workshop: ${p}`, note: p === 'footer' ? 'a strip under the desk' : `a column on the ${p}`, radio: true, checked: v.workshop && i.layout.workshop === p });
   }
   rows.push({ kind: 'rule' }, { kind: 'head', label: 'theme' });
-  rows.push({ kind: 'theme', options: i.theme.map((e) => ({ run: e.run, label: `${e.glyph} ${e.label}`, checked: e.current, title: e.title })) });
+  rows.push({ kind: 'theme', options: i.theme.map((e) => ({ run: e.run, label: e.label, checked: e.current, title: e.title })) });
   rows.push({ kind: 'rule' });
   rows.push({ kind: 'item', run: 'mods.open', name: 'Mods…', note: 'installed, available, add from folder' });
   rows.push({ kind: 'item', run: 'voice.settings.open', name: 'Voice settings…' });

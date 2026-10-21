@@ -120,8 +120,8 @@ export function pillOf(v: VoiceView, clientTail: string | null = null): Pill {
   const gone = v.clientConnected === false;
   const tail = clientTail ?? (gone ? ' · voice app not connected' : '');
   const goneCls = gone ? ' voice-noclient' : '';
-  if (v.state === 'ambient') return { state: 'ambient', label: `Listening${tail}`, target, title: `Ambient: the mic is open for ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to switch to push-to-talk or off.`, className: `voice-pill kernel-owned voice-ambient${goneCls}` };
-  if (v.state === 'ptt') return { state: 'ptt', label: `Hold ${v.hotkey} to talk${tail}`, target, title: `Push-to-talk to ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to change.`, className: `voice-pill kernel-owned voice-ptt${goneCls}` };
+  if (v.state === 'ambient') return { state: 'ambient', label: `Listening${tail}`, target, title: `Dictate: the mic is open for ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to choose another rung.`, className: `voice-pill kernel-owned voice-ambient${goneCls}` };
+  if (v.state === 'ptt') return { state: 'ptt', label: `Hold ${v.hotkey} to talk${tail}`, target, title: `Talk to ${target}.${gone ? ' The kernel does not see the voice app connected.' : ''} Click to change.`, className: `voice-pill kernel-owned voice-ptt${goneCls}` };
   if (gone) return { state: 'noclient', label: 'Voice app not running', target: '', title: 'The Gnomon voice app is not connected. Start it to talk.', className: 'voice-pill kernel-owned voice-off voice-noclient' };
   return { state: 'off', label: 'Mic off', target: '', title: v.known ? 'Voice is off. Click to attach it to the focused session.' : 'This kernel reports no voice status.', className: 'voice-pill kernel-owned voice-off' };
 }
@@ -157,7 +157,7 @@ export type VoicePlan = { kind: 'same' } | { kind: 'free' } | { kind: 'presence'
 /** What choosing `to` for session `hsid` does: same, free (narrowing, PTT, re-target), Touch ID (first widening to ambient) or blocked. */
 export function planVoice(v: VoiceView, to: VoiceState, hsid: string | null, presenceDone: boolean): VoicePlan {
   if (to !== 'off' && !hsid) return { kind: 'blocked', reason: 'no session focused' };
-  if (RANK[to] > RANK[v.ceiling]) return { kind: 'blocked', reason: `voice ceiling ${v.ceiling === 'ambient' ? 'ambient' : v.ceiling === 'ptt' ? 'push-to-talk' : 'off'}` };
+  if (RANK[to] > RANK[v.ceiling]) return { kind: 'blocked', reason: `voice ceiling ${v.ceiling === 'ambient' ? 'Pieces' : v.ceiling === 'ptt' ? 'Talk' : 'Off'}` };
   if (to === v.state && (to === 'off' || v.hsid === hsid)) return { kind: 'same' };
   if (to === 'ambient' && !v.ambientConfirmed && !presenceDone) return { kind: 'presence' };
   return { kind: 'free' };
@@ -173,7 +173,7 @@ export function voiceRequest(v: VoiceView, to: VoiceState, hsid: string | null):
   return { kind: 'voice.session.start', payload: { hsid, mode: WIRE_MODE[to], ...cont } };
 }
 
-export const VOICE_TITLE: Readonly<Record<VoiceState, string>> = Object.freeze({ off: 'Off', ptt: 'Push-to-talk', ambient: 'Ambient' });
+export const VOICE_TITLE: Readonly<Record<VoiceState, string>> = Object.freeze({ off: 'Off', ptt: 'Talk', ambient: 'Dictate' });
 
 /* The pill's Off / Push-to-talk / Ambient menu is gone: the Atelier 2026-10-21 trust ladder (core/voice-ladder.ts,
    #gui-voice-ladder) is the one voice choice, mapped onto these states by stateOfRung. */
@@ -228,9 +228,9 @@ export const SPEAKER_MAX = 32;
 export function voiceRefusalNote(reason: string | null, data: Record<string, unknown> | null): string | null {
   const cause = data && typeof data.cause === 'string' ? data.cause : null;
   if (reason === 'voice-off') {
-    if (cause === 'aec') return 'Ambient needs echo cancellation in the voice app (voice-off · aec)';
+    if (cause === 'aec') return 'an open mic needs echo cancellation in the voice app (voice-off · aec)';
     if (cause === 'ceiling') return 'this session\'s voice ceiling does not allow that (voice-off · ceiling)';
-    if (cause === 'presence') return 'Ambient needs Touch ID first (voice-off · presence)';
+    if (cause === 'presence') return 'an open mic needs Touch ID first (voice-off · presence)';
     return 'voice is off for this session (voice-off)';
   }
   if (reason === 'voice-playback') return `Claude is still finishing its reply; try again when it is done (voice-playback${data?.streaming === true ? ' · streaming' : ''})`;

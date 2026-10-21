@@ -25,9 +25,9 @@ export const ACK_KEY_PREFIX = 'gnomon.voice.liabilityAck.';
 export const PRESET_LABELS: Readonly<Record<VoicePreset, string>> = Object.freeze({ talk: 'Talk', dictate: 'Dictate', 'send-word': 'Send word', pieces: 'Pieces' });
 export const PRESET_NOTES: Readonly<Record<VoicePreset, string>> = Object.freeze({
   talk: 'hold the key; sends after the countdown',
-  dictate: 'ambient words fill the draft; Enter sends',
+  dictate: 'open-mic words fill the draft; Enter sends',
   'send-word': 'say your send word to send; edits ask first',
-  pieces: 'ambient speech is sent in pieces; edits ask first',
+  pieces: 'open-mic speech is sent in pieces; edits ask first',
 });
 export const ACK_TEXT = VOICE_LIABILITY_ACK_TEXT;
 

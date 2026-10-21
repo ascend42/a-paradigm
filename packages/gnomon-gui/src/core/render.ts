@@ -348,11 +348,11 @@ export function permissionTitleOf(card: Record<string, unknown>, tool: unknown, 
   return { verb: `Allow ${tool}`, arg, truncated };
 }
 
-/** S3: the card's voice tag from the kernel's handle: `🎙 reversible · card 3`, `🎙 gate` + the handle word, or `hand-only`. */
+/** S3: the card's voice tag from the kernel's handle, in words: `voice · reversible · card 3`, `voice · gate` + the handle word, or `hand-only`. */
 export function voiceTagOf(v: CardView['voice']): { text: string; handle: string | null } | null {
   if (!v) return null;
-  if (v.eligible === 'reversible') return { text: `🎙 reversible${v.label ? ` · ${v.label}` : ''}`, handle: null };
-  if (v.eligible === 'gate') return { text: '🎙 gate', handle: v.label || null };
+  if (v.eligible === 'reversible') return { text: `voice · reversible${v.label ? ` · ${v.label}` : ''}`, handle: null };
+  if (v.eligible === 'gate') return { text: 'voice · gate', handle: v.label || null };
   return { text: 'hand-only', handle: null };
 }
 
