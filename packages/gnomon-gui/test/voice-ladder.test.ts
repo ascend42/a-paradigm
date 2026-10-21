@@ -401,7 +401,7 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
     // Luna #4: the tall view has a pressed state in both themes; #8: the send key at the comp's size
     expect(CSS).toMatch(/\.composer-tall\[aria-pressed="true"\] \{ background: var\(--ink\); color: var\(--on-ink\)/);
     expect(CSS).toMatch(/\[data-theme="night"\] \.composer-tall\[aria-pressed="true"\]::before \{ content: "\["/);
-    expect(CSS).toMatch(/\.composer-ctrls \.key\.pri \{ min-height: 24px; padding: 3px 9px; font-size: 11\.5px;/);
+    expect(CSS).toMatch(/\.composer-ctrls \.key\.pri \{ min-height: 24px; padding: 3px 9px; font-size: var\(--fs-control\);/);
   });
 });
 

@@ -102,6 +102,7 @@ foundations:
       control: 11.5      # keys, menu items, session rows, field text, toasts, tool and result lines, the pill
       reading: 13.5      # replies, card titles, reply choices, body, section heads, night titles
       title: 17          # wordmark, sheet and pane titles, chat title, empty and setup titles, the setup digest
+    weights: { card-title: 600, settings-head: 600, from: { session: 2026-10-21-design-systems, board: gnomon-type-scale, note: "Mika approved: the card title and settings section head carry their rank by weight at 13.5" } }
     line_height: { body: 1.6, card-title: 1.45, tight: 1.3 }
     measure: 80ch
     night_titles: "mono, uppercase, letter-spacing .08em (wordmark .1em), 13.5"

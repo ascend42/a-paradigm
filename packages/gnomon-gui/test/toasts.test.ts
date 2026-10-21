@@ -350,9 +350,9 @@ describe('page wiring (source read)', () => {
     // Mika #4: the clamp opens on hover or focus, and a fail is never clamped
     expect(css).toMatch(/\.toast:hover \.toast-text, \.toast-text:focus, \.toast\.fail \.toast-text \{ display: block; -webkit-line-clamp: none;/);
     expect(css).not.toMatch(/\.toasts \{[^}]*display: none|\.toasts \{ display: none/); // never hidden under a sheet any more
-    expect(css).toMatch(/\.toast \{[^}]*font-size: 11\.5px;[^}]*border-left: 3px solid var\(--ink\);[^}]*border-radius: var\(--radius\);/);
+    expect(css).toMatch(/\.toast \{[^}]*font-size: var\(--fs-control\);[^}]*border-left: 3px solid var\(--ink\);[^}]*border-radius: var\(--radius\);/);
     expect(css).toMatch(/\.toast\.warn \{ border-left: 3px dashed var\(--warn-edge\); \}/);
-    expect(css).toMatch(/\.toast-tag \{ font-size: 10\.5px; font-weight: 600; text-transform: uppercase;[^}]*color: var\(--ink\); \}/);
+    expect(css).toMatch(/\.toast-tag \{ font-size: var\(--fs-label\); font-weight: 600; text-transform: uppercase;[^}]*color: var\(--ink\); \}/);
     expect(css).toMatch(/\.toast\.fail \{ border-left-color: var\(--fail-edge\); \}/);
     expect(css).toMatch(/-webkit-line-clamp: 4;/);
     expect(css).toMatch(/\[data-motion="full"\] \.toast \{ animation: toast-in 120ms/);

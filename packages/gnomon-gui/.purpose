@@ -1048,6 +1048,35 @@ components:
     tags: [gnomon, gui, design-system, chip]
     tests:
       - test/desk.test.ts
+  gui-type:
+    description: >-
+      #gui-type (board gnomon-type-scale, choice four-steps; design-system
+      foundations.type; migration batch type) - four type steps as tokens in
+      static/styles.css :root: --fs-label 10.5 (caps labels, card heads,
+      chips, timestamps, notes, the status line, Workshop words, kbd hints,
+      the .choice-k key),
+      --fs-control 11.5 (keys incl. .key.quiet, menu items,
+      session rows, field text, toasts, tool and result lines, the pill),
+      --fs-reading 13.5 (body, replies, reply choices, card titles, section
+      heads, night titles, the heard phrase at 600) and --fs-title 17
+      (wordmark, sheet and pane titles incl. the stack head, chat, empty and
+      setup titles, the setup digest); at night the stack and settings
+      titles are 13.5, carried by typeface and case. A setup card's title is
+      13.5 at 600. Every font-size uses one; no literal
+      remains, and none is set inline from TS. Hierarchy beyond size is
+      weight, case and face (card title and settings section head at 600).
+      The Workshop 76px column's text is 10.5: titles, texts, labels and the
+      absent note wrap (overflow-wrap anywhere), a cap question truncates
+      with … at 64px and keeps its full text in title= and aria-label; the
+      host and slot drop their cap and padding inside the column. The setup
+      digest is 17, weight 600, .08em, one unbroken line of groups of four.
+      gnomon-wrapper/static/status.css carries --fs-reading and --fs-title
+      for its standalone page.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, type]
+    tests:
+      - test/desk.test.ts
   gui-toast:
     description: >-
       #gui-toast (board gnomon-notices, choice band-for-alerts; design-system

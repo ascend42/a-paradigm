@@ -457,7 +457,7 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
   };
   it('one chip: 18px, 10.5, the faint --rule edge, radius 3 by day and square at night; tones plain, ink, warn', () => {
     const chip = rule('.chip, .tone-chip');
-    for (const d of ['height: 18px', 'font-size: 10.5px', 'border: 1px solid var(--rule)', 'border-radius: var(--radius)', 'color: var(--sec)']) expect(chip).toContain(d);
+    for (const d of ['height: 18px', 'font-size: var(--fs-label)', 'border: 1px solid var(--rule)', 'border-radius: var(--radius)', 'color: var(--sec)']) expect(chip).toContain(d);
     expect(css).toContain('[data-theme="night"] .chip, [data-theme="night"] .tone-chip { border-radius: 0; }');
     expect(css).toContain('.chip.ink, .tone-chip { color: var(--ink); }');
     expect(css).toContain('.chip.warn { color: var(--warn-ink); border-color: var(--warn-edge); background: var(--warn-bg); }');
@@ -483,7 +483,7 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
   });
   it('✎ rename, run mode ▾ and the stack filter are 24px quiet keys with the --key-edge and 11.5 type', () => {
     const k = rule('.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope');
-    for (const d of ['height: 24px', 'min-height: 24px', 'min-width: 24px', 'font-size: 11.5px', 'border-color: var(--key-edge)']) expect(k).toContain(d);
+    for (const d of ['height: 24px', 'min-height: 24px', 'min-width: 24px', 'font-size: var(--fs-control)', 'border-color: var(--key-edge)']) expect(k).toContain(d);
     expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope)[^{]*\{[^}]*border-color: var\(--rule\)/);
     for (const id of ['rename-btn', 'mode-btn', 'stack-scope']) expect(html).toMatch(new RegExp(`<button id="${id}" class="key quiet [^"]*${id}`));
   });
@@ -503,5 +503,51 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
     expect(css).not.toMatch(/\.(composer-tall|more-btn|key\.quiet)[^{]*\{[^}]*min-height: 0/);
     expect(css).toMatch(/\.key:focus-visible[^{]*\{ outline: 2px solid var\(--key-edge\)/);
     expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope|more-btn|composer-tall)[^{]*:focus-visible[^{]*\{[^}]*outline: (none|0)/);
+  });
+});
+
+describe('board gnomon-type-scale (batch type): four steps, 10.5 label · 11.5 control · 13.5 reading · 17 title', () => {
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  const wrapper = readFileSync(path.join(ROOT, '..', 'gnomon-wrapper', 'static', 'status.css'), 'utf8');
+  const rule = (sel: string): string => {
+    const i = css.indexOf(`\n${sel} {`);
+    expect(i, sel).toBeGreaterThan(-1);
+    return css.slice(i, css.indexOf('}', i));
+  };
+  it('the four tokens carry the four sizes, and no literal font size remains in either stylesheet', () => {
+    for (const d of ['--fs-label: 10.5px;', '--fs-control: 11.5px;', '--fs-reading: 13.5px;', '--fs-title: 17px;']) expect(css).toContain(d);
+    expect(css.match(/--fs-[a-z]+:/g)).toHaveLength(4);
+    for (const sheet of [css, wrapper.replace(/--fs-(reading|title): [0-9.]+px;/g, '')]) {
+      expect(sheet).not.toMatch(/font-size:\s*[0-9]/);
+      expect(sheet).not.toMatch(/font:\s*[0-9]/);
+    }
+    for (const m of css.matchAll(/font-size: var\(--fs-([a-z]+)\)/g)) expect(['label', 'control', 'reading', 'title']).toContain(m[1]);
+    expect(wrapper).toContain('--fs-reading: 13.5px; --fs-title: 17px;');
+  });
+  it('no inline font size in TS-rendered markup', () => {
+    const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.ts') ? [path.join(d, e.name)] : []));
+    for (const f of walk(path.join(ROOT, 'src'))) expect(readFileSync(f, 'utf8'), f).not.toMatch(/fontSize|font-size/);
+  });
+  it('roles: controls at 11.5, the choice key at 10.5, reply choices at 13.5, night stack and settings titles at 13.5, the stack title at 17, the heard phrase at 13.5 and 600', () => {
+    for (const sel of ['.key.quiet', '.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope']) expect(rule(sel)).toContain('font-size: var(--fs-control)');
+    expect(rule('.choice .choice-k')).toContain('font-size: var(--fs-label)');
+    expect(rule('.choice')).toContain('font-size: var(--fs-reading)');
+    expect(rule('[data-theme="night"] .pilehead .title, [data-theme="night"] .settings-head .title')).toContain('font-size: var(--fs-reading)');
+    expect(rule('.setup-card > .title')).toContain('font-size: var(--fs-reading); font-weight: 600;');
+    expect(rule('.pilehead .title')).toContain('font-size: var(--fs-title)');
+    expect(rule('.vs-heard')).toMatch(/font-size: var\(--fs-reading\); font-weight: 600;/);
+    for (const sel of ['.card-title', '.settings-h']) expect(rule(sel)).toContain('font-weight: 600');
+  });
+  it('the Workshop column grows to 10.5 and wraps or truncates, never overflows', () => {
+    for (const sel of ['.workshop-col .mod-region-workshop .blk-title', '.workshop-col .mod-region-workshop .blk-text', '.workshop-col .mod-label', '.workshop-col .workshop-absent', '.cap .q', '.cap-word']) expect(rule(sel)).toContain('font-size: var(--fs-label)');
+    expect(css).toMatch(/\.workshop-col \{ overflow-x: hidden; \}/);
+    for (const sel of ['.workshop-col .mod-region-workshop .blk-text', '.workshop-col .mod-label', '.workshop-col .workshop-absent']) expect(rule(sel)).toContain('overflow-wrap: anywhere');
+    expect(rule('.cap .q')).toMatch(/white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+    expect(rule('.workshop-col .cap .q')).toContain('max-width: 64px');
+    expect(rule('.workshop-col .workshop-host')).toContain('max-width: none');
+    expect(rule('.mod-slot.mod-slot-workshop')).toContain('padding: 0');
+  });
+  it('the setup digest: 17, weight 600, .08em, one unbroken line of groups of four', () => {
+    expect(rule('.setup-digest')).toMatch(/font-size: var\(--fs-title\); font-weight: 600; letter-spacing: 0\.08em; white-space: nowrap;/);
   });
 });

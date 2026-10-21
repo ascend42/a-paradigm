@@ -1,9 +1,10 @@
-:root { color-scheme: light dark; }
-html, body { margin: 0; height: 100%; background: #f3ecdc; color: #2b2620; font: 15px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+/* type: the GUI's four steps (styles.css --fs-*, design-system foundations.type); this page uses reading and title */
+:root { color-scheme: light dark; --fs-reading: 13.5px; --fs-title: 17px; }
+html, body { margin: 0; height: 100%; background: #f3ecdc; color: #2b2620; font: var(--fs-reading)/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
 @media (prefers-color-scheme: dark) { html, body { background: #0f120e; color: #b8f0a8; } }
 .status { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 12vw; }
-.wordmark { font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.6; margin: 0 0 1em; }
-.state { font-size: 20px; margin: 0 0 1em; }
+.wordmark { font-size: var(--fs-reading); letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.6; margin: 0 0 1em; }
+.state { font-size: var(--fs-title); margin: 0 0 1em; }
 .state.error { color: #a3341f; }
 @media (prefers-color-scheme: dark) { .state.error { color: #ff8a70; } }
 .detail { white-space: pre-wrap; margin: 0; padding: 1em; border: 1px solid currentColor; border-radius: 4px; opacity: 0.85; user-select: text; }
