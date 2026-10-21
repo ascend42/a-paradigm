@@ -119,3 +119,15 @@ describe('G-ID-09 counts: exactly one presence per decision', () => {
     expect(g.publishers.get('acme')).toMatchObject({ host: 'gitlab.com', namespace: 'acme' });
   });
 });
+
+describe('Q2: status.helper.batch', () => {
+  it("'available' on a 1.8.0 helper; 'unavailable (helper <1.8.0)' on an older one", async () => {
+    expect(await rig().broker.refreshHelperBatch()).toBe('available');
+    const old = new FakeHelper(GEN);
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: old.publicPem('approvals') }, HUMAN, old);
+    const b = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async () => undefined, approvals });
+    expect(b.helperBatch()).toBeNull();
+    expect(await b.refreshHelperBatch()).toBe('unavailable (helper <1.8.0)');
+    expect(b.helperBatch()).toBe('unavailable (helper <1.8.0)');
+  });
+});

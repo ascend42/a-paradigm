@@ -743,6 +743,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(opts.approvalsKey ? { approvals: opts.approvalsKey } : {}),
     guiSessions: () => ((web?.status() as { guiSessions?: { n?: number } } | undefined)?.guiSessions?.n ?? 0),
   });
+  void broker.refreshHelperBatch(); // Q2: status.helper.batch from the start (re-probed before every root decision)
   // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
   opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   // helper 1.6.0 (§14.7, S29-K5): voice-arm references. A helper exit or a session push (lock, sleep, user
@@ -826,7 +827,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const humans = [...readRegistry(home, authority).devices.values()].filter((d) => d.principalKind === 'human').map((d) => d.principalId).sort();
     return humans[0] ?? null;
   };
-  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status() }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
+  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}) }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
   const brokerTimer = setInterval(() => {
     void broker.expireDue().catch(() => undefined);
     void apiTokens.sweep().catch(() => undefined);

@@ -194,6 +194,9 @@ export interface PreparedRows {
   state?: unknown;
 }
 
+export const HELPER_BATCH_UNAVAILABLE = 'unavailable (helper <1.8.0)' as const;
+export type HelperBatchState = 'available' | typeof HELPER_BATCH_UNAVAILABLE | null;
+
 /** The decisions of `kind` that are root class (the kind's table, plus RaiseInput.rootDecisions). */
 export function rootDecisionsOf(kind: string, extra: readonly string[] = []): string[] {
   const t = (KIND_DECISIONS as Record<string, Record<string, string>>)[kind] ?? {};
@@ -463,6 +466,23 @@ export class ApprovalBroker {
   }
 
   /* ── raise ──────────────────────────────────────────────────────────── */
+
+  #helperBatch: HelperBatchState = null;
+
+  /**
+   * Q2 (TD-2026-10-20-514): status.helper.batch. Can this helper sign a decision and its rows in ONE touch
+   * (decision.sign, info.version >= 1.8.0)? Probed when the daemon starts and before every root decision;
+   * null = no helper-held approvals key.
+   */
+  helperBatch(): HelperBatchState {
+    return this.#helperBatch;
+  }
+
+  async refreshHelperBatch(): Promise<HelperBatchState> {
+    if (typeof this.#approvals.decisionBatchAvailable !== 'function') return (this.#helperBatch = null);
+    const ok = await this.#approvals.decisionBatchAvailable().catch(() => false);
+    return (this.#helperBatch = ok ? 'available' : HELPER_BATCH_UNAVAILABLE);
+  }
 
   async raise(input: RaiseInput): Promise<CardV1> {
     const cardId = input.cardId ?? mintId('card');
@@ -801,7 +821,7 @@ export class ApprovalBroker {
       // Aegis C6: the path comes from info.version ONLY; a decision.sign error on a >= 1.8.0 helper refuses, never falls back
       // Aegis F6: a client-supplied decisionSig (verified above) takes the ROOT-ONLY form: no approve message, the
       // presence and every root row still in the ONE touch
-      batch = typeof this.#approvals.signDecisionBatch === 'function' && (await this.#approvals.decisionBatchAvailable?.()) === true;
+      batch = typeof this.#approvals.signDecisionBatch === 'function' && (await this.refreshHelperBatch()) === 'available';
     }
 
     // 4b. presence per class
