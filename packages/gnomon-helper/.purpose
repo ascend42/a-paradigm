@@ -2,7 +2,10 @@ version: "2.0"
 description: >-
   Gnomon signed platform helper (docs/specs/gnomon.md §3.1, §16, §18). npm
   shell (private) holding the built, signed binaries in bin/ (gitignored build
-  output) with checksums.json, verified by the kernel at spawn (G-HLP-01).
+  output) with checksums.json (advisory). The kernel verifies the helper at
+  spawn (G-HLP-01): code-signing requirement + version floor, and in a
+  release build the sha256 that packages/gnomon's release manifest pins
+  (#release-pins, T-2026-10-21-028).
   darwin/ is a SwiftPM package (swift-tools 5.9, macOS 14); scripts/ builds
   the signed .app (Developer ID identity looked up in the keychain, the
   provisioning profile embedded from ~/.config/gnomon-signing) and optionally

@@ -14,3 +14,10 @@ export { CLAUDE_CODE_PLATFORMS } from './platform/claude-code.js';
 // P8-D97: the kernel's repo-context staging and hook extract, for the p10m-repo-context re-run under the production policy
 export * as repoContext from './kernel/supervisor/repo-context.js';
 export * as repoHooks from './kernel/supervisor/repo-hooks.js';
+// T-2026-10-21-028 (#release-pins): the requirements and floors scripts/write-release-manifest.mjs records and checks
+export { HELPER_REQUIREMENT, MIN_HELPER_VERSION } from './kernel/identity/helper.js';
+export { VOICE_IO_REQUIREMENT, MIN_VOICE_IO_VERSION } from './kernel/voice/voice-install.js';
+export * as releasePins from './kernel/lifecycle/release-pins.js';
+export { releaseHelperSha256 } from './kernel/identity/helper.js';
+export { releaseVoiceIoSha256 } from './kernel/voice/voice-install.js';
+export { pinHelper } from './kernel/identity/helper.js';

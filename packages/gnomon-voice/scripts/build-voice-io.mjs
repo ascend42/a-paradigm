@@ -17,12 +17,14 @@
 //      (identity LOOKED UP in the keychain: exactly one "Developer ID Application: … (SW4BMQ8PNL)")
 //   4. codesign --verify --strict --deep, then against VOICE_IO_REQUIREMENT; the signed entitlements
 //      must be exactly {audio-input: true} and the runtime flag set (anything else fails the build)
-//   5. checksums.json: sha256 of the executable (advisory; the kernel's pin is the manifest of §14.7)
+//   5. checksums.json: sha256 of the executable (advisory; a release kernel pins the sha256 from packages/gnomon's
+//      release manifest, write-release-manifest.mjs, T-2026-10-21-028)
 // Notarization is NOT run here; the founder runs notarytool (README).
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM } from '@a-company/gnomon-contracts';
 import { TEAM, findIdentity, run, sha256File } from '../../gnomon-helper/scripts/signing.mjs';
 
 export const BUNDLE_ID = 'gnomon.voice-io';
@@ -30,9 +32,12 @@ export const APP_NAME = 'GnomonVoiceIO.app';
 export const EXE_NAME = 'gnomon-voice-io';
 export const MIC_USAGE = 'Gnomon voice listens only while the mic is on.';
 export const AUDIO_INPUT = 'com.apple.security.device.audio-input';
-/** Apple anchor, a Developer ID Application leaf from the Developer ID CA, this team, this identifier. */
-export const VOICE_IO_REQUIREMENT =
-  `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${TEAM}" and identifier "${BUNDLE_ID}"`;
+/**
+ * Apple anchor, a Developer ID Application leaf from the Developer ID CA, this team, this identifier: the ONE constant
+ * the kernel verifies too (gnomon-contracts; build @a-company/gnomon-contracts first).
+ */
+export { VOICE_IO_REQUIREMENT };
+if (VOICE_IO_IDENTIFIER !== BUNDLE_ID || VOICE_IO_TEAM !== TEAM) throw new Error('gnomon-voice-io build: the shared requirement names another identifier or team');
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -142,7 +147,7 @@ try {
 }
 checksums = {
   schema: 'gnomon-voice-checksums:v1',
-  note: 'sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel pins the voice binary by the manifest of spec §14.7 (TD-2026-10-19-194 item 5), not by this file. A timestamped signature changes the sha on every build.',
+  note: 'sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel does not read this file; a release kernel pins the voice-io sha256 from its release manifest (packages/gnomon/scripts/write-release-manifest.mjs) on top of the code-signing requirement and the version floor. A timestamped signature changes the sha on every build.',
   binaries: { ...(checksums.binaries ?? {}), [rel]: { sha256: sha256File(destExe), version, ...signing } },
 };
 writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);

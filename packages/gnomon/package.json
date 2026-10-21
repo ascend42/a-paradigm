@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "build": "tsup && node scripts/build-stamp.mjs",
+    "build:release": "node scripts/build-release.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:perf",

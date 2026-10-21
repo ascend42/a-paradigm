@@ -714,6 +714,13 @@ components:
       signatures change every build); the platform check is
       src/platform/helper-verifier.ts (R6); SupervisedHelper never restarts
       after close() and backs off 1 s doubling to 30 s (R5).
+      G-HLP-01 wired (T-2026-10-21-028, #release-pins): in a RELEASE build
+      pinHelper also requires the sha256 the release build compiled in for
+      this arch (releaseHelperSha256; mismatch, no entry for the arch, a
+      broken compiled manifest or another requirement ⇒ 'checksum'; a pinned
+      version below MIN_HELPER_VERSION ⇒ 'version'). Every call site
+      (provisioner, openHardwareIdentity, HelperRepin, preflight) goes through
+      it; a dev build (no manifest) keeps signature + version floor only.
       hardware.ts — HardwareRootAuthority (state `hardware`; verifies with
       the pinned root; signRow sync via `once`, signRowAsync via the daemon's
       helper; fresh presence per signature; a signature that does not verify
@@ -864,6 +871,34 @@ components:
       or not holding this identity's keys ⇒ fail closed.
     tags: [kernel, lifecycle]
     signals: ["!daemon-update-detected"]
+  release-pins:
+    description: >-
+      #release-pins (T-2026-10-21-028, TD-2026-10-21-758 zero-build, G-HLP-01;
+      Aegis M1 review) — the exact native bytes THIS kernel build accepts,
+      COMPILED INTO THE BUNDLE. npm run build:release (scripts/build-release.mjs):
+      tsup (dev pass) → scripts/write-release-manifest.mjs (release-manifest:v1
+      from the signed GnomonHelper.app / GnomonVoiceIO.app executables: name,
+      --version ≥ the kernel floor, sha256, the requirement the kernel enforces
+      checked with codesign -R, arch via lipo) → tsup again with
+      GNOMON_RELEASE_MANIFEST, so tsup.config.ts defines __GNOMON_RELEASE__ and
+      __GNOMON_RELEASE_MANIFEST__ → build-stamp.mjs (copies the manifest into
+      the stamp for status only). lifecycle/release-pins.ts reads ONLY the
+      compiled values: release ⇒ identity/helper.ts pinHelper and
+      voice/voice-install.ts (install and recheckVoiceApp right before the
+      spawn) require the pinned sha256 for this arch on top of the signature
+      and version floor ('checksum'); a release with a missing or invalid
+      compiled manifest is broken (every pin refused); deleting or editing the
+      stamp, loading dist/index.js or copying dist never makes it dev. Not a
+      release ⇒ dev (signature + version floor only). The daemon records the
+      mode in <home>/kernel-build.json; `gnomon daemon status` reports build:
+      release | dev | broken; the setup helper row says which.
+    path: src/kernel/lifecycle/release-pins.ts
+    type: module
+    tags: [kernel, lifecycle, release, security]
+    related: ["#identity", "#gnomon-voice", "#update-watch", "#setup-preflight"]
+    tests:
+      - test/release-pins.test.ts
+      - test/daemon-lifecycle.test.ts
   gui-resume:
     description: >-
       #gui-resume (TD-2026-10-19-063, founder ruling "ONE Touch ID") — the
@@ -1064,10 +1099,13 @@ components:
       LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil;
       off = warn), claude (resolved, pin none/match/mismatch → `gnomon session
       repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags),
-      node floor, leftover generations (purge, never adopt), home state (dev
+      node floor (NODE_MAJOR_FLOOR 24, equal to scripts/install-darwin.mjs: the
+      source-install floor; a zero-build release bundles its own Node),
+      leftover generations (purge, never adopt), home state (dev
       marker, symlink, malformed identity.json: shown, never touched). Each
       check {id, status pass|warn|fail, detail, fix}. INFORMATIVE only (Aegis
-      I12): #provisioner and #gnomon-up enforce on their own.
+      I12): #provisioner and #gnomon-up enforce on their own. The helper row
+      names the build's #release-pins mode (release sha256-pinned, or dev).
     path: src/kernel/setup/preflight.ts
     type: module
     tags: [gnomon, kernel, setup]
@@ -2116,7 +2154,15 @@ components:
       dispatcher.adoptPreauthenticated, no hello/auth, no key in the child),
       allow-list env, backoff restarts, dies on every daemon exit and drain
       (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app
-      into <home>/bin/voice and fetches models; the client entry resolves
+      into <home>/bin/voice and fetches models; T-2026-10-21-028
+      (#release-pins): the copied executable is hashed before and after
+      codesign (VOICE_IO_REQUIREMENT from gnomon-contracts, the build's own),
+      must equal the release's compiled sha256 for this arch in a release
+      build (VoiceAppRefused 'checksum', dev flag or not) and answer
+      --version ≥ MIN_VOICE_IO_VERSION in every build ('version');
+      createVoicePrepare re-verifies it LAST, right before the spawn
+      (recheckVoiceApp: path, inode, size, mtime, sha256, the release pin,
+      codesign hash-verify-rehash), so the model-fetch window cannot swap it; the client entry resolves
       lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks
       the workspace gnomon-voice dist against dist/voice-client.manifest.json
       and that manifest against the loaded build stamp's voiceClientManifest

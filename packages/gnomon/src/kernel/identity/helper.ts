@@ -12,9 +12,14 @@
  *      the designated requirement: Apple anchor, Developer ID Application leaf
  *      under the Developer ID CA, team SW4BMQ8PNL, identifier gnomon.helper
  *      (identical to packages/gnomon-helper/scripts/signing.mjs);
- *   3. its sha256 (and, when given, the expected checksum) is recorded at
- *      verification and RE-CHECKED SYNCHRONOUSLY (stat + hash) right before
- *      every spawn, so a binary swapped after verification is refused.
+ *   3. its sha256 is recorded at verification and RE-CHECKED SYNCHRONOUSLY
+ *      (stat + hash) right before every spawn, so a binary swapped after
+ *      verification is refused;
+ *   4. G-HLP-01 (T-2026-10-21-028, #release-pins): in a RELEASE build the
+ *      sha256 must also equal the one the release build compiled in
+ *      for this arch (refused `checksum`): a correctly signed but different
+ *      helper (an older or a tampered-then-resigned build) never runs. A dev
+ *      build (no manifest) keeps steps 1-3 plus the version floor.
  * A missing, unsigned or changed helper fails closed: HelperUnavailableError
  * (the callers refuse UNSUPPORTED, never a software fallback, §3.1).
  * The window between the final file re-check and exec(2) is closed for
@@ -35,6 +40,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { helperVerifierFor } from '../../platform/helper-verifier.js';
+import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 
 export const HELPER_TEAM = 'SW4BMQ8PNL';
 export const HELPER_IDENTIFIER = 'gnomon.helper';
@@ -196,7 +202,7 @@ const sameFacts = (a: Facts, b: Facts): boolean => a.ino === b.ino && a.size ===
  * otherwise pin bytes nobody verified); record the facts the pre-spawn
  * re-check compares.
  */
-export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expectedSha256?: string } = {}): PinnedHelper {
+export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expectedSha256?: string; pins?: ReleasePins } = {}): PinnedHelper {
   let exe: string;
   try {
     exe = fs.realpathSync.native(exePath);
@@ -207,11 +213,12 @@ export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expec
   if (!st0.isFile() || (st0.mode & 0o111) === 0) throw new HelperUnavailableError('not-a-file', `${exe} is not an executable file`);
   if ((st0.mode & 0o022) !== 0) throw new HelperUnavailableError('unsigned', `${exe} is group- or world-writable`);
   const verifier = o.verifier ?? CODESIGN_VERIFIER;
+  const expected = o.expectedSha256 ?? releaseHelperSha256(o.pins ?? loadedReleasePins());
   const before = fileFacts(exe);
   verifier.verify(exe);
   const after = fileFacts(exe);
   if (!sameFacts(before, after)) throw new HelperUnavailableError('changed', `${exe} changed while it was being verified`);
-  if (o.expectedSha256 !== undefined && o.expectedSha256 !== after.sha256) throw new HelperUnavailableError('checksum', `${exe} does not match the pinned sha256`);
+  if (expected !== undefined && expected !== after.sha256) throw new HelperUnavailableError('checksum', `${exe} does not match the sha256 this Gnomon release pins (signed, but not the shipped helper)`);
   return Object.freeze({
     exe,
     sha256: after.sha256,
@@ -227,6 +234,20 @@ export function pinHelper(exePath: string, o: { verifier?: HelperVerifier; expec
       if (!sameFacts(now, after)) throw new HelperUnavailableError('changed', `${exe} changed after it was verified`);
     },
   });
+}
+
+/**
+ * G-HLP-01 (T-2026-10-21-028): the sha256 a release build pins for the helper on this arch, or undefined in a dev
+ * build (signature + version floor only). A release that pins no helper for this arch, pins it under another
+ * signing requirement, or pins one below MIN_HELPER_VERSION refuses before anything is verified or run.
+ */
+export function releaseHelperSha256(pins: ReleasePins, arch: string = process.arch): string | undefined {
+  const p = artifactPin(pins, 'gnomon-helper', arch);
+  if (p.kind === 'dev') return undefined;
+  if (p.kind === 'refuse') throw new HelperUnavailableError('checksum', p.why);
+  if (p.artifact.requirement !== HELPER_REQUIREMENT) throw new HelperUnavailableError('checksum', 'the release manifest pins the helper under a different signing requirement than this kernel enforces');
+  if (!versionAtLeast(p.artifact.version, MIN_HELPER_VERSION)) throw new HelperUnavailableError('version', `the release pins helper ${p.artifact.version}, older than the minimum ${MIN_HELPER_VERSION}`);
+  return p.artifact.sha256;
 }
 
 /** The env a helper runs with: nothing of the kernel's (no GNOMON_*, no NODE_OPTIONS). */

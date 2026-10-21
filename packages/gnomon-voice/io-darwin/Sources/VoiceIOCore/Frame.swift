@@ -14,6 +14,9 @@
 
 import Foundation
 
+// Bump voiceIOVersion with EVERY security-relevant voice-io fix, and raise the kernel's floor with it
+// (MIN_VOICE_IO_VERSION, packages/gnomon/src/kernel/voice/voice-install.ts): the floor is what refuses an older,
+// still validly signed GnomonVoiceIO.app in a dev build (T-2026-10-21-028).
 public let voiceIOVersion = "0.1.0"
 public let voiceIOProtocol = "gnomon-voice-io:v1"
 

@@ -2,11 +2,12 @@
 // The committed files must equal this output (test/schemas.test.ts, fixed point).
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CONTRACT_SCHEMAS, serializeSchema, KIT_ID, CLIENT_API_ID } from '../dist/index.js';
+import { BUILD_SCHEMAS, CONTRACT_SCHEMAS, serializeSchema, KIT_ID, CLIENT_API_ID } from '../dist/index.js';
 
 const dir = fileURLToPath(new URL('../schemas/', import.meta.url));
-for (const [name, schema] of Object.entries(CONTRACT_SCHEMAS)) {
+const all = { ...CONTRACT_SCHEMAS, ...BUILD_SCHEMAS };
+for (const [name, schema] of Object.entries(all)) {
   writeFileSync(dir + name, serializeSchema(schema));
 }
 writeFileSync(dir + 'client-api.ids.json', `${JSON.stringify({ kitId: KIT_ID, clientApiId: CLIENT_API_ID }, null, 2)}\n`);
-process.stdout.write(`wrote ${Object.keys(CONTRACT_SCHEMAS).length + 1} files to schemas/\n`);
+process.stdout.write(`wrote ${Object.keys(all).length + 1} files to schemas/\n`);

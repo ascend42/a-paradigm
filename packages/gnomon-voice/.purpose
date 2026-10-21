@@ -5,7 +5,10 @@ description: >-
   its first native piece, the darwin audio I/O binary (TD-2026-10-19-298,
   slice V2b, T-2026-10-19-026): io-darwin/ is a SwiftPM package (swift-tools
   5.9, macOS 14), scripts/build-voice-io.mjs bundles and signs it as
-  GnomonVoiceIO.app (bin/, gitignored; checksums.json after a signed build).
+  GnomonVoiceIO.app (bin/, gitignored but shipped in the npm package via
+  files + bin/.npmignore; checksums.json after a signed build, advisory: a
+  release build pins its sha256 in packages/gnomon's release manifest,
+  #release-pins, T-2026-10-21-028).
   PROBES.md holds the founder's P1 (TCC attribution) and P7 (AEC leak) steps.
   macOS only: CI builds and tests it on the macOS runner of the native job,
   never on Windows or Linux.

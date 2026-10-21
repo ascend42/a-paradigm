@@ -8,6 +8,12 @@
  *     `codesign --verify --strict --deep` against the designated requirement — Developer ID, identifier
  *     `gnomon.voice-io`, team `SW4BMQ8PNL`. An unsigned or mismatched binary is REFUSED. A dev build may run
  *     unsigned only with the explicit dev flag (daemon option voice.client.devUnsigned), which the GUI shows loud.
+ *     T-2026-10-21-028 (#release-pins): the copied executable is hashed before and after codesign; in a RELEASE
+ *     build it must equal the sha256 the release build compiled in for this arch (else VoiceAppRefused
+ *     'checksum', even with the dev flag), and in every build it must answer `--version` at or above
+ *     MIN_VOICE_IO_VERSION (else 'version'). A dev build (no manifest) pins signature + version floor only. The
+ *     installed copy is re-verified LAST in every prepare, right before the spawn (recheckVoiceApp), so the
+ *     model-fetch window cannot swap it (Aegis M1 review).
  *   - The CLIENT (Aegis V2e M2): the workspace's gnomon-voice dist/cli.js is session-writable, so the kernel never
  *     runs it from there. On the first prepare of a daemon it copies the client (dist/cli.js, a {"type":"module"}
  *     package.json, and the optional native sherpa-onnx-node with its platform packages when resolvable) into
@@ -26,12 +32,14 @@ import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
+import { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM } from '@a-company/gnomon-contracts';
+import { versionAtLeast } from '../identity/helper.js';
 import { DISABLE_SIGUSR1 } from '../lifecycle/env.js';
+import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 import { voiceChildEnv, type VoicePrepared } from './voice-child.js';
 
-export const VOICE_IO_TEAM = 'SW4BMQ8PNL';
-export const VOICE_IO_IDENTIFIER = 'gnomon.voice-io';
-export const VOICE_IO_REQUIREMENT = `anchor apple generic and identifier "${VOICE_IO_IDENTIFIER}" and certificate leaf[subject.OU] = "${VOICE_IO_TEAM}"`;
+// the ONE requirement shared with the build script (gnomon-contracts; Developer ID CA + leaf, team, identifier)
+export { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM };
 export const VOICE_APP_NAME = 'GnomonVoiceIO.app';
 export const VOICE_IO_IN_APP = 'Contents/MacOS/gnomon-voice-io';
 
@@ -90,8 +98,20 @@ function ensurePrivateDir(d: string): void {
  * inside the copy. Throws a plain-words Error when the signature or designated requirement does not hold and the
  * dev flag is off.
  */
-export function installVoiceApp(o: { home: string; sourceApp: string; devUnsigned: boolean; check?: CodesignCheck; ditto?: (src: string, dst: string) => void }): VoicePrepared {
-  if (!fs.existsSync(path.join(o.sourceApp, VOICE_IO_IN_APP))) throw new Error('The voice app is not built yet (GnomonVoiceIO.app is missing).');
+export function installVoiceApp(o: {
+  home: string;
+  sourceApp: string;
+  devUnsigned: boolean;
+  check?: CodesignCheck;
+  ditto?: (src: string, dst: string) => void;
+  /** #release-pins: default = the loaded kernel's (a release pins the executable's sha256; dev pins nothing) */
+  pins?: ReleasePins;
+  /** what the copied executable answers to `--version` (tests); default runs it with a 5 s cap */
+  readVersion?: (exe: string) => string | null;
+}): VoicePrepared & { appPin?: VoiceAppPin } {
+  if (!fs.existsSync(path.join(o.sourceApp, VOICE_IO_IN_APP))) throw new VoiceAppRefused('missing', 'The voice app is not built yet (GnomonVoiceIO.app is missing).');
+  // a release that cannot pin voice-io for this arch refuses before anything is copied
+  const expected = releaseVoiceIoSha256(o.pins ?? loadedReleasePins());
   const dir = voiceBinDir(o.home);
   ensurePrivateDir(path.dirname(dir));
   ensurePrivateDir(dir);
@@ -103,14 +123,120 @@ export function installVoiceApp(o: { home: string; sourceApp: string; devUnsigne
     if (r.status !== 0) throw new Error(`could not copy the voice app (${String(r.stderr).trim()})`);
   });
   ditto(o.sourceApp, staging);
-  const check = (o.check ?? codesignCheck)(staging, VOICE_IO_REQUIREMENT);
-  if (!check.ok && !o.devUnsigned) {
+  const refuse = (e: VoiceAppRefused): never => {
     fs.rmSync(staging, { recursive: true, force: true });
-    throw new Error(`The voice app is not signed by Gnomon's team (${VOICE_IO_TEAM}, ${VOICE_IO_IDENTIFIER}); refusing to start it. ${check.detail}`.trim());
-  }
+    throw e;
+  };
+  // hash, verify, re-hash (as pinHelper): the bytes compared to the pin are the bytes codesign verified
+  const exe = path.join(staging, VOICE_IO_IN_APP);
+  const before = sha256File(exe);
+  const check = (o.check ?? codesignCheck)(staging, VOICE_IO_REQUIREMENT);
+  const after = sha256File(exe);
+  if (before !== after) refuse(new VoiceAppRefused('changed', 'The voice app changed while it was being verified; refusing to start it.'));
+  if (!check.ok && !o.devUnsigned) refuse(new VoiceAppRefused('unsigned', `The voice app is not signed by Gnomon's team (${VOICE_IO_TEAM}, ${VOICE_IO_IDENTIFIER}); refusing to start it. ${check.detail}`.trim()));
+  if (expected !== undefined && after !== expected) refuse(new VoiceAppRefused('checksum', 'The voice app does not match the sha256 this Gnomon release pins; refusing to start it.'));
+  const version = (o.readVersion ?? readVoiceIoVersion)(exe);
+  if (!versionAtLeast(version, MIN_VOICE_IO_VERSION)) refuse(new VoiceAppRefused('version', `The voice app (${version ?? 'no version'}) is older than the minimum ${MIN_VOICE_IO_VERSION}; refusing to start it.`));
   fs.rmSync(dest, { recursive: true, force: true });
   fs.renameSync(staging, dest);
-  return { ioBinary: path.join(dest, VOICE_IO_IN_APP), devUnsigned: !check.ok };
+  const ioBinary = path.join(dest, VOICE_IO_IN_APP);
+  const facts = voiceExeFacts(ioBinary);
+  if (facts.sha256 !== after) throw new VoiceAppRefused('changed', 'The voice app changed while it was being installed; refusing to start it.');
+  const appPin: VoiceAppPin = Object.freeze({ app: dest, exe: fs.realpathSync.native(ioBinary), facts, expectedSha256: expected, devUnsigned: !check.ok, check: o.check ?? codesignCheck });
+  return { ioBinary, devUnsigned: !check.ok, appPin };
+}
+
+interface VoiceExeFacts {
+  ino: number;
+  size: number;
+  mtimeMs: number;
+  sha256: string;
+}
+
+function voiceExeFacts(exe: string): VoiceExeFacts {
+  const st = fs.statSync(exe);
+  return { ino: st.ino, size: st.size, mtimeMs: st.mtimeMs, sha256: sha256File(exe) };
+}
+
+const sameExeFacts = (a: VoiceExeFacts, b: VoiceExeFacts): boolean => a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.sha256 === b.sha256;
+
+/** What installVoiceApp verified, for the re-check right before the spawn (Aegis M1 review, T-2026-10-21-028). */
+export interface VoiceAppPin {
+  readonly app: string;
+  readonly exe: string;
+  readonly facts: VoiceExeFacts;
+  /** the release's sha256 for this arch (undefined in a dev build) */
+  readonly expectedSha256: string | undefined;
+  /** the copy was accepted unsigned under the dev flag: the signature is not re-checked either */
+  readonly devUnsigned: boolean;
+  readonly check: CodesignCheck;
+}
+
+/**
+ * Re-verify the installed voice app right before the spawn, as the helper's pin is re-checked: the executable's
+ * path, inode, size, mtime and sha256 are what was verified at install (hash → codesign → re-hash, so the bytes
+ * compared are the bytes codesign saw), the release's sha256 still holds, and the designated requirement still
+ * holds (unless accepted under the dev flag). Closes the model-fetch window: a copy swapped after install is refused.
+ */
+export function recheckVoiceApp(pin: VoiceAppPin): void {
+  let before: VoiceExeFacts;
+  try {
+    if (fs.realpathSync.native(pin.exe) !== pin.exe) throw new Error('moved'); // pin.exe is the real path recorded at install
+    before = voiceExeFacts(pin.exe);
+  } catch {
+    throw new VoiceAppRefused('changed', 'The installed voice app moved or vanished after it was verified; refusing to start it.');
+  }
+  if (!sameExeFacts(before, pin.facts)) throw new VoiceAppRefused('changed', 'The installed voice app changed after it was verified; refusing to start it.');
+  if (pin.expectedSha256 !== undefined && before.sha256 !== pin.expectedSha256) throw new VoiceAppRefused('checksum', 'The voice app does not match the sha256 this Gnomon release pins; refusing to start it.');
+  if (!pin.devUnsigned) {
+    const check = pin.check(pin.app, VOICE_IO_REQUIREMENT);
+    let after: VoiceExeFacts;
+    try {
+      after = voiceExeFacts(pin.exe);
+    } catch {
+      throw new VoiceAppRefused('changed', 'The installed voice app vanished while it was being verified; refusing to start it.');
+    }
+    if (!sameExeFacts(after, pin.facts)) throw new VoiceAppRefused('changed', 'The installed voice app changed while it was being verified; refusing to start it.');
+    if (!check.ok) throw new VoiceAppRefused('unsigned', `The installed voice app is no longer signed by Gnomon's team (${VOICE_IO_TEAM}, ${VOICE_IO_IDENTIFIER}); refusing to start it. ${check.detail}`.trim());
+  }
+}
+
+/**
+ * The voice-io floor (T-2026-10-21-028): the copy must answer `--version` with at least this. Every security-relevant
+ * voice-io fix bumps voiceIOVersion (packages/gnomon-voice/io-darwin/Sources/VoiceIOCore/Frame.swift) and raises this
+ * floor with it, like MIN_HELPER_VERSION (identity/helper.ts): the floor is what refuses an older, validly signed copy.
+ */
+export const MIN_VOICE_IO_VERSION = '0.1.0';
+
+/** The voice app could not be installed: missing, unsigned, changed mid-check, not the release's bytes, or too old. */
+export class VoiceAppRefused extends Error {
+  constructor(
+    readonly reason: 'missing' | 'unsigned' | 'changed' | 'checksum' | 'version',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'VoiceAppRefused';
+  }
+}
+
+/**
+ * The sha256 a release build pins for voice-io on this arch; undefined in a dev build (signature + version floor
+ * only). Refuses (`checksum` / `version`) when the release cannot pin it: no entry for this arch, a broken stamp, a
+ * different signing requirement than VOICE_IO_REQUIREMENT, or a pinned version below the floor.
+ */
+export function releaseVoiceIoSha256(pins: ReleasePins, arch: string = process.arch): string | undefined {
+  const p = artifactPin(pins, 'gnomon-voice-io', arch);
+  if (p.kind === 'dev') return undefined;
+  if (p.kind === 'refuse') throw new VoiceAppRefused('checksum', `The voice app cannot be verified: ${p.why}.`);
+  if (p.artifact.requirement !== VOICE_IO_REQUIREMENT) throw new VoiceAppRefused('checksum', 'The release manifest pins the voice app under a different signing requirement than this kernel enforces.');
+  if (!versionAtLeast(p.artifact.version, MIN_VOICE_IO_VERSION)) throw new VoiceAppRefused('version', `The release pins voice app ${p.artifact.version}, older than the minimum ${MIN_VOICE_IO_VERSION}.`);
+  return p.artifact.sha256;
+}
+
+/** `gnomon-voice-io --version` → its version; null when it does not answer (run only AFTER the signature check). */
+export function readVoiceIoVersion(exe: string): string | null {
+  const r = spawnSync(exe, ['--version'], { encoding: 'utf8', timeout: 5000, env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'ignore'] });
+  return r.status === 0 ? (/gnomon-voice-io (\S+)/.exec(r.stdout ?? '')?.[1] ?? null) : null;
 }
 
 /** A copied client that no longer matches the kernel's pin (or cannot be copied): the spawn is refused, not retried. */
@@ -322,9 +448,12 @@ export function createVoicePrepare(o: {
     report('installing');
     verifyVoiceClient(pin);
     const sourceApp = path.resolve(path.dirname(o.entry), '..', 'bin', 'darwin', VOICE_APP_NAME);
-    const prepared = (o.installApp ?? installVoiceApp)({ home: o.home, sourceApp, devUnsigned: o.devUnsigned });
+    const { appPin, ...prepared } = (o.installApp ?? installVoiceApp)({ home: o.home, sourceApp, devUnsigned: o.devUnsigned });
     await (o.fetchModels ?? fetchVoiceModels)({ home: o.home, entry: pin.entry, report: (mb) => report('downloading-models', mb) });
     verifyVoiceClient(pin);
+    // Aegis M1 review: the io app is re-verified LAST, right before the spawn (the model fetch is the window)
+    if (appPin) recheckVoiceApp(appPin);
+    else if (!o.installApp) throw new VoiceAppRefused('changed', 'The voice app was installed without a pin; refusing to start it.');
     return { ...prepared, clientEntry: pin.entry };
   };
 }

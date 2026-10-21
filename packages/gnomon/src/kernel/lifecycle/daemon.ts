@@ -141,6 +141,7 @@ import type * as net from 'node:net';
 import { readEnrolled } from '../voice/enrolment.js';
 import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
 import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
+import { loadedReleasePins } from './release-pins.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { cachedSendWordSource, parseSendWordRequest, writeSendWord, writeTrialWord } from '../voice/send-word-store.js';
 import { KernelSpeakable } from '../voice/speakable.js';
@@ -1407,7 +1408,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   }
   // TD-2026-10-19-063: record what this kernel LOADED (0600) for the launcher, and watch the on-disk stamp
   try {
-    writeKernelBuild(home, { stamp: buildStamp, pid: pidfile.pid, startedAt: pidfile.startedAt });
+    // T-2026-10-21-028: `pins` is how THIS process pins the helper and voice-io (the same loader pinHelper uses)
+    writeKernelBuild(home, { stamp: buildStamp, pid: pidfile.pid, startedAt: pidfile.startedAt, pins: loadedReleasePins().mode });
   } catch {
     /* the launcher then sees no record and never claims a mismatch */
   }

@@ -17,6 +17,7 @@
   },
   "files": [
     "dist",
+    "bin",
     "voice-models.manifest.json"
   ],
   "scripts": {

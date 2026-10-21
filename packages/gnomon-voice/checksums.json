@@ -1,6 +1,6 @@
 {
   "schema": "gnomon-voice-checksums:v1",
-  "note": "sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel pins the voice binary by the manifest of spec §14.7 (TD-2026-10-19-194 item 5), not by this file. A timestamped signature changes the sha on every build.",
+  "note": "sha256 per built voice executable; written by scripts/build-voice-io.mjs. ADVISORY: the kernel does not read this file; a release kernel pins the voice-io sha256 from its release manifest (packages/gnomon/scripts/write-release-manifest.mjs) on top of the code-signing requirement and the version floor. A timestamped signature changes the sha on every build.",
   "binaries": {
     "bin/darwin/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io": {
       "sha256": "107e254d559d1d359f087146b5d6768142d09b362ada66c76a7263027c4186c1",

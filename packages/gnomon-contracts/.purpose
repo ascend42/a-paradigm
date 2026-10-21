@@ -516,6 +516,28 @@ components:
     tests:
       - test/voice-allowlist.test.ts
       - test/voice-golden.test.ts
+  contract-release-manifest:
+    description: >-
+      release-manifest:v1 (T-2026-10-21-028, TD-2026-10-21-758 zero-build,
+      G-HLP-01): {schemaVersion, release, artifacts[{name gnomon-helper |
+      gnomon-voice-io, version a.b.c, sha256 hex, requirement, arch arm64 |
+      x64 | universal}]}, one entry per (name, arch), a universal entry
+      alone. validateReleaseManifestV1 / isReleaseManifestV1 (hand-written,
+      zero deps) mirror RELEASE_MANIFEST_V1_SCHEMA
+      (schemas/release-manifest.v1.schema.json, generated; in BUILD_SCHEMAS,
+      NOT CONTRACT_SCHEMAS, so it is not a clientApiId input);
+      releaseArtifactFor picks the exact-arch entry, else universal. Written
+      by packages/gnomon/scripts/write-release-manifest.mjs, compiled into the
+      kernel bundle by build-release.mjs (tsup define), enforced by the
+      kernel's #release-pins. Also VOICE_IO_TEAM / VOICE_IO_IDENTIFIER /
+      VOICE_IO_REQUIREMENT: the ONE designated requirement (Developer ID CA +
+      leaf, team SW4BMQ8PNL, gnomon.voice-io) shared by
+      gnomon-voice/scripts/build-voice-io.mjs and the kernel's voice-install.ts.
+    path: src/release-manifest.ts
+    type: module
+    tags: [gnomon, contracts, release, paradigm-8]
+    tests:
+      - test/release-manifest.test.ts
   contract-voice-modes:
     description: >-
       Voice capture x send policy (TD-2026-10-21-514, spec §14.7 "Voice

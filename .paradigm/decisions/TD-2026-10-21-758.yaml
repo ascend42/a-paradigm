@@ -1,0 +1,45 @@
+id: TD-2026-10-21-758
+timestamp: '2026-10-21T22:24:38.130Z'
+title: 'Gnomon ships zero-build in 8.0.0: signed app bundle via npm platform packages'
+decision: >-
+  8.0.0 is not tagged until Gnomon installs and runs with no building or signing by the user: `npm i -g
+  @a-company/paradigm` then `gnomon` reaches setup, then two Touch ID prompts, then the desk. Each release ships one
+  signed, notarized Gnomon.app per arch (a bundled pinned Node, the kernel with the GUI embedded, GnomonHelper.app,
+  GnomonVoiceIO.app). It's built and signed once per release by a script on the founder's Mac, delivered as
+  @a-company/gnomon-darwin-{arm64,x64} optional deps of a public @a-company/gnomon, and launched by a `gnomon` shim bin
+  in @a-company/paradigm. The kernel verifies the code-signing requirement plus a pinned sha256 (closing G-HLP-01).
+  Voice models come from upstream with hash pins, plus our own Release mirror as a fallback. macOS only in 8.0.
+rationale: >-
+  Founder: "if someone gets the latest paradigm. they shouldn't need to do any 'building' and 'signing of packages' they
+  should just be able to run gnomon". Arky's analysis: today Gnomon is private, built from a clone, has a
+  helper/voice-io signed on the user's machine, and a wrapper pinned to the builder's own Node path. Bundled Node keeps
+  the wrapper's Aegis C1 trust root and supports mods and native voice libs. npm platform packages cache and work behind
+  mirrors. Mac-side signing keeps the spec ruling that secrets stay out of CI (CI signing in 8.1).
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Node single-executable (SEA)
+    rejected_because: weak native addon, child process and ESM support; risky for mods and voice
+  - option: GitHub Release download at first run
+    rejected_because: second network path at first launch; kept as a mirror
+  - option: CI signing for 8.0
+    rejected_because: changes the spec ruling; deferred to 8.1
+  - option: Tag 8.0.0 now, repo-only Gnomon
+    rejected_because: founder chose to make Gnomon publishable first
+symbols_affected:
+  - '#gnomon-kernel'
+  - '#gnomon-helper'
+  - '#gnomon-voice'
+  - '#gnomon-wrapper'
+  - '#paradigm'
+status: active
+tags:
+  - gnomon
+  - distribution
+  - release
+  - '8.0'

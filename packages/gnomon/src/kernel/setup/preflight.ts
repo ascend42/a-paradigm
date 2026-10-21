@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { API_BILLING_ENV } from '../budget/billing.js';
 import { HelperProcess, pinHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from '../identity/helper.js';
 import { readIdentity, type IdentityRecord } from '../identity/provision.js';
+import { describeReleasePins, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 import { leftoverGens, listHelperKeys } from '../identity/provisioner.js';
 import { readClaudePin, REPIN_COMMAND, sha256File } from '../runner/binary.js';
 import { resolveClaudeBinary } from '../runner/preflight.js';
@@ -37,6 +38,12 @@ export interface PreflightCheck {
   fix?: string;
 }
 
+/**
+ * The Node floor for a dev/source install (a zero-build release bundles its own pinned Node, TD-2026-10-21-758).
+ * 24 because the kernel is built for (tsup target node24) and type-checked against (@types/node 24) Node 24 and
+ * every Gnomon package declares engines >=24; --disable-sigusr1 alone would allow 22.14. Kept equal to
+ * scripts/install-darwin.mjs NODE_MAJOR_FLOOR (test/install-darwin.test.ts pins the two together).
+ */
 export const NODE_MAJOR_FLOOR = 24;
 export const MACOS_MAJOR_FLOOR = 13;
 const DEV_HOME_MARKER = 'DEV-ONLY-gnomon-home.json';
@@ -48,6 +55,8 @@ export interface PreflightInput {
   userHome: string;
   helperPath: string;
   verifier?: HelperVerifier;
+  /** #release-pins (tests); default: the loaded kernel's */
+  pins?: ReleasePins;
   start?: (pin: PinnedHelper) => HelperTransport;
   env: Readonly<Record<string, string | undefined>>;
   /** the unsafe-runtime verdict (launch-tty.ts unsafeRuntime), computed by the caller */
@@ -107,7 +116,7 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
   } else {
     let helper: HelperTransport | null = null;
     try {
-      const pin = pinHelper(i.helperPath, i.verifier ? { verifier: i.verifier } : {});
+      const pin = pinHelper(i.helperPath, { ...(i.verifier ? { verifier: i.verifier } : {}), ...(i.pins ? { pins: i.pins } : {}) });
       helper = i.start ? i.start(pin) : HelperProcess.start(pin);
       const keys = await listHelperKeys(helper);
       leftover = leftoverGens(keys, existing);
@@ -115,7 +124,8 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
       touch = p.available === true
         ? { id: 'touch-id', status: 'pass', detail: p.biometrics === true ? 'Touch ID is available (asked without a prompt)' : 'presence is available (passcode; no Touch ID enrolled)' }
         : { id: 'touch-id', status: 'fail', detail: `presence is not available${typeof p.error === 'string' ? ` (${p.error})` : ''}`, fix: 'enable Touch ID in System Settings → Touch ID & Password' };
-      add({ id: 'helper', status: 'pass', detail: `signed helper pinned: ${pin.exe}` });
+      const pins = i.pins ?? loadedReleasePins();
+      add({ id: 'helper', status: 'pass', detail: pins.mode === 'release' ? `signed helper pinned (${describeReleasePins(pins)}): ${pin.exe}` : `signed helper pinned: ${pin.exe}; ${describeReleasePins(pins)}` });
     } catch (e) {
       add({ id: 'helper', status: 'fail', detail: e instanceof Error ? e.message : 'the helper could not be pinned', fix: 'reinstall Gnomon (the signed GnomonHelper.app ships with it)' });
     } finally {

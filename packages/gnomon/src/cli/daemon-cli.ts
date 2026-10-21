@@ -44,6 +44,7 @@ import {
   sigusr1Refusal,
   startDaemon,
 } from '../kernel/lifecycle/index.js';
+import { readKernelBuild } from '../kernel/lifecycle/build-stamp.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
 import { IdentityError, openHardwareIdentity, readKernelPubs, readRegistry } from '../kernel/identity/index.js';
 import type { ServerKeyPin } from '../kernel/socket/client.js';
@@ -170,7 +171,7 @@ export async function runForeground(args: DaemonArgs, runtime: { execArgv: reado
   if (refuseDevHome(daemonHomeOf(args))) return exitCodeOfClass(STARTUP_FAULT_CLASS['dev-home']);
   const sig = sigusr1Refusal(runtime.execArgv);
   if (sig) {
-    process.stderr.write(`gnomond: ${sig} [sigusr1-enabled]\n  next: run gnomond via its bin (the shebang passes --disable-sigusr1) or \`node --disable-sigusr1 <gnomond.js> --foreground\` (Node >= 22.14)\n`);
+    process.stderr.write(`gnomond: ${sig} [sigusr1-enabled]\n  next: run gnomond via its bin (the shebang passes --disable-sigusr1) or \`node --disable-sigusr1 <gnomond.js> --foreground\` (Node >= 24, the source-install floor)\n`);
     return exitCodeOfClass(STARTUP_FAULT_CLASS['sigusr1-enabled']);
   }
   // Launched by an activator: its stderr pipe goes away once we are ready, and a write to it then is EPIPE, not a crash.
@@ -351,6 +352,8 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
         serverKeyId: session.hello.serverKeyId,
         serverVerified: session.serverVerified,
         pinSource: found.source,
+        // T-2026-10-21-028 #release-pins: `release` = helper and voice-io sha256-pinned; `dev` = signature + version floor only
+        build: readKernelBuild(home)?.pins ?? 'unknown',
         authenticated: false,
         reason: 'status sends hello only; it does not authenticate',
         diagnosticPid,

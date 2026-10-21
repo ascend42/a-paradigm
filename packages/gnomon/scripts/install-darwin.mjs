@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // #bare-entry installer (spec §2.4 rule 8): put `gnomon` on PATH from THIS clone, idempotently.
 //   node packages/gnomon/scripts/install-darwin.mjs [--no-build]      (or: npm run gnomon:install)
-// 1. refuses when NODE_OPTIONS is set (the kernel would refuse it anyway: `unsafe-env`) or node is older than 22.14;
+// 1. refuses when NODE_OPTIONS is set (the kernel would refuse it anyway: `unsafe-env`) or node is older than 24 (NODE_MAJOR_FLOOR);
 // 2. runs `npm run build:gnomon` at the repo root (skip with --no-build);
 // 3. links `gnomon` → packages/gnomon/dist/cli/gnomon.js in the first writable of /opt/homebrew/bin, /usr/local/bin.
 //    An existing link to this clone's bin is left as is; a link elsewhere or a non-symlink is REFUSED (said so,
@@ -17,18 +17,24 @@ const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(PKG, '..', '..');
 export const BIN_DIRS = Object.freeze(['/opt/homebrew/bin', '/usr/local/bin']);
 
-/** True when node has --disable-sigusr1: 22.14+ on 22.x, 23.7+ on 23.x, any 24+. */
+/**
+ * The ONE Node floor for a dev/source install: 24. Kept equal to NODE_MAJOR_FLOOR in src/kernel/setup/preflight.ts
+ * (test/install-darwin.test.ts pins the two together). --disable-sigusr1 alone would allow 22.14+/23.7+, but the
+ * kernel is built (tsup target node24) and type-checked (@types/node 24) for Node 24 and every Gnomon package
+ * declares engines >=24, so nothing guarantees a 22.x runtime has the APIs it uses. A zero-build release bundles its
+ * own pinned Node (TD-2026-10-21-758), so this floor only gates source installs.
+ */
+export const NODE_MAJOR_FLOOR = 24;
+
+/** True when node is at or above the floor (every 24+ also has --disable-sigusr1). */
 export function nodeFloorOk(version) {
-  const [maj, min] = version.split('.').map(Number);
-  if (maj === 22) return min >= 14;
-  if (maj === 23) return min >= 7;
-  return maj >= 24;
+  return Number(version.split('.')[0]) >= NODE_MAJOR_FLOOR;
 }
 
 /** Null when the runtime is fit to install from; else {reason, message}. */
 export function runtimeProblem(env = process.env, version = process.versions.node) {
   if (env.NODE_OPTIONS !== undefined && env.NODE_OPTIONS.trim() !== '') return { reason: 'unsafe-env', message: 'NODE_OPTIONS is set: gnomon refuses to run its kernel under it (unsafe-env). Run `unset NODE_OPTIONS` (and remove it from your shell profile), then run this again' };
-  if (!nodeFloorOk(version)) return { reason: 'node-too-old', message: `node ${version} lacks --disable-sigusr1: gnomon needs node 22.14+ on 22.x, 23.7+ on 23.x, or 24 and later` };
+  if (!nodeFloorOk(version)) return { reason: 'node-too-old', message: `node ${version} is too old: gnomon from source needs node ${NODE_MAJOR_FLOOR} or later` };
   return null;
 }
 

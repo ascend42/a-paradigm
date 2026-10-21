@@ -13,7 +13,7 @@ and the private launch-token URL hand-off.
 | `darwin/` | SwiftPM package (swift-tools 5.9, macOS 14), executable `gnomon-helper`: `--version`, `serve` (reader thread + main run loop with the session observer) and `once` (one request), speaking `gnomon-helper:v2`: key.list/create/public/delete, sign, unlock.drop(-all), arm.open/sign/close/close-all, conn.close, push `session`. `swift test` runs the unit tests in `darwin/Tests/`. CI builds it unsigned; signing (Developer ID) runs only on the founder's Mac. |
 | `win32/` | Rust helper (P8-D71). Placeholder only. |
 | `bin/` | Build output (gitignored): `bin/darwin/GnomonHelper.app` from `scripts/build-darwin.mjs`. |
-| `checksums.json` | sha256 of each built binary in `bin/`. **Advisory**: the kernel does not read it; the pin is the code-signing requirement plus the version floor (`packages/gnomon/src/kernel/identity/helper.ts`). Spec `G-HLP-01` also names a checksum verified at start; that is not wired (reported gap). |
+| `checksums.json` | sha256 of each built binary in `bin/`. **Advisory**: the kernel never reads this file. The checksum of spec `G-HLP-01` is wired through the release manifest instead (T-2026-10-21-028): `packages/gnomon/scripts/write-release-manifest.mjs` (`npm run build:release -w @a-company/gnomon`) records the signed helper's sha256, the release build compiles it into the kernel bundle, and a release kernel refuses any other bytes (`checksum`) on top of the code-signing requirement and the version floor (`packages/gnomon/src/kernel/identity/helper.ts`, `lifecycle/release-pins.ts`). A dev build (no manifest) pins the signature and the version floor only. |
 
 Build (macOS):
 

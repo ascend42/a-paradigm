@@ -66,6 +66,18 @@ import {
   RUN_MODES,
 } from './card.js';
 import { CLIENT_NONCE_PATTERN_SOURCE, CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
+import {
+  ARTIFACT_VERSION_PATTERN,
+  RELEASE_ARCHES,
+  RELEASE_ARTIFACT_NAMES,
+  RELEASE_ARTIFACT_V1_KEYS,
+  RELEASE_ARTIFACTS_MAX,
+  RELEASE_MANIFEST_V1,
+  RELEASE_MANIFEST_V1_KEYS,
+  RELEASE_REQUIREMENT_MAX,
+  RELEASE_VERSION_PATTERN,
+  SHA256_HEX_PATTERN,
+} from './release-manifest.js';
 import { CONTEXT_SOURCES, OFFER_LIMITS, OFFER_PHASES, OFFER_REACHES, OFFER_SPEC_V1_KEYS, OFFER_TITLE_SCHEMA_PATTERN, OFFER_TOKEN_PATTERN, OFFER_TOOL_PATTERN, OFFERS_PER_MOD_MAX } from './offer.js';
 
 type Schema = Record<string, unknown>;
@@ -434,6 +446,36 @@ export const OFFER_SPEC_V1_SCHEMA: Schema = deepFreeze({
   ),
 });
 
+/* ── release-manifest:v1 (zero-build release pins, TD-2026-10-21-758) ── */
+
+export const RELEASE_MANIFEST_V1_SCHEMA: Schema = deepFreeze({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: `${ID_BASE}release-manifest.v1.schema.json`,
+  title: 'release-manifest:v1',
+  description:
+    'The native executables one Gnomon release ships (GnomonHelper.app, GnomonVoiceIO.app) and the exact sha256 the kernel accepts for each (G-HLP-01). Written by packages/gnomon/scripts/write-release-manifest.mjs and embedded in the build stamp; at most one entry per (name, arch), a universal entry stands alone (validateReleaseManifestV1).',
+  ...closedObj(
+    {
+      schemaVersion: { const: RELEASE_MANIFEST_V1 },
+      release: str(RELEASE_VERSION_PATTERN),
+      artifacts: arr(
+        closedObj(
+          {
+            name: enumOf(RELEASE_ARTIFACT_NAMES),
+            version: str(ARTIFACT_VERSION_PATTERN),
+            sha256: str(SHA256_HEX_PATTERN),
+            requirement: { type: 'string', minLength: 1, maxLength: RELEASE_REQUIREMENT_MAX },
+            arch: enumOf(RELEASE_ARCHES),
+          },
+          RELEASE_ARTIFACT_V1_KEYS,
+        ),
+        { minItems: 1, maxItems: RELEASE_ARTIFACTS_MAX },
+      ),
+    },
+    RELEASE_MANIFEST_V1_KEYS,
+  ),
+});
+
 /** File name → schema, for the generator and the fixed-point test. */
 export const CONTRACT_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze({
   'event.v1.schema.json': EVENT_V1_SCHEMA,
@@ -444,6 +486,14 @@ export const CONTRACT_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze(
   'review-finding.v1.schema.json': REVIEW_FINDING_V1_SCHEMA,
   'change-note.v1.schema.json': CHANGE_NOTE_V1_SCHEMA,
   'offer-spec.v1.schema.json': OFFER_SPEC_V1_SCHEMA,
+});
+
+/**
+ * Schemas generated the same way but OUTSIDE the client API (they do not feed CLIENT_API_DESCRIPTOR, so adding one
+ * does not move clientApiId): build/release artifacts no client speaks.
+ */
+export const BUILD_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze({
+  'release-manifest.v1.schema.json': RELEASE_MANIFEST_V1_SCHEMA,
 });
 
 /** How a schema file is serialized on disk (2-space JSON + newline). */

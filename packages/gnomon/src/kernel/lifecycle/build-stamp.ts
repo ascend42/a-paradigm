@@ -14,6 +14,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateReleaseManifestV1, type ReleaseManifestV1 } from '@a-company/gnomon-contracts';
 
 export interface BuildStamp {
   schemaVersion: 'gnomon-build:v1';
@@ -23,10 +24,13 @@ export interface BuildStamp {
   guiBundleHash: string | null;
   /** Aegis V2e M2: sha256 of the gnomon-voice dist/voice-client.manifest.json this build was made with */
   voiceClientManifest?: string | null;
+  /** T-2026-10-21-028: the release-manifest:v1 a release build was made with (absent: a dev build; #release-pins) */
+  release?: ReleaseManifestV1;
 }
 
 export const KERNEL_BUILD_FILE = 'kernel-build.json';
-const MAX_STAMP_BYTES = 4096;
+/** A stamp with an embedded release manifest is ~1.5 KB; the cap leaves room without reading anything unbounded. */
+export const MAX_STAMP_BYTES = 16384;
 const SHORT = /^[\x20-\x7e]{1,80}$/;
 
 /** Where the running bundle's stamp lives: dist/cli/<entry>.js → dist/build-id.json (src under tests: absent ⇒ null). */
@@ -45,7 +49,17 @@ export function parseBuildStamp(raw: unknown): BuildStamp | null {
   if (g !== null && (typeof g !== 'string' || !SHORT.test(g))) return null;
   const v = o.voiceClientManifest;
   if (v !== undefined && v !== null && (typeof v !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(v))) return null;
-  return { schemaVersion: 'gnomon-build:v1', version: o.version, commit: o.commit, distHash: o.distHash, guiBundleHash: g, ...(typeof v === 'string' ? { voiceClientManifest: v } : {}) };
+  const r = o.release;
+  if (r !== undefined && r !== null && validateReleaseManifestV1(r).length) return null;
+  return {
+    schemaVersion: 'gnomon-build:v1',
+    version: o.version,
+    commit: o.commit,
+    distHash: o.distHash,
+    guiBundleHash: g,
+    ...(typeof v === 'string' ? { voiceClientManifest: v } : {}),
+    ...(r !== undefined && r !== null ? { release: r as ReleaseManifestV1 } : {}),
+  };
 }
 
 /** Read a stamp file; null when absent, oversized or malformed (never throws). */
@@ -79,6 +93,8 @@ export function describeUpdate(from: BuildStamp | null, to: BuildStamp): string 
 export interface KernelBuildRecord {
   schemaVersion: 'gnomon-kernel-build:v1';
   stamp: BuildStamp | null;
+  /** T-2026-10-21-028 #release-pins: how this kernel pins native artifacts (`dev` = signature + version floor only) */
+  pins?: 'release' | 'dev' | 'broken';
   pid: number;
   startedAt: string;
 }
@@ -96,7 +112,8 @@ export function readKernelBuild(home: string): KernelBuildRecord | null {
   try {
     const o = JSON.parse(fs.readFileSync(path.join(home, KERNEL_BUILD_FILE), 'utf8')) as Record<string, unknown>;
     if (o.schemaVersion !== 'gnomon-kernel-build:v1' || typeof o.pid !== 'number' || typeof o.startedAt !== 'string') return null;
-    return { schemaVersion: 'gnomon-kernel-build:v1', stamp: parseBuildStamp(o.stamp), pid: o.pid, startedAt: o.startedAt };
+    const pins = o.pins === 'release' || o.pins === 'dev' || o.pins === 'broken' ? { pins: o.pins as 'release' | 'dev' | 'broken' } : {};
+    return { schemaVersion: 'gnomon-kernel-build:v1', stamp: parseBuildStamp(o.stamp), pid: o.pid, startedAt: o.startedAt, ...pins };
   } catch {
     return null;
   }

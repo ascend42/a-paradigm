@@ -15,7 +15,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createVoicePrepare, installVoiceClient, verifyVoiceClient, voiceClientDir, VoiceClientRefused, VOICE_CLIENT_MANIFEST } from '../src/kernel/voice/voice-install.js';
+import { createVoicePrepare, installVoiceApp, installVoiceClient, verifyVoiceClient, voiceClientDir, VoiceClientRefused, VOICE_APP_NAME, VOICE_CLIENT_MANIFEST, VOICE_IO_IN_APP } from '../src/kernel/voice/voice-install.js';
+import { DEV_PINS } from '../src/kernel/lifecycle/release-pins.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -149,6 +150,25 @@ describe('#gnomon-voice V2e (Aegis M2): the build-pinned client copy', () => {
 
 const VOICE_PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'gnomon-voice');
 const BUILT = fs.existsSync(path.join(VOICE_PKG, 'dist', VOICE_CLIENT_MANIFEST));
+
+describe('#gnomon-voice T-2026-10-21-028 (Aegis M1 review): the io app is re-verified right before the spawn', () => {
+  it('a voice-io swapped during the model fetch is refused (VoiceAppRefused changed); untouched, prepare returns it', async () => {
+    const { home, entry, expected } = source();
+    const app = path.join(path.dirname(home), 'src-app', VOICE_APP_NAME);
+    fs.mkdirSync(path.join(app, path.dirname(VOICE_IO_IN_APP)), { recursive: true });
+    fs.writeFileSync(path.join(app, VOICE_IO_IN_APP), '#!/bin/sh\necho "gnomon-voice-io 0.1.0"\n', { mode: 0o755 });
+    const installApp = (o: { home: string; devUnsigned: boolean }) =>
+      installVoiceApp({ home: o.home, sourceApp: app, devUnsigned: o.devUnsigned, check: () => ({ ok: true, detail: '' }), ditto: (a, b) => fs.cpSync(a, b, { recursive: true }), pins: DEV_PINS, readVersion: () => '0.1.0' });
+    const ok = await createVoicePrepare({ home, entry, devUnsigned: false, expectedManifest: expected, installApp, fetchModels: async () => undefined })(() => undefined);
+    expect(ok.ioBinary.endsWith(VOICE_IO_IN_APP)).toBe(true);
+    const swap = createVoicePrepare({ home, entry, devUnsigned: false, expectedManifest: expected, installApp, fetchModels: async () => {
+      const exe = path.join(home, 'bin', 'voice', VOICE_APP_NAME, VOICE_IO_IN_APP);
+      fs.writeFileSync(`${exe}.evil`, '#!/bin/sh\necho "gnomon-voice-io 9.9.9"\n', { mode: 0o755 });
+      fs.renameSync(`${exe}.evil`, exe);
+    } });
+    await expect(swap(() => undefined)).rejects.toMatchObject({ name: 'VoiceAppRefused', reason: 'changed' });
+  });
+});
 
 describe.skipIf(!BUILT)('#gnomon-voice V2e (Aegis M2): the copied client runs (root build:gnomon builds gnomon-voice first)', () => {
   it('node <home>/bin/voice/client/dist/cli.js status runs from the copy, reading the copied models manifest', async () => {

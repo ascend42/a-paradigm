@@ -340,6 +340,8 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
       // T-2026-10-19-016(a): pinned against the key this home's daemon recorded
       serverVerified: true,
       pinSource: 'home-kernel-pub',
+      // T-2026-10-21-028: a build without a release manifest starts and says it is a dev build
+      build: 'dev',
       authenticated: false,
       diagnosticPid: ready.pid,
     });
