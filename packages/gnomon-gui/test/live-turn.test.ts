@@ -247,3 +247,69 @@ describe('review H1: a kept item that changed in place is repainted (not only th
     expect(app).not.toMatch(/items\[i\]!\.text !== next\[i\]!\.text/);
   });
 });
+
+describe('review M1: a refused or failed send is no turn; a stamped echo pairs with its own turn.sent', () => {
+  const stamped = (seq: number, hms: string, text: string, k: number): Row => ({ ...echo(seq, hms, text), turn: `turn:${H}/${k}` });
+  const unsent = (seq: number, hms: string, text: string): Row => ({ ...echo(seq, hms, text), unsent: true });
+  const refused = (seq: number, why: string): Row => ({ seq, kind: 'send.refused', connId: 'local', session: H, payload: why });
+  it('a refused send, then a normal send: the second message runs with its own clock and nothing waits', () => {
+    const rows: Row[] = [
+      unsent(10.5, '10:00:00', 'first try'),
+      refused(10.6, 'refused: a turn permit is needed'),
+      stamped(11.5, '10:00:05', 'second try', 1),
+      row(12, 'turn.sent', '10:00:05.2', { turn: `turn:${H}/1` }),
+      ev(13, '10:00:06', replay('second try'), 'user'),
+    ];
+    const f = view(rows);
+    expect(roles(f)).toEqual(['user: first try', 'error: refused: a turn permit is needed', 'user: second try', 'working: working…']);
+    expect(f[3]!.live?.since).toBe(at('10:00:05.2'));
+    const done = view([...rows, ev(14, '10:00:07', say('ok'), 'assistant'), result(15, '10:00:08', 0.01, 1)]);
+    expect(roles(done)).toEqual(['user: first try', 'error: refused: a turn permit is needed', 'user: second try', 'assistant: ok', 'result: success · $0.0100 · 1 tokens']);
+    expect(hasLive(done)).toBe(false);
+  });
+  it('a refused send while a turn runs never waits: the next message starts at the running turn\'s result', () => {
+    const rows: Row[] = [
+      stamped(1.5, '10:00:00', 'one', 1),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      unsent(2.5, '10:00:01', 'refused one'),
+      refused(2.6, 'refused: busy'),
+      stamped(3.5, '10:00:02', 'two', 2),
+      row(4, 'turn.sent', '10:00:02.1', { turn: `turn:${H}/2` }),
+      ev(5, '10:00:03', say('answer one'), 'assistant'),
+      result(6, '10:00:04', 0.01, 1),
+    ];
+    const f = view(rows);
+    // the refused message stays where it was typed (it is no turn); the running turn's output goes above the WAITING one
+    expect(roles(f)).toEqual(['user: one', 'user: refused one', 'error: refused: busy', 'assistant: answer one', 'result: success · $0.0100 · 1 tokens', 'user: two', 'working: working…']);
+    expect(f[f.length - 1]!.live?.since).toBe(at('10:00:04'));
+  });
+  it('a network error does the same (the echo is marked unsent and its reason shows under it)', () => {
+    const rows: Row[] = [
+      unsent(10.5, '10:00:00', 'lost'),
+      refused(10.6, 'not sent: the connection to the kernel failed'),
+      stamped(11.5, '10:00:05', 'again', 1),
+      row(12, 'turn.sent', '10:00:05.2', { turn: `turn:${H}/1` }),
+    ];
+    const f = view(rows);
+    expect(roles(f)).toEqual(['user: lost', 'error: not sent: the connection to the kernel failed', 'user: again', 'working: working…']);
+    expect(f[3]!.live?.since).toBe(at('10:00:05.2'));
+  });
+  it('the stamp is exact: a turn.sent another client caused does not start this page\'s waiting message', () => {
+    const rows: Row[] = [
+      stamped(1.5, '10:00:00', 'one', 1),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      stamped(2.5, '10:00:01', 'mine', 3),
+      row(3, 'turn.sent', '10:00:01.1', { turn: `turn:${H}/2` }), // the kernel's open turn, or another device
+      row(4, 'turn.sent', '10:00:01.2', { turn: `turn:${H}/3` }),
+    ];
+    const items = chatItems(rows, { live: true }).items;
+    expect(roles(items)).toEqual(['user: one', 'working: working…', 'user: mine']);
+  });
+  it('the page stamps the echo from session.send and marks it unsent on a refusal or a network error', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    expect(app).toMatch(/stampEcho\(echo, await client\.call<\{ turn\?: unknown \}>\('session\.send'/);
+    expect(app).toMatch(/unsentEcho\(echo, err\);/);
+    expect(app).toMatch(/if \(echo\) echo\.unsent = true;/);
+    expect(app).toMatch(/\$\{mine\.length\}\.\$\{localRev\}/);
+  });
+});

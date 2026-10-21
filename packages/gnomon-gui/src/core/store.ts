@@ -46,6 +46,10 @@ export interface Row {
   hash?: string;
   /** dictation (TD-2026-10-20-262): this page's composer echo of an edited voice draft (🎙✎) */
   mark?: 'voice-edited';
+  /** review M1: this page's composer echo, stamped with the turn id session.send returned (pairs with turn.sent{turn}) */
+  turn?: string;
+  /** review M1: this page's composer echo whose send was refused or failed on the network: it is not a turn */
+  unsent?: boolean;
 }
 
 export interface StackCard {
@@ -848,6 +852,8 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
 interface WaitingTurn {
   idx: number[];
   sent: boolean;
+  /** review M1: its turn id (the composer stamp from session.send, or the turn.sent it paired with) */
+  turn?: string;
 }
 /** Where chatItems puts an item: 'turn' the running turn's output; 'message' / 'voice-message' a user message (it
  * waits while a turn runs); 'tail' appended as is. */
@@ -894,10 +900,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   const waiting: WaitingTurn[] = [];
   let open = 0; // turn.sent rows with no turn.result yet
   let activeUnsent = false; // the running turn's message is shown but its turn.sent has not arrived yet
+  let activeTurn: string | undefined; // review M1: that message's stamped turn id, when session.send has returned it
   let turnSince: string | undefined;
   let turnKey = '';
   let progress: LiveClock['progress'] | undefined;
   const insertAt = (): number => (waiting.length ? waiting[0]!.idx[0]! : items.length);
+  let placedTurn: string | undefined; // review M1: the stamp of the composer echo being placed
   const place = (item: ChatItem, how: Place): void => {
     if (opts.raw || how === 'tail' || (how === 'turn' && !waiting.length)) {
       items.push(item);
@@ -914,8 +922,11 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     // a multi-part voice message is ONE turn (one turn.sent cites every part)
     if (how === 'voice-message' && last && !last.sent) last.idx.push(items.length - 1);
     else if (how === 'voice-message' && activeUnsent && !waiting.length) return;
-    else if (open > 0 || waiting.length || activeUnsent) waiting.push({ idx: [items.length - 1], sent: false });
-    else activeUnsent = true;
+    else if (open > 0 || waiting.length || activeUnsent) waiting.push({ idx: [items.length - 1], sent: false, ...(placedTurn !== undefined ? { turn: placedTurn } : {}) });
+    else {
+      activeUnsent = true;
+      activeTurn = placedTurn;
+    }
   };
   /** The waiting message the item just pushed belongs to (null: it is the running turn's). */
   const lastWaiting = (): WaitingTurn | null => {
@@ -925,13 +936,17 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   /** The oldest waiting message's turn starts (the turn before it ended). */
   const startNext = (): void => {
     const w = waiting.shift();
-    if (w) activeUnsent = !w.sent;
+    if (w) {
+      activeUnsent = !w.sent;
+      activeTurn = w.turn;
+    }
   };
   /** A session boundary (exit, drain, orphan, open / resume): no turn runs and nothing waits any more. */
   const settle = (): void => {
     waiting.length = 0;
     open = 0;
     activeUnsent = false;
+    activeTurn = undefined;
     progress = undefined;
   };
   const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }, how: Place = 'turn'): ChatItem => {
@@ -965,8 +980,16 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     if (r.connId === 'local') {
       if (r.kind === 'composer') {
         const t = String(r.payload ?? '');
+        const voice = r.mark === 'voice-edited' ? { voice: 'voice-edited' as const } : {};
+        if (r.unsent) {
+          // review M1: a refused (or network-failed) send is no turn: it never waits, never runs, and claude never replays it
+          push(r, 0, { role: 'user', text: t, ...voice }, 'tail');
+          continue;
+        }
         echoes.push(oneLine(t));
-        push(r, 0, { role: 'user', text: t, ...(r.mark === 'voice-edited' ? { voice: 'voice-edited' as const } : {}) }, 'message');
+        placedTurn = typeof r.turn === 'string' ? r.turn : undefined;
+        push(r, 0, { role: 'user', text: t, ...voice }, 'message');
+        placedTurn = undefined;
         echoTurn.push(lastWaiting());
         if (r.mark === 'voice-edited' && editedReplays > 0) editedReplays--;
       } else {
@@ -985,10 +1008,18 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     if (r.kind === 'turn.sent') {
       turnGuidance = typeof p?.guidanceHash === 'string' ? p.guidanceHash : null;
       open++;
-      if (activeUnsent) activeUnsent = false;
+      // review M1: a stamped message pairs with ITS turn.sent exactly; an unstamped one (session.send still in flight)
+      // pairs in send order with the first turn.sent no stamp claims
+      const id = typeof p?.turn === 'string' ? p.turn : undefined;
+      const exact = id !== undefined ? waiting.find((x) => !x.sent && x.turn === id) : undefined;
+      if (exact) exact.sent = true;
+      else if (activeUnsent && (activeTurn === undefined || activeTurn === id)) activeUnsent = false;
       else {
-        const w = waiting.find((x) => !x.sent);
-        if (w) w.sent = true;
+        const w = waiting.find((x) => !x.sent && x.turn === undefined);
+        if (w) {
+          w.sent = true;
+          if (id !== undefined) w.turn = id;
+        }
       }
       if (open === 1 && waiting.length === 0) {
         turnSince = r.at;
@@ -1029,6 +1060,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
           const at = waiting.indexOf(w);
           if (at >= 0) {
             activeUnsent = !w.sent;
+            activeTurn = w.turn;
             waiting.splice(0, at + 1);
           }
         }

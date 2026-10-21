@@ -69,6 +69,7 @@ let motion: 'reduce' | 'system' = 'system';
 const LAYOUT_KEY = 'gnomon.gui.layout';
 let layout: Layout = parseLayout(localStorage.getItem(LAYOUT_KEY) ?? '') ?? applyPreset('desk'); // S5.2: persisted per browser
 const local: Row[] = []; // this page's own composer lines (memory only)
+let localRev = 0; // review M1: bumped when a local row is stamped or marked unsent in place (the memo key reads it)
 const refusals = new Map<string, ShownRefusal>();
 /** Verified decision keys per (cardId, contentHash) under the current verifyKey (C4, I4). */
 const verified = new Map<string, string[]>();
@@ -186,7 +187,7 @@ function currentItems(): { items: ChatItem[]; hidden: number } {
   const mine = local.filter((r) => (r.session ?? null) === focused);
   // T-2026-10-21-007: a running turn shows its working row only while the session is live (a kernel restart ends it)
   const live = !!focused && isLiveState(store.sessions.get(focused)?.state ?? 'seen');
-  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
+  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}.${localRev}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
   if (memo?.key === key) return memo.out;
   const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
   // the kernel feed has no conversation: it stays the raw row list
@@ -1078,16 +1079,33 @@ async function send(textValue: string, accepted?: () => void): Promise<boolean> 
     return false;
   }
   accepted?.();
-  local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: focused, payload: textValue, at: new Date().toISOString() });
-  schedule(new Set([`transcript:${focused}`]));
+  const hsid = focused;
+  const echo: Row = { seq: store.head + 0.5, kind: 'composer', connId: 'local', session: hsid, payload: textValue, at: new Date().toISOString() };
+  local.push(echo);
+  schedule(new Set([`transcript:${hsid}`]));
   try {
-    await client.call('session.send', { hsid: focused, content: [{ text: textValue }] });
+    stampEcho(echo, await client.call<{ turn?: unknown }>('session.send', { hsid, content: [{ text: textValue }] }));
     return true;
   } catch (err) {
-    if (err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: focused, payload: refusalText(err.refusal) });
-    schedule(new Set([`transcript:${focused}`]));
+    unsentEcho(echo, err);
     return false;
   }
+}
+
+/** review M1: the composer echo pairs with ITS turn.sent: stamp it with the turn id session.send returned. */
+function stampEcho(echo: Row, r: { turn?: unknown } | null | undefined): void {
+  if (typeof r?.turn !== 'string') return;
+  echo.turn = r.turn;
+  localRev++;
+  schedule(new Set([`transcript:${echo.session}`]));
+}
+/** review M1: a refused or network-failed send is no turn: the echo stops waiting, the reason shows under it. */
+function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = echo?.session): void {
+  if (echo) echo.unsent = true;
+  localRev++;
+  const why = err instanceof RpcError ? refusalText(err.refusal) : 'not sent: the connection to the kernel failed';
+  if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why });
+  schedule(new Set([`transcript:${hsid}`]));
 }
 
 async function openSession(cwd: string, model: string): Promise<void> {
@@ -1208,17 +1226,19 @@ async function sendDictation(): Promise<void> {
   if (!client || !req) return dispatchDictation({ type: 'sendFailed', now: Date.now() });
   // an edited draft's words are the human's: this page echoes them (🎙✎); unedited turns become the 🎙 bubbles
   // an edited draft is the human's own text (one part; the kernel attributes nothing, Aegis L1): echoed as typed
-  if (dict.edited) local.push({ seq: store.head + 0.5, kind: 'composer', connId: 'local', session: req.hsid, payload: dict.text, at: new Date().toISOString() });
+  const echo: Row | null = dict.edited ? { seq: store.head + 0.5, kind: 'composer', connId: 'local', session: req.hsid, payload: dict.text, at: new Date().toISOString() } : null;
+  if (echo) local.push(echo);
   schedule(new Set([`transcript:${req.hsid}`]));
   try {
-    await client.call('session.send', req);
+    const r = await client.call<{ turn?: unknown }>('session.send', req);
+    if (echo) stampEcho(echo, r);
     dispatchDictation({ type: 'sent', now: Date.now() });
     // Aegis M3: the composer shows exactly the reducer's text: the in-flight edit (held) or the turns heard in flight
     const ta = $<HTMLTextAreaElement>('composer-text');
     if (dict.focusedHere) ta.value = dict.text;
   } catch (err) {
-    if (err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: req.hsid, payload: refusalText(err.refusal) });
-    else notice('the dictated draft was not sent; it stays in the composer', true);
+    unsentEcho(echo, err, req.hsid);
+    if (!(err instanceof RpcError)) notice('the dictated draft was not sent; it stays in the composer', true);
     dispatchDictation({ type: 'sendFailed', now: Date.now() });
     const ta = $<HTMLTextAreaElement>('composer-text');
     if (dict.focusedHere && !ta.value) ta.value = dict.text; // the draft stays in the composer

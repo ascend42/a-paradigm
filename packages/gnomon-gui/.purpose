@@ -429,7 +429,11 @@ components:
       remount. Review H1: in BOTH repaint branches the kept prefix is diffed by rendered signature
       (core/live-turn.ts itemSig: role, text, live, took, said, voice marks; a card's decided state is its
       text) and changedBefore's indices are remounted too, so an activity line frozen by the reply (same key,
-      live removed) never keeps a stale .live class or a frozen "running" span. CSS .trow.role-working
+      live removed) never keeps a stale .live class or a frozen "running" span. Review M1: the composer echo
+      (Row.turn) is stamped with the turn id session.send returns and pairs with turn.sent{turn} EXACTLY (an
+      unstamped echo, its send still in flight, pairs in send order with the first turn.sent no stamp claims);
+      a refused or network-failed send marks the echo unsent (Row.unsent): it never waits, never becomes the
+      running message, and its reason shows under it, so the next send gets the right clock and order. CSS .trow.role-working
       (spinner, still under reduced motion) and .role-activity.live.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
