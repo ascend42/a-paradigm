@@ -143,11 +143,25 @@ describe('G-VOX-17 (pure): the clamp book', () => {
     expect(b.active()).toBe('word');
     b.closed(['t1']);
     expect(b.active()).toBe('word'); // an earlier hand turn's result does not end the clamp
+    b.replayed('t2');
     b.closed(['t2', 't3']);
     expect(b.active()).toBeNull();
     b.sent('t4', 'piece');
     expect(b.active()).toBe('piece'); // never closed ⇒ clamped until the session (and the book) ends
   });
+  it('Aegis M-3 fold: a voice turn folded behind a hand turn closes only after ITS replay and a later result', () => {
+    const b = new VoiceClampBook();
+    b.sent('h1', null); // a hand turn running
+    b.sent('v2', 'word'); // a voice turn queued behind it
+    b.closed(['h1', 'v2']); // one result names both, but v2 was never consumed: stays clamped
+    expect(b.active()).toBe('word');
+    b.replayed('v2');
+    b.closed(['v2']); // the result after its replay closes it
+    expect(b.active()).toBeNull();
+    b.replayed('nope'); // a replay of an unknown turn is ignored
+    expect(b.outstanding()).toEqual([]);
+  });
+
   it('the card names the voice origin and the kernel-composed line', () => {
     const plan = { detail: { tool: 'Edit' }, lines: ['Edit a.ts'], block: {} };
     const shown = withVoiceOrigin(plan, 'piece');

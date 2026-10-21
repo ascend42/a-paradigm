@@ -1068,7 +1068,12 @@ export class SessionSupervisor {
       case 'user':
         // review M2: a replayed human message (no tool results) is Claude Code consuming the next outstanding turn
         // re-review L-2: not before the stream is live (a resumed session's history replays)
-        if (ev.replay && ev.toolResults.length === 0 && s.replayLive) s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
+        if (ev.replay && ev.toolResults.length === 0 && s.replayLive) {
+          const before = s.consumedTurns;
+          s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
+          // Aegis M-3: the clamp book learns which turn Claude just consumed (the next outstanding one, FIFO)
+          if (s.consumedTurns > before) s.voiceClamp?.replayed(s.turnIds[s.consumedTurns - 1]);
+        }
         // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
         for (const r of ev.toolResults) {
           const tool = s.toolNames.get(r.toolUseId);

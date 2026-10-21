@@ -51,6 +51,8 @@ export function pieceGuidance(n: number): string {
  */
 export class VoiceClampBook {
   readonly #open = new Map<string, VoiceSentBy>();
+  /** Aegis M-3: voice turns whose own replay line (Claude consuming that message) has been seen */
+  readonly #replayed = new Set<string>();
   /** pieces sent since the last non-piece turn (the N of "piece N") */
   #pieces = 0;
 
@@ -69,8 +71,27 @@ export class VoiceClampBook {
     return this.#pieces + 1;
   }
 
+  /** Claude consumed this turn's message (its replay line): only a LATER result may close it. */
+  replayed(turn: string | undefined): void {
+    if (turn !== undefined && this.#open.has(turn)) this.#replayed.add(turn);
+  }
+
+  /**
+   * A result closed these turns. Aegis M-3: a voice turn closes only when its own replay was seen BEFORE this result;
+   * a voice turn the result names but Claude never consumed (folded behind a hand turn, or a stream we did not see)
+   * stays clamped (fail closed) until a later result after its replay, or the session's end.
+   */
   closed(turns: readonly string[]): void {
-    for (const t of turns) this.#open.delete(t);
+    for (const t of turns) {
+      if (!this.#open.has(t) || !this.#replayed.has(t)) continue;
+      this.#open.delete(t);
+      this.#replayed.delete(t);
+    }
+  }
+
+  /** the outstanding voice turns (a result that closes the turn queue hands back the ones it could not close) */
+  outstanding(): string[] {
+    return [...this.#open.keys()];
   }
 
   /** the sentBy of the latest outstanding voice turn, or null when nothing is clamped */
