@@ -30,7 +30,7 @@ const ROWS: Array<{ kind: string; payload: Record<string, unknown> }> = [
 
 describe('gnomon desk stats: offer.suppressed', () => {
   it('per mod: shown N · suppressed M with a per-reason breakdown', () => {
-    expect(foldDeskStats(ROWS)[MOD]).toEqual({ shown: 1, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 3, suppressedBy: { 'pending-card': 2, 'turn-streaming': 1 } });
+    expect(foldDeskStats(ROWS)[MOD]).toEqual({ shown: 1, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 3, suppressedBy: { 'pending-card': 2, 'turn-streaming': 1 }, retired: 0 });
   });
   it('no-block and malformed name no mod: counted per session, never under a mod', () => {
     expect(Object.keys(foldDeskStats(ROWS))).toEqual([MOD]);
@@ -71,6 +71,29 @@ describe('gnomon desk stats: offer.suppressed', () => {
     const second = { ...ROWS[0]!, payload: { ...ROWS[0]!.payload, offerId: 'offer:01J00000000000000000000002' } };
     expect(foldDeskStats([ROWS[0]!, second])[MOD]!.shown).toBe(2);
     const again = { kind: 'offer.suppressed', payload: { hsid: HSID2, turn: T(HSID2, 1), why: 'malformed' } };
-    expect(foldDeskUnnamed([ROWS[6]!, again]).bySession[HSID2]).toEqual({ malformed: 2 });
+    // re-review M-3: the same turn id counts again only in a new session epoch (a session.open between them)
+    const reopen = { kind: 'session.open', seq: 50, payload: { hsid: HSID2 } };
+    expect(foldDeskUnnamed([ROWS[6]!, reopen, again]).bySession[HSID2]).toEqual({ malformed: 2 });
+  });
+  it('re-review M-3: a retired, undecided offer is not shown; a suppression counts once per (hsid, epoch, turn)', () => {
+    const open1 = { kind: 'session.open', seq: 10, payload: { hsid: HSID } };
+    const retired = { kind: 'offer.retired', payload: { offerId: OFFER, hsid: HSID, why: 'continued' } };
+    const re = { kind: 'offer.suppressed', payload: { hsid: HSID, turn: T(HSID, 1), why: 'no-block' } };
+    const named = { kind: 'offer.suppressed', payload: { hsid: HSID, turn: T(HSID, 2), why: 'pending-card', name: MOD, offerKind: 'map-the-idea' } };
+    // the continuation of turn 1: offer shown, retired, then the continuation's own evaluation (twice: a replayed row)
+    const rows = [open1, ROWS[0]!, retired, re, re, named, named];
+    expect(foldDeskStats(rows)[MOD]).toMatchObject({ shown: 0, retired: 1, suppressed: 1, suppressedBy: { 'pending-card': 1 } });
+    expect(foldDeskUnnamed(rows).byReason).toEqual({ 'no-block': 1 });
+    // a decided offer is never un-shown by a later retired row; a retired one takes no decision
+    const decided = { kind: 'offer.decided', payload: { offerId: OFFER, hsid: HSID, decision: 'not-now' } };
+    expect(foldDeskStats([ROWS[0]!, decided, retired])[MOD]).toMatchObject({ shown: 1, notNow: 1, retired: 0 });
+    expect(foldDeskStats([ROWS[0]!, retired, decided])[MOD]).toMatchObject({ shown: 0, notNow: 0, retired: 1 });
+    // a new epoch counts the same turn id again; a non-kernel session.open or offer.retired is ignored
+    const open2 = { kind: 'session.open', seq: 90, payload: { hsid: HSID } };
+    expect(foldDeskUnnamed([open1, re, open2, re]).byReason).toEqual({ 'no-block': 2 });
+    const k = (r: object) => ({ ...r, principal: KERNEL });
+    const forged = [k(open1), k(re), { ...open2, principal: 'p:agent/claude' }, k(re), k(ROWS[0]!), { ...retired, principal: 'p:agent/claude' }];
+    expect(foldDeskUnnamed(forged, { kernelPrincipal: KERNEL }).byReason).toEqual({ 'no-block': 1 });
+    expect(foldDeskStats(forged, { kernelPrincipal: KERNEL })[MOD]).toMatchObject({ shown: 1, retired: 0 });
   });
 });

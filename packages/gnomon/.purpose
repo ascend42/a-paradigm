@@ -2248,7 +2248,9 @@ components:
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by
       reason)/open/not-now/stop-here/kept per mod from the verified log, and
-      the unnamed suppressions (no-block, malformed) per session.
+      the unnamed suppressions (no-block, malformed) per session; re-review
+      M-3: a retired, undecided offer leaves shown (counted as retired) and a
+      suppression counts once per (hsid, session.open seq, turn).
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mod-playbooks, paradigm-8]

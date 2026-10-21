@@ -8,8 +8,10 @@
  *       Verifies the kernel log (as `gnomon replay` does) and folds offer.shown / offer.decided / offer.kept per mod:
  *       shown, open, not-now, stop-here, kept, and kept/shown (the A6 metric; the kill line is 15% after two weeks of
  *       daily use). offer.suppressed (T-2026-10-21-006) counts per mod with a per-reason breakdown; no-block and
- *       malformed name no mod and are counted per session. Read-only; runs with or without a daemon. An unverified
- *       log is refused.
+ *       malformed name no mod and are counted per session. Re-review M-3: an offer.retired offer that was never
+ *       decided is not counted as shown (it stopped standing), and a suppression counts once per (hsid, session
+ *       epoch = the seq of the session.open before it, turn): a continuation re-evaluating a turn does not count
+ *       twice. Read-only; runs with or without a daemon. An unverified log is refused.
  *
  *   gnomon mod config <mod> [--server <name>] [--command <abs>] [--args <a> <b> …] [--env NAME=value …]
  *       Asks for a per-user launch override of one of the mod's provides.mcp servers (Aegis D2). Accepted only for
@@ -50,6 +52,8 @@ export interface DeskModStats {
   suppressed: number;
   /** …by reason (OFFER_SUPPRESS_REASONS) */
   suppressedBy: Record<string, number>;
+  /** re-review M-3: offers retired before any decision (offer.retired; not counted in shown) */
+  retired: number;
 }
 
 /** offer.suppressed rows that name no mod (no-block, malformed), per reason and per session. */
@@ -61,21 +65,53 @@ export interface DeskUnnamedStats {
 
 const bump = (m: Record<string, number>, k: string): void => void (m[k] = (m[k] ?? 0) + 1);
 
-/** A verified offer.* row: its kind, payload and the principal that wrote it (the envelope's). */
+/** A verified offer.* (or session.open) row: its kind, payload and the principal that wrote it (the envelope's). */
 export interface DeskRow {
   kind: string;
   payload: unknown;
   principal?: string;
+  /** the row's seq (session.open: the session epoch, re-review M-3) */
+  seq?: number;
+  /** the envelope's session */
+  session?: string;
 }
-/** review C2: with a kernel principal, only the kernel's offer.shown / offer.suppressed rows count. */
-const foreign = (r: DeskRow, kernel: string | undefined): boolean => kernel !== undefined && (r.kind === 'offer.shown' || r.kind === 'offer.suppressed') && r.principal !== kernel;
+/** The kinds the stats read: the offer rows and session.open (the epoch of a suppression's turn id). */
+export const DESK_STAT_KINDS: readonly string[] = Object.freeze(['offer.shown', 'offer.decided', 'offer.kept', 'offer.suppressed', 'offer.retired', 'session.open']);
+/** review C2: with a kernel principal, only the kernel's offer.shown / suppressed / retired and session.open rows count. */
+const KERNEL_ONLY = new Set(['offer.shown', 'offer.suppressed', 'offer.retired', 'session.open']);
+const foreign = (r: DeskRow, kernel: string | undefined): boolean => kernel !== undefined && KERNEL_ONLY.has(r.kind) && r.principal !== kernel;
+const payloadOf = (r: DeskRow): Record<string, unknown> => (r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {});
+
+/**
+ * Re-review M-3: the kernel's offer.suppressed rows to count, in log order: one per (hsid, session epoch, turn). The
+ * epoch is the seq of the latest session.open of that hsid (turn ids restart at /1 after a resume, review C3); a
+ * continuation that re-evaluates a turn writes a second row for the same turn, which is not counted again.
+ */
+function* countedSuppressions(rows: Iterable<DeskRow>, kernel: string | undefined): Generator<Record<string, unknown>> {
+  const epoch = new Map<string, number>();
+  const seen = new Set<string>();
+  let opens = 0;
+  for (const r of rows) {
+    if (foreign(r, kernel)) continue;
+    const p = payloadOf(r);
+    if (r.kind === 'session.open') {
+      const h = typeof p.hsid === 'string' ? p.hsid : r.session;
+      opens++;
+      if (typeof h === 'string') epoch.set(h, r.seq ?? -opens);
+      continue;
+    }
+    if (r.kind !== 'offer.suppressed' || typeof p.hsid !== 'string' || typeof p.turn !== 'string') continue;
+    const key = `${p.hsid}|${epoch.get(p.hsid) ?? 0}|${p.turn}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    yield p;
+  }
+}
 
 /** offer.suppressed rows (in log order) that name no mod, folded per reason and per session. */
 export function foldDeskUnnamed(rows: Iterable<DeskRow>, opts: { kernelPrincipal?: string } = {}): DeskUnnamedStats {
   const out: DeskUnnamedStats = { byReason: {}, bySession: {} };
-  for (const r of rows) {
-    if (r.kind !== 'offer.suppressed' || foreign(r, opts.kernelPrincipal)) continue;
-    const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
+  for (const p of countedSuppressions(rows, opts.kernelPrincipal)) {
     if (typeof p.name === 'string' || typeof p.why !== 'string' || typeof p.hsid !== 'string') continue;
     bump(out.byReason, p.why);
     bump((out.bySession[p.hsid] ??= {}), p.why);
@@ -85,30 +121,38 @@ export function foldDeskUnnamed(rows: Iterable<DeskRow>, opts: { kernelPrincipal
 
 /** Fold offer rows (in log order) into per-mod counts. Decisions and kept rows count once per offer. */
 export function foldDeskStats(rows: Iterable<DeskRow>, opts: { kernelPrincipal?: string } = {}): Record<string, DeskModStats> {
-  const byOffer = new Map<string, { mod: string; decided: boolean; kept: boolean }>();
+  const byOffer = new Map<string, { mod: string; decided: boolean; kept: boolean; retired: boolean }>();
   const out: Record<string, DeskModStats> = {};
-  const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 0, suppressedBy: {} });
-  for (const r of rows) {
+  const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 0, suppressedBy: {}, retired: 0 });
+  const list = [...rows];
+  // re-review M-3: one per (hsid, epoch, turn); the unnamed ones fold in foldDeskUnnamed
+  for (const p of countedSuppressions(list, opts.kernelPrincipal)) {
+    if (typeof p.name === 'string' && typeof p.why === 'string') {
+      const s = of(p.name);
+      s.suppressed++;
+      bump(s.suppressedBy, p.why);
+    }
+  }
+  for (const r of list) {
     if (foreign(r, opts.kernelPrincipal)) continue;
     // review C3: keyed by offerId (a ULID) and mod, never by turn id (turn ids restart at /1 after a resume)
-    const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
-    if (r.kind === 'offer.suppressed') {
-      // one row per evaluated turn (the router evaluates each turn once); the unnamed ones fold in foldDeskUnnamed
-      if (typeof p.name === 'string' && typeof p.why === 'string') {
-        const s = of(p.name);
-        s.suppressed++;
-        bump(s.suppressedBy, p.why);
-      }
-      continue;
-    }
+    const p = payloadOf(r);
     const id = typeof p.offerId === 'string' ? p.offerId : null;
     if (!id) continue;
     if (r.kind === 'offer.shown' && typeof p.mod === 'string' && !byOffer.has(id)) {
-      byOffer.set(id, { mod: p.mod, decided: false, kept: false });
+      byOffer.set(id, { mod: p.mod, decided: false, kept: false, retired: false });
       of(p.mod).shown++;
+    } else if (r.kind === 'offer.retired') {
+      // re-review M-3: a continuation retired it before any decision: it never stood, so it is not "shown"
+      const o = byOffer.get(id);
+      if (!o || o.decided || o.retired) continue;
+      o.retired = true;
+      const s = of(o.mod);
+      s.shown--;
+      s.retired++;
     } else if (r.kind === 'offer.decided') {
       const o = byOffer.get(id);
-      if (!o || o.decided) continue;
+      if (!o || o.decided || o.retired) continue;
       o.decided = true;
       const s = of(o.mod);
       if (p.decision === 'open') s.open++;
@@ -165,10 +209,10 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
       kernelPrincipal,
       kernelKeyIds: pubs.map((k) => k.keyId),
       onRow: (r) => {
-        if (!r.kind.startsWith('offer.')) return;
+        if (!DESK_STAT_KINDS.includes(r.kind)) return;
         try {
-          const env = JSON.parse(r.envelope) as { payload?: unknown; principal?: unknown };
-          rows.push({ kind: r.kind, payload: env.payload, ...(typeof env.principal === 'string' ? { principal: env.principal } : {}) });
+          const env = JSON.parse(r.envelope) as { payload?: unknown; principal?: unknown; session?: unknown };
+          rows.push({ kind: r.kind, payload: env.payload, seq: r.seq, ...(typeof env.principal === 'string' ? { principal: env.principal } : {}), ...(typeof env.session === 'string' ? { session: env.session } : {}) });
         } catch {
           /* an envelope verify accepted always parses */
         }
@@ -198,7 +242,7 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
   if (mods.length) {
     readout(io.stdout, mods.map((m) => {
       const s = stats[m]!;
-      return [m, `shown ${s.shown} · suppressed ${s.suppressed}${byReason(s.suppressedBy)} · open ${s.open} · not now ${s.notNow} · stop here ${s.stopHere} · kept ${s.kept} · kept/shown ${pct(s.kept, s.shown)}`] as const;
+      return [m, `shown ${s.shown}${s.retired ? ` (+${s.retired} retired)` : ''} · suppressed ${s.suppressed}${byReason(s.suppressedBy)} · open ${s.open} · not now ${s.notNow} · stop here ${s.stopHere} · kept ${s.kept} · kept/shown ${pct(s.kept, s.shown)}`] as const;
     }));
   }
   if (sessions.length) {
