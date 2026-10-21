@@ -1,0 +1,29 @@
+id: TD-2026-10-21-836
+timestamp: '2026-10-21T02:26:44.289Z'
+title: Gnomon auto-edits auto-passes a wider set of read-only command families
+decision: >-
+  Auto-edits mode widens its read-only auto-pass to common inspection families:
+  grep/rg/find/fd/ls/cat/head/tail/wc/sort/uniq/cut/which/file/stat/du/tree, git read verbs
+  (status/log/diff/show/branch/blame/rev-parse/ls-files), and the read verbs of known project CLIs (paradigm
+  status/doctor/search/…, gnomon status/desk stats/mod list/…). Pipelines and `;`/`&&` chains pass only when every
+  segment is in the set. Any redirection to a file, command substitution, write flags (find -exec/-delete, sort -o, sed
+  -i, tee) or unknown segment falls back to a card. Gnomon still does not load the repo's .claude/settings.local.json.
+rationale: >-
+  Founder dogfood 2026-10-21: with auto-edits on, three cards asked for a grep pipeline, `gnomon desk stats` and
+  `paradigm status`. Native Claude Code would not ask for at least the grep. The founder's bar is never to prompt more
+  than native in the same mode. The founder chose widening auto-edits over importing allow rules.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+alternatives_considered:
+  - option: Import allow rules once via a card
+    rejected_because: founder chose widening auto-edits
+  - option: Trust the user settings file only
+    rejected_because: the project rules still wouldn't apply
+status: active
+tags:
+  - gnomon
+  - run-modes
+  - founder
+  - dogfood

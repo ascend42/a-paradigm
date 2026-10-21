@@ -1,85 +1,85 @@
 {
-  "sessionId": "smvh5cvl1",
-  "startTime": 1792528786405,
-  "lastActivity": 1792538812417,
+  "sessionId": "smvhbtz56",
+  "startTime": 1792539661866,
+  "lastActivity": 1792546155703,
   "breadcrumbs": [
     {
-      "timestamp": 1792528797006,
+      "timestamp": 1792539677441,
       "action": "tool-call",
       "tool": "paradigm_session_recover",
       "summary": "session_recover"
     },
     {
-      "timestamp": 1792529217386,
+      "timestamp": 1792540240084,
       "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: agent-session"
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Gnomon: one presence prompt per decision, including root-cla"
     },
     {
-      "timestamp": 1792529594010,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: human-note"
-    },
-    {
-      "timestamp": 1792529602375,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Claude Docs offer spike (Desk O1, A4, founder 2026-10-20). C\""
-    },
-    {
-      "timestamp": 1792530737013,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: agent-session"
-    },
-    {
-      "timestamp": 1792531887578,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Mod authoring skills (founder idea, 2026-10-20): make it sea\""
-    },
-    {
-      "timestamp": 1792531887829,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: human-note"
-    },
-    {
-      "timestamp": 1792531979118,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: human-note"
-    },
-    {
-      "timestamp": 1792532371367,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: agent-session"
-    },
-    {
-      "timestamp": 1792532838040,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: human-note"
-    },
-    {
-      "timestamp": 1792533565978,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: agent-session"
-    },
-    {
-      "timestamp": 1792538811555,
+      "timestamp": 1792542547489,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
       "summary": "lore_record: milestone"
     },
     {
-      "timestamp": 1792538812426,
+      "timestamp": 1792544075439,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"TD-2026-10-20-514 Aegis residuals (tracked, not merge-blocki\""
+    },
+    {
+      "timestamp": 1792544306919,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Gnomon: session PATH from root-signed config, with a fixed p"
+    },
+    {
+      "timestamp": 1792544383202,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon Windows session env after a daemon re-exec (Aegis M1 \""
+    },
+    {
+      "timestamp": 1792544454423,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-21-001"
+    },
+    {
+      "timestamp": 1792545004509,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon: a guided UI plus a CLI verb to change the root-signe\""
+    },
+    {
+      "timestamp": 1792545133284,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon contracts: publish the session.sandbox phases identit\""
+    },
+    {
+      "timestamp": 1792545283032,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Gnomon: sessions can't write into PATH tool dirs; a Homebrew"
+    },
+    {
+      "timestamp": 1792545290389,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon: brew install/upgrade from a session via a card (TD-2\""
+    },
+    {
+      "timestamp": 1792546155098,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: agent-session"
+    },
+    {
+      "timestamp": 1792546155710,
       "action": "tool-call",
       "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, The Desk O1 plus S0b mod naming and versioning are MERGED in"
+      "summary": "Checkpoint: phase=validating, One-presence-per-decision (TD-2026-10-20-514) and the sessio"
     }
   ],
   "symbolsModified": [],
