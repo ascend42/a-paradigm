@@ -106,7 +106,7 @@ import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MO
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_TRANSCRIPTS_REL, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
@@ -429,7 +429,16 @@ export function turnContentHash(text: string): string {
  * existing entry — a dir, or a link the policy then refuses to carve back — is left exactly as found.
  */
 export function ensureTranscriptDir(userClaudeDir: string): void {
-  const dir = path.join(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
+  ensureClaudeDir(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
+}
+
+/** The session-env carve-back root exists before the spawn too (its literal re-deny then names a real dir: Claude Code creates `<id>/` inside it, never the root). */
+export function ensureSessionEnvDir(userClaudeDir: string): void {
+  ensureClaudeDir(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+}
+
+function ensureClaudeDir(userClaudeDir: string, rel: string): void {
+  const dir = path.join(userClaudeDir, rel);
   try {
     fs.lstatSync(dir);
     return;
@@ -662,6 +671,7 @@ export class SessionSupervisor {
       // names a real dir (the session can then neither remove, rename nor replace it). Never over an existing entry:
       // a link there is the policy's fail-closed case, not ours to repair.
       ensureTranscriptDir(userClaudeDir);
+      ensureSessionEnvDir(userClaudeDir);
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,
@@ -680,9 +690,12 @@ export class SessionSupervisor {
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
         claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
+        claudeSessionEnv: true, // Claude Code mkdirs ~/.claude/session-env/<id> before any command hook runs (else every hook: EPERM)
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
+      // fail closed, reported: no session-env carve-back means Claude Code's command hooks cannot run in this session
+      if (policy.sessionEnvRefused) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-withheld', reason: policy.sessionEnvRefused }, { session: hsid });
       if (r && policy.allowWriteRefused) throw new PreflightRefusal('spawn_failed', 'a resume needs its transcript dir writable', { resume: 'transcripts-withheld' });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);

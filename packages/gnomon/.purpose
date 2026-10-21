@@ -2597,6 +2597,14 @@ components:
       loads; (c) the readers include the user's own unsandboxed Claude Code;
       (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can
       redirect a later write by the host's Claude Code outside projects.
+      SESSION-ENV (hooks fix 2026-10-21; profile v7): a second carve-back of
+      the same shape, ~/.claude/session-env (subpath, class session-env),
+      behind supervisor flag claudeSessionEnv, so Claude Code can mkdir
+      session-env/<id> before running command hooks (else every hook failed
+      EPERM). Root literal re-denied (denyWriteAlways), created by
+      ensureSessionEnvDir before the spawn, withheld fail closed
+      (sessionEnvRefused, logged session.sandbox{phase:'session-env-withheld'}).
+      ~/.claude/settings.json etc. stay denied (test/session-sandbox.test.ts).
       Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063):
       the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE
       #approval-broker gate-class card per new sha (on an open refused
