@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **A declared read-only command set** (`src/core/command-policy.ts`, `READ_ONLY_COMMANDS`): `status`, `doctor`, `ripple`, `integrity`, `purpose validate`, `portal validate`, `task ls`, `task show`, `lore list`, `lore show` and `notices`. These commands make no filesystem writes (project or HOME) and no network calls, global hooks included. Any other command is a write command.
 - **The migration notice on a read-only command prints but never writes** (`#migration-notices`). Notices now go to stderr, so `--json` stdout stays clean, and print at most once per process. On a write command the notice prints and is acknowledged, as before.
-- **Lore reads never migrate.** `loadLoreEntries` shows legacy root-level entries exactly as they will look once migrated, without moving any file. Every lore write migrates first. `paradigm migrate` has a new `lore-legacy-entries` step.
+- **Lore reads never migrate, in the CLI and the MCP server.** `loadLoreEntries` shows legacy root-level entries exactly as they will look once migrated, without moving any file. Every lore write migrates first. `paradigm migrate` has a new `lore-legacy-entries` step. The CLI and `paradigm-mcp` now share one implementation (`paradigm-mcp/src/utils/lore-legacy.ts`) instead of two copies. The MCP lore-loader also imports `os` again: without it, the author fallback to the OS username silently returned `unknown`.
+- **Ids never build a path outside their store.** Before, a crafted id such as `L-2026-10-01-/../../../../../../x` let `paradigm lore show` read and print a file outside the project. Now, wherever an id becomes a file path, an id with a separator, a dot or `..` is refused (lore and task lookups only compare such ids against stored ones). This covers `lore show`/`get`, lore update and delete, the lore server route, `task show` and every task update, and `paradigm override <id>`. Lore records refuse such ids too, and also a timestamp that does not start `YYYY-MM-DD`.
 
 ### Added
 - `paradigm notices` lists pending notices (read-only). `paradigm notices ack <id|all>` silences one. `PARADIGM_NO_NOTICES=1` hides notices for a process without writing anything.
@@ -21,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Packages
 - `@a-company/paradigm` 7.15.2
 - plugin 7.15.2
-- `@a-company/paradigm-mcp` unchanged (7.15.0)
+- `@a-company/paradigm-mcp` 7.15.2
 
 ## [7.15.0] — 2026-10-14
 
