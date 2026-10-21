@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T05:42:07.904Z'
+generated: '2026-10-21T05:57:38.674Z'
 structure: {}
 key_files:
   config:
@@ -262,6 +262,7 @@ symbols:
   '#purpose-component-contract-gnomon-rpc-v1': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-client-api-id': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-voice-allowlist': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-component-gui-session-rename': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-model-picker': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-setup': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
@@ -270,6 +271,7 @@ symbols:
   '#purpose-component-gui-dictation': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-preview': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-voice-capture': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-component-gui-mods-panel': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-offer-slip': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-table-talk': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-settings': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
@@ -311,7 +313,10 @@ symbols:
   '#purpose-component-standing-grant': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-approval-broker': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-desk-guidance': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  '#purpose-component-session-names': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-offer-router': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  '#purpose-component-mods-admin': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  '#purpose-component-desk-stats': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-mcp-passthrough': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-budget-fuse': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-component-scheduler': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
@@ -1394,6 +1399,8 @@ symbols:
   ^purpose-ref-gate-peer-paired.: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-ref-component-web-endpoint.': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   $purpose-ref-flow-voice-approval: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-ref-component-rename-btn': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
+  '#purpose-ref-component-rename-input': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-ns-model': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-chead-meta': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-ref-component-model-switch-dialog': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
@@ -1417,6 +1424,7 @@ symbols:
   '#purpose-ref-component-freshPrompt': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-ref-component-deciding': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-ref-flow-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  '#purpose-ref-component-desk-stats.': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   ^purpose-ref-gate-claude: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-ref-component-wire': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-ref-flow-NAME: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose

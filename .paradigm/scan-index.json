@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-21T05:42:07.895Z",
+    "generatedAt": "2026-10-21T05:57:38.664Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 108,
@@ -2823,6 +2823,19 @@
       ],
       "componentType": "module"
     },
+    "gui-session-rename": {
+      "id": "gui-session-rename",
+      "name": "Gui Session Rename",
+      "symbol": "#gui-session-rename",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "8.0:session-rename (founder ask: rename a session). core/rename.ts (PURE): renameRequest (log.append request.session.rename{hsid, name}), planRename (contracts normalizeSessionName preview: unchanged sends nothing, '' resets, a refused name is a notice), bindInlineRename (Enter saves, Esc cancels, blur saves, settles once). core/store.ts folds the kernel's session.renamed into SessionRow.name; sessionTitle shows the name (cut to 28), sessionFullTitle is the tooltip text, derivedTitle the placeholder; the transcript shows a \"renamed\" line. ui/app.ts: double-click the header title or press the pencil (#rename-btn, aria-label \"Rename session\") opens #rename-input (aria-label \"Session name\", value = the name, placeholder = the derived title); double-click or F2 on a session-list row renames it in place (the rail does not repaint while it is open); palette command session.rename \"Rename session\" (not in BLOCK_SAFE_COMMANDS). Trusted gestures only. The title tooltip shows the full title and the hsid. Test: test/rename.test.ts.",
+      "visualTags": [],
+      "related": [
+        "#rename-btn",
+        "#rename-input"
+      ]
+    },
     "gui-model-picker": {
       "id": "gui-model-picker",
       "name": "Gui Model Picker",
@@ -2932,7 +2945,7 @@
       "symbol": "#gui-voice-capture",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "#gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live capture feedback. core/capture.ts is PURE: captureStatusOf is the one adapter over status.voice.capture{state, segId, reason?, level?, at} (the voice app's per-segment state, relayed by the kernel with a 5 s TTL); captureStep/captureDisplayOf give the pill words: idle keeps \"Listening\" / \"Hold … to talk\" (meter still), hearing \"Hearing you…\" (pulsing, the meter is the REAL level), transcribing \"Catching that…\", captured \"Got it\" (1.2 s flash), dropped the reason only for 2.5 s (no words, no count). capturePollMs is the V3 cadence (no push relay): ~1 s at rest, 175 ms while hearing or transcribing, null when off, detached, the voice app gone or disconnected; app.ts syncClientPoll runs the one attached poll at that cadence (single flight, pollStatusOnce) and stopStatusPolls clears every status poll and the flash timer on disconnect (Aegis L2 of 862ef85a). The composer ghost line \"…\" is its own element (#composer-ghost, never the textarea); the polite caption (#voice-caption) changes on a state change only. The decorative meter animation and row kick are gone, and the dead voice.turn.partial path is removed. B1 live words (T-2026-10-20-005, V1/V2): captureStatusOf reads capture.text{committed, tail} (hearing / transcribing only; ghostTextOf: strings only, whitespace collapsed, capped at GHOST_TEXT_MAX keeping the newest words), which the kernel projects to the human gui credential only; app.ts paintGhost puts the committed words solid (.ghost-committed) and the tail dim (.ghost-tail) as text nodes into #composer-ghost (never the textarea, so a send can never carry non-final words), \"…\" with no words, and clears on captured / dropped / idle. Reduced motion: the global rule makes the tail fade instant. Aegis follow-ups: a capture from a status received more than CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock); a captured the kernel marks kernel:'unconfirmed' reads \"Heard, not confirmed\", never \"Got it\".",
+      "description": "Voice drops fix (2026-10-20): a drop names its reason in words (dropLabelOf, refusalPhrase) and stays on the pill until the next capture or a dismiss (captureDismiss on opening the voice menu); the store renders kernel-refused hash-only voice.turn.user rows (refusedReason, refusedCause) as voice-refused. #gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live capture feedback. core/capture.ts is PURE: captureStatusOf is the one adapter over status.voice.capture{state, segId, reason?, level?, at} (the voice app's per-segment state, relayed by the kernel with a 5 s TTL); captureStep/captureDisplayOf give the pill words: idle keeps \"Listening\" / \"Hold … to talk\" (meter still), hearing \"Hearing you…\" (pulsing, the meter is the REAL level), transcribing \"Catching that…\", captured \"Got it\" (1.2 s flash), dropped the reason only for 2.5 s (no words, no count). capturePollMs is the V3 cadence (no push relay): ~1 s at rest, 175 ms while hearing or transcribing, null when off, detached, the voice app gone or disconnected; app.ts syncClientPoll runs the one attached poll at that cadence (single flight, pollStatusOnce) and stopStatusPolls clears every status poll and the flash timer on disconnect (Aegis L2 of 862ef85a). The composer ghost line \"…\" is its own element (#composer-ghost, never the textarea); the polite caption (#voice-caption) changes on a state change only. The decorative meter animation and row kick are gone, and the dead voice.turn.partial path is removed. B1 live words (T-2026-10-20-005, V1/V2): captureStatusOf reads capture.text{committed, tail} (hearing / transcribing only; ghostTextOf: strings only, whitespace collapsed, capped at GHOST_TEXT_MAX keeping the newest words), which the kernel projects to the human gui credential only; app.ts paintGhost puts the committed words solid (.ghost-committed) and the tail dim (.ghost-tail) as text nodes into #composer-ghost (never the textarea, so a send can never carry non-final words), \"…\" with no words, and clears on captured / dropped / idle. Reduced motion: the global rule makes the tail fade instant. Aegis follow-ups: a capture from a status received more than CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock); a captured the kernel marks kernel:'unconfirmed' reads \"Heard, not confirmed\", never \"Got it\".",
       "visualTags": [],
       "related": [
         "#composer-ghost",
@@ -2940,6 +2953,16 @@
         "$voice-turn"
       ],
       "componentType": "module"
+    },
+    "gui-mods-panel": {
+      "id": "gui-mods-panel",
+      "name": "Gui Mods Panel",
+      "symbol": "#gui-mods-panel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "The Mods panel (founder dogfood 2026-10-21: \"Install Workshop does nothing; no way to see which mods are on\"). core/mods.ts (PURE): modsViewOf(status, stack cards) gives installed / available / pending; request builders for request.mod.install|link|pause|start|uninstall| config; folderPathError; configRequest (only manifest-declared fields, secrets refused). ui/mods-panel.ts: header Mods key + sheet (created in code, no index.html change), palette mods.open, Esc closes, trusted presses only, every key busy then a result in words (refusals as alerts), \"decide in the stack\" focuses the card. Install Workshop (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts installWorkshop) now sends request.mod.install or opens the panel; it was a disabled constant with the command in title= only.",
+      "visualTags": [],
+      "related": []
     },
     "gui-offer-slip": {
       "id": "gui-offer-slip",
@@ -3083,7 +3106,7 @@
       "symbol": "#gnomon-voice",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes through appendSignedEnrolRow (sig verified, seq recomputed under the lock, moved seq refused loudly, durable append). A missing `consent` is never \"unconsented\"; the text lives in voice/consents/<hex>.txt. TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId, consentHash; seq under the enrolments lock), commitEnrol re-checks seq and writes the consent text to voice/consents/<hex>.txt; the consent never enters the card or the log. ONE presence. Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human session.send{source:'voice'} is hash-matched against the attachment's pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId, voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}. #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298: the attachment mode is a ceiling, ptt under any, conversation only under conversation; widening to conversation takes one fresh-presence strictness card per GUI login; ambient turns need an aec claim, an enrolled speaker and a not-busy session by the supervisor's own turn state plus the echo tail (voice-playback, clock kernel); idle auto-off of a conversation ceiling after voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle; receipt-refused and unknown-speaker turns are stored as a keyed text hash, duration and reason, never text; status.voice attached, hsid, ceiling, since, idleAt) (spec §14.1-14.4, §14.7 Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026, TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts: attachment ONLY by a human gesture (log.append voice.session.start|end on a first-party GUI/device connection; the kernel mints voiceSessionId and writes the row); voice session.send to the attached session only, source voice forced, riding the attaching human's turn permit (never its own), accepted only for the voice connection's latest voice.turn.user in this attachment from an enrolled speaker, not intercepted, push-to-talk, outside every voice.turn.agent playback window + echoTailMs (750). Refusals are FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn, voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off (conversation mode). session.stop interrupt only; voice.* shape-validated; the voice reader sees its attached session + voice.*, redacted. approve stays voice-off in every form; request.voice.arm stays refused (V7). src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup | enrol | forget, root-signed rows (enrolments.jsonl, voice device key). Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after receipt, never before the attachment, echo checked on kernel times too; per-turn client mode claim cross-checked against the attachment (ptt is a client claim, §A.4); voice follow subscriptions end on every attachment change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice reader sees only its attached session's rows; enrolment order is the signed seq; windows bounded at VOICE_WINDOW_CAP. Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor spawns the voice client over an inherited socketpair (fd 3) the kernel authenticates itself as p:<ns>/voice (SocketServerHandle.adopt + dispatcher.adoptPreauthenticated, no hello/auth, no key in the child), allow-list env, backoff restarts, dies on every daemon exit and drain (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app into <home>/bin/voice and fetches models; the client entry resolves lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks the workspace gnomon-voice dist against dist/voice-client.manifest.json and that manifest against the loaded build stamp's voiceClientManifest (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of dist, voice-models.manifest.json, a module package.json and the optional sherpa-onnx-node + platform packages into <home>/bin/voice/client (0700/0600), pins a sha256 of every file in memory, runs the model fetch and the spawn from the COPY, and re-verifies the pin last in every prepare; a changed, added or missing file is VoiceClientRefused, phase 'unavailable' with the reason, never retried. Every exit (signal, stop, idle, upgrade after its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol (fresh-presence strictness card, detail.op voice.enrol, writes the root-signed row), request.voice.forget (no card), request.voice.report (client progress + notices relayed in status.voice; 2026-10-20 prints{stale: names} = speakers whose print predates the client's speech gate, held per voice connection with no TTL, cleared when it closes, relayed as status.voice.prints; T-2026-10-20-005 A1 capture{state idle|hearing|transcribing|captured|dropped, segId, reason? closed too-short|echo|not-attached|no-words|not-enrolled| barge-in|refused on dropped only, level? 0..1 on hearing only} relayed as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor projects B1's capture.text{committed, tail} (the live partial words, hearing / transcribing only, voice principal only, sanitised, capped at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row) to a human-class connection on the gui credential only (V2; the shared CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis follow-ups: terminal states are marked claim:'client' and cross-checked against the kernel's own acceptances on that voice connection (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop shows captured with kernel:'accepted' and clientReason, a captured with no acceptance is kernel:'unconfirmed'; text only for cls human on the gui credential; the slot remembers its connId and clears when that connection closes); request.voice.client start|stop is human only. speakable.ts KernelSpeakable appends voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached session; the voice reader is narrowed to voice.* rows. speakerEnrolled is the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged. TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item prefers the first speak fenced block (markdown, URLs and long digit/hex runs stripped, 300-char sentence cap, unclosed fence = its first paragraph) as from:'block', else the gnome line / first paragraph as from:'heuristic'; kernel-written ask-waiting and edits items carry from:'kernel'. table-talk.ts holds the frozen guidance (at most 160 words, pinned hash); VoiceControl.guidanceFor(hsid) returns it only while voice is attached to that session, and the #supervisor writes it as a second <gnomon-voice> text block on every send (turn.sent guidanceHash; contentHash stays the human text, replay unchanged). The spoken scrub (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon trace allows one extra prompt block only when turn.sent names its guidanceHash and the hash matches (Aegis M2).",
+      "description": "Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain end_turn message_stop (supervisor turnBusy), re-armed by message_start; the append result carries refused/refusedCause; capture reports carry refusal/cause; voice.turn.user keeps speakerScore (bucket) and gatedSpeechMs; the kernel stamps localDrops counts (VoiceReports takeLocalDrops) on voice.turn.user and voice.session.end. Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes through appendSignedEnrolRow (sig verified, seq recomputed under the lock, moved seq refused loudly, durable append). A missing `consent` is never \"unconsented\"; the text lives in voice/consents/<hex>.txt. TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId, consentHash; seq under the enrolments lock), commitEnrol re-checks seq and writes the consent text to voice/consents/<hex>.txt; the consent never enters the card or the log. ONE presence. Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human session.send{source:'voice'} is hash-matched against the attachment's pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId, voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}. #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298: the attachment mode is a ceiling, ptt under any, conversation only under conversation; widening to conversation takes one fresh-presence strictness card per GUI login; ambient turns need an aec claim, an enrolled speaker and a not-busy session by the supervisor's own turn state plus the echo tail (voice-playback, clock kernel); idle auto-off of a conversation ceiling after voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle; receipt-refused and unknown-speaker turns are stored as a keyed text hash, duration and reason, never text; status.voice attached, hsid, ceiling, since, idleAt) (spec §14.1-14.4, §14.7 Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026, TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts: attachment ONLY by a human gesture (log.append voice.session.start|end on a first-party GUI/device connection; the kernel mints voiceSessionId and writes the row); voice session.send to the attached session only, source voice forced, riding the attaching human's turn permit (never its own), accepted only for the voice connection's latest voice.turn.user in this attachment from an enrolled speaker, not intercepted, push-to-talk, outside every voice.turn.agent playback window + echoTailMs (750). Refusals are FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn, voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off (conversation mode). session.stop interrupt only; voice.* shape-validated; the voice reader sees its attached session + voice.*, redacted. approve stays voice-off in every form; request.voice.arm stays refused (V7). src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup | enrol | forget, root-signed rows (enrolments.jsonl, voice device key). Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after receipt, never before the attachment, echo checked on kernel times too; per-turn client mode claim cross-checked against the attachment (ptt is a client claim, §A.4); voice follow subscriptions end on every attachment change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice reader sees only its attached session's rows; enrolment order is the signed seq; windows bounded at VOICE_WINDOW_CAP. Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor spawns the voice client over an inherited socketpair (fd 3) the kernel authenticates itself as p:<ns>/voice (SocketServerHandle.adopt + dispatcher.adoptPreauthenticated, no hello/auth, no key in the child), allow-list env, backoff restarts, dies on every daemon exit and drain (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app into <home>/bin/voice and fetches models; the client entry resolves lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks the workspace gnomon-voice dist against dist/voice-client.manifest.json and that manifest against the loaded build stamp's voiceClientManifest (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of dist, voice-models.manifest.json, a module package.json and the optional sherpa-onnx-node + platform packages into <home>/bin/voice/client (0700/0600), pins a sha256 of every file in memory, runs the model fetch and the spawn from the COPY, and re-verifies the pin last in every prepare; a changed, added or missing file is VoiceClientRefused, phase 'unavailable' with the reason, never retried. Every exit (signal, stop, idle, upgrade after its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol (fresh-presence strictness card, detail.op voice.enrol, writes the root-signed row), request.voice.forget (no card), request.voice.report (client progress + notices relayed in status.voice; 2026-10-20 prints{stale: names} = speakers whose print predates the client's speech gate, held per voice connection with no TTL, cleared when it closes, relayed as status.voice.prints; T-2026-10-20-005 A1 capture{state idle|hearing|transcribing|captured|dropped, segId, reason? closed too-short|echo|not-attached|no-words|not-enrolled| barge-in|refused on dropped only, level? 0..1 on hearing only} relayed as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor projects B1's capture.text{committed, tail} (the live partial words, hearing / transcribing only, voice principal only, sanitised, capped at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row) to a human-class connection on the gui credential only (V2; the shared CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis follow-ups: terminal states are marked claim:'client' and cross-checked against the kernel's own acceptances on that voice connection (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop shows captured with kernel:'accepted' and clientReason, a captured with no acceptance is kernel:'unconfirmed'; text only for cls human on the gui credential; the slot remembers its connId and clears when that connection closes); request.voice.client start|stop is human only. speakable.ts KernelSpeakable appends voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached session; the voice reader is narrowed to voice.* rows. speakerEnrolled is the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged. TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item prefers the first speak fenced block (markdown, URLs and long digit/hex runs stripped, 300-char sentence cap, unclosed fence = its first paragraph) as from:'block', else the gnome line / first paragraph as from:'heuristic'; kernel-written ask-waiting and edits items carry from:'kernel'. table-talk.ts holds the frozen guidance (at most 160 words, pinned hash); VoiceControl.guidanceFor(hsid) returns it only while voice is attached to that session, and the #supervisor writes it as a second <gnomon-voice> text block on every send (turn.sent guidanceHash; contentHash stays the human text, replay unchanged). The spoken scrub (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon trace allows one extra prompt block only when turn.sent names its guidanceHash and the hash matches (Aegis M2).",
       "visualTags": [],
       "related": [
         "#supervisor",
@@ -3502,6 +3525,18 @@
       ],
       "componentType": "module"
     },
+    "session-names": {
+      "id": "session-names",
+      "name": "Session Names",
+      "symbol": "#session-names",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#session-names (8.0:session-rename, spec §3.3 \"Session names\"). src/kernel/supervisor/session-names.ts: a fold over the kernel-signed session.open{hsid, by} (the owner) and session.renamed{hsid, name} rows, seeded from log.read at boot (SESSION_NAME_SEED_KINDS) and fed by log.onCommit, so a name survives a restart and a replay with no store of its own (bounded, SESSION_NAMES_CAP). rename() serves the human's log.append{kind:'request.session.rename', payload:{hsid, name}} routed by the dispatcher from a gui or device human connection only (FORBIDDEN{matrix} otherwise); closed {hsid, name}; the name goes through contracts normalizeSessionName (the ONE section 4.5 sanitizer, whitespace folded, trimmed, <= 80 code points; a control or format character is BAD_REQUEST, never dropped); '' resets to the derived title. The session must be one this human opened (NOT_FOUND otherwise, live or ended). Writes request.session.rename then session.renamed (checked at append by #kernel-log). status.sessionNames lists the asker's names (human class only). A name is display text, never a capability: nothing routes, grants or permits by it, and it never reaches a path. The raw CLI form is `gnomon session rename` (src/cli/session-cli.ts runSessionRename, the gnomon mode device connection). Tests: test/session-names.test.ts, socket-abi.test.ts.",
+      "visualTags": [],
+      "related": [
+        "#kernel-log"
+      ]
+    },
     "offer-router": {
       "id": "offer-router",
       "name": "Offer Router",
@@ -3516,6 +3551,26 @@
         "^offer-accept"
       ],
       "componentType": "module"
+    },
+    "mods-admin": {
+      "id": "mods-admin",
+      "name": "Mods Admin",
+      "symbol": "#mods-admin",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#mods-admin (the GUI Mods panel's kernel half; founder dogfood 2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges installed / available / catalog into the human class's status.mods (pin, tier, source, version, run state, MCP server, offers, Desk counts, a shipped first-party tree that is not the pin = update; available = packages/gnomon-mods beside the kernel, findFirstPartyRoot, tier by hash). request() serves request.mod.install{source:'folder', path} (the A8 contracts kind, written as a row) and the dispatcher-only request.mod.link|pause|start|uninstall|config, each exactly its `gnomon mod` verb (stageInstall, writePause, requestStart, requestUninstall, requestMcpConfig), human on a gui/device connection only; then StagedCardPickup / McpConfigCards scan at once so the card is in the stack before the answer. Signs nothing. A URL source is refused UNSUPPORTED (slice S4).",
+      "visualTags": [],
+      "related": []
+    },
+    "desk-stats": {
+      "id": "desk-stats",
+      "name": "Desk Stats",
+      "symbol": "#desk-stats",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#desk-stats. src/kernel/desk/desk-stats.ts: the pure foldDeskStats / foldDeskUnnamed `gnomon desk stats` prints (moved from cli/desk-cli.ts, which re-exports them) and DeskTally, the kernel's live tally (seeded from the log once, fed by onCommit, bounded) behind status.mods.installed[].desk.",
+      "visualTags": [],
+      "related": []
     },
     "mcp-passthrough": {
       "id": "mcp-passthrough",
@@ -11794,6 +11849,30 @@
       "visualTags": [],
       "related": []
     },
+    "rename-btn": {
+      "id": "rename-btn",
+      "name": "Rename Btn",
+      "symbol": "#rename-btn",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui-session-rename",
+      "visualTags": [
+        "button"
+      ],
+      "related": []
+    },
+    "rename-input": {
+      "id": "rename-input",
+      "name": "Rename Input",
+      "symbol": "#rename-input",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui-session-rename",
+      "visualTags": [
+        "input"
+      ],
+      "related": []
+    },
     "ns-model": {
       "id": "ns-model",
       "name": "Ns Model",
@@ -11953,6 +12032,16 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
       "description": "Referenced from #approval-broker",
+      "visualTags": [],
+      "related": []
+    },
+    "desk-stats.": {
+      "id": "desk-stats.",
+      "name": "Desk Stats.",
+      "symbol": "#desk-stats.",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #desk-stats",
       "visualTags": [],
       "related": []
     },
@@ -19904,6 +19993,10 @@
       "category": "components",
       "id": "contract-voice-allowlist"
     },
+    "#gui-session-rename": {
+      "category": "components",
+      "id": "gui-session-rename"
+    },
     "#gui-model-picker": {
       "category": "components",
       "id": "gui-model-picker"
@@ -19935,6 +20028,10 @@
     "#gui-voice-capture": {
       "category": "components",
       "id": "gui-voice-capture"
+    },
+    "#gui-mods-panel": {
+      "category": "components",
+      "id": "gui-mods-panel"
     },
     "#gui-offer-slip": {
       "category": "components",
@@ -20100,9 +20197,21 @@
       "category": "components",
       "id": "desk-guidance"
     },
+    "#session-names": {
+      "category": "components",
+      "id": "session-names"
+    },
     "#offer-router": {
       "category": "components",
       "id": "offer-router"
+    },
+    "#mods-admin": {
+      "category": "components",
+      "id": "mods-admin"
+    },
+    "#desk-stats": {
+      "category": "components",
+      "id": "desk-stats"
     },
     "#mcp-passthrough": {
       "category": "components",
@@ -24432,6 +24541,14 @@
       "category": "flows",
       "id": "voice-approval"
     },
+    "#rename-btn": {
+      "category": "components",
+      "id": "rename-btn"
+    },
+    "#rename-input": {
+      "category": "components",
+      "id": "rename-input"
+    },
     "#ns-model": {
       "category": "components",
       "id": "ns-model"
@@ -24523,6 +24640,10 @@
     "$flow": {
       "category": "flows",
       "id": "flow"
+    },
+    "#desk-stats.": {
+      "category": "components",
+      "id": "desk-stats."
     },
     "^claude": {
       "category": "gates",
