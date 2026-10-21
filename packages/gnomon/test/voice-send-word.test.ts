@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { RefusedError, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { VoiceControl, type VoiceAppendRow, type VoicePresenceRequest } from '../src/kernel/voice/voice-control.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
-import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord } from '../src/kernel/voice/send-word-store.js';
+import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord, writeTrialWord } from '../src/kernel/voice/send-word-store.js';
 import { voiceStatusFor } from '../src/kernel/voice/voice-requests.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -19,7 +19,7 @@ const VOICE = 'p:abcdefgh/voice';
 const SPK = 'spk:abcdefgh/founder';
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 
-function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null } = {}) {
+function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null; onTrialChange?: (t: { word: string; until: number } | null) => void } = {}) {
   const clock = { t: 100_000 };
   const rows: VoiceAppendRow[] = [];
   const presence: VoicePresenceRequest[] = [];
@@ -36,6 +36,7 @@ function rig(o: { level?: string | null; press?: () => { n: number; at: number }
     },
     strictnessLevel: () => o.level ?? null,
     ...(o.press ? { sendNowPress: o.press } : {}),
+    ...(o.onTrialChange ? { onTrialChange: o.onTrialChange } : {}),
   });
   v.setSendWord({ text: 'over and out', variants: ['over an out'] });
   const supSends: Array<Record<string, unknown>> = [];
@@ -251,6 +252,45 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const vc = { connId: 'conn:V', principal: VOICE };
     expect(await refusal(r.v.send(vc, { hsid: HSID, content: [{ text: 'ship it' }] }))).toMatchObject({ code: 'FORBIDDEN', reason: 'voice-grammar', cause: 'trial-take' });
     expect(r.supSends).toHaveLength(0);
+  });
+
+  it('Aegis L-2: the trial file carries the kernel-clock expiry and is removed once the trial stops listening', async () => {
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-swt-')));
+    const file = path.join(home, 'voice', 'send-word-trial.json');
+    const seen: Array<{ word: string; until: number } | null> = [];
+    try {
+      const r = rig({ onTrialChange: (t) => (seen.push(t), writeTrialWord(home, t ? { text: t.word } : null, t?.until ?? 0)) });
+      r.v.setSendWord(null);
+      await r.attach('word');
+      const t0 = r.clock.t;
+      r.v.setTrialWord({ text: 'send' }, 60_000);
+      // one clock: the file's until IS the kernel's trial expiry (the clock is injected; Date.now is never read)
+      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ text: 'send', until: t0 + 60_000 });
+      expect(new Date(String(r.v.status().sendWordTrial!['until'])).getTime()).toBe(t0 + 60_000);
+      // renewing moves both together
+      r.clock.t += 1_000;
+      r.v.setTrialWord({ text: 'send' }, 60_000);
+      expect(JSON.parse(fs.readFileSync(file, 'utf8')).until).toBe(t0 + 61_000);
+      // a miss keeps it; the correct take (ready) removes it; status still shows the ready trial for the dialog
+      await r.turn('sand');
+      expect(fs.existsSync(file)).toBe(true);
+      await r.turn('send');
+      expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready' });
+      expect(fs.existsSync(file)).toBe(false);
+      expect(seen).toEqual([{ word: 'send', until: t0 + 60_000 }, { word: 'send', until: t0 + 61_000 }, null]);
+      // an exhausted trial is announced as null too
+      r.v.setTrialWord(null);
+      r.v.setTrialWord({ text: 'over' }, 60_000);
+      for (let i = 0; i < 4; i++) await r.turn('banana');
+      expect(r.v.status().sendWordTrial).toMatchObject({ state: 'exhausted' });
+      expect(fs.existsSync(file)).toBe(false);
+      // a throwing hook never breaks the trial
+      const r2 = rig({ onTrialChange: () => { throw new Error('disk full'); } });
+      expect(r2.v.setTrialWord({ text: 'send' })).toEqual({ text: 'send', variants: [] });
+      expect(r2.v.status().sendWordTrial).toMatchObject({ state: 'listening' });
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('the trial is time-boxed; after it a short unverified word is refused again', async () => {

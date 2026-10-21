@@ -133,7 +133,7 @@ import { StagedCardPickup } from '../modhost/control.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
-import { SEND_WORD_TRIAL_MS, VoiceControl } from '../voice/voice-control.js';
+import { VoiceControl } from '../voice/voice-control.js';
 import { defaultBuildStampPath, describeUpdate, readBuildStamp, writeKernelBuild, type BuildStamp } from './build-stamp.js';
 import { UpdateWatch } from './update-watch.js';
 import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
@@ -1082,6 +1082,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     sendNowPress: () => voiceReports.sendNowPress(),
     // TD-2026-10-21-514: the held send word (GUI request and raw CLI share <home>/voice/send-word.json)
     sendWordSource: cachedSendWordSource(home),
+    // the attended trial's 0600 file for the voice client: written ONLY from the kernel's own trial view (its word and
+    // its expiry on the kernel clock, Aegis L-2), present only while the trial is listening
+    onTrialChange: (t) => writeTrialWord(home, t ? { text: t.word } : null, t?.until ?? 0),
     // pieces is refused at strictness L2 or above (the session's repo level; null while levels are unbuilt)
     strictnessLevel: (hsid) => {
       const sc = supervisor.scopeOf(hsid);
@@ -1227,20 +1230,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       sendWord: async (p: unknown) => {
         const r = parseSendWordRequest(p);
         if (r.op === 'start' && r.trial) {
-          // the attended trial: the kernel counts its takes (status.voice.sendWordTrial); a 0600 file tells the voice client
+          // the attended trial: the kernel counts its takes (status.voice.sendWordTrial); its onTrialChange writes the
+          // voice client's 0600 file with the kernel-clock expiry
           const t = voice.setTrialWord({ text: r.text, variants: [] });
-          writeTrialWord(home, { text: r.text }, Date.now() + SEND_WORD_TRIAL_MS);
           return { trial: t ? voice.trialStatus() : null };
         }
         if (r.op === 'save') {
           // the save rule (a correct take) is the kernel's; a refusal leaves the trial running
           const saved = voice.saveTrial(r.dropVariants);
-          writeTrialWord(home, null);
           const w = writeSendWord(home, saved);
           return { trial: null, sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
         }
         voice.setTrialWord(null);
-        writeTrialWord(home, null);
         if (r.op === 'clear' && r.trial) return { trial: null, sendWord: ((x) => (x ? { text: x.text, variants: [...x.variants] } : null))(voice.sendWord()) };
         const w = writeSendWord(home, r.op === 'clear' ? null : { text: r.text, variants: r.variants });
         return { sendWord: w ? { text: w.text, variants: [...w.variants] } : null };

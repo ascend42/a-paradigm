@@ -276,6 +276,13 @@ export interface VoiceControlOptions {
   sendNowPress?: () => { n: number; at: number } | null;
   /** TD-2026-10-21-514: the held send word's source (daemon: <home>/voice/send-word.json via a stat-keyed cache) */
   sendWordSource?: () => SendWord | null;
+  /**
+   * The attended trial as the voice client must see it (daemon: <home>/voice/send-word-trial.json, 0600): the word and
+   * its expiry ON THE KERNEL CLOCK (#now; Aegis L-2) while the trial is LISTENING, else null (ready, exhausted, saved,
+   * cleared or expired). Called on every change; a throw is swallowed (fail safe: with no file the
+   * client withholds an unverified take's text, and the kernel decides every take anyway).
+   */
+  onTrialChange?: (t: { word: string; until: number } | null) => void;
   /** TD-2026-10-21-514: the strictness level of the session's repo (pieces is refused at L2 or above); absent ⇒ not built */
   strictnessLevel?: (hsid: string) => string | null;
   /** V2a: arm the idle timer (default setTimeout, unref'd); tests drive checkIdle() instead */
@@ -762,7 +769,9 @@ export class VoiceControl {
           const next = recordTrialTake(trial.state, p.text);
           stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, forwardable: false, trialTake: true, trialVerdict: next.last!.verdict, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, ...(drops ? { localDrops: drops } : {}) };
           commit.push(() => {
-            if (this.#trial === trial) trial.state = next; // the ONE take counter (a trial replaced meanwhile is not touched)
+            if (this.#trial !== trial) return; // a trial replaced meanwhile is not touched
+            trial.state = next; // the ONE take counter
+            this.#trialChanged(); // ready or exhausted: the client stops sending takes
           });
         } else {
           // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send); a
@@ -854,6 +863,7 @@ export class VoiceControl {
   setTrialWord(w: unknown, ttlMs = SEND_WORD_TRIAL_MS): SendWord | null {
     if (w === null) {
       this.#trial = null;
+      this.#trialChanged();
       return null;
     }
     const c = canonicalSendWord(w);
@@ -862,11 +872,30 @@ export class VoiceControl {
     const live = this.#liveTrial();
     if (live && live.state.word === st.word) live.until = this.#now() + ttlMs;
     else this.#trial = { state: st, until: this.#now() + ttlMs };
+    this.#trialChanged();
     return { text: c.text, variants: [] };
   }
   #liveTrial(): { state: SendWordTrialState; until: number } | null {
-    if (this.#trial && this.#now() > this.#trial.until) this.#trial = null;
+    if (this.#trial && this.#now() > this.#trial.until) {
+      this.#trial = null;
+      this.#trialChanged();
+    }
     return this.#trial;
+  }
+  /** the last view handed to onTrialChange ('' = none yet), so an unchanged trial is not re-announced */
+  #trialSeen = '';
+  /** Aegis L-2: tell the daemon what the voice client must see (listening ⇒ word + kernel-clock until, else null). */
+  #trialChanged(): void {
+    const t = this.#trial;
+    const view = t && t.state.state === 'listening' ? { word: t.state.word, until: t.until } : null;
+    const key = view ? `${view.word}\n${view.until}` : 'none';
+    if (key === this.#trialSeen) return;
+    this.#trialSeen = key;
+    try {
+      this.#o.onTrialChange?.(view);
+    } catch {
+      // fail safe (see onTrialChange): the trial itself is the kernel's and is unaffected
+    }
   }
   /** status.voice.sendWordTrial: the live trial (human class only), or null. `take` is the take being asked for. */
   trialStatus(): Record<string, unknown> | null {
@@ -886,6 +915,7 @@ export class VoiceControl {
     const w = trialSaveable(t.state, dropVariants);
     if (!w) throw bad('no take was heard as the word itself yet', 'sendword-no-correct-take');
     this.#trial = null;
+    this.#trialChanged();
     return w;
   }
 
