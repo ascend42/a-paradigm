@@ -649,13 +649,18 @@ components:
       ("Sending… Esc keeps it", draft state word-grace) then
       request.voice.send.claim and the one send path. An ambient attach asks
       for the preset's send ceiling (with liabilityAck once the in-app
-      acknowledgement dialog recorded it). Labels: sentLabel(turn.sent) on
-      voice messages and CLAMP_CHIP in the session header; the guided
-      "Teach your send word" dialog (core/send-word-teach.ts, a pure reducer
-      over the kernel's attended trial: pick, then "Say <word> once to test ·
-      Take n of up to 4" from status.voice.sendWordTrial (the ONE take
-      counter), "I heard …", save via request.voice.sendword{op:'save'} once
-      a take was heard as the word; no lead-in, never the product name);
+      acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice
+      messages ("spoken · sent by you / on release / by send word / as a
+      piece / by send-now", + "edits ask first") and CLAMP_CHIP "voice turn ·
+      edits ask first" in the session header; teaching the send word INLINE
+      under its row in the Voice settings sheet (core/send-word-teach.ts, a
+      pure reducer over the kernel's attended trial: pick send / send it /
+      over / your own, then "Say <word> once, on its own." and the ONE
+      counter "take n of up to 4" from status.voice.sendWordTrial, "I heard
+      …", a mishearing kept as a variant, the risk check with "I
+      understand" right before save via request.voice.sendword{op:'save'};
+      no lead-in, never the product name; TEACH_DROP_VARIANTS is the
+      inactive hook for removing a variant once the kernel's save takes it);
       a trialTake row is never a transcript line (store voiceItem) and never
       a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold
       while busy, piece claim, piece ring); Mic key switch, Listening
@@ -909,6 +914,64 @@ components:
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+  gui-voice-ladder:
+    description: >-
+      #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html;
+      design-system gnomon.voice.model + pill) - voice is ONE choice, a trust
+      ladder Off / Talk / Dictate / Send word / Pieces mapped onto the voice
+      state x send preset (Off = voice.session.end, Talk = ptt x countdown,
+      Dictate = open/toggle x key, Send word = word, Pieces = pieces). PURE
+      core/voice-ladder.ts: rungOf (the kernel's status.voice.send wins over
+      the page's preset), ladderEntries (one line each, cost tags), chooseRung
+      (a not-ready rung names the Voice settings section that readies it),
+      voicePillOf (the kernel-owned header pill: mic dot filled + ring when
+      open, rung name, ONE live fact: hold ⌃⌥Space / listening / say “word” /
+      mic off · ⌃` / heard Ns ago; 2px amber edge + "edits ask first" while a
+      voice-origin turn is clamped; vermilion "not sent · why"), sheetRows.
+      The popover (role menu, rungs menuitemradio, arrows/Home/End, Esc back
+      to the pill) holds the ladder only plus a foot line (mic key · listen)
+      and "voice settings…"; the old Off/Push-to-talk/Ambient list, delay
+      buttons and Send preset buttons are gone.
+    path: src/core/voice-ladder.ts
+    type: module
+    tags: [gnomon, gui, voice]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/voice.test.ts
+  gui-voice-settings:
+    description: >-
+      #gui-voice-settings (Atelier 2026-10-21, setup-home.html + teach.html) -
+      the Voice settings sheet, a right-side drawer on the sheet component
+      (role dialog, Esc closes, focus returns): your voice (inline enrolment:
+      name + consent, Touch ID, "phrase N of 3" with the phrase and a REAL
+      level meter), send word (inline teaching over request.voice.sendword
+      start{trial} / save / clear{trial}), keys (talk ⌃⌥Space, mic ⌃` via
+      the existing mic-key op with the bare ` opt-in warning, send now
+      ⌃⌥Return), listen (always / mic key), timing (Talk auto-send 3/5/8/15/off
+      as a segmented control; pieces gap shown), risk (acknowledged or not; a
+      waiting Pieces turns on from here). ui/voice-settings.ts builds with
+      render.ts h() and routes every trusted press through one act callback;
+      the old sendword / ack / enrol dialogs are removed. The trial never
+      outlives the row or the sheet.
+    path: src/ui/voice-settings.ts
+    type: module
+    tags: [gnomon, gui, voice, settings]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/voice-client.test.ts
+  gui-composer:
+    description: >-
+      #gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the
+      composer wraps and grows with its text to 12 lines, then scrolls; the ⤢
+      key toggles a tall view capped at 24 lines (persisted per viewer,
+      gnomon.composer.tall); a line count sits beside it; exactly one send
+      control in the composer region. PURE core/composer.ts composerFit.
+    path: src/core/composer.ts
+    type: module
+    tags: [gnomon, gui, composer]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/dictation.test.ts
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto
