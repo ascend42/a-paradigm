@@ -745,6 +745,26 @@ components:
     flows: [$voice-turn]
     tests:
       - test/capture.test.ts
+  gui-mods-panel:
+    description: >-
+      The Mods panel (founder dogfood 2026-10-21: "Install Workshop does
+      nothing; no way to see which mods are on"). core/mods.ts (PURE):
+      modsViewOf(status, stack cards) gives installed / available / pending;
+      request builders for request.mod.install|link|pause|start|uninstall|
+      config; folderPathError; configRequest (only manifest-declared fields,
+      secrets refused). ui/mods-panel.ts: header Mods key + sheet (created in
+      code, no index.html change), palette mods.open, Esc closes, trusted
+      presses only, every key busy then a result in words (refusals as
+      alerts), "decide in the stack" focuses the card. Install Workshop
+      (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts
+      installWorkshop) now sends request.mod.install or opens the panel;
+      it was a disabled constant with the command in title= only.
+    tags: [gui, mods]
+    signals: []
+    tests:
+      - test/mods.test.ts
+      - test/workshop.test.ts
+
   gui-offer-slip:
     description: >-
       The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp

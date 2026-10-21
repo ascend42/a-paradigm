@@ -11,7 +11,9 @@
  */
 import type { GnomonClient } from '../core/client.js';
 import { RpcError } from '../core/client.js';
-import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, WORKSHOP_INSTALL_KEY, WORKSHOP_NOT_INSTALLED, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, workshopInstallKey, WORKSHOP_NOT_INSTALLED, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { installRequest, workshopSource } from '../core/mods.js';
+import { requestMod } from './mods-panel.js';
 import type { MiniDoc } from '../core/render.js';
 
 const REGION_HOST: Record<ModRegion, { id: string; parent: string; after?: string }> = {
@@ -22,28 +24,66 @@ const REGION_HOST: Record<ModRegion, { id: string; parent: string; after?: strin
   workshop: { id: 'mod-slot-workshop', parent: 'workshop-host' },
 };
 
+/** What the Workshop's Install key needs from the page (app.ts passes it to mountModPanels). */
+export interface WorkshopInstallDeps {
+  /** the Mods panel (#gui-mods-panel) */
+  openMods: () => void;
+  /** after a request: refresh status so the stack and the panel show the card */
+  refreshStatus: () => Promise<void>;
+}
+
 /** S5.1: the Workshop region with no running Workshop: one quiet line, in --sec. */
-function paintWorkshopAbsence(line: string | null): void {
+function paintWorkshopAbsence(line: string | null, client: GnomonClient, status: unknown, deps: WorkshopInstallDeps | undefined): void {
   if (line === null) return;
   const el = regionEl('workshop');
   if (!el) return;
   clear(el);
   el.hidden = false;
   if (line === WORKSHOP_NOT_INSTALLED) {
-    // fidelity 2: UI-first key; disabled while install has no GUI request kind (WORKSHOP_INSTALL_KEY)
+    // fidelity 2: the UI-first key (core/mod-panels.ts workshopInstallKey): every press ends in words, never nothing
+    const k = workshopInstallKey(workshopSource(status));
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'key quiet workshop-install';
-    b.textContent = WORKSHOP_INSTALL_KEY.label;
-    b.title = WORKSHOP_INSTALL_KEY.title;
-    b.disabled = !WORKSHOP_INSTALL_KEY.enabled;
-    el.appendChild(b);
+    b.textContent = k.label;
+    b.title = k.title;
+    const said = document.createElement('small');
+    said.className = 'meta workshop-install-result';
+    said.setAttribute('role', 'status');
+    said.hidden = true;
+    b.addEventListener('click', (e) => {
+      if (!e.isTrusted || b.getAttribute('aria-busy') === 'true') return; // G-GUI-04
+      if (k.action === 'open-mods') {
+        if (deps) return deps.openMods();
+        said.hidden = false;
+        said.textContent = 'this kernel lists no shipped Workshop: open Mods (⌘K → Mods) to add one from a folder';
+        return;
+      }
+      void installWorkshop(b, said, client, workshopSource(status)!, deps);
+    });
+    el.append(b, said);
     return;
   }
   const p = document.createElement('small');
   p.className = 'meta workshop-absent';
   p.textContent = line;
   el.appendChild(p);
+}
+
+/** The Install Workshop press: one request.mod.install; the key is busy until it answers, then the result in words. */
+export async function installWorkshop(b: HTMLButtonElement, said: HTMLElement, client: GnomonClient, path: string, deps: WorkshopInstallDeps | undefined): Promise<void> {
+  b.setAttribute('aria-busy', 'true');
+  b.disabled = true;
+  b.textContent = 'Installing…';
+  const r = await requestMod(client, installRequest(path));
+  b.removeAttribute('aria-busy');
+  b.disabled = false;
+  b.textContent = 'Install Workshop';
+  said.hidden = false;
+  said.className = `meta workshop-install-result${r.fail ? ' fail' : ''}`;
+  said.setAttribute('role', r.fail ? 'alert' : 'status');
+  said.textContent = r.text;
+  await deps?.refreshStatus().catch(() => undefined);
 }
 
 function regionEl(region: ModRegion): HTMLElement | null {
@@ -66,7 +106,23 @@ const clear = (el: HTMLElement): void => {
   while (el.firstChild) el.removeChild(el.firstChild);
 };
 
-let current: { scheduler: ModPanelScheduler; views: number; dispose(): void } | null = null;
+let current: { scheduler: ModPanelScheduler; views: number; key: string; opts: MountOptions; row(row: { kind?: unknown } | null): void; dispose(): void } | null = null;
+
+type MountOptions = { client: GnomonClient; status: unknown; focused: () => string | null; workshop?: WorkshopInstallDeps };
+
+/** What a mount depends on in status: the views, the Workshop line and its install source (a change ⇒ a re-mount). */
+function mountKey(status: unknown): string {
+  const views = modPanelsOf(status);
+  return JSON.stringify([views.map((v) => [v.name, v.viewId, v.region, v.dev]), workshopAbsence(status, views), workshopSource(status)]);
+}
+
+/**
+ * #gui-mods-panel: a fresh status (app.ts refreshStatus) re-mounts the panels when what they show changed, so an
+ * install, pause or uninstall decided in the stack shows (or hides) its views and the Workshop key without a reload.
+ */
+export function modPanelsStatus(status: unknown): void {
+  if (current && mountKey(status) !== current.key) mountModPanels({ ...current.opts, status });
+}
 
 /** K3: the focused session changed (app.ts focus()) ⇒ the mod panels re-render now with the new {focus:{hsid}}. */
 export function modPanelsFocus(hsid: string | null): void {
@@ -74,7 +130,7 @@ export function modPanelsFocus(hsid: string | null): void {
 }
 
 /** Mount (or re-mount) the mod panels for this connection. Returns the live-row hook. */
-export function mountModPanels(o: { client: GnomonClient; status: unknown; focused: () => string | null }): (row: { kind?: unknown } | null) => void {
+export function mountModPanels(o: MountOptions): (row: { kind?: unknown } | null) => void {
   current?.dispose();
   const doc = document as unknown as MiniDoc;
   const views: ModPanelView[] = modPanelsOf(o.status);
@@ -106,14 +162,30 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
       }
       for (const { v, r, why } of results) if (v.region === region) el.appendChild(renderModFence({ doc }, v, r, why) as unknown as Node);
     }
-    paintWorkshopAbsence(absent);
+    paintWorkshopAbsence(absent, o.client, o.status, o.workshop);
   };
   const scheduler = new ModPanelScheduler(render, { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (t) => window.clearTimeout(t as number) });
+  let lifecycleTimer: number | null = null;
   current = {
     scheduler,
     views: views.length,
+    key: mountKey(o.status),
+    opts: o,
+    row: (row) => {
+      if (!live) return;
+      if (views.length) scheduler.row(row?.kind);
+      // a mod's lifecycle row (installed, paused, uninstalled…): re-read status once, debounced; it re-mounts on a change
+      if (typeof row?.kind === 'string' && MOD_LIFECYCLE_KINDS.has(row.kind) && o.workshop) {
+        if (lifecycleTimer !== null) window.clearTimeout(lifecycleTimer);
+        lifecycleTimer = window.setTimeout(() => {
+          lifecycleTimer = null;
+          void o.workshop!.refreshStatus().catch(() => undefined);
+        }, 250);
+      }
+    },
     dispose: () => {
       live = false;
+      if (lifecycleTimer !== null) window.clearTimeout(lifecycleTimer);
     },
   };
   scheduler.focus(o.focused()); // K3: the mount render uses the current focus
@@ -126,9 +198,11 @@ export function mountModPanels(o: { client: GnomonClient; status: unknown; focus
         el.hidden = true;
       }
     }
-    paintWorkshopAbsence(absent);
+    paintWorkshopAbsence(absent, o.client, o.status, o.workshop);
   }
-  return (row) => {
-    if (live && views.length) scheduler.row(row?.kind);
-  };
+  // stable across re-mounts (modPanelsStatus): the page keeps this one hook
+  return (row) => current?.row(row);
 }
+
+/** Kernel rows that change which mods run (mod-host and manifest-loader kinds). */
+export const MOD_LIFECYCLE_KINDS: ReadonlySet<string> = new Set(['manifest.installed', 'manifest.load', 'manifest.staged', 'manifest.uninstall', 'mod.installed', 'mod.linked', 'mod.paused', 'mod.unlinked', 'mod.rollback', 'mod.health']);

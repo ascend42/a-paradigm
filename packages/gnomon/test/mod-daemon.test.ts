@@ -56,7 +56,7 @@ describe('ModHost in startDaemon (M1.11 slice 2)', () => {
     const { s } = await rig();
     const st = (await s.conn.call('status', {})) as { result: Record<string, unknown> };
     expect(st.result.modAbiId).toBe(MOD_ABI_ID);
-    expect(st.result.mods).toEqual({ modAbiId: MOD_ABI_ID, running: [], paused: [], publishers: {}, views: [] });
+    expect(st.result.mods).toMatchObject({ modAbiId: MOD_ABI_ID, running: [], paused: [], publishers: {}, views: [], installed: [] }); // #mods-admin adds installed / available / catalog for the human
     expect(st.result.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: true })]);
   });
 

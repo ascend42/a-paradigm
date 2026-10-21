@@ -129,6 +129,7 @@ import type { VoiceControl } from '../voice/voice-control.js';
 const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
 import { voiceApproveRefusal } from '../broker/broker.js';
 import { voiceStatusFor } from '../voice/voice-requests.js';
+import { MOD_ADMIN_REQUESTS } from '../modhost/mods-admin.js';
 import type { ApprovalPort } from '../broker/port.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
@@ -369,6 +370,24 @@ export interface HumanRequestPort {
     decide(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
     mute(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   };
+  /**
+   * #mods-admin (the GUI Mods panel): request.mod.install|link|pause|start|uninstall|config from the human on a gui or
+   * device connection, each exactly its `gnomon mod` verb (modhost/mods-admin.ts); status() is merged into the human
+   * class's status.mods (installed, available, catalog).
+   */
+  mods?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+  };
+}
+
+/** #mods-admin's status for the human's status.mods; a read that throws shows as `adminError`, never a failed status. */
+function modsAdminStatus(m: NonNullable<HumanRequestPort['mods']>): Record<string, unknown> {
+  try {
+    return m.status();
+  } catch (err) {
+    return { adminError: err instanceof Error ? err.message.slice(0, 200) : 'mods status failed' };
+  }
 }
 
 /** The connection a human-device verb runs for (stamped from THIS connection, never from params). */
@@ -482,7 +501,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       verbs: VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
       humanDeviceVerbs: HUMAN_DEVICE_VERBS.map((v) => ({ verb: v.verb, access: accessOf_(v.verb, cls), available: cls === 'human' && s.credential === 'device' && o.humanVerbs?.[v.verb as keyof HumanDeviceVerbPorts] !== undefined, milestone: HUMAN_DEVICE_VERB_MILESTONES[v.verb] })),
       relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf_(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
-      ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
+      // F4: full to the human class only; #mods-admin adds installed / available / catalog for the human's Mods panel
+      ...(o.mods ? { mods: { ...o.mods.status(cls === 'human'), ...(cls === 'human' && o.requests?.mods ? modsAdminStatus(o.requests.mods) : {}) } } : {}),
       daemon: o.status.daemon(),
       log: o.status.log(),
       sessions: { n: 0 },
@@ -810,6 +830,17 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
         try {
           return await (pa.kind === 'request.offer.decide' ? o.requests.offer.decide(asker, pa.payload) : o.requests.offer.mute(asker, pa.payload));
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // #mods-admin: the GUI Mods panel's requests, gui/device human connections only, the asker stamped by connId
+      if (typeof pa?.kind === 'string' && MOD_ADMIN_REQUESTS.includes(pa.kind) && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mods) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
+        try {
+          return await o.requests.mods.request(asker, pa.kind, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }
