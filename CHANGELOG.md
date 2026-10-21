@@ -5,6 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.1] — 2026-10-20
+
+### Changed
+- **Agent turn limits raised to 100** for every core agent: builder (was 50), architect and tester (were 30), reviewer and security (were 20). Large slices kept hitting the old caps before they could report. Plugin-only change; the npm packages are unchanged.
+
 ## [7.15.0] — 2026-10-14
 
 **Symbol integrity, Phase 1** (T-2026-10-13-001, TD-2026-10-13-661). A three-agent review of the symbol layer found the deterministic core sound, but found that identity and freshness gave silently wrong answers. The worst case: `paradigm_ripple` reported **0 dependents and "safe to proceed" for a `portal.yaml` gate used by a `.purpose` component** (reproduced). This release fixes correctness only. Typed edges, one ripple engine and aliases are Phase 2 (T-2026-10-13-002); efficiency and cleanup are Phase 3 (T-2026-10-13-003).
