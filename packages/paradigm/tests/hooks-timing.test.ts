@@ -110,6 +110,7 @@ describe('plugin hooks close their pipes within budget', () => {
   }, 60_000);
 
   const cases: Array<[string, string, object]> = [
+    ['SessionStart', 'paradigm-session-start.sh', { hook_event_name: 'SessionStart', source: 'startup' }],
     ['PreToolUse Bash', 'paradigm-precommit.sh', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } }],
     ['PreToolUse Glob', 'paradigm-navigate-remind.sh', { hook_event_name: 'PreToolUse', tool_name: 'Glob', tool_input: { pattern: '*' } }],
     ['PreToolUse Write', 'paradigm-team-gate.sh', { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: '/x/src/a.ts' } }],
