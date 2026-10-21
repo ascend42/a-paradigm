@@ -17,7 +17,7 @@ import type { AudioIO, SpeakerEngine, VadEngine, VadSegment } from './types.js';
  */
 export const ENROL_PHRASES: readonly string[] = Object.freeze([
   'The quick brown fox jumps over the lazy dog.',
-  'Gnomon, please run the tests and tell me what failed.',
+  'Please run the tests and tell me what failed.',
   'I enrol my voice on this computer, and it stays here.',
 ]);
 const MIN_PHRASE_MS = 1200;

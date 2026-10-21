@@ -84,6 +84,12 @@ describe('enrolment phrases', () => {
     expect(guiPhrases).toEqual([...ENROL_PHRASES]);
     expect(ENROL_PHRASES).toHaveLength(3);
   });
+  it('the phrases are natural sentences that never ask anyone to say the product name', () => {
+    for (const p of ENROL_PHRASES) {
+      expect(p).not.toMatch(/gnomon/i);
+      expect(p.split(' ').length).toBeGreaterThanOrEqual(6);
+    }
+  });
   it('requestedEnrolment reads only phase requested', () => {
     expect(
       requestedEnrolment({ voice: { enrolment: { name: 'matt', phase: 'requested', at: 'T' } } })

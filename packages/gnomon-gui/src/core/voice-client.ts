@@ -298,7 +298,7 @@ export const forgetRequest = (name: string): ClientRequest => ({ kind: 'request.
 /** The three phrases the voice app records (A3; the same list as gnomon-voice enrol.ts ENROL_PHRASES). */
 export const ENROL_PHRASES: readonly string[] = Object.freeze([
   'The quick brown fox jumps over the lazy dog.',
-  'Gnomon, please run the tests and tell me what failed.',
+  'Please run the tests and tell me what failed.',
   'I enrol my voice on this computer, and it stays here.',
 ]);
 
