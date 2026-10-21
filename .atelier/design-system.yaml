@@ -129,7 +129,7 @@ gnomon:
   layout:
     choice: desk
     structure:
-      header: "wordmark · command palette (⌘K) · kernel-owned voice-armed indicator with Disarm · ⊞ Layout presets"
+      header: "wordmark menu (Gnomon ▾: Layout presets, Day/Night/Auto, Mods…, Voice settings…, Settings… ⌘,) · command palette (⌘K) · quiet kernel status (link dot, word only when not connected; browser-risk amber outlined chip) · kernel-owned voice pill (the Start action when the voice app can't run) (superseded 2026-10-21, board header-5b)"
       left: "sessions: + New (⌘N), Active grouped with project swatch + state note (needs you / failed / streaming), Past collapsed"
       centre: "the chat: per-message timestamps, 'took Ns' durations, collapsible activity history; that project's pending cards pinned above the composer"
       right: "global decision stack as a paper pile, sorted by urgency; hover fans it out to compare and pick which to hit first"
@@ -177,3 +177,12 @@ gnomon:
       overrides:
         - { rule: "a mishearing ... is kept as an accepted variant", reason: "Aegis R-1: a real word like 'sent' said alone would send; founder kept the opt-in", by: creator, from: { session: 2026-10-21-gnomon-voice, board: teach, finish_review: true } }
       from: { session: 2026-10-21-gnomon-voice, board: teach, ref: refs/teach.html, note: "also you are making the user say \"Gnomon\" which there is NO reference to how it supposed to be said in the first place." }
+    header:
+      choice: wordmark-menu
+      rules:
+        - "The header row holds only four things: wordmark menu, palette, quiet kernel status, voice pill; every control is 28px and never wraps"
+        - "Rarely used tools (Layout presets, theme, Mods, Voice settings, Settings) live in the wordmark menu and ⌘K, never as header keys; the ▾ is always visible with hover and pressed states"
+        - "Status is quiet when well: the link is a dot that gains a word only when not connected; the browser-risk chip is outlined amber at key height and stays visible"
+        - "When the voice app can't run, the pill itself is the action ('○ Start voice · app not running'); there is no separate Start key; its aria-label says what a click does"
+        - "Notices are toasts in the current vocabulary (no 'Ambient'), never loose text in the header"
+      from: { session: 2026-10-21-gnomon-voice, board: header-5b, ref: refs/header-5b.html, note: "we have no consistent layout or design on these elements" }

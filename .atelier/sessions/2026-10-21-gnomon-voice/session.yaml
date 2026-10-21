@@ -5,6 +5,8 @@ depth: deep
 mode: overhaul
 read: "The voice control surface of Gnomon: one operator steering sessions by voice; glanced at constantly in the header pill, opened a few times a day to switch mode or teach a word; legible at a glance, calm, exact, inside the papercraft/phosphor world."
 inherits: { system: .atelier/design-system.yaml#gnomon }
+scope_changes:
+  - { at: "2026-10-21", board: header-5b, line: "Rescoped to include the Gnomon header as board 5b: every element in the top chrome (wordmark, palette, risk, connection, voice pill and its action/notes, Layout, theme, Mods, Settings, narrow toggles), because the voice pill lives there and the creator said \"we have no consistent layout or design on these elements\"", by: creator }
 preserve: [gnomon.colour, gnomon.type, gnomon.style, gnomon.cli-voice, "kernel-owned voice indicator cannot be hidden"]
 founder_feedback:
   - "the ui ux of how this is displayed and interacted with by the user needs a serious pass"
@@ -32,5 +34,19 @@ boards:
     options: [inline-in-sheet, focused-step-card]
     decision: inline-in-sheet
     decided_by: creator
-references_rendered: [mode-model, setup-home, pill, teach, direction]
+  - id: header
+    options: [one-rhythm-a, one-rhythm-b, one-rhythm-c]
+    decision: null
+    status: rejected
+    note: "lacking (three options were the same toolbar rearranged with uniform 28px keys)"
+  - id: header-5b
+    audit: refs/header-audit.md
+    founder_feedback: ["we have no consistent layout or design on these elements"]
+    options:
+      - { id: command-line, axis: "what the header is for", value: "commanding and reading: no tool keys; the palette is the tools' home" }
+      - { id: kernel-band, axis: "how status and notices are carried", value: "a second kernel-owned strip under the tool row, with a notice slot" }
+      - { id: wordmark-menu, axis: "where tools live", value: "one menu on the wordmark; status quiet when well; the pill becomes the action when voice can't run", recommended: true }
+    decision: null
+references_rendered: [mode-model, setup-home, pill, teach, direction, header, header-5b]
 direction: { ref: refs/direction.html, approved: true, by: creator, note: "yeah this works for me" }
+header_5b_decision: { choice: wordmark-menu, decided_by: creator, ref: refs/header-5b.html, audit: refs/header-audit.md }
