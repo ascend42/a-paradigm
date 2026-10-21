@@ -253,7 +253,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:T-2026-10-21-006 (founder ruling: offer.suppressed on the signed log + desk.suppress closed values): was sha256:4d883058…ccd8.
 // Moved once by review M2 (turn.result{turn} + descriptor turnResult): was sha256:eda8c627…1114.
 // Moved once by 8.0:T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly + desk.retire/sessionAnomaly closed values): was sha256:4c2b9371…af2c.
-const PINNED_CLIENT_API_ID = 'sha256:454cd632007a77540a4526bebb55384d40e7935ad677e5dd9bf185595c77e4de';
+// Moved once by 8.0:session-rename (request.session.rename + session.renamed + descriptor sessionRename): was sha256:454cd632…7de.
+const PINNED_CLIENT_API_ID = 'sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -603,6 +604,8 @@ describe('event labels and payload docs (round 2)', () => {
       'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' },
       'daemon.log.quarantined': { evidencePath: 'sensitive' }, // P8-D89 reservation (a local path)
       'session.compacted': { summaryHash: 'sensitive' }, // P8-D93: digest of model-written summary text
+      'request.session.rename': { name: 'sensitive' }, // 8.0:session-rename: the human's own words
+      'session.renamed': { name: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

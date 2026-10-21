@@ -73,6 +73,19 @@ components:
       continued; descriptor desk.retire) and session.anomaly{hsid, why}
       (SESSION_ANOMALY_REASONS: result-without-turn; descriptor sessionAnomaly). Closed,
       ids and reasons only; checked at append by #kernel-log.
+    session-name-contract: >-
+      8.0:session-rename (one deliberate clientApiId move,
+      sha256:454cd632...7de ->
+      sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9):
+      kernel-owned, normal request.session.rename{hsid, name} and
+      session.renamed{hsid, name}, name a sensitive field; closed payloads
+      checked by validateKindPayload with isSessionName (event.ts, a
+      structural check). display.ts normalizeSessionName is the ONE
+      normalisation (refuses non-strings, > SESSION_NAME_INPUT_MAX = 1024
+      code units, C0/C1 controls but tab/LF/CR; runs sanitizeDisplayText;
+      folds whitespace; trims; refuses > SESSION_NAME_MAX = 80 code points
+      and kept format characters); '' resets. Descriptor sessionRename.
+      Test: test/session-name.test.ts.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

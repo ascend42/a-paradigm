@@ -37,7 +37,9 @@
  * (8.0:model-switch) from the same human on the same connections goes to the
  * session port (SessionPort.model), which writes its request row. `request.offer.decide` and
  * `request.offer.mute` (TD-2026-10-20-812) from the same human on the same connections go to
- * #offer-router (requests.offer), which writes the request rows. Every other caller and
+ * #offer-router (requests.offer), which writes the request rows. `request.session.rename`
+ * (8.0:session-rename) from the same human on the same connections goes to #session-names
+ * (requests.sessionNames), which writes its request row. Every other caller and
  * kind still lands here.
  *
  * So in M1.4 NO principal can append through the socket: every outcome is a
@@ -64,6 +66,7 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.session.model',
   'request.offer.decide',
   'request.offer.mute',
+  'request.session.rename',
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);
