@@ -93,12 +93,13 @@ export function cachedSendWordSource(home: string): () => SendWord | null {
 }
 
 /** request.voice.sendword{op:'start', word, variants?} | {op:'clear'} — the payload's strict shape (TypeError ⇒ BAD_REQUEST). */
-export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[]; trial: boolean } | { op: 'clear' } {
+export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[]; trial: boolean } | { op: 'clear'; trial: boolean } {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError("request.voice.sendword takes {op:'start', word, variants?} | {op:'clear'}");
   const p = payload as Record<string, unknown>;
   if (p.op === 'clear') {
-    if (Object.keys(p).length !== 1) throw new TypeError("{op:'clear'} takes no other field");
-    return { op: 'clear' };
+    // Aegis L-2: {op:'clear', trial:true} drops only the word being taught; the held send word stays
+    if (Object.keys(p).some((k) => k !== 'op' && k !== 'trial') || (p.trial !== undefined && typeof p.trial !== 'boolean')) throw new TypeError("{op:'clear'} takes trial? only");
+    return { op: 'clear', trial: p.trial === true };
   }
   if (p.op !== 'start') throw new TypeError("op is 'start' or 'clear'");
   if (Object.keys(p).some((k) => k !== 'op' && k !== 'word' && k !== 'variants' && k !== 'trial')) throw new TypeError("{op:'start'} takes word, variants? and trial?");

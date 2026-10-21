@@ -322,9 +322,10 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     }
   });
   it('the request shape is strict', () => {
-    expect(parseSendWordRequest({ op: 'clear' })).toEqual({ op: 'clear' });
+    expect(parseSendWordRequest({ op: 'clear' })).toEqual({ op: 'clear', trial: false });
+    expect(parseSendWordRequest({ op: 'clear', trial: true })).toEqual({ op: 'clear', trial: true }); // Aegis L-2
     expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [], trial: false });
     expect(parseSendWordRequest({ op: 'start', word: 'over', trial: true })).toMatchObject({ trial: true });
-    for (const bad of [null, { op: 'set' }, { op: 'clear', word: 'x' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
+    for (const bad of [null, { op: 'set' }, { op: 'clear', word: 'x' }, { op: 'clear', trial: 'yes' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
   });
 });

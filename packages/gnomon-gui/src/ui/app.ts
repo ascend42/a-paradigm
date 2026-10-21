@@ -1391,7 +1391,7 @@ async function closeTeach(): Promise<void> {
   teach = null;
   teachFor = null;
   // a trial word never outlives the dialog
-  if (client && was && was.step !== 'pick' && was.step !== 'done') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear' } }).catch(() => undefined);
+  if (client && was && was.step !== 'pick' && was.step !== 'done') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined); // Aegis L-2: only the trial; the held word stays
 }
 function paintTeach(): void {
   const s = teach;

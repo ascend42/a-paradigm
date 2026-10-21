@@ -1233,6 +1233,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         }
         voice.setTrialWord(null);
         writeTrialWord(home, null);
+        if (r.op === 'clear' && r.trial) return { trial: null, sendWord: ((x) => (x ? { text: x.text, variants: [...x.variants] } : null))(voice.sendWord()) };
         const w = writeSendWord(home, r.op === 'clear' ? null : { text: r.text, variants: r.variants });
         return { sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
       },
