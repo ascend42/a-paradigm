@@ -42,7 +42,7 @@ import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
-import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
+import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
@@ -1969,7 +1969,7 @@ function paintVoice(): void {
   });
   const btn = $('voice-pill');
   const trouble = cp.label !== null || cp.tail !== null;
-  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${bare && pv.live ? ' mic-live' : ''}${cap ? ` ${cap.display.className}` : ''}`;
+  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${cap ? ` ${cap.display.className}` : ''}`;
   btn.dataset.state = cp.label !== null ? `client-${c.phase}` : rung;
   btn.title = trouble && cp.title ? `${pv.title} ${cp.title}` : pv.title;
   btn.setAttribute('aria-label', pv.aria);
@@ -2013,8 +2013,8 @@ let statusAt: number | null = null;
 let captureFlash: ReturnType<typeof setTimeout> | null = null;
 let captionState: string | null = null;
 /**
- * The capture overlay: only while voice is attached and the voice app is connected (`live`). The meter is drawn from
- * the REAL level while hearing and is still otherwise (no decorative motion); the composer ghost line is its own
+ * The capture overlay: only while voice is attached and the voice app is connected (`live`). The meter shows only
+ * while hearing, drawn from the REAL level (meterShownOf; no decorative motion); the composer ghost line is its own
  * element, never the textarea (B1: the live words, committed solid and the tail dim, or "…"); the polite caption
  * changes on a state change only. Returns what the pill's fact reads (core/voice-ladder.ts voicePillOf), or null.
  */
@@ -2023,7 +2023,7 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
   captureTrack = live ? captureStep(captureTrack, freshCapture(captureStatusOf(status), statusAt, Date.now()), Date.now()) : null;
   const d = captureDisplayOf(captureTrack, Date.now(), live);
   const meter = $('voice-meter');
-  meter.hidden = !live;
+  meter.hidden = !meterShownOf(live, d);
   meter.style.setProperty('--level', String(d.meter));
   const ghost = $('composer-ghost');
   ghost.hidden = !d.ghost;

@@ -261,15 +261,15 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(css).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}animation: none !important/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
   });
-  it('the pill (Atelier 2026-10-21): an open mic is a filled --stamp dot with a soft ring, static; amber only for the clamp, vermilion only for speech not sent', () => {
+  it('the pill (Atelier 2026-10-21): an open mic is a filled --live dot with a soft ring, static; amber only for the clamp, vermilion only for speech not sent', () => {
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^\.voice-(pill|meter|fact|dot)/.test(l));
-    expect(rules.find((l) => l.startsWith('.voice-pill.live .voice-dot'))).toMatch(/background: var\(--stamp\); border-color: var\(--stamp\); box-shadow: 0 0 0 3px/);
+    expect(rules.find((l) => l.startsWith('.voice-pill.live .voice-dot'))).toMatch(/background: var\(--live\); border-color: var\(--live\); box-shadow: 0 0 0 3px/);
     for (const l of rules) {
       expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring|slate/);
       if (/--warn-/.test(l)) expect(l, l).toMatch(/clamp/);
       if (/--fail/.test(l)) expect(l, l).toMatch(/^\.voice-fact\.fail \{/);
     }
-    expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--stamp\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level
+    expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--live\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level
     expect(css).not.toMatch(/@keyframes voice-(pulse|ring|meter)/);
   });
 });

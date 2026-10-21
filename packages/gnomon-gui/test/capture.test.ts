@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, captureDismiss, DROP_LABEL, dropLabelOf, refusalPhrase } from '../src/core/capture.js';
+import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, captureDismiss, meterShownOf, DROP_LABEL, dropLabelOf, refusalPhrase } from '../src/core/capture.js';
 import { clientOf, clientPillOf, oneLine } from '../src/core/voice-client.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +41,13 @@ describe('the pill words (V4: a drop says its reason only)', () => {
     expect(show({ state: 'hearing', segId: 's1', level: 0.6 })).toMatchObject({ label: 'Hearing you…', className: 'capture-hearing', meter: 0.6, ghost: true });
     expect(show({ state: 'transcribing', segId: 's1' })).toMatchObject({ label: 'Catching that…', meter: 0, ghost: true });
     expect(show({ state: 'captured', segId: 's1' })).toMatchObject({ label: 'Got it', ghost: false });
+  });
+  it('the pill meter shows ONLY while hearing (Luna #9), and app.ts hides it otherwise', () => {
+    expect(meterShownOf(true, show({ state: 'hearing', segId: 's1', level: 0.6 }))).toBe(true);
+    for (const state of ['idle', 'transcribing', 'captured'] as const) expect(meterShownOf(true, show({ state, segId: 's1' })), state).toBe(false);
+    expect(meterShownOf(true, show({ state: 'dropped', segId: 's1', reason: 'too-short' }))).toBe(false);
+    expect(meterShownOf(false, show({ state: 'hearing', segId: 's1', level: 0.6 }))).toBe(false); // not live: never
+    expect(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'ui', 'app.ts'), 'utf8')).toContain('meter.hidden = !meterShownOf(live, d);');
   });
   it('each drop reason has its own readable words, never text or a count', () => {
     expect(show({ state: 'dropped', segId: 's1', reason: 'too-short' }).label).toBe('Too short to catch. Hold a little longer, or say it again');

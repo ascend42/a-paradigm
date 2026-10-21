@@ -201,6 +201,9 @@ export interface CaptureDisplay {
   flashLeftMs: number | null;
 }
 
+/** Luna #9: the pill's level meter is shown ONLY while the capture state is `hearing` (never a still meter at rest). */
+export const meterShownOf = (live: boolean, d: Pick<CaptureDisplay, 'state'>): boolean => live && d.state === 'hearing';
+
 /** The pill overlay for an attached voice with the voice app connected; anything else shows nothing. */
 export function captureDisplayOf(t: CaptureTrack | null, now: number, live: boolean): CaptureDisplay {
   const rest: CaptureDisplay = { state: 'idle', label: null, className: 'capture-idle', meter: 0, ghost: false, ghostText: null, caption: '', flashLeftMs: null };

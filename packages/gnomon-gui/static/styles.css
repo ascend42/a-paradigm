@@ -52,6 +52,8 @@
   --cap-shadow: rgba(40, 30, 15, .22);
   --cap-glow: none;
   --stamp: #3F6664;
+  /* the open mic (the comp's --live): an alias of --stamp's value, for the pill's dot and meter */
+  --live: #3F6664;
   --title-font: "Fraunces", Georgia, serif;
   --display-wght: 600;
   --title-transform: none;
@@ -100,6 +102,7 @@
   --cap-shadow: transparent;
   --cap-glow: 0 0 8px 1px rgba(160, 255, 220, .22);
   --stamp: #A8CFCB;
+  --live: #A8CFCB;
   --title-font: var(--mono);
   --display-wght: 500;
   --title-transform: uppercase;
@@ -615,8 +618,8 @@ html, body {
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
 /* #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.pill): the header
-   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --stamp
-   dot with a soft ring (the comp's --live), a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
+   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --live
+   dot (an alias of --stamp's value) with a soft ring, a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
    --warn-ink, speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
    only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
@@ -624,7 +627,7 @@ html, body {
 [data-theme="night"] .voice-pill { border-radius: 0; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
 .voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--sec); background: transparent; flex: none; }
-.voice-pill.live .voice-dot { background: var(--stamp); border-color: var(--stamp); box-shadow: 0 0 0 3px color-mix(in srgb, var(--stamp) 22%, transparent); }
+.voice-pill.live .voice-dot { background: var(--live); border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
 .voice-fact { color: var(--sec); font-weight: 400; }
 .voice-fact:empty { display: none; }
 .voice-fact.fail { color: var(--fail); }
@@ -633,11 +636,11 @@ html, body {
 /* the voice app's trouble (not running, crashed, setting up): a dashed edge, the words in the fact */
 .voice-pill.voice-trouble { border-style: dashed; }
 .voice-pill.clamp.voice-trouble { border-style: solid; }
-/* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level) while hearing,
-   and still otherwise; no decorative animation */
+/* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level), shown ONLY while
+   the capture state is `hearing` (Luna #9: hidden otherwise, never a still meter); no decorative animation */
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
 .voice-meter[hidden] { display: none; }
-.voice-meter i { display: block; width: 2px; background: var(--stamp); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+.voice-meter i { display: block; width: 2px; background: var(--live); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
 .voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
 /* the ladder (the pill's popover, role menu): Off, Talk, Dictate, Send word, Pieces, one line each, a cost tag */
 .voice-ladder { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px; max-width: calc(100vw - 24px); padding: 8px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
@@ -712,7 +715,7 @@ html, body {
 /* phrase N of 3: the REAL input level only (still otherwise; reduced motion: the global rule makes it instant) */
 .vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
 .vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
-.vs-meter.recording span { background: var(--stamp); }
+.vs-meter.recording span { background: var(--live); }
 @media (max-width: 560px) { .vs-flow, .vs-sec > .vs-timing { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
@@ -918,6 +921,10 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 [data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
 [data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
+/* Luna #4: a chosen night segment is [bracketed] and glows (the night idiom), not just an ink edge every key has */
+[data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key[aria-checked="true"]::before, [data-theme="night"] .seg-key[aria-pressed="true"]::before { content: "["; color: var(--ink); }
+[data-theme="night"] .seg-key.current::after, [data-theme="night"] .seg-key[aria-checked="true"]::after, [data-theme="night"] .seg-key[aria-pressed="true"]::after { content: "]"; color: var(--ink); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { text-shadow: var(--wm-glow); }
 
 /* fidelity 2 chat header: "title  ■ project · claude · started 13:58 · 9m" (meta never squeezed out by the title), the
    kernel-owned run mode as a small chip (`ask ▾`), and a ⋯ menu holding the counts and the raw toggle */
@@ -943,8 +950,14 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .composer-main > .composer-foot { margin-top: 0; justify-content: flex-start; }
 .composer-ctrls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .composer-tall { min-height: 0; padding: 1px 7px; line-height: 1.4; }
+/* Luna #4: the tall view is ON: an ink key by day; [bracketed] with the glow by night */
+.composer-tall[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+[data-theme="night"] .composer-tall[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
+[data-theme="night"] .composer-tall[aria-pressed="true"]::before { content: "["; color: var(--ink); }
+[data-theme="night"] .composer-tall[aria-pressed="true"]::after { content: "]"; color: var(--ink); }
 .composer-lines { font-size: 11px; white-space: nowrap; }
-.composer-ctrls .key.pri { min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
+/* Luna #8: the ONE send key at the comp's size (11.5px, 3px 9px, 24px tall) */
+.composer-ctrls .key.pri { min-height: 24px; padding: 3px 9px; font-size: 11.5px; box-shadow: none; }
 
 /* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
 .pilehead { padding: 12px 14px 8px; align-items: baseline; }

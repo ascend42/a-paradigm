@@ -206,6 +206,17 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(r.all((e) => e.attrs.get('role') === 'radiogroup')[0]!.attrs.get('aria-label')).toBe('Talk sends after');
     expect(r.text).toContain('talk sends after 8 s · pieces pause 1.5 s, up to 8 s');
     expect(rows({ delayMs: null })[4]!.value).toBe('talk sends after you press Enter · pieces pause 1.5 s, up to 8 s');
+    // Luna #4: by night the chosen segment is [bracketed] and glows (not just the ink edge every key has)
+    expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-checked="true"\]::before[^{]*\{ content: "\["/);
+    expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-checked="true"\]::after[^{]*\{ content: "\]"/);
+    expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-pressed="true"\] \{ text-shadow: var\(--wm-glow\)/);
+  });
+  it('the open mic is the --live token (an alias of --stamp in both themes) for the dot and the meter', () => {
+    expect(CSS.match(/--stamp: (#[0-9A-F]+);\n[^\n]*\n?\s*--live: (#[0-9A-F]+);/g)?.length).toBe(2);
+    for (const [, a, b] of CSS.matchAll(/--stamp: (#[0-9A-F]+);\n(?:\s*\/\*[^\n]*\*\/\n)?\s*--live: (#[0-9A-F]+);/g)) expect(b).toBe(a);
+    expect(CSS).toMatch(/\.voice-pill\.live \.voice-dot \{ background: var\(--live\)/);
+    expect(CSS).toMatch(/\.voice-meter i \{[^}]*background: var\(--live\)/);
+    expect(APP).not.toContain('mic-live');
   });
   it('the send word teaches INLINE under its row: pick, say once, I heard, one counter, risk check, save', () => {
     let s = initialTeach();
@@ -351,6 +362,10 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
     expect(composer).toMatch(/<button id="composer-tall" class="key quiet composer-tall" type="button" aria-pressed="false" aria-controls="composer-text"[^>]*>⤢<\/button>/);
     expect(composer).toContain('<span id="composer-lines" class="meta composer-lines">1 line</span>');
     expect(CSS).not.toMatch(/\.composer textarea \{[^}]*max-height: 40vh/);
+    // Luna #4: the tall view has a pressed state in both themes; #8: the send key at the comp's size
+    expect(CSS).toMatch(/\.composer-tall\[aria-pressed="true"\] \{ background: var\(--ink\); color: var\(--on-ink\)/);
+    expect(CSS).toMatch(/\[data-theme="night"\] \.composer-tall\[aria-pressed="true"\]::before \{ content: "\["/);
+    expect(CSS).toMatch(/\.composer-ctrls \.key\.pri \{ min-height: 24px; padding: 3px 9px; font-size: 11\.5px;/);
   });
 });
 
