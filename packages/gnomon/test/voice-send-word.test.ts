@@ -173,8 +173,16 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     await r.turn('I am teaching my send word now');
     r.v.setTrialWord({ text: 'ship it' }, 10_000);
     const take = await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t });
-    expect(take.forwardable).toBe(true);
-    expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ cause: 'not-send-word' });
+    // Aegis L-3: the take is accepted (shown to the dialog) but never forwardable, never a draft
+    expect(take).toMatchObject({ forwardable: false, trialTake: true });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, text: 'ship it' });
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
+    // a take never anchors adjacency: with only takes nearby (the lead-in consumed), another short take is refused
+    const r2 = rig();
+    r2.v.setSendWord(null);
+    await r2.attach('word');
+    r2.v.setTrialWord({ text: 'ship it' }, 60_000);
+    expect(await r2.turn('ship it', { speakerBasis: 'adjacent', t0: r2.clock.t - 700, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
     r.clock.t += 11_000;
     expect(await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ refused: 'voice-speaker' });
   });

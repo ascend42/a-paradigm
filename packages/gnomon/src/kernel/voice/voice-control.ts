@@ -294,6 +294,8 @@ interface UserTurn {
   refused: RefusedError | undefined;
   /** TD-2026-10-21-514: the whole utterance is the held send word (#send-word-matcher at receipt; the text is not kept) */
   isWord: boolean;
+  /** Aegis L-3: a take of the word being taught: never forwardable, never a draft, never an adjacency anchor */
+  trialTake?: boolean;
 }
 interface Attachment {
   voiceSessionId: string;
@@ -397,7 +399,7 @@ export class VoiceControl {
 
   /** a turn the human may still send from the composer (dictation): accepted, unforwarded, of the live attachment */
   #pendingDictation(t: UserTurn): boolean {
-    return !t.refused && !t.intercepted && !this.#forwarded.has(t.turnId) && this.#attachment !== null && t.attachment === this.#attachment.voiceSessionId;
+    return !t.refused && !t.intercepted && !t.trialTake && !this.#forwarded.has(t.turnId) && this.#attachment !== null && t.attachment === this.#attachment.voiceSessionId;
   }
 
   /**
@@ -718,6 +720,7 @@ export class VoiceControl {
           aec: p.aec as string | undefined,
           refused: undefined,
           isWord: typeof p.text === 'string' && isSendWord(p.text, this.#word()),
+          ...(typeof p.text === 'string' && !isSendWord(p.text, this.#word()) && isSendWord(p.text, this.#trialWord()) ? { trialTake: true } : {}),
         };
         // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
         // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
@@ -735,7 +738,8 @@ export class VoiceControl {
           stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}), ...(drops ? { localDrops: drops } : {}) };
         } else {
           // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send)
-          stamped = { ...stamped, forwardable: !turn.intercepted };
+          // Aegis L-3: a take of the word being taught is shown to the dialog (trialTake) but never forwardable
+          stamped = { ...stamped, forwardable: !turn.intercepted && !turn.trialTake, ...(turn.trialTake ? { trialTake: true } : {}) };
         }
         commit.push((seq) => {
           turn.seq = seq;
@@ -775,7 +779,7 @@ export class VoiceControl {
       const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
       return { ...r, forwardable: false, refused: d.reason, ...(typeof d.cause === 'string' ? { refusedCause: d.cause } : {}) };
     }
-    if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true };
+    if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true, ...(stamped.trialTake === true ? { trialTake: true } : {}) };
     return r;
   }
 
@@ -791,7 +795,7 @@ export class VoiceControl {
     if (typeof p.text !== 'string' || !(isSendWord(p.text, this.#word()) || isSendWord(p.text, this.#trialWord()))) return false;
     const start = receivedAt - (p.t1 - p.t0);
     for (const t of this.#userTurns.values()) {
-      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.attachment !== a.voiceSessionId || t.isWord) continue;
+      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.attachment !== a.voiceSessionId || t.isWord) continue;
       if (this.#pendingDictation(t) || Math.abs(start - t.receivedAt) <= SEND_WORD_ADJACENT_MS) return true;
     }
     return false;

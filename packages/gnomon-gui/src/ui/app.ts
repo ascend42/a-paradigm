@@ -1439,7 +1439,8 @@ async function submitTeach(trusted: boolean): Promise<void> {
 }
 /** While the dialog listens, a voice turn is a take (never a draft): its text, or null when it was withheld. */
 function teachHeard(p: Record<string, unknown> | null): void {
-  const text = p && p.forwardable === true && typeof p.text === 'string' && p.text.trim() ? p.text : null;
+  // a take of the word being taught is stamped trialTake (never forwardable, Aegis L-3); the lead-in is a normal turn
+  const text = p && (p.forwardable === true || p.trialTake === true) && typeof p.text === 'string' && p.text.trim() ? p.text : null;
   void teachStep({ type: 'heard', text });
 }
 
