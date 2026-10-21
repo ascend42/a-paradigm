@@ -83,13 +83,18 @@ describe('teach the send word', () => {
     expect(teachCommit(s)).toBeNull();
   });
 
-  it('validation: approval words are refused; a common word asks once; no suggestion names the product', () => {
+  it('validation: approval words are refused; a custom common word asks once; no suggestion names the product', () => {
     expect(run(initialTeach(), { type: 'pick', text: 'approve' })).toMatchObject({ step: 'pick', hint: expect.stringMatching(/approval or command/) });
-    const c = run(initialTeach(), { type: 'pick', text: 'send' });
+    const c = run(initialTeach(), { type: 'pick', text: 'thanks' });
     expect(c.step).toBe('confirm-common');
     expect(run(c, { type: 'confirmCommon', yes: true }).step).toBe('takes');
     expect(run(c, { type: 'confirmCommon', yes: false }).step).toBe('pick');
     expect(TEACH_SUGGESTIONS.some((w) => /gnomon/i.test(w))).toBe(false);
+  });
+
+  it('the recommended words never trigger the common-word warning (Luna #1), even "send"', () => {
+    for (const w of TEACH_SUGGESTIONS) expect(run(initialTeach(), { type: 'pick', text: w })).toMatchObject({ step: 'takes', word: w, hint: null });
+    expect(run(initialTeach(), { type: 'pick', text: 'Send!' }).step).toBe('takes');
   });
 
   it('a trial that is not up yet changes nothing; one that ends after it was seen goes back to pick', () => {

@@ -111,7 +111,8 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
       if (s.step !== 'pick' && s.step !== 'confirm-common') return s;
       const v = validateSendWord(e.text);
       if (!v.ok) return { ...s, step: 'pick', hint: REASONS[v.reason] ?? 'Not a usable send word.' };
-      if (v.warn === 'common') return { ...s, step: 'confirm-common', word: v.text, hint: `“${v.text}” is a very common word and may send by accident.` };
+      // the recommended words skip the scare step; only a custom common word asks for a second confirmation
+      if (v.warn === 'common' && !(TEACH_SUGGESTIONS as readonly string[]).includes(v.text)) return { ...s, step: 'confirm-common', word: v.text, hint: `“${v.text}” is a very common word and may send by accident.` };
       return { ...initialTeach(s.ack), step: 'takes', word: v.text };
     }
     case 'confirmCommon':
