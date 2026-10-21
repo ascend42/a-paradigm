@@ -18,6 +18,7 @@ import { getDefaultPurposeContent } from '@a-company/purpose-core';
 import { getDefaultPremiseContent } from '@a-company/premise-core';
 import { detectIDE, loadParadigmFiles, syncToIDE } from '../core/ide-adapters/index.js';
 import { indexCommand } from './scan/index.js';
+import { ensureSessionMarkersGitignore } from '../core/session-markers-gitignore.js';
 import { detectDiscipline, getDisciplineConfig, detectStack, getStackConfig, STACK_PRESETS } from '../core/discipline.js';
 
 // ============================================
@@ -706,6 +707,9 @@ export async function initCommand(options: InitOptions) {
     spinner.fail(chalk.red(`Failed: ${(error as Error).message}`));
     return;
   }
+
+  // Keep hook session markers (.purpose-paths, .orchestrated, ...) out of git
+  ensureSessionMarkersGitignore(paradigmDir);
 
   // Create .premise file
   const premisePath = path.join(cwd, '.premise');
