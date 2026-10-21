@@ -62,6 +62,21 @@ describe('hooksInstallCommand - Claude Code', () => {
     expect(settings.hooks.PostToolUse).toBeDefined();
   });
 
+  it('project-level install registers the SessionStart hook-health warning and writes its script + the monitor', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ claudeCode: true });
+    await hooksInstallCommand({ claudeCode: true }); // idempotent: no duplicate entry
+    const settings = JSON.parse(fs.readFileSync(path.join(rootDir, '.claude', 'settings.json'), 'utf8'));
+    const entries = JSON.stringify(settings.hooks.SessionStart ?? []).match(/paradigm-session-start\.sh/g) ?? [];
+    expect(entries).toHaveLength(1);
+    expect(settings.hooks.SessionStart[0].hooks[0]).toMatchObject({ type: 'command', timeout: 10 });
+    for (const f of ['paradigm-session-start.sh', 'paradigm-hook-monitor.sh']) {
+      const p = path.join(rootDir, '.claude', 'hooks', f);
+      expect(fs.existsSync(p), f).toBe(true);
+      expect(fs.statSync(p).mode & 0o111, f).not.toBe(0);
+    }
+  });
+
   it('merges with existing Claude settings (non-destructive)', async () => {
     // Create existing settings
     const claudeDir = path.join(rootDir, '.claude');

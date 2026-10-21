@@ -43,7 +43,8 @@ components:
       context), e.g. "Paradigm Stop hook timed out 11 time(s) since <date>;
       enforcement did not run. Run `paradigm doctor`." Once per session
       (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
-      ring to its cap. Always exits 0.
+      ring to its cap. Always exits 0. Registered by the plugin hooks.json AND by
+      the project-level `paradigm hooks install --claude-code` (.claude/settings.json).
     type: hook
     file: scripts/claude-code-session-start.sh
     tags:
