@@ -40,7 +40,7 @@
  *     appends request.voice.send.claim before the one send path.
  */
 
-import { matchSendWord, SEND_WORD_GRACE_MS, SEND_WORD_VISIBLE_MS, sanitizeDisplayText, type SendPolicy, type SendWord } from '@a-company/gnomon-contracts';
+import { matchSendWord, PIECE_CAP_MS, PIECE_GAP_MS, SEND_WORD_GRACE_MS, SEND_WORD_VISIBLE_MS, sanitizeDisplayText, type SendPolicy, type SendWord } from '@a-company/gnomon-contracts';
 
 export type Activity = 'speaking' | 'transcribing' | 'idle';
 export const DELAY_CHOICES: readonly (number | null)[] = Object.freeze([3000, 5000, 8000, 15000, null]);
@@ -102,8 +102,10 @@ export interface DictationState {
   grace: { seq: number; startedAt: number } | null;
   /** a near miss of the send word (the pill asks "Did you say '<word>'?") */
   nearMiss: string | null;
-  /** the in-flight send's claim (the word turn), when it was sent by the send word */
-  claim: { by: 'word'; turnSeq: number } | null;
+  /** the in-flight send's claim: the word turn (send word) or the piece's turns (pieces) */
+  claim: { by: 'word'; turnSeq: number } | { by: 'piece'; turnSeqs: number[] } | null;
+  /** $send-by-pieces: when the current piece's first part arrived (the cap runs from here) */
+  pieceStartedAt: number | null;
 }
 
 export type HoldBy = 'gui' | 'voice' | 'detached';
@@ -130,7 +132,25 @@ export type DictationEvent =
   | { type: 'graceCancel'; now: number };
 
 export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): DictationState {
-  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null };
+  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null };
+}
+
+/**
+ * $send-by-pieces (TD-2026-10-21-514): the current piece may go now — unedited dictated parts, not held, the session
+ * attached and not busy (its streaming state, from the kernel's rows), and either a PIECE_GAP_MS gap since the last
+ * speech (the voice app idle) or the piece reached PIECE_CAP_MS (it never grows past the cap).
+ */
+export function pieceDue(s: DictationState, now: number): boolean {
+  if (s.policy !== 'pieces' || !s.parts.length || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
+  const gap = s.activity === 'idle' && now - s.lastActivityAt >= PIECE_GAP_MS;
+  const cap = s.pieceStartedAt !== null && now - s.pieceStartedAt >= PIECE_CAP_MS;
+  return gap || cap;
+}
+
+/** The piece ring's drained fraction 0..1 toward the gap (null when no piece is gathering). */
+export function pieceFraction(s: DictationState, now: number): number | null {
+  if (s.policy !== 'pieces' || !s.parts.length || s.edited || s.hold || s.sending) return null;
+  return Math.min(1, Math.max(0, (now - s.lastActivityAt) / PIECE_GAP_MS));
 }
 
 /** The draft may be sent by the word now: a draft, visible ≥ SEND_WORD_VISIBLE_MS, page visible, focused, attached, idle. */
@@ -229,7 +249,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
         if (m === 'near') return { ...n0, nearMiss: s.sendWord.text };
       }
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -261,6 +281,8 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       if (e.busy === s.busy) return s;
       return settle({ ...s, busy: e.busy, lastActivityAt: e.now }, e.now, true);
     case 'tick':
+      // $send-by-pieces: the piece is due (gap or cap): send its parts with the piece claim
+      if (pieceDue(s, e.now)) return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'piece', turnSeqs: s.parts.map((p) => p.seq) } };
       // the send word's grace ran out: send with the claim (still ready: visible, focused, attached)
       if (s.grace && e.now - s.grace.startedAt >= SEND_WORD_GRACE_MS) {
         if (!wordReady(s, e.now)) return { ...s, grace: null };
@@ -271,7 +293,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
     case 'sendNow':
       return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: null } : s;
     case 'sent':
-      return settle({ ...cleared(s), claim: null, visibleSince: null, nearMiss: null }, e.now, true);
+      return settle({ ...cleared(s), claim: null, visibleSince: null, nearMiss: null, pieceStartedAt: null }, e.now, true);
     case 'sendFailed':
       return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false, claim: null }, e.now, false); // never loop a refused send: wait for the human
     case 'setPolicy':
@@ -309,8 +331,9 @@ export interface SendRequest {
 }
 
 /** TD-2026-10-21-514: the claim the app appends (request.voice.send.claim) right before a send-word send. */
-export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSeq: number } | null {
-  return s.claim && s.hsid ? { hsid: s.hsid, by: s.claim.by, turnSeq: s.claim.turnSeq } : null;
+export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSeq: number } | { hsid: string; by: 'piece'; turnSeqs: number[] } | null {
+  if (!s.claim || !s.hsid) return null;
+  return s.claim.by === 'word' ? { hsid: s.hsid, by: 'word', turnSeq: s.claim.turnSeq } : { hsid: s.hsid, by: 'piece', turnSeqs: [...s.claim.turnSeqs] };
 }
 
 /** The `session.send` params the draft makes, or null (nothing, or no session). */
@@ -362,6 +385,7 @@ export const WORD_GRACE_LINE = 'Sending… Esc keeps it';
 export function draftState(s: DictationState): DraftState {
   if (!hasDraft(s) || !s.parts.length) return 'idle';
   if (s.grace) return 'word-grace';
+  if (s.policy === 'pieces' && !s.edited && !s.hold) return 'piece-ring';
   if (ambientDraft(s)) return 'ambient';
   if (s.delayMs === null) return 'ptt-manual';
   return s.hold ? 'ptt-held' : 'ptt-countdown';
@@ -377,6 +401,7 @@ export function dictationNote(s: DictationState): string | null {
   if (s.grace) return WORD_GRACE_LINE;
   if (s.nearMiss) return `Did you say '${s.nearMiss}'? Say it again or press Enter`;
   if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
+  if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';
   if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE; // nothing counts down, so a hold means nothing here
   if (s.hold) return 'draft held';
   if (s.delayMs === null) return 'draft · auto-send off';

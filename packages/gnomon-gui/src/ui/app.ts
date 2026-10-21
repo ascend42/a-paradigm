@@ -41,7 +41,7 @@ import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
-import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -1525,10 +1525,11 @@ function paintDictation(): void {
   const bar = $('dictation');
   bar.hidden = !on || !dict.focusedHere;
   const now = Date.now();
-  const frac = ringFraction(dict, now);
+  // $send-by-pieces: the piece ring drains toward the gap that sends the piece
+  const frac = draftControls(dict).pieceRing ? pieceFraction(dict, now) : ringFraction(dict, now);
   const rem = ringRemaining(dict, now);
   const controls = draftControls(dict);
-  $('dictation-ring').hidden = frac === null || !controls.ring;
+  $('dictation-ring').hidden = frac === null || !(controls.ring || controls.pieceRing);
   if (frac !== null) $('dictation-arc').setAttribute('stroke-dashoffset', String(Math.round(frac * 1000) / 10));
   put($('dictation-secs'), rem === null ? '' : `${Math.ceil(rem / 1000)} s`);
   const line = on ? liveLine(dict, now) : '';
