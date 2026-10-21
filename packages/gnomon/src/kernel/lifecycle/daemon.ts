@@ -71,7 +71,6 @@
  * first relay and never hold idle; every exit (idle included) stops them
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
-import * as nodeOs from 'node:os';
 import { generateKeyPairSync } from 'node:crypto';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperPush, HelperTransport } from '../identity/helper.js';
@@ -120,6 +119,7 @@ import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { ClaudeRepinCards, REPIN_POLL_MS } from '../runner/repin-card.js';
 import { resolveClaudeSource } from '../runner/preflight.js';
+import { osUserHome } from '../runner/env.js';
 import { claudeVerifierFor } from '../../platform/claude-verifier.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
@@ -806,7 +806,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // managed-policy list and the mid-session watch are M1.7 (#claude-adapter, G-SUB-01/05)
     billing: seams.billing ?? {
       env: () => ({ ...process.env }),
-      layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
+      layers: () => fileLayers([{ where: 'user-settings', path: path.join(osUserHome(), '.claude', 'settings.json'), kind: 'settings' }]),
     },
   });
   // M1.6 slice 2: a restart no longer forgets today's spend — the meter is rebuilt from the chain. Runs BEFORE
@@ -892,7 +892,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     broker,
     requestedBy: kernelPrincipal,
     verifier: claudeVerifierFor(process.platform),
-    source: () => (claudeRow ? (resolveClaudeSource({ ...(supSeams.claudePath ? { explicit: supSeams.claudePath } : {}), row: claudeRow, home: supSeams.userHome ?? nodeOs.homedir() })?.real ?? null) : null),
+    source: () => (claudeRow ? (resolveClaudeSource({ ...(supSeams.claudePath ? { explicit: supSeams.claudePath } : {}), row: claudeRow, home: supSeams.userHome ?? osUserHome() })?.real ?? null) : null),
     ...(supSeams.allowScripts ? { allowScripts: true } : {}),
   });
   const repinTimer = setInterval(() => void repin.poll().catch(() => undefined), REPIN_POLL_MS);

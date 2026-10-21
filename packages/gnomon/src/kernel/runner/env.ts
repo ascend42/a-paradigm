@@ -97,6 +97,108 @@ export function defaultSessionPath(o: { platform?: NodeJS.Platform; nodeDir?: st
   return [...new Set([...head, ...tail])];
 }
 
+/**
+ * Aegis L (TD-2026-10-21-077): the node dir a session PATH carries — the dir of the REALPATH of `execPath`. Chosen
+ * option: it is always kept, and planSessionPath WRITE-DENIES it whenever this user can write it (under the home
+ * for nvm/volta, inside the Homebrew prefix for brew); a root-owned dir needs no deny. null on win32 / failure.
+ */
+export function sessionNodeDir(execPath: string, d: { platform?: NodeJS.Platform } = {}): string | null {
+  if ((d.platform ?? process.platform) === 'win32') return null;
+  try {
+    const dir = path.dirname(fs.realpathSync.native(execPath));
+    return path.posix.isAbsolute(dir) && !dir.includes(':') ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Realpath the longest existing prefix of `p` and append the rest (SBPL matches resolved paths). */
+function realLoose(p: string): string {
+  let cur = p;
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(cur), ...rest.reverse());
+    } catch {
+      const up = path.dirname(cur);
+      if (up === cur) return p;
+      rest.push(path.basename(cur));
+      cur = up;
+    }
+  }
+}
+
+/** Whether this user could write `p` (or create it: the nearest existing ancestor): owner, or W_OK. */
+function userWritable(p: string, uid: number | undefined): boolean {
+  let cur = p;
+  for (;;) {
+    try {
+      const st = fs.statSync(cur);
+      if (uid !== undefined && st.uid === uid) return true;
+      try {
+        fs.accessSync(cur, fs.constants.W_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    } catch {
+      const up = path.dirname(cur);
+      if (up === cur) return false;
+      cur = up;
+    }
+  }
+}
+
+const within = (child: string, parent: string): boolean => {
+  const rel = path.relative(parent, child);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+};
+
+/**
+ * TD-2026-10-21-162 (founder ruling; Aegis M): every user-writable dir on the session PATH is WRITE-DENIED in the
+ * session profile, so a session cannot plant an `ls`/`git` a later session's auto-passed read-only command runs.
+ * Per entry (POSIX; resolved by realpath, never from env — no HOMEBREW_PREFIX):
+ *   - under the OS home (~/.local/bin, an nvm/volta node dir) ⇒ deny the dir (even before it exists);
+ *   - a Homebrew prefix (the entry is <prefix>/bin|sbin and <prefix>/Cellar exists) that this user can write ⇒ deny
+ *     the WHOLE prefix (bin entries are links into Cellar); for the Intel prefix /usr/local only
+ *     /usr/local/{bin,sbin,Cellar} (not all of /usr/local);
+ *   - any other entry this user can write (owner or W_OK, or its nearest existing ancestor) ⇒ deny the dir.
+ * An entry that IS the home or an ancestor of it is DROPPED from the PATH (denying it would deny the whole home).
+ * Reads and exec stay allowed (file-write* only).
+ */
+export function planSessionPath(dirs: readonly string[], o: { home?: string; uid?: number } = {}): { dirs: string[]; denies: string[] } {
+  const home = o.home ? realLoose(o.home) : undefined;
+  const uid = o.uid ?? process.getuid?.();
+  const kept: string[] = [];
+  const denies = new Set<string>();
+  for (const d of dirs) {
+    const real = realLoose(d);
+    if (home && within(home, real)) continue; // the home itself, or `/`, `/Users`: never a PATH entry
+    kept.push(d);
+    if (home && within(real, home)) {
+      denies.add(real);
+      continue;
+    }
+    const base = path.basename(real);
+    const prefix = path.dirname(real);
+    const cellar = path.join(prefix, 'Cellar');
+    if ((base === 'bin' || base === 'sbin') && fs.existsSync(cellar) && (userWritable(real, uid) || userWritable(cellar, uid))) {
+      if (prefix === '/usr/local') for (const x of ['bin', 'sbin', 'Cellar']) denies.add(path.join(prefix, x));
+      else denies.add(prefix);
+      continue;
+    }
+    if (userWritable(real, uid)) denies.add(real);
+  }
+  // a deny inside another deny is redundant
+  const all = [...denies].sort();
+  return { dirs: kept, denies: all.filter((x) => !all.some((y) => y !== x && within(x, y))) };
+}
+
+/** The OS user home (os.userInfo().homedir via the resolved identity), else os.homedir(); one helper for every kernel reader. */
+export function osUserHome(): string {
+  return sessionIdentity()?.home ?? os.homedir();
+}
+
 /** The session PATH: the configured list, else the default; null ⇒ keep the allowlisted PATH (win32 only). */
 export function sessionPathFor(configured: readonly string[] | null | undefined, o: { platform?: NodeJS.Platform; nodeDir?: string; home?: string } = {}): string | null {
   const platform = o.platform ?? process.platform;

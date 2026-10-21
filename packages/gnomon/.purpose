@@ -2359,6 +2359,20 @@ components:
       test/session-env-identity.test.ts, test/session-supervisor.test.ts
       ("session env identity from the OS"), test/local-lane-spawn.test.ts
       (Aegis L1/L2), test/budget-fuse.test.ts (config.sessions.path).
+      TD-2026-10-21-162 (Aegis M): planSessionPath write-denies every
+      user-writable PATH dir (the supervisor's #pathDenies, passed to
+      LocalLane as the REQUIRED pathDenies with the REQUIRED sessionPath):
+      in-home dirs (~/.local/bin, nvm/volta node), a Homebrew prefix whole
+      (<prefix>/bin|sbin + <prefix>/Cellar, by realpath, never
+      HOMEBREW_PREFIX; /usr/local only bin/sbin/Cellar), any other
+      owner/W_OK dir; the home or its ancestors are dropped from PATH.
+      PERSISTENCE_PATHS gains .local/bin. sessionNodeDir = dirname of the
+      realpath of process.execPath (kept; denied when writable).
+      osUserHome() is the one home helper the daemon's law-7 user layer and
+      claude source use (never $HOME). Tests: session-env-identity
+      (planSessionPath), session-sandbox (EPERM rig: ~/.local/bin and a
+      brew-shaped prefix unwritable, read + exec ok), session-supervisor
+      (real /opt/homebrew where user-writable).
     model-picker: >-
       Founder ask 2026-10-20 ("is there no way to change the model?").
       session.open{model}: anything other than the routing values

@@ -425,8 +425,33 @@ describe.skipIf(!SANDBOX_OK)('session env identity from the OS (the re-exec\'d d
     const p = ((await argvOf()).ident as Record<string, string>).PATH!.split(':');
     expect(p).not.toContain('/daemon/path/probe');
     expect(p).toContain('/opt/homebrew/bin');
-    expect(p[0]).toBe(path.dirname(process.execPath));
+    expect(p[0]).toBe(path.dirname(fs.realpathSync.native(process.execPath))); // Aegis L: the node dir by realpath
     expect(JSON.stringify(r.rows)).not.toContain('/daemon/path/probe');
+  });
+  // capability, not platform: only where a user-writable Homebrew prefix exists (TD-2026-10-21-162)
+  const BREW_RW = ((): boolean => {
+    try {
+      fs.accessSync('/opt/homebrew/Cellar', fs.constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  it.runIf(BREW_RW)('TD-2026-10-21-162: the user-writable /opt/homebrew prefix is write-denied for the session (sandbox + Claude Edit rule); exec still works', async () => {
+    const probe = `/opt/homebrew/gnomon-probe-${process.pid}-${Date.now()}`;
+    try {
+      const r = rig();
+      setMode(w, { probeWrite: probe });
+      expect((await open(r.sup)).state).toBe('running'); // the session (node from the brew prefix) still executes
+      const a = await argvOf();
+      expect(trace(w).find((t) => t.t === 'version')!.probe).toBe('blocked');
+      expect(fs.existsSync(probe)).toBe(false);
+      const args = a.args as string[];
+      const deny = JSON.parse(fs.readFileSync(args[args.indexOf('--settings') + 1]!, 'utf8')).permissions.deny as string[];
+      expect(deny.some((d) => d.startsWith('Edit(') && d.includes(fs.realpathSync.native('/opt/homebrew')))).toBe(true);
+    } finally {
+      fs.rmSync(probe, { force: true });
+    }
   });
   it('Aegis ruling 3: an incomplete OS identity logs one session.sandbox{phase:identity, missing} row (names only); a refused auth then names the missing USER', async () => {
     const r = rig({ identity: () => ({ ...(sessionIdentity() ?? {}), user: undefined }) as SessionIdentity });

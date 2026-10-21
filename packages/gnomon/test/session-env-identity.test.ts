@@ -9,7 +9,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildSessionEnv, defaultSessionPath, ENV_ALLOWLIST, IDENTITY_KEYS, missingIdentity, resolveSessionIdentity, sessionPathFor, validTempDir, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
+import { buildSessionEnv, defaultSessionPath, ENV_ALLOWLIST, IDENTITY_KEYS, missingIdentity, planSessionPath, resolveSessionIdentity, sessionNodeDir, sessionPathFor, validTempDir, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
+import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
 
 /** capabilities, not platforms: POSIX uid + mode bits; darwin's per-user temp dir via getconf */
 const POSIX = typeof process.getuid === 'function';
@@ -144,5 +145,54 @@ describe('Aegis L2 / ruling 3: the OS home and the missing-identity names', () =
     expect(missingIdentity({}, 'darwin')).toEqual(['USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'HOME']);
     expect(missingIdentity({ user: 'a', shell: '/bin/sh', home: '/h' }, 'linux')).toEqual([]);
     expect(missingIdentity(null, 'win32')).toEqual([]);
+  });
+});
+
+describe('TD-2026-10-21-162 / Aegis M: every user-writable dir on the session PATH is write-denied', () => {
+  const rp = (p: string): string => fs.realpathSync.native(p);
+  it.runIf(POSIX)('~/.local/bin (even before it exists), an in-home node dir, a user-writable brew prefix as a WHOLE subpath; root-owned dirs are not denied', () => {
+    const root = ownedDir();
+    const home = path.join(root, 'home');
+    fs.mkdirSync(path.join(home, '.nvm', 'v24', 'bin'), { recursive: true });
+    const brew = path.join(root, 'brew');
+    fs.mkdirSync(path.join(brew, 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(brew, 'Cellar'));
+    const plain = path.join(root, 'tools', 'bin');
+    fs.mkdirSync(plain, { recursive: true });
+    const p = planSessionPath([path.join(home, '.nvm', 'v24', 'bin'), path.join(home, '.local', 'bin'), path.join(brew, 'bin'), plain, '/usr/bin', '/bin'], { home });
+    expect(p.denies).toEqual(expect.arrayContaining([rp(path.join(home, '.nvm', 'v24', 'bin')), path.join(rp(home), '.local', 'bin'), rp(brew), rp(plain)]));
+    expect(p.denies).not.toContain(rp(path.join(brew, 'bin'))); // covered by the prefix deny
+    expect(p.denies.some((d) => d === '/usr/bin' || d === '/bin' || d === rp('/usr/bin'))).toBe(false);
+    expect(p.dirs).toHaveLength(6);
+  });
+  it.runIf(POSIX)('a PATH entry that is the home or an ancestor of it is dropped, never denied (that would deny the home)', () => {
+    const home = ownedDir();
+    const p = planSessionPath([home, '/', '/usr/bin'], { home });
+    expect(p.dirs).toEqual(['/usr/bin']);
+    expect(p.denies).toEqual([]);
+  });
+  it.runIf(POSIX)('the brew prefix comes from the realpath of the entry, never from env (HOMEBREW_PREFIX ignored)', () => {
+    const root = ownedDir();
+    fs.mkdirSync(path.join(root, 'real', 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'real', 'Cellar'));
+    fs.symlinkSync(path.join(root, 'real', 'bin'), path.join(root, 'linked-bin'));
+    const prev = process.env.HOMEBREW_PREFIX;
+    process.env.HOMEBREW_PREFIX = '/nowhere';
+    try {
+      expect(planSessionPath([path.join(root, 'linked-bin')], { home: '/nonexistent-home-x' }).denies).toEqual([rp(path.join(root, 'real'))]);
+    } finally {
+      if (prev === undefined) delete process.env.HOMEBREW_PREFIX;
+      else process.env.HOMEBREW_PREFIX = prev;
+    }
+  });
+  it('sessionNodeDir is the dir of the REALPATH of the node binary; null for win32', () => {
+    expect(sessionNodeDir(process.execPath)).toBe(path.dirname(fs.realpathSync.native(process.execPath)));
+    expect(sessionNodeDir(process.execPath, { platform: 'win32' })).toBeNull();
+  });
+  it.runIf(POSIX)('~/.local/bin is a persistence path: write-denied in every session policy', () => {
+    const root = ownedDir();
+    for (const d of ['home', 'gh', 'repo']) fs.mkdirSync(path.join(root, d));
+    const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: path.join(root, 'repo'), userClaudeDir: path.join(root, 'home', '.claude'), userHome: path.join(root, 'home'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null });
+    expect(pol.denyWrite).toEqual(expect.arrayContaining([expect.objectContaining({ path: path.join(rp(path.join(root, 'home')), '.local', 'bin'), match: 'subpath' })]));
   });
 });
