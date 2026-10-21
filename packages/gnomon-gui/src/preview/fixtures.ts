@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'model-switch' | 'offer-armed';
+  open?: 'settings' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -451,6 +451,8 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   empty: fixture('empty', 'Fresh install: no sessions, voice app not started', emptyChain(), statusOf({ attached: false, clientConnected: false, client: { phase: 'stopped', restarts: 0, devUnsigned: false }, enrolled: [] }, { runModes: false }), null),
   'voice-armed': fixture('voice-armed', 'Ambient voice attached to billing, hearing', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, level: 0.62, dictation: { activity: 'speaking', holdToggles: 0, at: T('14:08:05') } }), BILLING),
   'voice-crashed': fixture('voice-crashed', 'Ambient attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),
+  'voice-ladder': fixture('voice-ladder', 'The voice pill open: the trust ladder (Dictate live, Send word not set up)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-ladder' }),
+  'voice-settings': fixture('voice-settings', 'The Voice settings sheet (your voice, send word, keys, listen, timing, risk)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-settings' }),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
   'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'workshop', why: 'user', cardId: null }] } }, BILLING, true),

@@ -278,7 +278,7 @@ export function sheetRows(i: SheetInput): SheetRowView[] {
       : { id: 'sendword', label: 'send word', value: 'not set', tone: 'warn', action: i.attachable ? { label: 'set up', act: 'sendword' } : null },
     { id: 'keys', label: 'keys', value: `talk ${i.hotkey} · mic ${micKeyName(i.micKeyBare)} · send now ${SEND_NOW_KEY}`, tone: 'plain', action: i.attachable ? { label: 'change', act: 'keys' } : null },
     { id: 'listen', label: 'listen', value: i.capture === 'toggle' ? `the mic key turns it on and off (${micKeyName(i.micKeyBare)})` : 'always on (open-mic rungs)', tone: 'plain', action: i.attachable ? { label: i.capture === 'toggle' ? 'keep always on' : 'use mic key', act: i.capture === 'toggle' ? 'listen.open' : 'listen.toggle' } : null },
-    { id: 'timing', label: 'timing', value: PIECES_TIMING, tone: 'plain', action: null },
+    { id: 'timing', label: 'timing', value: `talk sends after ${i.delayMs === null ? 'you press Enter' : secs(i.delayMs)} · ${PIECES_TIMING}`, tone: 'plain', action: null },
     { id: 'risk', label: 'risk', value: i.acked ? 'acknowledged' : 'not acknowledged', tone: i.acked ? 'ok' : 'warn', action: i.acked || !i.attachable ? null : { label: 'review', act: 'risk' } },
   ];
 }

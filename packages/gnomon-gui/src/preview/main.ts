@@ -51,6 +51,12 @@ async function boot(): Promise<void> {
   // S3: ?fan=1 shows the stack pile fanned (what :hover / :focus-within does), for the screenshot
   if (new URLSearchParams(location.search).get('fan') === '1') document.getElementById('stack')?.classList.add('fan');
   if (fx.open === 'settings') document.getElementById('settings-btn')?.click(); // opening needs no trust; its controls do
+  // #gui-voice-ladder / #gui-voice-settings: opening the ladder or the sheet needs no trust; a rung or a sheet press does
+  if (fx.open === 'voice-ladder') document.getElementById('voice-pill')?.click();
+  if (fx.open === 'voice-settings') {
+    document.getElementById('voice-pill')?.click();
+    (document.querySelector('#voice-menu [data-vs-open]') as HTMLElement | null)?.click();
+  }
   if (fx.open === 'model-switch') {
     // #gui-model-picker: the header ▾ and a menu item only DISPLAY the confirm sheet; the switch is its trusted submit
     (document.querySelector('#chead-meta .model-btn') as HTMLElement | null)?.click();

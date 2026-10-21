@@ -198,13 +198,14 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(rows({ enrolled: [] })[0]).toMatchObject({ tone: 'warn', action: { label: 'teach' } });
   });
   it('timing: the Talk delay 3/5/8/15/off is a segmented control with a selected state', () => {
-    const r = root(sheetEls(fdoc, view({ delayMs: 8000 })));
+    const r = root(sheetEls(fdoc, view({ delayMs: 8000, rows: rows({ delayMs: 8000 }) })));
     const keys = r.all((e) => e.attrs.has('data-vs-delay'));
     expect(keys.map((k) => k.text)).toEqual(['3 s', '5 s', '8 s', '15 s', 'off']);
     expect(keys.map((k) => k.attrs.get('aria-checked'))).toEqual(['false', 'false', 'true', 'false', 'false']);
     expect(keys.every((k) => k.attrs.get('role') === 'radio')).toBe(true);
     expect(r.all((e) => e.attrs.get('role') === 'radiogroup')[0]!.attrs.get('aria-label')).toBe('Talk sends after');
-    expect(r.text).toContain('pieces pause 1.5 s, up to 8 s');
+    expect(r.text).toContain('talk sends after 8 s · pieces pause 1.5 s, up to 8 s');
+    expect(rows({ delayMs: null })[4]!.value).toBe('talk sends after you press Enter · pieces pause 1.5 s, up to 8 s');
   });
   it('the send word teaches INLINE under its row: pick, say once, I heard, one counter, risk check, save', () => {
     let s = initialTeach();

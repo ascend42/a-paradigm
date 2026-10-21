@@ -694,7 +694,7 @@ html, body {
 .vs-v.warn { color: var(--warn-ink); }
 .vs-flow { margin: 10px 0 2px 110px; display: flex; flex-direction: column; gap: 10px; border-left: 2px solid var(--ink); padding-left: 12px; }
 .vs-flow p, .vs-sec > p { margin: 0; }
-.vs-timing, .vs-pieces { margin: 8px 0 0 110px; }
+.vs-sec > .vs-timing { margin: 8px 0 0 110px; }
 .vs-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .vs-counter { font-size: 11.5px; color: var(--sec); }
 .vs-heard { font-size: 15px; font-weight: 600; }
@@ -712,7 +712,7 @@ html, body {
 .vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
 .vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
 .vs-meter.recording span { background: var(--stamp); }
-@media (max-width: 560px) { .vs-flow, .vs-timing, .vs-pieces { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
+@media (max-width: 560px) { .vs-flow, .vs-sec > .vs-timing { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
    auto-send delay. Reduced motion (the setting or the OS) hides the draining ring and shows the seconds as text. */

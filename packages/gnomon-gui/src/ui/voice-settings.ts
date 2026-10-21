@@ -18,7 +18,7 @@ import { DELAY_CHOICES, delayLabel, serializeDelay } from '../core/dictation.js'
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariantsLine, TEACH_PICKS, type TeachState } from '../core/send-word-teach.js';
 import { consentText, enrolLine, normalizeVoiceName, type EnrolState } from '../core/voice-client.js';
-import { micKeyName, PIECES_TIMING, RUNG_NAME, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
+import { micKeyName, RUNG_NAME, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
 import { ACK_TEXT } from '../core/voice-presets.js';
 
 /* ── the ladder popover ─────────────────────────────────────────────── */
@@ -169,7 +169,7 @@ function keysEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'keys' }>): MiniEl[]
 function timingEls(doc: MiniDoc, delayMs: number | null, attachable: boolean): MiniEl[] {
   const seg = h(doc, 'span', { class: 'seg vs-seg', role: 'radiogroup', 'aria-label': 'Talk sends after' });
   for (const d of DELAY_CHOICES) seg.appendChild(btn(doc, { class: `key quiet seg-key${d === delayMs ? ' current' : ''}`, role: 'radio', 'aria-checked': String(d === delayMs), 'data-vs-delay': serializeDelay(d), 'data-vs-focus': `delay-${serializeDelay(d)}` }, delayLabel(d), !attachable));
-  return [h(doc, 'div', { class: 'vs-row vs-timing' }, h(doc, 'span', { class: 'meta' }, 'talk sends after'), seg), h(doc, 'p', { class: 'meta vs-pieces' }, PIECES_TIMING)];
+  return [h(doc, 'div', { class: 'vs-row vs-timing' }, seg)];
 }
 
 /** The sheet body: each row, its inline flow under it (one at a time), the timing control in the timing row. */
