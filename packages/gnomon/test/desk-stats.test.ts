@@ -67,5 +67,10 @@ describe('gnomon desk stats: offer.suppressed', () => {
     expect(foldDeskStats(rows, { kernelPrincipal: KERNEL })[MOD]).toMatchObject({ shown: 1, suppressed: 3 });
     expect(foldDeskUnnamed(rows, { kernelPrincipal: KERNEL }).byReason).toEqual({ 'no-block': 2, malformed: 1 });
   });
-
+  it('review C3: two offers on turn /1 of the same hsid (a resumed session restarts its turn ids) both count', () => {
+    const second = { ...ROWS[0]!, payload: { ...ROWS[0]!.payload, offerId: 'offer:01J00000000000000000000002' } };
+    expect(foldDeskStats([ROWS[0]!, second])[MOD]!.shown).toBe(2);
+    const again = { kind: 'offer.suppressed', payload: { hsid: HSID2, turn: T(HSID2, 1), why: 'malformed' } };
+    expect(foldDeskUnnamed([ROWS[6]!, again]).bySession[HSID2]).toEqual({ malformed: 2 });
+  });
 });

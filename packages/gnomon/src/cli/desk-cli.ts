@@ -90,6 +90,7 @@ export function foldDeskStats(rows: Iterable<DeskRow>, opts: { kernelPrincipal?:
   const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 0, suppressedBy: {} });
   for (const r of rows) {
     if (foreign(r, opts.kernelPrincipal)) continue;
+    // review C3: keyed by offerId (a ULID) and mod, never by turn id (turn ids restart at /1 after a resume)
     const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
     if (r.kind === 'offer.suppressed') {
       // one row per evaluated turn (the router evaluates each turn once); the unnamed ones fold in foldDeskUnnamed

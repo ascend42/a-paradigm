@@ -2229,7 +2229,11 @@ components:
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
       one settles without a row. Review C2: gnomon desk stats folds only
-      kernel-principal offer.shown / offer.suppressed rows. Pause
+      kernel-principal offer.shown / offer.suppressed rows. Review C3
+      (verified): desk stats key on offerId (ULID), mod and hsid, the GUI
+      slips on offerId anchored by seq, and the router and the GUI drop
+      turn state at session.open, so turn ids restarting at /1 after a
+      resume collide nowhere. Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by
