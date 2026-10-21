@@ -42,8 +42,8 @@ export interface TeachState {
   hint: string | null;
   /** the risk check's "I understand" box (pre-ticked when this user already acknowledged) */
   ack: boolean;
-  /** collected variants the human removed (sent as dropVariants on save) */
-  dropped: string[];
+  /** collected variants the human ticked to keep (every other one is sent as dropVariants on save) */
+  kept: string[];
 }
 
 export type TeachEvent =
@@ -56,10 +56,10 @@ export type TeachEvent =
   | { type: 'ack'; on: boolean }
   /** the kernel refused the save (code: its refusal reason, e.g. sendword-no-trial) */
   | { type: 'saveRefused'; reason: string; code?: string | null }
-  /** remove (or keep again) one collected variant */
-  | { type: 'dropVariant'; variant: string };
+  /** tick (keep) or untick one collected variant */
+  | { type: 'keepVariant'; variant: string; on: boolean };
 
-export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked, dropped: [] });
+export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked, kept: [] });
 
 const REASONS: Readonly<Record<string, string>> = Object.freeze({
   empty: 'Type a word or pick a suggestion.',
@@ -99,11 +99,10 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
       return initialTeach(s.ack);
     case 'ack':
       return { ...s, ack: e.on };
-    case 'dropVariant': {
+    case 'keepVariant': {
       if (!s.trial?.variants.includes(e.variant)) return s;
-      if (s.dropped.includes(e.variant)) return { ...s, dropped: s.dropped.filter((v) => v !== e.variant) };
-      if (s.dropped.length >= DROP_VARIANTS_MAX || e.variant.length > DROP_VARIANT_CHARS) return s;
-      return { ...s, dropped: [...s.dropped, e.variant] };
+      const kept = s.kept.filter((v) => v !== e.variant);
+      return { ...s, kept: e.on ? [...kept, e.variant] : kept };
     }
     case 'saveRefused':
       if (e.code === 'sendword-no-trial') return { ...initialTeach(s.ack), hint: 'The time to test the word ran out. Pick it again.' };
@@ -126,7 +125,7 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
         return s.trial ? { ...initialTeach(s.ack), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
       }
       const step: TeachStep = t.state === 'ready' ? 'done' : t.state === 'exhausted' ? 'exhausted' : 'takes';
-      return { ...s, step, trial: t, dropped: s.dropped.filter((v) => t.variants.includes(v)) };
+      return { ...s, step, trial: t, kept: s.kept.filter((v) => t.variants.includes(v)) };
     }
   }
 }
@@ -166,22 +165,22 @@ export function teachHeardLine(s: TeachState): string {
 }
 
 /**
- * Variant removal: each collected mishearing has a remove / keep control in the row; the save carries the removed ones
- * as `dropVariants` (the kernel's request.voice.sendword{op:'save', dropVariants?: string[]}, at most 8, each at most
- * 64 characters). The heard text comes only from status.voice.sendWordTrial.last (take rows are hash-only).
+ * Variants are an explicit opt-in (Aegis R-1): at save each collected mishearing is an UNTICKED box ("Saying “x” on
+ * its own will also send. …"); the save carries every unticked one as `dropVariants` (the kernel's
+ * request.voice.sendword{op:'save', dropVariants?: string[]}, at most 8, each at most 64 characters), so only ticked
+ * ones are kept. The heard text comes only from status.voice.sendWordTrial.last (take rows are hash-only).
  */
 export const TEACH_DROP_VARIANTS = true;
 export const DROP_VARIANTS_MAX = 8;
 export const DROP_VARIANT_CHARS = 64;
 
-/** The mishearings that will be saved as variants ('' when none). */
-export const teachVariantsLine = (s: TeachState): string => {
-  const kept = (s.trial?.variants ?? []).filter((v) => !s.dropped.includes(v));
-  return kept.length ? `kept as ${kept.length === 1 ? 'a variant' : 'variants'}: ${kept.map((v) => `“${v}”`).join(', ')}` : '';
-};
+/** While the takes go on: the mishearings heard so far ('' when none); whether one also sends is chosen at save. */
+export const teachVariantsLine = (s: TeachState): string => (s.step === 'takes' && s.trial?.variants.length ? `heard so far: ${s.trial.variants.map((v) => `“${v}”`).join(', ')} · you choose at save whether any also sends` : '');
 
-/** Each collected variant and whether the human removed it (the row's remove / keep controls). */
-export const teachVariants = (s: TeachState): { variant: string; dropped: boolean }[] => (s.trial?.variants ?? []).map((variant) => ({ variant, dropped: s.dropped.includes(variant) }));
+/** At save: each collected variant, its opt-in label and whether it is ticked (unticked = dropped). */
+export function teachVariants(s: TeachState): { variant: string; kept: boolean; label: string }[] {
+  return (s.trial?.variants ?? []).map((variant) => ({ variant, kept: s.kept.includes(variant), label: `Saying “${variant}” on its own will also send. You said “${s.word}”; I heard “${variant}”.` }));
+}
 
 /** The risk check shows right before save (a take was heard as the word). */
 export const teachShowsRisk = (s: TeachState): boolean => s.step === 'done';
@@ -189,6 +188,7 @@ export const teachShowsRisk = (s: TeachState): boolean => s.step === 'done';
 /** The save request: the kernel holds the takes, so it carries nothing else. Only once a take was heard correctly AND the risk box is ticked. */
 export function teachCommit(s: TeachState): { op: 'save'; dropVariants?: string[] } | null {
   if (s.step !== 'done' || (s.trial?.correct ?? 0) === 0 || !s.ack) return null;
-  const drop = s.dropped.filter((v) => s.trial!.variants.includes(v)).slice(0, DROP_VARIANTS_MAX);
+  // Aegis R-1: keeping a mishearing is an explicit opt-in; every unticked one is dropped
+  const drop = s.trial!.variants.filter((v) => !s.kept.includes(v)).slice(0, DROP_VARIANTS_MAX);
   return drop.length ? { op: 'save', dropVariants: drop } : { op: 'save' };
 }

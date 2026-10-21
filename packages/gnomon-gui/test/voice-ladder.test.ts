@@ -225,16 +225,22 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     r = paint();
     expect(r.text).toContain('I heard “sand it”. Say it again.');
     expect(r.text).toContain('take 2 of up to 4');
-    expect(r.text).toContain('kept as a variant: “sand it”');
-    const rm = r.all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!;
-    expect(rm.text).toBe('remove'); // a remove control per collected variant
-    s = run(s, { type: 'dropVariant', variant: 'sand it' });
-    expect(paint().all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!.text).toBe('keep');
-    s = run(s, { type: 'dropVariant', variant: 'sand it' });
+    expect(r.text).toContain('heard so far: “sand it”');
+    expect(r.all((e) => e.attrs.has('data-vs-variant'))).toHaveLength(0); // the choice is made at save
     s = run(s, trialStatus(takes('send it', 'sand it', 'send it')));
     r = paint();
     expect(r.text).toContain('I heard: “send it” ✓');
     expect(r.text).toContain('I understand a misheard or other voice can send for me; edits will still ask.');
+    // Aegis R-1: each collected mishearing is an UNTICKED opt-in box with its consequence in words
+    const box = r.all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!;
+    expect(box.tag).toBe('input');
+    expect(box.attrs.get('type')).toBe('checkbox');
+    expect(box.attrs.has('checked')).toBe(false);
+    expect(r.text).toContain('Saying “sand it” on its own will also send. You said “send it”; I heard “sand it”.');
+    s = run(s, { type: 'keepVariant', variant: 'sand it', on: true });
+    expect(paint().all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!.attrs.has('checked')).toBe(true);
+    s = run(s, { type: 'keepVariant', variant: 'sand it', on: false });
+    r = paint();
     const save = r.all((e) => e.attrs.get('data-vs-teach') === 'save')[0]!;
     expect(save.text).toBe('save “send it”');
     expect(save.attrs.has('disabled')).toBe(true); // the box first
@@ -251,7 +257,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(APP).toMatch(/if \(vsFlow === 'teach' && f !== 'teach'\) void endTeach\(\);/);
     // only a LISTENING trial counts a turn as a take; with the row open nothing heard becomes a draft
     expect(APP).toMatch(/if \(r\.kind === 'voice\.turn\.user' && teachOpen\(\)\) \{\s*if \(r\.seq > dict\.lastSeq\) dict = \{ \.\.\.dict, lastSeq: r\.seq \};\s*if \(teach\?\.step === 'takes'\) teachHeard\(\);\s*return;/);
-    expect(APP).toContain("if (teach) teach = reduceTeach(teach, { type: 'dropVariant', variant: value });");
+    expect(APP).toContain("if (teach) teach = reduceTeach(teach, { type: 'keepVariant', variant: value.slice(2), on: value.startsWith('1:') });");
     // the risk check right before save IS the acknowledgement
     expect(APP).toMatch(/payload: commit \}\);\s*if \(me\) recordAck\(localStorage, me\);/);
   });

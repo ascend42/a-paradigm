@@ -100,12 +100,10 @@ function teachEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'teach' }>): MiniEl
   if (heard) out.push(h(doc, 'p', { class: `vs-heard${s.trial?.last?.verdict === 'correct' ? ' ok' : ''}`, 'aria-live': 'polite' }, heard));
   const variants = teachVariantsLine(s);
   if (variants) out.push(h(doc, 'p', { class: 'meta vs-variants' }, variants));
-  // each collected mishearing can be removed before save (sent as dropVariants), or kept again
-  if (TEACH_DROP_VARIANTS && (s.step === 'takes' || s.step === 'done') && teachVariants(s).length) {
-    const list = h(doc, 'div', { class: 'vs-row vs-variant-list', role: 'group', 'aria-label': 'variants' });
-    teachVariants(s).forEach(({ variant, dropped }, n) =>
-      list.appendChild(h(doc, 'span', { class: `vs-variant${dropped ? ' dropped' : ''}` }, `“${variant}”${dropped ? ' · removed' : ''} `, btn(doc, { class: 'link', 'data-vs-variant': variant, 'data-vs-focus': `variant-${n}`, 'aria-label': `${dropped ? 'keep' : 'remove'} the variant ${variant}` }, dropped ? 'keep' : 'remove'))),
-    );
+  // Aegis R-1: at save each collected mishearing is an UNTICKED opt-in; only ticked ones are kept
+  if (TEACH_DROP_VARIANTS && s.step === 'done' && teachVariants(s).length) {
+    const list = h(doc, 'div', { class: 'vs-variant-list', role: 'group', 'aria-label': 'heard differently: keep any?' });
+    teachVariants(s).forEach(({ variant, kept, label }, n) => list.appendChild(checkbox(doc, { 'data-vs-variant': variant, 'data-vs-focus': `variant-${n}` }, kept, label)));
     out.push(list);
   }
   if (s.hint) out.push(h(doc, 'p', { class: 'meta vs-hint' }, s.hint));
@@ -277,10 +275,9 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
   };
   body.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
-    const el = t.closest('[data-vs-act], [data-vs-pick], [data-vs-teach], [data-vs-enrol], [data-vs-forget], [data-vs-risk], [data-vs-mickey], [data-vs-delay], [data-vs-keys], [data-vs-variant]') as HTMLElement | null;
+    const el = t.closest('[data-vs-act], [data-vs-pick], [data-vs-teach], [data-vs-enrol], [data-vs-forget], [data-vs-risk], [data-vs-mickey], [data-vs-delay], [data-vs-keys]') as HTMLElement | null;
     if (!el || (el as HTMLButtonElement).disabled) return;
     const ds = el.dataset;
-    if (ds.vsVariant !== undefined) return d.act('variant', ds.vsVariant, e.isTrusted);
     const [action, value] = ds.vsAct !== undefined ? ['act', ds.vsAct] : ds.vsPick !== undefined ? ['pick', ds.vsPick] : ds.vsTeach !== undefined ? ['teach', ds.vsTeach] : ds.vsEnrol !== undefined ? ['enrol', ds.vsEnrol] : ds.vsForget !== undefined ? ['forget', ds.vsForget] : ds.vsRisk !== undefined ? ['risk', ds.vsRisk] : ds.vsMickey !== undefined ? ['mickey', ds.vsMickey] : ds.vsDelay !== undefined ? ['delay', ds.vsDelay] : ['keys', ds.vsKeys ?? ''];
     if (action === 'teach' && value === 'custom') {
       const f = body.querySelector('[data-vs-custom]') as HTMLInputElement | null;
@@ -291,6 +288,7 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
   body.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
     if (t.dataset.vsAck !== undefined) d.act('ack', `${t.dataset.vsAck}:${t.checked ? '1' : '0'}`, e.isTrusted);
+    else if (t.dataset.vsVariant !== undefined) d.act('variant', `${t.checked ? '1' : '0'}:${t.dataset.vsVariant}`, e.isTrusted);
     else if (t.dataset.vsEnrolAgree !== undefined) d.act('agree', t.checked ? '1' : '0', e.isTrusted);
   });
   body.addEventListener('input', (e) => {

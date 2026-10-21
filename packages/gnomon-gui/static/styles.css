@@ -706,8 +706,7 @@ html, body {
 .vs-custom { width: 14em; }
 .vs-label { display: flex; gap: 6px; align-items: center; }
 .vs-warn { color: var(--warn-ink); }
-.vs-variant { font-size: 12px; }
-.vs-variant.dropped { color: var(--sec); text-decoration: line-through; }
+.vs-variant-list { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .vs-voices { display: flex; flex-direction: column; gap: 2px; }
 .vs-voice { display: flex; justify-content: space-between; gap: 8px; }
 /* phrase N of 3: the REAL input level only (still otherwise; reduced motion: the global rule makes it instant) */

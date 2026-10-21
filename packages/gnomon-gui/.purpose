@@ -659,9 +659,10 @@ components:
       counter "take n of up to 4" from status.voice.sendWordTrial, "I heard
       …", a mishearing kept as a variant, the risk check with "I
       understand" right before save via request.voice.sendword{op:'save'};
-      no lead-in, never the product name; each collected variant has a
-      remove / keep control and the save carries the removed ones as
-      dropVariants (at most 8); only a LISTENING trial makes a turn a take,
+      no lead-in, never the product name; Aegis R-1: keeping a mishearing is an
+      explicit opt-in, each collected variant an UNTICKED box at save
+      ("Saying “x” on its own will also send. You said “w”; I heard “x”.")
+      and the save carries every unticked one as dropVariants; only a LISTENING trial makes a turn a take,
       and with the row open nothing heard becomes a draft; the heard text is
       read only from status.voice.sendWordTrial.last);
       a trialTake row is never a transcript line (store voiceItem) and never

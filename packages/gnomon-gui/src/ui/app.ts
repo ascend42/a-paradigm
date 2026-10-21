@@ -1465,7 +1465,7 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
     else if (value === 'save') void submitTeach(true);
     else if (value === 'cancel') setFlow(null);
   } else if (action === 'variant') {
-    if (teach) teach = reduceTeach(teach, { type: 'dropVariant', variant: value });
+    if (teach) teach = reduceTeach(teach, { type: 'keepVariant', variant: value.slice(2), on: value.startsWith('1:') });
   } else if (action === 'ack') {
     const [which, on] = value.split(':');
     if (which === 'teach' && teach) teach = reduceTeach(teach, { type: 'ack', on: on === '1' });

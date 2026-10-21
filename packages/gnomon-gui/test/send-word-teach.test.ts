@@ -36,12 +36,13 @@ describe('teach the send word', () => {
     expect(teachHeardLine(s)).toBe('I heard “ship hit”. Say it again.');
     expect(teachPrompt(s)).toBe('Say “ship it” again, on its own.');
     expect(teachCounter(s)).toBe('take 2 of up to 4 · listening…');
-    expect(teachVariantsLine(s)).toBe('kept as a variant: “ship hit”');
+    expect(teachVariantsLine(s)).toBe('heard so far: “ship hit” · you choose at save whether any also sends');
     expect(run(s, { type: 'ack', on: true }).step).toBe('takes');
     expect(teachCommit(run(s, { type: 'ack', on: true }))).toBeNull(); // the save rule: no correct take yet
     s = run(s, status(takes('ship it', 'ship hit', 'ship it')), { type: 'ack', on: true });
     expect(s).toMatchObject({ step: 'done', trial: { variants: ['ship hit'], correct: 1, takes: 2 } });
-    expect(teachCommit(s)).toEqual({ op: 'save' });
+    expect(teachCommit(s)).toEqual({ op: 'save', dropVariants: ['ship hit'] }); // Aegis R-1: not ticked, not kept
+    expect(teachCommit(run(s, { type: 'keepVariant', variant: 'ship hit', on: true }))).toEqual({ op: 'save' });
   });
 
   it('the kernel refusing the save: its words under the row; a trial that ran out goes back to pick', () => {
@@ -52,16 +53,20 @@ describe('teach the send word', () => {
     expect(run(done, { type: 'saveRefused', reason: 'x', code: 'sendword-no-trial' })).toMatchObject({ step: 'pick', ack: true, hint: expect.stringMatching(/ran out/) });
   });
 
-  it('a collected variant can be removed before save: the save carries dropVariants; keep restores it', () => {
+  it('Aegis R-1: keeping a mishearing is an explicit opt-in; unticked (the default) are all dropped, ticked are kept', () => {
     let s = run(initialTeach(true), { type: 'pick', text: 'ship it' }, status(takes('ship it', 'ship hit', 'chip it', 'ship it')));
     expect(s).toMatchObject({ step: 'done', trial: { variants: ['ship hit', 'chip it'] } });
-    expect(teachCommit(s)).toEqual({ op: 'save' });
-    s = run(s, { type: 'dropVariant', variant: 'chip it' });
-    expect(teachVariants(s)).toEqual([{ variant: 'ship hit', dropped: false }, { variant: 'chip it', dropped: true }]);
-    expect(teachVariantsLine(s)).toBe('kept as a variant: “ship hit”');
-    expect(teachCommit(s)).toEqual({ op: 'save', dropVariants: ['chip it'] });
-    expect(teachCommit(run(s, { type: 'dropVariant', variant: 'chip it' }))).toEqual({ op: 'save' }); // keep again
-    expect(run(s, { type: 'dropVariant', variant: 'not collected' })).toBe(s); // only a collected variant
+    expect(teachVariants(s)).toEqual([
+      { variant: 'ship hit', kept: false, label: 'Saying “ship hit” on its own will also send. You said “ship it”; I heard “ship hit”.' },
+      { variant: 'chip it', kept: false, label: 'Saying “chip it” on its own will also send. You said “ship it”; I heard “chip it”.' },
+    ]);
+    expect(teachCommit(s)).toEqual({ op: 'save', dropVariants: ['ship hit', 'chip it'] }); // default: none kept
+    s = run(s, { type: 'keepVariant', variant: 'chip it', on: true });
+    expect(teachCommit(s)).toEqual({ op: 'save', dropVariants: ['ship hit'] });
+    s = run(s, { type: 'keepVariant', variant: 'ship hit', on: true });
+    expect(teachCommit(s)).toEqual({ op: 'save' }); // both ticked: both kept
+    expect(teachCommit(run(s, { type: 'keepVariant', variant: 'ship hit', on: false }))).toEqual({ op: 'save', dropVariants: ['ship hit'] });
+    expect(run(s, { type: 'keepVariant', variant: 'not collected', on: true })).toBe(s);
     expect(TEACH_DROP_VARIANTS).toBe(true);
   });
 
