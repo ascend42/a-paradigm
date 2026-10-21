@@ -53,12 +53,14 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'workshop.right', title: 'Workshop: right column' },
   { id: 'workshop.left', title: 'Workshop: left column' },
   { id: 'stack.scope.toggle', title: 'Decision stack: this project / all projects' },
-  // TD-2026-10-21-514: voice presets (Send word and Pieces ask for the one-time acknowledgement), the send word, the mic
-  { id: 'voice.preset.talk', title: 'Voice: Talk (hold the key; sends after the countdown)' },
-  { id: 'voice.preset.dictate', title: 'Voice: Dictate (ambient words fill the draft; Enter sends)' },
-  { id: 'voice.preset.send-word', title: 'Voice: Send word (say your send word to send; edits ask first)' },
-  { id: 'voice.preset.pieces', title: 'Voice: Pieces (ambient speech sent in pieces; edits ask first)' },
-  { id: 'voice.sendword.teach', title: 'Voice: Teach Gnomon your send word…' },
+  // TD-2026-10-21-514 + Atelier 2026-10-21 (#gui-voice-ladder): the ladder's rungs (a rung not ready opens Voice
+  // settings at its section), the send word, the sheet, the mic
+  { id: 'voice.preset.talk', title: 'Voice: Talk (hold to speak; sends after release)' },
+  { id: 'voice.preset.dictate', title: 'Voice: Dictate (open mic fills the box; you press Enter)' },
+  { id: 'voice.preset.send-word', title: 'Voice: Send word (say your word to send; edits ask first)' },
+  { id: 'voice.preset.pieces', title: 'Voice: Pieces (each pause sends; edits ask first)' },
+  { id: 'voice.sendword.teach', title: 'Voice: set up your send word…' },
+  { id: 'voice.settings.open', title: 'Voice settings…' },
   { id: 'voice.mic.toggle', title: 'Voice: mic on / off', keys: '⌃` · ` in Gnomon' },
   // §11.4 run-mode commands (P8-D87): the focused session's folder (mode.repo.*, the default scope, F2 of
   // TD-2026-10-20-086), or this session only (mode.*); a looser mode asks for presence

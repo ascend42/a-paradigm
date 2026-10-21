@@ -15,9 +15,12 @@
  * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
-import { initialTeach, reduceTeach, teachCommit, teachHeardLine, teachLine, teachVariantsLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { ACK_TEXT, acked, attachSend, captureOf, CAPTURE_KEY, clampedFrom, CLAMP_CHIP, parseCapturePref, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
+import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
+import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
+import { chooseRung, clientFactOf, ladderEntries, ladderFoot, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
+import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
+import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
+import { acked, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -40,13 +43,13 @@ import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwi
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
-import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
-import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
-import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
+import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -299,6 +302,7 @@ function onChoice(e: Event, b: HTMLElement): void {
     },
     set value(v: string) {
       ta.value = v;
+      fitComposer();
     },
     dictationDraft: dictationOn() && dict.focusedHere && hasDraft(dict),
     // THE send path: the composer form's submit, exactly as typing and pressing send
@@ -744,6 +748,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         raisedAt: c.raisedAt ?? null,
         now: Date.now(),
         voice: cardVoiceOf(c.card),
+        voiceOrigin: cardVoiceOrigin(c.card), // TD-2026-10-21-514: "asked during a voice-sent turn · check this was you"
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
         localNs: localNsOf(session?.principal),
         // Aegis C1e: what a root-class decision signs, verified against contentHash (null ⇒ no root key)
@@ -972,6 +977,20 @@ const settings = mountSettings(document, {
 });
 store.onChange((w) => {
   if (w.has('feed') || w.has('modes') || w.has('voice')) settings.repaint();
+});
+// #gui-voice-settings: the Voice settings sheet (a right-side drawer: your voice, send word, keys, listen, timing, risk)
+const voiceSheet = mountVoiceSheet(document, {
+  view: () => sheetView(),
+  act: (a, v, trusted) => sheetAct(a, v, trusted),
+  input: (field, text) => {
+    if (field !== 'enrol-name') return; // the custom send word is read on its own press
+    enrolName = text;
+    voiceSheet.repaint();
+  },
+  onClose: () => {
+    pendingRung = null;
+    setFlow(null);
+  },
 });
 // #gui-mods-panel: the Mods sheet (header Mods key, ⌘K "Mods…", the Workshop footer's key); requests only, never a decision
 const modsPanel = mountMods(document, { client: () => client, status: () => status, cards: () => store.cards.values(), refreshStatus: () => refreshStatus(), focusCard: (cardId) => focusCard(cardId) });
@@ -1229,6 +1248,31 @@ function focus(hsid: string | null): void {
   syncDictationContext();
 }
 
+/* ── the growing composer (#gui-composer; core/composer.ts) ─────────── */
+/** the ⤢ tall view (24 lines), per viewer */
+let composerTall = parseTall(localStorage.getItem(TALL_KEY));
+/** Fit the textarea to its text: it grows to 12 lines (24 in the tall view), then scrolls; the line count follows. */
+function fitComposer(): void {
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  const cs = getComputedStyle(ta);
+  const px = (v: string): number => parseFloat(v) || 0;
+  const edge = px(cs.paddingTop) + px(cs.paddingBottom) + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+  ta.style.height = 'auto';
+  const f = composerFit(ta.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth), px(cs.lineHeight), edge, composerTall);
+  ta.style.height = `${f.heightPx}px`;
+  ta.style.overflowY = f.scrolls ? 'auto' : 'hidden';
+  put($('composer-lines'), lineCountLabel(f.lines));
+  $('composer').classList.toggle('tall', composerTall);
+  const k = $('composer-tall');
+  k.setAttribute('aria-pressed', String(composerTall));
+  k.title = composerTall ? 'Tall view: up to 24 lines (again: back to 12)' : 'Tall view: up to 24 lines';
+}
+function toggleComposerTall(): void {
+  composerTall = !composerTall;
+  localStorage.setItem(TALL_KEY, serializeTall(composerTall));
+  fitComposer();
+}
+
 /* ── voice dictation (TD-2026-10-20-262; core/dictation.ts) ────────── */
 let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
 /** TD-2026-10-21-514: the voice preset (per machine) and a pending double-rAF visibility stamp */
@@ -1292,6 +1336,7 @@ function dispatchDictation(e: DictationEvent): void {
   if (dict.sending && !prev.sending) void sendDictation();
   syncDictationTimer();
   paintDictation();
+  fitComposer();
   stampPainted();
 }
 
@@ -1317,95 +1362,155 @@ function syncVoicePolicy(): void {
   if (policy !== dict.policy || JSON.stringify(word) !== JSON.stringify(dict.sendWord)) dispatchDictation({ type: 'setPolicy', policy, sendWord: word, now: Date.now() });
 }
 
-/** Choose a preset (pill menu, palette): Send word and Pieces ask for the one-time liability acknowledgement first. */
-async function chooseVoicePreset(p: typeof voicePreset, trusted: boolean): Promise<void> {
-  if (!trusted) return;
-  const me = myPrincipal();
-  const step = choosePreset(p, { acked: acked(localStorage, me), sendWord: sendWordOf(status) });
-  if (step === 'needs-ack') return openAck(p);
-  if (step === 'needs-word') return openTeach(p);
-  applyVoicePreset(p);
-}
-
 function myPrincipal(): string | null {
   const p = (status as { principal?: unknown } | null)?.principal;
   return typeof p === 'string' ? p : null;
 }
 
+/** The preset a rung sets (per machine); the pill and the ladder follow the kernel's state, not this. */
 function applyVoicePreset(p: typeof voicePreset): void {
+  const capture = currentCapture();
   voicePreset = p;
   localStorage.setItem(PRESET_KEY, p);
   syncVoicePolicy();
-  void applyCapture();
-  notice(`voice: ${PRESET_LABELS[p]} · ${PRESET_NOTES[p]}${attachSend(p) ? ' (re-attach voice to apply its send ceiling)' : ''}`);
-  if (!$('voice-menu').hidden) paintVoiceMenu();
+  if (currentCapture() !== capture) void applyCapture();
 }
 
-/* ── the liability acknowledgement (TD-2026-10-21-514: Send word and Pieces are liability modes) ── */
-let ackFor: typeof voicePreset | null = null;
-function openAck(p: typeof voicePreset): void {
-  closeVoiceMenu();
-  ackFor = p;
-  put($('ack-mode'), `${PRESET_LABELS[p]}: ${PRESET_NOTES[p]}`);
-  put($('ack-text'), ACK_TEXT);
-  const box = $<HTMLInputElement>('ack-agree');
-  box.checked = false;
-  ($('ack-go') as HTMLButtonElement).disabled = true;
-  $('ack-dialog').hidden = false;
-  box.focus();
-}
-function closeAck(): void {
-  $('ack-dialog').hidden = true;
-  ackFor = null;
-}
-function submitAck(trusted: boolean): void {
-  const p = ackFor;
-  const me = myPrincipal();
-  if (!trusted || !p || !me || !$<HTMLInputElement>('ack-agree').checked) return;
-  recordAck(localStorage, me);
-  closeAck();
-  void chooseVoicePreset(p, true);
-}
-
-/* ── "Teach your send word" (pick, validate, takes counted by the kernel's attended trial, save) ── */
+/* ── the voice ladder and the Voice settings sheet (#gui-voice-ladder, #gui-voice-settings; Atelier 2026-10-21) ── */
+/** the sheet's one open inline flow */
+let vsFlow: 'teach' | 'enrol' | 'risk' | 'keys' | null = null;
+/** the rung waiting on a setup step (it is applied once the step is done) */
+let pendingRung: Rung | null = null;
+let riskAck = false;
 let teach: TeachState | null = null;
-let teachFor: typeof voicePreset | null = null;
+let enrolName = '';
+let enrolAgreed = false;
+/** when this page last saw a heard voice turn (the pill's "heard Ns ago") */
+let lastHeardAt: number | null = null;
+
+const readiness = (): Readiness => ({ acked: acked(localStorage, myPrincipal()), sendWord: sendWordOf(status) });
+const RUNG_OF_PRESET: Readonly<Record<typeof voicePreset, Rung>> = Object.freeze({ talk: 'talk', dictate: 'dictate', 'send-word': 'word', pieces: 'pieces' });
+
+/**
+ * Choose a rung (the ladder, the palette): ready → the preset and the voice state in one gesture; not ready → the
+ * sheet opens at the section that makes it ready (the rung waits there and is applied once that is done).
+ */
+async function chooseRungUi(r: Rung, trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  const c = chooseRung(r, readiness());
+  if (c.kind === 'setup') {
+    closeVoiceMenu(false);
+    return openVoiceSettings(c.section, r);
+  }
+  closeVoiceMenu(true);
+  const p = presetOfRung(r);
+  if (p) applyVoicePreset(p);
+  const to = stateOfRung(r);
+  await setVoice(to, voiceTargetFor(to), true, sendOfRung(r));
+}
+
+/** Open the Voice settings sheet, at a section; a not-ready rung opens that section's inline step. */
+function openVoiceSettings(section?: SheetSection, rung: Rung | null = null): void {
+  settings.close();
+  pendingRung = rung;
+  if (section === 'sendword' && rung) startTeachFlow();
+  else if (section === 'risk') setFlow('risk');
+  voiceSheet.open(section);
+}
+
+/** One inline flow at a time: leaving the send-word teaching clears its trial (it never outlives the row). */
+function setFlow(f: typeof vsFlow): void {
+  if (vsFlow === 'teach' && f !== 'teach') void endTeach();
+  if (vsFlow === 'enrol' && f !== 'enrol') void closeEnrol(true);
+  vsFlow = f;
+  if (f === 'risk') riskAck = acked(localStorage, myPrincipal());
+  syncEnrolPoll();
+}
+
+function sheetView(): SheetView {
+  const v = voiceStatusOf(status);
+  const c = clientOf(status);
+  const r = readiness();
+  const rows = sheetRows({ ...r, enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status) });
+  let flow: FlowView | null = null;
+  if (vsFlow === 'teach' && teach) flow = { kind: 'teach', s: teach, attached: v.hsid !== null };
+  else if (vsFlow === 'enrol' && store.enrol) flow = { kind: 'enrol', s: store.enrol, name: enrolName, agreed: enrolAgreed, enrolled: c.enrolled, forgetArmed, level: null };
+  else if (vsFlow === 'risk') flow = { kind: 'risk', rung: pendingRung === 'word' || pendingRung === 'pieces' ? pendingRung : null, ack: riskAck };
+  else if (vsFlow === 'keys') flow = { kind: 'keys', bare: micKeyBareOf(status) };
+  return { rows, flow, delayMs: dict.delayMs, attachable: canAttach(status) };
+}
+
+/** A press in the sheet (trusted gestures only, G-GUI-04). */
+function sheetAct(action: string, value: string, trusted: boolean): void {
+  if (!trusted) return;
+  if (action === 'act') {
+    if (value === 'enrol') openEnrolFlow();
+    else if (value === 'sendword') {
+      pendingRung = null;
+      startTeachFlow();
+    } else if (value === 'keys') setFlow('keys');
+    else if (value === 'risk') {
+      pendingRung = null;
+      setFlow('risk');
+    } else if (value === 'listen.open' || value === 'listen.toggle') {
+      capturePref = value === 'listen.toggle' ? 'toggle' : 'open';
+      localStorage.setItem(CAPTURE_KEY, capturePref);
+      void applyCapture();
+    }
+  } else if (action === 'pick') void teachStep({ type: 'pick', text: value });
+  else if (action === 'teach') {
+    if (value === 'common-yes' || value === 'common-no') void teachStep({ type: 'confirmCommon', yes: value === 'common-yes' });
+    else if (value === 'retry') void retryTeach();
+    else if (value === 'other') void endTeach().then(() => ((teach = initialTeach(acked(localStorage, myPrincipal()))), (vsFlow = 'teach'), voiceSheet.repaint()));
+    else if (value === 'save') void submitTeach(true);
+    else if (value === 'cancel') setFlow(null);
+  } else if (action === 'ack') {
+    const [which, on] = value.split(':');
+    if (which === 'teach' && teach) teach = reduceTeach(teach, { type: 'ack', on: on === '1' });
+    else if (which === 'risk') riskAck = on === '1';
+  } else if (action === 'risk') {
+    if (value === 'go') return submitRisk();
+    setFlow(null);
+  } else if (action === 'enrol') {
+    if (value === 'go') void submitEnrol(true);
+    else setFlow(null);
+  } else if (action === 'agree') enrolAgreed = value === '1';
+  else if (action === 'forget') void forgetVoice(value, true);
+  else if (action === 'mickey') void setMicKey(value === 'bare', true);
+  else if (action === 'delay') setDictationDelay(parseDelay(value));
+  else if (action === 'keys') setFlow(null);
+  voiceSheet.repaint();
+}
+
+/** The risk check (Pieces, or a review): "I understand" records the acknowledgement; a waiting rung then turns on. */
+function submitRisk(): void {
+  const me = myPrincipal();
+  if (!riskAck || !me) return;
+  recordAck(localStorage, me);
+  const r = pendingRung;
+  pendingRung = null;
+  setFlow(null);
+  voiceSheet.repaint();
+  if (r) {
+    voiceSheet.close();
+    void chooseRungUi(r, true);
+  }
+}
+
+/* ── teaching the send word, inline (pick, the kernel's attended trial counts the takes, risk check, save) ── */
 function teachOpen(): boolean {
-  return teach !== null && !$('sendword-dialog').hidden;
+  return teach !== null && vsFlow === 'teach' && voiceSheet.isOpen();
 }
-function openTeach(p: typeof voicePreset | null): void {
-  closeVoiceMenu();
-  teach = initialTeach();
-  teachFor = p;
-  const sug = $('sendword-suggestions');
-  clear(sug);
-  for (const w of TEACH_SUGGESTIONS) sug.appendChild(h(doc, 'button', { class: 'key quiet', type: 'button', 'data-sendword': w }, w) as unknown as Node);
-  $<HTMLInputElement>('sendword-custom').value = '';
-  $('sendword-dialog').hidden = false;
-  paintTeach();
-  $('sendword-custom').focus();
+function startTeachFlow(): void {
+  setFlow('teach');
+  teach = initialTeach(acked(localStorage, myPrincipal()));
 }
-async function closeTeach(): Promise<void> {
-  $('sendword-dialog').hidden = true;
+/** Leave the teaching: a trial word never outlives the row (an unsaved 'done' included). */
+async function endTeach(): Promise<void> {
   const was = teach;
   teach = null;
-  teachFor = null;
-  // a trial word never outlives the dialog (an unsaved 'done' included)
+  if (vsFlow === 'teach') vsFlow = null;
   if (client && was && was.step !== 'pick' && was.step !== 'confirm-common') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined); // Aegis L-2: only the trial; the held word stays
-}
-function paintTeach(): void {
-  const s = teach;
-  if (!s) return;
-  const attached = voiceStatusOf(status).hsid !== null;
-  put($('sendword-line'), !attached && s.step === 'takes' ? 'Attach voice to a session first (the takes are heard through it).' : teachLine(s));
-  $('sendword-pick').hidden = s.step !== 'pick';
-  put($('sendword-heard'), teachHeardLine(s));
-  // one counter only: "Take n of up to 4" is in the line above (the kernel's status.voice.sendWordTrial)
-  put($('sendword-hint'), s.hint ?? teachVariantsLine(s));
-  const go = $<HTMLButtonElement>('sendword-go');
-  go.hidden = !(s.step === 'pick' || s.step === 'confirm-common' || s.step === 'done' || s.step === 'exhausted');
-  put(go, s.step === 'done' ? 'Save' : s.step === 'exhausted' ? 'Try again' : s.step === 'confirm-common' ? 'Use it' : 'Continue');
-  $('sendword-no').hidden = s.step !== 'confirm-common';
 }
 async function teachStep(e: TeachEvent): Promise<void> {
   if (!teach) return;
@@ -1413,7 +1518,7 @@ async function teachStep(e: TeachEvent): Promise<void> {
   teach = reduceTeach(teach, e);
   // entering the takes: the kernel starts the attended trial (it counts every take; status.voice.sendWordTrial)
   if (client && teach.step === 'takes' && prev.step !== 'takes' && e.type !== 'status') await startTrial(teach.word);
-  paintTeach();
+  voiceSheet.repaint();
 }
 async function startTrial(word: string): Promise<void> {
   if (!client) return;
@@ -1424,35 +1529,39 @@ async function startTrial(word: string): Promise<void> {
       if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the voice app could not be told the word' };
     });
 }
+/** A fresh trial of the same word (the kernel keeps a live trial's count, so it is cleared first). */
+async function retryTeach(): Promise<void> {
+  if (!client || !teach || teach.step !== 'exhausted') return;
+  const word = teach.word;
+  await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined);
+  teach = { ...initialTeach(teach.ack), step: 'takes', word };
+  voiceSheet.repaint();
+  await startTrial(word);
+  voiceSheet.repaint();
+}
 async function submitTeach(trusted: boolean): Promise<void> {
   if (!trusted || !teach || !client) return;
-  if (teach.step === 'pick') return teachStep({ type: 'pick', text: $<HTMLInputElement>('sendword-custom').value });
-  if (teach.step === 'confirm-common') return teachStep({ type: 'confirmCommon', yes: true });
-  if (teach.step === 'exhausted') {
-    // a fresh trial of the same word (the kernel keeps a live trial's count, so it is cleared first)
-    const word = teach.word;
-    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined);
-    teach = { ...initialTeach(), step: 'takes', word };
-    paintTeach();
-    return startTrial(word);
-  }
-  const commit = teachCommit(teach);
+  const commit = teachCommit(teach); // a take heard as the word AND the risk box ticked
   if (!commit) return;
+  const me = myPrincipal();
   try {
     await client.call('log.append', { kind: 'request.voice.sendword', payload: commit });
-    await refreshStatus();
-    const p = teachFor;
-    $('sendword-dialog').hidden = true;
+    if (me) recordAck(localStorage, me); // the risk check right before save is the acknowledgement
     teach = null;
-    teachFor = null;
-    if (p) void chooseVoicePreset(p, true);
-    else notice('send word saved');
+    vsFlow = null;
+    await refreshStatus();
+    const r = pendingRung;
+    pendingRung = null;
+    if (r) {
+      voiceSheet.close();
+      void chooseRungUi(r, true);
+    } else notice('send word saved');
   } catch (err) {
-    if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the send word was not saved' };
-    paintTeach();
+    if (teach) teach = reduceTeach(teach, { type: 'saveRefused', reason: err instanceof RpcError ? refusalText(err.refusal) : 'the send word was not saved', code: err instanceof RpcError ? err.refusal.reason : null });
   }
+  voiceSheet.repaint();
 }
-/** While the dialog listens, a voice turn is a take (never a draft): the kernel counted it; re-read its trial. */
+/** While the row teaches, a voice turn is a take (never a draft): the kernel counted it; re-read its trial. */
 function teachHeard(): void {
   void refreshStatus();
 }
@@ -1464,6 +1573,8 @@ function dictationRow(r: Row): void {
     if (r.seq > dict.lastSeq) dict = { ...dict, lastSeq: r.seq };
     return teachHeard();
   }
+  const tp = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
+  if (r.kind === 'voice.turn.user' && tp?.trialTake !== true) lastHeardAt = Date.now(); // the pill's "heard Ns ago"
   if (!dictationOn()) return;
   const now = Date.now();
   if (r.kind === 'voice.turn.user') {
@@ -1496,6 +1607,7 @@ function setDictationDelay(d: number | null): void {
   localStorage.setItem(DELAY_KEY, serializeDelay(d));
   dispatchDictation({ type: 'setDelay', delayMs: d, now: Date.now() });
   if (!$('voice-menu').hidden) paintVoiceMenu();
+  voiceSheet.repaint();
   // TD-2026-10-20-125: the delay applies to push-to-talk only; ambient speech always waits for Enter / Send
   notice(d === null ? 'dictation: auto-send off (Send or Enter sends)' : `dictation: push-to-talk auto-sends after ${delayLabel(d)} of silence; ambient speech waits for Enter`);
 }
@@ -1533,12 +1645,14 @@ async function sendDictation(): Promise<void> {
     // Aegis M3: the composer shows exactly the reducer's text: the in-flight edit (held) or the turns heard in flight
     const ta = $<HTMLTextAreaElement>('composer-text');
     if (dict.focusedHere) ta.value = dict.text;
+    fitComposer();
   } catch (err) {
     unsentEcho(echo, err, req.hsid);
     if (!(err instanceof RpcError)) notice('the dictated draft was not sent; it stays in the composer', true);
     dispatchDictation({ type: 'sendFailed', now: Date.now() });
     const ta = $<HTMLTextAreaElement>('composer-text');
     if (dict.focusedHere && !ta.value) ta.value = dict.text; // the draft stays in the composer
+    fitComposer();
     schedule(new Set([`transcript:${req.hsid}`]));
   }
 }
@@ -1593,7 +1707,7 @@ async function refreshStatus(): Promise<void> {
   paintVoice();
   paintSessions();
   if (teach) teach = reduceTeach(teach, { type: 'status', status }); // the kernel's one take counter
-  paintTeach();
+  voiceSheet.repaint();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
@@ -1705,7 +1819,7 @@ let enrolPoll: ReturnType<typeof setInterval> | null = null;
 /** A light status poll only while the enrol dialog waits on the Touch ID card or the voice app. */
 function syncEnrolPoll(): void {
   const s = store.enrol;
-  const want = !!s && !$('enrol-dialog').hidden && (s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase');
+  const want = !!s && vsFlow === 'enrol' && voiceSheet.isOpen() && (s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase');
   if (want && !enrolPoll) enrolPoll = setInterval(() => void refreshStatus(), ENROL_POLL_MS);
   else if (!want && enrolPoll) {
     clearInterval(enrolPoll);
@@ -1824,26 +1938,42 @@ let voiceBusy = false;
 function paintVoice(): void {
   const v = voiceStatusOf(status);
   store.voiceIdleMs = v.ambientIdleMs;
-  // V2e: with nothing attached, the voice app's lifecycle owns the pill (setup phases, crash, the enrol nudge);
-  // attached, the live state stands and the app's real condition is appended (Aegis M V2d: never under-report)
+  // V2e: with nothing attached, the voice app's lifecycle is the pill's fact (setup phases, crash, the enrol nudge);
+  // attached, the live rung stands and the app's real condition is its fact (Aegis M V2d: never under-report)
   const c = clientOf(status);
-  const cp = clientPillOf(c, v.state !== 'off', canAttach(status));
-  const p = pillOf(v, cp.tail);
+  const attached = v.state !== 'off';
+  const cp = clientPillOf(c, attached, canAttach(status));
+  const cap = paintCapture(v, cp.label === null);
+  const rung = rungOf(v, voicePreset);
+  const clampHsid = v.hsid ?? focused;
+  const bare = micKeyBareOf(status);
+  const pv = voicePillOf({
+    rung,
+    hotkey: v.hotkey,
+    sendWord: sendWordOf(status)?.text ?? null,
+    attached,
+    target: v.hsid ? sessionName(v.hsid) : '',
+    clientConnected: v.clientConnected,
+    clientFact: clientFactOf(cp.label, cp.tail),
+    capture: cap,
+    clamped: !!clampHsid && clampedFrom(store.transcript(clampHsid), clampHsid),
+    micClosed: attached && v.micWanted === false,
+    micKeyBare: bare,
+    heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
+  });
   const btn = $('voice-pill');
-  btn.className = cp.tail !== null ? [...new Set(`${p.className} ${cp.className}`.split(' '))].join(' ') : p.className;
-  btn.title = cp.tail !== null ? `${p.title} ${cp.title}` : p.title;
-  btn.dataset.state = p.state;
-  // privacy (Aegis): with the bare ` mic key on, the pill always says when the mic is live
-  const bareLive = micKeyBareOf(status) && (status as { voice?: { micWanted?: unknown } } | null)?.voice?.micWanted !== false && v.state !== 'off';
-  put($('voice-label'), bareLive ? `${p.label} · mic live` : p.label);
-  btn.classList.toggle('mic-live', bareLive);
-  put($('voice-target'), p.target ? `· ${p.target}` : '');
-  if (cp.label !== null) {
-    btn.className = `voice-pill kernel-owned ${cp.className}`;
-    btn.title = cp.title;
-    btn.dataset.state = `client-${c.phase}`;
-    put($('voice-label'), cp.label);
-  }
+  const trouble = cp.label !== null || cp.tail !== null;
+  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${bare && pv.live ? ' mic-live' : ''}${cap ? ` ${cap.display.className}` : ''}`;
+  btn.dataset.state = cp.label !== null ? `client-${c.phase}` : rung;
+  btn.title = trouble && cp.title ? `${pv.title} ${cp.title}` : pv.title;
+  btn.setAttribute('aria-label', pv.aria);
+  put($('voice-label'), pv.name);
+  const fact = $('voice-fact');
+  put(fact, pv.fact ? `· ${pv.fact}` : '');
+  fact.className = `voice-fact${pv.tone === 'fail' ? ' fail' : pv.tone === 'clamp' ? ' clamp' : ''}`;
+  // "heard Ns ago" counts up once a second until it is gone (a timeout, never an interval; nothing idles)
+  if (heardTimer) clearTimeout(heardTimer);
+  heardTimer = pv.fact.startsWith('heard ') && pv.fact.endsWith('s ago') ? setTimeout(() => ((heardTimer = null), paintVoice()), 1000) : null;
   const bar = $('voice-progress');
   bar.hidden = cp.progress === null;
   if (cp.progress !== null) {
@@ -1858,14 +1988,17 @@ function paintVoice(): void {
   const dev = devBannerOf(c);
   $('voice-dev').hidden = dev === null;
   put($('voice-dev'), dev ? `⚠ ${dev}` : '');
-  if (!$('enrol-dialog').hidden) paintEnrol();
-  paintCapture(v, cp.label === null);
   const note = store.voiceNote;
   $('voice-note').hidden = !note || v.state !== 'off';
   put($('voice-note'), note ?? '');
   if (!$('voice-menu').hidden) paintVoiceMenu();
+  if (voiceSheet.isOpen()) {
+    voiceSheet.repaint();
+    voiceSheet.level(captureStatusOf(status)?.level ?? v.level);
+  }
   paintDictation();
 }
+let heardTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ── live capture (T-2026-10-20-005 A1; core/capture.ts, #gui-voice-capture) ── */
 let captureTrack: CaptureTrack | null = null;
@@ -1874,19 +2007,15 @@ let statusAt: number | null = null;
 let captureFlash: ReturnType<typeof setTimeout> | null = null;
 let captionState: string | null = null;
 /**
- * The capture overlay on the attached pill: only while voice is attached and the voice app is connected (`live`).
- * The meter is drawn from the REAL level while hearing and is still otherwise (no decorative motion); the composer
- * ghost line is its own element, never the textarea (B1: the live words, committed solid and the tail dim, or "…");
- * the polite caption changes on a state change only.
+ * The capture overlay: only while voice is attached and the voice app is connected (`live`). The meter is drawn from
+ * the REAL level while hearing and is still otherwise (no decorative motion); the composer ghost line is its own
+ * element, never the textarea (B1: the live words, committed solid and the tail dim, or "…"); the polite caption
+ * changes on a state change only. Returns what the pill's fact reads (core/voice-ladder.ts voicePillOf), or null.
  */
-function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): void {
+function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): { display: ReturnType<typeof captureDisplayOf>; cap: CaptureTrack['cap'] } | null {
   const live = pillOwned && !!client && v.state !== 'off' && v.clientConnected === true;
   captureTrack = live ? captureStep(captureTrack, freshCapture(captureStatusOf(status), statusAt, Date.now()), Date.now()) : null;
   const d = captureDisplayOf(captureTrack, Date.now(), live);
-  const btn = $('voice-pill');
-  for (const c of [...btn.classList]) if (c.startsWith('capture-')) btn.classList.remove(c);
-  if (live) btn.classList.add(d.className);
-  if (live && d.label !== null) put($('voice-label'), `${d.label}${clientPillOf(clientOf(status), true, canAttach(status)).tail ?? ''}`);
   const meter = $('voice-meter');
   meter.hidden = !live;
   meter.style.setProperty('--level', String(d.meter));
@@ -1899,6 +2028,7 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
   }
   if (captureFlash) clearTimeout(captureFlash);
   captureFlash = d.flashLeftMs !== null ? setTimeout(() => ((captureFlash = null), paintVoice()), d.flashLeftMs + 20) : null;
+  return live ? { display: d, cap: captureTrack?.cap ?? null } : null;
 }
 
 let ghostShown: string | null = null;
@@ -1924,60 +2054,46 @@ function paintGhost(el: HTMLElement, t: GhostText | null): void {
   el.append(committed, document.createTextNode(t.committed && t.tail ? ' ' : ''), tail);
 }
 
-/** The session a choice applies to: Off and a mode switch go to the attached session; nothing attached ⇒ the focused one. */
+/** The session a rung applies to: Off goes to the attached session; a rung goes to the focused session (else the attached one). */
 function voiceTargetFor(to: VoiceState): string | null {
   const v = voiceStatusOf(status);
   if (to === 'off') return v.hsid;
-  return v.state !== 'off' && v.hsid ? v.hsid : focused;
+  return focused ?? v.hsid;
 }
 
+/** The ladder (the pill's popover): the rungs, the foot line and the settings link. Repainted only when it changes. */
+let ladderShown = '';
 function paintVoiceMenu(): void {
   const menu = $('voice-menu');
-  clear(menu);
   const v = voiceStatusOf(status);
-  for (const e of voiceMenuEntries(v, focused, canAttach(status), voicePresenceDone)) {
-    const b = h(doc, 'button', { class: `mode-item voice-item${e.current ? ' current' : ''}${e.state ? ` voice-${e.state}` : ' scope'}`, type: 'button', role: 'menuitem', 'data-voice': e.id, 'aria-disabled': String(e.disabled) }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as HTMLButtonElement;
-    b.disabled = e.disabled;
-    menu.appendChild(b);
-  }
-  // V2e: Start / Stop voice and "Teach Gnomon your voice" (human connections only: clientMenuEntries is [] otherwise)
-  for (const e of clientMenuEntries(clientOf(status), canAttach(status)))
-    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-client': e.id }, h(doc, 'span', { class: 'mode-name' }, e.label), h(doc, 'span', { class: 'mode-note' }, e.note)) as unknown as Node);
-  if (canAttach(status)) {
-    // dictation: the auto-send delay after silence (per machine)
-    const picks = h(doc, 'span', { class: 'mode-item scope dictation-delays', role: 'group', 'aria-label': 'push-to-talk auto-send after silence (ambient speech waits for Enter)' }, h(doc, 'span', { class: 'mode-name' }, 'Push-to-talk auto-send after')) as unknown as HTMLElement;
-    for (const d of DELAY_CHOICES)
-      picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
-    menu.appendChild(picks);
-  }
-  if (canAttach(status)) {
-    // TD-2026-10-21-514: the presets, a segmented control (Send word and Pieces ask for the acknowledgement once)
-    const seg = h(doc, 'span', { class: 'mode-item scope voice-presets', role: 'group', 'aria-label': 'voice preset' }, h(doc, 'span', { class: 'mode-name' }, 'Send')) as unknown as HTMLElement;
-    for (const p of VOICE_PRESET_IDS)
-      seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
-    menu.appendChild(seg);
-    // TD-2026-10-21-514: how the ambient presets listen — always on, or the mic key toggles listening (toggle capture)
-    if (voicePreset !== 'talk')
-      menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(capturePref === 'toggle'), 'data-capture': capturePref === 'toggle' ? 'open' : 'toggle' }, h(doc, 'span', { class: 'mode-name' }, `Listening: ${capturePref === 'toggle' ? 'the mic key turns it on and off' : 'always on while attached'}`), h(doc, 'span', { class: 'mode-note' }, capturePref === 'toggle' ? 'switch to always on' : 'let the mic key toggle listening (starts off)')) as unknown as Node);
-    // the Mic key switch (TD-2026-10-21-514): ⌃` by default; a bare ` everywhere only by opt-in, with the warning
-    const bare = micKeyBareOf(status);
-    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(bare), 'data-mic-key': bare ? 'ctrl' : 'bare' }, h(doc, 'span', { class: 'mode-name' }, `Mic key: ${bare ? '` everywhere' : '⌃` (` inside Gnomon)'}`), h(doc, 'span', { class: 'mode-note' }, bare ? 'switch back to ⌃`' : 'use a bare ` everywhere: while Gnomon voice runs, ` will not type in any app')) as unknown as Node);
-    const sw = sendWordOf(status);
-    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-sendword': '1' }, h(doc, 'span', { class: 'mode-name' }, sw ? 'Change your send word' : 'Teach Gnomon your send word'), h(doc, 'span', { class: 'mode-note' }, sw ? `now “${sw.text}”` : 'a guided step: say it a few times')) as unknown as Node);
-  }
-  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃\` mic on/off · ⌃⌥H holds the dictation · ⌃⌥Return sends`) as unknown as Node);
+  const entries = ladderEntries({ ...readiness(), rung: rungOf(v, voicePreset), hotkey: v.hotkey, attachable: canAttach(status), target: voiceTargetFor('ptt'), ceiling: v.ceiling });
+  const foot = ladderFoot({ micKeyBare: micKeyBareOf(status), capture: capturePref });
+  const key = JSON.stringify([entries, foot]);
+  if (key === ladderShown && menu.firstChild) return;
+  ladderShown = key;
+  const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-vs-open]') as HTMLElement | null;
+  const fk = had ? (had.dataset.rung ?? 'settings') : null;
+  clear(menu);
+  for (const el of ladderEls(doc, entries, foot)) menu.appendChild(el as unknown as Node);
+  if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
 }
+/** The ladder's focusable items, in order (arrow keys move among them). */
+const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-rung]:not([disabled]), [data-vs-open]')];
 function openVoiceMenu(): void {
-  // voice drops fix: opening the menu is the human's dismiss of a sticky drop on the pill (core/capture.ts)
+  // voice drops fix: opening the ladder is the human's dismiss of a sticky drop on the pill (core/capture.ts)
   captureTrack = captureDismiss(captureTrack, Date.now());
   $('voice-menu').hidden = false;
   $('voice-pill').setAttribute('aria-expanded', 'true');
+  ladderShown = '';
   paintVoiceMenu();
   paintVoice();
+  (($('voice-menu').querySelector('[data-rung][aria-checked="true"]:not([disabled])') as HTMLElement | null) ?? ladderItems()[0])?.focus();
 }
-function closeVoiceMenu(): void {
+function closeVoiceMenu(focusPill = false): void {
+  if ($('voice-menu').hidden) return;
   $('voice-menu').hidden = true;
   $('voice-pill').setAttribute('aria-expanded', 'false');
+  if (focusPill) $('voice-pill').focus();
 }
 
 /**
@@ -1985,7 +2101,7 @@ function closeVoiceMenu(): void {
  * first widening to ambient in this GUI login comes back as a pending presence card this same gesture approves
  * `allow` (the kernel asks for Touch ID), as a run-mode loosening does. A refusal is shown as given.
  */
-async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): Promise<void> {
+async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, send: 'word' | 'pieces' | null = attachSend(voicePreset)): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
   if (!client) return notice('not connected: voice was not changed', true);
@@ -1993,10 +2109,12 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   const v = voiceStatusOf(status);
   const plan = planVoice(v, to, hsid, voicePresenceDone);
   if (plan.kind === 'blocked') return notice(`${VOICE_TITLE[to]} is not allowed: ${plan.reason}`, true);
-  if (plan.kind === 'same') return;
+  // the ladder: Dictate, Send word and Pieces share the ambient state, so a rung change on the same session re-attaches
+  // with the new send ceiling (the kernel reports the current one as status.voice.send)
+  if (plan.kind === 'same' && !(to === 'ambient' && v.send !== null && v.send !== (send ?? 'key'))) return;
   const req0 = voiceRequest(v, to, hsid);
-  // TD-2026-10-21-514: an ambient attach asks for the preset's send ceiling (word | pieces; pieces takes a presence card)
-  const ceil = attachSend(voicePreset);
+  // TD-2026-10-21-514: an ambient attach asks for the rung's send ceiling (word | pieces; pieces takes a presence card)
+  const ceil = send;
   // Aegis M-4: the liability acknowledgement (recorded by the dialog) rides the attach; the kernel writes it into the start row
   const ackOk = acked(localStorage, myPrincipal());
   const req = req0 && req0.kind === 'voice.session.start' && req0.payload.mode === 'conversation' && ceil && ackOk ? { ...req0, payload: { ...req0.payload, send: ceil, liabilityAck: VOICE_LIABILITY_ACK_HASH } } : req0;
@@ -2057,58 +2175,43 @@ async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<vo
   }
 }
 
+/** "your voice": the enrolment opens inline under its row in the Voice settings sheet (phrase N of 3, a level meter). */
+function openEnrolFlow(): void {
+  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
+  setFlow('enrol');
+  if (!store.enrol || store.enrol.step === 'done' || store.enrol.step === 'failed') {
+    store.enrol = enrolStart();
+    enrolName = '';
+    enrolAgreed = false;
+  }
+  syncEnrolPoll();
+}
+/** The pill's [Teach] and the palette: the sheet, at "your voice", teaching. */
 function openEnrol(trusted: boolean): void {
   if (!trusted) return;
   closeVoiceMenu();
-  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
-  if (!store.enrol || store.enrol.step === 'done' || store.enrol.step === 'failed') store.enrol = enrolStart();
-  $('enrol-dialog').hidden = false;
-  paintEnrol();
-  if (store.enrol.step === 'form') $('enrol-name').focus();
+  openVoiceSettings('voice');
+  openEnrolFlow();
+  voiceSheet.repaint(true);
 }
 
 function paintEnrol(): void {
   syncEnrolPoll();
-  const s = store.enrol;
-  if (!s || $('enrol-dialog').hidden) return;
-  const raw = $<HTMLInputElement>('enrol-name').value;
-  const name = normalizeVoiceName(raw);
-  put($('enrol-line'), enrolLine(s));
-  const formStep = s.step === 'form' || s.step === 'failed';
-  $('enrol-form-step').hidden = !formStep;
-  put($('enrol-name-norm'), raw && name !== raw ? `saved as “${name}”` : '');
-  put($('enrol-consent'), consentText(name || 'your name'));
-  const phraseStep = s.step === 'waiting' || s.step === 'phrase';
-  $('enrol-phrase-step').hidden = !phraseStep;
-  if (phraseStep) {
-    put($('enrol-progress'), s.step === 'waiting' ? 'The voice app is getting ready to listen…' : `Phrase ${s.index + 1} of ${s.phrases.length} · ${s.recorded} recorded`);
-    put($('enrol-phrase'), s.step === 'phrase' ? `“${s.phrases[s.index] ?? ''}”` : '');
-    $('enrol-rec').className = `enrol-rec${s.recording ? ' recording' : ''}`;
-    put($('enrol-rec-label'), s.recording ? 'recording' : s.step === 'waiting' ? 'waiting' : 'get ready');
-  }
-  const go = $<HTMLButtonElement>('enrol-go');
-  go.hidden = !(formStep || s.step === 'confirm');
-  put(go, s.step === 'confirm' ? 'Confirm with Touch ID' : s.step === 'failed' ? 'Try again' : 'Continue');
-  put($('enrol-cancel'), s.step === 'done' ? 'done' : s.step === 'confirm' ? 'cancel' : 'close');
-  const list = $('enrol-list');
-  clear(list);
-  const enrolled = clientOf(status).enrolled;
-  if (enrolled === null) list.appendChild(h(doc, 'p', { class: 'meta' }, 'this kernel does not list enrolled voices') as unknown as Node);
-  else if (!enrolled.length) list.appendChild(h(doc, 'p', { class: 'meta' }, 'none yet: Gnomon forwards no speech until a voice is enrolled') as unknown as Node);
-  else
-    for (const n of enrolled)
-      list.appendChild(h(doc, 'div', { class: 'enrol-voice' }, h(doc, 'span', null, n), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-forget': n, 'data-armed': forgetArmed === n ? 'true' : 'false' }, forgetArmed === n ? `Forget ${n}? confirm` : 'Forget')) as unknown as Node);
+  voiceSheet.repaint();
 }
 
-/** The dialog's one button: send the request (form), or finish with Touch ID (confirm). Trusted gestures only. */
+/** The row's one button: send the request (form), or finish with Touch ID (confirm). Trusted gestures only. */
 async function submitEnrol(trusted: boolean): Promise<void> {
   const s = store.enrol;
   if (!trusted || !s) return;
   if (!client) return notice('not connected: no voice was enrolled', true);
   if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
   if (s.step === 'form' || s.step === 'failed') {
-    const v = enrolRequest($<HTMLInputElement>('enrol-name').value, $<HTMLInputElement>('enrol-agree').checked);
-    if (!v.ok) return void put($('enrol-line'), v.reason);
+    const v = enrolRequest(enrolName, enrolAgreed);
+    if (!v.ok) {
+      store.enrol = { ...s, step: 'failed', error: v.reason };
+      return paintEnrol();
+    }
     try {
       // the voice app records the phrases (it watches for this enrolment); start it first if it is not running
       if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start', currentCapture()));
@@ -2121,25 +2224,24 @@ async function submitEnrol(trusted: boolean): Promise<void> {
   }
   if (s.step !== 'confirm') return;
   const cardId = s.cardId ?? [...store.cards.values()].find((c) => isEnrolCard(c, s.name))?.cardId ?? null;
-  if (!cardId) return void put($('enrol-line'), 'the Touch ID card has not arrived yet; it shows in the decisions pile when it does');
-  put($('enrol-line'), 'Confirm with Touch ID…');
+  if (!cardId) return notice('the Touch ID card has not arrived yet; it shows in the decisions pile when it does');
   try {
     await client.call('approve', { cardId, decision: 'allow' });
     // allowed: the kernel asks the voice app to record (status.voice.enrolment 'requested'); progress folds in
     store.enrol = enrolAllowed({ ...s, cardId }, Date.now());
   } catch (err) {
     focusCard(cardId);
-    return void put($('enrol-line'), err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet');
+    return notice(err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet', true);
   }
   paintEnrol();
   await refreshStatus();
 }
 
-/** Close the dialog; an enrolment whose card is still pending is cancelled by denying it (no Touch ID to say no). */
+/** Close the enrolment; one whose card is still pending is cancelled by denying it (no Touch ID to say no). */
 async function closeEnrol(trusted: boolean): Promise<void> {
   if (!trusted) return;
   const s = store.enrol;
-  $('enrol-dialog').hidden = true;
+  if (vsFlow === 'enrol') vsFlow = null;
   forgetArmed = null;
   store.enrol = null;
   syncEnrolPoll();
@@ -2216,8 +2318,12 @@ function run(id: string, trusted: boolean): void {
   $('palette').hidden = true;
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
-  else if (id.startsWith('voice.preset.')) void chooseVoicePreset(parsePreset(id.slice('voice.preset.'.length)), trusted);
-  else if (id === 'voice.sendword.teach') openTeach(null);
+  else if (id.startsWith('voice.preset.')) void chooseRungUi(RUNG_OF_PRESET[parsePreset(id.slice('voice.preset.'.length))], trusted);
+  else if (id === 'voice.sendword.teach') {
+    openVoiceSettings('sendword');
+    startTeachFlow();
+    voiceSheet.repaint(true);
+  } else if (id === 'voice.settings.open') openVoiceSettings();
   else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
   else if (id === 'mods.open') modsPanel.open();
@@ -2249,10 +2355,7 @@ function run(id: string, trusted: boolean): void {
   else if (id.startsWith('mode.') && (RUN_MODES as readonly string[]).includes(id.slice(5))) void setMode(id.slice(5) as RunMode, 'session', trusted);
   else if (id === 'voice.client.start') void voiceClientOp('start', trusted);
   else if (id === 'voice.client.stop') void voiceClientOp('stop', trusted);
-  else if (id === 'voice.enrol') {
-    settings.close(); // the enrol dialog takes the screen (Esc then closes it, not a sheet under it)
-    openEnrol(trusted);
-  }
+  else if (id === 'voice.enrol') openEnrol(trusted); // the Voice settings sheet, at "your voice" (it closes Settings first)
   else if (id.startsWith('voice.delay.')) setDictationDelay(parseDelay(id.slice(12)));
   else if (id === 'voice.dictation.hold') {
     // Hold belongs beside a countdown only: an ambient draft (or auto-send off) has nothing to hold
@@ -2423,6 +2526,7 @@ function wire(): void {
     pendingPick = null;
     void send(t.value, () => {
       if (!viaDictation) t.value = '';
+      fitComposer();
     }).then((ok) => {
       if (!pp || !ok) return;
       pickedChoices.set(pp.item, pp.key);
@@ -2431,7 +2535,10 @@ function wire(): void {
     });
   });
   // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
+  $('composer-tall').addEventListener('click', () => toggleComposerTall());
+  window.addEventListener('resize', () => fitComposer());
   $('composer-text').addEventListener('input', () => {
+    fitComposer();
     if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: $<HTMLTextAreaElement>('composer-text').value, now: Date.now() });
   });
   $('composer-text').addEventListener('pointerdown', () => {
@@ -2462,71 +2569,43 @@ function wire(): void {
     }
     void setMode(b.dataset.mode as RunMode, defaultScope(currentMode()), e.isTrusted);
   });
-  $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
-  // TD-2026-10-21-514: the guided send-word dialog and the liability acknowledgement (in-app dialogs, never prompt/confirm)
-  $('sendword-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    void submitTeach(e.isTrusted);
+  $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu(true)));
+  // #gui-voice-ladder: ↓ on the pill opens the ladder; inside it ↑/↓/Home/End move, Esc closes back to the pill
+  $('voice-pill').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' && $('voice-menu').hidden) {
+      e.preventDefault();
+      openVoiceMenu();
+    }
   });
-  $('sendword-cancel').addEventListener('click', () => void closeTeach());
-  $('sendword-no').addEventListener('click', () => void teachStep({ type: 'confirmCommon', yes: false }));
-  $('sendword-suggestions').addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-sendword]') as HTMLElement | null;
-    if (b && e.isTrusted) void teachStep({ type: 'pick', text: b.dataset.sendword! });
+  $('voice-menu').addEventListener('keydown', (e) => {
+    const items = ladderItems();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number): void => {
+      e.preventDefault();
+      items[(n + items.length) % items.length]?.focus();
+    };
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(items.length - 1);
+    else if (e.key === 'Tab') closeVoiceMenu(false);
   });
-  $('ack-agree').addEventListener('change', () => (($('ack-go') as HTMLButtonElement).disabled = !$<HTMLInputElement>('ack-agree').checked));
-  $('ack-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    submitAck(e.isTrusted);
-  });
-  $('ack-cancel').addEventListener('click', () => closeAck());
   $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
-    const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
-    if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
-    const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
-    if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
-    if ((e.target as HTMLElement).closest('[data-voice-sendword]') && e.isTrusted) return openTeach(null);
-    const cp = (e.target as HTMLElement).closest('[data-capture]') as HTMLElement | null;
-    if (cp && e.isTrusted) {
-      capturePref = parseCapturePref(cp.dataset.capture ?? null);
-      localStorage.setItem(CAPTURE_KEY, capturePref);
-      void applyCapture();
-      return paintVoiceMenu();
+    const t = e.target as HTMLElement;
+    if (t.closest('[data-vs-open]')) {
+      closeVoiceMenu(false);
+      return openVoiceSettings();
     }
-    const mk = (e.target as HTMLElement).closest('[data-mic-key]') as HTMLElement | null;
-    if (mk) return void setMicKey(mk.dataset.micKey === 'bare', e.isTrusted);
-    const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
-    if (vc) {
-      const id = vc.dataset.voiceClient!;
-      if (id === 'voice.enrol') return openEnrol(e.isTrusted);
-      return void voiceClientOp(id === 'voice.client.stop' ? 'stop' : 'start', e.isTrusted);
-    }
-    const b = (e.target as HTMLElement).closest('[data-voice]') as HTMLButtonElement | null;
+    const b = t.closest('[data-rung]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
-    const id = b.dataset.voice!;
-    if (id === 'voice.attach') {
-      const v = voiceStatusOf(status);
-      return void setVoice(v.state === 'off' ? 'ptt' : v.state, focused, e.isTrusted);
-    }
-    const to = id.slice(6) as VoiceState;
-    void setVoice(to, voiceTargetFor(to), e.isTrusted);
+    void chooseRungUi(b.dataset.rung as Rung, e.isTrusted);
   });
-  // V2e: the pill's own action ([Start voice] · [Restart] · [Teach]) and the enrolment dialog
+  // V2e: the pill's own action ([Start voice] · [Restart] · [Teach])
   $('voice-action').addEventListener('click', (e) => {
     const a = $('voice-action').dataset.action;
     if (a === 'enrol') return openEnrol(e.isTrusted);
     if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted);
-  });
-  $('enrol-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    void submitEnrol(e.isTrusted);
-  });
-  $('enrol-name').addEventListener('input', () => paintEnrol());
-  $('enrol-cancel').addEventListener('click', (e) => void closeEnrol(e.isTrusted));
-  $('enrol-list').addEventListener('click', (e) => {
-    const f = (e.target as HTMLElement).closest('[data-forget]') as HTMLElement | null;
-    if (f) void forgetVoice(f.dataset.forget!, e.isTrusted);
   });
   document.addEventListener('click', (e) => {
     if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
@@ -2598,10 +2677,10 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
-    } else if (e.key === 'Escape' && !$('ack-dialog').hidden) {
-      closeAck();
-    } else if (e.key === 'Escape' && !$('sendword-dialog').hidden) {
-      void closeTeach();
+    } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
+      closeVoiceMenu(true); // #gui-voice-ladder: back to the pill
+    } else if (e.key === 'Escape' && voiceSheet.isOpen()) {
+      voiceSheet.close(); // #gui-voice-settings: an inline step ends with the sheet (a trial never outlives it)
     } else if (e.key === 'Escape' && dict.grace) {
       e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
       dispatchDictation({ type: 'graceCancel', now: Date.now() });
@@ -2611,10 +2690,6 @@ function wire(): void {
       modsPanel.close();
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
-    } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
-      closeVoiceMenu();
-    } else if (e.key === 'Escape' && !$('enrol-dialog').hidden) {
-      void closeEnrol(e.isTrusted);
     } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
       e.preventDefault();
       void stopSpeaking(e.isTrusted);
@@ -2644,6 +2719,7 @@ export function main(raw?: string): void {
   applyLook();
   applyLayout();
   wire();
+  fitComposer(); // #gui-composer: the saved tall view and the line count from the start
   paintChatHead(); // S2.3: the quiet empty centre until a session is focused
   paintSessions(); // the ACTIVE / PAST heads show before the first row arrives
   // #bare-entry: the folder hint is decoded here but applied by attach only after the token verified (Aegis M1)

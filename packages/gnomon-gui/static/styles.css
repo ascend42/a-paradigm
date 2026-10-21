@@ -293,7 +293,7 @@ html, body {
 .trow .t { color: var(--sec); font-size: 11px; margin-right: 8px; }
 .pinned { border-top: 1px solid var(--rule); max-height: 30vh; overflow-y: auto; }
 .composer { border-top: 1px solid var(--rule); padding: 8px 14px; background: var(--sheet); }
-.composer textarea { resize: vertical; max-height: 40vh; }
+.composer textarea { resize: none; }
 .composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
 
 /* S3 (critique 2026-10-20 §2 S3): the stack is a paper pile on the ground; a card is a sheet with a state edge on the
@@ -614,35 +614,50 @@ html, body {
 .mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: 11px; }
 .mode-item .mode-name { font-size: 12px; }
 .mode-item .mode-note { font-size: 11px; color: var(--sec); }
-/* V2d voice pill (kernel-owned; TD-2026-10-19-298), restyled in S1 (critique 2026-10-20 §2 S1.5; same states, same
-   logic). Text tokens only from the G-GUI-10 fixture. Mic off = --sec, dashed --key-edge; push-to-talk = neutral
-   --ink2 with a filled --ink2 dot (slate is a project hue, never a state); ambient (the live mic, "armed") = the
-   fixture's voice-armed pair (--warn-ink on --warn-bg) inside a 1px amber --warn-edge (3.24:1 on its fill, a fixture
-   pair) with a 7px amber dot, STATIC: amber = armed, vermilion = failure only, nothing idles. Only the level meter
-   moves, and only with the real mic level (#gui-voice-capture); crashed keeps vermilion (a failure). */
+/* #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.pill): the header
+   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --stamp
+   dot with a soft ring (the comp's --live), a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
+   --warn-ink, speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
+   only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; font: inherit; font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; border-radius: var(--radius); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--sec); cursor: pointer; }
-.voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
-.voice-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--key-edge); background: transparent; flex: none; }
-.voice-pill.voice-off .voice-dot { border-style: dashed; }
-.voice-pill.voice-ptt { color: var(--ink2); border-color: var(--key-edge); }
-.voice-pill.voice-ptt .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
-.voice-pill.voice-ambient { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); font-weight: 600; }
-.voice-pill.voice-ambient .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
-.voice-pill.voice-noclient { color: var(--sec); border-style: dashed; }
-.voice-target { font-weight: 400; }
+.voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 11px; font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--ink); cursor: pointer; }
+[data-theme="night"] .voice-pill { border-radius: 0; }
+.voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--sec); background: transparent; flex: none; }
+.voice-pill.live .voice-dot { background: var(--stamp); border-color: var(--stamp); box-shadow: 0 0 0 3px color-mix(in srgb, var(--stamp) 22%, transparent); }
+.voice-fact { color: var(--sec); font-weight: 400; }
+.voice-fact:empty { display: none; }
+.voice-fact.fail { color: var(--fail); }
+.voice-pill.clamp { border: 2px solid var(--warn-edge); padding: 2px 10px; }
+.voice-fact.clamp { color: var(--warn-ink); }
+/* the voice app's trouble (not running, crashed, setting up): a dashed edge, the words in the fact */
+.voice-pill.voice-trouble { border-style: dashed; }
+.voice-pill.clamp.voice-trouble { border-style: solid; }
 /* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level) while hearing,
    and still otherwise; no decorative animation */
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
 .voice-meter[hidden] { display: none; }
-/* S1 + capture merge: amber (armed), static; the meter follows the REAL level only (no idle or decorative motion) */
-.voice-meter i { display: block; width: 2px; background: var(--warn-edge); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+.voice-meter i { display: block; width: 2px; background: var(--stamp); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
 .voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
-.voice-pill.capture-hearing { font-weight: 600; }
-.voice-pill.capture-hearing .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); }
-.voice-pill.capture-transcribing .voice-dot { background: var(--ink2); border-color: var(--key-edge); }
-.voice-pill.capture-captured { border-color: var(--key-edge); color: var(--ink); }
-.voice-pill.capture-dropped { border-style: dashed; color: var(--warn-ink); }
+/* the ladder (the pill's popover, role menu): Off, Talk, Dictate, Send word, Pieces, one line each, a cost tag */
+.voice-ladder { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px; max-width: calc(100vw - 24px); padding: 8px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
+.voice-ladder[hidden] { display: none; }
+.rung { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: start; width: 100%; padding: 8px 6px; border: 0; border-bottom: 1px dashed var(--rule); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rung:hover:not([disabled]) { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.rung:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.rung[aria-checked="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.rung[disabled] { cursor: not-allowed; }
+.rung[disabled] .rung-name { color: var(--sec); }
+.rung-r { width: 12px; height: 12px; margin-top: 3px; border: 1px solid var(--key-edge); border-radius: 50%; }
+.rung[aria-checked="true"] .rung-r { background: var(--ink); }
+.rung-name { font-weight: 600; font-size: 12.5px; }
+.rung-line { display: block; color: var(--sec); font-size: 11.5px; }
+.rung-tag { font-size: 11px; color: var(--ink2); white-space: nowrap; }
+.rung-tag.tag { font-size: 10.5px; color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 0 5px; }
+.ladder-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 6px 2px; font-size: 11px; color: var(--sec); }
+.link { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.link[disabled] { color: var(--sec); cursor: not-allowed; }
 .composer-ghost { padding: 2px 10px; font-style: italic; color: var(--sec); }
 .composer-ghost[hidden] { display: none; }
 /* B1 live words: committed solid, the unfixed tail dim (reduced motion: the global rule makes the fade instant) */
@@ -650,15 +665,6 @@ html, body {
 .composer-ghost .ghost-tail { opacity: 0.55; transition: opacity 0.12s linear; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .voice-note { font-style: italic; }
-.voice-menu { left: 0; right: auto; }
-.voice-keys { padding: 4px 8px 2px; border-top: 1px solid var(--rule); }
-.voice-item.voice-ambient .mode-name::before { content: "● "; color: var(--warn-ink); }
-.voice-item.voice-ptt .mode-name::before { content: "● "; color: var(--ink2); }
-.voice-item.voice-off .mode-name::before { content: "○ "; color: var(--sec); }
-.voice-attach { display: flex; gap: 4px; padding: 2px 10px 4px 24px; flex-wrap: wrap; }
-.voice-row-btn.voice-ambient { color: var(--warn-ink); }
-.voice-row-btn.voice-ptt, .voice-choice.voice-ptt { color: var(--ink2); }
-.voice-choice.current { border-width: 2px; }
 /* the transcript's voice turns */
 .trow.voice .who { color: var(--slate); }
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
@@ -666,12 +672,6 @@ html, body {
 .mode-item.scope { font-size: 11px; color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }
 /* V2e voice app lifecycle, dev banner, enrolment, notices (T-2026-10-19-026). Existing tokens only; reduced motion is
    covered by the global [data-motion="reduced"] rule. */
-.voice-pill.voice-setup { border-style: solid; }
-.voice-pill.voice-crashed { color: var(--fail); border-color: var(--fail-edge); border-style: solid; }
-.voice-pill.voice-unavailable { color: var(--sec); }
-.voice-pill.voice-nudge { color: var(--ink2); border-color: var(--key-edge); border-style: dashed; }
-/* T-2026-10-20-002, Aegis M (V2d): an attached ambient mic keeps its loud colours when a voice-app condition is appended (dashed edge = the app's trouble) */
-.voice-pill.voice-ambient:is(.voice-noclient, .voice-setup, .voice-crashed, .voice-unavailable, .voice-nudge) { color: var(--warn-ink); background: var(--warn-bg); border: 1px dashed var(--warn-edge); }
 .voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
 .voice-progress[hidden] { display: none; }
 .voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
@@ -680,15 +680,39 @@ html, body {
 .voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
 .voice-toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--sec); font-size: 12px; box-shadow: var(--shadow); }
 .voice-toast[hidden] { display: none; }
-.enrol-card { max-width: 460px; }
-.enrol-consent { font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; }
-.enrol-agree { display: flex; align-items: center; gap: 6px; }
-.enrol-phrase { font-size: 17px; line-height: 1.4; padding: 10px 4px; font-weight: 600; }
-.enrol-rec { display: inline-flex; align-items: center; gap: 6px; color: var(--sec); font-size: 12px; }
-.enrol-rec .voice-dot { border-style: dashed; }
-.enrol-rec.recording { color: var(--warn-ink); font-weight: 600; }
-.enrol-rec.recording .voice-dot { background: var(--warn-edge); border-color: var(--warn-edge); border-style: solid; }
-.enrol-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; }
+/* #gui-voice-settings: the Voice settings sheet, a right-side drawer on the sheet component (the Settings card);
+   rows are label | value | link, and teaching opens INLINE under its row (no modal over the sheet) */
+.overlay.vs-drawer { align-items: stretch; justify-content: flex-end; padding: 0; }
+.vs-drawer .voice-sheet { width: min(520px, 100vw); max-width: 520px; min-width: 0; max-height: none; height: 100%; border-radius: 0; border-width: 0 0 0 1px; box-shadow: var(--sheet-shadow); }
+.vs-body { padding: 4px 18px 18px; gap: 0; }
+.vs-sec { border-top: 1px solid var(--rule); padding: 10px 0; }
+.vs-sec:first-child { border-top: 0; }
+.vs-head { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.vs-k { color: var(--sec); font-size: 12px; }
+.vs-v { font-size: 12.5px; }
+.vs-v.ok { color: var(--stamp); }
+.vs-v.warn { color: var(--warn-ink); }
+.vs-flow { margin: 10px 0 2px 110px; display: flex; flex-direction: column; gap: 10px; border-left: 2px solid var(--ink); padding-left: 12px; }
+.vs-flow p, .vs-sec > p { margin: 0; }
+.vs-timing, .vs-pieces { margin: 8px 0 0 110px; }
+.vs-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vs-counter { font-size: 11.5px; color: var(--sec); }
+.vs-heard { font-size: 15px; font-weight: 600; }
+.vs-heard.ok { color: var(--stamp); }
+.vs-risk { font-size: 12px; color: var(--ink2); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 8px 10px; border-radius: var(--radius); }
+.vs-risk .vs-risk-text { margin: 0 0 6px; }
+.vs-check { display: flex; gap: 6px; align-items: center; }
+.vs-check input:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.vs-custom { width: 14em; }
+.vs-label { display: flex; gap: 6px; align-items: center; }
+.vs-warn { color: var(--warn-ink); }
+.vs-voices { display: flex; flex-direction: column; gap: 2px; }
+.vs-voice { display: flex; justify-content: space-between; gap: 8px; }
+/* phrase N of 3: the REAL input level only (still otherwise; reduced motion: the global rule makes it instant) */
+.vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
+.vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
+.vs-meter.recording span { background: var(--stamp); }
+@media (max-width: 560px) { .vs-flow, .vs-timing, .vs-pieces { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
    auto-send delay. Reduced motion (the setting or the OS) hides the draining ring and shows the seconds as text. */
@@ -798,9 +822,7 @@ html, body {
    focus (a11y: a visible focus state), on the same token as every other focus ring. */
 .composer textarea.field { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
 .composer textarea.field:focus, .composer textarea.field:focus-visible { outline: none; box-shadow: none; }
-.composer:has(> textarea.field:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
-.composer-kbd { font: inherit; font-size: 11px; color: var(--sec); margin-left: auto; }
-.composer-foot .key.pri { margin-left: 8px; }
+.composer:has(textarea.field:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
 
 /* palette rows: title left, kbd hint right */
 .pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
@@ -890,7 +912,6 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .badge.risk { font-size: 10.5px; line-height: 18px; padding: 0 6px; }
 .theme-word { display: none; }
 .theme-switch .seg-key { min-width: 26px; padding: 1px 6px; text-align: center; }
-.voice-pill.voice-off:not(.voice-noclient):not(.voice-setup):not(.voice-crashed):not(.voice-nudge) { padding: 1px 7px; font-size: 10.5px; border-color: var(--rule); }
 /* night: the comp's keys carry no [ ] caps (only + New session does); a model-text choice is marked by its dashed
    edge AND its filled choice-k pill (Aegis L3) */
 [data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
@@ -912,14 +933,17 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .more-btn { font-size: 13px; line-height: 1; padding: 1px 7px; border-color: transparent; }
 .more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
 
-/* fidelity 2 composer (comp): the input alone with "Reply to <name>…" and a small ⌘↵ hint; send is a small key. Who it
+/* #gui-composer (Atelier 2026-10-21 direction): the text wraps and grows to 12 lines, then scrolls; ⤢ raises the cap
+   to 24 (core/composer.ts fits the height, per viewer); the line count and the ONE send key stack on the right. Who it
    goes to and the run mode are in the textarea's title= (and the sr-only #composer-mode line). */
-.composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; }
-.composer > textarea { grid-column: 1; resize: none; min-height: 21px; line-height: 1.55; }
-.composer > .composer-ghost { grid-column: 1 / -1; }
-.composer > .composer-foot { grid-column: 2; grid-row: 1; margin-top: 0; justify-content: flex-end; }
-.composer-kbd { border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
-.composer-foot .key.pri { margin-left: 2px; min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 10px; }
+.composer-main { min-width: 0; display: flex; flex-direction: column; }
+.composer-main > textarea { resize: none; min-height: 21px; line-height: 1.6; overflow-y: hidden; }
+.composer-main > .composer-foot { margin-top: 0; justify-content: flex-start; }
+.composer-ctrls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.composer-tall { min-height: 0; padding: 1px 7px; line-height: 1.4; }
+.composer-lines { font-size: 11px; white-space: nowrap; }
+.composer-ctrls .key.pri { min-height: 0; padding: 1px 8px; font-size: 10.5px; box-shadow: none; }
 
 /* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
 .pilehead { padding: 12px 14px 8px; align-items: baseline; }
@@ -966,13 +990,11 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .workshop-install-result { margin-left: 8px; }
 .key[aria-busy="true"] { cursor: progress; }
 
-/* TD-2026-10-21-514: the send-word suggestions */
-.sendword-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
-
-/* TD-2026-10-21-514: sent-by label and the clamp chip */
-.who .sent-by { margin-left: 6px; opacity: .7; font-size: .9em; }
-.who .sent-by.asks-first { opacity: .9; }
-.clamp-chip { margin-left: 8px; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: .85em; }
-
-/* privacy: the bare-key mic is live */
-#voice-pill.mic-live { outline: 1px solid currentColor; }
+/* TD-2026-10-21-514 + Atelier 2026-10-21: "spoken · sent by …" (amber "edits ask first" on a voice-origin turn), the
+   session header chip while it is clamped, and the card line of a card asked during one */
+.who .sent-by { margin-left: 6px; color: var(--sec); font-size: 11px; }
+.who .sent-by.asks-first { color: var(--warn-ink); }
+.clamp-chip { margin-left: 8px; padding: 1px 8px; font-size: 11px; color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); border-radius: 999px; }
+[data-theme="night"] .clamp-chip { border-radius: 0; }
+.card.voice-origin { --edge: var(--warn-edge); }
+.card-voice-origin { display: block; font-size: 11px; color: var(--warn-ink); }

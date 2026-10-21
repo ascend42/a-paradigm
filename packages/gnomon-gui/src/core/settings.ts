@@ -94,6 +94,7 @@ export const SETTINGS_RUNS: ReadonlySet<string> = new Set(
       id === 'voice.client.start' ||
       id === 'voice.client.stop' ||
       id === 'voice.enrol' ||
+      id === 'voice.settings.open' ||
       id.startsWith('voice.delay.'),
   ),
 );
@@ -216,8 +217,10 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
           : { kind: 'action', id: 'voice-app', label: `Voice app · ${phase}`, run: 'voice.client.start', note: c.phase === 'crashed' ? 'Restart voice' : 'Start voice' },
     );
     voice.push({ kind: 'action', id: 'voice-enrol', label: `Enrolled voices · ${c.enrolled === null ? 'not listed by this kernel' : c.enrolled.length ? c.enrolled.join(', ') : 'none yet (no speech is forwarded until one is)'}`, run: 'voice.enrol', note: 'Teach Gnomon your voice…' });
+    // Atelier 2026-10-21 (#gui-voice-settings): everything voice configures lives in ONE Voice settings sheet
+    voice.push({ kind: 'action', id: 'voice-settings', label: 'Your voice, send word, keys, listening, timing, risk', run: 'voice.settings.open', note: 'Voice settings…' });
   }
-  voice.push({ kind: 'readonly', id: 'voice-mode', label: 'Listening mode', value: v.state === 'off' ? 'off: no session has the mic' : `${VOICE_TITLE[v.state]} on ${v.hsid ? v.hsid.slice(-10) : 'a session'}`, how: 'Chosen per session, not here: open the mic pill (or a session’s Voice ▾) and pick Push-to-talk or Ambient. Ambient asks for Touch ID once per login.' });
+  voice.push({ kind: 'readonly', id: 'voice-mode', label: 'Listening mode', value: v.state === 'off' ? 'off: no session has the mic' : `${VOICE_TITLE[v.state]} on ${v.hsid ? v.hsid.slice(-10) : 'a session'}`, how: 'Chosen live, not here: open the voice pill in the header and pick a rung (Off, Talk, Dictate, Send word, Pieces). An open mic asks for Touch ID once per login.' });
   voice.push({ kind: 'readonly', id: 'voice-hotkey', label: 'Talk hotkey', value: `hold ${v.hotkey}; ⌃⌥H holds the dictation`, how: 'The voice app owns its global hotkeys; they are shown here as they are.' });
   voice.push({
     kind: 'choice',
