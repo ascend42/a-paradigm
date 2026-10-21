@@ -21,7 +21,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, isAtBottom } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -638,6 +638,10 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         voice: cardVoiceOf(c.card),
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
         localNs: localNsOf(session?.principal),
+        // Aegis C1e: what a root-class decision signs, verified against contentHash (null ⇒ no root key)
+        rootRows: rootRowsOf(c.card),
+        // Q2: status.helper.batch 'unavailable (helper <1.8.0)' ⇒ a one-line notice on root cards
+        batchUnavailable: typeof (status?.helper as { batch?: unknown } | undefined)?.batch === 'string' && String((status!.helper as { batch: string }).batch).startsWith('unavailable'),
       },
       c.card.block,
     ) as unknown as HTMLElement;
@@ -660,6 +664,8 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const shown = pileOpen ? cards : cards.slice(0, PILE_MAX);
   for (const c of shown) pile.appendChild(mk(c));
   pile.classList.toggle('open', pileOpen);
+  // Aegis C1e: a root decision whose logged rowsDigest is not the digest of the rows its card showed: flagged red
+  for (const m of store.rootMismatches) pile.appendChild(h(doc, 'p', { class: 'refusal root-digest-mismatch', role: 'alert' }, `The ${m.decision} of ${m.cardId} was logged with rows the card did not show (rowsDigest ${m.logged ?? 'missing'} ≠ shown ${m.shown}). Check gnomon verify.`) as unknown as Node);
   if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
   put($('stack-hint'), cards.length > 1 ? ' · hover to fan' : '');
   const pinned = $('pinned');

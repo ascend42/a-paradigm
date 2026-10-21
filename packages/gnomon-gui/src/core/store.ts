@@ -28,6 +28,7 @@
  */
 import { projectHue, sha256Tagged } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
+import { rootRowsOf, rowsDigestCheck } from './render.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
@@ -144,6 +145,8 @@ export class GuiStore {
   /** Rows with no session, kept for the kernel feed. */
   readonly kernelFeed: Row[] = [];
   readonly cards = new Map<string, StackCard>();
+  /** Aegis C1e: root decisions logged with a rowsDigest that is not the shown rows' digest (newest 16), shown red */
+  readonly rootMismatches: Array<{ cardId: string; decision: string; shown: string; logged: string | null }> = [];
   #cardSeq = 0;
   head = 0;
   rowsSeen = 0;
@@ -328,6 +331,14 @@ export class GuiStore {
         what.add(`card-in:${card.cardId}`);
       }
     } else if (r.kind === 'approval.decide' || r.kind === 'approval.expire') {
+      // Aegis C1e: a root decision's logged rowsDigest must be the digest of the rows its card SHOWED
+      const was = typeof p.cardId === 'string' ? this.cards.get(p.cardId) : undefined;
+      const rr = was && r.kind === 'approval.decide' && typeof p.decision === 'string' ? rootRowsOf(was.card as Record<string, unknown>) : null;
+      if (rr && rowsDigestCheck(rr, String(p.decision), p.rowsDigest) === 'mismatch') {
+        this.rootMismatches.push({ cardId: String(p.cardId), decision: String(p.decision), shown: rr.rowsDigest, logged: typeof p.rowsDigest === 'string' ? p.rowsDigest : null });
+        if (this.rootMismatches.length > 16) this.rootMismatches.shift();
+        what.add('root-mismatch');
+      }
       if (typeof p.cardId === 'string' && this.cards.delete(p.cardId)) {
         what.add('cards');
         what.add(`card-out:${p.cardId}`);

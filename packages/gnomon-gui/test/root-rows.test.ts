@@ -1,0 +1,126 @@
+/**
+ * Aegis C1e (TD-2026-10-20-514): a root-class card shows, in full, what its ONE touch signs ("This decision signs"),
+ * from the kernel's {type:'root-rows', rootDecisions, detail} node verified against contentHash. No Approve on a
+ * root-class card whose node is missing, fails the hash, or holds a row this GUI cannot render. After the decision the
+ * logged rowsDigest is compared with the shown rows' digest (a mismatch is flagged red). A helper < 1.8.0 adds a
+ * one-line notice.
+ */
+import { describe, expect, it } from 'vitest';
+import { cardContentHash, renderCard, rootRowsOf, rowsDigestOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { GuiStore } from '../src/core/store.js';
+
+class FText {
+  constructor(readonly data: string) {}
+}
+class FEl implements MiniEl {
+  className = '';
+  readonly attrs = new Map<string, string>();
+  readonly children: Array<FEl | FText> = [];
+  constructor(readonly tag: string) {}
+  appendChild(c: unknown): unknown {
+    this.children.push(c as FEl | FText);
+    return c;
+  }
+  setAttribute(n: string, v: string): void {
+    this.attrs.set(n, v);
+  }
+  get text(): string {
+    return this.children.map((c) => (c instanceof FText ? c.data : c.text)).join('');
+  }
+  all(): FEl[] {
+    return [this, ...this.children.flatMap((c) => (c instanceof FEl ? c.all() : []))];
+  }
+}
+const fdoc: MiniDoc = { createElement: (t) => new FEl(t), createTextNode: (s) => new FText(s) };
+
+const C = 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+const MH = `sha256:${'c'.repeat(64)}`;
+const PK = `sha256:${'e'.repeat(64)}`;
+const HOSTS = Array.from({ length: 12 }, (_, i) => `host-${i}.example.com`);
+const ROWS = [
+  { schemaVersion: 'grantRow:v1', kind: 'grant.trust', manifestHash: MH, tier: 'community', cardId: C },
+  { schemaVersion: 'grantRow:v1', kind: 'grant.capability', manifestHash: MH, capabilities: ['tools:call', 'knowledge:provide'], read: ['/Users/x/notes'], cardId: C },
+  { schemaVersion: 'grantRow:v1', kind: 'grant.egress', manifestHash: MH, hosts: HOSTS, cardId: C },
+  { schemaVersion: 'grantRow:v2', kind: 'grant.publisher', publisher: 'acme', host: 'gitlab.com', namespace: 'acme', cardId: C },
+  { schemaVersion: 'grantRow:v2', kind: 'grant.install', name: 'acme.board', manifestHash: MH, packageHash: PK, cardId: C, source: 'git:gitlab.com/acme/board@' + 'b'.repeat(40) },
+];
+
+function card(rows: unknown[] | null, o: { tamper?: boolean; kind?: string; rootDecisions?: string[] } = {}) {
+  const kind = o.kind ?? 'install';
+  const detail = { name: 'acme.board', ...(rows ? { rootRows: rows } : {}) };
+  const base = { cardId: C, kind, requestedBy: 'p:abcdefgh/matt', flags: [] as string[] };
+  const contentHash = cardContentHash(base, detail);
+  const shown = o.tamper ? { ...detail, name: 'acme.other' } : detail;
+  const children: unknown[] = [{ type: 'Text', text: 'Install acme.board' }, ...(rows ? [{ type: 'root-rows', rootDecisions: o.rootDecisions ?? ['install'], detail: shown }] : [])];
+  return { ...base, state: 'pending', contentHash, block: { schemaVersion: 'display-block:v1', type: 'Box', children } } as Record<string, unknown>;
+}
+const view = (c: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ cardId: C, kind: String(c.kind), requestedBy: 'p:abcdefgh/matt', hsid: null, repo: null, state: 'pending', contentHash: String(c.contentHash), flags: [], decisions: String(c.kind) === 'install' ? ['install', 'deny'] : ['allow', 'deny'], decidable: true, rootRows: rootRowsOf(c), ...extra });
+const keysOf = (el: FEl) => el.all().filter((e) => e.attrs.has('data-decision')).map((e) => e.attrs.get('data-decision'));
+
+describe('Aegis C1e: "This decision signs"', () => {
+  it('renders every root row IN FULL (every egress host, tier, capabilities + read paths, publisher → host/namespace, mod id/source/packageHash prefix) and keeps Approve', () => {
+    const c = card(ROWS);
+    const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+    const t = el.text;
+    expect(t).toContain('This decision signs');
+    for (const h of HOSTS) expect(t).toContain(h);
+    expect(t).toContain('trust tier community');
+    expect(t).toContain('capabilities: tools:call, knowledge:provide · reads: /Users/x/notes');
+    expect(t).toContain('publisher acme → gitlab.com/acme');
+    expect(t).toContain(`install acme.board from git:gitlab.com/acme/board@${'b'.repeat(40)} · packageHash ${PK.slice(0, 19)}…`);
+    expect(keysOf(el)).toEqual(['install', 'deny']);
+  });
+
+  it('an empty rootRows shows "its decision row only" and keeps Approve', () => {
+    const c = card([], { kind: 'api-token', rootDecisions: ['use-api-token'] });
+    const el = renderCard({ doc: fdoc }, { ...view(c), decisions: ['use-api-token', 'deny'] }, c.block) as FEl;
+    expect(el.text).toContain('its decision row only');
+    expect(keysOf(el)).toEqual(['use-api-token', 'deny']);
+  });
+
+  for (const [what, c] of [
+    ['no root-rows node', card(null)],
+    ['a node whose detail fails contentHash', card(ROWS, { tamper: true })],
+    ['a row kind it cannot render', card([...ROWS.slice(0, 4), { schemaVersion: 'grantRow:v1', kind: 'grant.bind', cardId: C }, ROWS[4]])],
+  ] as const) {
+    it(`${what}: NO Approve on the root-class card (deny stays), and a visible reason`, () => {
+      const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+      expect(rootRowsOf(c)).toBeNull();
+      expect(keysOf(el)).toEqual(['deny']);
+      expect(el.text).toContain('there is no Approve here');
+    });
+  }
+
+  it('a non-root card (permission) is untouched', () => {
+    const c = { ...card(null, { kind: 'permission' }) };
+    const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+    expect(keysOf(el)).toEqual(['allow', 'deny']);
+    expect(el.text).not.toContain('This decision signs');
+  });
+
+  it('Q2: a helper below 1.8.0 adds a one-line notice on a root card', () => {
+    const c = card(ROWS);
+    const el = renderCard({ doc: fdoc }, view(c, { batchUnavailable: true }), c.block) as FEl;
+    expect(el.text).toContain('older than 1.8.0');
+  });
+});
+
+describe('Aegis C1e: the logged rowsDigest against the shown rows', () => {
+  const req = (c: Record<string, unknown>) => ({ seq: 1, kind: 'approval.request', payload: { card: c, flags: [] } });
+  it('a matching rowsDigest: no flag; a different or missing one: flagged', () => {
+    const c = card(ROWS);
+    const ok = new GuiStore();
+    ok.apply([req(c), { seq: 2, kind: 'approval.decide', payload: { cardId: C, decision: 'install', rowsDigest: rowsDigestOf(ROWS) } }]);
+    expect(ok.rootMismatches).toEqual([]);
+    const bad = new GuiStore();
+    const what = bad.apply([req(c), { seq: 2, kind: 'approval.decide', payload: { cardId: C, decision: 'install', rowsDigest: `sha256:${'0'.repeat(64)}` } }]);
+    expect(what.has('root-mismatch')).toBe(true);
+    expect(bad.rootMismatches).toEqual([{ cardId: C, decision: 'install', shown: rowsDigestOf(ROWS), logged: `sha256:${'0'.repeat(64)}` }]);
+    const missing = new GuiStore();
+    missing.apply([req(c), { seq: 2, kind: 'approval.decide', payload: { cardId: C, decision: 'install' } }]);
+    expect(missing.rootMismatches).toHaveLength(1);
+    const deny = new GuiStore();
+    deny.apply([req(c), { seq: 2, kind: 'approval.decide', payload: { cardId: C, decision: 'deny' } }]);
+    expect(deny.rootMismatches).toEqual([]);
+  });
+});

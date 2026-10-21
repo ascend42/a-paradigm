@@ -209,6 +209,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     }
     case 'Image':
       return h(doc, 'div', { class: 'blk blk-image', role: 'img', 'aria-label': str(data.alt) }, `[image] ${str(data.alt)}`);
+    case 'root-rows':
+      // Aegis C1e: the kernel's structured root rows: renderCard's "This decision signs" section renders them (rootRowsOf)
+      return h(doc, 'span', { class: 'blk blk-root-rows' });
     case 'bash-prefix':
       // the kernel's structured prefix choices: the card's always keys render them (prefixOptionsOf)
       return h(doc, 'span', { class: 'blk blk-bash-prefix' });
@@ -252,6 +255,13 @@ export interface CardView {
   held?: { seconds: number; undo: string } | null;
   /** fidelity 2: a permission card's one-line title the GUI composed from the kernel's STRUCTURED fields (permissionTitleOf) */
   composedTitle?: ComposedTitle | null;
+  /**
+   * Aegis C1e (TD-2026-10-20-514): what a root-class decision of this card signs (rootRowsOf), verified against
+   * contentHash. null on a root-class card ⇒ its root decisions show NO key (missing node, bad hash, a row it cannot render)
+   */
+  rootRows?: RootRowsView | null;
+  /** Q2: the helper cannot sign a decision and its rows in one touch (status.helper.batch unavailable, helper < 1.8.0) */
+  batchUnavailable?: boolean;
   /** Aegis L2: the local trust set's namespace (localNsOf the connection's principal); null/absent => no shortening */
   localNs?: string | null;
 }
@@ -477,6 +487,91 @@ export interface AskCardDetail {
   maxAnswerChars: number;
 }
 
+/** Aegis C1e: decisions that are ROOT class by kind (the kernel's classes.ts); a voice.enrol card names its own in the node. */
+export const ROOT_CLASS_BY_KIND: Readonly<Record<string, readonly string[]>> = Object.freeze({ install: ['install'], 'api-token': ['use-api-token'], grant: ['allow'], 'peer-pair': ['accept'] });
+
+export interface RootRowsView {
+  /** the decisions that sign these rows (the kernel's node) */
+  rootDecisions: string[];
+  /** detail.rootRows as shown, verbatim (rowsDigest is computed over these) */
+  rows: Record<string, unknown>[];
+  /** one rendered line per row, in full */
+  lines: string[];
+  /** sha256(canonicalJson(rows)): what the logged v2 decision row's rowsDigest must equal */
+  rowsDigest: string;
+}
+
+const short = (v: unknown, n = 19): string => (typeof v === 'string' ? (v.length > n ? `${v.slice(0, n)}…` : v) : '?');
+const list = (v: unknown): string | null => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]).join(', ') : null);
+
+/** One root row as the card shows it, IN FULL; null = a kind this GUI cannot render (then no root key is shown). */
+export function rootRowLine(r: Record<string, unknown>): string | null {
+  const s = (k: string): string | null => (typeof r[k] === 'string' ? (r[k] as string) : null);
+  if (r.schemaVersion === 'voiceEnrolRow:v1') return r.op === 'enrol' && s('speakerId') ? `enrol the voice speaker ${s('speakerId')} · consent ${short(r.consentHash)}` : null;
+  switch (r.kind) {
+    case 'grant.trust':
+      return s('tier') ? `trust tier ${s('tier')} for manifest ${short(r.manifestHash)}` : null;
+    case 'grant.capability': {
+      const caps = list(r.capabilities);
+      if (caps === null) return null;
+      const read = r.read === undefined ? '' : list(r.read);
+      return read === null ? null : `capabilities: ${caps || '(none)'}${read ? ` · reads: ${read}` : ''}`;
+    }
+    case 'grant.egress': {
+      const hosts = list(r.hosts);
+      return hosts === null ? null : `egress hosts: ${hosts}`;
+    }
+    case 'grant.publisher':
+      return s('publisher') && s('host') && s('namespace') ? `publisher ${s('publisher')} → ${s('host')}/${s('namespace')}` : null;
+    case 'grant.install':
+      return s('name') && s('source') ? `install ${s('name')} from ${s('source')} · packageHash ${short(r.packageHash)}` : null;
+    case 'grant.uninstall':
+      return s('name') ? `uninstall ${s('name')} · packageHash ${short(r.packageHash)}` : null;
+    default:
+      return null;
+  }
+}
+
+/** sha256:<hex> of canonicalJson(rows), exactly as the kernel's decision-batch.ts rowsDigestOf. */
+export function rowsDigestOf(rows: readonly unknown[]): string {
+  return `sha256:${hex(sha256(canonicalJson(rows)))}`;
+}
+
+/**
+ * Aegis C1e: the card's {type:'root-rows', rootDecisions, detail} node, its detail verified against contentHash, every
+ * row renderable. null = no such node, more than one, a hash mismatch, or a row this GUI cannot render.
+ */
+export function rootRowsOf(card: Record<string, unknown>): RootRowsView | null {
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'root-rows') as Array<{ rootDecisions?: unknown; detail?: unknown }>;
+  if (nodes.length !== 1) return null;
+  const { detail, rootDecisions } = nodes[0]!;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail) || typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const rows = (detail as { rootRows?: unknown }).rootRows;
+  if (!Array.isArray(rows) || !rows.every((r) => r && typeof r === 'object' && !Array.isArray(r))) return null;
+  if (!Array.isArray(rootDecisions) || !rootDecisions.every((d) => typeof d === 'string')) return null;
+  const lines: string[] = [];
+  for (const r of rows as Record<string, unknown>[]) {
+    const l = rootRowLine(r);
+    if (l === null) return null;
+    lines.push(l);
+  }
+  return { rootDecisions: rootDecisions as string[], rows: rows as Record<string, unknown>[], lines, rowsDigest: rowsDigestOf(rows) };
+}
+
+/** The decision keys a card may show: a root-class decision only with a verified, renderable root-rows node (Aegis C1e). */
+export function rootSafeDecisions(kind: string, decisions: readonly string[], rr: RootRowsView | null): string[] {
+  const root = rr ? rr.rootDecisions : (ROOT_CLASS_BY_KIND[kind] ?? []);
+  return rr ? [...decisions] : decisions.filter((d) => !root.includes(d));
+}
+
+/** Aegis C1e: after a root decision, the logged v2 decision row's rowsDigest against the rows the card showed. */
+export function rowsDigestCheck(shown: RootRowsView, decision: string, logged: unknown): 'ok' | 'mismatch' | 'not-root' {
+  if (!shown.rootDecisions.includes(decision)) return 'not-root';
+  return logged === shown.rowsDigest ? 'ok' : 'mismatch';
+}
+
 /** contentHash exactly as the kernel's broker computes it (card.ts contentHashOf): sha256 over canonical {kind, requestedBy, hsid, detail, flags}. */
 export function cardContentHash(card: { kind?: unknown; requestedBy?: unknown; hsid?: unknown; flags?: unknown }, detail: unknown): string {
   const flags = Array.isArray(card.flags) ? [...(card.flags as string[])].sort() : [];
@@ -613,7 +708,8 @@ function argEl(doc: MiniDoc, arg: string): MiniEl {
  */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
-  const keys = v.decidable && v.decisions.length ? v.decisions : [];
+  const rootGated = v.rootRows !== undefined && (v.rootRows !== null || (ROOT_CLASS_BY_KIND[v.kind] ?? []).some((d) => v.decisions.includes(d)));
+  const keys = v.decidable && v.decisions.length ? (rootGated ? rootSafeDecisions(v.kind, v.decisions, v.rootRows ?? null) : v.decisions) : [];
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
   const loud = v.flags.includes('claim-mismatch');
@@ -656,6 +752,12 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     bodyShown ? bodyEl : null,
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
+    v.rootRows
+      ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
+      : rootGated
+        ? h(doc, 'p', { class: 'refusal root-rows-missing' }, 'This card does not show what its approval signs: there is no Approve here. Raise it again from the kernel.')
+        : null,
+    v.batchUnavailable && rootGated ? h(doc, 'small', { class: 'meta helper-batch-note' }, 'The helper is older than 1.8.0: this approval asks Touch ID once per signed row.') : null,
     h(
       doc,
       'div',
