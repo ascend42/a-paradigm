@@ -380,7 +380,7 @@ describe('founder report 2026-10-20: one send control; Hold only beside a countd
     expect(draftControls(s).hold).toBeNull();
   });
   it('no state carries a send control (the composer send is the only one)', () => {
-    for (const c of Object.values(DRAFT_CONTROLS)) expect(Object.keys(c).sort()).toEqual(['hold', 'ring']);
+    for (const c of Object.values(DRAFT_CONTROLS)) for (const k of Object.keys(c)) expect(['hold', 'ring', 'grace', 'pieceRing']).toContain(k); // never a send key
   });
 });
 

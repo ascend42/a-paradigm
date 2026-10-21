@@ -15,7 +15,8 @@
  * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { isCardDecidable, sanitizeDisplayText, validateSendWord, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
+import { ACK_TEXT, acked, attachSend, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -39,7 +40,7 @@ import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
-import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -1225,6 +1226,9 @@ function focus(hsid: string | null): void {
 
 /* ── voice dictation (TD-2026-10-20-262; core/dictation.ts) ────────── */
 let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
+/** TD-2026-10-21-514: the voice preset (per machine) and a pending double-rAF visibility stamp */
+let voicePreset = parsePreset(localStorage.getItem(PRESET_KEY));
+let paintStamp = false;
 let dictTimer: ReturnType<typeof setInterval> | null = null;
 let dictTicks = 0;
 let dictLive = '';
@@ -1245,6 +1249,68 @@ function dispatchDictation(e: DictationEvent): void {
   if (dict.sending && !prev.sending) void sendDictation();
   syncDictationTimer();
   paintDictation();
+  stampPainted();
+}
+
+/**
+ * TD-2026-10-21-514: the send word may only send a draft that has been VISIBLE ≥ 1 s. Stamped after paint (a double
+ * requestAnimationFrame: the frame after the one that painted it), only while the page is visible.
+ */
+function stampPainted(): void {
+  if (paintStamp || dict.policy !== 'word' || dict.visibleSince !== null || !hasDraft(dict) || !dict.focusedHere || document.visibilityState !== 'visible') return;
+  paintStamp = true;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      paintStamp = false;
+      if (document.visibilityState === 'visible') dispatchDictation({ type: 'painted', now: Date.now() });
+    }),
+  );
+}
+
+/** TD-2026-10-21-514: the preset's send policy and the kernel-held send word reach the reducer. */
+function syncVoicePolicy(): void {
+  const policy = policyOf(voicePreset);
+  const word = sendWordOf(status);
+  if (policy !== dict.policy || JSON.stringify(word) !== JSON.stringify(dict.sendWord)) dispatchDictation({ type: 'setPolicy', policy, sendWord: word, now: Date.now() });
+}
+
+/** Choose a preset (pill menu, palette): Send word and Pieces ask for the one-time liability acknowledgement first. */
+async function chooseVoicePreset(p: typeof voicePreset, trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  const me = typeof (status as { principal?: unknown } | null)?.principal === 'string' ? ((status as { principal: string }).principal) : null;
+  let step = choosePreset(p, { acked: acked(localStorage, me), sendWord: sendWordOf(status) });
+  if (step === 'needs-ack') {
+    if (!me || !window.confirm(`${PRESET_LABELS[p]} is a liability mode.\n\n${ACK_TEXT}`)) return notice(`${PRESET_LABELS[p]} stays off: the acknowledgement is needed once`);
+    recordAck(localStorage, me);
+    step = choosePreset(p, { acked: true, sendWord: sendWordOf(status) });
+  }
+  if (step === 'needs-word' && !(await teachSendWord())) return;
+  voicePreset = p;
+  localStorage.setItem(PRESET_KEY, p);
+  syncVoicePolicy();
+  notice(`voice: ${PRESET_LABELS[p]} · ${PRESET_NOTES[p]}${attachSend(p) ? ' (re-attach voice to apply its send ceiling)' : ''}`);
+  if (!$('voice-menu').hidden) paintVoiceMenu();
+}
+
+/** "Teach Gnomon your send word" (first step: pick and validate; the kernel stores it 0600). */
+async function teachSendWord(): Promise<boolean> {
+  if (!client) return false;
+  const raw = window.prompt('Teach Gnomon your send word: 1-3 words you would not say by accident (e.g. "over and out", "ship it"). Never an approval word.');
+  if (raw === null) return false;
+  const v = validateSendWord(raw);
+  if (!v.ok) {
+    notice(`not a usable send word (${v.reason}): 1-3 words, never an approval or command phrase`, true);
+    return false;
+  }
+  if (v.warn === 'common' && !window.confirm(`"${v.text}" is a very common word and may send by accident. Use it anyway?`)) return false;
+  try {
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word: v.text } });
+    await refreshStatus();
+    return true;
+  } catch (err) {
+    notice(`the send word was not saved: ${err instanceof Error ? err.message : String(err)}`, true);
+    return false;
+  }
 }
 
 /** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
@@ -1264,6 +1330,7 @@ function syncDictationContext(): void {
   const on = dictationOn();
   dispatchDictation({ type: 'context', attached: on ? voiceStatusOf(status).hsid : null, focused, now });
   if (!on) return;
+  syncVoicePolicy();
   const d = dictationStatusOf(status);
   if (d.activity !== dict.activity) dispatchDictation({ type: 'activity', activity: d.activity, now });
   if (d.holdToggles !== null && (d.holdToggles !== dict.holdToggles || d.epoch !== dict.holdEpoch)) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, epoch: d.epoch, now });
@@ -1301,6 +1368,9 @@ async function sendDictation(): Promise<void> {
   if (echo) local.push(echo);
   schedule(new Set([`transcript:${req.hsid}`]));
   try {
+    // TD-2026-10-21-514 ($send-by-word): the claim first; the kernel consumes the word and stamps this send voice-origin
+    const claim = sendClaim(dict);
+    if (claim) await client.call('log.append', { kind: 'request.voice.send.claim', payload: claim });
     const r = await client.call<{ turn?: unknown }>('session.send', req);
     if (echo) stampEcho(echo, r);
     dispatchDictation({ type: 'sent', now: Date.now() });
@@ -1718,7 +1788,14 @@ function paintVoiceMenu(): void {
       picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
     menu.appendChild(picks);
   }
-  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃⌥H holds the dictation`) as unknown as Node);
+  if (canAttach(status)) {
+    // TD-2026-10-21-514: the presets, a segmented control (Send word and Pieces ask for the acknowledgement once)
+    const seg = h(doc, 'span', { class: 'mode-item scope voice-presets', role: 'group', 'aria-label': 'voice preset' }, h(doc, 'span', { class: 'mode-name' }, 'Send')) as unknown as HTMLElement;
+    for (const p of VOICE_PRESET_IDS)
+      seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
+    menu.appendChild(seg);
+  }
+  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃\` mic on/off · ⌃⌥H holds the dictation · ⌃⌥Return sends`) as unknown as Node);
 }
 function openVoiceMenu(): void {
   // voice drops fix: opening the menu is the human's dismiss of a sticky drop on the pill (core/capture.ts)
@@ -1747,7 +1824,10 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   const plan = planVoice(v, to, hsid, voicePresenceDone);
   if (plan.kind === 'blocked') return notice(`${VOICE_TITLE[to]} is not allowed: ${plan.reason}`, true);
   if (plan.kind === 'same') return;
-  const req = voiceRequest(v, to, hsid);
+  const req0 = voiceRequest(v, to, hsid);
+  // TD-2026-10-21-514: an ambient attach asks for the preset's send ceiling (word | pieces; pieces takes a presence card)
+  const ceil = attachSend(voicePreset);
+  const req = req0 && req0.kind === 'voice.session.start' && req0.payload.mode === 'conversation' && ceil ? { ...req0, payload: { ...req0.payload, send: ceil } } : req0;
   if (!req) return;
   if (voiceBusy) return;
   voiceBusy = true;
@@ -2212,6 +2292,8 @@ function wire(): void {
   $('voice-menu').addEventListener('click', (e) => {
     const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
     if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
+    const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
+    if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
     if (vc) {
       const id = vc.dataset.voiceClient!;
@@ -2299,6 +2381,8 @@ function wire(): void {
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
     if (r) run(r.dataset.id!, e.isTrusted);
   });
+  // TD-2026-10-21-514: a hidden page never counts toward the send word's visibility
+  document.addEventListener('visibilitychange', () => dispatchDictation({ type: 'pageVisible', visible: document.visibilityState === 'visible', now: Date.now() }));
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
@@ -2307,6 +2391,9 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
+    } else if (e.key === 'Escape' && dict.grace) {
+      e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
+      dispatchDictation({ type: 'graceCancel', now: Date.now() });
     } else if (e.key === 'Escape' && settings.isOpen()) {
       settings.close();
     } else if (e.key === 'Escape' && modsPanel.isOpen()) {

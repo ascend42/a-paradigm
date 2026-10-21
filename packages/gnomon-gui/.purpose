@@ -638,6 +638,17 @@ components:
     signals: []
   gui-dictation:
     description: >-
+      VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk /
+      Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented
+      control in the pill menu; Send word and Pieces need the one-time
+      liability acknowledgement, recorded per user); the reducer's 'word'
+      policy treats a turn that IS the held send word (#send-word-matcher) as
+      a command, never appended, acting only on a draft visible ≥ 1 s
+      ('painted' via double rAF, page visible, focused, attached; any text
+      change resets it); a near miss asks "Did you say …?"; a 1 s grace
+      ("Sending… Esc keeps it", draft state word-grace) then
+      request.voice.send.claim and the one send path. An ambient attach asks
+      for the preset's send ceiling. Labels: sentLabel(turn.sent), CLAMP_CHIP.
       ONE SEND CONTROL (founder report 2026-10-20): the composer's own send
       (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no
       Send of its own. draftState / DRAFT_CONTROLS map the draft's state to
