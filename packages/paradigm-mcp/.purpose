@@ -188,6 +188,14 @@ components:
       - mcp
       - lore
       - calibration
+  lore-legacy:
+    description: The one implementation of legacy lore-entry migration, shared by the MCP lore-loader and the CLI's core/lore/storage.ts. planLegacyMigration and readLoreEntriesWithLegacy are pure (read paths show legacy entries as they will look migrated, moving nothing); migrateLegacyEntries moves files and runs on write paths only. isPathSafeLoreId guards every id-to-path join.
+    type: utility
+    anchors:
+      - src/utils/lore-legacy.ts:1-260
+    tags:
+      - lore
+      - migration
   HabitsTools:
     description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation
     type: tool
