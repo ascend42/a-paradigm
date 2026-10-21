@@ -10,13 +10,15 @@
  *   takes      the GUI starts the trial (request.voice.sendword{op:'start', word, trial:true}); "Say <word> once, on
  *              its own." and the one counter "take n of up to 4", then "I heard: …". No lead-in sentence, and never the
  *              product name. A mishearing asks again and is kept as an accepted variant.
- *   done       a take was heard as the word itself: the risk check (the exact text plus "I understand") sits right
+ *   done       a take was heard as the word itself: the risk check (the sentence naming the word, then the ACK_TEXT box,
+ *              or "acknowledged · <date>" when this user already acknowledged) sits right
  *              before save (request.voice.sendword{op:'save'}; the kernel commits the word plus the variants its
  *              mishearings collected, and refuses a save with no correct take)
  *   exhausted  four takes, none heard as the word: try again or pick another word
  * While the row teaches, every voice turn is a take (the kernel stamps trialTake) and never a draft.
  */
 import { SEND_WORD_SUGGESTIONS, SEND_WORD_TRIAL_MAX_TAKES, validateSendWord, type TrialTakeVerdict } from '@a-company/gnomon-contracts';
+import { ackedLine } from './voice-presets.js';
 
 export const TEACH_SUGGESTIONS = SEND_WORD_SUGGESTIONS;
 
@@ -40,8 +42,12 @@ export interface TeachState {
   trial: TrialView | null;
   /** the line under the step (a validation reason, a refusal), or null */
   hint: string | null;
-  /** the risk check's "I understand" box (pre-ticked when this user already acknowledged) */
+  /** the risk check is satisfied: the box was ticked now, or this user already acknowledged (prior) */
   ack: boolean;
+  /** this user acknowledged before (Luna #3): the check shows "acknowledged · <date>" instead of a pre-ticked box */
+  prior: boolean;
+  /** when that acknowledgement was recorded (ISO), or null */
+  ackedAt: string | null;
   /** collected variants the human ticked to keep (every other one is sent as dropVariants on save) */
   kept: string[];
 }
@@ -59,7 +65,9 @@ export type TeachEvent =
   /** tick (keep) or untick one collected variant */
   | { type: 'keepVariant'; variant: string; on: boolean };
 
-export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked, kept: [] });
+export const initialTeach = (acked = false, ackedAt: string | null = null): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked, prior: acked, ackedAt: acked ? ackedAt : null, kept: [] });
+/** A fresh start that keeps the acknowledgement (prior, or ticked in this row). */
+const fresh = (s: TeachState): TeachState => ({ ...initialTeach(s.prior, s.ackedAt), ack: s.ack });
 
 const REASONS: Readonly<Record<string, string>> = Object.freeze({
   empty: 'Type a word or pick a suggestion.',
@@ -96,16 +104,16 @@ export function trialViewOf(status: unknown): TrialView | null {
 export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
   switch (e.type) {
     case 'restart':
-      return initialTeach(s.ack);
+      return fresh(s);
     case 'ack':
-      return { ...s, ack: e.on };
+      return s.prior ? s : { ...s, ack: e.on };
     case 'keepVariant': {
       if (!s.trial?.variants.includes(e.variant)) return s;
       const kept = s.kept.filter((v) => v !== e.variant);
       return { ...s, kept: e.on ? [...kept, e.variant] : kept };
     }
     case 'saveRefused':
-      if (e.code === 'sendword-no-trial') return { ...initialTeach(s.ack), hint: 'The time to test the word ran out. Pick it again.' };
+      if (e.code === 'sendword-no-trial') return { ...fresh(s), hint: 'The time to test the word ran out. Pick it again.' };
       return { ...s, hint: e.reason };
     case 'pick': {
       if (s.step !== 'pick' && s.step !== 'confirm-common') return s;
@@ -113,17 +121,17 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
       if (!v.ok) return { ...s, step: 'pick', hint: REASONS[v.reason] ?? 'Not a usable send word.' };
       // the recommended words skip the scare step; only a custom common word asks for a second confirmation
       if (v.warn === 'common' && !(TEACH_SUGGESTIONS as readonly string[]).includes(v.text)) return { ...s, step: 'confirm-common', word: v.text, hint: `“${v.text}” is a very common word and may send by accident.` };
-      return { ...initialTeach(s.ack), step: 'takes', word: v.text };
+      return { ...fresh(s), step: 'takes', word: v.text };
     }
     case 'confirmCommon':
       if (s.step !== 'confirm-common') return s;
-      return e.yes ? { ...initialTeach(s.ack), step: 'takes', word: s.word } : { ...initialTeach(s.ack), hint: 'Pick another word.' };
+      return e.yes ? { ...fresh(s), step: 'takes', word: s.word } : { ...fresh(s), hint: 'Pick another word.' };
     case 'status': {
       if (s.step !== 'takes' && s.step !== 'done' && s.step !== 'exhausted') return s;
       const t = trialViewOf(e.status);
       if (!t || t.word !== s.word) {
         // the trial ended under us (expired, or cleared elsewhere): only once it had been seen
-        return s.trial ? { ...initialTeach(s.ack), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
+        return s.trial ? { ...fresh(s), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
       }
       const step: TeachStep = t.state === 'ready' ? 'done' : t.state === 'exhausted' ? 'exhausted' : 'takes';
       return { ...s, step, trial: t, kept: s.kept.filter((v) => t.variants.includes(v)) };
@@ -182,6 +190,9 @@ export const teachVariantsLine = (s: TeachState): string => (s.step === 'takes' 
 export function teachVariants(s: TeachState): { variant: string; kept: boolean; label: string }[] {
   return (s.trial?.variants ?? []).map((variant) => ({ variant, kept: s.kept.includes(variant), label: `Saying “${variant}” on its own will also send. You said “${s.word}”; I heard “${variant}”.` }));
 }
+
+/** The risk check's already-acknowledged line ("acknowledged · today"), or '' when the box is asked for. */
+export const teachAckLine = (s: TeachState, now: Date = new Date()): string => (s.prior ? ackedLine(s.ackedAt, now) : '');
 
 /** The risk check shows right before save (a take was heard as the word). */
 export const teachShowsRisk = (s: TeachState): boolean => s.step === 'done';

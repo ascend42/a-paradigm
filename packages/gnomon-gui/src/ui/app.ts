@@ -20,7 +20,7 @@ import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachStat
 import { chooseRung, clientFactOf, ladderEntries, ladderFoot, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
 import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
-import { acked, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, sendWordOf } from '../core/voice-presets.js';
+import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -1431,11 +1431,11 @@ function sheetView(): SheetView {
   const v = voiceStatusOf(status);
   const c = clientOf(status);
   const r = readiness();
-  const rows = sheetRows({ ...r, enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status) });
+  const rows = sheetRows({ ...r, ackedAt: ackedAt(localStorage, myPrincipal()), enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status) });
   let flow: FlowView | null = null;
   if (vsFlow === 'teach' && teach) flow = { kind: 'teach', s: teach, attached: v.hsid !== null };
   else if (vsFlow === 'enrol' && store.enrol) flow = { kind: 'enrol', s: store.enrol, name: enrolName, agreed: enrolAgreed, enrolled: c.enrolled, forgetArmed, level: null };
-  else if (vsFlow === 'risk') flow = { kind: 'risk', rung: pendingRung === 'word' || pendingRung === 'pieces' ? pendingRung : null, ack: riskAck };
+  else if (vsFlow === 'risk') flow = { kind: 'risk', rung: pendingRung === 'word' || pendingRung === 'pieces' ? pendingRung : null, ack: riskAck, word: r.sendWord?.text ?? null };
   else if (vsFlow === 'keys') flow = { kind: 'keys', bare: micKeyBareOf(status) };
   return { rows, flow, delayMs: dict.delayMs, attachable: canAttach(status) };
 }
@@ -1461,7 +1461,7 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
   else if (action === 'teach') {
     if (value === 'common-yes' || value === 'common-no') void teachStep({ type: 'confirmCommon', yes: value === 'common-yes' });
     else if (value === 'retry') void retryTeach();
-    else if (value === 'other') void endTeach().then(() => ((teach = initialTeach(acked(localStorage, myPrincipal()))), (vsFlow = 'teach'), voiceSheet.repaint()));
+    else if (value === 'other') void endTeach().then(() => ((teach = initialTeach(acked(localStorage, myPrincipal()), ackedAt(localStorage, myPrincipal()))), (vsFlow = 'teach'), voiceSheet.repaint()));
     else if (value === 'save') void submitTeach(true);
     else if (value === 'cancel') setFlow(null);
   } else if (action === 'variant') {
@@ -1505,7 +1505,7 @@ function teachOpen(): boolean {
 }
 function startTeachFlow(): void {
   setFlow('teach');
-  teach = initialTeach(acked(localStorage, myPrincipal()));
+  teach = initialTeach(acked(localStorage, myPrincipal()), ackedAt(localStorage, myPrincipal()));
 }
 /** Leave the teaching: a trial word never outlives the row (an unsaved 'done' included). */
 async function endTeach(): Promise<void> {
@@ -1536,7 +1536,7 @@ async function retryTeach(): Promise<void> {
   if (!client || !teach || teach.step !== 'exhausted') return;
   const word = teach.word;
   await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined);
-  teach = { ...initialTeach(teach.ack), step: 'takes', word };
+  teach = { ...initialTeach(teach.prior, teach.ackedAt), ack: teach.ack, step: 'takes', word };
   voiceSheet.repaint();
   await startTrial(word);
   voiceSheet.repaint();

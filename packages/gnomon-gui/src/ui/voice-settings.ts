@@ -9,17 +9,18 @@
  *   - The pill's popover is the ladder only (role menu, rungs are menuitemradio), a foot line with the mic key and
  *     the listen mode, and a "voice settings…" link. A rung that is not ready opens the sheet at its section.
  *   - The sheet is a right-side drawer (role dialog): your voice, send word, keys, listen, timing, risk. Teaching
- *     opens inline under its row (one prompt, a live "I heard", one counter, then the risk check right before save);
+ *     opens inline under its row (one prompt, a live "I heard", one counter, then the risk check right before save:
+ *     the sentence naming the word, then the ACK_TEXT box, or "acknowledged · <date>" once this user acknowledged);
  *     there is no modal over the sheet.
  *
  * Every press must be a trusted user event (G-GUI-04): a script-made click changes nothing.
  */
 import { DELAY_CHOICES, delayLabel, serializeDelay } from '../core/dictation.js';
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
-import { teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, type TeachState } from '../core/send-word-teach.js';
+import { teachAckLine, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, type TeachState } from '../core/send-word-teach.js';
 import { consentText, enrolLine, normalizeVoiceName, type EnrolState } from '../core/voice-client.js';
 import { micKeyName, RUNG_NAME, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
-import { ACK_TEXT } from '../core/voice-presets.js';
+import { ACK_TEXT, riskSentence } from '../core/voice-presets.js';
 
 /* ── the ladder popover ─────────────────────────────────────────────── */
 
@@ -57,7 +58,8 @@ export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: str
 export type FlowView =
   | { kind: 'teach'; s: TeachState; attached: boolean }
   | { kind: 'enrol'; s: EnrolState; name: string; agreed: boolean; enrolled: string[] | null; forgetArmed: string | null; level: number | null }
-  | { kind: 'risk'; rung: 'word' | 'pieces' | null; ack: boolean }
+  /** word: the held send word (the sentence names it), or null */
+  | { kind: 'risk'; rung: 'word' | 'pieces' | null; ack: boolean; word?: string | null }
   | { kind: 'keys'; bare: boolean };
 
 /** The section a flow opens under. */
@@ -108,7 +110,9 @@ function teachEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'teach' }>): MiniEl
   }
   if (s.hint) out.push(h(doc, 'p', { class: 'meta vs-hint' }, s.hint));
   if (teachShowsRisk(s)) {
-    out.push(h(doc, 'div', { class: 'vs-risk' }, h(doc, 'p', { class: 'vs-risk-text' }, ACK_TEXT), checkbox(doc, { 'data-vs-ack': 'teach', 'data-vs-focus': 'ack' }, s.ack, 'I understand')));
+    // Luna #3: the render's sentence with the word; the box is ACK_TEXT itself; an earlier acknowledgement shows its date, not a pre-ticked box
+    const prior = teachAckLine(s);
+    out.push(h(doc, 'div', { class: 'vs-risk' }, h(doc, 'p', { class: 'vs-risk-text' }, riskSentence({ word: s.word })), prior ? h(doc, 'p', { class: 'meta vs-acked' }, prior) : checkbox(doc, { 'data-vs-ack': 'teach', 'data-vs-focus': 'ack' }, s.ack, ACK_TEXT)));
     out.push(h(doc, 'div', { class: 'vs-row' }, btn(doc, { class: 'key pri', 'data-vs-teach': 'save', 'data-vs-focus': 'save' }, `save “${s.word}”`, !s.ack || (s.trial?.correct ?? 0) === 0), btn(doc, { class: 'key', 'data-vs-teach': 'cancel' }, 'cancel')));
   } else if (s.step === 'exhausted') {
     out.push(h(doc, 'div', { class: 'vs-row' }, btn(doc, { class: 'key pri', 'data-vs-teach': 'retry', 'data-vs-focus': 'retry' }, 'try again'), btn(doc, { class: 'key', 'data-vs-teach': 'other' }, 'pick another'), btn(doc, { class: 'key', 'data-vs-teach': 'cancel' }, 'cancel')));
@@ -153,7 +157,7 @@ function enrolEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'enrol' }>): MiniEl
 
 function riskEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'risk' }>): MiniEl[] {
   return [
-    h(doc, 'div', { class: 'vs-risk' }, h(doc, 'p', { class: 'vs-risk-text' }, ACK_TEXT), checkbox(doc, { 'data-vs-ack': 'risk', 'data-vs-focus': 'ack' }, f.ack, 'I understand')),
+    h(doc, 'div', { class: 'vs-risk' }, h(doc, 'p', { class: 'vs-risk-text' }, riskSentence({ word: f.word ?? null, pieces: f.rung === 'pieces' })), checkbox(doc, { 'data-vs-ack': 'risk', 'data-vs-focus': 'ack' }, f.ack, ACK_TEXT)),
     h(doc, 'div', { class: 'vs-row' }, btn(doc, { class: 'key pri', 'data-vs-risk': 'go', 'data-vs-focus': 'risk-go' }, f.rung ? `turn on ${RUNG_NAME[f.rung]}` : 'acknowledge', !f.ack), btn(doc, { class: 'key', 'data-vs-risk': 'cancel' }, 'cancel')),
   ];
 }

@@ -1,7 +1,7 @@
 /** "Teach your send word" (TD-2026-10-21-514, spec §14.7 trial semantics): the guided steps over the kernel's trial, pure. */
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
-import { initialTeach, reduceTeach, teachCommit, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
+import { initialTeach, reduceTeach, teachAckLine, teachCommit, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { initialDictation, reduceDictation } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 
@@ -26,8 +26,14 @@ describe('teach the send word', () => {
     expect(teachCommit(s)).toBeNull(); // the "I understand" box is not ticked yet
     s = run(s, { type: 'ack', on: true });
     expect(teachCommit(s)).toEqual({ op: 'save' });
-    // a user who already acknowledged starts with the box ticked
-    expect(initialTeach(true).ack).toBe(true);
+    // a user who already acknowledged starts satisfied, shown as "acknowledged · <date>" (no pre-ticked box, Luna #3)
+    const prior = initialTeach(true, '2026-10-21T09:00:00.000Z');
+    expect(prior).toMatchObject({ ack: true, prior: true });
+    expect(teachAckLine(prior, new Date('2026-10-21T18:00:00.000Z'))).toBe('acknowledged · today');
+    expect(teachAckLine(initialTeach(true))).toBe('acknowledged');
+    expect(teachAckLine(s)).toBe('');
+    expect(run(prior, { type: 'ack', on: false }).ack).toBe(true); // nothing to untick
+    expect(run(prior, { type: 'pick', text: 'over' }, { type: 'restart' })).toMatchObject({ prior: true, ackedAt: '2026-10-21T09:00:00.000Z' });
   });
 
   it('misheard then correct: "I heard x. Say it again", the mishearing is a variant, one counter', () => {

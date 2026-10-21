@@ -51,8 +51,39 @@ export function attachSend(p: VoicePreset): 'word' | 'pieces' | null {
 
 /** The liability acknowledgement, recorded once per user (principal) on this machine. */
 export const acked = (st: StorageLike, principal: string | null): boolean => !!principal && st.getItem(ACK_KEY_PREFIX + principal) === ACK_TEXT;
-export function recordAck(st: StorageLike, principal: string): void {
+/** Luna #3: when the acknowledgement was recorded (ISO), stored beside it; null when not acked or recorded before the date was kept. */
+export const ACK_AT_SUFFIX = '.at';
+export function ackedAt(st: StorageLike, principal: string | null): string | null {
+  if (!principal || !acked(st, principal)) return null;
+  const at = st.getItem(ACK_KEY_PREFIX + principal + ACK_AT_SUFFIX);
+  return at && !Number.isNaN(new Date(at).getTime()) ? at : null;
+}
+export function recordAck(st: StorageLike, principal: string, now: Date = new Date()): void {
   st.setItem(ACK_KEY_PREFIX + principal, ACK_TEXT);
+  st.setItem(ACK_KEY_PREFIX + principal + ACK_AT_SUFFIX, now.toISOString());
+}
+
+/** When the acknowledgement was made, in words: 'today', else a short date; '' when unknown. */
+export function ackWhen(iso: string | null, now: Date = new Date()): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) return 'today';
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+/** "acknowledged · today" (or the date; plain "acknowledged" for one recorded before the date was kept). */
+export const ackedLine = (iso: string | null, now: Date = new Date()): string => {
+  const w = ackWhen(iso, now);
+  return w ? `acknowledged · ${w}` : 'acknowledged';
+};
+
+/**
+ * The risk check's paragraph (Atelier 2026-10-21 direction.html): what sends, and why edits ask first. With a send
+ * word it names the word; Pieces names the pause. The box under it is ACK_TEXT itself (its hash is the kernel's).
+ */
+export function riskSentence(o: { word: string | null; pieces?: boolean }): string {
+  const what = o.pieces || !o.word ? 'When you pause' : `When you say “${o.word}”`;
+  return `${what}, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.`;
 }
 
 /**

@@ -21,6 +21,7 @@ import { PIECE_CAP_MS, PIECE_GAP_MS, type SendWord, type VoicePreset } from '@a-
 import type { CaptureDisplay } from './capture.js';
 import { refusalPhrase, type CaptureView } from './capture.js';
 import type { VoiceState, VoiceView } from './voice.js';
+import { ackedLine } from './voice-presets.js';
 
 export type Rung = 'off' | 'talk' | 'dictate' | 'word' | 'pieces';
 export const RUNGS: readonly Rung[] = Object.freeze(['off', 'talk', 'dictate', 'word', 'pieces'] as const);
@@ -254,6 +255,9 @@ export interface SheetInput extends Readiness {
   delayMs: number | null;
   hotkey: string;
   attachable: boolean;
+  /** when the acknowledgement was recorded (ISO), for "acknowledged · today"; null/absent = unknown */
+  ackedAt?: string | null;
+  now?: Date;
 }
 
 const secs = (ms: number): string => `${Math.round(ms / 100) / 10} s`;
@@ -279,6 +283,6 @@ export function sheetRows(i: SheetInput): SheetRowView[] {
     { id: 'keys', label: 'keys', value: `talk ${i.hotkey} · mic ${micKeyName(i.micKeyBare)} · send now ${SEND_NOW_KEY}`, tone: 'plain', action: i.attachable ? { label: 'change', act: 'keys' } : null },
     { id: 'listen', label: 'listen', value: i.capture === 'toggle' ? `the mic key turns it on and off (${micKeyName(i.micKeyBare)})` : 'always on (open-mic rungs)', tone: 'plain', action: i.attachable ? { label: i.capture === 'toggle' ? 'keep always on' : 'use mic key', act: i.capture === 'toggle' ? 'listen.open' : 'listen.toggle' } : null },
     { id: 'timing', label: 'timing', value: `talk sends after ${i.delayMs === null ? 'you press Enter' : secs(i.delayMs)} · ${PIECES_TIMING}`, tone: 'plain', action: null },
-    { id: 'risk', label: 'risk', value: i.acked ? 'acknowledged' : 'not acknowledged', tone: i.acked ? 'ok' : 'warn', action: i.acked || !i.attachable ? null : { label: 'review', act: 'risk' } },
+    { id: 'risk', label: 'risk', value: i.acked ? ackedLine(i.ackedAt ?? null, i.now) : 'not acknowledged', tone: i.acked ? 'ok' : 'warn', action: i.acked || !i.attachable ? null : { label: 'review', act: 'risk' } },
   ];
 }

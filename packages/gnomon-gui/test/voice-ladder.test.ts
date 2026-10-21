@@ -13,7 +13,7 @@ import { chooseRung, clientFactOf, dropFact, ladderEntries, ladderFoot, PIECES_T
 import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, lineCountLabel, parseTall, serializeTall } from '../src/core/composer.js';
 import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { enrolStart } from '../src/core/voice-client.js';
-import { CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_TEXT, CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
 import { renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { ladderEls, sheetEls, sheetKey, type SheetView } from '../src/ui/voice-settings.js';
 import { voiceStatusOf } from '../src/core/voice.js';
@@ -246,8 +246,36 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(save.attrs.has('disabled')).toBe(true); // the box first
     s = run(s, { type: 'ack', on: true });
     expect(paint().all((e) => e.attrs.get('data-vs-teach') === 'save')[0]!.attrs.has('disabled')).toBe(false);
-    // never the product name; takes never reach the transcript (send-word-teach.test.ts)
-    expect(paint().text).not.toMatch(/gnomon/i);
+    // never ASKS the user to say the product name (the risk paragraph names it as the sender, the render's sentence);
+    // takes never reach the transcript (send-word-teach.test.ts)
+    const said = paint().all((e) => e.className.includes('vs-prompt') || e.className.includes('vs-heard') || e.className.includes('vs-counter') || e.attrs.has('data-vs-pick'));
+    for (const e of said) expect(e.text).not.toMatch(/gnomon/i);
+  });
+  it('the risk check (Luna #3): the render’s sentence with the word, the box labelled ACK_TEXT; an earlier acknowledgement shows its date, not a ticked box', () => {
+    const done = run(initialTeach(), { type: 'pick', text: 'over' }, trialStatus(takes('over', 'over')));
+    let r = root(sheetEls(fdoc, view({ flow: { kind: 'teach', s: done, attached: true } })));
+    const para = r.all((e) => e.className === 'vs-risk-text')[0]!;
+    expect(para.text).toBe('When you say “over”, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.');
+    const box = r.all((e) => e.attrs.get('data-vs-ack') === 'teach')[0]!;
+    expect(box.attrs.has('checked')).toBe(false);
+    expect(r.all((e) => e.className === 'vs-check')[0]!.text.trim()).toBe(ACK_TEXT);
+    expect(r.text).not.toContain('I understandI understand');
+    // already acknowledged: no pre-ticked box, the date instead; the save is open
+    const today = new Date().toISOString();
+    const prior = run(initialTeach(true, today), { type: 'pick', text: 'over' }, trialStatus(takes('over', 'over')));
+    r = root(sheetEls(fdoc, view({ flow: { kind: 'teach', s: prior, attached: true } })));
+    expect(r.all((e) => e.attrs.has('data-vs-ack'))).toHaveLength(0);
+    expect(r.all((e) => e.className.includes('vs-acked'))[0]!.text).toBe('acknowledged · today');
+    expect(r.all((e) => e.attrs.get('data-vs-teach') === 'save')[0]!.attrs.has('disabled')).toBe(false);
+    // the Pieces risk row names the pause; with a held word, a review names the word
+    const pieces = root(sheetEls(fdoc, view({ flow: { kind: 'risk', rung: 'pieces', ack: false, word: 'over' } })));
+    expect(pieces.all((e) => e.className === 'vs-risk-text')[0]!.text).toMatch(/^When you pause, Gnomon sends what you dictated\./);
+    const review = root(sheetEls(fdoc, view({ flow: { kind: 'risk', rung: null, ack: false, word: 'over' } })));
+    expect(review.all((e) => e.className === 'vs-risk-text')[0]!.text).toMatch(/^When you say “over”/);
+    // the risk row says when
+    expect(rows({ acked: true, ackedAt: '2026-10-21T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[5]!.value).toBe('acknowledged · today');
+    expect(rows({ acked: true, ackedAt: '2026-10-01T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[5]!.value).toMatch(/^acknowledged · .*2026/);
+    expect(rows({ acked: true })[5]!.value).toBe('acknowledged');
   });
   it('the page drives the kernel trial: start{word, trial}, save, clear{trial}; the sheet closing ends it', () => {
     expect(APP).toContain("payload: { op: 'start', word, trial: true }");

@@ -1,6 +1,6 @@
 /** #gui voice presets (TD-2026-10-21-514): preset parse, liability ack per user, send ceiling, labels. Pure. */
 import { describe, expect, it } from 'vitest';
-import { ACK_TEXT, acked, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
 import { chatItems } from '../src/core/store.js';
 import { captureOf, parseCapturePref } from '../src/core/voice-presets.js';
 import { clientRequest } from '../src/core/voice-client.js';
@@ -25,8 +25,14 @@ describe('voice presets', () => {
     expect(ACK_TEXT).toBe('I understand a misheard or other voice can send for me; edits will still ask.');
     expect(choosePreset('send-word', { acked: acked(st, 'p:a/me'), sendWord: null })).toBe('needs-ack');
     expect(choosePreset('dictate', { acked: false, sendWord: null })).toBe('apply');
-    recordAck(st, 'p:a/me');
+    expect(ackedAt(st, 'p:a/me')).toBeNull();
+    recordAck(st, 'p:a/me', new Date('2026-10-21T09:00:00.000Z'));
     expect(acked(st, 'p:a/me')).toBe(true);
+    expect(ackedAt(st, 'p:a/me')).toBe('2026-10-21T09:00:00.000Z'); // Luna #3: the risk row says when
+    expect(ackedAt(st, 'p:a/other')).toBeNull();
+    expect(ackWhen('2026-10-21T09:00:00.000Z', new Date('2026-10-21T12:00:00.000Z'))).toBe('today');
+    expect(ackWhen(null)).toBe('');
+    expect(riskSentence({ word: 'send it' })).toBe('When you say “send it”, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.');
     expect(acked(st, 'p:a/other')).toBe(false);
     expect(choosePreset('send-word', { acked: true, sendWord: null })).toBe('needs-word');
     expect(choosePreset('send-word', { acked: true, sendWord: { text: 'over', variants: [] } })).toBe('apply');
