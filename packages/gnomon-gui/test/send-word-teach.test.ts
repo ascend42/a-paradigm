@@ -1,7 +1,7 @@
 /** "Teach your send word" (TD-2026-10-21-514, spec §14.7 trial semantics): the guided steps over the kernel's trial, pure. */
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
-import { initialTeach, reduceTeach, teachCommit, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariantsLine, TEACH_PICKS, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
+import { initialTeach, reduceTeach, teachCommit, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { initialDictation, reduceDictation } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 
@@ -50,6 +50,19 @@ describe('teach the send word', () => {
     const r = run(done, { type: 'saveRefused', reason: 'no take was heard as the word itself yet', code: 'sendword-no-correct-take' });
     expect(r).toMatchObject({ step: 'done', hint: 'no take was heard as the word itself yet' });
     expect(run(done, { type: 'saveRefused', reason: 'x', code: 'sendword-no-trial' })).toMatchObject({ step: 'pick', ack: true, hint: expect.stringMatching(/ran out/) });
+  });
+
+  it('a collected variant can be removed before save: the save carries dropVariants; keep restores it', () => {
+    let s = run(initialTeach(true), { type: 'pick', text: 'ship it' }, status(takes('ship it', 'ship hit', 'chip it', 'ship it')));
+    expect(s).toMatchObject({ step: 'done', trial: { variants: ['ship hit', 'chip it'] } });
+    expect(teachCommit(s)).toEqual({ op: 'save' });
+    s = run(s, { type: 'dropVariant', variant: 'chip it' });
+    expect(teachVariants(s)).toEqual([{ variant: 'ship hit', dropped: false }, { variant: 'chip it', dropped: true }]);
+    expect(teachVariantsLine(s)).toBe('kept as a variant: “ship hit”');
+    expect(teachCommit(s)).toEqual({ op: 'save', dropVariants: ['chip it'] });
+    expect(teachCommit(run(s, { type: 'dropVariant', variant: 'chip it' }))).toEqual({ op: 'save' }); // keep again
+    expect(run(s, { type: 'dropVariant', variant: 'not collected' })).toBe(s); // only a collected variant
+    expect(TEACH_DROP_VARIANTS).toBe(true);
   });
 
   it('the row offers the design’s three picks plus your own; none names the product', () => {

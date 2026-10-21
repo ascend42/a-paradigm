@@ -42,6 +42,8 @@ export interface TeachState {
   hint: string | null;
   /** the risk check's "I understand" box (pre-ticked when this user already acknowledged) */
   ack: boolean;
+  /** collected variants the human removed (sent as dropVariants on save) */
+  dropped: string[];
 }
 
 export type TeachEvent =
@@ -53,9 +55,11 @@ export type TeachEvent =
   /** the risk check's box */
   | { type: 'ack'; on: boolean }
   /** the kernel refused the save (code: its refusal reason, e.g. sendword-no-trial) */
-  | { type: 'saveRefused'; reason: string; code?: string | null };
+  | { type: 'saveRefused'; reason: string; code?: string | null }
+  /** remove (or keep again) one collected variant */
+  | { type: 'dropVariant'; variant: string };
 
-export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked });
+export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked, dropped: [] });
 
 const REASONS: Readonly<Record<string, string>> = Object.freeze({
   empty: 'Type a word or pick a suggestion.',
@@ -95,6 +99,12 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
       return initialTeach(s.ack);
     case 'ack':
       return { ...s, ack: e.on };
+    case 'dropVariant': {
+      if (!s.trial?.variants.includes(e.variant)) return s;
+      if (s.dropped.includes(e.variant)) return { ...s, dropped: s.dropped.filter((v) => v !== e.variant) };
+      if (s.dropped.length >= DROP_VARIANTS_MAX || e.variant.length > DROP_VARIANT_CHARS) return s;
+      return { ...s, dropped: [...s.dropped, e.variant] };
+    }
     case 'saveRefused':
       if (e.code === 'sendword-no-trial') return { ...initialTeach(s.ack), hint: 'The time to test the word ran out. Pick it again.' };
       return { ...s, hint: e.reason };
@@ -116,7 +126,7 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
         return s.trial ? { ...initialTeach(s.ack), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
       }
       const step: TeachStep = t.state === 'ready' ? 'done' : t.state === 'exhausted' ? 'exhausted' : 'takes';
-      return { ...s, step, trial: t };
+      return { ...s, step, trial: t, dropped: s.dropped.filter((v) => t.variants.includes(v)) };
     }
   }
 }
@@ -156,18 +166,29 @@ export function teachHeardLine(s: TeachState): string {
 }
 
 /**
- * HOOK (variant removal): the kernel's save is gaining a way to drop a mishearing before it is kept (a parallel change
- * to request.voice.sendword{op:'save'}). Until it lands this stays false: the row shows no remove control and the save
- * carries nothing else. To wire it: flip this, keep `dropped` in TeachState (event {type:'dropVariant', variant}),
- * filter it out of teachVariantsLine, and add it to teachCommit's payload in the kernel's field name.
+ * Variant removal: each collected mishearing has a remove / keep control in the row; the save carries the removed ones
+ * as `dropVariants` (the kernel's request.voice.sendword{op:'save', dropVariants?: string[]}, at most 8, each at most
+ * 64 characters). The heard text comes only from status.voice.sendWordTrial.last (take rows are hash-only).
  */
-export const TEACH_DROP_VARIANTS = false;
+export const TEACH_DROP_VARIANTS = true;
+export const DROP_VARIANTS_MAX = 8;
+export const DROP_VARIANT_CHARS = 64;
 
 /** The mishearings that will be saved as variants ('' when none). */
-export const teachVariantsLine = (s: TeachState): string => (s.trial?.variants.length ? `kept as ${s.trial.variants.length === 1 ? 'a variant' : 'variants'}: ${s.trial.variants.map((v) => `“${v}”`).join(', ')}` : '');
+export const teachVariantsLine = (s: TeachState): string => {
+  const kept = (s.trial?.variants ?? []).filter((v) => !s.dropped.includes(v));
+  return kept.length ? `kept as ${kept.length === 1 ? 'a variant' : 'variants'}: ${kept.map((v) => `“${v}”`).join(', ')}` : '';
+};
+
+/** Each collected variant and whether the human removed it (the row's remove / keep controls). */
+export const teachVariants = (s: TeachState): { variant: string; dropped: boolean }[] => (s.trial?.variants ?? []).map((variant) => ({ variant, dropped: s.dropped.includes(variant) }));
 
 /** The risk check shows right before save (a take was heard as the word). */
 export const teachShowsRisk = (s: TeachState): boolean => s.step === 'done';
 
 /** The save request: the kernel holds the takes, so it carries nothing else. Only once a take was heard correctly AND the risk box is ticked. */
-export const teachCommit = (s: TeachState): { op: 'save' } | null => (s.step === 'done' && (s.trial?.correct ?? 0) > 0 && s.ack ? { op: 'save' } : null);
+export function teachCommit(s: TeachState): { op: 'save'; dropVariants?: string[] } | null {
+  if (s.step !== 'done' || (s.trial?.correct ?? 0) === 0 || !s.ack) return null;
+  const drop = s.dropped.filter((v) => s.trial!.variants.includes(v)).slice(0, DROP_VARIANTS_MAX);
+  return drop.length ? { op: 'save', dropVariants: drop } : { op: 'save' };
+}

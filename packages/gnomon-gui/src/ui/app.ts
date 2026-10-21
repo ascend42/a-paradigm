@@ -1464,6 +1464,8 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
     else if (value === 'other') void endTeach().then(() => ((teach = initialTeach(acked(localStorage, myPrincipal()))), (vsFlow = 'teach'), voiceSheet.repaint()));
     else if (value === 'save') void submitTeach(true);
     else if (value === 'cancel') setFlow(null);
+  } else if (action === 'variant') {
+    if (teach) teach = reduceTeach(teach, { type: 'dropVariant', variant: value });
   } else if (action === 'ack') {
     const [which, on] = value.split(':');
     if (which === 'teach' && teach) teach = reduceTeach(teach, { type: 'ack', on: on === '1' });
@@ -1561,7 +1563,7 @@ async function submitTeach(trusted: boolean): Promise<void> {
   }
   voiceSheet.repaint();
 }
-/** While the row teaches, a voice turn is a take (never a draft): the kernel counted it; re-read its trial. */
+/** While the trial listens, a voice turn is a take (never a draft): the kernel counted it; re-read its trial. */
 function teachHeard(): void {
   void refreshStatus();
 }
@@ -1569,9 +1571,13 @@ function teachHeard(): void {
 /** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
 function dictationRow(r: Row): void {
   // the send-word dialog is listening: this turn is a take (the kernel stamps trialTake), never a draft
+  // the send-word row is open: nothing heard becomes a composer draft. Only while the kernel's trial listens is a turn a
+  // take (it counts it; the heard text is read from status.voice.sendWordTrial.last, take rows are hash-only); once the
+  // trial is ready or exhausted the kernel treats turns as ordinary, and the row still keeps them out of the draft
   if (r.kind === 'voice.turn.user' && teachOpen()) {
     if (r.seq > dict.lastSeq) dict = { ...dict, lastSeq: r.seq };
-    return teachHeard();
+    if (teach?.step === 'takes') teachHeard();
+    return;
   }
   const tp = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
   if (r.kind === 'voice.turn.user' && tp?.trialTake !== true) lastHeardAt = Date.now(); // the pill's "heard Ns ago"

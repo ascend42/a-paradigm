@@ -226,6 +226,11 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(r.text).toContain('I heard “sand it”. Say it again.');
     expect(r.text).toContain('take 2 of up to 4');
     expect(r.text).toContain('kept as a variant: “sand it”');
+    const rm = r.all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!;
+    expect(rm.text).toBe('remove'); // a remove control per collected variant
+    s = run(s, { type: 'dropVariant', variant: 'sand it' });
+    expect(paint().all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!.text).toBe('keep');
+    s = run(s, { type: 'dropVariant', variant: 'sand it' });
     s = run(s, trialStatus(takes('send it', 'sand it', 'send it')));
     r = paint();
     expect(r.text).toContain('I heard: “send it” ✓');
@@ -244,6 +249,9 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(APP).toContain("payload: { op: 'clear', trial: true }");
     expect(APP).toMatch(/onClose: \(\) => \{\s*pendingRung = null;\s*setFlow\(null\);/);
     expect(APP).toMatch(/if \(vsFlow === 'teach' && f !== 'teach'\) void endTeach\(\);/);
+    // only a LISTENING trial counts a turn as a take; with the row open nothing heard becomes a draft
+    expect(APP).toMatch(/if \(r\.kind === 'voice\.turn\.user' && teachOpen\(\)\) \{\s*if \(r\.seq > dict\.lastSeq\) dict = \{ \.\.\.dict, lastSeq: r\.seq \};\s*if \(teach\?\.step === 'takes'\) teachHeard\(\);\s*return;/);
+    expect(APP).toContain("if (teach) teach = reduceTeach(teach, { type: 'dropVariant', variant: value });");
     // the risk check right before save IS the acknowledgement
     expect(APP).toMatch(/payload: commit \}\);\s*if \(me\) recordAck\(localStorage, me\);/);
   });
