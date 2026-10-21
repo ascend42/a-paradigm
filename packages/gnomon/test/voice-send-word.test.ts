@@ -249,7 +249,7 @@ describe('G-VOX-21 pieces', () => {
     const a = (await r.turn('so the idea is')) as { seq: number };
     expect(await refusal(() => r.claim({ by: 'piece', turnSeqs: [a.seq] }))).toMatchObject({ reason: 'voice-off', cause: 'send-ceiling' });
     await r.attach('pieces');
-    expect(r.presence.map((p) => p.send ?? null)).toEqual([null, 'pieces']);
+    expect(r.presence.map((p) => p.send ?? null)).toEqual(['word', 'pieces']); // Aegis L-5: the word ceiling rides the widening card too
     const b = (await r.turn('we split the module')) as { seq: number };
     const c = (await r.turn('in two')) as { seq: number };
     expect(r.claim({ by: 'piece', turnSeqs: [b.seq, c.seq] })).toMatchObject({ claimed: true, by: 'piece' });

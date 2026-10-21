@@ -165,7 +165,8 @@ export interface VoicePresenceRequest {
   from: VoiceMode | null;
   to: 'conversation';
   /** TD-2026-10-21-514: the card also grants the pieces send ceiling (detail.send 'pieces') */
-  send?: 'pieces';
+  /** TD-2026-10-21-514 (Aegis L-5): the send ceiling the card also grants (word or pieces), shown with the ack text */
+  send?: 'pieces' | 'word';
   /** run on allow (after Touch ID); rejects if the attachment could not be made */
   onAllow: () => Promise<void>;
 }
@@ -357,7 +358,7 @@ export class VoiceControl {
   /** V2a: first-party human connections that gave the widening presence (one GUI login each); dropped on close */
   readonly #widened = new Set<string>();
   /** V2a: a pending widening card per asking connection */
-  readonly #pendingWiden = new Map<string, { cardId: string; hsid: string; send?: 'pieces' }>();
+  readonly #pendingWiden = new Map<string, { cardId: string; hsid: string; send?: 'pieces' | 'word' }>();
   /** connections with a widening card out that have not closed (a grant never lands on a closed login) */
   readonly #liveConn = new Set<string>();
   readonly #past = new Map<string, string>();
@@ -525,7 +526,7 @@ export class VoiceControl {
       // keeps the old reuse behaviour
       const live = (id: string): boolean => (this.#o.presenceState ? this.#o.presenceState(id) === 'pending' : true);
       const still = this.#pendingWiden.get(asker.connId);
-      if (still && live(still.cardId) && still.hsid === p.hsid && still.send === (send === 'pieces' ? 'pieces' : undefined)) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
+      if (still && live(still.cardId) && still.hsid === p.hsid && still.send === (send !== 'key' ? send : undefined)) return { pending: true, cardId: still.cardId, hsid: still.hsid, mode };
       if (still && still.hsid !== p.hsid && live(still.cardId)) {
         throw bad(`a widening card for session ${still.hsid} is pending on this connection; decide it first`);
       }
@@ -538,7 +539,7 @@ export class VoiceControl {
         hsid,
         from: prev && prev.owner === asker.principal ? prev.mode : null,
         to: 'conversation',
-        ...(send === 'pieces' ? { send: 'pieces' as const } : {}),
+        ...(send !== 'key' ? { send } : {}),
         onAllow: async () => {
           this.#pendingWiden.delete(asker.connId);
           if (!this.#liveConn.has(asker.connId)) return; // the login closed while the card waited: nothing is granted
@@ -551,7 +552,7 @@ export class VoiceControl {
         },
       });
       const granted = this.#widened.has(asker.connId) && (send !== 'pieces' || this.#piecesGranted.has(asker.connId));
-      if (this.#liveConn.has(asker.connId) && !granted) this.#pendingWiden.set(asker.connId, { cardId: card.cardId, hsid, ...(send === 'pieces' ? { send: 'pieces' as const } : {}) });
+      if (this.#liveConn.has(asker.connId) && !granted) this.#pendingWiden.set(asker.connId, { cardId: card.cardId, hsid, ...(send !== 'key' ? { send } : {}) });
       return { pending: true, cardId: card.cardId, hsid, mode };
     }
     return this.#start(asker, p.hsid, mode, continues, send);

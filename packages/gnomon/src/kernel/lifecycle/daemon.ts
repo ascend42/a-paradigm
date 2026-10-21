@@ -1099,7 +1099,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId, ...(send ? { send, liabilityAck: VOICE_LIABILITY_ACK_HASH } : {}) },
         lines: send === 'pieces'
           ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
-          : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
+          : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, ...(send === 'word' ? ['Send word: a spoken send word sends the draft; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT] : []), 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
         decisions: ['allow', 'deny'],
         timeoutMs: LOOSEN_TIMEOUT_MS,
         effect: async (decision) => {
