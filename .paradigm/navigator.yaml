@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T03:26:40.981Z'
+generated: '2026-10-21T05:42:07.904Z'
 structure: {}
 key_files:
   config:
@@ -58,6 +58,7 @@ symbols:
   '#purpose-feature-integrity-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
   '#purpose-feature-scan-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
   '#purpose-feature-scan-auto-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
+  '#purpose-feature-notices-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
   '#purpose-feature-status-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
   '#purpose-feature-beacon-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
   '#purpose-feature-constellation-command': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose
@@ -352,6 +353,7 @@ symbols:
   '#purpose-component-GraphTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-ConductorTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-LoreTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
+  '#purpose-component-lore-legacy': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-HabitsTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-AspectGraphTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '#purpose-component-ClassroomTools': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
@@ -776,6 +778,8 @@ symbols:
   '#purpose-component-paradigm-override-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-paradigm-arch-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-paradigm-solo-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
+  '#purpose-component-command-policy': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
+  '#purpose-component-migration-notices': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-pipeline-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-pipeline-utils': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-iteration-loop-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
@@ -1553,6 +1557,7 @@ symbolsByComponentType:
     - '#integrity-command'
     - '#scan-command'
     - '#scan-auto-command'
+    - '#notices-command'
     - '#status-command'
     - '#beacon-command'
     - '#constellation-command'
@@ -1665,6 +1670,7 @@ symbolsByComponentType:
     - '#score-io'
     - '#task-archive'
     - '#action-picker-views'
+    - '#lore-legacy'
     - '#AspectLoreBridge'
     - '#SessionTracker'
     - '#ToolCache'
@@ -1695,6 +1701,8 @@ symbolsByComponentType:
     - '#matcher'
     - '#task-reconcile'
     - '#tool-aliases'
+    - '#command-policy'
+    - '#migration-notices'
     - '#pipeline-utils'
     - '#iteration-revision-log'
     - '#team-funnel'

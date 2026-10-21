@@ -1,0 +1,57 @@
+id: TD-2026-10-21-514
+timestamp: '2026-10-21T05:42:08.491Z'
+title: 'Gnomon voice: capture and send policy split; voice-sent turns are clamped; send word and Pieces ship'
+decision: >-
+  (A) Every turn carries a kernel-stamped origin: hand (typed, Enter/Send, send hotkey, push-to-talk key hold) or voice
+  (sent by a spoken send word or as a piece). While a voice-origin turn is outstanding, nothing write-capable
+  auto-passes (no auto-edits pass, no always rule); provably read-only commands still pass; every other tool call is a
+  card marked "asked during a voice-sent turn", and approving it by voice takes readback + confirm. A spoken send word
+  sends a draft only if every word has been on screen, painted, for at least 1 s while the page was visible and the
+  session focused. It is a standalone utterance, never part of a sentence and never in the text; the kernel consumes it
+  once and stamps origin:voice. Short send words are accepted by ADJACENCY to the draft speaker's verified speech
+  (within 2 s, or while their draft is pending) unless attributed to someone else. This replaces "voice behaves exactly
+  like typed".
+
+  (B) Pieces ships with the rest: ambient speech is sent in pieces as clamped voice-origin turns. Each piece is marked
+  to the agent as a piece of an ongoing utterance, so Gnomon and the agent can judge whether a thought is half-baked
+  (wait for more) or worth responding to.
+
+  (C) Capture (push-to-talk / open / toggle key) and send policy (key / countdown / send word / pieces) are independent
+  settings with presets Talk, Dictate, Send word, Pieces. A countdown is never allowed with ambient capture. Mic key: ⌃`
+  global plus bare ` inside Gnomon (bare global by opt-in only); off means the audio engine stops, in-flight audio is
+  discarded, and the mic stays off across restarts and on screen lock. Voice may narrow the mode, never widen it. Every
+  setup step, the send word included, has a guided GUI. One Send control.
+
+  Send word and Pieces are liability modes: the user turns them on knowingly, through an explicit acknowledgement of the
+  risk.
+rationale: >-
+  Founder, 2026-10-21: ambient needs submodes (send in pieces, a toggle key, a dictated send word). On adjacency: "the
+  point is that this mode is a liability and those that use it need to knowingly accept that." On Pieces: "the whole
+  point ... is that things can be sent in pieces and gnomon and the agent present should be able to have the context to
+  understand if a thought is half baked and one that is roughly worth responding to." Speaker recognition stays a
+  convenience filter, never a boundary; the clamp is the boundary.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: arky
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: No clamp; voice-sent behaves like typed
+    rejected_because: a misheard or impostor voice could make Claude edit files with no card
+  - option: Gate Pieces behind a speaker-check accuracy target
+    rejected_because: 'founder: ship with the rest; the clamp plus agent-side piece awareness carries it'
+  - option: Long verifiable send phrase only
+    rejected_because: founder accepts adjacency as a knowingly-accepted liability
+symbols_affected:
+  - '#gnomon-voice'
+  - '#gui-dictation'
+  - '#supervisor'
+  - '#approval-broker'
+status: active
+tags:
+  - gnomon
+  - voice
+  - founder-ruling
+  - security

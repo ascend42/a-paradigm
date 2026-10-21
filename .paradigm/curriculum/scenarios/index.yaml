@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T03:26:41.268Z'
+generated: '2026-10-21T05:42:08.357Z'
 scenarios:
   - id: SC-aspect-validate-vs-queryable
     origin: authored
