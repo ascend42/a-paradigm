@@ -205,6 +205,19 @@ process.stdin.on('data', (c) => {
     // mode.contextTokens: the LAST main-chain message's in+cacheRead+cacheWrite+out (the kernel's context meter)
     out({ type: 'assistant', message: { id, model: currentModel, content: tool, usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: mode.contextTokens ? Math.max(0, mode.contextTokens - 30) : 100 } } });
     out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } });
+    // mode.endTurn (voice busy guard): the reply ends at its main-chain message_stop (end_turn), and the result comes
+    // resultDelayMs later (Claude Code's Stop hook). continueAtMs / continueEndMs: a Stop-hook continuation, a new
+    // main-chain message that starts and ends before the result. A sub-agent's end_turn (parent set) is emitted first.
+    if (mode.endTurn) {
+      const e = mode.endTurn;
+      const stop = (extra = {}) => { out({ type: 'stream_event', event: { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }, ...extra }); out({ type: 'stream_event', event: { type: 'message_stop' }, ...extra }); };
+      stop({ parent_tool_use_id: `tu_parent_${n}` });
+      if (!e.noMainStop) stop();
+      if (e.continueAtMs !== undefined) setTimeout(() => out({ type: 'stream_event', event: { type: 'message_start', message: { id: `${id}_c`, usage: { input_tokens: 1, output_tokens: 1 } } } }), e.continueAtMs);
+      if (e.continueEndMs !== undefined) setTimeout(() => stop(), e.continueEndMs);
+      setTimeout(() => out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' }), e.resultDelayMs ?? 0);
+      continue;
+    }
     if (mode.resultThenExit) { out({ type: 'result', subtype: 'success', is_error: false, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [] }); process.exit(0); }
     out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' });
   }

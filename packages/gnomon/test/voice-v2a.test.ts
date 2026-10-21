@@ -196,6 +196,25 @@ describe('#gnomon-voice V2a ambient guards', () => {
     expect(r.sends).toHaveLength(1);
     expect(r.rows.filter((x) => x.kind === 'voice.turn.agent')).toHaveLength(0);
   });
+  it('voice drops fix: the reply ended at message_stop (its result still ~30 s away) ⇒ speech after the tail is accepted; TTS still playing refuses it', async () => {
+    const r = rig();
+    await r.widen();
+    r.clock.t += 2000;
+    // the supervisor saw the main-chain message_stop: not streaming, ended now (the result has not come)
+    r.busy.streaming = false;
+    r.busy.endedAt = r.clock.t;
+    r.clock.t += 1000 + 750 + 1; // a 1 s turn that began just after the tail
+    const ok = (await r.userTurn({ text: 'and the docs too' })) as Record<string, unknown>;
+    expect(ok).toMatchObject({ forwardable: true });
+    expect(ok).not.toHaveProperty('refused');
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('refusedReason');
+    // the client is still speaking the reply (a voice.turn.agent playback window): the echo guard refuses at receipt
+    r.clock.t += 5000;
+    await r.v.voiceAppend(r.vc, { kind: 'voice.turn.agent', payload: { turnId: 'a1', t0: r.clock.t - 3000, t1: r.clock.t, textPlanned: 'Done.', textSpoken: 'Done.' } });
+    r.clock.t += 300;
+    const echo = (await r.userTurn({ t0: r.clock.t - 200, t1: r.clock.t })) as Record<string, unknown>;
+    expect(echo).toMatchObject({ forwardable: false, refused: 'voice-echo' });
+  });
 });
 
 describe('#gnomon-voice V2a privacy', () => {

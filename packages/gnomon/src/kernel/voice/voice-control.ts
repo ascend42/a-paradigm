@@ -23,7 +23,9 @@
  *   - an `aec` claim on its voice.turn.user (`vpio` | `headphones`), else voice-off{cause: 'aec'};
  *   - an enrolled speaker (as for ptt);
  *   - the attached session's model not busy by the kernel's own clock: refused voice-playback{clock: 'kernel'} while
- *     the supervisor has a turn in flight (turn.sent until its result) and through echoTailMs after it closed
+ *     the supervisor has a turn in flight (turn.sent until the main-chain reply ends: its message_stop after an end_turn
+ *     stop_reason, re-armed by a Stop-hook continuation's message_start; the result only when no end was seen) and
+ *     through echoTailMs after it ended
  *     (VoiceSessionsPort.busy, from supervisor state). This window covers model streaming plus the tail ONLY: client
  *     TTS that plays longer, a client that logs no voice.turn.agent, or a claimed turn duration of 0 can still get an
  *     echo past it (spec §14.7 residual risk); the client playback rows and the AEC claim are the rest of the defence.
@@ -126,8 +128,8 @@ export interface VoiceSessionsPort {
   send(owner: string, p: { hsid: string; text: string; source: 'voice'; voice: VoiceTurnLink }): Promise<unknown>;
   stop(owner: string, p: { hsid: string; interrupt: true }): Promise<unknown>;
   /**
-   * V2a kernel-side busy: is the session's model turn streaming now (turn.sent until its result), and when (kernel
-   * clock, ms) did its last turn close. From supervisor state, never a client claim. Absent ⇒ never busy (tests).
+   * V2a kernel-side busy: is the session's model turn streaming now (turn.sent until the main-chain reply's
+   * end_turn message_stop, re-armed by a new main-chain message_start), and when (kernel clock, ms) did its last reply end. From supervisor state, never a client claim. Absent ⇒ never busy (tests).
    */
   busy?(hsid: string): { streaming: boolean; endedAt: number | null };
 }

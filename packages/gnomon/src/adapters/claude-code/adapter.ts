@@ -306,8 +306,13 @@ export interface Usage {
 
 export type AdapterEvent =
   | { kind: 'init'; type: string; sessionId: string | null; model: string | null; apiKeySource: string | null }
-  | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number } }
-  | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean; model: string | null; parentToolUseId: string | null }
+  /**
+   * A stream_event line. parentToolUseId: null on the main chain (a sub-agent's stream sets it). stopReason: the
+   * message_delta's stop_reason when this line carries one (the #gnomon-voice busy guard ends a reply at the main-chain
+   * message_stop after an end_turn delta, TD-2026-10-20 voice drops fix).
+   */
+  | { kind: 'partial'; type: string; bytes: number; usage?: { messageId: string | null; tokens: number }; parentToolUseId: string | null; stopReason: string | null }
+  | { kind: 'message'; type: string; messageId: string | null; tokens: number | null; toolUses: Array<{ id: string | null; name: string; input: unknown }>; quota: boolean; model: string | null; parentToolUseId: string | null; stopReason: string | null }
   | { kind: 'user'; type: string; replay: boolean; toolResults: ToolResultSeen[] }
   | { kind: 'result'; type: string; subtype: string | null; isError: boolean; tokens: number | null; split: UsageSplit | null; costUsd: number | null; permissionDenials: number; quota: boolean }
   | { kind: 'control'; type: string; subtype: string | null; requestId: string | null; error: string | null; errorCode: string | null }
@@ -380,14 +385,16 @@ export function parseStreamLine(line: string): AdapterEvent {
       const msg = obj(ev?.message);
       const u = usageTokens(msg?.usage);
       const id = str(msg?.id);
-      return { kind: 'partial', type: `stream_event.${evType}`, bytes: Buffer.byteLength(line), ...(u !== null && id !== null ? { usage: { messageId: id, tokens: u } } : {}) };
+      const delta = obj(ev?.delta);
+      const stopReason = evType === 'message_delta' ? str(delta?.stop_reason) : null;
+      return { kind: 'partial', type: `stream_event.${evType}`, bytes: Buffer.byteLength(line), ...(u !== null && id !== null ? { usage: { messageId: id, tokens: u } } : {}), parentToolUseId: str(o.parent_tool_use_id), stopReason };
     }
     case 'assistant': {
       const m = obj(o.message);
       const content = Array.isArray(m?.content) ? (m!.content as unknown[]) : [];
       const toolUses = content.map(obj).filter((c): c is Record<string, unknown> => c !== null && c.type === 'tool_use').map((c) => ({ id: str(c.id), name: str(c.name) ?? '', input: c.input }));
       const quota = str(o.error) !== null && QUOTA.test(String(o.error));
-      return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota, model: str(m?.model), parentToolUseId: str(o.parent_tool_use_id) };
+      return { kind: 'message', type: 'assistant', messageId: str(m?.id), tokens: usageTokens(m?.usage), toolUses, quota, model: str(m?.model), parentToolUseId: str(o.parent_tool_use_id), stopReason: str(m?.stop_reason) };
     }
     case 'user': {
       // Aegis detector (P8-D96): the tool_result ids, with Claude's own permission decision when it reports one
