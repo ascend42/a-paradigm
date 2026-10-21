@@ -492,6 +492,35 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
   return row;
 }
 
+/**
+ * Aegis F4 (TD-2026-10-20-514): the verified rows ONE decision wrote (its cardId), in file order, when that decision's
+ * anchor (grant.install / grant.uninstall naming the cardId) is among them; else []. A commit whose append landed but
+ * whose decision was not recorded (the pin read-back or the staged write threw) is finished from these rows.
+ */
+export function rowsOfDecision(home: string, trust: RowVerifier, cardId: string): GrantRow[] {
+  let text = '';
+  try {
+    text = fs.readFileSync(grantsPath(home), 'utf8');
+  } catch {
+    return [];
+  }
+  if (trust.rootKeyId === null) return [];
+  const out: GrantRow[] = [];
+  for (const raw of text.split('\n')) {
+    if (raw.trim() === '') continue;
+    try {
+      const rec = JSON.parse(raw) as { row?: Record<string, unknown>; signer?: unknown; sig?: unknown };
+      const row = rec?.row;
+      if (!isPlainObject(row) || row.cardId !== cardId || typeof rec.signer !== 'string' || typeof rec.sig !== 'string') continue;
+      if (!trust.verifyRow(rec.signer, row, rec.sig) || checkGrantRow(row)) continue;
+      out.push(row as unknown as GrantRow);
+    } catch {
+      /* not a row */
+    }
+  }
+  return out.some((r) => r.kind === 'grant.install' || r.kind === 'grant.uninstall') ? out : [];
+}
+
 export interface GrantCheck {
   ok: boolean;
   missingCapabilities: string[];

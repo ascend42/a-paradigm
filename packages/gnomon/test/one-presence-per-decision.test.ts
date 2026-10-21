@@ -15,7 +15,8 @@ import { RefusedError } from '@a-company/gnomon-contracts';
 import { ApprovalBroker, raiseInstallCard } from '../src/kernel/broker/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
-import { appendGrantRow, appendSignedGrantRows, effectiveInstall, grantsPath, MANIFEST_FILE, readGrants, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
+import { appendGrantRow, appendSignedGrantRows, effectiveInstall, grantsPath, MANIFEST_FILE, readGrants, readStaged, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
+import { prepareInstall } from '../src/kernel/manifest/install.js';
 import { requestUninstall, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
 import { CountingFakeHelper, FakeHelper } from './helper-fake.js';
 
@@ -167,6 +168,26 @@ describe('G-ID-10: nothing appended on failure; the card stays pending', () => {
     const r = rig({ duringPrompt: () => void vi.spyOn(performance, 'now').mockImplementation(() => t0 + 90_000) });
     const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId: stage(home), authority: r.root });
     await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install' });
+    expect(readGrants(home, r.root).installs).toHaveLength(1);
+  });
+
+  it('Aegis F4: rows written but the decision not recorded (a commit that threw after its append) are finished, never re-appended', async () => {
+    const home = tmp();
+    const r = rig();
+    const cardId = stage(home, { capabilities: ['log.append:modns.acme.diff-lens.*'], egress: 'none' });
+    const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId, authority: r.root });
+    // the earlier commit: prepare, sign, append ... and then it threw before writeStaged (simulated: append only)
+    const other = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: r.helper.publicPem('root') }, { once: (req) => r.helper.handle(req) });
+    const p = prepareInstall(home, 'acme.diff-lens', cardId, 'install', { authority: other });
+    appendSignedGrantRows(home, other, p.rows, p.rows.map((x) => other.signRow(x)));
+    const written = grantsBytes(home);
+    expect(readStaged(home, 'acme.diff-lens', cardId)!.card.state).toBe('pending');
+    const before = r.helper.evaluations;
+    const d = await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install' });
+    expect(d.state).toBe('decided');
+    expect(r.helper.evaluations - before).toBe(1);
+    expect(grantsBytes(home)).toBe(written); // nothing appended a second time
+    expect(readStaged(home, 'acme.diff-lens', cardId)!.card.state).toBe('decided');
     expect(readGrants(home, r.root).installs).toHaveLength(1);
   });
 

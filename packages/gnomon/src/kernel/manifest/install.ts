@@ -61,7 +61,7 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
-import { appendGrantRow, appendSignedGrantRows, buildGrantRows, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
+import { appendGrantRow, appendSignedGrantRows, buildGrantRows, rowsOfDecision, type GrantRow, type GrantRowInput, checkAgainstGrants, effectiveInstall, HISTORICAL_FIRST_PARTY_PINS, pinDirKey, readGrants, type GrantInstallRow, type ResolvedGrants } from './grants.js';
 import { COMMAND_UNSAFE, compareVersions, detectWidening, MANIFEST_FILE, readManifest, type ManifestMcpConfig, type ManifestV2, type ReadManifestResult, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
@@ -782,6 +782,11 @@ export interface PreparedInstall {
   rows: GrantRow[];
   /** the card was already decided this way: commit is a no-op */
   done: boolean;
+  /**
+   * Aegis F4: the rows are ALREADY in grants.jsonl (an earlier commit appended them, then its pin read-back or staged
+   * write threw): `rows` are those written rows; commit appends nothing and finishes the decision idempotently
+   */
+  finishing?: boolean;
   rec: StagedRecord;
   events: Array<[string, Record<string, unknown>]>;
 }
@@ -813,6 +818,18 @@ export function prepareInstall(home: string, name: string, cardId: string, decis
     throw new ManifestRefusal('NOT_INSTALLED', `install card ${cardId} is already decided`, { name, cardId });
   }
   const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
+  if (decision === 'install' && already) {
+    // Aegis F4: written but not decided: the rows this card's decision wrote, verified; commit only records the decision
+    const written = rowsOfDecision(home, opts.authority, cardId);
+    if (written.at(-1)?.kind === 'grant.install') {
+      out.rows = written;
+      out.finishing = true;
+      const pin = written.at(-1) as GrantInstallRow;
+      out.events.push(['manifest.installed', { name, manifestHash: pin.manifestHash, packageHash: pin.packageHash, cardId, source: pin.source }]);
+      out.events.push(['mod.installed', { name, packageHash: pin.packageHash, ...(rec.detail.replaces ? { replaces: rec.detail.replaces.packageHash } : {}) }]);
+      if (pin.source.startsWith('linked:') && !rec.detail.replaces) out.events.push(['mod.linked', { name, path: pin.source.slice(7), packageHash: pin.packageHash }]);
+    }
+  }
   if (decision === 'install' && !already) {
     const dir = pinnedDir(home, name, rec.detail.packageHash);
     if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
@@ -877,7 +894,12 @@ export function commitInstall(p: PreparedInstall, rowSigs: ReadonlyArray<{ signe
   if (p.done) return p.rec;
   const cur = readStaged(p.home, p.name, p.cardId);
   if (!cur || cur.card.state !== 'pending') throw new ManifestRefusal('NOT_INSTALLED', `install card ${p.cardId} is already decided`, { name: p.name, cardId: p.cardId });
-  appendSignedGrantRows(p.home, opts.authority, p.rows, rowSigs);
+  if (p.finishing) {
+    // Aegis F4: the rows are written already; they must still be there, verbatim, and nothing is appended again
+    if (canonicalJson(rowsOfDecision(p.home, opts.authority, p.cardId)) !== canonicalJson(p.rows)) throw new ManifestRefusal('GRANT', `install card ${p.cardId}: its written rows changed; decide again`, { name: p.name, cardId: p.cardId, stale: true });
+  } else {
+    appendSignedGrantRows(p.home, opts.authority, p.rows, rowSigs);
+  }
   for (const [k, v] of p.events) emit(k as Parameters<ManifestEventSink>[0], v);
   const decided: StagedRecord = { ...p.rec, card: { ...p.rec.card, state: 'decided' }, decision: { decision: p.decision, at: now.toISOString() } };
   writeStaged(p.home, decided);
