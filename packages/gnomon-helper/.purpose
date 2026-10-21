@@ -50,8 +50,23 @@ components:
       voice-decision.ts) and refuses unless it names this arm and pair;
       arm.open and arm.sign fail closed on a locked, off-console or unknown
       session (CGSessionProbe); maxSignatures required (ceiling 1024); the
-      helper arm line leads the prompt, caller text capped at 120. Unit tests: darwin/Tests (swift
-      test). Later: the
+      helper arm line leads the prompt, caller text capped at 120. Helper
+      1.8.0 (TD-2026-10-20-514, G-ID-09, G-ID-10, Aegis C1-C4, C7):
+      decision.sign — ONE fresh evaluatePresence signs a card decision's
+      approvals messages (approve:v1 + presence:v1, at most one each) and
+      every root row (1..8, the gnomon-root-decision:v2 row first) under the
+      same context, invalidated at once; never keep, never Unlocks.put; 10
+      messages and 256 KiB at most. bindDecisionBatch checks the decision
+      row against the approve message, sha256(intent) against rowsDigest,
+      each later row (volatile fields dropped) against intent[i], cardId and
+      manifestHash binding, and the closed per-cardKind row table;
+      decisionLine names what every row grants and every digest, FIRST in
+      the dialog, refused rather than truncated. The TS mirror and shared
+      vectors: gnomon src/kernel/identity/decision-batch.ts,
+      gnomon-contracts test/fixtures/decision-batch-vectors.json. Root key:
+      fresh presence per DECISION. `probe-decision <gen>` is the on-device
+      check (one dialog, both keys, an unevaluated context fails). Unit
+      tests: darwin/Tests (swift test; DecisionSignTests.swift). Later: the
       kernel-key keystore item, the keystore log anchor, XPC under launchd,
       the Windows pipe, job objects, WFP, launch-token hand-off.
     path: darwin/Sources/gnomon-helper/

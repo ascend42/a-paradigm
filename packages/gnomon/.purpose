@@ -633,6 +633,12 @@ components:
       The bearer-token model (a phone token as approval authority with no
       biometric) is REJECTED.
     description: >-
+      TD-2026-10-20-514 (G-ID-09, G-ID-10): HelperApprovalsKey.signDecisionBatch
+      sends ONE decision.sign (helper >= 1.8.0, chosen from info.version) for a
+      whole card decision, pre-checked by decision-batch.ts (the TS mirror of the
+      helper rules, shared vectors), every signature verified against the pinned
+      keys and `shown` compared byte-exact; HelperProcess / SupervisedHelper
+      stash the handshake version.
       #identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3,
       blocked on the founder's provisioning profile). root-authority.ts — the
       RootAuthority seam: UnprovisionedRootAuthority is the production default
@@ -1159,6 +1165,13 @@ components:
 
   manifest-loader:
     description: >-
+      TD-2026-10-20-514: prepareInstall (every check, rows BUILT with cardId,
+      checked against the card's detail.rootRows) / commitInstall (token consumed,
+      appendSignedGrantRows); buildGrantRow(s) and appendSignedGrantRows re-check
+      every signed row under a cross-process lock file (grant-lock.ts: torn-tail
+      repair, dir fsync, one in-flight root decision per home) and write once,
+      grant.install last; the reader drops a cardId row whose batch anchor is
+      missing (unanchored).
       S0b user-mcp.ts: userMcpServerNames(home, {repo?}) reads ONLY server NAMES
       (never commands, args or env) from ~/.claude.json (user scope mcpServers and
       local scope projects.<path>.mcpServers) and <repo>/.mcp.json (project scope,
@@ -1729,6 +1742,11 @@ components:
       - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      TD-2026-10-20-514: every root-class card carries detail.rootRows; #approve
+      prepares the rows (RaiseInput.prepare), builds the gnomon-root-decision:v2
+      row (rowsDigest) and makes ONE fresh prompt with signDecisionBatch on a
+      helper >= 1.8.0, else the legacy one-signature-per-row path over the same
+      prepare/commit; the effect gets rowSigs; prepare released in a finally.
       STANDING GRANT (TD-2026-10-20-086 F6): StandingSeam (setStanding) is
       asked before any presence; a match is signed under the device unlock
       (or a verified client decisionSig) with presence 'standing:<id>' and
