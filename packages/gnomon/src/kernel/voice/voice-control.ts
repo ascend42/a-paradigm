@@ -279,7 +279,7 @@ export interface VoiceControlOptions {
   /**
    * The attended trial as the voice client must see it (daemon: <home>/voice/send-word-trial.json, 0600): the word and
    * its expiry ON THE KERNEL CLOCK (#now; Aegis L-2) while the trial is LISTENING, else null (ready, exhausted, saved,
-   * cleared or expired). Called on every change; a throw is swallowed (fail safe: with no file the
+   * cleared, expired, or ended by a detach or an attach to another session, Aegis L-1). Called on every change; a throw is swallowed (fail safe: with no file the
    * client withholds an unverified take's text, and the kernel decides every take anyway).
    */
   onTrialChange?: (t: { word: string; until: number } | null) => void;
@@ -593,7 +593,8 @@ export class VoiceControl {
     if (owner === undefined || owner !== asker.principal) throw new RefusedError(refuse({ code: 'NOT_FOUND', data: { reason: 'not-found' } }), '#gnomon-voice: no such live session for this principal');
     const prev = this.#attachment;
     if (prev && prev.owner !== asker.principal && this.#o.sessions.ownerOf(prev.hsid) === prev.owner) throw voiceRefusal('voice-target', "voice is attached to another human's session");
-    if (prev) await this.#end(prev, asker.connId, asker.principal);
+    // Aegis L-1: re-attaching to the SAME session keeps a trial; attaching elsewhere ends it (below and in #end)
+    if (prev) await this.#end(prev, asker.connId, asker.principal, undefined, prev.hsid === hsid);
     const now = this.#now();
     const a: Attachment = { voiceSessionId: `vs:${ulid()}`, hsid, owner, mode, turns: 0, startedAt: now, lastForwardAt: now, connId: asker.connId, send };
     const r = await this.#o.append({
@@ -604,14 +605,21 @@ export class VoiceControl {
       session: a.hsid,
     });
     this.#attachment = a; // only after the row is written (log before effect)
+    // Aegis L-1: a trial belongs to one session: started unattached it binds here, bound to another session it ends
+    const tr = this.#trial;
+    if (tr && tr.hsid !== null && tr.hsid !== hsid) this.#endTrial();
+    else if (tr) tr.hsid = hsid;
     this.#armIdle();
     this.#o.onAttachmentChange?.();
     return { ...r, voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, send };
   }
 
-  async #end(a: Attachment, connId: string | undefined, principal: string, reason?: 'idle'): Promise<unknown> {
+  async #end(a: Attachment, connId: string | undefined, principal: string, reason?: 'idle', keepTrial = false): Promise<unknown> {
     const drops = this.#o.localDrops?.();
     const r = await this.#o.append({ kind: 'voice.session.end', principal, payload: { voiceSessionId: a.voiceSessionId, turns: a.turns, compactedTo: null, ...(reason ? { reason } : {}), ...(drops ? { localDrops: drops } : {}) }, ...(connId ? { connId } : {}), session: a.hsid });
+    // Aegis L-1: a detach (by the human, the voice principal or the idle timer) ends the attended trial; only a
+    // re-attach to the same session (#start) keeps it
+    if (!keepTrial) this.#endTrial();
     this.#past.set(a.voiceSessionId, a.owner);
     while (this.#past.size > PAST_CAP) this.#past.delete(this.#past.keys().next().value!);
     if (this.#attachment === a) {
@@ -718,7 +726,7 @@ export class VoiceControl {
         // the attended trial: a turn of the attached human's voice principal is a take (no speaker check, no adjacency),
         // only while the trial is LISTENING (Aegis M-2: once ready or exhausted, take capture stops)
         const live = p.intercepted === undefined && a !== null && voicePrincipalOf(a.owner) === c.principal ? this.#liveTrial() : null;
-        const trial = live && live.state.state === 'listening' ? live : null;
+        const trial = live && live.state.state === 'listening' && (live.hsid === null || live.hsid === a!.hsid) ? live : null;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
@@ -858,7 +866,13 @@ export class VoiceControl {
    * The attended trial (spec §14.7 trial semantics): the word being taught, its take count (the ONE counter) and its
    * kernel-clock expiry. Never the held word, never isWord, never a send.
    */
-  #trial: { state: SendWordTrialState; until: number } | null = null;
+  #trial: { state: SendWordTrialState; until: number; hsid: string | null } | null = null;
+  /** Aegis L-1: end the trial (a detach, or an attach to another session). */
+  #endTrial(): void {
+    if (!this.#trial) return;
+    this.#trial = null;
+    this.#trialChanged();
+  }
   /** Start a trial of `w`; the same word while live renews the expiry and KEEPS its takes (null ends the trial). */
   setTrialWord(w: unknown, ttlMs = SEND_WORD_TRIAL_MS): SendWord | null {
     if (w === null) {
@@ -871,11 +885,11 @@ export class VoiceControl {
     if (!c || !st) throw bad('the send word is 1-3 words, never an approval or command phrase (validateSendWord)');
     const live = this.#liveTrial();
     if (live && live.state.word === st.word) live.until = this.#now() + ttlMs;
-    else this.#trial = { state: st, until: this.#now() + ttlMs };
+    else this.#trial = { state: st, until: this.#now() + ttlMs, hsid: this.#attachment?.hsid ?? null };
     this.#trialChanged();
     return { text: c.text, variants: [] };
   }
-  #liveTrial(): { state: SendWordTrialState; until: number } | null {
+  #liveTrial(): { state: SendWordTrialState; until: number; hsid: string | null } | null {
     if (this.#trial && this.#now() > this.#trial.until) {
       this.#trial = null;
       this.#trialChanged();

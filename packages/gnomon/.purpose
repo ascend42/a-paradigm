@@ -3596,7 +3596,9 @@ flows:
       trial is listening, and its row is hash-only plus trialVerdict (Aegis
       M-2: the heard text lives only in kernel memory for status);
       send-word-trial.json is written only from VoiceControl onTrialChange
-      with the kernel-clock until and only while listening (Aegis L-2); the
+      with the kernel-clock until and only while listening (Aegis L-2); a
+      trial binds to the attached session and ends on any detach (human,
+      voice principal, idle) or an attach to another hsid (Aegis L-1); the
       kernel is the ONE take counter
       (status.voice.sendWordTrial, human class only: word, state, take,
       takes, maxTakes 4, correct, variants, last, until) and

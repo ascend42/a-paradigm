@@ -18,13 +18,14 @@ const HUMAN = 'p:abcdefgh/founder';
 const VOICE = 'p:abcdefgh/voice';
 const SPK = 'spk:abcdefgh/founder';
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
+const HSID2 = 'hs:01JBBBBBBBBBBBBBBBBBBBBBBB';
 
 function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null; onTrialChange?: (t: { word: string; until: number } | null) => void } = {}) {
   const clock = { t: 100_000 };
   const rows: VoiceAppendRow[] = [];
   const presence: VoicePresenceRequest[] = [];
   const v = new VoiceControl({
-    sessions: { ownerOf: (h) => (h === HSID ? HUMAN : undefined), send: async () => ({}), stop: async () => ({}) },
+    sessions: { ownerOf: (h) => (h === HSID || h === HSID2 ? HUMAN : undefined), send: async () => ({}), stop: async () => ({}) },
     append: async (row) => (rows.push(row), { seq: rows.length, hash: `h${rows.length}` }),
     enrolled: () => new Set([SPK]),
     voiceConnections: () => ['conn:V'],
@@ -291,6 +292,41 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it('Aegis L-1: a detach ends the trial; a re-attach to the same session keeps it; an attach elsewhere ends it', async () => {
+    const seen: Array<{ word: string; until: number } | null> = [];
+    const r = rig({ onTrialChange: (t) => void seen.push(t) });
+    const h = { connId: 'conn:H1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    await r.turn('sand');
+    // the human detaches: the trial ends (status, and the client's file view)
+    await r.v.humanAppend(h, 'voice.session.end', {});
+    expect(r.v.status().sendWordTrial).toBeNull();
+    expect(seen.at(-1)).toBeNull();
+    expect(await refusal(() => r.v.saveTrial())).toMatchObject({ reason: 'sendword-no-trial' });
+    // a re-attach to the same session keeps a live trial and its count
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    await r.turn('sand');
+    await r.attach('word');
+    expect(r.v.status().sendWordTrial).toMatchObject({ word: 'send', takes: 1, state: 'listening' });
+    // an attach to another session ends it
+    await r.v.humanAppend(h, 'voice.session.start', { hsid: HSID2, mode: 'conversation', send: 'word', liabilityAck: VOICE_LIABILITY_ACK_HASH });
+    expect(r.v.status()).toMatchObject({ hsid: HSID2, sendWordTrial: null });
+    expect(seen.at(-1)).toBeNull();
+    // the voice principal's end and the kernel's idle end detach too
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    const vs = String(r.v.status().voiceSessionId);
+    await r.v.voiceAppend({ connId: 'conn:V', principal: VOICE }, { kind: 'voice.session.end', payload: { voiceSessionId: vs } });
+    expect(r.v.status().sendWordTrial).toBeNull();
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 20 * 60_000);
+    r.clock.t += 11 * 60_000; // past the 10 min ambient idle
+    expect(await r.v.checkIdle()).toBe(true);
+    expect(r.v.status().sendWordTrial).toBeNull();
   });
 
   it('the trial is time-boxed; after it a short unverified word is refused again', async () => {

@@ -61,7 +61,7 @@ export const SEND_WORD_TRIAL_FILE = 'send-word-trial.json';
  * The word being taught (the attended trial): written 0600 with an absolute expiry so the voice client knows a trial
  * is on (it then sends every segment's short text as a take, with no adjacency); never read as the held word. The
  * daemon calls this ONLY from VoiceControl's onTrialChange (Aegis L-2): `until` is the kernel's own trial expiry (one
- * clock), and the file is removed as soon as the trial stops listening (ready, exhausted, saved, cleared).
+ * clock), and the file is removed as soon as the trial stops listening (ready, exhausted, saved, cleared, or ended by a detach or an attach to another session).
  */
 export function writeTrialWord(home: string, word: { text: string } | null, until = 0): void {
   const file = path.join(voiceDir(home), SEND_WORD_TRIAL_FILE);
