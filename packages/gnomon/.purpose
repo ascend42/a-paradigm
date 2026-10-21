@@ -2184,6 +2184,28 @@ components:
       - test/table-talk-session.test.ts
     oracles: [G-DSK-01]
 
+  session-names:
+    description: >-
+      #session-names (8.0:session-rename, spec §3.3 "Session names").
+      src/kernel/supervisor/session-names.ts: a fold over the kernel-signed
+      session.open{hsid, by} (the owner) and session.renamed{hsid, name}
+      rows, seeded from log.read at boot (SESSION_NAME_SEED_KINDS) and fed
+      by log.onCommit, so a name survives a restart and a replay with no
+      store of its own (bounded, SESSION_NAMES_CAP). rename() serves the
+      human's log.append{kind:'request.session.rename', payload:{hsid, name}}
+      routed by the dispatcher from a gui or device human connection only
+      (FORBIDDEN{matrix} otherwise); closed {hsid, name}; the name goes
+      through contracts normalizeSessionName (the ONE section 4.5 sanitizer,
+      whitespace folded, trimmed, <= 80 code points; a control or format
+      character is BAD_REQUEST, never dropped); '' resets to the derived
+      title. The session must be one this human opened (NOT_FOUND
+      otherwise, live or ended). Writes request.session.rename then
+      session.renamed (checked at append by #kernel-log). status.sessionNames
+      lists the asker's names (human class only). A name is display text,
+      never a capability: nothing routes, grants or permits by it, and it
+      never reaches a path. The raw CLI form is `gnomon session rename`
+      (src/cli/session-cli.ts runSessionRename, the gnomon mode device
+      connection). Tests: test/session-names.test.ts, socket-abi.test.ts.
   offer-router:
     description: >-
       #offer-router (TD-2026-10-20-812, slice S1; spec §12.9).

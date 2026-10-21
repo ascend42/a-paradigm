@@ -28,7 +28,8 @@ import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } 
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
-import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
+import { chatItems, derivedTitle, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText } from '../core/live-turn.js';
 import { mountStandingFeed } from './standing-feed.js';
@@ -227,7 +228,9 @@ function paintChatHead(): void {
   const s = focused ? store.sessions.get(focused) : undefined;
   const title = s ? sessionTitle(s) : focused ? focused.slice(-10) : feedView ? 'kernel feed' : 'No session open';
   put($('transcript-title'), title);
-  $('transcript-title').title = focused ?? '';
+  // #gui-session-rename: the full title (the truncation stays) and the hsid in the tooltip; ✎ renames
+  $('transcript-title').title = s ? `${sessionFullTitle(s)}\n${s.hsid}${s.name ? '' : '\n(double-click to rename)'}` : (focused ?? '');
+  if (renaming?.where !== 'head') $('rename-btn').hidden = !s;
   const meta = $('chead-meta');
   clear(meta);
   if (s) {
@@ -567,6 +570,8 @@ function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][numb
   ) as unknown as HTMLElement;
 }
 function paintSessions(): void {
+  // #gui-session-rename: a list rename holds the rail still (a repaint would drop the input); it repaints on settle
+  if (renaming?.where === 'list') return void (sessionsDirty = true);
   const list = $('session-list');
   clear(list);
   const q = ($('session-search') as HTMLInputElement).value.trim().toLowerCase();
@@ -578,6 +583,65 @@ function paintSessions(): void {
   for (const g of active) for (const s of g.sessions) list.appendChild(sessionRowEl(s, g.hue));
   list.appendChild(h(doc, 'button', { class: 'sec-head sec-toggle', type: 'button', 'data-past-toggle': '1', 'aria-expanded': String(pastOpen) }, h(doc, 'span', null, `${pastOpen ? '▾' : '▸'} Past`), h(doc, 'span', null, String(past.length))) as unknown as Node);
   if (pastOpen) for (const { s, hue } of past) list.appendChild(sessionRowEl(s, hue));
+}
+
+/* ── #gui-session-rename: inline rename (header, session list, palette) ── */
+let renaming: { hsid: string; where: 'head' | 'list'; binding: RenameBinding } | null = null;
+let sessionsDirty = false;
+/** Open the inline name input for a session (a trusted gesture only). Enter / blur save, Esc cancels (core/rename.ts). */
+function startRename(hsid: string | null, where: 'head' | 'list', trusted: boolean): void {
+  const s = hsid ? store.sessions.get(hsid) : undefined;
+  if (!trusted || !s || renaming) return;
+  let input: HTMLInputElement;
+  if (where === 'head') {
+    input = $<HTMLInputElement>('rename-input');
+    $('transcript-title').hidden = true;
+    $('rename-btn').hidden = true;
+    input.hidden = false;
+  } else {
+    const row = $('session-list').querySelector(`[data-hsid="${CSS.escape(s.hsid)}"]`);
+    if (!row) return;
+    input = h(doc, 'input', { class: 'field rename-input', type: 'text', 'aria-label': `Rename session ${sessionTitle(s)}`, maxlength: '160', spellcheck: 'false', autocomplete: 'off' }) as unknown as HTMLInputElement;
+    const swatch = row.querySelector('.swatch')?.cloneNode(true) ?? null;
+    row.replaceWith(h(doc, 'div', { class: `${row.className} renaming`, 'data-renaming': s.hsid }, swatch as never, input as never) as unknown as Node);
+  }
+  input.value = s.name ?? '';
+  input.placeholder = derivedTitle(s);
+  const current = s.name ?? null;
+  const done = (): void => {
+    renaming = null;
+    if (where === 'head') {
+      input.hidden = true;
+      $('transcript-title').hidden = false;
+    }
+    const dirty = sessionsDirty || where === 'list'; // the list input row is replaced by a fresh paint
+    sessionsDirty = false;
+    if (dirty) paintSessions();
+    paintChatHead();
+  };
+  const binding = bindInlineRename(input, {
+    onSave: (v) => {
+      done();
+      void saveRename(s.hsid, current, v);
+    },
+    onCancel: done,
+  });
+  renaming = { hsid: s.hsid, where, binding };
+  input.focus();
+  input.select();
+}
+/** Send the rename (the kernel normalises again; the name shows once its session.renamed row arrives). */
+async function saveRename(hsid: string, current: string | null, typed: string): Promise<void> {
+  const plan = planRename(current, typed);
+  if (plan.kind === 'none') return;
+  if (plan.kind === 'refuse') return notice(plan.note, true);
+  if (!client) return notice('not connected: the name was not changed', true);
+  try {
+    await client.call('log.append', renameRequest(hsid, plan.name));
+    notice(null);
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the name was not changed', true);
+  }
 }
 
 /* ── decision stack ─────────────────────────────────────────────── */
@@ -1915,6 +1979,7 @@ function run(id: string, trusted: boolean): void {
     $('new-session-dialog').hidden = false;
     modelPicker?.onDialogOpen();
   }
+  else if (id === 'session.rename') startRename(focused, 'head', trusted);
   else if (id === 'composer.focus') $('composer-text').focus();
   else if (id === 'view.kernel-feed') {
     // S2.3: the raw kernel feed, on demand only (it is never the default centre)
@@ -2064,6 +2129,20 @@ function wire(): void {
     if (b) focus(b.dataset.hsid || null);
   });
   $('session-search').addEventListener('input', paintSessions);
+  // #gui-session-rename: double-click a row (or F2 on it) renames it in place; double-click or ✎ in the header
+  $('session-list').addEventListener('dblclick', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-hsid]') as HTMLElement | null;
+    if (b) startRename(b.dataset.hsid || null, 'list', e.isTrusted);
+  });
+  $('session-list').addEventListener('keydown', (e) => {
+    const b = (e.target as HTMLElement).closest('button[data-hsid]') as HTMLElement | null;
+    if (b && (e as KeyboardEvent).key === 'F2') {
+      e.preventDefault();
+      startRename(b.dataset.hsid || null, 'list', e.isTrusted);
+    }
+  });
+  $('transcript-title').addEventListener('dblclick', (e) => startRename(focused, 'head', e.isTrusted));
+  $('rename-btn').addEventListener('click', (e) => startRename(focused, 'head', e.isTrusted));
   const onCard = (e: Event): void => {
     const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
     if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);

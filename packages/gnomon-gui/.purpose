@@ -15,6 +15,24 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-session-rename:
+    description: >-
+      8.0:session-rename (founder ask: rename a session). core/rename.ts
+      (PURE): renameRequest (log.append request.session.rename{hsid, name}),
+      planRename (contracts normalizeSessionName preview: unchanged sends
+      nothing, '' resets, a refused name is a notice), bindInlineRename
+      (Enter saves, Esc cancels, blur saves, settles once). core/store.ts
+      folds the kernel's session.renamed into SessionRow.name; sessionTitle
+      shows the name (cut to 28), sessionFullTitle is the tooltip text,
+      derivedTitle the placeholder; the transcript shows a "renamed" line.
+      ui/app.ts: double-click the header title or press the pencil
+      (#rename-btn, aria-label "Rename session") opens #rename-input
+      (aria-label "Session name", value = the name, placeholder = the
+      derived title); double-click or F2 on a session-list row renames it in
+      place (the rail does not repaint while it is open); palette command
+      session.rename "Rename session" (not in BLOCK_SAFE_COMMANDS). Trusted
+      gestures only. The title tooltip shows the full title and the hsid.
+      Test: test/rename.test.ts.
   gui-model-picker:
     description: >-
       Founder ask 2026-10-20 ("is there no way to change the model of what

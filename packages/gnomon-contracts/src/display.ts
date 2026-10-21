@@ -47,7 +47,7 @@
  * hidden-chars on every pass.
  */
 
-import { opaqueEventView, isKnownKind, EVENT_KINDS, type EventV1 } from './event.js';
+import { opaqueEventView, isKnownKind, isSessionName, EVENT_KINDS, SESSION_NAME_INPUT_MAX, SESSION_NAME_MAX, type EventV1 } from './event.js';
 import type { CardFlag } from './card.js';
 
 /** The visible glyph for each bidi control (\u00a74.5), keyed by code point. */
@@ -171,6 +171,33 @@ export function sanitizeDisplayText(input: string): SanitizedText {
   if (hidden) flags.push('hidden-chars');
   if (bidi) flags.push('bidi');
   return { text: out, flags };
+}
+
+/** Why normalizeSessionName refused a name (8.0:session-rename). */
+export type SessionNameRefusal = 'not-a-string' | 'too-long' | 'control-character' | 'format-character';
+export type NormalizedSessionName = { ok: true; name: string; flags: CardFlag[] } | { ok: false; why: SessionNameRefusal };
+// C0 controls but tab / LF / CR (whitespace, folded to one space), DEL and C1: refused, never silently dropped
+// eslint-disable-next-line no-control-regex
+const NAME_CONTROLS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
+
+/**
+ * 8.0:session-rename: the ONE normalisation of a session display name, for the kernel (which writes session.renamed)
+ * and every client (which previews it). In order: a non-string, or more than SESSION_NAME_INPUT_MAX code units, is
+ * refused; a C0/C1 control or DEL (tab, LF and CR excepted) is refused `control-character`; the §4.5 sanitizer runs
+ * (sanitizeDisplayText: invisible characters stripped, bidi controls made visible glyphs — its flags are returned);
+ * every whitespace run becomes one space; the result is trimmed; more than SESSION_NAME_MAX code points is refused
+ * `too-long`; a format character the sanitizer keeps is refused `format-character`. `''` is a valid result: it resets
+ * the session to its derived title. The output always passes isSessionName and is a fixed point.
+ */
+export function normalizeSessionName(raw: unknown): NormalizedSessionName {
+  if (typeof raw !== 'string') return { ok: false, why: 'not-a-string' };
+  if (raw.length > SESSION_NAME_INPUT_MAX) return { ok: false, why: 'too-long' };
+  if (NAME_CONTROLS.test(raw)) return { ok: false, why: 'control-character' };
+  const san = sanitizeDisplayText(raw);
+  const name = san.text.replace(/\s+/gu, ' ').trim();
+  if ([...name].length > SESSION_NAME_MAX) return { ok: false, why: 'too-long' };
+  if (!isSessionName(name)) return { ok: false, why: 'format-character' };
+  return { ok: true, name, flags: san.flags };
 }
 
 /** How a client lists one event row (\u00a74.9): a kind the client has no renderer for is shown opaquely, never dropped. */

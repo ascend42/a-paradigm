@@ -116,7 +116,7 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { planResume, resumeAfterUpgrade, type ResumeReport, type ResumeRow } from '../supervisor/resume.js';
 import { processControlFor, processStartMs } from './process-control.js';
-import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { SessionSupervisor, createSessionPort, SessionNames, SESSION_NAME_SEED_KINDS, type NameRow } from '../supervisor/index.js';
 import { ClaudeRepinCards, REPIN_POLL_MS } from '../runner/repin-card.js';
 import { resolveClaudeSource } from '../runner/preflight.js';
 import { osUserHome } from '../runner/env.js';
@@ -1159,6 +1159,22 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const rows = router.observe(e);
     for (const row of rows) setImmediate(() => void log.append({ kind: row.kind, principal: kernelPrincipal, payload: { ...row.payload }, session: row.session }).catch(() => undefined));
   });
+  // #session-names (8.0:session-rename): a fold over session.open{by} and session.renamed, seeded from the log so a
+  // name survives a restart; the human's request.session.rename writes the two kernel rows. Display text only.
+  const sessionNames = new SessionNames({
+    kernelPrincipal,
+    append: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload: { ...payload }, session: ids.session, connId: ids.connId }).then(() => undefined),
+  });
+  try {
+    const seed: NameRow[] = [];
+    for (const v of log.read({ reader: { class: 'human' }, kinds: SESSION_NAME_SEED_KINDS })) {
+      if (v.view === 'full') seed.push({ kind: v.event.kind, principal: v.event.principal, session: v.event.session ?? null, payload: v.event.payload });
+    }
+    sessionNames.seed(seed);
+  } catch {
+    /* an unreadable history seeds nothing: no owner or name is invented (a rename is refused NOT_FOUND) */
+  }
+  log.onCommit((e) => sessionNames.observe(e));
   // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
   let mcpCardsTimer: NodeJS.Timeout | null = null;
   const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home) });
@@ -1199,6 +1215,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
+      sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),

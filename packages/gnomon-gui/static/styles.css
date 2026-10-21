@@ -900,6 +900,12 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 /* fidelity 2 chat header: "title  ■ project · claude · started 13:58 · 9m" (meta never squeezed out by the title), the
    kernel-owned run mode as a small chip (`ask ▾`), and a ⋯ menu holding the counts and the raw toggle */
 .chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
+/* #gui-session-rename: the ✎ beside the title and the inline name input (header and session list) */
+.chead .rename-btn { flex: none; font-size: 11px; padding: 0 5px; line-height: 18px; border-color: var(--rule); }
+.rename-input { font: inherit; font-size: 13px; color: var(--ink); background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); padding: 1px 6px; min-width: 0; }
+.chead .rename-input { flex: 0 1 45%; min-width: 16ch; }
+.session-row.renaming { cursor: text; }
+.session-row.renaming .rename-input { width: 100%; font-size: 12.5px; }
 .chead-meta { flex: 0 0 auto; }
 .chead .mode-btn { font-size: 10.5px; padding: 0 6px; line-height: 18px; border-color: var(--rule); }
 .more-wrap { position: relative; display: inline-flex; }

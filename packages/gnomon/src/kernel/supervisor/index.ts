@@ -3,3 +3,4 @@
 export * from './supervisor.js';
 export * from './port.js';
 export * from './local-session.js';
+export * from './session-names.js';

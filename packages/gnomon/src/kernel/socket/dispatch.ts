@@ -379,6 +379,14 @@ export interface HumanRequestPort {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
   };
+  /**
+   * 8.0:session-rename (#session-names): request.session.rename{hsid, name} from the human on a gui or device
+   * connection ONLY; status.sessionNames lists the names of the asker's own sessions. A name is display text only.
+   */
+  sessionNames?: {
+    rename(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    namesFor(principal: string): Array<{ hsid: string; name: string }>;
+  };
 }
 
 /** #mods-admin's status for the human's status.mods; a read that throws shows as `adminError`, never a failed status. */
@@ -510,6 +518,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
       ...(o.requests?.standing && cls === 'human' ? { standing: o.requests.standing.status() } : {}),
+      // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
+      ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
       // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
       // capture.text, reach a human-class connection on the gui credential only)
@@ -841,6 +851,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
         try {
           return await o.requests.mods.request(asker, pa.kind, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // 8.0:session-rename: the human names a session (gui/device human connections only, stamped by connId)
+      if (pa?.kind === 'request.session.rename' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.sessionNames) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.sessionNames.rename({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

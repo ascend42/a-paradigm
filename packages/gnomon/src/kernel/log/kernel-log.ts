@@ -2123,7 +2123,8 @@ function checkPayload(kind: string, payload: unknown): void {
   }
   // T-2026-10-21-006: offer.suppressed is closed (names only, never message text) and checked at append;
   // T-2026-10-21-008: offer.retired and session.anomaly likewise (ids and closed reasons only)
-  if (kind === 'offer.suppressed' || kind === 'offer.retired' || kind === 'session.anomaly') {
+  // 8.0:session-rename: request.session.rename and session.renamed carry a normalised display name (isSessionName)
+  if (kind === 'offer.suppressed' || kind === 'offer.retired' || kind === 'session.anomaly' || kind === 'request.session.rename' || kind === 'session.renamed') {
     const errors = validateKindPayload(kind, payload);
     if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-payload', `${kind} payload: ${errors.slice(0, 4).join('; ')}`, { kind });
   }

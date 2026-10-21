@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -83,6 +83,8 @@ const DESK = '8.0:TD-2026-10-20-812' as const;
 const OFFER_SUPPRESS = '8.0:T-2026-10-21-006' as const;
 /** T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly, one deliberate clientApiId move). */
 const REREVIEW = '8.0:T-2026-10-21-008' as const;
+/** The session rename (founder ask 2026-10-20: rename a session from the GUI or the CLI): one clientApiId move. */
+const SESSION_RENAME = '8.0:session-rename' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -164,6 +166,12 @@ const TABLE: Row[] = [
   // T-2026-10-21-008 (re-review M-1): session.anomaly{hsid, why} — the supervisor saw a stream shape it does not expect
   // (why in SESSION_ANOMALY_REASONS: 'result-without-turn' = a result with no outstanding turn). Names only, never text.
   ['session', 'kernel', 'anomaly', REREVIEW],
+  // the session rename (8.0:session-rename): request.session.rename{hsid, name} — the human's ask, written by the kernel on
+  // a first-party human connection (like request.session.model); session.renamed{hsid, name} — the display name the
+  // kernel set ('' = back to the derived title). The name is DISPLAY TEXT (normalizeSessionName, the §4.5 sanitizer),
+  // never a capability: nothing routes, grants or permits by it.
+  ['request', 'kernel', 'session.rename', SESSION_RENAME],
+  ['session', 'kernel', 'renamed', SESSION_RENAME],
   ['request', 'kernel', 'offer.decide offer.mute mod.install', DESK],
   // the context meter (TD-2026-10-20-812): session.context.threshold{hsid, usedTokens, windowTokens, ratio} — a Paradigm
   // session crossed the meter's threshold (Claude checkpoints, then the human is ASKED); request.session.restart{hsid,
@@ -255,6 +263,9 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   // project or agent-written detail; the rows stay private + normal.
   'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },
   'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
+  // 8.0:session-rename: a session name is the human's own words (it may echo the conversation): a limited reader never gets it
+  'request.session.rename': { name: 'sensitive' },
+  'session.renamed': { name: 'sensitive' },
   'merge.reverted': { trailer: 'sensitive' },
   // M1.4 slice 2 round 3 (Aegis): digests of sensitive or low-entropy content are
   // confirmation oracles for a dictionary guess, so a limited reader never gets them.
@@ -421,6 +432,9 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   // source 'git' carries url (https only) and optionally commit (40 hex), 'folder' carries path (absolute); the other keys are refused
   'request.mod.install': Object.freeze(['source', 'url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['hsid', 'checkpointRef']),
+  // 8.0:session-rename: the name is normalised display text (isSessionName); '' resets to the derived title
+  'request.session.rename': Object.freeze(['hsid', 'name']),
+  'session.renamed': Object.freeze(['hsid', 'name']),
   'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
 });
 
@@ -445,6 +459,26 @@ export const SESSION_ANOMALY_REASONS = ['result-without-turn'] as const;
 export type SessionAnomalyReason = (typeof SESSION_ANOMALY_REASONS)[number];
 
 export const TURN_RESULT_PAIRING = Object.freeze({ key: 'turn', pattern: TURN_ID_PATTERN.source, closesThrough: true, absent: 'fifo' } as const);
+
+/**
+ * 8.0:session-rename: a session's display name. At most SESSION_NAME_MAX code points after normalisation
+ * (normalizeSessionName in display.ts: the §4.5 sanitizer, whitespace runs to one space, trimmed); the raw input a
+ * client sends is at most SESSION_NAME_INPUT_MAX UTF-16 code units. '' means "no name": the derived title shows.
+ */
+export const SESSION_NAME_MAX = 80;
+export const SESSION_NAME_INPUT_MAX = 1024;
+const SESSION_NAME_UNSAFE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u;
+/**
+ * A normalised session name (the shape session.renamed / request.session.rename carry): a string of 0..SESSION_NAME_MAX
+ * code points with no control, format, line/paragraph separator or lone surrogate character, no whitespace but single
+ * U+0020 spaces, and no leading or trailing space. A structural check: the ONE sanitizer is display.ts's.
+ */
+export function isSessionName(v: unknown): v is string {
+  if (typeof v !== 'string' || v.length > SESSION_NAME_MAX * 2) return false;
+  if ([...v].length > SESSION_NAME_MAX || SESSION_NAME_UNSAFE.test(v)) return false;
+  if (/[^\S ]| {2}/u.test(v)) return false;
+  return v === v.trim();
+}
 
 /** request.offer.mute{scope} (CLOSED): a mod is muted per repo (A3: Neurons on everywhere, mute per repo). */
 export const OFFER_MUTE_SCOPES = ['repo'] as const;
@@ -722,6 +756,11 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
         if (!('path' in v)) c.fail('', 'missing property "path" (source folder)');
         else if (!isInstallPath(v.path)) c.fail('path', `must be an absolute path (≤ ${MOD_INSTALL_LIMITS.path}) with no control character and no '..' segment`);
       }
+      break;
+    case 'request.session.rename':
+    case 'session.renamed':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('name' in v && !isSessionName(v.name)) c.fail('name', `must be a normalised session name (≤ ${SESSION_NAME_MAX} code points, one line, no control or format character, trimmed; '' resets)`);
       break;
     case 'request.session.restart':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

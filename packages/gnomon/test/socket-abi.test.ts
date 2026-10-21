@@ -772,8 +772,8 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         if (cls === 'human' && kind === 'request.session.model') {
           // 8.0:model-switch: served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
-        } else if (cls === 'human' && (kind === 'request.offer.decide' || kind === 'request.offer.mute')) {
-          // TD-2026-10-20-812 (Aegis D1): served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
+        } else if (cls === 'human' && (kind === 'request.offer.decide' || kind === 'request.offer.mute' || kind === 'request.session.rename')) {
+          // TD-2026-10-20-812 (Aegis D1) / 8.0:session-rename: served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
         } else if (cls === 'human' && kind === 'request.mod.install') {
           // #mods-admin (the GUI Mods panel): served for the human's own device like `gnomon mod install`; a bad payload is BAD_REQUEST and appends nothing
@@ -823,6 +823,55 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     await h.conn.close();
     await settle();
     expect(rows(r.home).slice(before).every((x) => x.kind.startsWith('socket.'))).toBe(true);
+  }, 60_000);
+
+  it('8.0:session-rename request.session.rename: the human device names its own session (request row, then session.renamed, normalised), status.sessionNames shows it, \'\' resets, and the name survives a kernel restart; agent, mod and voice are FORBIDDEN{kernel-owned}; session and read token by the matrix', async () => {
+    const r = await rig();
+    const K = r.d.kernelPrincipal;
+    const human = r.creds.get('human')!.principalId;
+    const mine = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZ1';
+    const theirs = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZ2';
+    // the kernel's own session.open rows name each session's owner (by)
+    await r.d.log.append({ kind: 'session.open', principal: K, session: mine, payload: { hsid: mine, by: human, cwd: '/tmp/x', backend: 'claude-code' } });
+    await r.d.log.append({ kind: 'session.open', principal: K, session: theirs, payload: { hsid: theirs, by: 'p:zzzzzzzz/other', cwd: '/tmp/y', backend: 'claude-code' } });
+    const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
+    const before = r.d.log.head().seq;
+    const payload = { hsid: mine, name: 'Fix the build' };
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.session.rename', payload })), cls).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
+      await s.conn.close();
+    }
+    for (const s of [await asDevice(r, 'session'), await asToken(r, m.token)]) {
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.session.rename', payload }))).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+    }
+    const h = await asDevice(r, 'human');
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.session.rename', payload: { hsid: theirs, name: 'x' } }))).toMatchObject({ c: 'NOT_FOUND' });
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.session.rename', payload: { hsid: mine, name: 'a\u0007b' } }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.session.rename', payload, extra: 1 }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+    await settle();
+    expect(rows(r.home).slice(before).every((x) => x.kind.startsWith('socket.'))).toBe(true); // nothing refused reached the chain
+    expect(ok(await h.conn.call('log.append', { kind: 'request.session.rename', payload: { hsid: mine, name: '  Fix   the\u200b build ' } }))).toEqual({ hsid: mine, name: 'Fix the build', changed: true });
+    await settle();
+    const added = rows(r.home).slice(before).filter((x) => !x.kind.startsWith('socket.'));
+    expect(added.map((x) => [x.kind, x.env.payload])).toEqual([
+      ['request.session.rename', { hsid: mine, name: 'Fix the build' }],
+      ['session.renamed', { hsid: mine, name: 'Fix the build' }],
+    ]);
+    expect((ok(await h.conn.call('status')) as { sessionNames?: unknown }).sessionNames).toEqual([{ hsid: mine, name: 'Fix the build' }]);
+    const a = await asDevice(r, 'agent');
+    expect(Object.hasOwn(ok(await a.conn.call('status')), 'sessionNames')).toBe(false); // the human class only
+    // a kernel restart folds the same kernel-signed rows: the name stays
+    await h.conn.close();
+    await r.d.shutdown('signal');
+    const d2 = await startDaemon({ home: r.home, idleMs: 60_000, kernelSigner: r.kernel, rootAuthority: r.root, clock: () => r.now.t });
+    cleanups.push(() => d2.shutdown('signal'));
+    const h2 = await connectGnomon({ socketPath: d2.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.creds.get('human')! });
+    cleanups.push(() => h2.conn.close());
+    expect((ok(await h2.conn.call('status')) as { sessionNames?: unknown }).sessionNames).toEqual([{ hsid: mine, name: 'Fix the build' }]);
+    // '' resets to the derived title, and that survives too
+    expect(ok(await h2.conn.call('log.append', { kind: 'request.session.rename', payload: { hsid: mine, name: '   ' } }))).toEqual({ hsid: mine, name: null, changed: true });
+    expect((ok(await h2.conn.call('status')) as { sessionNames?: unknown }).sessionNames).toEqual([]);
   }, 60_000);
 
   it('P8-D86/D87 request.mode.set: the human device tightens a repo with no presence (request row, then approval.mode.set), status.runModes shows it and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a mode', async () => {
