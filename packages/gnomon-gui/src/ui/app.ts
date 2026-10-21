@@ -15,7 +15,8 @@
  * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable, sanitizeDisplayText, validateSendWord, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
+import { isCardDecidable, sanitizeDisplayText, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
+import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
 import { ACK_TEXT, acked, attachSend, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
@@ -1277,14 +1278,19 @@ function syncVoicePolicy(): void {
 /** Choose a preset (pill menu, palette): Send word and Pieces ask for the one-time liability acknowledgement first. */
 async function chooseVoicePreset(p: typeof voicePreset, trusted: boolean): Promise<void> {
   if (!trusted) return;
-  const me = typeof (status as { principal?: unknown } | null)?.principal === 'string' ? ((status as { principal: string }).principal) : null;
-  let step = choosePreset(p, { acked: acked(localStorage, me), sendWord: sendWordOf(status) });
-  if (step === 'needs-ack') {
-    if (!me || !window.confirm(`${PRESET_LABELS[p]} is a liability mode.\n\n${ACK_TEXT}`)) return notice(`${PRESET_LABELS[p]} stays off: the acknowledgement is needed once`);
-    recordAck(localStorage, me);
-    step = choosePreset(p, { acked: true, sendWord: sendWordOf(status) });
-  }
-  if (step === 'needs-word' && !(await teachSendWord())) return;
+  const me = myPrincipal();
+  const step = choosePreset(p, { acked: acked(localStorage, me), sendWord: sendWordOf(status) });
+  if (step === 'needs-ack') return openAck(p);
+  if (step === 'needs-word') return openTeach(p);
+  applyVoicePreset(p);
+}
+
+function myPrincipal(): string | null {
+  const p = (status as { principal?: unknown } | null)?.principal;
+  return typeof p === 'string' ? p : null;
+}
+
+function applyVoicePreset(p: typeof voicePreset): void {
   voicePreset = p;
   localStorage.setItem(PRESET_KEY, p);
   syncVoicePolicy();
@@ -1292,25 +1298,106 @@ async function chooseVoicePreset(p: typeof voicePreset, trusted: boolean): Promi
   if (!$('voice-menu').hidden) paintVoiceMenu();
 }
 
-/** "Teach Gnomon your send word" (first step: pick and validate; the kernel stores it 0600). */
-async function teachSendWord(): Promise<boolean> {
-  if (!client) return false;
-  const raw = window.prompt('Teach Gnomon your send word: 1-3 words you would not say by accident (e.g. "over and out", "ship it"). Never an approval word.');
-  if (raw === null) return false;
-  const v = validateSendWord(raw);
-  if (!v.ok) {
-    notice(`not a usable send word (${v.reason}): 1-3 words, never an approval or command phrase`, true);
-    return false;
-  }
-  if (v.warn === 'common' && !window.confirm(`"${v.text}" is a very common word and may send by accident. Use it anyway?`)) return false;
+/* ── the liability acknowledgement (TD-2026-10-21-514: Send word and Pieces are liability modes) ── */
+let ackFor: typeof voicePreset | null = null;
+function openAck(p: typeof voicePreset): void {
+  closeVoiceMenu();
+  ackFor = p;
+  put($('ack-mode'), `${PRESET_LABELS[p]}: ${PRESET_NOTES[p]}`);
+  put($('ack-text'), ACK_TEXT);
+  const box = $<HTMLInputElement>('ack-agree');
+  box.checked = false;
+  ($('ack-go') as HTMLButtonElement).disabled = true;
+  $('ack-dialog').hidden = false;
+  box.focus();
+}
+function closeAck(): void {
+  $('ack-dialog').hidden = true;
+  ackFor = null;
+}
+function submitAck(trusted: boolean): void {
+  const p = ackFor;
+  const me = myPrincipal();
+  if (!trusted || !p || !me || !$<HTMLInputElement>('ack-agree').checked) return;
+  recordAck(localStorage, me);
+  closeAck();
+  void chooseVoicePreset(p, true);
+}
+
+/* ── "Teach Gnomon your send word" (guided: pick, validate, lead-in, 3 takes, test, done) ── */
+let teach: TeachState | null = null;
+let teachFor: typeof voicePreset | null = null;
+function teachOpen(): boolean {
+  return teach !== null && !$('sendword-dialog').hidden;
+}
+function openTeach(p: typeof voicePreset | null): void {
+  closeVoiceMenu();
+  teach = initialTeach();
+  teachFor = p;
+  const sug = $('sendword-suggestions');
+  clear(sug);
+  for (const w of TEACH_SUGGESTIONS) sug.appendChild(h(doc, 'button', { class: 'key quiet', type: 'button', 'data-sendword': w }, w) as unknown as Node);
+  $<HTMLInputElement>('sendword-custom').value = '';
+  $('sendword-dialog').hidden = false;
+  paintTeach();
+  $('sendword-custom').focus();
+}
+async function closeTeach(): Promise<void> {
+  $('sendword-dialog').hidden = true;
+  const was = teach;
+  teach = null;
+  teachFor = null;
+  // a trial word never outlives the dialog
+  if (client && was && was.step !== 'pick' && was.step !== 'done') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear' } }).catch(() => undefined);
+}
+function paintTeach(): void {
+  const s = teach;
+  if (!s) return;
+  const attached = voiceStatusOf(status).hsid !== null;
+  put($('sendword-line'), !attached && s.step !== 'pick' && s.step !== 'confirm-common' && s.step !== 'done' ? 'Attach voice to a session first (the takes are heard through it).' : teachLine(s));
+  $('sendword-pick').hidden = s.step !== 'pick';
+  put($('sendword-heard'), s.heard === null ? '' : `I heard: “${s.heard}”`);
+  put($('sendword-hint'), s.hint ?? (s.step === 'takes' || s.step === 'test' ? `${s.takes.length} of ${TAKES_NEEDED} takes${s.variants.length ? ` · also heard as ${s.variants.map((v) => `“${v}”`).join(', ')}` : ''}` : ''));
+  const go = $<HTMLButtonElement>('sendword-go');
+  go.hidden = !(s.step === 'pick' || s.step === 'confirm-common' || s.step === 'done');
+  put(go, s.step === 'done' ? 'Save' : s.step === 'confirm-common' ? 'Use it' : 'Continue');
+  $('sendword-no').hidden = s.step !== 'confirm-common';
+}
+async function teachStep(e: TeachEvent): Promise<void> {
+  if (!teach) return;
+  const prev = teach;
+  teach = reduceTeach(teach, e);
+  // entering the lead-in (or each heard take): the kernel holds the word as a trial so the short takes are attributed
+  if (client && teach.step !== 'pick' && teach.step !== 'confirm-common' && teach.step !== 'done' && (prev.step !== teach.step || e.type === 'heard'))
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word: teach.word, trial: true } }).catch((err: unknown) => {
+      if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the voice app could not be told the word' };
+    });
+  paintTeach();
+}
+async function submitTeach(trusted: boolean): Promise<void> {
+  if (!trusted || !teach || !client) return;
+  if (teach.step === 'pick') return teachStep({ type: 'pick', text: $<HTMLInputElement>('sendword-custom').value });
+  if (teach.step === 'confirm-common') return teachStep({ type: 'confirmCommon', yes: true });
+  const commit = teachCommit(teach);
+  if (!commit) return;
   try {
-    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word: v.text } });
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: commit });
     await refreshStatus();
-    return true;
+    const p = teachFor;
+    $('sendword-dialog').hidden = true;
+    teach = null;
+    teachFor = null;
+    if (p) void chooseVoicePreset(p, true);
+    else notice('send word saved');
   } catch (err) {
-    notice(`the send word was not saved: ${err instanceof Error ? err.message : String(err)}`, true);
-    return false;
+    if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the send word was not saved' };
+    paintTeach();
   }
+}
+/** While the dialog listens, a voice turn is a take (never a draft): its text, or null when it was withheld. */
+function teachHeard(p: Record<string, unknown> | null): void {
+  const text = p && p.forwardable === true && typeof p.text === 'string' && p.text.trim() ? p.text : null;
+  void teachStep({ type: 'heard', text });
 }
 
 /** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
@@ -1319,6 +1406,11 @@ function dictationRow(r: Row): void {
   const now = Date.now();
   if (r.kind === 'voice.turn.user') {
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
+    // the send-word dialog is listening: this turn is a take, never a draft
+    if (teachOpen() && r.seq > dict.lastSeq) {
+      dict = { ...dict, lastSeq: r.seq };
+      return teachHeard(p);
+    }
     dispatchDictation({ type: 'turnRow', seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, now });
   }
   if (dict.hsid && r.session === dict.hsid) dispatchDictation({ type: 'busy', busy: store.sessions.get(dict.hsid)?.state === 'streaming', now });
@@ -1435,6 +1527,7 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  paintTeach();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
@@ -1794,6 +1887,8 @@ function paintVoiceMenu(): void {
     for (const p of VOICE_PRESET_IDS)
       seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
     menu.appendChild(seg);
+    const sw = sendWordOf(status);
+    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-sendword': '1' }, h(doc, 'span', { class: 'mode-name' }, sw ? 'Change your send word' : 'Teach Gnomon your send word'), h(doc, 'span', { class: 'mode-note' }, sw ? `now “${sw.text}”` : 'a guided step: say it a few times')) as unknown as Node);
   }
   menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃\` mic on/off · ⌃⌥H holds the dictation · ⌃⌥Return sends`) as unknown as Node);
 }
@@ -2288,12 +2383,30 @@ function wire(): void {
     void setMode(b.dataset.mode as RunMode, defaultScope(currentMode()), e.isTrusted);
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
+  // TD-2026-10-21-514: the guided send-word dialog and the liability acknowledgement (in-app dialogs, never prompt/confirm)
+  $('sendword-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitTeach(e.isTrusted);
+  });
+  $('sendword-cancel').addEventListener('click', () => void closeTeach());
+  $('sendword-no').addEventListener('click', () => void teachStep({ type: 'confirmCommon', yes: false }));
+  $('sendword-suggestions').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-sendword]') as HTMLElement | null;
+    if (b && e.isTrusted) void teachStep({ type: 'pick', text: b.dataset.sendword! });
+  });
+  $('ack-agree').addEventListener('change', () => (($('ack-go') as HTMLButtonElement).disabled = !$<HTMLInputElement>('ack-agree').checked));
+  $('ack-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitAck(e.isTrusted);
+  });
+  $('ack-cancel').addEventListener('click', () => closeAck());
   $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
     const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
     if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
     const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
     if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
+    if ((e.target as HTMLElement).closest('[data-voice-sendword]') && e.isTrusted) return openTeach(null);
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
     if (vc) {
       const id = vc.dataset.voiceClient!;
@@ -2391,6 +2504,10 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
+    } else if (e.key === 'Escape' && !$('ack-dialog').hidden) {
+      closeAck();
+    } else if (e.key === 'Escape' && !$('sendword-dialog').hidden) {
+      void closeTeach();
     } else if (e.key === 'Escape' && dict.grace) {
       e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
       dispatchDictation({ type: 'graceCancel', now: Date.now() });

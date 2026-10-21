@@ -56,6 +56,22 @@ export function writeSendWord(home: string, word: { text: string; variants?: rea
   return c;
 }
 
+export const SEND_WORD_TRIAL_FILE = 'send-word-trial.json';
+/**
+ * The word being taught (the guided dialog's takes): written 0600 with an absolute expiry so the voice client's
+ * adjacency check can attribute the short takes; never read as the held word, cleared on commit or clear.
+ */
+export function writeTrialWord(home: string, word: { text: string } | null, until = 0): void {
+  const file = path.join(voiceDir(home), SEND_WORD_TRIAL_FILE);
+  if (word === null) return void fs.rmSync(file, { force: true });
+  const c = canonicalSendWord({ text: word.text, variants: [] });
+  if (!c) throw new TypeError('the send word is 1-3 words, never an approval or command phrase');
+  fs.mkdirSync(voiceDir(home), { recursive: true, mode: 0o700 });
+  const tmp = path.join(voiceDir(home), `.${SEND_WORD_TRIAL_FILE}.${process.pid}.${Date.now()}.tmp`);
+  fs.writeFileSync(tmp, `${JSON.stringify({ format: SEND_WORD_FORMAT, text: c.text, variants: [], until })}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, file);
+}
+
 /** A stat-keyed reader: re-reads only when the file's mtime/size/ino changes (absent ⇒ null). */
 export function cachedSendWordSource(home: string): () => SendWord | null {
   let key = '';
@@ -77,7 +93,7 @@ export function cachedSendWordSource(home: string): () => SendWord | null {
 }
 
 /** request.voice.sendword{op:'start', word, variants?} | {op:'clear'} — the payload's strict shape (TypeError ⇒ BAD_REQUEST). */
-export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[] } | { op: 'clear' } {
+export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[]; trial: boolean } | { op: 'clear' } {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError("request.voice.sendword takes {op:'start', word, variants?} | {op:'clear'}");
   const p = payload as Record<string, unknown>;
   if (p.op === 'clear') {
@@ -85,8 +101,9 @@ export function parseSendWordRequest(payload: unknown): { op: 'start'; text: str
     return { op: 'clear' };
   }
   if (p.op !== 'start') throw new TypeError("op is 'start' or 'clear'");
-  if (Object.keys(p).some((k) => k !== 'op' && k !== 'word' && k !== 'variants')) throw new TypeError("{op:'start'} takes word and variants?");
+  if (Object.keys(p).some((k) => k !== 'op' && k !== 'word' && k !== 'variants' && k !== 'trial')) throw new TypeError("{op:'start'} takes word, variants? and trial?");
+  if (p.trial !== undefined && typeof p.trial !== 'boolean') throw new TypeError('trial is a boolean');
   if (typeof p.word !== 'string') throw new TypeError('word is a string');
   if (p.variants !== undefined && (!Array.isArray(p.variants) || !p.variants.every((v) => typeof v === 'string'))) throw new TypeError('variants is a string array');
-  return { op: 'start', text: p.word, variants: (p.variants as string[] | undefined) ?? [] };
+  return { op: 'start', text: p.word, variants: (p.variants as string[] | undefined) ?? [], trial: p.trial === true };
 }

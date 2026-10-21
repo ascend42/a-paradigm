@@ -965,3 +965,6 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .field[aria-invalid="true"] { border-color: var(--fail-edge); }
 .workshop-install-result { margin-left: 8px; }
 .key[aria-busy="true"] { cursor: progress; }
+
+/* TD-2026-10-21-514: the send-word suggestions */
+.sendword-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }

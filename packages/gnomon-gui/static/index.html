@@ -83,6 +83,28 @@
 <div id="settings-body" class="settings-body"></div>
 </div>
 </div>
+<div id="sendword-dialog" class="overlay" hidden>
+<form id="sendword-form" class="sheet-card enrol-card" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="sendword-title">
+<p id="sendword-title" class="title">Teach Gnomon your send word</p>
+<p id="sendword-line" class="meta" role="status" aria-live="polite"></p>
+<div id="sendword-pick">
+<div id="sendword-suggestions" class="sendword-suggestions" role="group" aria-label="suggestions"></div>
+<label class="meta">or your own (1 to 3 words) <input id="sendword-custom" class="field" type="text" maxlength="32" spellcheck="false"></label>
+</div>
+<p id="sendword-heard" class="enrol-phrase" aria-live="polite"></p>
+<p id="sendword-hint" class="meta"></p>
+<div class="composer-foot"><button id="sendword-cancel" class="key" type="button">cancel</button><button id="sendword-no" class="key" type="button" hidden>pick another</button><button id="sendword-go" class="key" type="submit">Continue</button></div>
+</form>
+</div>
+<div id="ack-dialog" class="overlay" hidden>
+<form id="ack-form" class="sheet-card enrol-card" role="dialog" aria-modal="true" aria-labelledby="ack-title">
+<p id="ack-title" class="title">Turn on a voice send mode</p>
+<p id="ack-mode" class="meta"></p>
+<p id="ack-text" class="enrol-consent"></p>
+<label class="meta enrol-agree"><input id="ack-agree" type="checkbox"> I understand</label>
+<div class="composer-foot"><button id="ack-cancel" class="key" type="button">cancel</button><button id="ack-go" class="key" type="submit" disabled>Turn it on</button></div>
+</form>
+</div>
 <div id="enrol-dialog" class="overlay" hidden>
 <form id="enrol-form" class="sheet-card enrol-card" autocomplete="off" aria-label="Teach Gnomon your voice">
 <p class="title">Teach Gnomon your voice</p>

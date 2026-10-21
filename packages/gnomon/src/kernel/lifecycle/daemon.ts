@@ -132,7 +132,7 @@ import { StagedCardPickup } from '../modhost/control.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
-import { VoiceControl } from '../voice/voice-control.js';
+import { SEND_WORD_TRIAL_MS, VoiceControl } from '../voice/voice-control.js';
 import { defaultBuildStampPath, describeUpdate, readBuildStamp, writeKernelBuild, type BuildStamp } from './build-stamp.js';
 import { UpdateWatch } from './update-watch.js';
 import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
@@ -141,7 +141,7 @@ import { readEnrolled } from '../voice/enrolment.js';
 import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
 import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
-import { cachedSendWordSource, parseSendWordRequest, writeSendWord } from '../voice/send-word-store.js';
+import { cachedSendWordSource, parseSendWordRequest, writeSendWord, writeTrialWord } from '../voice/send-word-store.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
@@ -1220,6 +1220,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       // TD-2026-10-21-514: the human sets or clears the held send word (persisted 0600; the kernel reads it back)
       sendWord: async (p: unknown) => {
         const r = parseSendWordRequest(p);
+        if (r.op === 'start' && r.trial) {
+          // the guided dialog's takes: held for adjacency only (memory + a 0600 file the voice client reads)
+          const t = voice.setTrialWord({ text: r.text, variants: [] });
+          writeTrialWord(home, { text: r.text }, Date.now() + SEND_WORD_TRIAL_MS);
+          return { trial: t ? { text: t.text } : null };
+        }
+        voice.setTrialWord(null);
+        writeTrialWord(home, null);
         const w = writeSendWord(home, r.op === 'clear' ? null : { text: r.text, variants: r.variants });
         return { sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
       },

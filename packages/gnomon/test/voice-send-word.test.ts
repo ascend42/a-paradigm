@@ -142,6 +142,19 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
   });
 
+  it('a word being taught (trial) is accepted by adjacency but is never a send word, and expires', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    await r.turn('I am teaching my send word now');
+    r.v.setTrialWord({ text: 'ship it' }, 10_000);
+    const take = await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t });
+    expect(take.forwardable).toBe(true);
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ cause: 'not-send-word' });
+    r.clock.t += 11_000;
+    expect(await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+  });
+
   it('the held word is shown to the human class only', async () => {
     const r = rig();
     const st = r.v.status();
@@ -239,7 +252,8 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
   });
   it('the request shape is strict', () => {
     expect(parseSendWordRequest({ op: 'clear' })).toEqual({ op: 'clear' });
-    expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [] });
+    expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [], trial: false });
+    expect(parseSendWordRequest({ op: 'start', word: 'over', trial: true })).toMatchObject({ trial: true });
     for (const bad of [null, { op: 'set' }, { op: 'clear', word: 'x' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
   });
 });

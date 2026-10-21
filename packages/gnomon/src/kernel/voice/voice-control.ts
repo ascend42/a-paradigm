@@ -113,6 +113,8 @@ export const VOICE_MODES_V1 = ['ptt', 'conversation'] as const;
 export const VOICE_SEND_CEILINGS = ['key', 'word', 'pieces'] as const;
 export type VoiceSendCeiling = (typeof VOICE_SEND_CEILINGS)[number];
 const sendRank = (c: VoiceSendCeiling): number => VOICE_SEND_CEILINGS.indexOf(c);
+/** a send word being taught is held for adjacency this long (the guided dialog renews it per take) */
+export const SEND_WORD_TRIAL_MS = 2 * 60_000;
 /** at most this many turns per piece claim */
 export const PIECE_CLAIM_MAX_TURNS = 64;
 export type VoiceMode = (typeof VOICE_MODES_V1)[number];
@@ -774,7 +776,8 @@ export class VoiceControl {
   #adjacentOk(p: Record<string, unknown>, receivedAt: number): boolean {
     const a = this.#attachment;
     if (!a || !num(p.t0) || !num(p.t1) || p.t1 < p.t0 || p.t1 - p.t0 >= SEND_WORD_SHORT_MS) return false;
-    if (typeof p.text !== 'string' || !isSendWord(p.text, this.#word())) return false;
+    // the held word, or the word being taught ("Teach Gnomon your send word": its takes are short words too)
+    if (typeof p.text !== 'string' || !(isSendWord(p.text, this.#word()) || isSendWord(p.text, this.#trialWord()))) return false;
     const start = receivedAt - (p.t1 - p.t0);
     for (const t of this.#userTurns.values()) {
       if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.attachment !== a.voiceSessionId || t.isWord) continue;
@@ -797,6 +800,23 @@ export class VoiceControl {
 
   sendWord(): SendWord | null {
     return this.#word();
+  }
+
+  /** TD-2026-10-21-514: the word being taught (adjacency only, never isWord, never a send), with its kernel-clock expiry */
+  #trial: { word: SendWord; until: number } | null = null;
+  setTrialWord(w: unknown, ttlMs = SEND_WORD_TRIAL_MS): SendWord | null {
+    if (w === null) {
+      this.#trial = null;
+      return null;
+    }
+    const c = canonicalSendWord(w);
+    if (!c) throw bad('the send word is 1-3 words, never an approval or command phrase (validateSendWord)');
+    this.#trial = { word: c, until: this.#now() + ttlMs };
+    return c;
+  }
+  #trialWord(): SendWord | null {
+    if (this.#trial && this.#now() > this.#trial.until) this.#trial = null;
+    return this.#trial?.word ?? null;
   }
 
   /** the held word: the daemon's file source when wired (the CLI and the GUI land in one file), else setSendWord's */
