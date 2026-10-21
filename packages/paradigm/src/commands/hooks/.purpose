@@ -33,6 +33,22 @@ components:
     tags:
       - hooks
       - observability
+  hook-health-warning:
+    description: |
+      7.15.2 SessionStart hook (scripts/claude-code-session-start.sh, plugin
+      paradigm-session-start.sh, hooks.json SessionStart, timeout 10 s). One
+      awk pass over the #hook-monitor ring; for each hook killed (start with no
+      end older than timeout + 5 s, or a recorded SIGTERM) or over its budget
+      since the last warning it prints ONE line to stdout (added to the agent's
+      context), e.g. "Paradigm Stop hook timed out 11 time(s) since <date>;
+      enforcement did not run. Run `paradigm doctor`." Once per session
+      (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
+      ring to its cap. Always exits 0.
+    type: hook
+    file: scripts/claude-code-session-start.sh
+    tags:
+      - hooks
+      - observability
   stop-hook-timing:
     description: |
       7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
