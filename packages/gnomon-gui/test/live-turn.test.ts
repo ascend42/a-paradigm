@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hasLive, LiveTicker, liveSecs, liveText } from '../src/core/live-turn.js';
+import { changedBefore, hasLive, itemSig, LiveTicker, liveSecs, liveText } from '../src/core/live-turn.js';
 import { chatItems, foldActivity, type Row } from '../src/core/store.js';
 import { HeightIndex } from '../src/core/virtual.js';
 
@@ -185,5 +185,65 @@ describe('T-2026-10-21-007 the page wiring', () => {
     expect(app).not.toMatch(/setInterval\(\(\) => paintTranscript/);
     const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
     expect(css).toMatch(/\[data-motion="reduced"\] \.trow\.role-working \.spin \{ animation: none; \}/);
+  });
+});
+
+describe('review H1: a kept item that changed in place is repainted (not only the changed tail)', () => {
+  const keys = (xs: Array<{ key: string }>) => xs.map((x) => x.key);
+  const lcpOf = (a: Array<{ key: string }>, b: Array<{ key: string }>): number => {
+    let i = 0;
+    while (i < Math.min(a.length, b.length) && a[i]!.key === b[i]!.key) i++;
+    return i;
+  };
+  /** The page's repaint: the prefix stays mounted except the items changedBefore names; the tail is rebuilt. */
+  const repaint = (prev: ReturnType<typeof view>, next: ReturnType<typeof view>): string[] => {
+    const lcp = lcpOf(prev, next);
+    const stale = new Set(changedBefore(prev, next, lcp));
+    return next.map((it, i) => (i < lcp && !stale.has(i) ? itemSig(prev[i]!) : itemSig(it)));
+  };
+  it('tools → working → reply: the activity line keeps its key, is frozen and has no .live once the reply lands', () => {
+    const running = [
+      echo(1.5, '10:00:00', 'run it'),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      ev(3, '10:00:01', { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu', name: 'Bash', input: { command: 'ls' } }] } }, 'assistant'),
+      ev(4, '10:00:31', { type: 'tool_progress', tool_name: 'Bash', elapsed_time_seconds: 30 }, 'tool_progress'),
+    ];
+    const prev = view(running);
+    expect(prev.map((x) => x.role)).toEqual(['user', 'activity', 'working']);
+    expect(prev[1]!.live).toBeDefined();
+    const next = view([...running, ev(5, '10:02:06', say('Done.'), 'assistant')]);
+    expect(next.map((x) => x.role)).toEqual(['user', 'activity', 'assistant', 'working']);
+    expect(keys(next).slice(0, 2)).toEqual(keys(prev).slice(0, 2));
+    expect(next[1]!.live).toBeUndefined();
+    expect(next[1]!.text).toBe('10:00–10:02 · ran 1 command · 2m 6s of work');
+    // the activity line sits inside the kept prefix and is named for a remount
+    expect(lcpOf(prev, next)).toBe(2);
+    expect(changedBefore(prev, next, 2)).toEqual([1]);
+    expect(repaint(prev, next)).toEqual(next.map(itemSig));
+    // and its result: the working row goes, nothing stale is left
+    const done = view([...running, ev(5, '10:02:06', say('Done.'), 'assistant'), result(6, '10:02:07', 0.1, 3)]);
+    expect(repaint(next, done)).toEqual(done.map(itemSig));
+    expect(hasLive(done)).toBe(false);
+  });
+  it('a card decided while a turn runs: every changed item of the kept prefix repaints, the rest stays mounted', () => {
+    const base = [
+      echo(1.5, '10:00:00', 'edit it'),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      ev(3, '10:00:01', { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu', name: 'Edit', input: { file_path: '/a' } }] } }, 'assistant'),
+      row(4, 'approval.request', '10:00:02', { card: { cardId: 'card:1', kind: 'permission' } }),
+    ];
+    const prev = view(base);
+    const next = view([...base, row(5, 'approval.decide', '10:00:09', { cardId: 'card:1', decision: 'allow' })]);
+    expect(next.map((x) => x.text).filter((t) => t.startsWith('decided'))).toEqual(['decided · allow']);
+    expect(repaint(prev, next)).toEqual(next.map(itemSig));
+    // the reply then freezes the activity line above both cards
+    const replied = view([...base, row(5, 'approval.decide', '10:00:09', { cardId: 'card:1', decision: 'allow' }), ev(6, '10:00:20', say('Edited.'), 'assistant')]);
+    expect(changedBefore(next, replied, lcpOf(next, replied))).toContain(next.findIndex((x) => x.role === 'activity'));
+    expect(repaint(next, replied)).toEqual(replied.map(itemSig));
+  });
+  it('the page uses changedBefore in both repaint branches (no text-only check left in the append branch)', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    expect(app).toMatch(/const stale = new Set\(changedBefore\(items, next, lcp\)\);\n\s+for \(const \[i, el\] of mounted\)\n\s+if \(i >= lcp \|\| stale\.has\(i\)\)/);
+    expect(app).not.toMatch(/items\[i\]!\.text !== next\[i\]!\.text/);
   });
 });

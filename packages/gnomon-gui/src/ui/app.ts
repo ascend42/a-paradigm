@@ -30,7 +30,7 @@ import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
-import { hasLive, LiveTicker, liveText } from '../core/live-turn.js';
+import { changedBefore, hasLive, LiveTicker, liveText } from '../core/live-turn.js';
 import { mountStandingFeed } from './standing-feed.js';
 import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
@@ -455,26 +455,25 @@ function paintTranscript(remeasure = false): void {
   if (remeasure || (lcp === 0 && items.length > 0)) {
     unmountAll();
     heights = widths.restore(transcriptId(), width, next.length);
-  } else if (lcp < items.length) {
-    // the tail changed (a turn's result anchored under its turn, the working row moving down): keep the prefix
-    // mounted and measured, rebuild only from the first changed item
-    for (const [i, el] of mounted)
-      if (i >= lcp) {
-        el.remove();
-        mounted.delete(i);
-      }
-    heights.truncate(lcp);
-    heights.push(next.length - lcp);
-    appended = Math.max(0, next.length - items.length);
   } else {
-    appended = next.length - items.length;
-    if (appended > 0) heights.push(appended);
-    // an item that grew in place (the one 🔊 marker per reply folding its later sentences) is repainted
+    // review H1: a kept item that changed in place (the activity line frozen when the reply lands, a 🔊 marker
+    // folding its later sentences) is repainted in BOTH branches, so nothing before the changed tail stays stale
+    const stale = new Set(changedBefore(items, next, lcp));
     for (const [i, el] of mounted)
-      if (items[i] && next[i] && items[i]!.text !== next[i]!.text) {
+      if (i >= lcp || stale.has(i)) {
         el.remove();
         mounted.delete(i);
       }
+    if (lcp < items.length) {
+      // the tail changed (a turn's result anchored under its turn, the working row moving down): keep the prefix
+      // mounted and measured, rebuild only from the first changed item
+      heights.truncate(lcp);
+      heights.push(next.length - lcp);
+      appended = Math.max(0, next.length - items.length);
+    } else {
+      appended = next.length - items.length;
+      if (appended > 0) heights.push(appended);
+    }
   }
   items = next;
   hiddenRows = hidden;

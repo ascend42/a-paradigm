@@ -40,6 +40,26 @@ export function liveText(it: Pick<ChatItem, 'role' | 'live'>, now: number): stri
   return ` · running ${total}${t !== null ? ` · ${it.live.progress?.tool ?? 'tool'} ${durationText(t)}` : ''}`;
 }
 
+/**
+ * The rendered signature of a transcript item: everything itemEl paints from it (role, text, liveness, "took", the
+ * said-aloud line and the voice marks). A card's decided state is its text ("needs you" / "decided · …").
+ */
+export function itemSig(it: Pick<ChatItem, 'role' | 'text' | 'live' | 'said' | 'voice' | 'speaker'> & { took?: number }): string {
+  return JSON.stringify([it.role, it.text, it.live !== undefined, it.took ?? null, it.said ?? null, it.voice ?? null, it.speaker ?? null]);
+}
+
+/**
+ * Review H1: the indices before `upto` (the common key prefix the page keeps mounted) whose rendered signature
+ * changed. A kept item can still change in place: the activity line freezes when the reply lands (same key, live
+ * removed), a 🔊 marker folds its later sentences. The page remounts exactly these, in both repaint branches.
+ */
+export function changedBefore(prev: readonly Parameters<typeof itemSig>[0][], next: readonly Parameters<typeof itemSig>[0][], upto: number): number[] {
+  const out: number[] = [];
+  const n = Math.min(upto, prev.length, next.length);
+  for (let i = 0; i < n; i++) if (itemSig(prev[i]!) !== itemSig(next[i]!)) out.push(i);
+  return out;
+}
+
 /** Does this transcript have a running turn to tick? */
 export const hasLive = (items: readonly Pick<ChatItem, 'live'>[]): boolean => items.some((i) => i.live !== undefined);
 

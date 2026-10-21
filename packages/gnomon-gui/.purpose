@@ -426,7 +426,11 @@ components:
       while the focused transcript has a running turn, cleared when it ends; each tick rewrites only the mounted
       .live-clock spans). ui/app.ts paintTranscript keeps the common key prefix mounted and measured and
       rebuilds only the changed tail (HeightIndex.truncate), so the working row moving down costs no full
-      remount. CSS .trow.role-working (spinner, still under reduced motion) and .role-activity.live.
+      remount. Review H1: in BOTH repaint branches the kept prefix is diffed by rendered signature
+      (core/live-turn.ts itemSig: role, text, live, took, said, voice marks; a card's decided state is its
+      text) and changedBefore's indices are remounted too, so an activity line frozen by the reply (same key,
+      live removed) never keeps a stale .live class or a frozen "running" span. CSS .trow.role-working
+      (spinner, still under reduced motion) and .role-activity.live.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
       column (header, notices, desk grows, status line); the desk is a
