@@ -49,7 +49,7 @@
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
 import { kernelSpeakable, sentences } from './speakable.js';
-import { SpeakerVerifier, type VoicePrint } from './speaker.js';
+import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
 import { capPartial, LiveAgreement, PARTIAL_ANCHOR_MARGIN_MS, PARTIAL_FULL_WINDOW_MS, PARTIAL_GATE_MS, PARTIAL_MAX_SEGMENT_MS, PARTIAL_MAX_WINDOW_MS, PARTIAL_PREROLL_MS, PARTIAL_TAIL_WINDOW_MS, PARTIAL_TICK_MS, type PartialText } from './partials.js';
 import type { AppendResult, AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
@@ -1004,7 +1004,10 @@ export class VoiceClient {
     // composer delivery: the client never forwards; the kernel stamps forwardable (TD-2026-10-20-262). TD-2026-10-20-125:
     // an ambient turn is never sent by the client, whatever the delivery (it fills the composer; a human sends it)
     const direct = this.#delivery === 'direct' && mode === 'ptt';
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }) };
+    // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
+    const gatedMs = gatedSpeechMsOf(who.speechMs);
+    const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...calib };
     let verdict: AppendResult;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
@@ -1012,7 +1015,7 @@ export class VoiceClient {
       this.#refused(err, 'log.append');
       return end('dropped', 'refused', captureRefusalOf(toRefusal(err).reason));
     }
-    this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode });
+    this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode, ...calib });
     if (!enrolled) {
       this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');
@@ -1021,7 +1024,9 @@ export class VoiceClient {
     // as dropped with the kernel's reason, never as captured: the GUI says why instead of "Heard, not confirmed".
     if (verdict?.refused !== undefined) {
       this.#flow.info('turn refused at receipt', { turnId, refused: verdict.refused, ...(verdict.refusedCause ? { cause: verdict.refusedCause } : {}) });
-      return end('dropped', verdict.refused === 'voice-speaker' ? 'not-enrolled' : verdict.refused === 'voice-target' ? 'not-attached' : 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
+      // voice-speaker is the not-enrolled drop (its own words); every other verdict rides reason 'refused' + refusal,
+      // so the kernel's local-drop tally never counts a kernel refusal as a client-local drop
+      return end('dropped', verdict.refused === 'voice-speaker' ? 'not-enrolled' : 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
     }
     if (!direct) {
       this.#flow.info('turn dictated (composer)', { turnId });

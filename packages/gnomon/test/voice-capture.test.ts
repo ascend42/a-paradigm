@@ -180,6 +180,37 @@ describe('#gnomon-voice capture: VoiceReports', () => {
     expect(aec).toMatchObject({ forwardable: false, refused: 'voice-off', refusedCause: 'aec' });
   });
 
+  it('calibration: client-local drops are tallied by reason (never a refused or contradicted one) and stamped on the next voice.turn.user', async () => {
+    const rep = new VoiceReports(() => 1_000_000);
+    rep.report({ capture: { state: 'dropped', segId: 'a1', reason: 'too-short' } }, 'conn:V');
+    rep.report({ capture: { state: 'dropped', segId: 'a2', reason: 'too-short' } }, 'conn:V');
+    rep.report({ capture: { state: 'dropped', segId: 'a3', reason: 'echo' } }, 'conn:V');
+    rep.report({ capture: { state: 'dropped', segId: 'a4', reason: 'refused', refusal: 'voice-playback' } }, 'conn:V');
+    rep.report({ capture: { state: 'dropped', segId: 'a5', reason: 'not-enrolled' } }, 'conn:V');
+    expect(rep.takeLocalDrops()).toEqual({ echo: 1, 'too-short': 2 });
+    expect(rep.takeLocalDrops()).toBeUndefined();
+    const { VoiceControl } = await import('../src/kernel/voice/voice-control.js');
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const SPK = 'spk:abcdefgh/founder';
+    let drops: Record<string, number> | undefined = { 'no-words': 3 };
+    const v = new VoiceControl({
+      sessions: { ownerOf: () => 'p:abcdefgh/founder', send: async () => ({ turn: 't' }), stop: async () => ({ signals: [], exited: false }) },
+      append: async (row) => (rows.push({ kind: row.kind, payload: row.payload as Record<string, unknown> }), { seq: rows.length, hash: 'h' }),
+      enrolled: () => new Set([SPK]),
+      voiceConnections: () => ['conn:V'],
+      now: () => 10_000,
+      localDrops: () => { const d = drops; drops = undefined; return d; },
+    });
+    const vc = { connId: 'conn:V', principal: 'p:abcdefgh/voice' };
+    // not attached: refused hash-only, but the calibration fields and the tally are kept
+    await v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: '1', speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: 9_000, t1: 10_000, text: 'secret', mode: 'ptt', speakerScore: '0.65-0.8', gatedSpeechMs: 1230 } });
+    expect(rows.at(-1)!.payload).toMatchObject({ refusedReason: 'voice-target', speakerScore: '0.65-0.8', gatedSpeechMs: 1230, localDrops: { 'no-words': 3 } });
+    expect(JSON.stringify(rows.at(-1)!.payload)).not.toContain('secret');
+    for (const bad of [{ localDrops: { echo: 1 } }, { speakerScore: 0.71 }, { gatedSpeechMs: 1234 }, { gatedSpeechMs: -10 }]) {
+      await expect(v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: String(Math.random()).slice(2, 12), speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: 9_000, t1: 10_000, text: 'x', mode: 'ptt', ...bad } }), JSON.stringify(bad)).rejects.toThrow();
+    }
+  });
+
   it('Aegis L3: the capture slot remembers its connection and clears when that connection closes', () => {
     const rep = new VoiceReports(() => 1_000_000);
     rep.report({ capture: { state: 'hearing', segId: 's1' } }, 'conn:V');

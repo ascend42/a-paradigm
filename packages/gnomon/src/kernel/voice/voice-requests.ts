@@ -101,6 +101,13 @@ export interface CaptureReport {
   clientReason?: CaptureDropReason;
   at: string;
 }
+/**
+ * Calibration (voice drops fix): the client-local drop reasons tallied for localDrops (mirrors voice-control.ts
+ * VOICE_LOCAL_DROP_REASONS; not-enrolled and refused are already on the log as refused voice.turn.user rows)
+ */
+const LOCAL_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'barge-in'] as const;
+/** one reason's count never grows past this between two rows (a stuck client cannot inflate a row) */
+const LOCAL_DROP_CAP = 10_000;
 /** Aegis M1: a kernel acceptance is matched to a terminal capture report within this window */
 export const VOICE_CAPTURE_ACCEPT_WINDOW_MS = 5_000;
 /** status.voice.capture goes stale this fast: a crashed client never leaves "hearing" lit (the client re-reports ≤ 1 s) */
@@ -201,6 +208,8 @@ export class VoiceReports {
   #accepted: Array<{ connId: string; kind: 'turn' | 'send'; at: number }> = [];
   /** the human's ⏹ Stop speaking presses (request.voice.client{op:'stop-speaking'}); the client acts on a change */
   #stopSpeakingSeq = 0;
+  /** calibration: client-local drops by reason since the last takeLocalDrops (counts only) */
+  #localDrops = new Map<string, number>();
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
   #dictationConn: string | undefined;
   readonly #now: () => number;
@@ -279,6 +288,10 @@ export class VoiceReports {
     if (capture) {
       this.#capture = capture;
       this.#captureConn = connId;
+      // calibration: a client-local drop (no kernel refusal, not contradicted by an acceptance) is tallied by reason
+      if (capture.state === 'dropped' && capture.reason && !capture.refusal && (LOCAL_DROP_REASONS as readonly string[]).includes(capture.reason)) {
+        this.#localDrops.set(capture.reason, Math.min(LOCAL_DROP_CAP, (this.#localDrops.get(capture.reason) ?? 0) + 1));
+      }
     }
     if (playback) this.#playback = playback;
     if (enrolment) this.#enrolment = enrolment;
@@ -310,6 +323,14 @@ export class VoiceReports {
       this.#prints = null;
       this.#printsConn = undefined;
     }
+  }
+
+  /** Calibration: the client-local drop counts since the last take, reset (undefined when none). Counts only. */
+  takeLocalDrops(): Record<string, number> | undefined {
+    if (this.#localDrops.size === 0) return undefined;
+    const out = Object.fromEntries([...this.#localDrops.entries()].sort(([a], [b]) => (a < b ? -1 : 1)));
+    this.#localDrops.clear();
+    return out;
   }
 
   /** Take (consume) this connection's freshest unmatched acceptance of `kinds` inside the window. */
