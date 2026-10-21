@@ -935,7 +935,16 @@ components:
       The popover (role menu, rungs menuitemradio, arrows/Home/End, Esc back
       to the pill) holds the ladder only plus a foot line (mic key · listen)
       and "voice settings…"; the old Off/Push-to-talk/Ambient list, delay
-      buttons and Send preset buttons are gone.
+      buttons and Send preset buttons are gone. Luna finish-review: Pieces
+      reads "set up · Touch ID" while not ready; when the focused session is
+      not the attached one the ladder (and its aria name) says "applies to
+      <B> · voice is on <A>" (ladderTargetLine / ladderAria); a crash's fact is
+      just "voice crashed", its cause in the title and aria name
+      (crashCauseOf); the risk row says when it was acknowledged; the mic dot
+      and meter use the --live token (an alias of --stamp's value); the pill
+      meter shows only while capture is `hearing` (capture.ts meterShownOf);
+      night selected segments are [bracketed] with the glow; the tall-view
+      key has a pressed state.
     path: src/core/voice-ladder.ts
     type: module
     tags: [gnomon, gui, voice]
@@ -956,7 +965,13 @@ components:
       waiting Pieces turns on from here). ui/voice-settings.ts builds with
       render.ts h() and routes every trusted press through one act callback;
       the old sendword / ack / enrol dialogs are removed. The trial never
-      outlives the row or the sheet.
+      outlives the row or the sheet. The risk check is the render's sentence
+      naming the word (voice-presets riskSentence; Pieces names the pause)
+      with the ACK_TEXT box; once this user acknowledged it shows
+      "acknowledged · <date>" (recordAck keeps the date, ackedAt) instead of a
+      pre-ticked box. The recommended send words skip the common-word
+      warning. While open, Tab is trapped inside the aria-modal drawer
+      (trapNext) and focus returns on close.
     path: src/ui/voice-settings.ts
     type: module
     tags: [gnomon, gui, voice, settings]
@@ -987,10 +1002,13 @@ components:
       and settingsModel (Appearance, Layout, Voice, Permissions, About). Every
       control names an existing GUI command in SETTINGS_RUNS (theme, motion,
       layout presets, pane toggles, workshop placement, mode.repo.*, voice app
-      start/stop, enrol, dictation delay) or the standing Revoke
-      (core/standing.ts revokeRequest); no new kernel verb. Kernel-owned values
-      (mode ceiling, unlock and bounds, connection, bundle pin, voice hotkeys,
-      the always-shown regions) are read-only rows with a how-to-change line,
+      start/stop, voice.settings.open) or the standing Revoke
+      (core/standing.ts revokeRequest); no new kernel verb. The Voice section
+      only starts/stops the voice app, links the Voice settings sheet and
+      reads out the rung in force (RUNG_NAME); everything voice configures
+      lives in #gui-voice-settings. Kernel-owned values
+      (mode ceiling, unlock and bounds, connection, bundle pin, the voice
+      rung, the always-shown regions) are read-only rows with a how-to-change line,
       never a terminal-only path. ui/settings-sheet.ts paints with render.ts
       h() (text nodes, no inline style) and acts on trusted clicks only
       (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are
