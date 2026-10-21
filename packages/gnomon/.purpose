@@ -2218,7 +2218,11 @@ components:
       evaluation marks; mutes stay, L7), since a resumed session restarts
       its turn ids at /1. Review R4: the turn.result fallback writes no row
       for an errored or interrupted turn (isError, or a subtype other than
-      success). Pause
+      success). Review R1: each outstanding turn is a record evaluated at most
+      once; a reply's end is attributed to the oldest outstanding turn not
+      yet evaluated (an interleaved stream no longer loses the next turn's
+      offer); "others" counts only outstanding turns still streaming (not yet
+      evaluated); turn.result keeps the text of a newer turn's message. Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by

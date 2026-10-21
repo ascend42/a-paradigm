@@ -132,17 +132,23 @@ interface OfferState {
   watchTool: string[] | null;
 }
 
+/** review R1: one outstanding turn, evaluated at most once (at its reply's end, or at turn.result). */
+interface TurnRec {
+  id: string;
+  evaluated: boolean;
+}
+
 interface SessionState {
   /** the session exited; its mutes stay until the state is evicted (L7) */
   exited: boolean;
-  /** outstanding turn ids, oldest first (turn.result closes the head) */
-  turns: string[];
+  /** outstanding turns, oldest first (turn.result{turn} closes up to the one it names; FIFO without it) */
+  turns: TurnRec[];
   /** the text blocks of the current main-chain assistant message */
   texts: string[];
   /** that message's id (a new id starts a new message) */
   msgId: string | null;
-  /** the turn id already evaluated (at its end), so turn.result never evaluates it again */
-  evaluated: string | null;
+  /** review R1: the turn the current message belongs to (turn.result keeps the text of a newer turn's message) */
+  msgTurn: string | null;
   muted: Set<string>;
   stopped: boolean;
   latest: string | null;
@@ -219,7 +225,7 @@ export class OfferRouter {
     let s = this.#sessions.get(hsid);
     if (!s) {
       if (this.#sessions.size >= MAX_SESSIONS) this.#sessions.delete(this.#sessions.keys().next().value!);
-      s = { exited: false, turns: [], texts: [], msgId: null, evaluated: null, muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      s = { exited: false, turns: [], texts: [], msgId: null, msgTurn: null, muted: new Set(), stopped: false, latest: null, calls: new Map() };
       this.#sessions.set(hsid, s);
     } else {
       // LRU: a touched session moves to the back of the eviction order
@@ -323,14 +329,14 @@ export class OfferRouter {
         s.turns = [];
         s.texts = [];
         s.msgId = null;
-        s.evaluated = null;
+        s.msgTurn = null;
         return [];
       }
     }
     if (!hsid) return [];
     const s = this.#s(hsid);
     if (e.kind === 'turn.sent') {
-      if (typeof p.turn === 'string') s.turns.push(p.turn);
+      if (typeof p.turn === 'string') s.turns.push({ id: p.turn, evaluated: false });
       s.latest = null; // L1: a new turn retires the shown offer (the kernel is as strict as the GUI)
       return [];
     }
@@ -343,33 +349,58 @@ export class OfferRouter {
         // a new main-chain message: only the FINAL message of the turn is the reply
         s.texts = [];
         s.msgId = c.msgId;
+        s.msgTurn = this.#streamTurn(s)?.id ?? null;
       }
       if (c.text !== null && s.texts.reduce((n, t) => n + t.length, 0) + c.text.length <= MAX_TURN_TEXT) s.texts.push(c.text);
-      // T-2026-10-21-006: the reply ended (end_turn, not tool_use) ⇒ evaluate now, once, for the oldest outstanding turn
-      const head = s.turns[0];
-      if (c.stop === 'end_turn' && head !== undefined && s.evaluated !== head) {
-        s.evaluated = head;
-        const row = this.#offerFor(hsid, s.texts.join('\n\n'), head, s.turns.length - 1);
+      // T-2026-10-21-006: the reply ended (end_turn, not tool_use) ⇒ evaluate now, once, for the turn it belongs to
+      if (c.stop === 'end_turn') {
+        const row = this.#evaluate(hsid, s, s.msgTurn ?? this.#streamTurn(s)?.id ?? null);
         if (row) out.push(row);
       }
       return out;
     }
     // turn.result{turn} (review M2) names the latest turn it closes: every outstanding turn up to it closes (a queued
     // message folded into the running turn); a row without it (older logs) closes the oldest one (FIFO)
-    const at = typeof p.turn === 'string' ? s.turns.indexOf(p.turn) : -1;
+    const at = typeof p.turn === 'string' ? s.turns.findIndex((t) => t.id === p.turn) : -1;
     const closed = s.turns.splice(0, at >= 0 ? at + 1 : Math.min(1, s.turns.length));
-    const replyTurnId = closed[closed.length - 1] ?? null;
-    const reply = s.texts.join('\n\n');
-    const done = replyTurnId !== null && closed.some((t) => s.evaluated === t);
-    s.texts = [];
-    s.msgId = null;
-    s.evaluated = null;
-    if (replyTurnId === null || done) return [];
+    const last = closed[closed.length - 1];
+    // review R1: the current message belongs to a closed turn (or to none): its text is this reply's; a NEWER turn's
+    // message has started: its text stays for that turn
+    const mine = s.msgTurn === null || closed.some((t) => t.id === s.msgTurn);
+    const reply = mine ? s.texts.join('\n\n') : '';
+    if (mine) {
+      s.texts = [];
+      s.msgId = null;
+      s.msgTurn = null;
+    }
+    if (!last || closed.some((t) => t.evaluated)) return [];
     // review R4: an errored or interrupted turn (isError, or a subtype other than success) offers nothing, writes no row
     if (p.isError === true || (typeof p.subtype === 'string' && p.subtype !== 'success')) return [];
     // fallback: the turn's end was not seen (no message_delta end_turn); evaluated here, with today's streaming rule
-    const row = this.#offerFor(hsid, reply, replyTurnId, s.turns.length);
+    last.evaluated = true;
+    const row = this.#offerFor(hsid, reply, last.id, this.#streaming(s, last));
     return row ? [row] : [];
+  }
+
+  /**
+   * review R1: the turn the stream is in: the oldest outstanding turn not yet evaluated (an interleaved stream can end
+   * the next turn's reply before the previous turn's turn.result), else the oldest outstanding.
+   */
+  #streamTurn(s: SessionState): TurnRec | undefined {
+    return s.turns.find((t) => !t.evaluated) ?? s.turns[0];
+  }
+
+  /** The outstanding turns other than `rec` still streaming (their reply has not ended): the budget's "others". */
+  #streaming(s: SessionState, rec: TurnRec): number {
+    return s.turns.filter((t) => t !== rec && !t.evaluated).length;
+  }
+
+  /** Evaluate one turn's reply, once (each turn is evaluated exactly once). */
+  #evaluate(hsid: string, s: SessionState, turn: string | null): RouterRow | null {
+    const rec = turn === null ? undefined : s.turns.find((t) => t.id === turn);
+    if (!rec || rec.evaluated) return null;
+    rec.evaluated = true;
+    return this.#offerFor(hsid, s.texts.join('\n\n'), rec.id, this.#streaming(s, rec));
   }
 
   /** The handoff tool's full names on the mod's OWN servers added to THIS session (serverNameOf; H1b). */

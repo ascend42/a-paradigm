@@ -539,3 +539,49 @@ describe('#offer-router: session boundaries and errored turns (review R3, R4)', 
     }
   });
 });
+
+describe('#offer-router: an interleaved stream (review R1)', () => {
+  const ev = (line: string): CommittedRow => ({ kind: 'turn.event', session: HSID, payload: { hsid: HSID, line } });
+  const sent = (k: number): CommittedRow => ({ kind: 'turn.sent', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}` } });
+  const resultOf = (k: number): CommittedRow => ({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}`, subtype: 'success', isError: false } });
+  const reply = (t: ReturnType<typeof rig>, id: string, text: string): RouterRow[] => [
+    ...t.commit(ev(messageStartLine(id))),
+    ...t.commit(ev(assistantLineOf(text, { id }))),
+    ...t.commit(ev(messageDeltaLine('end_turn'))),
+    ...t.commit(ev(messageStopLine())),
+  ];
+  it("turn 2's reply ends before turn 1's turn.result: turn 2 is evaluated for itself and its offer is shown", () => {
+    const t = rig();
+    t.commit(sent(1));
+    expect(reply(t, 'msg_1', 'plain')).toEqual([]);
+    t.commit(sent(2));
+    const rows = reply(t, 'msg_2', offerReply('Here.', BLOCK));
+    expect(rows.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/2`);
+    expect(t.commit(resultOf(1))).toEqual([]);
+    expect(t.commit(resultOf(2))).toEqual([]);
+    expect(t.suppressed).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'no-block' }]);
+  });
+  it("turn 1's turn.result does not clear the text of turn 2's message that already started (the fallback still sees it)", () => {
+    const t = rig();
+    t.commit(sent(1));
+    reply(t, 'msg_1', 'plain');
+    t.commit(sent(2));
+    t.commit(ev(messageStartLine('msg_2')));
+    t.commit(ev(assistantLineOf(offerReply('Here.', BLOCK), { id: 'msg_2' })));
+    expect(t.commit(resultOf(1))).toEqual([]);
+    // turn 2's end is never seen (no partial messages): turn.result evaluates its text
+    const rows = t.commit(resultOf(2));
+    expect(rows.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/2`);
+  });
+  it('an evaluated turn awaiting its turn.result does not count as streaming for the next reply', () => {
+    const t = rig();
+    t.commit(sent(1));
+    reply(t, 'msg_1', 'plain');
+    t.commit(sent(2));
+    t.commit(sent(3)); // still streaming when turn 2 ends: that one does suppress
+    reply(t, 'msg_2', offerReply('Here.', BLOCK));
+    expect(t.suppressed.at(-1)).toEqual({ hsid: HSID, turn: `turn:${HSID}/2`, why: 'turn-streaming', name: BLOCK.mod, offerKind: BLOCK.kind });
+  });
+});
