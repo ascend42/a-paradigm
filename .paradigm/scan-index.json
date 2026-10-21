@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-21T07:47:42.654Z",
+    "generatedAt": "2026-10-21T09:07:11.064Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 108,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 146,
+      "module": 149,
       "cli": 3,
       "tool": 45,
       "tool-group": 10,
@@ -2840,7 +2840,7 @@
       "symbol": "#send-word-matcher",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "The ONE send-word matcher (TD-2026-10-21-514), shared by the GUI dictation reducer, the voice client (short words by adjacency) and the kernel (claim check and fail-closed backstop): normalizeUtterance, validateSendWord (1-3 words, never an approval or command phrase, warns on very common words), canonicalSendWord, matchSendWord gives exact, variant, near (same word count, Metaphone key within Levenshtein 2; never sent, never appended) or none (a sentence that merely contains the word), isSendWord, acceptableVariant (enrolment).",
+      "description": "The ONE send-word matcher (TD-2026-10-21-514), shared by the GUI dictation reducer, the voice client (short words by adjacency) and the kernel (claim check and fail-closed backstop): normalizeUtterance, validateSendWord (1-3 words, never an approval or command phrase, warns on very common words), canonicalSendWord (Aegis M-3: drops every variant the variant guard refuses, on every path: trial save, raw CLI, {op:'start', variants}, the send-word.json read-back in the kernel and the voice client), matchSendWord gives exact, variant, near (same word count, Metaphone key within Levenshtein 2; never sent, never appended) or none (a sentence that merely contains the word), isSendWord, acceptableVariant (the variant guard, Aegis H-1: same word count, at least 3 characters, never a SEND_WORD_COMMON word or a variant made only of SEND_WORD_VARIANT_STOP function words and fillers, never an approval or command phrase, and a RELATIVE Metaphone bound of 1 for a key of at most 3 characters, else 2; so \"and\", \"so\", \"of\", \"or\", \"for\" are never variants of send / over, while \"sand\" for send is kept). The attended send-word trial (spec §14.7 trial semantics) is pure here too: startSendWordTrial, classifyTrialTake (correct, variant when it passes the variant guard, unlike, unclear when too long), the ONE take counter recordTrialTake (at most SEND_WORD_TRIAL_MAX_TAKES = 4; stops at ready or exhausted), trialTakeNumber (\"Take n of up to 4\") and the save rule trialSaveable(state, dropVariants?) (at least one correct take; the human's dropVariants are left out). SEND_WORD_SUGGESTIONS never names the product.",
       "visualTags": [],
       "related": [],
       "componentType": "module"
@@ -2941,7 +2941,7 @@
       "symbol": "#gui-dictation",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk / Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented control in the pill menu; Send word and Pieces need the one-time liability acknowledgement, recorded per user); the reducer's 'word' policy treats a turn that IS the held send word (#send-word-matcher) as a command, never appended, acting only on a draft visible ≥ 1 s ('painted' via double rAF, page visible, focused, attached; any text change resets it); a near miss asks \"Did you say …?\"; a 1 s grace (\"Sending… Esc keeps it\", draft state word-grace) then request.voice.send.claim and the one send path. An ambient attach asks for the preset's send ceiling (with liabilityAck once the in-app acknowledgement dialog recorded it). Labels: sentLabel(turn.sent) on voice messages and CLAMP_CHIP in the session header; the guided \"Teach Gnomon your send word\" dialog (core/send-word-teach.ts: pick, lead-in, 3 takes, test, save); Pieces (gap 1500 / cap 8000 ms, hold while busy, piece claim, piece ring); Mic key switch, Listening (open / toggle) choice sent as the client's capture kind, voice.preset.* palette commands, in-app bare `, send-now from the voice app. ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
+      "description": "VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk / Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented control in the pill menu; Send word and Pieces need the one-time liability acknowledgement, recorded per user); the reducer's 'word' policy treats a turn that IS the held send word (#send-word-matcher) as a command, never appended, acting only on a draft visible ≥ 1 s ('painted' via double rAF, page visible, focused, attached; any text change resets it); a near miss asks \"Did you say …?\"; a 1 s grace (\"Sending… Esc keeps it\", draft state word-grace) then request.voice.send.claim and the one send path. An ambient attach asks for the preset's send ceiling (with liabilityAck once the in-app acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice messages (\"spoken · sent by you / on release / by send word / as a piece / by send-now\", + \"edits ask first\") and CLAMP_CHIP \"voice turn · edits ask first\" in the session header; teaching the send word INLINE under its row in the Voice settings sheet (core/send-word-teach.ts, a pure reducer over the kernel's attended trial: pick send / send it / over / your own, then \"Say <word> once, on its own.\" and the ONE counter \"take n of up to 4\" from status.voice.sendWordTrial, \"I heard …\", a mishearing kept as a variant, the risk check with \"I understand\" right before save via request.voice.sendword{op:'save'}; no lead-in, never the product name; Aegis R-1: keeping a mishearing is an explicit opt-in, each collected variant an UNTICKED box at save (\"Saying “x” on its own will also send. You said “w”; I heard “x”.\") and the save carries every unticked one as dropVariants; only a LISTENING trial makes a turn a take, and with the row open nothing heard becomes a draft; the heard text is read only from status.voice.sendWordTrial.last); a trialTake row is never a transcript line (store voiceItem) and never a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold while busy, piece claim, piece ring); Mic key switch, Listening (open / toggle) choice sent as the client's capture kind, voice.preset.* palette commands, in-app bare `, send-now from the voice app. ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
       "visualTags": [],
       "related": [
         "$send-by-word",
@@ -3012,15 +3012,50 @@
       "related": [],
       "componentType": "module"
     },
+    "gui-voice-ladder": {
+      "id": "gui-voice-ladder",
+      "name": "Gui Voice Ladder",
+      "symbol": "#gui-voice-ladder",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "#gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.model + pill) - voice is ONE choice, a trust ladder Off / Talk / Dictate / Send word / Pieces mapped onto the voice state x send preset (Off = voice.session.end, Talk = ptt x countdown, Dictate = open/toggle x key, Send word = word, Pieces = pieces). PURE core/voice-ladder.ts: rungOf (the kernel's status.voice.send wins over the page's preset), ladderEntries (one line each, cost tags), chooseRung (a not-ready rung names the Voice settings section that readies it), voicePillOf (the kernel-owned header pill: mic dot filled + ring when open, rung name, ONE live fact: hold ⌃⌥Space / listening / say “word” / mic off · ⌃` / heard Ns ago; 2px amber edge + \"edits ask first\" while a voice-origin turn is clamped; vermilion \"not sent · why\"), sheetRows. The popover (role menu, rungs menuitemradio, arrows/Home/End, Esc back to the pill) holds the ladder only plus a foot line (mic key · listen) and \"voice settings…\"; the old Off/Push-to-talk/Ambient list, delay buttons and Send preset buttons are gone. Luna finish-review: Pieces reads \"set up · Touch ID\" while not ready; when the focused session is not the attached one the ladder (and its aria name) says \"applies to <B> · voice is on <A>\" (ladderTargetLine / ladderAria); a crash's fact is just \"voice crashed\", its cause in the title and aria name (crashCauseOf); the risk row says when it was acknowledged; the mic dot and meter use the --live token (an alias of --stamp's value); the pill meter shows only while capture is `hearing` (capture.ts meterShownOf); night selected segments are [bracketed] with the glow; the tall-view key has a pressed state.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gui-voice-settings": {
+      "id": "gui-voice-settings",
+      "name": "Gui Voice Settings",
+      "symbol": "#gui-voice-settings",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "#gui-voice-settings (Atelier 2026-10-21, setup-home.html + teach.html) - the Voice settings sheet, a right-side drawer on the sheet component (role dialog, Esc closes, focus returns): your voice (inline enrolment: name + consent, Touch ID, \"phrase N of 3\" with the phrase and a REAL level meter), send word (inline teaching over request.voice.sendword start{trial} / save / clear{trial}), keys (talk ⌃⌥Space, mic ⌃` via the existing mic-key op with the bare ` opt-in warning, send now ⌃⌥Return), listen (always / mic key), timing (Talk auto-send 3/5/8/15/off as a segmented control; pieces gap shown), risk (acknowledged or not; a waiting Pieces turns on from here). ui/voice-settings.ts builds with render.ts h() and routes every trusted press through one act callback; the old sendword / ack / enrol dialogs are removed. The trial never outlives the row or the sheet. The risk check is the render's sentence naming the word (voice-presets riskSentence; Pieces names the pause) with the ACK_TEXT box; once this user acknowledged it shows \"acknowledged · <date>\" (recordAck keeps the date, ackedAt) instead of a pre-ticked box. The recommended send words skip the common-word warning. While open, Tab is trapped inside the aria-modal drawer (trapNext) and focus returns on close.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gui-composer": {
+      "id": "gui-composer",
+      "name": "Gui Composer",
+      "symbol": "#gui-composer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "#gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the composer wraps and grows with its text to 12 lines, then scrolls; the ⤢ key toggles a tall view capped at 24 lines (persisted per viewer, gnomon.composer.tall); a line count sits beside it; exactly one send control in the composer region. PURE core/composer.ts composerFit.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
     "gui-settings": {
       "id": "gui-settings",
       "name": "Gui Settings",
       "symbol": "#gui-settings",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "#gui-settings (founder UI-first rule) - the header Day / Night / Auto theme switch and the Settings sheet (header gear key, Cmd-comma, the palette's \"Settings...\"). core/settings.ts is PURE: parseTheme / parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout), themeSwitchEntries, unlockSeenOf (the cached unlock folded from kernel-principal approval.unlock / .dropped rows; daemon.start clears) and settingsModel (Appearance, Layout, Voice, Permissions, About). Every control names an existing GUI command in SETTINGS_RUNS (theme, motion, layout presets, pane toggles, workshop placement, mode.repo.*, voice app start/stop, enrol, dictation delay) or the standing Revoke (core/standing.ts revokeRequest); no new kernel verb. Kernel-owned values (mode ceiling, unlock and bounds, connection, bundle pin, voice hotkeys, the always-shown regions) are read-only rows with a how-to-change line, never a terminal-only path. ui/settings-sheet.ts paints with render.ts h() (text nodes, no inline style) and acts on trusted clicks only (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are pinned to the connected home's kernel principal (standing.ts kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an unseen unlock says only \"no unlock seen since this page connected\"; run(id, trusted) carries the gesture's isTrusted from every path and the header switch checks it; the standing feed sits under overlays (hidden while a dialog is open), its offer is not an ink key, and the stack pile reserves bottom room so it never covers a card key.",
+      "description": "#gui-settings (founder UI-first rule) - the header Day / Night / Auto theme switch and the Settings sheet (header gear key, Cmd-comma, the palette's \"Settings...\"). core/settings.ts is PURE: parseTheme / parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout), themeSwitchEntries, unlockSeenOf (the cached unlock folded from kernel-principal approval.unlock / .dropped rows; daemon.start clears) and settingsModel (Appearance, Layout, Voice, Permissions, About). Every control names an existing GUI command in SETTINGS_RUNS (theme, motion, layout presets, pane toggles, workshop placement, mode.repo.*, voice app start/stop, voice.settings.open) or the standing Revoke (core/standing.ts revokeRequest); no new kernel verb. The Voice section only starts/stops the voice app, links the Voice settings sheet and reads out the rung in force (RUNG_NAME); everything voice configures lives in #gui-voice-settings. Kernel-owned values (mode ceiling, unlock and bounds, connection, bundle pin, the voice rung, the always-shown regions) are read-only rows with a how-to-change line, never a terminal-only path. ui/settings-sheet.ts paints with render.ts h() (text nodes, no inline style) and acts on trusted clicks only (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are pinned to the connected home's kernel principal (standing.ts kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an unseen unlock says only \"no unlock seen since this page connected\"; run(id, trusted) carries the gesture's isTrusted from every path and the header switch checks it; the standing feed sits under overlays (hidden while a dialog is open), its offer is not an ink key, and the stack pile reserves bottom room so it never covers a card key.",
       "visualTags": [],
-      "related": [],
+      "related": [
+        "#gui-voice-settings"
+      ],
       "componentType": "module"
     },
     "gnomon-helper": {
@@ -12069,6 +12104,16 @@
       "visualTags": [],
       "related": []
     },
+    "gui-voice-settings.": {
+      "id": "gui-voice-settings.",
+      "name": "Gui Voice Settings.",
+      "symbol": "#gui-voice-settings.",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui-settings",
+      "visualTags": [],
+      "related": []
+    },
     "state": {
       "id": "state",
       "name": "State",
@@ -13720,7 +13765,7 @@
       "name": "Send By Word",
       "symbol": "$send-by-word",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway. Aegis fixes: the origin check runs on EVERY human send (stale or wrong-session claims stamp voice; under a word+ ceiling an ambient-matched send is a piece, so Enter on an ambient draft is clamped); a voice turn closes only after its own replay and a later result; a short word passes adjacency with or without speakerBasis; a word or pieces attach carries liabilityAck (sha256 of the ack text), recorded in the kernel-written start row. The guided dialog teaches the word as a TRIAL (adjacency only, 2 min, send-word-trial.json 0600). request.voice.client mic-toggle / mic-key / start{capture} drive the mic, the Mic key and the capture kind of the kernel-spawned client (--capture ptt|open|toggle).",
+      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway. Aegis fixes: the origin check runs on EVERY human send (stale or wrong-session claims stamp voice; under a word+ ceiling an ambient-matched send is a piece, so Enter on an ambient draft is clamped); a voice turn closes only after its own replay and a later result; a short word passes adjacency with or without speakerBasis; a word or pieces attach carries liabilityAck (sha256 of the ack text), recorded in the kernel-written start row. The guided dialog teaches the word as an ATTENDED TRIAL (spec §14.7 trial semantics; 2 min, send-word-trial.json 0600): every turn of the attached human's voice principal is a take with no speaker check and no adjacency, stamped trialTake, forwardable:false, isWord false, never a dictation turn or adjacency anchor, and never sent (Aegis M-1: the voice principal's direct session.send of a take is refused voice-grammar, cause trial-take); a take is captured only while the trial is listening, and its row is hash-only plus trialVerdict (Aegis M-2: the heard text lives only in kernel memory for status); send-word-trial.json is written only from VoiceControl onTrialChange with the kernel-clock until and only while listening (Aegis L-2); a trial binds to the attached session and ends on any detach (human, voice principal, idle) or an attach to another hsid (Aegis L-1); the kernel is the ONE take counter (status.voice.sendWordTrial, human class only: word, state, take, takes, maxTakes 4, correct, variants, last, until) and request.voice.sendword{op:'save', dropVariants?} commits the word and the variants its mishearings collected (each passing the variant guard, #send-word-matcher acceptableVariant), minus the ones the human dropped, only after a correct take. request.voice.client mic-toggle / mic-key / start{capture} drive the mic, the Mic key and the capture kind of the kernel-spawned client (--capture ptt|open|toggle).",
       "steps": [
         {
           "id": "send-by-word-step-0",
@@ -20221,6 +20266,18 @@
       "category": "components",
       "id": "gui-table-talk"
     },
+    "#gui-voice-ladder": {
+      "category": "components",
+      "id": "gui-voice-ladder"
+    },
+    "#gui-voice-settings": {
+      "category": "components",
+      "id": "gui-voice-settings"
+    },
+    "#gui-composer": {
+      "category": "components",
+      "id": "gui-composer"
+    },
     "#gui-settings": {
       "category": "components",
       "id": "gui-settings"
@@ -24808,6 +24865,10 @@
     "#voice-caption": {
       "category": "components",
       "id": "voice-caption"
+    },
+    "#gui-voice-settings.": {
+      "category": "components",
+      "id": "gui-voice-settings."
     },
     "$XDG_RUNTIME_DIR": {
       "category": "flows",
