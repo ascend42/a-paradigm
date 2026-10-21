@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-21T05:57:38.664Z",
+    "generatedAt": "2026-10-21T07:47:42.654Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 108,
@@ -11,7 +11,7 @@
     },
     "componentTypes": {
       "command": 114,
-      "utility": 61,
+      "utility": 65,
       "config": 11,
       "manager": 6,
       "engine": 9,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 144,
+      "module": 146,
       "cli": 3,
       "tool": 45,
       "tool-group": 10,
@@ -44,7 +44,7 @@
       "types": 9,
       "command-group": 8,
       "route": 3,
-      "hook": 1,
+      "hook": 2,
       "storage": 1
     }
   },
@@ -2823,6 +2823,28 @@
       ],
       "componentType": "module"
     },
+    "contract-voice-modes": {
+      "id": "contract-voice-modes",
+      "name": "Contract Voice Modes",
+      "symbol": "#contract-voice-modes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Voice capture x send policy (TD-2026-10-21-514, spec §14.7 \"Voice submodes\"), pure and frozen, NOT a clientApiId input: CAPTURE_KINDS ptt|open|toggle, SEND_POLICIES key|countdown|word|pieces, SENT_BY key|release|word|piece, VOICE_ORIGINS hand|voice, VOICE_PRESETS (Talk ptt x countdown, Dictate, Send word, Pieces), validPair (a countdown is never valid with ambient capture; word and pieces need ambient capture), originOf, presetOf, the liability-ack text and the timing constants (visible 1 s, grace 1 s, claim TTL 5 s, word age 30 s, short word 1500 ms, adjacency 2 s, piece gap 1500 / cap 8000 ms).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "send-word-matcher": {
+      "id": "send-word-matcher",
+      "name": "Send Word Matcher",
+      "symbol": "#send-word-matcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "The ONE send-word matcher (TD-2026-10-21-514), shared by the GUI dictation reducer, the voice client (short words by adjacency) and the kernel (claim check and fail-closed backstop): normalizeUtterance, validateSendWord (1-3 words, never an approval or command phrase, warns on very common words), canonicalSendWord, matchSendWord gives exact, variant, near (same word count, Metaphone key within Levenshtein 2; never sent, never appended) or none (a sentence that merely contains the word), isSendWord, acceptableVariant (enrolment).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
     "gui-session-rename": {
       "id": "gui-session-rename",
       "name": "Gui Session Rename",
@@ -2919,9 +2941,11 @@
       "symbol": "#gui-dictation",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
+      "description": "VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk / Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented control in the pill menu; Send word and Pieces need the one-time liability acknowledgement, recorded per user); the reducer's 'word' policy treats a turn that IS the held send word (#send-word-matcher) as a command, never appended, acting only on a draft visible ≥ 1 s ('painted' via double rAF, page visible, focused, attached; any text change resets it); a near miss asks \"Did you say …?\"; a 1 s grace (\"Sending… Esc keeps it\", draft state word-grace) then request.voice.send.claim and the one send path. An ambient attach asks for the preset's send ceiling (with liabilityAck once the in-app acknowledgement dialog recorded it). Labels: sentLabel(turn.sent) on voice messages and CLAMP_CHIP in the session header; the guided \"Teach Gnomon your send word\" dialog (core/send-word-teach.ts: pick, lead-in, 3 takes, test, save); Pieces (gap 1500 / cap 8000 ms, hold while busy, piece claim, piece ring); Mic key switch, Listening (open / toggle) choice sent as the client's capture kind, voice.preset.* palette commands, in-app bare `, send-now from the voice app. ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
       "visualTags": [],
       "related": [
+        "$send-by-word",
+        "#send-word-matcher",
         "#gui"
       ],
       "componentType": "module"
@@ -3120,7 +3144,7 @@
       "symbol": "#gnomon-voice-io",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-voice/.purpose",
-      "description": "Hotkeys talk, mic-toggle, mode-toggle, hold-toggle (carbonId 4, default ctrl+alt+h, TD-2026-10-20-262 dictation hold) and stop-speaking (carbonId 5, default ctrl+alt+. — the period key, kVK_ANSI_Period 0x2F, spelled \".\" or \"period\"; T-2026-10-19-026: cuts the reply being read aloud). The voice child's audio I/O, mic only (no keychain group, no network, writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON (stdin commands, stdout replies and events), 0x02 capture (stdout: hostTimeNs:u64le sampleRate:u32le s16le, 16 kHz mono after voice processing), 0x03 playback (stdin: sampleRate:u32le s16le mono TTS, 8-48 kHz). Commands info, mic.on, mic.off, play.stop (barge-in flush), play.end, route.get, hotkeys.set {bindings}, quit; each gets one reply {type:'reply', id, op, ok}. Events (tUs monotonic µs, the capture clock): ready, mic, route {route, aec: vpio|headphones|none}, level {rmsDBFS, peakDBFS} ~15 Hz, playback.start {audibleAtUs}, playback.end {reason: drained|stopped|mic-switch|route-change|exit}, hotkey {action: talk|mic-toggle|mode-toggle|hold-toggle|stop-speaking, phase: down|up}, engine, error, exit. Mic on = one AVAudioEngine with inputNode.setVoiceProcessingEnabled(true) (VoiceProcessingIO AEC) and a player node in the same engine, so TTS is the echo reference; mic off stops and releases that engine (no orange dot) and TTS plays via an output-only engine that never touches inputNode. Route from CoreAudio (default output device transport + built-in data source, listeners on both). Hotkeys via Carbon RegisterEventHotKey, press and release, no Input Monitoring; defaults ctrl+alt+space (talk), ctrl+alt+m, ctrl+alt+a; reported only, the controller acts. Mic modes re-spawn with TCC responsibility disclaimed so the Microphone grant names GnomonVoiceIO (probe P1; --no-disclaim is the control). Aegis V2b fixes: MicGate (a mic.off during an open TCC prompt wins, generation counter; mic.on refused not-disclaimed unless disclaimed or --no-disclaim), DisclaimToken (disclaimed only when argv --disclaim-token equals the env token; a stray env var is ignored), ParentWatch (kqueue EVFILT_PROC NOTE_EXIT on the re-spawning and the original parent: the child exits with either), re-spawn path from _NSGetExecutablePath + realpath only, a tap generation so no capture or level frame follows mic:false, a bounded stdout queue (one writer thread, no lock held in write(2), capture frames dropped first with a capture.dropped event), transport in mic and route events. --version, --selftest (1 s smoke), --probe-aec <file> (P7); stdin EOF exits 0. VoiceIOCore (frame codec, command parser, hotkey config, level and route math, mic gate, disclaim token, parent watch) is pure or Darwin-only and covered by swift test (37 XCTests).",
+      "description": "TD-2026-10-21-514 mic key: mic-toggle (Carbon id 2) defaults to ctrl+` (kVK_ANSI_Grave 0x32; grave / backtick synonyms); a bare ` only via hotkeys.set{allowBare:true} and only for mic-toggle (F-keys stay bare-capable); send-now (Carbon id 6, default ctrl+alt+return, a hand origin) is counted by the client as dictation.sendNows; a `system` event (screen lock, system or display sleep, user switch) turns the mic off. The client discards in-flight audio on mic off (capture drop mic-off, a mic epoch) and reports dictation.micWanted, which the kernel holds (status.voice.micWanted) and the client restores at start. Hotkeys talk, mic-toggle, mode-toggle, hold-toggle (carbonId 4, default ctrl+alt+h, TD-2026-10-20-262 dictation hold) and stop-speaking (carbonId 5, default ctrl+alt+. — the period key, kVK_ANSI_Period 0x2F, spelled \".\" or \"period\"; T-2026-10-19-026: cuts the reply being read aloud). The voice child's audio I/O, mic only (no keychain group, no network, writes only stdout/stderr). Protocol gnomon-voice-io:v1, the same framing both ways: type:u8 length:u32le payload (max 1 MiB); 0x01 JSON (stdin commands, stdout replies and events), 0x02 capture (stdout: hostTimeNs:u64le sampleRate:u32le s16le, 16 kHz mono after voice processing), 0x03 playback (stdin: sampleRate:u32le s16le mono TTS, 8-48 kHz). Commands info, mic.on, mic.off, play.stop (barge-in flush), play.end, route.get, hotkeys.set {bindings}, quit; each gets one reply {type:'reply', id, op, ok}. Events (tUs monotonic µs, the capture clock): ready, mic, route {route, aec: vpio|headphones|none}, level {rmsDBFS, peakDBFS} ~15 Hz, playback.start {audibleAtUs}, playback.end {reason: drained|stopped|mic-switch|route-change|exit}, hotkey {action: talk|mic-toggle|mode-toggle|hold-toggle|stop-speaking, phase: down|up}, engine, error, exit. Mic on = one AVAudioEngine with inputNode.setVoiceProcessingEnabled(true) (VoiceProcessingIO AEC) and a player node in the same engine, so TTS is the echo reference; mic off stops and releases that engine (no orange dot) and TTS plays via an output-only engine that never touches inputNode. Route from CoreAudio (default output device transport + built-in data source, listeners on both). Hotkeys via Carbon RegisterEventHotKey, press and release, no Input Monitoring; defaults ctrl+alt+space (talk), ctrl+alt+m, ctrl+alt+a; reported only, the controller acts. Mic modes re-spawn with TCC responsibility disclaimed so the Microphone grant names GnomonVoiceIO (probe P1; --no-disclaim is the control). Aegis V2b fixes: MicGate (a mic.off during an open TCC prompt wins, generation counter; mic.on refused not-disclaimed unless disclaimed or --no-disclaim), DisclaimToken (disclaimed only when argv --disclaim-token equals the env token; a stray env var is ignored), ParentWatch (kqueue EVFILT_PROC NOTE_EXIT on the re-spawning and the original parent: the child exits with either), re-spawn path from _NSGetExecutablePath + realpath only, a tap generation so no capture or level frame follows mic:false, a bounded stdout queue (one writer thread, no lock held in write(2), capture frames dropped first with a capture.dropped event), transport in mic and route events. --version, --selftest (1 s smoke), --probe-aec <file> (P7); stdin EOF exits 0. VoiceIOCore (frame codec, command parser, hotkey config, level and route math, mic gate, disclaim token, parent watch) is pure or Darwin-only and covered by swift test (37 XCTests).",
       "visualTags": [],
       "related": [],
       "componentType": "module"
@@ -3615,9 +3639,10 @@
       "symbol": "#session-runner",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "#session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16; M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by explicit path (root-signed config) else the platform registry's known locations (src/platform/claude-code.ts), NEVER PATH (p01); realpath + sha256; claude_binary_changed on a changed sha; version >= 2.1.288; `auth status` = claude.ai/firstParty. law7Layers: EVERY layer the child reads for THIS spawn's cwd (T-009 / Aegis C5) — managed sources per OS (+ managed-settings.d/*.json; unscannable sources such as Windows policy keys are hits), user settings*.json, project + worktree .claude/settings(.local).json and .mcp.json, ~/.claude.json mcpServers AND projects.<cwd>.mcpServers, the session's own policy.json/mcp.json — scanned over the CHILD env (scanApiBilling). env.ts: allowlist + scrub + GNOMON_HSID/SOCK/SESSION_KEY, envKeys names only (G-RUN-02). The darwin `session` profile generator is src/platform/darwin/session-sbpl.ts (from the M1.5 SessionPolicy + session-denies registry; T-008 git denies: .git pointer file, config.worktree, modules/**/{hooks,config, info}; launchers open/osascript/lsregister/launchctl by realpath), SLICE 2 (T-2026-10-18-010): the WHOLE Gnomon home is read-denied (keys/ incl. the device key, kernel.db*, log/** segments, every other session dir, the pin); policy.ts homeReadable carves back only the session's own sessions/<short> dir and the exec'd bin/ copy (or the runners/<tree> copy), refusing anything outside HOME_READABLE_ROOTS by realpath; SBPL order deny home, allow own, metadata on ancestors, re-deny keys + kernel log (profile v3; test/session-sandbox EPERM rig). registered in src/kernel/sandbox/session.ts (no backend => refused sandbox-unavailable; status fidelity per platform, G-WIN-06). p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302 under the GENERATED profile with the adapter argv: PASS, with writes to the whole ~/.claude/** and ~/.claude.json denied and NO per-session CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth). ROUND 2 (Aegis H1/M1/M2/L2): binary.ts pins the claude sha256 in <home>/claude-pin.json on first use (logged session.sandbox{phase: 'binary-pin'}); another hash is claude_binary_changed until an explicit repinClaudeBinary (CLI/test seam until the gate-class card); the kernel executes only a private copy <home>/bin/claude-<sha> written from the same verified buffer, and preflight --version / auth status run that copy UNDER the session profile. The profile also write-denies the binary realpath, its versions dir and every known-location link (supervisor binaryDenies) and the user persistence paths (policy.ts PERSISTENCE_PATHS: LaunchAgents, shell rc files, git config, ~/.ssh); shortcuts/automator join the launcher exec denies; copied Apple launchers die by launch constraints (137, spec §A.2(iv)). Law 7 also flags ~/.claude.json primaryApiKey / customApiKeyResponses.approved and forceLoginMethod 'console' (billing.ts). The p10m re-run with the private copy and the new denies: PASS. ROUND 3: trust on first use — the pin is written only after the sandboxed preflight passes (N1); the copy (not the source) is hashed, streamed, and not re-hashed when size+mtime match the pin record; script installs (#!, the npm cli.js) are refused claude_binary_unsupported; `gnomon session repin-claude` (src/cli/session-cli.ts: TTY + typed last 8 of the new sha, daemon stopped) writes a re-pin the supervisor logs session.sandbox{binary-pin, by:'repin', from, to} at the next open; PERSISTENCE_PATHS adds .bash_login, .zlogout, ~/.config/fish. macOS FLOOR (P8 note, CI run 39100281741): SESSION_SANDBOX_MIN_MACOS = 15 (platform/darwin/session-sbpl.ts, read via platform/darwin/macos.ts sw_vers); below it the darwin session backend refuses sandbox-unavailable {floor:macos, have, need} and status shows the session sandbox unavailable — on macos-14 a copied osascript reached System Events from inside the profile. CI tests macos-15 (enforcement) and macos-14 (floor refusal). SIP FLOOR (CI run 39100811385, GitHub macos-15 runner, SIP off: a copied launchctl not SIGKILLed): darwinSipEnabled (platform/darwin/macos.ts, csrutil status, cached; Custom Configuration counts as disabled) — SIP not plainly enabled ⇒ sandbox-unavailable {floor:sip, have:disabled| unknown}, status unavailable reason sip-disabled; test seam SupervisorOptions.sipEnabled / sessionLaunchPlan's 4th arg. Profile v2 adds (deny mach-lookup (global-name \"com.apple.coreservices.appleevents\")) beside (deny appleevent-send) (APPLEEVENT_MACH_SERVICES); Claude verified working (p10m-claude-compat-generated pass). Its coverage of a non-Apple AppleEvent sender is UNPROVEN (spec OPEN 5): the existing copied-osascript check (`get name` of System Events) is answered without sending an event, so its exit is only RECORDED (test annotation), never asserted; the 137 launch-constraint kill is asserted on SIP-on macOS 15+ only. Aegis conditions: darwin automation:apple-events fidelity is 'partial' while spec OPEN 5 is open (status must not overclaim); inherited TCC grants of the responsible process + the reachable pasteboard are spec §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed app); the csrutil parser test keeps the exact macOS 15 stdout fixture. TRANSCRIPTS (TD-2026-10-19-814 item 1, probe p-resume darwin; profile v6): a Claude Code session (supervisor claudeTranscripts: true; local sessions never) gets policy.allowWrite = [<userClaudeDir>/projects, subpath], rendered (allow file-write* ...) AFTER the ~/.claude write deny (SBPL last match wins), then (deny file-write* ...) again on policy.denyWriteAlways + the T-008 git regexes; no later rule allows writes. denyWriteAlways = the projects dir itself as a LITERAL (Aegis M1: no rm/rename/symlink swap of it; children still match the allow; the supervisor's ensureTranscriptDir creates it before the spawn, never over an existing entry), the denies inside it, and the steering regex re-rooted AT projects (Aegis L3; the home-rooted one would re-close ~/.claude). Hardlinks (Aegis M2): measured on macOS 15 that link(2) into projects from a write-denied source (~/.claude/settings.json, ~/.claude.json) is refused by the source's write deny; no file-link rule needed, tests assert it. ~/.claude/settings*, plugins, CLAUDE.md, the rest of ~/.claude and ~/.claude.json stay denied. The allow is derived from the user Claude dir only (a flag, never an input path: no manifest can widen it) and WITHHELD fail closed (allowWriteRefused, logged session.sandbox{phase:'transcripts-withheld'}) when projects resolves elsewhere (symlink) or another deny covers it. policy.json's Edit deny on ~/.claude/** is unchanged. Residual, ACCEPTED by the founder (TD-2026-10-19-814): (a) a session can write (and delete) memory and transcripts for ANY cwd's projects/<enc>/, not only its own; (b) it can forge transcript history a later --resume loads; (c) the readers include the user's own unsandboxed Claude Code; (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can redirect a later write by the host's Claude Code outside projects. Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063): the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE #approval-broker gate-class card per new sha (on an open refused claude_binary_changed, and on a poll of the resolved source at REPIN_POLL_MS cadence that never writes a pin); allow = fresh presence (one prompt), card TTL 24 h, a deny suppresses the sha; the publisher is checked on the private copy by src/platform/claude-verifier.ts (codesign, team Q6L2SF6YDW) and anything else sets claim-mismatch; the effect re-hashes the copy and writes the pin with signer + approval {cardId, contentHash, decisionSig}; live sessions keep their copy. Aegis fixes: the effect refuses unless the pin still equals the card's `from` (no rollback) and expires every other pending re-pin card; the card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a denied sha's refusal says \"re-pin denied; restart Gnomon to re-offer\"; the offline CLI prints the codesign signer (loud on a mismatch).",
+      "description": "#session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16; M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by explicit path (root-signed config) else the platform registry's known locations (src/platform/claude-code.ts), NEVER PATH (p01); realpath + sha256; claude_binary_changed on a changed sha; version >= 2.1.288; `auth status` = claude.ai/firstParty. law7Layers: EVERY layer the child reads for THIS spawn's cwd (T-009 / Aegis C5) — managed sources per OS (+ managed-settings.d/*.json; unscannable sources such as Windows policy keys are hits), user settings*.json, project + worktree .claude/settings(.local).json and .mcp.json, ~/.claude.json mcpServers AND projects.<cwd>.mcpServers, the session's own policy.json/mcp.json — scanned over the CHILD env (scanApiBilling). env.ts: allowlist + scrub + GNOMON_HSID/SOCK/SESSION_KEY, envKeys names only (G-RUN-02). The darwin `session` profile generator is src/platform/darwin/session-sbpl.ts (from the M1.5 SessionPolicy + session-denies registry; T-008 git denies: .git pointer file, config.worktree, modules/**/{hooks,config, info}; launchers open/osascript/lsregister/launchctl by realpath), SLICE 2 (T-2026-10-18-010): the WHOLE Gnomon home is read-denied (keys/ incl. the device key, kernel.db*, log/** segments, every other session dir, the pin); policy.ts homeReadable carves back only the session's own sessions/<short> dir and the exec'd bin/ copy (or the runners/<tree> copy), refusing anything outside HOME_READABLE_ROOTS by realpath; SBPL order deny home, allow own, metadata on ancestors, re-deny keys + kernel log (profile v3; test/session-sandbox EPERM rig). registered in src/kernel/sandbox/session.ts (no backend => refused sandbox-unavailable; status fidelity per platform, G-WIN-06). p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302 under the GENERATED profile with the adapter argv: PASS, with writes to the whole ~/.claude/** and ~/.claude.json denied and NO per-session CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth). ROUND 2 (Aegis H1/M1/M2/L2): binary.ts pins the claude sha256 in <home>/claude-pin.json on first use (logged session.sandbox{phase: 'binary-pin'}); another hash is claude_binary_changed until an explicit repinClaudeBinary (CLI/test seam until the gate-class card); the kernel executes only a private copy <home>/bin/claude-<sha> written from the same verified buffer, and preflight --version / auth status run that copy UNDER the session profile. The profile also write-denies the binary realpath, its versions dir and every known-location link (supervisor binaryDenies) and the user persistence paths (policy.ts PERSISTENCE_PATHS: LaunchAgents, shell rc files, git config, ~/.ssh); shortcuts/automator join the launcher exec denies; copied Apple launchers die by launch constraints (137, spec §A.2(iv)). Law 7 also flags ~/.claude.json primaryApiKey / customApiKeyResponses.approved and forceLoginMethod 'console' (billing.ts). The p10m re-run with the private copy and the new denies: PASS. ROUND 3: trust on first use — the pin is written only after the sandboxed preflight passes (N1); the copy (not the source) is hashed, streamed, and not re-hashed when size+mtime match the pin record; script installs (#!, the npm cli.js) are refused claude_binary_unsupported; `gnomon session repin-claude` (src/cli/session-cli.ts: TTY + typed last 8 of the new sha, daemon stopped) writes a re-pin the supervisor logs session.sandbox{binary-pin, by:'repin', from, to} at the next open; PERSISTENCE_PATHS adds .bash_login, .zlogout, ~/.config/fish. macOS FLOOR (P8 note, CI run 39100281741): SESSION_SANDBOX_MIN_MACOS = 15 (platform/darwin/session-sbpl.ts, read via platform/darwin/macos.ts sw_vers); below it the darwin session backend refuses sandbox-unavailable {floor:macos, have, need} and status shows the session sandbox unavailable — on macos-14 a copied osascript reached System Events from inside the profile. CI tests macos-15 (enforcement) and macos-14 (floor refusal). SIP FLOOR (CI run 39100811385, GitHub macos-15 runner, SIP off: a copied launchctl not SIGKILLed): darwinSipEnabled (platform/darwin/macos.ts, csrutil status, cached; Custom Configuration counts as disabled) — SIP not plainly enabled ⇒ sandbox-unavailable {floor:sip, have:disabled| unknown}, status unavailable reason sip-disabled; test seam SupervisorOptions.sipEnabled / sessionLaunchPlan's 4th arg. Profile v2 adds (deny mach-lookup (global-name \"com.apple.coreservices.appleevents\")) beside (deny appleevent-send) (APPLEEVENT_MACH_SERVICES); Claude verified working (p10m-claude-compat-generated pass). Its coverage of a non-Apple AppleEvent sender is UNPROVEN (spec OPEN 5): the existing copied-osascript check (`get name` of System Events) is answered without sending an event, so its exit is only RECORDED (test annotation), never asserted; the 137 launch-constraint kill is asserted on SIP-on macOS 15+ only. Aegis conditions: darwin automation:apple-events fidelity is 'partial' while spec OPEN 5 is open (status must not overclaim); inherited TCC grants of the responsible process + the reachable pasteboard are spec §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed app); the csrutil parser test keeps the exact macOS 15 stdout fixture. TRANSCRIPTS (TD-2026-10-19-814 item 1, probe p-resume darwin; profile v6): a Claude Code session (supervisor claudeTranscripts: true; local sessions never) gets policy.allowWrite = [<userClaudeDir>/projects, subpath], rendered (allow file-write* ...) AFTER the ~/.claude write deny (SBPL last match wins), then (deny file-write* ...) again on policy.denyWriteAlways + the T-008 git regexes; no later rule allows writes. denyWriteAlways = the projects dir itself as a LITERAL (Aegis M1: no rm/rename/symlink swap of it; children still match the allow; the supervisor's ensureTranscriptDir creates it before the spawn, never over an existing entry), the denies inside it, and the steering regex re-rooted AT projects (Aegis L3; the home-rooted one would re-close ~/.claude). Hardlinks (Aegis M2): measured on macOS 15 that link(2) into projects from a write-denied source (~/.claude/settings.json, ~/.claude.json) is refused by the source's write deny; no file-link rule needed, tests assert it. ~/.claude/settings*, plugins, CLAUDE.md, the rest of ~/.claude and ~/.claude.json stay denied. The allow is derived from the user Claude dir only (a flag, never an input path: no manifest can widen it) and WITHHELD fail closed (allowWriteRefused, logged session.sandbox{phase:'transcripts-withheld'}) when projects resolves elsewhere (symlink) or another deny covers it. policy.json's Edit deny on ~/.claude/** is unchanged. Residual, ACCEPTED by the founder (TD-2026-10-19-814): (a) a session can write (and delete) memory and transcripts for ANY cwd's projects/<enc>/, not only its own; (b) it can forge transcript history a later --resume loads; (c) the readers include the user's own unsandboxed Claude Code; (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can redirect a later write by the host's Claude Code outside projects. SESSION-ENV (hooks fix 2026-10-21; Aegis H1/M1 rework, profile v8): a second carve-back scoped to THIS session only, ~/.claude/session-env/<uuid> (subpath, class session-env), supervisor input claudeSessionEnv: <uuid> (strict SESSION_UUID_RE), so Claude Code can mkdir session-env/<id> and run command hooks. Never all of session-env: a sibling's CLAUDE_ENV_FILE is sourced as shell by that session (host Claude Code included). session-env and session-env/<uuid> are literal re-denied; siblings stay under the ~/.claude deny. ensureSessionEnvDir pre-creates both at 0700, lstat-refusing links, foreign-uid or group/world-writable dirs (L-2). Withheld fail closed (sessionEnvRefused, logged session.sandbox{phase:'session-env-withheld'}). A new live id (/clear) is logged session.sandbox{phase:'session-env-mismatch'}: hooks fail closed again. Probe p-session-env: hook -> CLAUDE_ENV_FILE -> Bash sees it; --resume keeps the uuid; B2: a LEFTOVER env file is sourced by a later resume even without the carve, so (Aegis M-B) emptySessionEnvDir empties session-env/<uuid> at every session end (#onExit: exited, drained, killed; daemon orphan sweep via sweepOrphans onOrphaned + the session.open uuid), lstat-only, never through a link, logged session.sandbox{phase:'session-env-emptied'}. Tests: test/session-sandbox.test.ts, test/session-env-cleanup.test.ts. Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063): the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE #approval-broker gate-class card per new sha (on an open refused claude_binary_changed, and on a poll of the resolved source at REPIN_POLL_MS cadence that never writes a pin); allow = fresh presence (one prompt), card TTL 24 h, a deny suppresses the sha; the publisher is checked on the private copy by src/platform/claude-verifier.ts (codesign, team Q6L2SF6YDW) and anything else sets claim-mismatch; the effect re-hashes the copy and writes the pin with signer + approval {cardId, contentHash, decisionSig}; live sessions keep their copy. Aegis fixes: the effect refuses unless the pin still equals the card's `from` (no rollback) and expires every other pending re-pin card; the card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a denied sha's refusal says \"re-pin denied; restart Gnomon to re-offer\"; the offline CLI prints the codesign signer (loud on a mismatch).",
       "visualTags": [],
       "related": [
+        "#onExit",
         "#approval-broker",
         "$HOME"
       ],
@@ -9516,6 +9541,17 @@
       ],
       "componentType": "command"
     },
+    "session-markers-gitignore": {
+      "id": "session-markers-gitignore",
+      "name": "Session Markers Gitignore",
+      "symbol": "#session-markers-gitignore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "ensureSessionMarkersGitignore writes an idempotent managed block into .paradigm/.gitignore listing every hook-written session marker (.purpose-paths, .orchestrated, .pending-review, .solo-declared, ...). Called by `paradigm init` and `paradigm sync` so no project commits per-session hook state. User lines outside the block are preserved.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "command-policy": {
       "id": "command-policy",
       "name": "Command Policy",
@@ -9834,6 +9870,17 @@
       "related": [],
       "componentType": "command"
     },
+    "doctor-hook-health": {
+      "id": "doctor-hook-health",
+      "name": "Doctor Hook Health",
+      "symbol": "#doctor-hook-health",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "7.15.2 hook-health section (hook-health.ts). Per-hook p50/p95/max wall time, kills (a start with no end older than timeout + 5 s, or a killed end) and over-budget runs from the",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "info-status": {
       "id": "info-status",
       "name": "Info Status",
@@ -9906,6 +9953,43 @@
         "!hook-installed"
       ],
       "componentType": "command"
+    },
+    "hook-monitor": {
+      "id": "hook-monitor",
+      "name": "Hook Monitor",
+      "symbol": "#hook-monitor",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "7.15.2 hook self-monitoring (scripts/paradigm-hook-monitor.sh, sourced by\nevery Claude Code hook via _pm_begin <Hook> <timeoutMs> <budgetMs>).\nAppends a start record and, from an EXIT trap, an end record (wall ms,\nrc, outcome ok|blocked|error|killed; SIGTERM/HUP/INT -> killed) to the\nring .paradigm/events/hook-timings.jsonl. A SIGKILLed hook leaves a\nstart with no end; readers treat it as killed once older than its\ntimeout + 5 s. Cost: two date(1) calls and two shell appends, no CLI or\nnode spawn. Ring trimmed to PARADIGM_HOOK_RING_MAX (500) lines on ~1 in\n64 runs and deterministically at SessionStart. Fail open: no stdout,\nexit code preserved, every write best-effort; PARADIGM_HOOK_MONITOR_OFF=1\ndisables it. Ring + marker are in the #session-markers-gitignore block.\n",
+      "visualTags": [],
+      "related": [
+        "#session-markers-gitignore"
+      ],
+      "componentType": "utility"
+    },
+    "hook-health-warning": {
+      "id": "hook-health-warning",
+      "name": "Hook Health Warning",
+      "symbol": "#hook-health-warning",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "7.15.2 SessionStart hook (scripts/claude-code-session-start.sh, plugin\nparadigm-session-start.sh, hooks.json SessionStart, timeout 10 s). One\nawk pass over the #hook-monitor ring; for each hook killed (start with no\nend older than timeout + 5 s, or a recorded SIGTERM) or over its budget\nsince the last warning it prints ONE line to stdout (added to the agent's\ncontext), e.g. \"Paradigm Stop hook timed out 11 time(s) since <date>;\nenforcement did not run. Run `paradigm doctor`.\" Once per session\n(.paradigm/.hook-health-warned = \"<session_id> <ms>\"); also trims the\nring to its cap. Always exits 0. Registered by the plugin hooks.json AND by\nthe project-level `paradigm hooks install --claude-code` (.claude/settings.json).\n",
+      "visualTags": [],
+      "related": [
+        "#hook-monitor"
+      ],
+      "componentType": "hook"
+    },
+    "stop-hook-timing": {
+      "id": "stop-hook-timing",
+      "name": "Stop Hook Timing",
+      "symbol": "#stop-hook-timing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on\na hook's stdout/stderr, not for its exit, until the hook timeout (Stop: 30 s).\nRules: (1) never background a command without </dev/null >/dev/null 2>&1;\n(2) paradigm-common.sh discovers .purpose files via `git ls-files -co\n--exclude-standard` (nested agent worktrees and node_modules are skipped)\nand keeps hot loops fork-free (_parent, _is_modified, one awk pass for\nCheck 4 anchors); (3) no network (npx --no-install). Enforced by\ntests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a\nlint check on background jobs).\n",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
     },
     "has-compliance-claimant": {
       "id": "has-compliance-claimant",
@@ -12045,6 +12129,16 @@
       "visualTags": [],
       "related": []
     },
+    "onExit": {
+      "id": "onExit",
+      "name": "OnExit",
+      "symbol": "#onExit",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #session-runner",
+      "visualTags": [],
+      "related": []
+    },
     "wire": {
       "id": "wire",
       "name": "Wire",
@@ -13618,6 +13712,59 @@
           "id": "voice-turn-step-1",
           "name": "Step 2",
           "order": 1
+        }
+      ]
+    },
+    "send-by-word": {
+      "id": "send-by-word",
+      "name": "Send By Word",
+      "symbol": "$send-by-word",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway. Aegis fixes: the origin check runs on EVERY human send (stale or wrong-session claims stamp voice; under a word+ ceiling an ambient-matched send is a piece, so Enter on an ambient draft is clamped); a voice turn closes only after its own replay and a later result; a short word passes adjacency with or without speakerBasis; a word or pieces attach carries liabilityAck (sha256 of the ack text), recorded in the kernel-written start row. The guided dialog teaches the word as a TRIAL (adjacency only, 2 min, send-word-trial.json 0600). request.voice.client mic-toggle / mic-key / start{capture} drive the mic, the Mic key and the capture kind of the kernel-spawned client (--capture ptt|open|toggle).",
+      "steps": [
+        {
+          "id": "send-by-word-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "send-by-word-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "send-by-word-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "send-by-word-step-3",
+          "name": "Step 4",
+          "order": 3
+        }
+      ]
+    },
+    "send-by-pieces": {
+      "id": "send-by-pieces",
+      "name": "Send By Pieces",
+      "symbol": "$send-by-pieces",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "$send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's pieces send ceiling (voice.session.start{send:'pieces'}, one fresh presence per GUI login, refused at strictness L2 or above) → the GUI batches finalized segments by gap/cap (1500 / 8000 ms) and holds while the session is busy → request.voice.send.claim{by:'piece', turnSeqs} → session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the piece guidance note on the per-turn guidance block → ^voice-origin-clamp.",
+      "steps": [
+        {
+          "id": "send-by-pieces-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "send-by-pieces-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "send-by-pieces-step-2",
+          "name": "Step 3",
+          "order": 2
         }
       ]
     },
@@ -15195,6 +15342,19 @@
       "description": "File path passes trust config deny-lists and auto-approve globs",
       "related": []
     },
+    "voice-origin-clamp": {
+      "id": "voice-origin-clamp",
+      "name": "Voice Origin Clamp",
+      "symbol": "^voice-origin-clamp",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm",
+      "description": "Gnomon voice-origin clamp (spec §14.7 \"Voice submodes\", TD-2026-10-21-514): while a turn sent by a spoken send word or as a piece is outstanding, nothing write-capable auto-passes (no auto-edits pass, no always rule); only provably read-only commands pass; every other tool call raises a card marked origin voice, and approving it by voice needs readback + confirm.",
+      "related": [
+        "#supervisor",
+        "#shell-readonly",
+        "#approval-broker"
+      ]
+    },
     "offer-accept": {
       "id": "offer-accept",
       "name": "Offer Accept",
@@ -15884,6 +16044,18 @@
       "description": "Completed/failed tasks archived to JSONL and removed from active store",
       "related": [
         "#task-store"
+      ]
+    },
+    "voice-clamp-applied": {
+      "id": "voice-clamp-applied",
+      "name": "Voice Clamp Applied",
+      "symbol": "!voice-clamp-applied",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "!voice-clamp-applied (TD-2026-10-21-514): a permission request was raised under ^voice-origin-clamp. Carried as clamp:'voice' on the answer's session.inject{channel:'permission'} row (an opaque payload field, no new log kind, so clientApiId does not move) and as detail.origin 'voice' on the card; the supervisor logs it on the #supervisor component.",
+      "related": [
+        "^voice-origin-clamp",
+        "#supervisor"
       ]
     },
     "log-emitted": {
@@ -19993,6 +20165,14 @@
       "category": "components",
       "id": "contract-voice-allowlist"
     },
+    "#contract-voice-modes": {
+      "category": "components",
+      "id": "contract-voice-modes"
+    },
+    "#send-word-matcher": {
+      "category": "components",
+      "id": "send-word-matcher"
+    },
     "#gui-session-rename": {
       "category": "components",
       "id": "gui-session-rename"
@@ -22077,6 +22257,10 @@
       "category": "components",
       "id": "paradigm-solo-cli"
     },
+    "#session-markers-gitignore": {
+      "category": "components",
+      "id": "session-markers-gitignore"
+    },
     "#command-policy": {
       "category": "components",
       "id": "command-policy"
@@ -22189,6 +22373,10 @@
       "category": "components",
       "id": "#docs-scaffold"
     },
+    "#doctor-hook-health": {
+      "category": "components",
+      "id": "doctor-hook-health"
+    },
     "#info-status": {
       "category": "components",
       "id": "info-status"
@@ -22212,6 +22400,18 @@
     "#paradigm-hooks": {
       "category": "components",
       "id": "paradigm-hooks"
+    },
+    "#hook-monitor": {
+      "category": "components",
+      "id": "hook-monitor"
+    },
+    "#hook-health-warning": {
+      "category": "components",
+      "id": "hook-health-warning"
+    },
+    "#stop-hook-timing": {
+      "category": "components",
+      "id": "stop-hook-timing"
     },
     "#has-compliance-claimant": {
       "category": "components",
@@ -22885,6 +23085,10 @@
       "category": "gates",
       "id": "^file-request-allowed"
     },
+    "^voice-origin-clamp": {
+      "category": "gates",
+      "id": "voice-origin-clamp"
+    },
     "^offer-accept": {
       "category": "gates",
       "id": "offer-accept"
@@ -23032,6 +23236,14 @@
     "$voice-turn": {
       "category": "flows",
       "id": "voice-turn"
+    },
+    "$send-by-word": {
+      "category": "flows",
+      "id": "send-by-word"
+    },
+    "$send-by-pieces": {
+      "category": "flows",
+      "id": "send-by-pieces"
     },
     "$offer-handoff": {
       "category": "flows",
@@ -23380,6 +23592,10 @@
     "!!tasks-archived": {
       "category": "signals",
       "id": "!tasks-archived"
+    },
+    "!voice-clamp-applied": {
+      "category": "signals",
+      "id": "voice-clamp-applied"
     },
     "!log-emitted": {
       "category": "signals",
@@ -24644,6 +24860,10 @@
     "#desk-stats.": {
       "category": "components",
       "id": "desk-stats."
+    },
+    "#onExit": {
+      "category": "components",
+      "id": "onExit"
     },
     "^claude": {
       "category": "gates",

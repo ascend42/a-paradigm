@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T05:57:38.674Z'
+generated: '2026-10-21T07:47:42.663Z'
 structure: {}
 key_files:
   config:
@@ -262,6 +262,8 @@ symbols:
   '#purpose-component-contract-gnomon-rpc-v1': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-client-api-id': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-contract-voice-allowlist': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-component-contract-voice-modes': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
+  '#purpose-component-send-word-matcher': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose
   '#purpose-component-gui-session-rename': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui-model-picker': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
   '#purpose-component-gui': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose
@@ -783,6 +785,7 @@ symbols:
   '#purpose-component-paradigm-override-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-paradigm-arch-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
   '#purpose-component-paradigm-solo-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose
+  '#purpose-component-session-markers-gitignore': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-command-policy': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-migration-notices': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
   '#purpose-component-pipeline-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
@@ -811,12 +814,16 @@ symbols:
   '#purpose-component-brain-cli': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/brain/.purpose
   '#purpose-component-DocsCommands': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/docs/.purpose
   '#purpose-component-#docs-scaffold': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/docs/.purpose
+  '#purpose-component-doctor-hook-health': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-info-status': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-context-audit': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-agent-audit': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-legacy-names-audit': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose
   '#purpose-component-skill-used-hook': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-paradigm-hooks': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
+  '#purpose-component-hook-monitor': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
+  '#purpose-component-hook-health-warning': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
+  '#purpose-component-stop-hook-timing': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-has-compliance-claimant': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-team-invocation-gates': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '#purpose-component-check-14-remediation-gate': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
@@ -985,6 +992,7 @@ symbols:
   ^purpose-gate-conductor-launched: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   ^purpose-gate-^symphony-enabled: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Symphony/.purpose
   ^purpose-gate-^file-request-allowed: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Symphony/.purpose
+  ^gate-voice-origin-clamp: /Users/ascend/Documents/GitHub/a-paradigm
   ^purpose-gate-offer-accept: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   ^gate-setup-token: /Users/ascend/Documents/GitHub/a-paradigm
   ^gate-unprovisioned-only: /Users/ascend/Documents/GitHub/a-paradigm
@@ -1022,6 +1030,8 @@ symbols:
   $purpose-flow-$task-archive: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   $purpose-flow-$sentinel-investigation: /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   $purpose-flow-voice-turn: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-voice/.purpose
+  $purpose-flow-send-by-word: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  $purpose-flow-send-by-pieces: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-flow-offer-handoff: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-flow-first-run: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-flow-daemon-lifecycle: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
@@ -1109,6 +1119,7 @@ symbols:
   '!purpose-signal-!task-cancelled': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   '!purpose-signal-!task-reassigned': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
   '!purpose-signal-!tasks-archived': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose
+  '!purpose-signal-voice-clamp-applied': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '!purpose-signal-log-emitted': /Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose
   '!purpose-signal-context-loaded': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
   '!purpose-signal-context-error': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose
@@ -1425,6 +1436,7 @@ symbols:
   '#purpose-ref-component-deciding': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-ref-flow-flow: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-ref-component-desk-stats.': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
+  '#purpose-ref-component-onExit': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   ^purpose-ref-gate-claude: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   '#purpose-ref-component-wire': /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
   $purpose-ref-flow-NAME: /Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose
@@ -1709,6 +1721,7 @@ symbolsByComponentType:
     - '#matcher'
     - '#task-reconcile'
     - '#tool-aliases'
+    - '#session-markers-gitignore'
     - '#command-policy'
     - '#migration-notices'
     - '#pipeline-utils'
@@ -1719,9 +1732,12 @@ symbolsByComponentType:
     - '#near-match'
     - '#project-type'
     - '#authority-yaml-writer'
+    - '#doctor-hook-health'
     - '#context-audit'
     - '#agent-audit'
     - '#legacy-names-audit'
+    - '#hook-monitor'
+    - '#stop-hook-timing'
     - '#has-compliance-claimant'
     - '#team-invocation-gates'
     - '#check-14-remediation-gate'
@@ -2049,6 +2065,8 @@ symbolsByComponentType:
     - '#contract-gnomon-rpc-v1'
     - '#contract-client-api-id'
     - '#contract-voice-allowlist'
+    - '#contract-voice-modes'
+    - '#send-word-matcher'
     - '#gui'
     - '#gui-setup'
     - '#gui-dictation'
@@ -2371,5 +2389,6 @@ symbolsByComponentType:
     - '#OverviewHandler'
   hook:
     - '#skill-used-hook'
+    - '#hook-health-warning'
   storage:
     - '#UniversityStorage'

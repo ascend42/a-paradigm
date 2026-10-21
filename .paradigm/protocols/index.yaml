@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T05:57:38.967Z'
+generated: '2026-10-21T07:47:43.045Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -55,7 +55,7 @@ protocols:
       - backend
   - id: P-add-command-with-file-output
     name: Add a CLI command that writes files
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - command writes files
@@ -537,6 +537,6 @@ protocols:
       - battle-test
 health:
   total: 40
-  current: 20
-  stale: 16
+  current: 19
+  stale: 17
   broken: 4
