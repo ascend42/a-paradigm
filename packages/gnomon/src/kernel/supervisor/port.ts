@@ -39,6 +39,8 @@ export interface VoiceAttributionPort {
    * fail-closed backstop (a pending send-word turn). null ⇒ hand. Never throws.
    */
   originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null): { sentBy: 'word' | 'piece' | 'hotkey' } | null;
+  /** Aegis L-4: a non-claiming match of the parts against pending voice turns (the origin check of a hint-less send) */
+  peekAttribution?(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
 }
 
 export interface SessionCallContext {
@@ -133,7 +135,9 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       // connection, or the send-word / ambient backstop, stamps voice; else hand
       if (voice?.originFor && ctx.principalClass === 'human') {
         try {
-          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, attr);
+          // Aegis L-4: with no source hint the parts are still matched (without claiming) so the ambient backstop applies
+          const forOrigin = attr ?? (p.source !== 'voice' && voice.peekAttribution ? voice.peekAttribution(ctx.principal, p.hsid, texts as string[]) : null);
+          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, forOrigin);
         } catch {
           origin = { sentBy: 'word' }; // fail closed: an origin check that throws clamps the turn
         }

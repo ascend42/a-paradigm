@@ -80,6 +80,11 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     await r.turn('and the docs');
     await r.send(['and the docs']);
     expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'piece' } });
+    // Aegis L-4: an ambient turn's words sent WITHOUT the source hint are still matched for origin (a piece)
+    await r.turn('the ambient words');
+    await r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: HSID, content: [{ text: 'the ambient words' }] });
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'piece' } });
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution'); // the hint-less send claims nothing
     // a typed send with no voice turns in it is hand
     await r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: HSID, content: [{ text: 'typed by hand' }] });
     expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');

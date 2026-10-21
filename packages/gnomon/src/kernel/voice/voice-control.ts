@@ -1083,6 +1083,24 @@ export class VoiceControl {
     }
   }
 
+  /**
+   * Aegis L-4: the same hash match as attributeHumanSend, WITHOUT claiming anything — for the origin check of a human
+   * send that carries no source hint (so the ambient backstop applies to every human send). Never throws.
+   */
+  peekAttribution(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null {
+    try {
+      const a = this.#attachment;
+      const vp = voicePrincipalOf(human);
+      if (!a || !vp || a.hsid !== hsid || a.owner !== human || parts.length === 0) return null;
+      const hashes = new Set(parts.map((x) => this.#hash(x)));
+      const matched = [...this.#userTurns.values()].filter((t) => t.principal === vp && t.attachment === a.voiceSessionId && t.receivedAt >= a.startedAt && t.seq > 0 && this.#pendingDictation(t) && hashes.has(t.textHash));
+      if (matched.length === 0) return null;
+      return { source: 'voice-edited', voiceSessionId: a.voiceSessionId, turnIds: matched.map((t) => t.turnId), turnSeqs: matched.map((t) => t.seq) };
+    } catch {
+      return null;
+    }
+  }
+
   /** The human send an attribution was made for failed: its turns are pending again. */
   releaseAttribution(attr: VoiceAttribution): void {
     for (const id of attr.turnIds) {
