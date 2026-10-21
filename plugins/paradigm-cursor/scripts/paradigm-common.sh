@@ -64,6 +64,29 @@ ENFORCEMENT_MAP=""
 if [ "$PARADIGM_AVAILABLE" = "true" ]; then
   ENFORCEMENT_MAP=$($PARADIGM_BIN enforcement resolve --json 2>/dev/null) || true
 fi
+# Normalise to compact JSON ONCE: drop every whitespace character that sits
+# outside a string literal (escapes inside strings respected). The CLI prints
+# pretty JSON (`"id": "value"`); the lookups below match the compact
+# `"id":"value"` form, so without this every configured severity was silently
+# ignored and each check ran at its hard-coded default.
+if [ -n "$ENFORCEMENT_MAP" ]; then
+  ENFORCEMENT_MAP=$(printf '%s\n' "$ENFORCEMENT_MAP" | awk '
+    BEGIN { ins = 0; esc = 0; out = "" }
+    {
+      line = $0
+      for (i = 1; i <= length(line); i++) {
+        c = substr(line, i, 1)
+        if (ins) {
+          out = out c
+          if (esc) esc = 0
+          else if (c == "\\") esc = 1
+          else if (c == "\"") ins = 0
+        } else if (c == "\"") { ins = 1; out = out c }
+        else if (c != " " && c != "\t" && c != "\r") out = out c
+      }
+    }
+    END { print out }')
+fi
 
 # Helper: get severity for a check ID
 _check_severity() {
