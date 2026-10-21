@@ -216,12 +216,17 @@ describe('#gui-settings Aegis fixes (M1, M2, L1, L2/L3)', () => {
     expect(app).toMatch(/if \(r\) run\(r\.dataset\.id!, e\.isTrusted\)/);
     expect(app).not.toMatch(/setMode\([^)]*'(repo|session)', true\)|voiceClientOp\('(start|stop)', true\)/);
   });
-  it('M2: the standing feed sits under overlays, hides while a dialog is open, its offer is not a key, the pile reserves room', () => {
+  it('M2: the standing feed sits under overlays, hides while a dialog is open, its offer is a toast, the pile reserves room', () => {
     const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
     expect(css).toMatch(/\.overlay \{ z-index: 40; \}/);
     expect(css).toMatch(/\.standing-feed \{[^}]*z-index: 15;/);
     expect(css).toMatch(/body:has\(\.overlay:not\(\[hidden\]\)\) \.standing-feed/);
     expect(css).toMatch(/\.pile \{ padding-bottom: 140px; \}/);
-    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'standing-feed.ts'), 'utf8')).toContain("offer.className = 'standing-offer';");
+    // #gui-toast (board gnomon-notices): the offer is a persistent toast with one key, never a bottom-right button
+    const feed = readFileSync(path.join(ROOT, 'src', 'ui', 'standing-feed.ts'), 'utf8');
+    expect(feed).toContain("key: { label: 'Make it standing'");
+    expect(feed).not.toMatch(/standing-offer|standing-toast/);
+    expect(css).not.toMatch(/\.standing-offer|\.standing-toast/);
+    expect(css).toMatch(/body:has\(\.overlay:not\(\[hidden\]\)\) \.feed > \.toast-anchor/); // lifted beside the sheet, not hidden
   });
 });

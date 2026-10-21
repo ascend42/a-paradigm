@@ -157,7 +157,6 @@ html, body {
 .title { font-family: var(--title-font); font-weight: var(--display-wght); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
 
 .notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: 12px; }
-.notice.fail { border-color: var(--fail-edge); color: var(--fail); background: var(--sheet); }
 
 /* S1 ink keys: a hard 2px ink offset (--key-shadow; none at night, where the --key-edge ring alone carries the key:
    the comp's night keys have no [ ] caps, only + New session does), a --key-edge ring (>= 3:1 on both surfaces;
@@ -674,8 +673,6 @@ html, body {
 .voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
 .voice-stop { color: var(--fail); border-color: var(--fail-edge); }
 .voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
-.voice-toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--sec); font-size: 12px; box-shadow: var(--shadow); }
-.voice-toast[hidden] { display: none; }
 /* #gui-voice-settings: the Voice settings sheet, a right-side drawer on the sheet component (the Settings card);
    rows are label | value | link, and teaching opens INLINE under its row (no modal over the sheet) */
 .overlay.vs-drawer { align-items: stretch; justify-content: flex-end; padding: 0; }
@@ -929,16 +926,43 @@ html, body {
 .settings-readonly .settings-label::after { content: " · kernel-owned"; color: var(--sec); font-size: 11px; }
 /* the standing-grant feed (ui/standing-feed.ts): classes only, the CSP refuses style attributes */
 /* Aegis M2: under every overlay (z 40) and gone while a dialog is open; the stack's pile reserves room below its last
-   card so the feed never covers a decision key; the offer is a plain sheet button, never an ink decision key */
+   card so today's list never covers a decision key. Its toasts and the offer are #gui-toast (below). */
 .overlay { z-index: 40; }
 .standing-feed { position: fixed; right: 12px; bottom: 12px; max-width: 320px; z-index: 15; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
 body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([hidden]) :focus) .standing-feed { display: none; }
 .pile { padding-bottom: 140px; }
-.standing-offer { font: inherit; font-size: 11.5px; text-align: left; color: var(--slate); background: var(--sheet); border: 1px dashed var(--slate); border-radius: var(--radius); padding: 4px 8px; cursor: pointer; }
-.standing-offer:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .standing-items { margin: 4px 0; padding-left: 16px; max-height: 200px; overflow: auto; }
-.standing-toast { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--key-edge); color: var(--ink); }
 .standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }
+/* #gui-toast (board gnomon-notices, rule notices-by-kind; placement: the founder's pick from Luna's
+   gnomon-toast-placement reference, option A): every notice that is not a kernel alert, in one style. On the desk the
+   region hangs from the chat column's right edge, under the chat header row (index.html: the anchor is the first child
+   of #pane-transcript > .feed), so it never covers the chat header's keys (run mode ▾, ⋯) or any stack key; it is
+   over the conversation and never pushes it down. Newest on top, at most three (ui/toasts.ts); under the header menus
+   (z 20). The left edge goes by kind: ink info, amber warn, vermilion fail. */
+.feed > .toast-anchor { position: absolute; top: 8px; left: 20px; right: 20px; height: 0; z-index: 15; }
+/* the region spans its anchor (so a toast's width is one fixed measure, clamped to the column); it lets clicks through
+   between toasts, a toast takes them */
+.toasts { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+.toasts > .toast { pointer-events: auto; }
+/* a sheet open (Settings, Mods, palette): the region lifts above the scrim (z 45 over the overlays' 40) to the window's
+   top right, beside a centred sheet, so an outcome raised inside the sheet still shows; with the Voice settings
+   drawer (right, up to 520px) it sits left of the drawer, never over its done key. Known gap: a 720px-wide
+   sheet leaves no room beside it at the narrowest desktop width, so a toast can cover its close key (tracked separately). */
+body:has(.overlay:not([hidden])) .feed > .toast-anchor, .toast-anchor.lifted { position: fixed; top: 48px; right: 14px; left: auto; width: min(calc(44ch + 26px), calc(100vw - 28px)); height: 0; z-index: 45; }
+body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px, 100vw) + 14px); }
+.toast { box-sizing: border-box; width: min(calc(44ch + 26px), 100%); display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; font-size: 11.5px; line-height: 1.45; color: var(--ink); background: var(--sheet); border: 1px solid var(--key-edge); border-left: 3px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* kind never by hue alone (rule status-in-ink): fail and warn carry a word (.toast-tag: "failed", "warning", "asks
+   first") in ink, caps at the label step, and warn's edge is dashed where fail's is solid */
+.toast.warn { border-left: 3px dashed var(--warn-edge); }
+.toast.fail { border-left-color: var(--fail-edge); }
+.toast-tag { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); }
+.toast-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+/* the clamp opens on hover or focus (a clamped text is focusable), and a fail is never clamped */
+.toast:hover .toast-text, .toast-text:focus, .toast.fail .toast-text { display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible; }
+.toast-text:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.toast-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+[data-motion="full"] .toast { animation: toast-in 120ms ease-out both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ── fidelity 2 (comp direction.html), superseded for the header by board header-5b (above): the row's gap */
 .chrome { gap: 10px; }

@@ -452,8 +452,6 @@ export function noticeOf(status: unknown): { text: string; at: string | null } |
 }
 export const NOTICE_MAX = 140;
 export const NOTICE_PREFIX = 'Voice app: ';
-/** How long a quiet toast stays (ms). */
-export const TOAST_MS = 6000;
 /** A notice older than this when it is read (a backlog page) is not toasted: toasts are for now, not history. */
 export const TOAST_MAX_AGE_MS = 30_000;
 export function toastFresh(at: string | null, now: number): boolean {

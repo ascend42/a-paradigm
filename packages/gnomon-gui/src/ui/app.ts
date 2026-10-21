@@ -38,13 +38,16 @@ import { chatItems, derivedTitle, durationText, foldActivity, groupHue, GuiStore
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText } from '../core/live-turn.js';
 import { mountStandingFeed } from './standing-feed.js';
+import { cardIn, notArrivedText, type CardLabel } from './card-focus.js';
+import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type ToastKey, type Toasts } from './toasts.js';
+import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
-import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
@@ -95,12 +98,32 @@ const shortKeyId = (spki: string): string => {
 let noticeCard: { cardId: string; seen: boolean } | null = null;
 /** #gui-model-picker (ui/model-picker.ts), mounted below; null until then */
 let modelPicker: ModelPicker | null = null;
-function notice(msg: string | null, fail = false): void {
+/** #gui-toast: the one toast region (ui/toasts.ts), mounted on first use (the chat column's right edge). */
+let toastRegion: Toasts | null = null;
+const toasts = (): Toasts =>
+  (toastRegion ??= mountToasts(document, $('toasts'), { say: document.getElementById('toast-say'), alert: document.getElementById('toast-alert'), returnFocus: () => $('voice-pill') }));
+let noticeOut: Notice | null = null;
+/** The toast the last notice() showed (cardWait keeps it to clear it when its card arrives). */
+let noticeShown: ToastHandle | null = null;
+/**
+ * A GUI outcome as a toast (board gnomon-notices: the band keeps kernel alerts only). kind by meaning: info for an
+ * outcome, warn for "not yet" and an asks-first step (held: it stays until cleared or replaced), fail for a refusal.
+ * A source names the action: its fail clears when the same source succeeds (ui/toasts.ts noticeChannel).
+ * notice(null) clears the last one: its cause was resolved.
+ */
+function notice(msg: string | null, kind: ToastKind = 'info', opts: NoticeOptions = {}): void {
   noticeCard = null; // any new notice (or a clear) replaces the card's
-  const n = $('notice');
-  n.hidden = !msg;
-  n.className = fail ? 'notice fail' : 'notice';
-  if (msg) put(n, msg);
+  noticeShown = (noticeOut ??= noticeChannel(toasts()))(msg, kind, opts);
+}
+/** A "card has not arrived yet" warn, cleared when that card shows in the stack (checked on every stack paint). */
+let cardWait: { cardId: string; toast: ToastHandle } | null = null;
+function checkCardWait(): void {
+  if (!cardWait) return;
+  if (!cardWait.toast.present) cardWait = null;
+  else if (cardInPile(cardWait.cardId)) {
+    cardWait.toast.dismiss();
+    cardWait = null;
+  }
 }
 
 function refusalText(r: ShownRefusal): string {
@@ -403,11 +426,11 @@ function onOfferAct(act: 'open' | 'not-now', offerId: string, e: Event): void {
   void sendOfferDecision(offerId, 'open');
 }
 async function sendOfferDecision(offerId: string, decision: 'open' | 'not-now'): Promise<void> {
-  if (!client) return notice('not connected: nothing was sent', true);
+  if (!client) return notice('not connected: nothing was sent', 'fail');
   try {
     await client.call('log.append', decideRequest(offerId, decision));
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the offer decision was not sent', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the offer decision was not sent', 'fail');
   }
   paintTranscript();
 }
@@ -639,13 +662,13 @@ function startRename(hsid: string | null, where: 'head' | 'list', trusted: boole
 async function saveRename(hsid: string, current: string | null, typed: string): Promise<void> {
   const plan = planRename(current, typed);
   if (plan.kind === 'none') return;
-  if (plan.kind === 'refuse') return notice(plan.note, true);
-  if (!client) return notice('not connected: the name was not changed', true);
+  if (plan.kind === 'refuse') return notice(plan.note, 'fail', { source: 'rename' });
+  if (!client) return notice('not connected: the name was not changed', 'fail', { source: 'rename' });
   try {
     await client.call('log.append', renameRequest(hsid, plan.name));
-    notice(null);
+    notice(null, 'info', { source: 'rename' });
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the name was not changed', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the name was not changed', 'fail', { source: 'rename' });
   }
 }
 
@@ -794,35 +817,38 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
     for (const x of d)
       if (!x.el.isConnected && (x.parent === pile || x.parent === pinned)) x.parent.insertBefore(x.el, x.parent.children[x.index] ?? null);
   paintUpdateBanner();
+  checkCardWait();
 }
 
 /* ── self-update (TD-2026-10-19-063, core/restart.ts) ───────────── */
+/**
+ * #gui-toast (board gnomon-notices): update available is a persistent toast with "Restart now", which focuses the
+ * upgrade card (the restart is the card's accept, with Touch ID; a toast never decides). It stays until the card is
+ * decided; closing it hides it for that card only.
+ */
+let updateToast: { cardId: string; text: string; handle: ToastHandle } | null = null;
+let updateClosedFor: string | null = null;
 function paintUpdateBanner(): void {
   const b = upgradeBannerOf([...store.cards.values()].map((c) => ({ cardId: c.cardId, kind: c.kind, card: c.card as Record<string, unknown> })));
-  let el = document.getElementById('update-banner');
-  if (!b) {
-    if (el) el.hidden = true;
-    return;
+  if (updateToast && (!b || b.cardId !== updateToast.cardId || b.text !== updateToast.text || !updateToast.handle.present)) {
+    updateToast.handle.dismiss();
+    updateToast = null;
   }
-  if (!el) {
-    // Aegis L4: h() never takes an `id` (ids would let display data clobber getElementById lookups); set it here
-    el = h(doc, 'div', { class: 'update-banner', role: 'status' }) as unknown as HTMLElement;
-    el.id = 'update-banner';
-    document.body.prepend(el);
-  }
-  clear(el);
-  el.appendChild(h(doc, 'span', null, `${b.text} · `) as unknown as Node);
-  const btn = h(doc, 'button', { type: 'button' }, 'Restart now') as unknown as HTMLButtonElement;
-  // focuses the card only: the restart is the card's accept, with Touch ID
-  btn.addEventListener('click', () => focusCard(b.cardId));
-  el.appendChild(btn);
-  el.hidden = false;
+  if (!b || updateToast || updateClosedFor === b.cardId) return;
+  const cardId = b.cardId;
+  const handle = toasts().show(b.text, {
+    kind: 'info',
+    persistent: true,
+    key: { label: 'Restart now', title: 'Focus the upgrade card (the restart is its accept, with Touch ID)', onPress: () => focusCard(cardId, 'upgrade card') },
+    onClose: () => (updateClosedFor = cardId),
+  });
+  updateToast = { cardId, text: b.text, handle };
 }
 
 /** The socket closed after this page accepted the upgrade: wait for the successor, then load its bundle. */
 async function awaitRestart(): Promise<void> {
   setLink('restarting');
-  notice('Gnomon is restarting with the new version…');
+  notice('Gnomon is restarting with the new version…', 'info', { held: true }); // held until the page reloads
   if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
     clearRestarting(sessionStorage);
     return showReconnect(RESTART_GUIDANCE);
@@ -931,7 +957,7 @@ function schedule(what: Set<string>): void {
     }
     if (w.has('modes') || w.has('voice')) void refreshStatus();
     if (w.has('voice-activity')) watchSpeech();
-    if (w.has('voice-toast')) showToast(); // board header-5b: the idle auto-off, a 6 s toast in the ladder's words
+    if (w.has('voice-toast')) showToast(); // board header-5b: the idle auto-off, a warn toast in the ladder's words
     paintShuttle();
   });
 }
@@ -944,6 +970,8 @@ const standingFeed = mountStandingFeed(document, {
   pendingKinds: () => [...store.cards.values()].map((c) => String(c.kind)),
   focusRepo: () => (focused ? (store.sessions.get(focused)?.repo ?? null) : null),
   notice,
+  toast: (text, o) => toasts().show(text, o),
+  focusCard: (cardId) => focusCard(cardId, 'grant card'),
   kernelPrincipal: () => kernelPrincipalOf(session?.principal),
 });
 store.onChange(() => standingFeed.repaint());
@@ -992,12 +1020,12 @@ const modsPanel = mountMods(document, { client: () => client, status: () => stat
 store.onChange(() => modsPanel.repaint());
 /** Settings → Revoke: the standing feed's own request (request.grant.standing.revoke, a tighten, no presence). */
 async function revokeGrant(grantId: string): Promise<void> {
-  if (!client) return notice('not connected: the grant was not revoked', true);
+  if (!client) return notice('not connected: the grant was not revoked', 'fail', { source: 'revoke' });
   try {
     await client.call('log.append', revokeRequest(grantId));
-    notice(null);
+    notice(null, 'info', { source: 'revoke' });
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the grant was not revoked', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the grant was not revoked', 'fail', { source: 'revoke' });
   } finally {
     await refreshStatus();
   }
@@ -1031,8 +1059,14 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     c.close();
     if (out.stage === 'server-sig') {
       // a forged or foreign serverSig: render nothing but the error and send nothing more (§4.9, G-GUI-12 page side)
+      // the toast region lives in the chat column: keep it (pinned to the window's top right) before the desk goes
+      const anchor = document.querySelector('.toast-anchor');
+      if (anchor) {
+        anchor.classList.add('lifted'); // styles.css: pinned to the window's top right
+        $('gnomon').appendChild(anchor);
+      }
       document.querySelector('.desk')?.remove();
-      notice(out.message, true);
+      notice(out.message, 'fail');
       return;
     }
     return showReconnect(out.refusal ? refusalText(out.refusal) : out.message);
@@ -1055,7 +1089,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
     void gnomonPost(fetch, '/diag', out.session.guiToken, `kernel key re-pinned from ${from} to ${to}`).catch(() => undefined);
   }
   c.onProtocolError((r) => {
-    notice(`kernel could not read a frame from this page: ${refusalText(r)}`, true);
+    notice(`kernel could not read a frame from this page: ${refusalText(r)}`, 'fail');
     void gnomonPost(fetch, '/diag', out.session.guiToken, `protocol error ${r.code} ${r.reason ?? ''} ${r.message}`).catch(() => undefined);
   });
   $('reconnect').hidden = true;
@@ -1101,7 +1135,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   try {
     await subscribe(c);
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'log.read failed', 'fail');
   }
   dispatchDictation({ type: 'start', sinceSeq: store.head, now: Date.now() }); // everything read so far is backlog
   offerLiveSince = store.head; // #gui-offer-slip: a slip shown after this slides in
@@ -1162,11 +1196,11 @@ async function send(textValue: string, accepted?: () => void): Promise<boolean> 
   if (hasDraft(dict)) dispatchDictation({ type: 'sent', now: Date.now() }); // a typed message clears hold
   // never swallow a message silently: say why nothing was sent (dogfood: Enter on the kernel feed "did nothing")
   if (!client) {
-    notice('not connected: nothing was sent', true);
+    notice('not connected: nothing was sent', 'fail');
     return false;
   }
   if (!focused) {
-    notice('no session focused: pick a session on the left or open a new one; nothing was sent', true);
+    notice('no session focused: pick a session on the left or open a new one; nothing was sent', 'fail');
     return false;
   }
   accepted?.();
@@ -1205,24 +1239,39 @@ async function openSession(cwd: string, model: string): Promise<void> {
     const r = await client.call<{ hsid: string }>('session.open', { cwd, model, attended: true });
     focus(r.hsid);
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed', true);
-    // TD-2026-10-19-063: a changed claude binary — the kernel pre-staged a re-pin card; [Re-pin] focuses it
+    // TD-2026-10-19-063: a changed claude binary — the kernel pre-staged a re-pin card; the toast's Re-pin key focuses it
     const d = err instanceof RpcError ? ((err.refusal.data ?? {}) as Record<string, unknown>) : {};
-    if (d.session === 'claude_binary_changed') {
-      const btn = h(doc, 'button', { class: 'key', type: 'button' }, 'Re-pin') as unknown as HTMLButtonElement;
-      btn.addEventListener('click', (e) => {
-        if (e.isTrusted) focusCard(typeof d.cardId === 'string' ? d.cardId : null);
-      });
-      $('notice').appendChild(btn);
-    }
+    // the key only when the refusal names its card: it focuses that card or none, never another gate card
+    const repinId = typeof d.cardId === 'string' ? d.cardId : null;
+    const repin: ToastKey | undefined =
+      d.session === 'claude_binary_changed' && repinId
+        ? {
+            label: 'Re-pin',
+            title: 'Focus the re-pin card in the stack (it decides nothing)',
+            onPress: (e) => {
+              if (e.isTrusted) focusCard(repinId, 're-pin card');
+            },
+          }
+        : undefined;
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed', 'fail', { key: repin });
   }
 }
 
-/** Scroll to a card and focus its default key (Deny on a claim-mismatch card), else its first key. Never decides. */
-function focusCard(cardId: string | null): void {
-  const pile = $('stack');
-  const el = (cardId ? pile.querySelector(`[data-card-id="${CSS.escape(cardId)}"].card`) : null) ?? pile.querySelector('.card.kind-gate-class');
-  if (!el) return notice('the re-pin card has not arrived yet; it shows in the stack when it does', true);
+/** The card with exactly this cardId in the stack, or null: never another card (ui/card-focus.ts). */
+const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId);
+
+/**
+ * Scroll to the card with exactly this cardId and focus its default key (Deny on a claim-mismatch card), else its
+ * first key. Never decides, never focuses a different card: when it has not arrived yet, a warn names it (`what`) and
+ * clears when it arrives (checkCardWait).
+ */
+function focusCard(cardId: string, what: CardLabel = 'card'): void {
+  const el = cardInPile(cardId);
+  if (!el) {
+    notice(notArrivedText(what), 'warn');
+    if (noticeShown) cardWait = { cardId, toast: noticeShown };
+    return;
+  }
   el.scrollIntoView({ block: 'nearest' });
   ((el.querySelector('[data-default]') ?? el.querySelector('[data-decision]') ?? el) as HTMLElement).focus();
 }
@@ -1278,7 +1327,7 @@ const currentCapture = (): 'ptt' | 'open' | 'toggle' => captureOf(voicePreset, c
 /** a running voice app is restarted with the new capture kind (the kernel restarts it only when the kind changed) */
 async function applyCapture(): Promise<void> {
   if (!client || !canAttach(status) || needsStart(clientOf(status))) return;
-  await client.call('log.append', clientRequest('start', currentCapture())).catch((err: unknown) => notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not restarted with the new listening mode', true));
+  await client.call('log.append', clientRequest('start', currentCapture())).catch((err: unknown) => notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not restarted with the new listening mode', 'fail'));
 }
 /** the last ⌃⌥Return count seen (a baseline first: presses before this page never send) */
 let sendNowsSeen: { n: number; epoch: string | null } | null = null;
@@ -1288,8 +1337,9 @@ async function micToggle(trusted: boolean): Promise<void> {
   if (!trusted || !client || !canAttach(status)) return;
   try {
     await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-toggle' } });
+    notice(null, 'info', { source: 'mic' }); // a stale "the mic was not toggled" goes once it works
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic was not toggled', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic was not toggled', 'fail', { source: 'mic' });
   }
 }
 
@@ -1298,10 +1348,11 @@ async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
   if (!trusted || !client || !canAttach(status)) return;
   try {
     await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-key', bare } });
-    notice(bare ? 'Mic key: ` everywhere. While Gnomon voice runs, ` will not type in any app.' : 'Mic key: ⌃` (and ` inside Gnomon)');
+    // a bare ` is a warn (it types in no app while voice runs; the Voice settings keys row says so too)
+    notice(bare ? 'Mic key: ` everywhere. While Gnomon voice runs, ` will not type in any app.' : 'Mic key: ⌃` (and ` inside Gnomon)', bare ? 'warn' : 'info', { source: 'mic-key' });
     await refreshStatus();
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic key was not changed', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic key was not changed', 'fail', { source: 'mic-key' });
   }
 }
 const micKeyBareOf = (st: unknown): boolean => (st as { voice?: { micKeyBare?: unknown } } | null)?.voice?.micKeyBare === true;
@@ -1649,7 +1700,7 @@ async function sendDictation(): Promise<void> {
     fitComposer();
   } catch (err) {
     unsentEcho(echo, err, req.hsid);
-    if (!(err instanceof RpcError)) notice('the dictated draft was not sent; it stays in the composer', true);
+    if (!(err instanceof RpcError)) notice('the dictated draft was not sent; it stays in the composer', 'fail');
     dispatchDictation({ type: 'sendFailed', now: Date.now() });
     const ta = $<HTMLTextAreaElement>('composer-text');
     if (dict.focusedHere && !ta.value) ta.value = dict.text; // the draft stays in the composer
@@ -1789,7 +1840,7 @@ async function stopSpeaking(trusted: boolean): Promise<void> {
   try {
     await client.call('log.append', stopSpeakingRequest());
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not stopped', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not stopped', 'fail');
   } finally {
     await refreshStatus();
   }
@@ -1885,29 +1936,29 @@ let modeBusy = false;
 async function setMode(to: RunMode, scope: ModeScope, trusted: boolean): Promise<void> {
   if (!trusted) return;
   closeModeMenu();
-  if (!client) return notice('not connected: the run mode was not changed', true);
+  if (!client) return notice('not connected: the run mode was not changed', 'fail', { source: 'run-mode' });
   const v = currentMode();
-  if (!v) return notice('no live session focused: the run mode was not changed', true);
+  if (!v) return notice('no live session focused: the run mode was not changed', 'fail', { source: 'run-mode' });
   const plan = planFor(v, to, scope);
-  if (plan.kind === 'blocked') return notice(`${to} is not allowed here: ${plan.reason}`, true);
+  if (plan.kind === 'blocked') return notice(`${to} is not allowed here: ${plan.reason}`, 'fail', { source: 'run-mode' });
   if (plan.kind === 'same') return;
   const req = modeRequest(v, to, scope);
-  if (!req) return notice('this session has no repo to set a mode for', true);
+  if (!req) return notice('this session has no repo to set a mode for', 'fail', { source: 'run-mode' });
   if (modeBusy) return;
   modeBusy = true;
   try {
     const r = await client.call<Record<string, unknown>>('log.append', req);
     if (r.pending === true && typeof r.cardId === 'string') {
-      notice(`run mode ${String(r.from)} → ${to}: confirm with Touch ID`);
+      notice(`run mode ${String(r.from)} → ${to}: confirm with Touch ID`, 'warn', { held: true, source: 'run-mode' });
       try {
         await client.call('approve', { cardId: r.cardId, decision: 'allow' });
-        notice(null);
+        notice(null, 'info', { source: 'run-mode' });
       } catch (err) {
-        notice(err instanceof RpcError ? `the run mode stays ${String(r.from)}: ${refusalText(err.refusal)}` : `the run mode stays ${String(r.from)}`, true);
+        notice(err instanceof RpcError ? `the run mode stays ${String(r.from)}: ${refusalText(err.refusal)}` : `the run mode stays ${String(r.from)}`, 'fail', { source: 'run-mode' });
       }
-    } else notice(null);
+    } else notice(null, 'info', { source: 'run-mode' });
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the run mode was not changed', true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the run mode was not changed', 'fail', { source: 'run-mode' });
   } finally {
     modeBusy = false;
     await refreshStatus();
@@ -1917,7 +1968,7 @@ async function setMode(to: RunMode, scope: ModeScope, trusted: boolean): Promise
 /** ⇧Tab: the next mode in the cycle, skipping one the ceiling does not allow. */
 function cycleMode(trusted: boolean): void {
   const v = currentMode();
-  if (!v) return notice(focused ? 'this session reports no run mode (it ended, or the kernel is older)' : 'no session focused: ⇧Tab cycles the focused session\'s run mode', true);
+  if (!v) return notice(focused ? 'this session reports no run mode (it ended, or the kernel is older)' : 'no session focused: ⇧Tab cycles the focused session\'s run mode', 'fail', { source: 'run-mode' });
   const scope = defaultScope(v); // F2: ⇧Tab moves this folder's mode unless the session has its own
   let to = nextRunMode(v.chosen);
   if (planFor(v, to, scope).kind === 'blocked') to = nextRunMode(to);
@@ -2119,13 +2170,13 @@ function closeVoiceMenu(focusPill = false): void {
 async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, send: 'word' | 'pieces' | null = attachSend(voicePreset)): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
-  if (!client) return notice('not connected: voice was not changed', true);
-  if (!canAttach(status)) return notice('only a human connection attaches voice', true);
+  if (!client) return notice('not connected: voice was not changed', 'fail', { source: 'voice' });
+  if (!canAttach(status)) return notice('only a human connection attaches voice', 'fail', { source: 'voice' });
   const v = voiceStatusOf(status);
   const plan = planVoice(v, to, hsid, voicePresenceDone);
   // the ladder's words in every notice (Off, Talk, Dictate, Send word, Pieces), never "ambient" / "push-to-talk"
   const toName = rungNameOf(to, send);
-  if (plan.kind === 'blocked') return notice(`${toName} is not allowed: ${plan.reason}`, true);
+  if (plan.kind === 'blocked') return notice(`${toName} is not allowed: ${plan.reason}`, 'fail', { source: 'voice' });
   // the ladder: Dictate, Send word and Pieces share the ambient state, so a rung change on the same session re-attaches
   // with the new send ceiling (the kernel reports the current one as status.voice.send)
   if (plan.kind === 'same' && !(to === 'ambient' && v.send !== null && v.send !== (send ?? 'key'))) return;
@@ -2142,34 +2193,34 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
     // V2e seamless: attaching (or choosing an open-mic rung) while the voice app is not running starts it in the same gesture
     if (to !== 'off' && needsStart(clientOf(status))) {
       await client.call('log.append', clientRequest('start', currentCapture()));
-      notice('Starting voice…');
+      notice('Starting voice…', 'info', { source: 'voice' });
     }
     const r = await client.call<Record<string, unknown>>('log.append', req);
     if (r.pending === true && typeof r.cardId === 'string') {
       // Aegis L (V2d): approve in this gesture ONLY the voice-widen presence card for this session; else the stack decides
       if (!isVoiceWidenCard(store.cards.get(r.cardId), hsid)) {
-        focusCard(r.cardId);
-        notice(`${toName} for ${sessionName(hsid ?? '')}: decide the pending card in the stack`);
+        focusCard(r.cardId, 'voice card');
+        notice(`${toName} for ${sessionName(hsid ?? '')}: decide the pending card in the stack`, 'warn', { held: true, source: 'voice' });
         noticeCard = { cardId: r.cardId, seen: store.cards.has(r.cardId) };
         return;
       }
-      notice(`${toName} for ${sessionName(hsid ?? '')}: confirm with Touch ID`);
+      notice(`${toName} for ${sessionName(hsid ?? '')}: confirm with Touch ID`, 'warn', { held: true, source: 'voice' });
       try {
         await client.call('approve', { cardId: r.cardId, decision: 'allow' });
         voicePresenceDone = true;
-        notice(null);
+        notice(null, 'info', { source: 'voice' });
       } catch (err) {
         // the widen card (strictness, detail.op voice.widen) stays in the stack: focus it so the human can decide it there
-        focusCard(r.cardId);
+        focusCard(r.cardId, 'voice card');
         const was = rungNameOf(v.state, v.send);
-        notice(err instanceof RpcError ? `voice stays ${was}: ${voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)}` : `voice stays ${was}`, true);
+        notice(err instanceof RpcError ? `voice stays ${was}: ${voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)}` : `voice stays ${was}`, 'fail', { source: 'voice' });
       }
     } else {
       if (to === 'ambient') voicePresenceDone = true; // the kernel already held this login's presence
-      notice(null);
+      notice(null, 'info', { source: 'voice' });
     }
   } catch (err) {
-    notice(err instanceof RpcError ? (voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)) : 'voice was not changed', true);
+    notice(err instanceof RpcError ? (voiceRefusalNote(err.refusal.reason, err.refusal.data) ?? refusalText(err.refusal)) : 'voice was not changed', 'fail', { source: 'voice' });
   } finally {
     voiceBusy = false;
     await refreshStatus();
@@ -2186,13 +2237,13 @@ function voiceAct(a: string, trusted: boolean): void {
 async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
-  if (!client) return notice('not connected: the voice app was not changed', true);
-  if (!canAttach(status)) return notice('only a human connection starts or stops the voice app', true);
+  if (!client) return notice('not connected: the voice app was not changed', 'fail', { source: 'voice-app' });
+  if (!canAttach(status)) return notice('only a human connection starts or stops the voice app', 'fail', { source: 'voice-app' });
   try {
     await client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op));
-    notice(null);
+    notice(null, 'info', { source: 'voice-app' });
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : `the voice app was not ${op === 'start' ? 'started' : 'stopped'}`, true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : `the voice app was not ${op === 'start' ? 'started' : 'stopped'}`, 'fail', { source: 'voice-app' });
   } finally {
     await refreshStatus();
   }
@@ -2200,7 +2251,7 @@ async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<vo
 
 /** "your voice": the enrolment opens inline under its row in the Voice settings sheet (phrase N of 3, a level meter). */
 function openEnrolFlow(): void {
-  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
+  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', 'fail');
   setFlow('enrol');
   if (!store.enrol || store.enrol.step === 'done' || store.enrol.step === 'failed') {
     store.enrol = enrolStart();
@@ -2227,8 +2278,8 @@ function paintEnrol(): void {
 async function submitEnrol(trusted: boolean): Promise<void> {
   const s = store.enrol;
   if (!trusted || !s) return;
-  if (!client) return notice('not connected: no voice was enrolled', true);
-  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', true);
+  if (!client) return notice('not connected: no voice was enrolled', 'fail', { source: 'enrol' });
+  if (!canAttach(status)) return notice('only a human connection teaches Gnomon a voice', 'fail', { source: 'enrol' });
   if (s.step === 'form' || s.step === 'failed') {
     const v = enrolRequest(enrolName, enrolAgreed);
     if (!v.ok) {
@@ -2247,14 +2298,14 @@ async function submitEnrol(trusted: boolean): Promise<void> {
   }
   if (s.step !== 'confirm') return;
   const cardId = s.cardId ?? [...store.cards.values()].find((c) => isEnrolCard(c, s.name))?.cardId ?? null;
-  if (!cardId) return notice('the Touch ID card has not arrived yet; it shows in the decisions pile when it does');
+  if (!cardId) return notice(notArrivedText('Touch ID card'), 'warn');
   try {
     await client.call('approve', { cardId, decision: 'allow' });
     // allowed: the kernel asks the voice app to record (status.voice.enrolment 'requested'); progress folds in
     store.enrol = enrolAllowed({ ...s, cardId }, Date.now());
   } catch (err) {
-    focusCard(cardId);
-    return notice(err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet', true);
+    focusCard(cardId, 'Touch ID card');
+    return notice(err instanceof RpcError ? `not enrolled yet: ${refusalText(err.refusal)}` : 'not enrolled yet', 'fail', { source: 'enrol' });
   }
   paintEnrol();
   await refreshStatus();
@@ -2283,25 +2334,23 @@ async function forgetVoice(name: string, trusted: boolean): Promise<void> {
   try {
     await client.call('log.append', forgetRequest(name));
   } catch (err) {
-    notice(err instanceof RpcError ? refusalText(err.refusal) : `${name} was not forgotten`, true);
+    notice(err instanceof RpcError ? refusalText(err.refusal) : `${name} was not forgotten`, 'fail');
   }
   await refreshStatus();
 }
 
-let toastTimer: ReturnType<typeof setTimeout> | null = null;
+let voiceToastShown: ToastHandle | null = null;
 /**
- * A quiet toast (6 s, then it clears itself): a voice-app notice, or the kernel's idle auto-off in the ladder's words
- * (board header-5b: never a note left in the header); never a decision, never a backlog replay.
+ * A warn toast (#gui-toast, board gnomon-notices; it leaves by itself): a voice-app notice, or the kernel's idle
+ * auto-off in the ladder's words (board header-5b: never a note left in the header); never a decision, never a
+ * backlog replay. A newer one replaces the last.
  */
 function showToast(): void {
   const t = store.voiceToast;
   store.voiceToast = null;
   if (!t || !toastFresh(t.at, Date.now())) return;
-  const el = $('voice-toast');
-  put(el, t.text);
-  el.hidden = false;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.hidden = true), TOAST_MS);
+  voiceToastShown?.dismiss();
+  voiceToastShown = toasts().show(t.text, { kind: 'warn' });
 }
 
 /* ── palette ────────────────────────────────────────────────────── */
@@ -2796,6 +2845,8 @@ function wire(): void {
     } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {
       e.preventDefault();
       void stopSpeaking(e.isTrusted);
+    } else if (e.key === 'Escape' && !editableFocus() && toasts().dismissNewestFail()) {
+      e.preventDefault(); // #gui-toast: a fail stays until closed (its close key, or Esc)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
       e.preventDefault();
       run('session.new', e.isTrusted);

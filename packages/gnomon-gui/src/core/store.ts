@@ -167,7 +167,7 @@ export class GuiStore {
   /** V2e: the "Teach Gnomon your voice" flow while its dialog is open (the page opens it; status.voice.enrolment folds into it). */
   enrol: EnrolState | null = null;
   /**
-   * The next quiet toast (core/voice-client.ts TOAST_MS, 6 s; it clears itself), until the page shows it: the voice
+   * The next warn toast (core/toasts.ts TOAST_WARN_MS; it leaves by itself), until the page shows it: the voice
    * app's notice (A5: status.voice.notice, set by the page) or, board header-5b, the kernel's idle auto-off ("Dictate
    * turned off after 10 min idle", `idle`; a voice.session.start drops one not yet shown).
    */
@@ -299,7 +299,7 @@ export class GuiStore {
     // #gui-offer-slip: an offer row (shown / decided / kept) changes that conversation's slips
     if (hsid && OFFER_ROW_KINDS.has(r.kind)) what.add(`offers:${hsid}`);
     // V2d: an attachment row changes status.voice (the pill re-reads it); a turn row kicks the level meter. Board
-    // header-5b: the kernel's idle auto-off is a quiet toast in the ladder's words (6 s, then it is gone), never a
+    // header-5b: the kernel's idle auto-off is a warn toast in the ladder's words (it leaves by itself), never a
     // note left in the header
     if (VOICE_ROW_KINDS.has(r.kind)) {
       what.add('voice');

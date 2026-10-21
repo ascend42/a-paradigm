@@ -13,6 +13,7 @@
  * Every request is sent only on a trusted user event (G-GUI-04).
  */
 import { CUSTOM, MODEL_CHOICES, modelChipText, modelLabel, openModelOf, sessionModelText, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest, type StorageLike } from '../core/model-picker.js';
+import type { ToastKind } from '../core/toasts.js';
 
 interface Caller {
   call<T = unknown>(method: string, params?: unknown): Promise<T>;
@@ -28,7 +29,7 @@ export interface ModelPickerDeps {
   /** is the session live (opened, not ended)? */
   live: (hsid: string) => boolean;
   focused: () => string | null;
-  notice: (msg: string | null, fail?: boolean) => void;
+  notice: (msg: string | null, kind?: ToastKind) => void;
   storage?: StorageLike;
 }
 export interface ModelPicker {
@@ -148,10 +149,10 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     const { hsid } = target;
     closeSheet();
     const c = d.client();
-    if (!c) return d.notice('not connected', true);
+    if (!c) return d.notice('not connected', 'fail');
     void c.call('log.append', switchRequest(hsid, to)).then(
       () => d.notice(`model switched to ${modelLabel(to)} · the conversation continues`),
-      (err: unknown) => d.notice(`model switch refused: ${err instanceof Error ? err.message : 'refused'}`, true),
+      (err: unknown) => d.notice(`model switch refused: ${err instanceof Error ? err.message : 'refused'}`, 'fail'),
     );
   });
   doc.addEventListener('click', (e) => {

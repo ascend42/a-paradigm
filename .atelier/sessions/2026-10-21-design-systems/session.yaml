@@ -77,6 +77,22 @@ boards:
       choice: say-instruction
       decided_by: creator
       refinement: "Tag quotes the exact phrase the voice grammar accepts for that card (the two-word challenge on gate cards), then '· reversible'. Same position."   # Luna's catch, accepted with the pick
+  - id: gnomon-standing-offer-key
+    product: gnomon
+    raised_by: "Aegis review of the notices-and-toasts batch"
+    question: "Should 'Make it standing' approve the grant from the toast, or open the card?"
+    decision: { kind: pick, choice: open-the-card, decided_by: creator, writes: "The toast key files the request and focuses the grant card; the decision happens on the card (a toast is never a decision key)." }
+  - id: gnomon-toast-placement
+    product: gnomon
+    raised_by: "Mika review of the notices-and-toasts batch: toasts under the pill cover the stack head's decision keys"
+    question: "Where do toasts sit?"
+    references_rendered: [now, chat-right-edge, under-pill-push, chat-bottom]   # refs/gnomon-toast-placement.html
+    decision:
+      kind: pick
+      choice: chat-right-edge
+      decided_by: creator
+      refinement: "Below the chat header row (clear of ask/⋯); with a sheet open, top right above the scrim (Luna)."
+      open: "At 1024 the 720px sheet leaves no room; in-sheet results inline in the row (T-2026-10-21-024)."
 amendments:                                 # Mika's adjustments while codifying, accepted by the creator
   - { board: gnomon-voice-tag, decided_by: creator, change: "Gate cards read 'say \u201c<prefix> approve <handle>\u201d \u00b7 gate' (no 'reversible'); the two-word challenge is issued only after the handle is spoken (spec \u00a714.7)." }
   - { board: gnomon-notices, decided_by: creator, change: "Toast edge by kind: ink info, amber asks-first, vermilion error (replaces header-5b's amber-for-all, which broke one-meaning-per-hue)." }

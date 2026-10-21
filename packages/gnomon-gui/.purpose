@@ -10,7 +10,7 @@ description: >-
   packages/gnomon/src/kernel/web/gui-bundle.ts (opaque base64 + pin literal);
   --check (first step of `npm test`) fails when that file is stale.
   TD-2026-10-19-063: a session.open refused claude_binary_changed shows a
-  [Re-pin] button in the red notice that focuses the kernel's pre-staged
+  fail toast (#gui-toast) with a Re-pin key that focuses the kernel's pre-staged
   re-pin card (never decides); a claim-mismatch card renders its first line
   red and marks Deny as the default (focused) key.
 
@@ -108,7 +108,7 @@ components:
       L3: a model-text choice chip keeps its filled choice-k pill at night too (two cues: dashed edge +
       pill), never the dashed border alone.
       L4: h() keeps `id` OFF its attribute allowlist (display data must not clobber getElementById); the
-      update banner and the reconnect close key set .id after h(). approval.mode.set rows stay visible as a
+      reconnect close key sets .id after h() (the update banner is a #gui-toast now). approval.mode.set rows stay visible as a
       system line ("run mode a → b") and in the raw view.
     workshop-caps: >-
       S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
@@ -161,8 +161,8 @@ components:
       in the fence). test/mod-panels.test.ts.
     self-update: >-
       TD-2026-10-19-063 restart (core/restart.ts, PURE but injected storage
-      and fetch): a pending daemon-stop{reason:'upgrade'} card shows the
-      banner "Gnomon was updated · Restart now", whose button only focuses
+      and fetch): a pending daemon-stop{reason:'upgrade'} card shows a
+      persistent toast (#gui-toast) "Gnomon was updated · Restart now", whose key only focuses
       the card (the restart is the card's accept, one Touch ID). This page's
       own accept sets a single-use sessionStorage marker; the kernel's
       gui.resume{resumeToken, kernelPublicKey} (this connection only) is
@@ -205,10 +205,14 @@ components:
       grant, not offered today) and builds request.grant.standing{tuples,
       repos} / request.grant.standing.revoke{grantId}. ui/standing-feed.ts
       (its own module; app.ts only mounts it and forwards live rows and
-      status reads) shows toasts, today's list with Revoke (a tighten, no
-      presence) and "Let Gnomon handle these today", which sends the request
-      and approves its grant card `allow` in the same trusted gesture (one
-      password). Tests: test/standing.test.ts.
+      status reads) shows each use as an info toast on the page's one toast
+      region (#gui-toast; no bottom-right toasts of its own; a window joining
+      the unlock is a warn), today's list with Revoke (a tighten, no presence)
+      and the offer as a persistent toast with one key, "Make it standing",
+      which files the request on a trusted press and then focuses the grant
+      card in the stack (founder decision with Aegis: a toast never decides a
+      card; the person accepts it there, one password); its close key reads
+      "Not today". Tests: test/standing.test.ts.
     voice-controls: >-
       Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
       header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the
@@ -251,8 +255,8 @@ components:
       store flags `voice` (voice.session.start / .end / .mode, daemon.start),
       plus the voice-app lifecycle poll (voice-app-lifecycle); voice.turn.* rows
       only kick the meter. The kernel's
-      idle auto-off (voice.session.end with reason idle) is a quiet 6 s
-      toast (store.voiceToast idle, "Dictate turned off after N min idle" in
+      idle auto-off (voice.session.end with reason idle) is a warn toast
+      (#gui-toast, 10 s; store.voiceToast idle, "Dictate turned off after N min idle" in
       ladder words, board header-5b); a new attachment drops one unshown. Transcript: a voice turn is the user message
       (one line, tagged with a mic and the speaker, capped at 32 chars) only
       when the kernel's turn.sent{source: voice, voiceTurnSeq} cites it;
@@ -309,7 +313,7 @@ components:
       closing while the card is pending denies it; enrolled voices with a
       two-click [Forget] sending request.voice.forget{name} (no card).
       Notices are status.voice.notice{text, code?, at}: a new `at` is a
-      quiet toast prefixed "Voice app: ", never a decision or a backlog
+      warn toast (#gui-toast) prefixed "Voice app: ", never a decision or a backlog
       replay (30 s). Aegis L2-L4: the dev-unsigned banner is a persistent
       alert (no timer); "done" shows only once status.voice.enrolled lists
       the name; during the phrases the dialog says "Recording <name> — only
@@ -1044,6 +1048,58 @@ components:
     tags: [gnomon, gui, design-system, chip]
     tests:
       - test/desk.test.ts
+  gui-toast:
+    description: >-
+      #gui-toast (board gnomon-notices, choice band-for-alerts; design-system
+      component toast, zone toasts, rule notices-by-kind; migration batch
+      notices-and-toasts) - every notice that is not a kernel alert, in one
+      style and one place: the #toasts region, a zero-height anchor that is
+      the first child of the chat column's .feed (founder's pick, option A of
+      Luna's gnomon-toast-placement reference): right-aligned at the chat
+      column's right edge under the chat header row, over the conversation,
+      never over the chat header's keys or any stack key. With a sheet open
+      it lifts above the scrim (z 45) to the window's top right, left of the
+      Voice settings drawer; if the desk is removed it moves to the shell
+      (.toast-anchor.lifted). One width, min(44ch + 26px, the column). A
+      clamped text opens on hover or focus (it is focusable) and a fail is
+      never clamped; announcements are appended to the live regions, so two
+      quick toasts are both read. A key focuses only its own card
+      (ui/card-focus.ts cardIn: the exact cardId, never another gate card);
+      when it has not arrived a warn names it (upgrade, grant, re-pin, voice,
+      Touch ID card) and clears when it does.
+      Known gap: at 1024 a 720px sheet leaves no room, so a toast can cover
+      the sheet's close key (tracked separately).
+      The band keeps #repin and #voice-dev only. core/toasts.ts (PURE) holds
+      the policy: kinds info / warn / fail with the left edge ink / amber /
+      vermilion; info leaves after 6 s and warn after 10 s, both paused while
+      hovered or focused; fail and persistent never leave by themselves;
+      kind is never hue alone: fail and warn carry a caps word in ink
+      ("failed", "warning", "asks first") and warn's edge is dashed;
+      announcements go through two live regions in index.html (#toast-say
+      polite, #toast-alert assertive for fail), the toasts are not live; at
+      most three, newest on top and always shown, an older info then warn
+      leaves for room, a fail or persistent one waits hidden; a refusal's next: line stays visible while the main
+      text clamps to 4 lines at 44ch (the rest in title=). ui/toasts.ts is
+      the DOM (text nodes only): an optional single key (Restart now, Make it
+      standing, Re-pin) that focuses a card or makes a request and never
+      decides a card; a 24px close key on fail and persistent toasts; Esc in
+      a toast closes it and the page's Esc closes the newest fail. Focus: a
+      new toast is inserted at the top and nothing moves; a focused toast
+      that leaves returns focus where it was before, never to another key.
+      Its callers: app.ts notice(msg, kind, {held, key, source}) over
+      noticeChannel (GUI outcomes; a new one replaces the last unless that
+      was a fail; a fail with a source clears when that source succeeds; an
+      asks-first step is a held warn; a re-pin "not arrived yet" warn clears
+      when the card arrives; "restarting" is held until reload), showToast (voice idle auto-off and
+      voice-app notices, warn), paintUpdateBanner (update available,
+      persistent, Restart now focuses the upgrade card; closing hides it for
+      that card) and ui/standing-feed.ts. A 120 ms fade that reduced motion
+      drops.
+    path: src/ui/toasts.ts
+    type: module
+    tags: [gnomon, gui, design-system, toast, notice]
+    tests:
+      - test/toasts.test.ts
   gui-composer:
     description: >-
       #gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the
@@ -1085,8 +1141,8 @@ components:
       unseen unlock says only "no unlock seen since this page connected";
       run(id, trusted) carries the gesture's isTrusted from every path and the
       header switch checks it; the standing feed sits under overlays (hidden
-      while a dialog is open), its offer is not an ink key, and the stack pile
-      reserves bottom room so it never covers a card key.
+      while a dialog is open), its offer is a toast (#gui-toast), and the stack
+      pile reserves bottom room so today's list never covers a card key.
     path: src/core/settings.ts
     type: module
     tags: [gnomon, gui, settings, theme]

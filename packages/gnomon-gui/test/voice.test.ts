@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { TOAST_MS } from '../src/core/voice-client.js';
+import { toastTtl, TOAST_WARN_MS } from '../src/core/toasts.js';
 import { canAttach, cardNoticeStep, idleNoteOf, startRungName, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
 import { ladderEntries, rungNameOf, rungOfPresetCommand } from '../src/core/voice-ladder.js';
 
@@ -120,7 +120,7 @@ describe('voice: a voice connection is never offered attach controls', () => {
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
     expect(app).not.toMatch(/voiceRowEl|data-voice-row/);
     expect(app).toMatch(/ladderEntries\(\{ \.\.\.readiness\(\), rung: rungOf\(v, voicePreset\), hotkey: v\.hotkey, attachable: canAttach\(status\)/);
-    expect(app).toMatch(/if \(!canAttach\(status\)\) return notice\('only a human connection attaches voice', true\);/);
+    expect(app).toMatch(/if \(!canAttach\(status\)\) return notice\('only a human connection attaches voice', 'fail', \{ source: 'voice' \}\);/);
   });
 });
 
@@ -151,18 +151,18 @@ describe('voice: the kernel idle auto-off', () => {
     const end = { seq: 3, view: 'full', event: { kind: 'voice.session.end', session: A, at: '2026-10-21T10:10:00.000Z', payload: { voiceSessionId: VS, reason: 'idle', turns: 4 } } };
     const what = s.apply([end]);
     expect(what.has('voice')).toBe(true);
-    expect(what.has('voice-toast')).toBe(true); // the page shows it as the 6 s toast (TOAST_MS), then it is gone
+    expect(what.has('voice-toast')).toBe(true); // the page shows it as a warn toast (TOAST_WARN_MS), then it is gone
     expect(s.voiceToast).toEqual({ text: 'Dictate turned off after 10 min idle', at: '2026-10-21T10:10:00.000Z', idle: true });
     expect(s.voiceToast!.text).not.toMatch(/ambient/i);
     expect(chatItems(s.transcript(A)).items.map((i) => i.text)).toContain('Voice turned off after 10 min idle');
     // a new attachment before the page showed it drops it (it is about the past)
     s.apply([{ seq: 4, view: 'full', event: { kind: 'voice.session.start', session: A, payload: { voiceSessionId: 'vs:2', hsid: A, mode: 'ptt' } } }]);
     expect(s.voiceToast).toBeNull();
-    // the page: a 'voice-toast' change shows it through the one toast, which hides itself after TOAST_MS
+    // the page: a 'voice-toast' change shows it as a warn toast (#gui-toast, board gnomon-notices), which leaves by itself
     expect(app).toContain("if (w.has('voice-toast')) showToast();");
-    expect(app).toMatch(/toastTimer = setTimeout\(\(\) => \(el\.hidden = true\), TOAST_MS\);/);
+    expect(app).toContain("voiceToastShown = toasts().show(t.text, { kind: 'warn' });");
+    expect(toastTtl('warn', false)).toBe(TOAST_WARN_MS);
     expect(app).not.toMatch(/voiceNote|voice-note/);
-    expect(TOAST_MS).toBe(6000);
     // and the pill after it: status says not attached ⇒ Mic off
     expect(pillOf(voiceStatusOf(off())).label).toBe('Mic off');
   });
@@ -264,10 +264,10 @@ describe('voice: palette, blocks and page wiring', () => {
   });
   it('a choice is sent only on a trusted gesture; an ambient presence card is approved allow in the same gesture', () => {
     expect(app).toMatch(/async function setVoice\(to: VoiceState, hsid: string \| null, trusted: boolean, send: 'word' \| 'pieces' \| null = attachSend\(voicePreset\)\): Promise<void> \{\s*if \(!trusted\) return;/);
-    expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{[\s\S]{0,200}if \(!isVoiceWidenCard\(store\.cards\.get\(r\.cardId\), hsid\)\) \{\s*focusCard\(r\.cardId\);[\s\S]{0,200}return;[\s\S]{0,300}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
+    expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{[\s\S]{0,200}if \(!isVoiceWidenCard\(store\.cards\.get\(r\.cardId\), hsid\)\) \{\s*focusCard\(r\.cardId, 'voice card'\);[\s\S]{0,260}return;[\s\S]{0,400}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
     expect(app).toContain('voicePresenceDone = false; // ambient\'s Touch ID is once per GUI login');
     // an undecided widen card (strictness, detail.op voice.widen) is focused in the stack
-    expect(app).toMatch(/catch \(err\) \{\s*\/\/ the widen card[^\n]*\n\s*focusCard\(r\.cardId\);/);
+    expect(app).toMatch(/catch \(err\) \{\s*\/\/ the widen card[^\n]*\n\s*focusCard\(r\.cardId, 'voice card'\);/);
   });
   it('the pill is repainted from status on a voice row, never on a timer', () => {
     expect(app).toContain("if (w.has('modes') || w.has('voice')) void refreshStatus();");
@@ -322,8 +322,8 @@ describe('the "decide the pending card" notice clears once its card is decided (
     store.apply([{ seq: 2, kind: 'approval.decide', connId: 'k', payload: { cardId: 'card:1', decision: 'allow' } } as Row]);
     expect(cardNoticeStep(t, store.cards).clear).toBe(true);
     const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
-    expect(app).toMatch(/decide the pending card in the stack`\);\s*noticeCard = \{ cardId: r\.cardId, seen: store\.cards\.has\(r\.cardId\) \};/);
+    expect(app).toMatch(/decide the pending card in the stack`, 'warn', \{ held: true, source: 'voice' \}\);\s*noticeCard = \{ cardId: r\.cardId, seen: store\.cards\.has\(r\.cardId\) \};/);
     expect(app).toMatch(/cardNoticeStep\(noticeCard, store\.cards\);\s*if \(step\.clear\) notice\(null\);/);
-    expect(app).toMatch(/function notice\(msg: string \| null, fail = false\): void \{\s*noticeCard = null;/);
+    expect(app).toMatch(/function notice\(msg: string \| null, kind: ToastKind = 'info', opts: NoticeOptions = \{\}\): void \{\s*noticeCard = null;/);
   });
 });

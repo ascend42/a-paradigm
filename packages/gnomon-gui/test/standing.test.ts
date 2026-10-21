@@ -59,10 +59,16 @@ describe('standing feed: the once-a-day offer', () => {
 describe('standing feed: the page wiring (source read)', () => {
   const feed = readFileSync(path.join(ROOT, 'src', 'ui', 'standing-feed.ts'), 'utf8');
   const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
-  it('offer and Revoke send only on a trusted gesture; the grant card is approved in the same gesture', () => {
-    expect(feed).toMatch(/offer\.addEventListener\('click', \(e\) => \{\s*if \(!e\.isTrusted/);
+  it('offer and Revoke send only on a trusted gesture; the offer files the request and focuses the grant card, never approves it', () => {
+    expect(feed).toMatch(/function makeStanding\(e: MouseEvent\): void \{\s*if \(!e\.isTrusted/);
+    expect(feed).toMatch(/onPress: makeStanding/);
     expect(feed).toMatch(/revoke\.addEventListener\('click', \(e\) => \{[\s\S]{0,80}if \(!e\.isTrusted/);
-    expect(feed).toMatch(/'log\.append', grantRequest\([\s\S]{0,200}client|c\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
+    expect(feed).toMatch(/'log\.append', grantRequest\(d\.focusRepo\(\)\)\);[\s\S]{0,200}if \(r\.pending === true && typeof r\.cardId === 'string'\) d\.focusCard\(r\.cardId\);/);
+    expect(feed).not.toMatch(/'approve'/); // founder decision with Aegis: a toast never decides a card
+    expect(feed).toContain("closeLabel: 'Not today'");
+    // Mika #5: the offer names what is granted, no vague "these" / "they"
+    expect(feed).toMatch(/const OFFER_TEXT = 'Let Gnomon handle today\\'s approvals\? One password now: mode switches, "always" rules, voice and same-build restarts then notify you instead of asking, until the screen locks';/);
+    expect(feed).toContain("kind: i.kind === 'joined' ? 'warn' : 'info'");
   });
   it('app.ts mounts the module once and forwards live rows and status reads (a minimal mount)', () => {
     expect(app.match(/mountStandingFeed\(/g)).toHaveLength(1);

@@ -172,13 +172,12 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
 });
 
 describe('Aegis L4: h() and ids', () => {
-  it('h() refuses an id attribute, and no h() call in the source passes one (the update banner and reconnect key set it after)', () => {
+  it('h() refuses an id attribute, and no h() call in the source passes one (the reconnect key sets it after)', () => {
     expect(() => h(fdoc, 'div', { id: 'update-banner' })).toThrow(/attribute id is not allowed/);
     for (const f of readdirSync(path.join(ROOT, 'src'), { recursive: true }) as string[]) {
       if (f.endsWith('.ts')) expect(readFileSync(path.join(ROOT, 'src', f), 'utf8'), f).not.toMatch(/\bh\([^)]*\{[^}]*\bid:/);
     }
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
-    expect(app).toContain("el.id = 'update-banner';");
     expect(app).toContain("close.id = 'reconnect-close';");
   });
 });
