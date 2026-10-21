@@ -505,3 +505,23 @@ describe('#offer-router: turn.result{turn} pairs by id (review M2)', () => {
     expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/3`);
   });
 });
+
+describe('#offer-router: session boundaries and errored turns (review R3, R4)', () => {
+  const ev = (line: string): CommittedRow => ({ kind: 'turn.event', session: HSID, payload: { hsid: HSID, line } });
+  const sent = (k: number): CommittedRow => ({ kind: 'turn.sent', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}` } });
+  for (const boundary of ['session.exited', 'session.open', 'session.drained'] as const) {
+    it(`R3: ${boundary} drops outstanding turns and the message text (a resumed session restarts at /1)`, () => {
+      const t = rig();
+      t.commit(sent(1));
+      t.commit(sent(2)); // never answered: the session ended
+      t.commit(ev(assistantLine(offerReply('stale', BLOCK))));
+      t.commit({ kind: boundary, session: HSID, payload: boundary === 'session.drained' ? { uuid: '00000000-0000-4000-8000-000000000000', reason: 'restart' } : { hsid: HSID } });
+      // the resumed session: turn ids restart at /1, nothing stale is outstanding or carried over
+      t.commit(sent(1));
+      t.commit(ev(assistantLine(offerReply('fresh', BLOCK))));
+      const rows = t.commit({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1`, subtype: 'success', isError: false } });
+      expect(rows.map((r) => r.kind)).toEqual(['offer.shown']);
+      expect(t.suppressed).toEqual([]);
+    });
+  }
+});

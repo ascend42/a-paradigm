@@ -2213,7 +2213,10 @@ components:
       the block named them; names only, never message text; at most one per
       completed turn, no-block only while the session has an offerable mod.
       Review M2: turn.result{turn} closes every outstanding turn up to the one
-      it names (FIFO when absent). Pause
+      it names (FIFO when absent). Review R3: session.exited, session.open and
+      session.drained drop the turn state (outstanding turns, message text,
+      evaluation marks; mutes stay, L7), since a resumed session restarts
+      its turn ids at /1. Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by

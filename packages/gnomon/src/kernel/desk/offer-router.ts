@@ -59,7 +59,7 @@ import { serverNameOf, type DeskMod } from './mcp-passthrough.js';
 
 /** The rows the router folds. */
 export const OFFER_ROUTER_KINDS: readonly string[] = Object.freeze([
-  'turn.sent', 'turn.event', 'turn.result', 'session.exited',
+  'turn.sent', 'turn.event', 'turn.result', 'session.exited', 'session.open', 'session.drained',
   'offer.shown', 'offer.decided', 'offer.kept', 'offer.muted',
 ]);
 /** The rows seed() reads at boot (the persistent state: repo mutes and the offers of resumed sessions). */
@@ -312,9 +312,20 @@ export class OfferRouter {
         return [];
       }
       case 'session.exited':
-        // L7: mutes and stop-here stay until the state is evicted (bounded LRU), not dropped at exit
-        if (hsid && this.#sessions.has(hsid)) this.#s(hsid).exited = true;
+      case 'session.open':
+      case 'session.drained': {
+        // L7: mutes and stop-here stay until the state is evicted (bounded LRU), not dropped at exit.
+        // review R3: a session boundary drops the turn state (a resumed session restarts its turn ids at /1)
+        if (!hsid || !this.#sessions.has(hsid)) return [];
+        const s = this.#s(hsid);
+        if (e.kind === 'session.exited') s.exited = true;
+        else if (e.kind === 'session.open') s.exited = false;
+        s.turns = [];
+        s.texts = [];
+        s.msgId = null;
+        s.evaluated = null;
         return [];
+      }
     }
     if (!hsid) return [];
     const s = this.#s(hsid);
