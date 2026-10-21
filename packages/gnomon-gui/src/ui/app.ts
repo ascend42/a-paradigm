@@ -38,7 +38,7 @@ import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
-import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, mountModPanels } from './mod-panels-mount.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
@@ -1249,7 +1249,7 @@ async function sendDictation(): Promise<void> {
   }
 }
 
-/** The ring, [Hold]/[Resume], [Send], the aria-live countdown and the pill's "draft waiting" note. */
+/** The ring, [Hold]/[Resume] (per draft state), the aria-live countdown and the pill's "draft waiting" note. */
 function paintDictation(): void {
   const on = dictationOn() && dict.parts.length > 0;
   const bar = $('dictation');
@@ -1257,16 +1257,19 @@ function paintDictation(): void {
   const now = Date.now();
   const frac = ringFraction(dict, now);
   const rem = ringRemaining(dict, now);
-  $('dictation-ring').hidden = frac === null;
+  const controls = draftControls(dict);
+  $('dictation-ring').hidden = frac === null || !controls.ring;
   if (frac !== null) $('dictation-arc').setAttribute('stroke-dashoffset', String(Math.round(frac * 1000) / 10));
   put($('dictation-secs'), rem === null ? '' : `${Math.ceil(rem / 1000)} s`);
   const line = on ? liveLine(dict, now) : '';
   if (line !== dictLive) put($('dictation-live'), (dictLive = line)); // a changed line only: the live region speaks once a second at most
+  // one send control (the composer's send); [Hold] / [Resume] only beside a push-to-talk countdown (DRAFT_CONTROLS)
   const hold = $('dictation-hold');
-  put(hold, dict.hold ? 'Resume' : 'Hold');
-  hold.setAttribute('aria-pressed', String(dict.hold));
-  bar.classList.toggle('held', dict.hold);
-  ($('dictation-send') as HTMLButtonElement).disabled = dict.sending;
+  hold.hidden = controls.hold === null;
+  put(hold, controls.hold === 'resume' ? 'Resume' : 'Hold');
+  hold.setAttribute('aria-pressed', String(controls.hold === 'resume'));
+  bar.classList.toggle('held', controls.hold === 'resume');
+  ($('composer-send') as HTMLButtonElement).disabled = dict.sending;
   const note = on ? dictationNote(dict) : null;
   const vn = $('voice-note');
   const wasWaiting = vn.classList.contains('dictation-waiting');
@@ -1921,7 +1924,11 @@ function run(id: string, trusted: boolean): void {
     openEnrol(trusted);
   }
   else if (id.startsWith('voice.delay.')) setDictationDelay(parseDelay(id.slice(12)));
-  else if (id === 'voice.dictation.hold') dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() });
+  else if (id === 'voice.dictation.hold') {
+    // Hold belongs beside a countdown only: an ambient draft (or auto-send off) has nothing to hold
+    if (hasDraft(dict) && draftControls(dict).hold === null) notice('nothing to hold: this draft never sends itself (Enter sends it)');
+    else dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() });
+  }
   else if (id.startsWith('voice.') && (VOICE_STATES as readonly string[]).includes(id.slice(6))) void setVoice(id.slice(6) as VoiceState, voiceTargetFor(id.slice(6) as VoiceState), trusted);
   else if (id === 'gui.reconnect' && trusted) void attach({ reconnect: true }, null);
   else if (id === 'diag.send' && trusted && session) void gnomonPost(fetch, '/diag', session.guiToken, `diag from palette at ${new Date().toISOString()}`);
@@ -2088,7 +2095,6 @@ function wire(): void {
   });
   $('composer-text').addEventListener('blur', () => dispatchDictation({ type: 'blurComposer', now: Date.now() }));
   $('dictation-hold').addEventListener('click', () => dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() }));
-  $('dictation-send').addEventListener('click', () => dispatchDictation({ type: 'sendNow', now: Date.now() }));
   $('composer-text').addEventListener('keydown', (e) => {
     if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault(); // ⇧Tab cycles the run mode, as in Claude Code (§11.5)

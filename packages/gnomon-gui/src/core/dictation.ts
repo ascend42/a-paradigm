@@ -16,8 +16,10 @@
  *   - Hold, with WHO set it (Aegis M1): 'gui' (typing, clicking into a draft, [Hold], a failed send), 'voice' (the
  *     voice app's ⌃⌥H: status.voice.dictation.holdToggles, applied by parity since the last value seen on the same
  *     voice connection, Aegis L5) or 'detached' (Aegis M2). A voice toggle may set hold or clear a voice-set hold,
- *     never a GUI-set or detached one: only [Resume] or a send clears those. [Send] / Enter / ⌘Enter send now and
- *     clear hold and the draft.
+ *     never a GUI-set or detached one: only [Resume] or a send clears those. The composer's send (Enter / ⌘Enter /
+ *     [send]) is the ONE send control: it sends now and clears hold and the draft.
+ *   - Controls per state (draftState / DRAFT_CONTROLS): [Hold] / [Resume] show only beside a push-to-talk countdown;
+ *     an ambient draft or auto-send off has no countdown, so no hold control.
  *   - No live attachment, never an auto-send (Aegis M2): when the attachment's hsid is not the draft's (moved, ended,
  *     the idle auto-off), the draft is held with reason 'detached'.
  *   - Send: unedited ⇒ one content part per turn in order, source voice (the kernel attributes them: 🎙); edited ⇒ the
@@ -25,7 +27,7 @@
  *     nothing and it reads as a typed message (Aegis L1).
  *   - Ambient never auto-sends (TD-2026-10-20-125, founder ruling): a part whose turn is not a push-to-talk claim
  *     (`mode` other than exactly 'ptt', missing included: fail closed) marks the draft AMBIENT. An ambient draft never
- *     arms the ring; only [Send] / Enter / ⌘Enter (a human key press) sends it. A misidentified voice can only fill
+ *     arms the ring and shows no hold control; only the composer's send (Enter / ⌘Enter / [send], a human key press) sends it. A misidentified voice can only fill
  *     the box, never act. PTT drafts keep the ring (the key hold was the human's gesture).
  *   - Never send words not shown (Aegis M3): an edit made while a send is in flight keeps hold and the edited text,
  *     and turns heard in flight append to it.
@@ -261,13 +263,49 @@ export function sendRequest(s: DictationState): SendRequest | null {
 /** TD-2026-10-20-125: an ambient draft waits for the human's key press. */
 export const AMBIENT_DRAFT_NOTE = 'draft · Enter sends (ambient never auto-sends)';
 
+/**
+ * The draft's state as the controls see it (founder report 2026-10-20: one send control, Hold only beside a countdown).
+ *   - 'idle': no dictated draft (the bar is hidden).
+ *   - 'ambient': the draft holds ambient speech: no countdown exists, so there is nothing to hold.
+ *   - 'ptt-countdown': a push-to-talk draft with a delay set and no hold (the ring may be paused by speech or streaming).
+ *   - 'ptt-held': a push-to-talk draft with a delay set, held (by the GUI, the voice hotkey or a detach).
+ *   - 'ptt-manual': a push-to-talk draft with auto-send off: no countdown, nothing to hold.
+ * A new dictation mode adds a state here and a row in DRAFT_CONTROLS; the composer's own send stays the one send.
+ */
+export type DraftState = 'idle' | 'ambient' | 'ptt-countdown' | 'ptt-held' | 'ptt-manual';
+
+export interface DraftControls {
+  /** the hold control beside the countdown: [Hold], [Resume], or none */
+  hold: 'hold' | 'resume' | null;
+  /** the countdown ring may show (it shows only while it runs: ringFraction) */
+  ring: boolean;
+}
+
+/** Per state, the dictation bar's controls. Sending is never here: the composer's send (Enter / ⌘Enter / [send]) is the one send control. */
+export const DRAFT_CONTROLS: Readonly<Record<DraftState, Readonly<DraftControls>>> = Object.freeze({
+  idle: Object.freeze({ hold: null, ring: false }),
+  ambient: Object.freeze({ hold: null, ring: false }),
+  'ptt-countdown': Object.freeze({ hold: 'hold' as const, ring: true }),
+  'ptt-held': Object.freeze({ hold: 'resume' as const, ring: false }),
+  'ptt-manual': Object.freeze({ hold: null, ring: false }),
+});
+
+export function draftState(s: DictationState): DraftState {
+  if (!hasDraft(s) || !s.parts.length) return 'idle';
+  if (ambientDraft(s)) return 'ambient';
+  if (s.delayMs === null) return 'ptt-manual';
+  return s.hold ? 'ptt-held' : 'ptt-countdown';
+}
+
+export const draftControls = (s: DictationState): DraftControls => DRAFT_CONTROLS[draftState(s)];
+
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold && s.holdBy === 'detached') return 'draft held · voice detached';
+  if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE; // nothing counts down, so a hold means nothing here
   if (s.hold) return 'draft held';
-  if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE;
   if (s.delayMs === null) return 'draft · auto-send off';
   return null;
 }

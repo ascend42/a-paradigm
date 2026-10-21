@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AMBIENT_DRAFT_NOTE, ambientDraft, armed, dictationNote, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
+import { AMBIENT_DRAFT_NOTE, ambientDraft, armed, DRAFT_CONTROLS, dictationNote, draftControls, draftState, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 import { canAttach } from '../src/core/voice.js';
 
@@ -318,10 +318,16 @@ describe('dictation: page wiring (read from the source)', () => {
     expect(canAttach({ principalKind: 'human' })).toBe(true);
     expect(html).toMatch(/id="dictation"[^>]*hidden/);
   });
-  it('the ring, [Hold]/[Resume], [Send], an aria-live countdown and the delay picks are wired', () => {
+  it('the ring, [Hold]/[Resume], an aria-live countdown and the delay picks are wired; the composer send is the ONE send', () => {
     expect(html).toContain('id="dictation-ring"');
-    expect(html).toContain('id="dictation-hold"');
-    expect(html).toContain('id="dictation-send"');
+    expect(html).toMatch(/id="dictation-hold"[^>]*hidden/); // shown only beside a countdown
+    expect(html).not.toContain('dictation-send');
+    expect(app).not.toContain('dictation-send');
+    const composer = /<form id="composer"[^]*?<\/form>/.exec(html)![0];
+    expect(composer.match(/<button/g)?.length).toBe(2); // [Hold] (countdown only) and the one send
+    expect(composer.match(/type="submit"/g)?.length).toBe(1);
+    expect(composer.match(/>\s*send\s*</gi)?.length).toBe(1);
+    expect(app).toMatch(/hold\.hidden = controls\.hold === null/);
     expect(html).toMatch(/id="dictation-live"[^>]*aria-live="polite"/);
     expect(app).toContain('DELAY_CHOICES');
     expect(app).toContain('DELAY_KEY');
@@ -331,5 +337,70 @@ describe('dictation: page wiring (read from the source)', () => {
   });
   it('only live event rows feed the composer (never the backlog page)', () => {
     expect(app).toMatch(/if \(p\.row\) \{[^]*?dictationRow\(/);
+  });
+});
+
+describe('founder report 2026-10-20: one send control; Hold only beside a countdown (draftState / DRAFT_CONTROLS)', () => {
+  it('idle: no draft, no controls', () => {
+    const s = ready();
+    expect(draftState(s)).toBe('idle');
+    expect(draftControls(s)).toEqual({ hold: null, ring: false });
+  });
+  it('ambient draft: no countdown, so no Hold; the note says Enter sends', () => {
+    let s = run(ready(), turn(11, 'hello there', 100, { mode: 'conversation' }));
+    expect(draftState(s)).toBe('ambient');
+    expect(draftControls(s).hold).toBeNull();
+    expect(ringFraction(s, 200)).toBeNull();
+    // clicking into it sets a GUI hold internally, yet nothing counts down: still no Hold/Resume, still the ambient note
+    s = run(s, { type: 'focusComposer', now: 300 });
+    expect(draftControls(s).hold).toBeNull();
+    expect(dictationNote(s)).toBe(AMBIENT_DRAFT_NOTE);
+    // a push-to-talk turn after an ambient one keeps the whole draft ambient
+    s = run(s, turn(12, 'more', 400));
+    expect(draftState(s)).toBe('ambient');
+  });
+  it('ptt countdown: Hold and the ring', () => {
+    const s = run(ready(), turn(11, 'hello', 100));
+    expect(draftState(s)).toBe('ptt-countdown');
+    expect(draftControls(s)).toEqual({ hold: 'hold', ring: true });
+    expect(ringFraction(s, 1100)).not.toBeNull();
+  });
+  it('ptt held (GUI, voice hotkey or detached): Resume, no ring', () => {
+    const viaGui = run(ready(), turn(11, 'hello', 100), { type: 'hold', hold: true, now: 200 });
+    expect(draftState(viaGui)).toBe('ptt-held');
+    expect(draftControls(viaGui)).toEqual({ hold: 'resume', ring: false });
+    expect(ringFraction(viaGui, 300)).toBeNull();
+    const detached = run(ready(), turn(11, 'hello', 100), { type: 'context', attached: null, focused: A, now: 200 });
+    expect(draftControls(detached).hold).toBe('resume');
+    expect(draftState(run(viaGui, { type: 'hold', hold: false, now: 400 }))).toBe('ptt-countdown');
+  });
+  it('ptt with auto-send off: no countdown, no Hold', () => {
+    const s = run(ready(null), turn(11, 'hello', 100));
+    expect(draftState(s)).toBe('ptt-manual');
+    expect(draftControls(s).hold).toBeNull();
+  });
+  it('no state carries a send control (the composer send is the only one)', () => {
+    for (const c of Object.values(DRAFT_CONTROLS)) expect(Object.keys(c).sort()).toEqual(['hold', 'ring']);
+  });
+});
+
+describe('composer: one container, not a box inside a box (founder report 2026-10-20)', () => {
+  const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8').replace(/\/\*[^]*?\*\//g, '');
+  const rules = (sel: RegExp): string[] => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => sel.test(m[1]!.trim())).map((m) => m[2]!);
+  it('the composer carries the border; the textarea draws no border, outline or shadow of its own', () => {
+    expect(rules(/^\.composer$/).some((b) => /border:\s*1px solid var\(--key-edge\)/.test(b))).toBe(true);
+    const ta = rules(/^\.composer textarea\.field$/).join(';');
+    expect(ta).toMatch(/border:\s*0/);
+    expect(ta).toMatch(/outline:\s*none/);
+    expect(ta).toMatch(/box-shadow:\s*none/);
+    expect(rules(/\.composer textarea\.field:focus-visible/).join(';')).toMatch(/outline:\s*none/);
+  });
+  it('keyboard focus stays visible: the ring moves to the one container, on the shared focus token', () => {
+    expect(rules(/^\.composer:has\(> textarea\.field:focus-visible\)$/).join(';')).toMatch(/outline:\s*2px solid var\(--key-edge\)/);
+  });
+  it('no theme or state rule gives the composer textarea a border back', () => {
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (/(composer-text|\.composer[^,]*textarea)/.test(m[1]!)) expect(m[2]!).not.toMatch(/border(-\w+)?:\s*(?!0)[1-9]/);
+    }
   });
 });

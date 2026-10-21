@@ -620,6 +620,14 @@ components:
     signals: []
   gui-dictation:
     description: >-
+      ONE SEND CONTROL (founder report 2026-10-20): the composer's own send
+      (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no
+      Send of its own. draftState / DRAFT_CONTROLS map the draft's state to
+      its controls: idle (none), ambient (no hold: nothing counts down),
+      ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send
+      off: no hold). A new dictation mode adds a state and a row. The composer
+      is one container: the form carries the border and, while the textarea
+      has keyboard focus, the focus ring (:has); the textarea draws none.
       #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation
       into the composer. core/dictation.ts is a PURE reducer: a live
       voice.turn.user row with the kernel-stamped `forwardable: true`,
@@ -633,7 +641,7 @@ components:
       one (else the pill says "draft waiting"); new speech, transcription, a
       new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume],
       the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity),
-      typing in or clicking into a draft. [Send]/Enter/⌘Enter send now. The
+      typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The
       send is session.send{hsid, content: one part per turn | the edit as ONE
       part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and
       the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited,
@@ -650,7 +658,7 @@ components:
       TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A
       part whose turn's mode is not exactly 'ptt' (missing included) marks
       the draft ambient (ambientDraft); an ambient draft never arms the ring
-      and only [Send]/Enter/⌘Enter sends it (note "draft · Enter sends
+      and only the composer send (Enter/⌘Enter/[send]) sends it (note "draft · Enter sends
       (ambient never auto-sends)"). PTT drafts keep the countdown; the delay
       picks say push-to-talk.
     path: src/core/dictation.ts
