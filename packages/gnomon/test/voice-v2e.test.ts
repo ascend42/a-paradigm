@@ -284,6 +284,7 @@ function drig() {
       forget: async (p) => (calls.push(`forget:${p.name}`), { forgotten: true }),
       report: (p) => (calls.push(`report:${JSON.stringify(p)}`), { ok: true }),
       stopSpeaking: () => (calls.push('stop-speaking'), { stopSpeakingSeq: calls.filter((c) => c === 'stop-speaking').length }),
+      sendWord: async (p) => (calls.push(`sendword:${JSON.stringify(p)}`), { trial: null }),
     },
   });
   let n = 0;
@@ -414,6 +415,23 @@ describe('#gnomon-voice V2e: request.voice.client is human only', () => {
     const voice = await r.connect({ kind: 'voice' });
     expect(await voice('log.append', { kind: 'request.voice.report', payload: { notice: { text: 'x' } } })).toEqual({ ok: true });
     expect(r.calls.filter((c) => c.startsWith('enrol') || c.startsWith('forget') || c.startsWith('report'))).toEqual([`enrol:p:abcdefgh/x:{"name":"founder","consent":"yes"}`, 'forget:founder', 'report:{"notice":{"text":"x"}}']);
+    expect(r.logged.filter((x) => x.kind.startsWith('request.'))).toEqual([]);
+  });
+
+  it('the send-word trial requests (request.voice.sendword start trial / save / clear trial) are human only; every other class is refused and never reaches the port', async () => {
+    const r = drig();
+    const payloads = [{ op: 'start', word: 'send', trial: true }, { op: 'save' }, { op: 'save', dropVariants: ['sand'] }, { op: 'clear', trial: true }];
+    for (const who of [{ kind: 'agent' }, { kind: 'session' }, { kind: 'mod' }, { kind: 'voice' }, { kind: 'readToken' }, { kind: 'peer' }] as Who[]) {
+      const call = await r.connect(who);
+      for (const payload of payloads) await expect(call('log.append', { kind: 'request.voice.sendword', payload }), `${who.kind} ${JSON.stringify(payload)}`).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    expect(r.calls.filter((c) => c.startsWith('sendword:'))).toEqual([]);
+    // the human (gui or device) reaches the port; nothing is written as a row
+    for (const credential of ['gui', 'device'] as const) {
+      const human = await r.connect({ kind: 'human', credential });
+      for (const payload of payloads) expect(await human('log.append', { kind: 'request.voice.sendword', payload })).toEqual({ trial: null });
+    }
+    expect(r.calls.filter((c) => c.startsWith('sendword:'))).toHaveLength(payloads.length * 2);
     expect(r.logged.filter((x) => x.kind.startsWith('request.'))).toEqual([]);
   });
 

@@ -11,20 +11,21 @@ import { describe, expect, it } from 'vitest';
 import { RefusedError, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { VoiceControl, type VoiceAppendRow, type VoicePresenceRequest } from '../src/kernel/voice/voice-control.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
-import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord } from '../src/kernel/voice/send-word-store.js';
+import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord, writeTrialWord } from '../src/kernel/voice/send-word-store.js';
 import { voiceStatusFor } from '../src/kernel/voice/voice-requests.js';
 
 const HUMAN = 'p:abcdefgh/founder';
 const VOICE = 'p:abcdefgh/voice';
 const SPK = 'spk:abcdefgh/founder';
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
+const HSID2 = 'hs:01JBBBBBBBBBBBBBBBBBBBBBBB';
 
-function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null } = {}) {
+function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null; onTrialChange?: (t: { word: string; until: number } | null) => void } = {}) {
   const clock = { t: 100_000 };
   const rows: VoiceAppendRow[] = [];
   const presence: VoicePresenceRequest[] = [];
   const v = new VoiceControl({
-    sessions: { ownerOf: (h) => (h === HSID ? HUMAN : undefined), send: async () => ({}), stop: async () => ({}) },
+    sessions: { ownerOf: (h) => (h === HSID || h === HSID2 ? HUMAN : undefined), send: async () => ({}), stop: async () => ({}) },
     append: async (row) => (rows.push(row), { seq: rows.length, hash: `h${rows.length}` }),
     enrolled: () => new Set([SPK]),
     voiceConnections: () => ['conn:V'],
@@ -36,6 +37,7 @@ function rig(o: { level?: string | null; press?: () => { n: number; at: number }
     },
     strictnessLevel: () => o.level ?? null,
     ...(o.press ? { sendNowPress: o.press } : {}),
+    ...(o.onTrialChange ? { onTrialChange: o.onTrialChange } : {}),
   });
   v.setSendWord({ text: 'over and out', variants: ['over an out'] });
   const supSends: Array<Record<string, unknown>> = [];
@@ -181,14 +183,17 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const take = await r.turn('ship hit', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 400, t1: r.clock.t });
     expect(take).toMatchObject({ forwardable: false, trialTake: true });
     expect(take).not.toHaveProperty('refused');
-    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, text: 'ship hit', trialVerdict: 'variant' });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, trialVerdict: 'variant' });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('refusedReason');
+    // Aegis M-2: the take's row is hash-only (the heard text lives only in kernel memory, shown in status)
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    expect(r.rows.at(-1)!.payload).toHaveProperty('textHash');
     expect(r.v.status().sendWordTrial).toMatchObject({ take: 2, takes: 1, correct: 0, variants: ['ship hit'], last: { heard: 'ship hit', verdict: 'variant' } });
     // never claimable, never a pending dictation turn: a send of its words is attributed to nothing
     expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
     // a sentence during the trial is a take too (never a draft) and its text is never kept
     await r.turn('I am teaching my send word now');
-    expect(r.rows.at(-1)!.payload).toMatchObject({ trialTake: true, forwardable: false, textWithheld: true, trialVerdict: 'unclear' });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ trialTake: true, forwardable: false, trialVerdict: 'unclear' });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     // the save rule: no correct take yet
     expect(await refusal(() => r.v.saveTrial())).toMatchObject({ code: 'BAD_REQUEST', reason: 'sendword-no-correct-take' });
@@ -199,7 +204,128 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', take: null, takes: 3, correct: 1 });
     await r.send(['ship it']);
     expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
+    // Aegis M-2: once ready, take capture stops — an unenrolled voice is refused again (hash only), an enrolled
+    // turn is an ordinary turn, and the count does not move
+    const after = await r.turn('ship it', { speakerId: 'spk:unknown-2', speakerEnrolled: false });
+    expect(after).toMatchObject({ refused: 'voice-speaker' });
+    expect(after).not.toHaveProperty('trialTake');
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    const ordinary = await r.turn('and then the docs');
+    expect(ordinary).toMatchObject({ forwardable: true });
+    expect(ordinary).not.toHaveProperty('trialTake');
+    expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', takes: 3 });
     expect(r.v.saveTrial()).toEqual({ text: 'ship it', variants: ['ship hit'] });
+    expect(r.v.status().sendWordTrial).toBeNull();
+  });
+
+  it('Aegis H-1: a poisoning take ("and" for send) is never collected; a lone "and" never sends; the human drops a variant at save', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    for (const heard of ['and', 'sand', 'sent']) await r.turn(heard, { t0: r.clock.t - 400, t1: r.clock.t });
+    expect(r.v.status().sendWordTrial).toMatchObject({ takes: 3, correct: 0, variants: ['sand', 'sent'], last: { heard: 'sent', verdict: 'variant' } });
+    await r.turn('send', { t0: r.clock.t - 400, t1: r.clock.t });
+    const saved = r.v.saveTrial(['sent']);
+    expect(saved).toEqual({ text: 'send', variants: ['sand'] });
+    r.v.setSendWord(saved);
+    // a lone "and" is no send word (isWord false): a pending draft plus "and" claimed as the word is refused
+    await r.turn('fix the build');
+    const and = (await r.turn('and')) as { seq: number };
+    expect(await refusal(() => r.claim({ by: 'word', turnSeq: and.seq }))).toMatchObject({ reason: 'voice-stale-utterance', cause: 'not-send-word' });
+    // the same for "over": "of", "or" and "for" are never collected
+    const r2 = rig();
+    await r2.attach('word');
+    r2.v.setTrialWord({ text: 'over' }, 120_000);
+    for (const heard of ['of', 'or', 'for']) await r2.turn(heard, { t0: r2.clock.t - 400, t1: r2.clock.t });
+    expect(r2.v.status().sendWordTrial).toMatchObject({ takes: 3, variants: [], last: { verdict: 'unlike' } });
+  });
+
+  it('Aegis M-1: the voice principal\'s direct send of a take is refused (voice-grammar, cause trial-take)', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'ship it' }, 120_000);
+    // a push-to-talk take from the enrolled speaker: the one shape the direct path would otherwise forward
+    r.clock.t += 5_000; // the take starts after the attachment (the direct path's order check passes)
+    const take = await r.turn('ship it', { mode: 'ptt', t0: r.clock.t - 1_000, t1: r.clock.t });
+    expect(take).toMatchObject({ trialTake: true, forwardable: false });
+    const vc = { connId: 'conn:V', principal: VOICE };
+    expect(await refusal(r.v.send(vc, { hsid: HSID, content: [{ text: 'ship it' }] }))).toMatchObject({ code: 'FORBIDDEN', reason: 'voice-grammar', cause: 'trial-take' });
+    expect(r.supSends).toHaveLength(0);
+  });
+
+  it('Aegis L-2: the trial file carries the kernel-clock expiry and is removed once the trial stops listening', async () => {
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-swt-')));
+    const file = path.join(home, 'voice', 'send-word-trial.json');
+    const seen: Array<{ word: string; until: number } | null> = [];
+    try {
+      const r = rig({ onTrialChange: (t) => (seen.push(t), writeTrialWord(home, t ? { text: t.word } : null, t?.until ?? 0)) });
+      r.v.setSendWord(null);
+      await r.attach('word');
+      const t0 = r.clock.t;
+      r.v.setTrialWord({ text: 'send' }, 60_000);
+      // one clock: the file's until IS the kernel's trial expiry (the clock is injected; Date.now is never read)
+      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ text: 'send', until: t0 + 60_000 });
+      expect(new Date(String(r.v.status().sendWordTrial!['until'])).getTime()).toBe(t0 + 60_000);
+      // renewing moves both together
+      r.clock.t += 1_000;
+      r.v.setTrialWord({ text: 'send' }, 60_000);
+      expect(JSON.parse(fs.readFileSync(file, 'utf8')).until).toBe(t0 + 61_000);
+      // a miss keeps it; the correct take (ready) removes it; status still shows the ready trial for the dialog
+      await r.turn('sand');
+      expect(fs.existsSync(file)).toBe(true);
+      await r.turn('send');
+      expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready' });
+      expect(fs.existsSync(file)).toBe(false);
+      expect(seen).toEqual([{ word: 'send', until: t0 + 60_000 }, { word: 'send', until: t0 + 61_000 }, null]);
+      // an exhausted trial is announced as null too
+      r.v.setTrialWord(null);
+      r.v.setTrialWord({ text: 'over' }, 60_000);
+      for (let i = 0; i < 4; i++) await r.turn('banana');
+      expect(r.v.status().sendWordTrial).toMatchObject({ state: 'exhausted' });
+      expect(fs.existsSync(file)).toBe(false);
+      // a throwing hook never breaks the trial
+      const r2 = rig({ onTrialChange: () => { throw new Error('disk full'); } });
+      expect(r2.v.setTrialWord({ text: 'send' })).toEqual({ text: 'send', variants: [] });
+      expect(r2.v.status().sendWordTrial).toMatchObject({ state: 'listening' });
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('Aegis L-1: a detach ends the trial; a re-attach to the same session keeps it; an attach elsewhere ends it', async () => {
+    const seen: Array<{ word: string; until: number } | null> = [];
+    const r = rig({ onTrialChange: (t) => void seen.push(t) });
+    const h = { connId: 'conn:H1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    await r.turn('sand');
+    // the human detaches: the trial ends (status, and the client's file view)
+    await r.v.humanAppend(h, 'voice.session.end', {});
+    expect(r.v.status().sendWordTrial).toBeNull();
+    expect(seen.at(-1)).toBeNull();
+    expect(await refusal(() => r.v.saveTrial())).toMatchObject({ reason: 'sendword-no-trial' });
+    // a re-attach to the same session keeps a live trial and its count
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    await r.turn('sand');
+    await r.attach('word');
+    expect(r.v.status().sendWordTrial).toMatchObject({ word: 'send', takes: 1, state: 'listening' });
+    // an attach to another session ends it
+    await r.v.humanAppend(h, 'voice.session.start', { hsid: HSID2, mode: 'conversation', send: 'word', liabilityAck: VOICE_LIABILITY_ACK_HASH });
+    expect(r.v.status()).toMatchObject({ hsid: HSID2, sendWordTrial: null });
+    expect(seen.at(-1)).toBeNull();
+    // the voice principal's end and the kernel's idle end detach too
+    r.v.setTrialWord({ text: 'send' }, 120_000);
+    const vs = String(r.v.status().voiceSessionId);
+    await r.v.voiceAppend({ connId: 'conn:V', principal: VOICE }, { kind: 'voice.session.end', payload: { voiceSessionId: vs } });
+    expect(r.v.status().sendWordTrial).toBeNull();
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'send' }, 20 * 60_000);
+    r.clock.t += 11 * 60_000; // past the 10 min ambient idle
+    expect(await r.v.checkIdle()).toBe(true);
     expect(r.v.status().sendWordTrial).toBeNull();
   });
 
@@ -233,7 +359,8 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const r = rig();
     const st = r.v.status();
     expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });
-    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
+    // Aegis M-3: setSendWord (the raw {op:'start', variants}) holds only guarded variants; a lone "and" never sends
+    expect(r.v.setSendWord({ text: 'send', variants: ['and', 'sand'] })).toEqual({ text: 'send', variants: ['sand'] });    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
     expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWord');
     expect(() => r.v.setSendWord({ text: 'approve' })).toThrow(RefusedError);
   });
@@ -342,12 +469,16 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     try {
       const src = cachedSendWordSource(home);
       expect(src()).toBeNull();
-      writeSendWord(home, { text: 'Ship it!', variants: ['shipped'] });
-      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['shipped'] });
-      expect(src()).toEqual({ text: 'ship it', variants: ['shipped'] });
+      writeSendWord(home, { text: 'Ship it!', variants: ['ship at'] });
+      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['ship at'] });
+      expect(src()).toEqual({ text: 'ship it', variants: ['ship at'] });
       expect(() => writeSendWord(home, { text: 'deny' })).toThrow(TypeError);
       fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"allow"}\n');
       expect(readSendWord(home)).toBeNull();
+      // Aegis M-3: the variant guard holds on the write AND the read-back (a file written before the guard)
+      expect(writeSendWord(home, { text: 'send', variants: ['and', 'sand', 'so'] })).toEqual({ text: 'send', variants: ['sand'] });
+      fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"over","variants":["of","or","for","ship it"]}\n');
+      expect(readSendWord(home)).toEqual({ text: 'over', variants: [] });
       writeSendWord(home, null);
       expect(fs.existsSync(sendWordPath(home))).toBe(false);
       expect(src()).toBeNull();
@@ -363,6 +494,9 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     try {
       expect(await runVoiceCommand(['send-word', 'set', 'Ship', 'it', '--variant', 'ship at', '--home', home], io, { env: {} })).toBe(0);
       expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['ship at'] });
+      // Aegis M-3: the raw form gets the same variant guard (a function word is dropped, never held)
+      expect(await runVoiceCommand(['send-word', 'set', 'send', '--variant', 'and', '--variant', 'sand', '--home', home], io, { env: {} })).toBe(0);
+      expect(readSendWord(home)).toEqual({ text: 'send', variants: ['sand'] });
       expect(await runVoiceCommand(['send-word', 'set', 'approve', '--home', home], io, { env: {} })).toBe(1);
       expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: { GNOMON_HSID: 'hs:x' } })).toBe(1);
       expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: {} })).toBe(0);
@@ -376,7 +510,9 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     expect(parseSendWordRequest({ op: 'clear', trial: true })).toEqual({ op: 'clear', trial: true }); // Aegis L-2
     expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [], trial: false });
     expect(parseSendWordRequest({ op: 'start', word: 'over', trial: true })).toMatchObject({ trial: true });
-    expect(parseSendWordRequest({ op: 'save' })).toEqual({ op: 'save' });
+    expect(parseSendWordRequest({ op: 'save' })).toEqual({ op: 'save', dropVariants: [] });
+    expect(parseSendWordRequest({ op: 'save', dropVariants: ['sent'] })).toEqual({ op: 'save', dropVariants: ['sent'] }); // Aegis H-1
+    for (const bad of [{ op: 'save', dropVariants: 'sent' }, { op: 'save', dropVariants: [1] }, { op: 'save', dropVariants: new Array(9).fill('x') }, { op: 'save', dropVariants: ['x'.repeat(65)] }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
     for (const bad of [null, { op: 'set' }, { op: 'save', word: 'x' }, { op: 'clear', word: 'x' }, { op: 'clear', trial: 'yes' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
   });
 });

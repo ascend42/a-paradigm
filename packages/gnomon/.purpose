@@ -3590,12 +3590,22 @@ flows:
       trial semantics; 2 min, send-word-trial.json 0600): every turn of the
       attached human's voice principal is a take with no speaker check and
       no adjacency, stamped trialTake, forwardable:false, isWord false, never
-      a dictation turn or adjacency anchor, its text kept only at a send
-      word's length; the kernel is the ONE take counter
+      a dictation turn or adjacency anchor, and never sent (Aegis M-1: the
+      voice principal's direct session.send of a take is refused
+      voice-grammar, cause trial-take); a take is captured only while the
+      trial is listening, and its row is hash-only plus trialVerdict (Aegis
+      M-2: the heard text lives only in kernel memory for status);
+      send-word-trial.json is written only from VoiceControl onTrialChange
+      with the kernel-clock until and only while listening (Aegis L-2); a
+      trial binds to the attached session and ends on any detach (human,
+      voice principal, idle) or an attach to another hsid (Aegis L-1); the
+      kernel is the ONE take counter
       (status.voice.sendWordTrial, human class only: word, state, take,
       takes, maxTakes 4, correct, variants, last, until) and
-      request.voice.sendword{op:'save'} commits the word and the variants
-      its mishearings collected only after a correct take. request.voice.client mic-toggle /
+      request.voice.sendword{op:'save', dropVariants?} commits the word and
+      the variants its mishearings collected (each passing the variant guard,
+      #send-word-matcher acceptableVariant), minus the ones the human dropped,
+      only after a correct take. request.voice.client mic-toggle /
       mic-key / start{capture} drive the mic, the Mic key and the capture
       kind of the kernel-spawned client (--capture ptt|open|toggle).
     steps: ["#gui-dictation", "#gnomon-voice", "#send-word-matcher", "#supervisor"]

@@ -538,16 +538,26 @@ components:
       dictation reducer, the voice client (short words by adjacency) and the
       kernel (claim check and fail-closed backstop): normalizeUtterance,
       validateSendWord (1-3 words, never an approval or command phrase, warns
-      on very common words), canonicalSendWord, matchSendWord gives exact,
+      on very common words), canonicalSendWord (Aegis M-3: drops every
+      variant the variant guard refuses, on every path: trial save, raw CLI,
+      {op:'start', variants}, the send-word.json read-back in the kernel and
+      the voice client), matchSendWord gives exact,
       variant, near (same word count, Metaphone key within Levenshtein 2;
       never sent, never appended) or none (a sentence that merely contains
-      the word), isSendWord, acceptableVariant (enrolment). The attended
+      the word), isSendWord, acceptableVariant (the variant guard, Aegis H-1:
+      same word count, at least 3 characters, never a SEND_WORD_COMMON word
+      or a variant made only of SEND_WORD_VARIANT_STOP function words and
+      fillers, never an approval or command phrase, and a RELATIVE Metaphone
+      bound of 1 for a key of at most 3 characters, else 2; so "and", "so",
+      "of", "or", "for" are never variants of send / over, while "sand" for
+      send is kept). The attended
       send-word trial (spec §14.7 trial semantics) is pure here too:
-      startSendWordTrial, classifyTrialTake (correct, variant within the bound
-      and never a command phrase, unlike, unclear when too long), the ONE take
+      startSendWordTrial, classifyTrialTake (correct, variant when it passes
+      the variant guard, unlike, unclear when too long), the ONE take
       counter recordTrialTake (at most SEND_WORD_TRIAL_MAX_TAKES = 4; stops at
       ready or exhausted), trialTakeNumber ("Take n of up to 4") and the save
-      rule trialSaveable (at least one correct take). SEND_WORD_SUGGESTIONS
+      rule trialSaveable(state, dropVariants?) (at least one correct take;
+      the human's dropVariants are left out). SEND_WORD_SUGGESTIONS
       never names the product.
     path: src/voice-modes.ts
     type: module

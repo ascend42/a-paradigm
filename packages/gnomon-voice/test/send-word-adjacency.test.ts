@@ -78,6 +78,9 @@ describe('short send word by adjacency (client)', () => {
       expect(src()).toEqual({ text: 'ship it', variants: [] });
       fs.writeFileSync(path.join(home, 'voice', 'send-word.json'), '{"format":"gnomon-send-word:v1","text":"deny me now ok"}\n');
       expect(src()).toBeNull();
+      // Aegis M-3: the read-back applies the variant guard (a poisoned variant written before it is dropped)
+      fs.writeFileSync(path.join(home, 'voice', 'send-word.json'), '{"format":"gnomon-send-word:v1","text":"send","variants":["and","so","sand"]}\n');
+      expect(src()).toEqual({ text: 'send', variants: ['sand'] });
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

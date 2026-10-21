@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { canonicalSendWord, type SendWord } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, SEND_WORD_MAX_CHARS, SEND_WORD_MAX_VARIANTS, type SendWord } from '@a-company/gnomon-contracts';
 import { voiceDir } from './enrolment.js';
 
 export const SEND_WORD_FILE = 'send-word.json';
@@ -59,8 +59,9 @@ export function writeSendWord(home: string, word: { text: string; variants?: rea
 export const SEND_WORD_TRIAL_FILE = 'send-word-trial.json';
 /**
  * The word being taught (the attended trial): written 0600 with an absolute expiry so the voice client knows a trial
- * is on (it then sends every segment's short text as a take, with no adjacency); never read as the held word,
- * cleared on save or clear.
+ * is on (it then sends every segment's short text as a take, with no adjacency); never read as the held word. The
+ * daemon calls this ONLY from VoiceControl's onTrialChange (Aegis L-2): `until` is the kernel's own trial expiry (one
+ * clock), and the file is removed as soon as the trial stops listening (ready, exhausted, saved, cleared, or ended by a detach or an attach to another session).
  */
 export function writeTrialWord(home: string, word: { text: string } | null, until = 0): void {
   const file = path.join(voiceDir(home), SEND_WORD_TRIAL_FILE);
@@ -97,15 +98,21 @@ export function cachedSendWordSource(home: string): () => SendWord | null {
  * request.voice.sendword — the payload's strict shape (TypeError ⇒ BAD_REQUEST):
  *   {op:'start', word, variants?}   hold `word` (the raw form: the CLI, or a dialog that did its own takes)
  *   {op:'start', word, trial:true}  start (or renew, keeping its takes) the ATTENDED trial of `word`
- *   {op:'save'}                     commit the trial: its word and collected variants, only after a correct take
+ *   {op:'save', dropVariants?}      commit the trial: its word and collected variants, only after a correct take;
+ *                                   dropVariants (≤ 8 strings, compared cleaned) are left out (Aegis H-1: the human
+ *                                   removes a mishearing they do not want held; one that was not collected is ignored)
  *   {op:'clear', trial?}            clear the held word, or with trial:true only the trial (Aegis L-2)
  */
-export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[]; trial: boolean } | { op: 'clear'; trial: boolean } | { op: 'save' } {
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError("request.voice.sendword takes {op:'start', word, variants?} | {op:'save'} | {op:'clear'}");
+export function parseSendWordRequest(payload: unknown): { op: 'start'; text: string; variants: string[]; trial: boolean } | { op: 'clear'; trial: boolean } | { op: 'save'; dropVariants: string[] } {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError("request.voice.sendword takes {op:'start', word, variants?} | {op:'save', dropVariants?} | {op:'clear'}");
   const p = payload as Record<string, unknown>;
   if (p.op === 'save') {
-    if (Object.keys(p).some((k) => k !== 'op')) throw new TypeError("{op:'save'} takes nothing else (the kernel holds the trial's takes)");
-    return { op: 'save' };
+    if (Object.keys(p).some((k) => k !== 'op' && k !== 'dropVariants')) throw new TypeError("{op:'save'} takes dropVariants? only (the kernel holds the trial's takes)");
+    const d = p.dropVariants;
+    if (d !== undefined && (!Array.isArray(d) || d.length > SEND_WORD_MAX_VARIANTS || !d.every((v) => typeof v === 'string' && v.length <= SEND_WORD_MAX_CHARS * 2))) {
+      throw new TypeError(`dropVariants is at most ${SEND_WORD_MAX_VARIANTS} strings of at most ${SEND_WORD_MAX_CHARS * 2} characters`);
+    }
+    return { op: 'save', dropVariants: (d as string[] | undefined) ?? [] };
   }
   if (p.op === 'clear') {
     // Aegis L-2: {op:'clear', trial:true} drops only the word being taught; the held send word stays

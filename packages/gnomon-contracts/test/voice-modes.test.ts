@@ -80,6 +80,34 @@ describe('#send-word-matcher', () => {
     expect(acceptableVariant('ship at', 'ship it')).toBe(true);
     expect(acceptableVariant('banana bread', 'ship it')).toBe(false);
   });
+
+  it('Aegis H-1: the variant guard refuses function words, common words, short takes and a different word count', () => {
+    // the poisoning cases: each is within Metaphone distance 2 of the word's key
+    for (const heard of ['and', 'end', 'so', 'the', 'a']) expect(acceptableVariant(heard, 'send'), heard).toBe(false);
+    for (const heard of ['of', 'or', 'for', 'off']) expect(acceptableVariant(heard, 'over'), heard).toBe(false);
+    expect(acceptableVariant('okay', 'over')).toBe(false); // SEND_WORD_COMMON
+    expect(acceptableVariant('send it', 'send')).toBe(false); // word count
+    expect(acceptableVariant('send', 'send it')).toBe(false);
+    expect(acceptableVariant('and it', 'send it')).toBe(false); // only function words
+    expect(acceptableVariant('approve', 'approve')).toBe(true); // the word itself always is (validateSendWord refuses it elsewhere)
+    expect(acceptableVariant('deny', 'dent')).toBe(false); // never a command or approval phrase
+    // the relative bound: a 3-character key (SNT) allows distance 1 only
+    expect(metaphone('send')).toBe('SNT');
+    expect(acceptableVariant('sand', 'send')).toBe(true); // decided: a real mishearing that passes is kept (droppable at save)
+    expect(acceptableVariant('sent', 'send')).toBe(true);
+    expect(metaphone('slim')).toBe('SLM');
+    expect(acceptableVariant('slim', 'send')).toBe(false); // distance 2: the old flat bound took it, the relative bound does not
+    expect(acceptableVariant('ship at', 'ship it')).toBe(true); // a longer key keeps distance 2
+  });
+
+  it('Aegis M-3: canonicalSendWord applies the variant guard on every path (a stored poisoned variant is dropped)', () => {
+    expect(canonicalSendWord({ text: 'send', variants: ['and', 'so', 'sand', 'end', 'sent'] })).toEqual({ text: 'send', variants: ['sand', 'sent'] });
+    expect(canonicalSendWord({ text: 'over', variants: ['of', 'or', 'for'] })).toEqual({ text: 'over', variants: [] });
+    expect(canonicalSendWord({ text: 'ship it', variants: ['shipped'] })).toEqual({ text: 'ship it', variants: [] }); // word count
+    const w = canonicalSendWord({ text: 'send', variants: ['and'] })!;
+    expect(isSendWord('and', w)).toBe(false);
+    expect(isSendWord('send', w)).toBe(true);
+  });
 });
 
 describe('the attended send-word trial (spec §14.7 trial semantics)', () => {
@@ -104,6 +132,17 @@ describe('the attended send-word trial (spec §14.7 trial semantics)', () => {
     expect(trialSaveable(s)).toEqual({ text: 'send', variants: ['sand'] });
     // the counter stops: a take after ready changes nothing
     expect(recordTrialTake(s, 'send')).toBe(s);
+  });
+  it('Aegis H-1: a poisoning take is unlike, never a variant; the human can drop a collected variant at save', async () => {
+    const { startSendWordTrial, recordTrialTake, classifyTrialTake, trialSaveable } = await import('../src/index.js');
+    for (const heard of ['and', 'so', 'end']) expect(classifyTrialTake(heard, 'send').verdict, heard).toBe('unlike');
+    for (const heard of ['of', 'or', 'for']) expect(classifyTrialTake(heard, 'over').verdict, heard).toBe('unlike');
+    let s = startSendWordTrial('send')!;
+    for (const heard of ['and', 'sand', 'sent']) s = recordTrialTake(s, heard);
+    expect(s.variants).toEqual(['sand', 'sent']);
+    s = recordTrialTake(s, 'send');
+    expect(trialSaveable(s)).toEqual({ text: 'send', variants: ['sand', 'sent'] });
+    expect(trialSaveable(s, ['Sent!', 'not collected'])).toEqual({ text: 'send', variants: ['sand'] });
   });
   it('a command or approval phrase is never a variant; four misses exhaust the trial', async () => {
     const { startSendWordTrial, recordTrialTake, classifyTrialTake, trialTakeNumber, SEND_WORD_TRIAL_MAX_TAKES } = await import('../src/index.js');
