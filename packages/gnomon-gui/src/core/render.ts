@@ -24,6 +24,7 @@
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
 import { BIDI_GLYPHS, canonicalJson, checkCap, hex, PRINCIPAL_ID_PATTERN, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
+import { CARD_VOICE_LINE } from './voice-presets.js';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
 /** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
@@ -251,6 +252,8 @@ export interface CardView {
   now?: number;
   /** S3: the kernel's voice handle of the card (card.voice: eligible none | reversible | gate, and its label) */
   voice?: { eligible: string; label: string } | null;
+  /** TD-2026-10-21-514: raised during a voice-origin turn (card.detail.origin 'voice'): the card says to check it was you */
+  voiceOrigin?: boolean;
   /** S4: a held voice decision the kernel reports (seconds left, the undo phrase): the amber countdown, kernel-owned */
   held?: { seconds: number; undo: string } | null;
   /** fidelity 2: a permission card's one-line title the GUI composed from the kernel's STRUCTURED fields (permissionTitleOf) */
@@ -751,7 +754,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}${v.voiceOrigin ? ' voice-origin' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(
       doc,
       'header',
@@ -765,6 +768,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
+    v.voiceOrigin ? h(doc, 'small', { class: 'card-voice-origin kernel-owned' }, CARD_VOICE_LINE) : null,
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card

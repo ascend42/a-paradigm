@@ -46,6 +46,10 @@ export interface VoiceView {
   level: number | null;
   /** the kernel's ambient idle auto-off (V2a ambientIdleMs), or null */
   ambientIdleMs: number | null;
+  /** TD-2026-10-21-514: the attachment's send ceiling (status.voice.send), or null when not attached or not reported */
+  send: 'key' | 'word' | 'pieces' | null;
+  /** TD-2026-10-21-514: the mic key's state (status.voice.micWanted): false = the human closed the mic; null unknown */
+  micWanted: boolean | null;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -81,6 +85,8 @@ export function voiceStatusOf(status: unknown): VoiceView {
     hotkey: str(v?.hotkey) ?? DEFAULT_PTT_HOTKEY,
     level: level === null ? null : Math.max(0, Math.min(1, level)),
     ambientIdleMs: v && typeof v.ambientIdleMs === 'number' && v.ambientIdleMs > 0 ? v.ambientIdleMs : null,
+    send: attached && (v?.send === 'key' || v?.send === 'word' || v?.send === 'pieces') ? (v.send as 'key' | 'word' | 'pieces') : null,
+    micWanted: v && typeof v.micWanted === 'boolean' ? v.micWanted : null,
   };
 }
 
@@ -167,45 +173,10 @@ export function voiceRequest(v: VoiceView, to: VoiceState, hsid: string | null):
   return { kind: 'voice.session.start', payload: { hsid, mode: WIRE_MODE[to], ...cont } };
 }
 
-export const VOICE_HELP: Readonly<Record<VoiceState, string>> = Object.freeze({
-  off: 'the mic is closed; nothing is heard',
-  ptt: 'hold the hotkey to talk; released, the mic is closed',
-  ambient: 'the mic stays open; talk freely (turns off after idle)',
-});
 export const VOICE_TITLE: Readonly<Record<VoiceState, string>> = Object.freeze({ off: 'Off', ptt: 'Push-to-talk', ambient: 'Ambient' });
 
-export interface VoiceMenuEntry {
-  id: string;
-  state: VoiceState | null;
-  label: string;
-  note: string;
-  current: boolean;
-  disabled: boolean;
-}
-
-/**
- * The pill menu: Off / Push-to-talk / Ambient for the attached session (or the focused one when nothing is
- * attached), plus "Attach to <focused>" when the focused session is another one. A non-human connection gets the
- * states shown, every one disabled (it may not attach).
- */
-export function voiceMenuEntries(v: VoiceView, focused: string | null, attachable: boolean, presenceDone: boolean): VoiceMenuEntry[] {
-  const target = v.state !== 'off' ? v.hsid : focused;
-  const out: VoiceMenuEntry[] = VOICE_STATES.map((s) => {
-    const p = planVoice(v, s, target, presenceDone);
-    return {
-      id: `voice.${s}`,
-      state: s,
-      label: VOICE_TITLE[s],
-      note: !attachable ? 'only you, from this window, can attach voice' : p.kind === 'blocked' ? p.reason : p.kind === 'presence' ? `${VOICE_HELP[s]} · needs Touch ID` : VOICE_HELP[s],
-      current: p.kind === 'same',
-      disabled: !attachable || p.kind === 'blocked',
-    };
-  });
-  if (attachable && focused && v.state !== 'off' && v.hsid !== focused) {
-    out.push({ id: 'voice.attach', state: null, label: `Attach to ${sessionName(focused)}`, note: `moves ${VOICE_TITLE[v.state].toLowerCase()} to the focused session`, current: false, disabled: false });
-  }
-  return out;
-}
+/* The pill's Off / Push-to-talk / Ambient menu is gone: the Atelier 2026-10-21 trust ladder (core/voice-ladder.ts,
+   #gui-voice-ladder) is the one voice choice, mapped onto these states by stateOfRung. */
 
 /** Rows whose arrival changes status.voice (the page re-reads status on them; motion-on-events, no polling). */
 export const VOICE_ROW_KINDS: ReadonlySet<string> = new Set(['voice.session.start', 'voice.session.end', 'voice.session.mode', 'daemon.start']);

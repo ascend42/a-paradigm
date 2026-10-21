@@ -61,6 +61,8 @@ describe('voice presets', () => {
     expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece', asksFirst: true });
     expect(sentLabel({ origin: 'hand', source: 'voice' })).toEqual({ label: 'spoken · sent by you', asksFirst: false });
     expect(sentLabel({ origin: 'hand' })).toBeNull();
-    expect(CLAMP_CHIP).toBe('Voice turn: edits ask first');
+    expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now', asksFirst: true });
+    expect(sentLabel({ origin: 'hand', sentBy: 'release', source: 'voice' })).toEqual({ label: 'spoken · sent on release', asksFirst: false });
+    expect(CLAMP_CHIP).toBe('voice turn · edits ask first');
   });
 });

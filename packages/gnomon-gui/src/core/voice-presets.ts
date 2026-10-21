@@ -75,12 +75,19 @@ export function sendWordOf(status: unknown): SendWord | null {
 export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | null {
   const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : null;
   if (!o || (o.source !== 'voice' && o.origin !== 'voice')) return null;
-  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by the voice app key' : 'spoken · sent by send word', asksFirst: true };
+  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by send-now' : 'spoken · sent by send word', asksFirst: true };
   return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you', asksFirst: false };
 }
 
-/** The session header chip while a voice-origin turn of that session is outstanding. */
-export const CLAMP_CHIP = 'Voice turn: edits ask first';
+/** The session header chip while a voice-origin turn of that session is outstanding (Atelier 2026-10-21 direction). */
+export const CLAMP_CHIP = 'voice turn · edits ask first';
+/** The line a card raised during a voice-origin turn carries (card.detail.origin 'voice'; the kernel's own line stays in its body). */
+export const CARD_VOICE_LINE = 'asked during a voice-sent turn · check this was you';
+/** A card raised during a voice-origin turn (the kernel's ^voice-origin-clamp stamps detail.origin 'voice'). Display only. */
+export function cardVoiceOrigin(card: Record<string, unknown>): boolean {
+  const d = card.detail && typeof card.detail === 'object' && !Array.isArray(card.detail) ? (card.detail as Record<string, unknown>) : null;
+  return d?.origin === 'voice';
+}
 
 /**
  * Display only (the kernel's clamp is the boundary): is a voice-origin turn of this session still open — a

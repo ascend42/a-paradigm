@@ -1,7 +1,7 @@
 /** "Teach your send word" (TD-2026-10-21-514, spec §14.7 trial semantics): the guided steps over the kernel's trial, pure. */
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
-import { initialTeach, reduceTeach, teachCommit, teachHeardLine, teachLine, teachVariantsLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
+import { initialTeach, reduceTeach, teachCommit, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariantsLine, TEACH_PICKS, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { initialDictation, reduceDictation } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 
@@ -11,27 +11,50 @@ const status = (t: SendWordTrialState | null): TeachEvent => ({ type: 'status', 
 const takes = (word: string, ...heard: string[]): SendWordTrialState => heard.reduce(recordTrialTake, startSendWordTrial(word)!);
 
 describe('teach the send word', () => {
-  it('one take heard correctly is enough: no lead-in, never the product name, save commits {op:save}', () => {
+  it('one take heard correctly is enough: no lead-in, never the product name; the risk check sits right before save', () => {
     let s = run(initialTeach(), { type: 'pick', text: 'Send it!' });
     expect(s.step).toBe('takes');
-    expect(teachLine(s)).toBe('Say “send it” once to test · Take 1 of up to 4');
-    expect(teachLine(s)).not.toMatch(/gnomon/i);
+    expect(teachPrompt(s)).toBe('Say “send it” once, on its own.');
+    expect(teachCounter(s)).toBe('take 1 of up to 4 · listening…'); // the ONE counter
+    expect(`${teachPrompt(s)} ${teachCounter(s)}`).not.toMatch(/gnomon/i);
+    expect(teachShowsRisk(s)).toBe(false);
     s = run(s, status(takes('send it')), status(takes('send it', 'Send it.')));
     expect(s.step).toBe('done');
-    expect(teachHeardLine(s)).toBe('I heard: “send it”');
+    expect(teachHeardLine(s)).toBe('I heard: “send it” ✓');
+    expect(teachCounter(s)).toBe('');
+    expect(teachShowsRisk(s)).toBe(true);
+    expect(teachCommit(s)).toBeNull(); // the "I understand" box is not ticked yet
+    s = run(s, { type: 'ack', on: true });
     expect(teachCommit(s)).toEqual({ op: 'save' });
+    // a user who already acknowledged starts with the box ticked
+    expect(initialTeach(true).ack).toBe(true);
   });
 
   it('misheard then correct: "I heard x. Say it again", the mishearing is a variant, one counter', () => {
     let s = run(initialTeach(), { type: 'pick', text: 'ship it' }, status(takes('ship it', 'ship hit')));
     expect(s.step).toBe('takes');
     expect(teachHeardLine(s)).toBe('I heard “ship hit”. Say it again.');
-    expect(teachLine(s)).toBe('Say “ship it” again · Take 2 of up to 4');
-    expect(teachVariantsLine(s)).toBe('Also accepted when heard as “ship hit”');
-    expect(teachCommit(s)).toBeNull(); // the save rule: no correct take yet
-    s = run(s, status(takes('ship it', 'ship hit', 'ship it')));
+    expect(teachPrompt(s)).toBe('Say “ship it” again, on its own.');
+    expect(teachCounter(s)).toBe('take 2 of up to 4 · listening…');
+    expect(teachVariantsLine(s)).toBe('kept as a variant: “ship hit”');
+    expect(run(s, { type: 'ack', on: true }).step).toBe('takes');
+    expect(teachCommit(run(s, { type: 'ack', on: true }))).toBeNull(); // the save rule: no correct take yet
+    s = run(s, status(takes('ship it', 'ship hit', 'ship it')), { type: 'ack', on: true });
     expect(s).toMatchObject({ step: 'done', trial: { variants: ['ship hit'], correct: 1, takes: 2 } });
     expect(teachCommit(s)).toEqual({ op: 'save' });
+  });
+
+  it('the kernel refusing the save: its words under the row; a trial that ran out goes back to pick', () => {
+    const done = run(initialTeach(true), { type: 'pick', text: 'over' }, status(takes('over', 'over')));
+    expect(done.step).toBe('done');
+    const r = run(done, { type: 'saveRefused', reason: 'no take was heard as the word itself yet', code: 'sendword-no-correct-take' });
+    expect(r).toMatchObject({ step: 'done', hint: 'no take was heard as the word itself yet' });
+    expect(run(done, { type: 'saveRefused', reason: 'x', code: 'sendword-no-trial' })).toMatchObject({ step: 'pick', ack: true, hint: expect.stringMatching(/ran out/) });
+  });
+
+  it('the row offers the design’s three picks plus your own; none names the product', () => {
+    expect(TEACH_PICKS).toEqual(['send', 'send it', 'over']);
+    expect(teachPrompt(initialTeach())).toBe('Pick a word you’ll say on its own when you finish speaking.');
   });
 
   it('four misses exhaust the trial; a sentence shows no text', () => {

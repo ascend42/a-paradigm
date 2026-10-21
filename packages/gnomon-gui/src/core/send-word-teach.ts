@@ -1,19 +1,20 @@
 /**
  * @symbol #gui-dictation
  *
- * "Teach your send word" (TD-2026-10-21-514, spec §14.7 "Voice submodes", trial semantics): the guided dialog, as a
- * PURE reducer over the KERNEL's attended trial. The kernel is the one take counter (status.voice.sendWordTrial, from
- * #send-word-matcher recordTrialTake); this reducer only mirrors it, so the dialog can never show two counts.
+ * "Teach your send word" (TD-2026-10-21-514, spec §14.7 "Voice submodes", trial semantics): the inline teaching under
+ * the send-word row of the Voice settings sheet (#gui-voice-settings; Atelier 2026-10-21-gnomon-voice, teach.html),
+ * as a PURE reducer over the KERNEL's attended trial. The kernel is the one take counter (status.voice.sendWordTrial,
+ * from #send-word-matcher recordTrialTake); this reducer only mirrors it, so the row can never show two counts.
  *   pick       a suggestion or 1-3 custom words; validated (validateSendWord: never an approval or command phrase; a
  *              very common word asks for a second confirmation)
- *   takes      the GUI starts the trial (request.voice.sendword{op:'start', word, trial:true}); "Say <word> once to
- *              test · Take n of up to 4", then "I heard: …". No lead-in sentence, and never the product name.
- *   done       a take was heard as the word itself: save (request.voice.sendword{op:'save'}; the kernel commits the
- *              word plus the variants its mishearings collected, and refuses a save with no correct take)
+ *   takes      the GUI starts the trial (request.voice.sendword{op:'start', word, trial:true}); "Say <word> once, on
+ *              its own." and the one counter "take n of up to 4", then "I heard: …". No lead-in sentence, and never the
+ *              product name. A mishearing asks again and is kept as an accepted variant.
+ *   done       a take was heard as the word itself: the risk check (the exact text plus "I understand") sits right
+ *              before save (request.voice.sendword{op:'save'}; the kernel commits the word plus the variants its
+ *              mishearings collected, and refuses a save with no correct take)
  *   exhausted  four takes, none heard as the word: try again or pick another word
- * While the dialog is open, every voice turn is a take (the kernel stamps trialTake) and never a draft.
- *
- * The voice UI/UX pass (T-2026-10-21-015) redesigns the dialog's look; this state shape is what it drives.
+ * While the row teaches, every voice turn is a take (the kernel stamps trialTake) and never a draft.
  */
 import { SEND_WORD_SUGGESTIONS, SEND_WORD_TRIAL_MAX_TAKES, validateSendWord, type TrialTakeVerdict } from '@a-company/gnomon-contracts';
 
@@ -39,6 +40,8 @@ export interface TeachState {
   trial: TrialView | null;
   /** the line under the step (a validation reason, a refusal), or null */
   hint: string | null;
+  /** the risk check's "I understand" box (pre-ticked when this user already acknowledged) */
+  ack: boolean;
 }
 
 export type TeachEvent =
@@ -46,9 +49,13 @@ export type TeachEvent =
   | { type: 'confirmCommon'; yes: boolean }
   /** a status read: the whole status object (status.voice.sendWordTrial is read from it) */
   | { type: 'status'; status: unknown }
-  | { type: 'restart' };
+  | { type: 'restart' }
+  /** the risk check's box */
+  | { type: 'ack'; on: boolean }
+  /** the kernel refused the save (code: its refusal reason, e.g. sendword-no-trial) */
+  | { type: 'saveRefused'; reason: string; code?: string | null };
 
-export const initialTeach = (): TeachState => ({ step: 'pick', word: '', trial: null, hint: null });
+export const initialTeach = (acked = false): TeachState => ({ step: 'pick', word: '', trial: null, hint: null, ack: acked });
 
 const REASONS: Readonly<Record<string, string>> = Object.freeze({
   empty: 'Type a word or pick a suggestion.',
@@ -85,23 +92,28 @@ export function trialViewOf(status: unknown): TrialView | null {
 export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
   switch (e.type) {
     case 'restart':
-      return initialTeach();
+      return initialTeach(s.ack);
+    case 'ack':
+      return { ...s, ack: e.on };
+    case 'saveRefused':
+      if (e.code === 'sendword-no-trial') return { ...initialTeach(s.ack), hint: 'The time to test the word ran out. Pick it again.' };
+      return { ...s, hint: e.reason };
     case 'pick': {
       if (s.step !== 'pick' && s.step !== 'confirm-common') return s;
       const v = validateSendWord(e.text);
       if (!v.ok) return { ...s, step: 'pick', hint: REASONS[v.reason] ?? 'Not a usable send word.' };
       if (v.warn === 'common') return { ...s, step: 'confirm-common', word: v.text, hint: `“${v.text}” is a very common word and may send by accident.` };
-      return { ...initialTeach(), step: 'takes', word: v.text };
+      return { ...initialTeach(s.ack), step: 'takes', word: v.text };
     }
     case 'confirmCommon':
       if (s.step !== 'confirm-common') return s;
-      return e.yes ? { ...initialTeach(), step: 'takes', word: s.word } : { ...initialTeach(), hint: 'Pick another word.' };
+      return e.yes ? { ...initialTeach(s.ack), step: 'takes', word: s.word } : { ...initialTeach(s.ack), hint: 'Pick another word.' };
     case 'status': {
       if (s.step !== 'takes' && s.step !== 'done' && s.step !== 'exhausted') return s;
       const t = trialViewOf(e.status);
       if (!t || t.word !== s.word) {
         // the trial ended under us (expired, or cleared elsewhere): only once it had been seen
-        return s.trial ? { ...initialTeach(), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
+        return s.trial ? { ...initialTeach(s.ack), word: s.word, hint: 'The time to test the word ran out. Pick it again.' } : s;
       }
       const step: TeachStep = t.state === 'ready' ? 'done' : t.state === 'exhausted' ? 'exhausted' : 'takes';
       return { ...s, step, trial: t };
@@ -109,23 +121,29 @@ export function reduceTeach(s: TeachState, e: TeachEvent): TeachState {
   }
 }
 
-/** The dialog's heading line per step ("Take n of up to 4" is the one counter, from the kernel). */
-export function teachLine(s: TeachState): string {
+/** The suggestions the row offers (the design's three, then "your own…"). */
+export const TEACH_PICKS: readonly string[] = Object.freeze(SEND_WORD_SUGGESTIONS.slice(0, 3));
+
+/** The row's one prompt per step (the counter is its own line: teachCounter). */
+export function teachPrompt(s: TeachState): string {
   switch (s.step) {
     case 'pick':
-      return 'Pick a send word: 1 to 3 words you would not say by accident.';
+      return 'Pick a word you’ll say on its own when you finish speaking.';
     case 'confirm-common':
       return 'Use it anyway?';
-    case 'takes': {
-      const max = s.trial?.maxTakes ?? SEND_WORD_TRIAL_MAX_TAKES;
-      const n = s.trial?.take ?? 1;
-      return n === 1 ? `Say “${s.word}” once to test · Take 1 of up to ${max}` : `Say “${s.word}” again · Take ${n} of up to ${max}`;
-    }
+    case 'takes':
+      return (s.trial?.take ?? 1) === 1 ? `Say “${s.word}” once, on its own.` : `Say “${s.word}” again, on its own.`;
     case 'done':
-      return `Heard “${s.word}”. Save it: say it after a draft has been on screen for a second to send; edits will still ask first.`;
+      return '';
     case 'exhausted':
       return `“${s.word}” was not heard in ${s.trial?.maxTakes ?? SEND_WORD_TRIAL_MAX_TAKES} takes. Try again, or pick another word.`;
   }
+}
+
+/** The ONE counter, from the kernel's trial: "take n of up to 4 · listening…" while it listens, else ''. */
+export function teachCounter(s: TeachState): string {
+  if (s.step !== 'takes') return '';
+  return `take ${s.trial?.take ?? 1} of up to ${s.trial?.maxTakes ?? SEND_WORD_TRIAL_MAX_TAKES} · listening…`;
 }
 
 /** What the last take was heard as ("I heard: …"), or ''. A take too long to be a send word shows no text. */
@@ -133,12 +151,23 @@ export function teachHeardLine(s: TeachState): string {
   const l = s.trial?.last;
   if (!l || s.step === 'pick' || s.step === 'confirm-common') return '';
   if (l.verdict === 'unclear' || l.heard === null) return s.step === 'takes' ? 'I could not make that out. Say just the word.' : '';
-  if (l.verdict === 'correct') return `I heard: “${l.heard}”`;
+  if (l.verdict === 'correct') return `I heard: “${l.heard}” ✓`;
   return s.step === 'takes' ? `I heard “${l.heard}”. Say it again.` : `I heard: “${l.heard}”`;
 }
 
-/** The mishearings that will be saved as variants ('' when none). */
-export const teachVariantsLine = (s: TeachState): string => (s.trial?.variants.length ? `Also accepted when heard as ${s.trial.variants.map((v) => `“${v}”`).join(', ')}` : '');
+/**
+ * HOOK (variant removal): the kernel's save is gaining a way to drop a mishearing before it is kept (a parallel change
+ * to request.voice.sendword{op:'save'}). Until it lands this stays false: the row shows no remove control and the save
+ * carries nothing else. To wire it: flip this, keep `dropped` in TeachState (event {type:'dropVariant', variant}),
+ * filter it out of teachVariantsLine, and add it to teachCommit's payload in the kernel's field name.
+ */
+export const TEACH_DROP_VARIANTS = false;
 
-/** The save request: the kernel holds the takes, so it carries nothing else. Only once a take was heard correctly. */
-export const teachCommit = (s: TeachState): { op: 'save' } | null => (s.step === 'done' && (s.trial?.correct ?? 0) > 0 ? { op: 'save' } : null);
+/** The mishearings that will be saved as variants ('' when none). */
+export const teachVariantsLine = (s: TeachState): string => (s.trial?.variants.length ? `kept as ${s.trial.variants.length === 1 ? 'a variant' : 'variants'}: ${s.trial.variants.map((v) => `“${v}”`).join(', ')}` : '');
+
+/** The risk check shows right before save (a take was heard as the word). */
+export const teachShowsRisk = (s: TeachState): boolean => s.step === 'done';
+
+/** The save request: the kernel holds the takes, so it carries nothing else. Only once a take was heard correctly AND the risk box is ticked. */
+export const teachCommit = (s: TeachState): { op: 'save' } | null => (s.step === 'done' && (s.trial?.correct ?? 0) > 0 && s.ack ? { op: 'save' } : null);
