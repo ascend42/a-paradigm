@@ -147,6 +147,12 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const notWord = await r.turn('ship', { speakerBasis: 'adjacent', t0: r.clock.t - 500, t1: r.clock.t });
     expect(notWord).toMatchObject({ refused: 'voice-speaker' });
     expect(await refusal(r.turn('x', { speakerBasis: 'verified' }))).toMatchObject({ code: 'BAD_REQUEST' });
+    // Aegis L-1: a short send word WITHOUT speakerBasis is held to the same rule (no draft nearby ⇒ refused)
+    const r3 = rig();
+    await r3.attach('word');
+    expect(await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    await r3.turn('a draft sentence long enough');
+    expect((await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).forwardable).toBe(true);
     // no draft pending and nothing within 2 s ⇒ refused
     const r2 = rig();
     await r2.attach('word');

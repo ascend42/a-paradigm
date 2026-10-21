@@ -683,6 +683,9 @@ export class VoiceControl {
           if (p.speakerBasis !== 'adjacent') throw bad("speakerBasis is 'adjacent'");
           if (enrolledNow && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
         }
+        // Aegis L-1: a SHORT send word must pass the adjacency rule whether or not it says speakerBasis (a short
+        // segment is never speaker-verified, so a bare enrolled claim on one proves nothing)
+        if (enrolledNow && p.speakerBasis === undefined && num(p.t0) && num(p.t1) && p.t1 - p.t0 < SEND_WORD_SHORT_MS && typeof p.text === 'string' && isSendWord(p.text, this.#word()) && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
