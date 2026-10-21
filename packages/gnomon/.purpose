@@ -2860,7 +2860,7 @@ components:
       operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
       path-checked; H3 + K1 (TD-2026-10-20-086) ctx.cwd is the anchored
       root's realpath (the caller runs anchorCommand: builtin cd [-q] --
-      'root' && builtin unset CDPATH && {\n<cmd>\n}); a cd is a whole
+      'root' && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && {\n<cmd>\n}); a cd is a whole
       top-level item to an absolute path or (with a known cwd) a relative
       existing directory, no .. segment, never -, + or = led, inside a session
       root as given and at realpath; the top-level list tracks the SET of
@@ -2872,7 +2872,7 @@ components:
       ctx.readRoots may only narrow that system list),
       plus the device/protected-root deny; M1 date display only; M2 the cwd
       is known only along an unbroken && chain from that cd, else relative
-      paths, implicit-cwd reads and git raise the card; M3 no git remote -v,
+      paths, implicit-cwd reads and git raise the card; M3 no git remote -v (RW: anchored only),
       no credential-bearing git config key; Low git branch NAME only after
       the long --list. RC3 git also: show-ref ls-tree rev-list shortlog
       merge-base for-each-ref, worktree list, stash list (flags only), reflog
@@ -2896,12 +2896,27 @@ components:
       expansion really on. No background/negation/env assignment, output
       redirection only to /dev/null. simpleArgv returns the argv of a single
       literal simple command (prefix always rules; signature unchanged).
+      RW read-only widening (founder decision 2026-10-20: auto-edits never
+      prompts more than native Claude Code), ANCHORED posix runs only
+      (ctx.cwd set; win32 and unanchored callers keep the rules above):
+      grep/egrep/fgrep -r/--recursive (-R -S -O -d -D still refused, the walked
+      cwd checked); rg (no -L --follow -z --search-zip --pre --pre-glob
+      --hostname-bin; the anchor also unsets RIPGREP_CONFIG_PATH); fd (no -x
+      --exec -X --exec-batch -l --list-details -L --follow); tree (no -o -R -l
+      --fromfile --fromtabfile --output; fd's pattern and tree -P/-I values are patterns); git remote -v / get-url NAME (Aegis M1: a card when any repo/global/system config scope has an insteadOf/pushInsteadOf key or a userinfo URL; gitRemoteUrlRisk); paradigm status|st,
+      doctor [--context] [--explain], ripple SYMBOL [PATH], purpose validate
+      [PATH], task ls [STATUS], task show REF (cwd at a session root; a card
+      while .paradigm/ lacks the preAction notice marker; never lore, index or
+      a write verb); gnomon desk stats, daemon status, mod list, mod status
+      [NAME], rules list, trace status, replay [--json] [--expect H] (default
+      home only; never bare trace or a write verb).
     tags: [kernel, security]
     signals: []
     tests:
       - test/shell-readonly.test.ts
       - test/shell-readonly-fs.test.ts
       - test/shell-readonly-cwd.test.ts
+      - test/shell-readonly-widen.test.ts
       - test/auto-edits-anchor.test.ts
       - test/run-modes-session.test.ts
   always-rules:

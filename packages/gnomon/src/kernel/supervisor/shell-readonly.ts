@@ -70,7 +70,8 @@
  *     pattern literally. No reader flag that recurses or follows symlinks:
  *     grep -r -R -S -O -d -D --recursive --dereference-recursive
  *     --directories --devices (and every abbreviation), ls -L -R, du -L, stat
- *     -L, diff -r, find -L/-follow; `rg` is gone (it recurses by default);
+ *     -L, diff -r, find -L/-follow; `rg` is gone (it recurses by default) —
+ *     RW below re-admits grep -r and rg in an anchored run only;
  *     `diff` takes no directory operand (`diff DIR DIR` / `diff FILE DIR` read
  *     files inside the directory that are never operands);
  *   - zsh EQUALS: a word starting with an unquoted `=` (`=cmd` is the full
@@ -112,6 +113,26 @@
  *   config names (core.fsmonitor, diff.external, textconv drivers); `.git/**`
  *   and (C2) `.gitconfig`, `.git-credentials`, `.netrc` and the other
  *   tool-steering files are gate-class, so a session cannot set them unseen.
+ *
+ * RW — THE READ-ONLY WIDENING (founder decision 2026-10-20: auto-edits never
+ * prompts more than native Claude Code in the same mode). In an ANCHORED posix
+ * run only (ctx.cwd set; win32 and unanchored callers keep the rules above):
+ *   grep/egrep/fgrep -r / --recursive (no symlink below an operand is followed;
+ *   -R -S -O -d -D stay refused; the walked cwd is checked); rg (no -L/--follow,
+ *   -z/--search-zip, --pre, --pre-glob, --hostname-bin; RIPGREP_CONFIG_PATH is
+ *   unset by the anchor); fd (no -x/--exec, -X/--exec-batch, -l/--list-details,
+ *   -L/--follow); tree (no -o, -R, -l, --fromfile, --fromtabfile, --output);
+ *   `git remote -v`; and the project CLIs' read verbs, each an exact grammar:
+ *   `paradigm status|st`, `doctor [--context] [--explain]`, `ripple SYMBOL
+ *   [PATH] …`, `purpose validate [PATH]`, `task ls [STATUS] …`, `task show REF`
+ *   (the cwd at a session root; a card while `.paradigm/` lacks the one-time
+ *   notice marker the CLI's preAction hook would write); `gnomon desk stats`,
+ *   `daemon status`, `mod list`, `mod status [NAME]`, `rules list`, `trace
+ *   status`, `replay [--json] [--expect H]` (default home only).
+ *   RESIDUAL (RW): the paradigm and gnomon binaries are found on $PATH (as git
+ *   is) and read their own config and, for gnomon, the Gnomon home (the verbs
+ *   print counts, names, hashes and state); rg, fd and grep -r read every file
+ *   below an in-root operand, the repo's `.git/**` and `.env` included.
  *   A glob is expanded at classification time: a file planted between the
  *   check and the run (by a concurrent process) is not seen. A planted file
  *   NAME inside a session root can still steer which in-root file a literal
@@ -1425,7 +1446,16 @@ const gitRule: Rule = (args, env, name) => {
   }
   if (sub === 'remote') {
     if (rest.length === 0) return;
-    no('git remote: only bare (a -v listing shows URLs, which may hold credentials)');
+    // RW (read-only widening): `remote -v` / `remote get-url NAME` in an anchored run. Aegis M1: git may print a URL
+    // that `cat .git/config` cannot show — rewritten by a global/system url.<base>.insteadOf / pushInsteadOf, or
+    // carrying userinfo — so either form is a card when any config scope git reads names such a key or such a URL
+    const verbose = rest.length === 1 && (rest[0]!.lit === '-v' || rest[0]!.lit === '--verbose');
+    const getUrl = rest.length === 2 && rest[0]!.lit === 'get-url' && /^[A-Za-z0-9._-]+$/.test(rest[1]!.lit!) && !rest[1]!.lit!.startsWith('-');
+    if (!(verbose || getUrl) || env.ctx.cwd === undefined || env.pp !== path.posix) no('git remote: only bare, or -v / get-url NAME in an anchored run');
+    if (!env.native) no('git remote: a foreign path flavour');
+    const risk = gitRemoteUrlRisk(env.cwd!, env.ctx.home);
+    if (risk !== null) no(`git remote: a URL may hold a credential (${risk})`);
+    return;
   }
   if (sub === 'config') {
     if (rest.length === 2 && ['--get', '--get-all'].includes(rest[0]!.lit!) && !rest[1]!.lit!.startsWith('-') && !GIT_SECRET_KEY.test(rest[1]!.lit!)) return;
@@ -1478,7 +1508,8 @@ function configValue(v: string): string {
  * Scan one git config file (and every include / includeIf path, conditions ignored: a superset) for an exec-class
  * key. Returns the key, null when none, or a reason string when the file cannot be read as git config (fail closed).
  */
-function scanGitConfig(file: string, home: string, depth: number, seen: Set<string>): string | null {
+type ConfigHit = (section: string, sub: string | null, key: string, value: string) => boolean;
+function scanGitConfig(file: string, home: string, depth: number, seen: Set<string>, hit: ConfigHit = execKey): string | null {
   if (depth > 10) return 'include depth';
   let text: string;
   try {
@@ -1511,10 +1542,10 @@ function scanGitConfig(file: string, home: string, depth: number, seen: Set<stri
     if (!k) return 'unparsed config line';
     const key = k[1]!.toLowerCase();
     const value = configValue(k[2] ?? '');
-    if (execKey(section, sub, key, value)) return `${section}${sub !== null ? `.${sub}` : ''}.${key}`;
+    if (hit(section, sub, key, value)) return `${section}${sub !== null ? `.${sub}` : ''}.${key}`;
     if ((section === 'include' || section === 'includeif') && key === 'path' && value !== '') {
       const inc = value.startsWith('~/') ? path.join(home, value.slice(2)) : path.isAbsolute(value) ? value : path.join(path.dirname(file), value);
-      const r = scanGitConfig(inc, home, depth + 1, seen);
+      const r = scanGitConfig(inc, home, depth + 1, seen, hit);
       if (r !== null) return r;
     }
   }
@@ -1526,7 +1557,7 @@ function scanGitConfig(file: string, home: string, depth: number, seen: Set<stri
  * config.worktree, the common dir's config, and their includes), or null. The repo is found as git finds it: the
  * nearest `.git` dir or `gitdir:` file at or above cwd. The user's global and system config are trusted.
  */
-export function repoGitExecKey(cwd: string, home: string): string | null {
+export function repoGitExecKey(cwd: string, home: string, hit: ConfigHit = execKey): string | null {
   let dir = cwd;
   for (let i = 0; i < 4096; i++) {
     const dotgit = path.join(dir, '.git');
@@ -1552,7 +1583,7 @@ export function repoGitExecKey(cwd: string, home: string): string | null {
       }
       const seen = new Set<string>();
       for (const f of files) {
-        const r = scanGitConfig(f, home, 0, seen);
+        const r = scanGitConfig(f, home, 0, seen, hit);
         if (r !== null) return r;
       }
       return null;
@@ -1560,6 +1591,42 @@ export function repoGitExecKey(cwd: string, home: string): string | null {
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Aegis M1: a key or value under which `git remote -v` / `get-url` may print a credential: any
+ * url.<base>.insteadOf / pushInsteadOf (a rewrite can add userinfo), or any value holding a URL with userinfo
+ * (`scheme://user[:pass]@…`).
+ */
+const credUrlHit: ConfigHit = (_section, _sub, key, value) => key === 'insteadof' || key === 'pushinsteadof' || /:\/\/[^/\s]*@/.test(value);
+
+/**
+ * Aegis M1: the first credential-risk key (credUrlHit) in any config scope git may read from `cwd` — the repo's (as
+ * repoGitExecKey finds it), the global (GIT_CONFIG_GLOBAL as well as ~/.gitconfig and $XDG_CONFIG_HOME/git/config)
+ * and the system (GIT_CONFIG_SYSTEM as well as /etc/gitconfig and the Homebrew prefixes), every include followed. A
+ * SUPERSET of what git reads (the env named is the kernel's; the defaults are scanned too). A file that exists but
+ * cannot be read or parsed is a risk (fail closed). Null when none.
+ */
+export function gitRemoteUrlRisk(cwd: string, home: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const r = repoGitExecKey(cwd, home, credUrlHit);
+  if (r !== null) return r;
+  const xdg = env.XDG_CONFIG_HOME ? env.XDG_CONFIG_HOME : path.join(home, '.config');
+  const files = [
+    ...(env.GIT_CONFIG_GLOBAL ? [env.GIT_CONFIG_GLOBAL] : []),
+    path.join(home, '.gitconfig'),
+    path.join(xdg, 'git', 'config'),
+    path.join(home, '.config', 'git', 'config'),
+    ...(env.GIT_CONFIG_SYSTEM ? [env.GIT_CONFIG_SYSTEM] : []),
+    '/etc/gitconfig',
+    '/opt/homebrew/etc/gitconfig',
+    '/usr/local/etc/gitconfig',
+  ];
+  const seen = new Set<string>();
+  for (const f of files) {
+    const hit = scanGitConfig(f, home, 0, seen, credUrlHit);
+    if (hit !== null) return hit;
   }
   return null;
 }
@@ -1584,13 +1651,256 @@ const diffRule: Rule = (args, env, name) => {
   }
 };
 
+/* ── RW: the read-only widening (founder decision 2026-10-20: never prompt more than native Claude Code) ── */
+
+/**
+ * RW: every family added by the widening passes only in an ANCHORED posix run — ctx.cwd is set (the kernel runs the
+ * command through anchorCommand, which cds to the root's realpath and unsets CDPATH and RIPGREP_CONFIG_PATH). A win32
+ * session and an unanchored caller keep the earlier rules unchanged.
+ */
+function anchoredOnly(env: Env, what: string): void {
+  if (env.ctx.cwd === undefined || env.pp !== path.posix) no(`${what}: only in an anchored run`);
+}
+
+/** A walk from the cwd (or an operand): the cwd must be known and readable, so the walk starts inside a root. */
+function walksCwd(env: Env, name: string): void {
+  needCwd(env, name);
+  checkPath('.', env);
+}
+
+/**
+ * RW: grep recursion. `-r` / `--recursive` (any abbreviation, `--r` included) walks a directory WITHOUT following a
+ * symlink found below it (GNU grep and ugrep: only a command-line symlink is followed, and an operand is checked at
+ * its realpath; BSD grep: -p, no symlink at all, is the default). `-R`, `-S`, `-O`, `-d`, `-D`,
+ * `--dereference-recursive`, `--directories` and `--devices` stay refused. Recursion is ANCHORED only, and the cwd it
+ * may walk with no operand is checked. An `r` anywhere in a short cluster counts (an attached value with an `r` only
+ * adds the checks).
+ */
+const GREP_DENY_SHORT = 'RSOdD';
+const GREP_DENY_LONG: readonly string[] = ['--dereference-recursive', '--directories', '--devices'];
+function grepRecursive(a: Arg): boolean {
+  if (!isFlag(a) || a.lit === '--') return false;
+  const s = a.lit!;
+  if (s.startsWith('--')) {
+    const k = s.split('=')[0]!;
+    return k.length > 2 && '--recursive'.startsWith(k);
+  }
+  return s.slice(1).includes('r');
+}
+function grepRule(): Rule {
+  const base = reader(GREP_DENY_SHORT, GREP_DENY_LONG, false, 'f');
+  return (args, env, name) => {
+    base(args, env, name);
+    if (args.some(grepRecursive)) {
+      anchoredOnly(env, `${name} -r`);
+      walksCwd(env, name);
+    }
+  };
+}
+
+/**
+ * RW: rg (recursive by default; never follows a symlink unless -L/--follow). Refused: -L --follow (symlinks),
+ * -z --search-zip (runs decompressors), --pre --pre-glob (runs a preprocessor), --hostname-bin (runs a program).
+ * Its config file (RIPGREP_CONFIG_PATH, which may add any flag) is unset by the anchor, so rg is anchored only.
+ */
+const rgReader = reader('Lz', ['--follow', '--pre', '--pre-glob', '--search-zip', '--hostname-bin'], false, 'f');
+const rgRule: Rule = (args, env, name) => {
+  anchoredOnly(env, name);
+  rgReader(args, env, name);
+  walksCwd(env, name);
+};
+
+/** RW: fd (recursive; no symlink unless -L). Refused: -x --exec, -X --exec-batch (run a command), -l --list-details (runs ls), -L --follow. */
+const fdReader = reader('xXlL', ['--exec', '--exec-batch', '--list-details', '--follow']);
+/**
+ * Aegis L3: fd's FIRST positional is its PATTERN, not a path; every later positional is a search path. Only flags
+ * that certainly take a separate value are modelled as consuming one (a value flag missed here only makes the real
+ * pattern look like a path: a stricter check, never a looser one). Path-valued flags (--base-directory,
+ * --search-path, --ignore-file) keep their value path-checked.
+ */
+const FD_VALUE_SHORT = 'dEetcjSo';
+const FD_VALUE_LONG: readonly string[] = ['--max-depth', '--min-depth', '--exact-depth', '--exclude', '--extension', '--type', '--color', '--threads', '--size', '--changed-within', '--changed-before', '--owner', '--max-results', '--path-separator', '--format', '--batch-size'];
+const FD_PATH_LONG: readonly string[] = ['--base-directory', '--search-path', '--ignore-file'];
+const fdRule: Rule = (args, env, name) => {
+  anchoredOnly(env, name);
+  staticOnly(args, name);
+  const checked: Arg[] = [];
+  let pattern = false;
+  let endOpts = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    const s = a.lit!;
+    if (!endOpts && s === '--') {
+      endOpts = true;
+      continue;
+    }
+    if (!endOpts && isFlag(a)) {
+      checked.push(a);
+      if (s.startsWith('--')) {
+        if (!s.includes('=') && (FD_VALUE_LONG.includes(s) || FD_PATH_LONG.includes(s)) && args[i + 1] !== undefined) {
+          i++;
+          if (FD_PATH_LONG.includes(s)) checked.push(args[i]!);
+        }
+      } else {
+        const j = [...s.slice(1)].findIndex((ch) => FD_VALUE_SHORT.includes(ch));
+        if (j === s.length - 2 && args[i + 1] !== undefined) i++; // the value letter ends the cluster: the next word is its value
+      }
+      continue;
+    }
+    if (!pattern) {
+      pattern = true; // the pattern: a regex or glob, never read as a path
+      continue;
+    }
+    checked.push(endOpts && isFlag(a) ? { ...a, lit: `./${s}` } : a);
+  }
+  fdReader(checked, env, name);
+  walksCwd(env, name);
+};
+
+/**
+ * RW: tree (names only). Refused: -o (writes its output to a file), -R (re-runs, writing 00Tree.html), -l (follows
+ * symlinks), --fromfile/--fromtabfile, --output. Aegis L3: tree reads a short cluster letter by letter and each of
+ * P I (a pattern) and L H T (a value) takes the NEXT word; a -P/-I pattern is not a path, the other values stay checked.
+ */
+const treeReader = reader('olR', ['--fromfile', '--fromtabfile', '--output'], true);
+const treeRule: Rule = (args, env, name) => {
+  anchoredOnly(env, name);
+  staticOnly(args, name);
+  const checked: Arg[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    checked.push(a);
+    if (!isFlag(a) || a.lit!.startsWith('--')) continue;
+    for (const ch of a.lit!.slice(1)) {
+      if (!'PILHT'.includes(ch) || args[i + 1] === undefined) continue;
+      i++;
+      if (!'PI'.includes(ch)) checked.push(args[i]!);
+    }
+  }
+  treeReader(checked, env, name);
+  walksCwd(env, name);
+};
+
+/**
+ * RW: the project CLIs' read verbs, each checked read-only in its source (packages/paradigm/src, packages/gnomon/src/cli).
+ * An exact grammar per verb: any other verb, flag or operand is a card.
+ */
+const PARADIGM_MARKER = '.v6-0-4-migration-acknowledged';
+/**
+ * The notice (and its marker write) fires only when the roster's `active` list lacks `compliance`
+ * (paradigm core/migration-notices.ts isCohortC). Read strictly: a block-style `active:` list of plain `- name`
+ * items only; any other shape reads as "no compliance" (the card).
+ */
+function rosterHasCompliance(file: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return false;
+  }
+  const lines = text.split(/\r?\n/);
+  const at = lines.findIndex((l) => /^active:\s*$/.test(l));
+  if (at < 0) return false;
+  for (const l of lines.slice(at + 1)) {
+    if (/^\s*(#.*)?$/.test(l)) continue;
+    const m = /^\s+-\s+['"]?([a-z0-9-]+)['"]?\s*$/.exec(l);
+    if (!m) return false;
+    if (m[1] === 'compliance') return true;
+  }
+  return false;
+}
+const TASK_LS_STATUS =new Set(['active', 'open', 'done', 'shelved', 'all']);
+/** `NAME VALUE` pairs and bare flags of one verb; returns the operands. A value never starts with `-`. */
+function verbArgs(rest: readonly string[], what: string, bare: readonly string[], valued: readonly string[] = [], value: RegExp = /^[^-]/): string[] {
+  const ops: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const s = rest[i]!;
+    if (!s.startsWith('-')) ops.push(s);
+    else if (bare.includes(s)) continue;
+    else if (valued.includes(s) && rest[i + 1] !== undefined && value.test(rest[i + 1]!)) i++;
+    else no(`${what}: ${s}`);
+  }
+  return ops;
+}
+/**
+ * `paradigm` (the cwd must be a session root: the CLI reads the project from process.cwd()):
+ *   status | st; doctor [--context] [--explain]; ripple SYMBOL [PATH] [-d|--depth N] [--json] [-q|--quiet];
+ *   purpose validate [PATH]; task ls [active|open|done|shelved|all] [--json] [--mine] [-p|--priority V] [-t|--tag V]
+ *   [-n|--limit N]; task show REF [--json].
+ * NOT: lore list/show (loadLoreEntries migrates legacy entries, moving files), index (writes probe-index.json),
+ * `task ls --board` / `--project`, and every other verb. The CLI's preAction hook writes
+ * `.paradigm/.v6-0-4-migration-acknowledged` once (cohort-C projects), so the command is a card while `.paradigm/`
+ * exists without that marker.
+ */
+const paradigmRule: Rule = (args, env, name) => {
+  anchoredOnly(env, name);
+  staticOnly(args, name);
+  needCwd(env, name);
+  if (!rootForms(env).some((r) => env.fold(r) === env.fold(env.cwd!))) no('paradigm: only with the cwd at a session root');
+  if (!env.native) no('paradigm: a foreign path flavour');
+  const dir = env.pp.join(env.cwd!, '.paradigm');
+  if (fs.existsSync(dir) && !fs.existsSync(env.pp.join(dir, PARADIGM_MARKER)) && !rosterHasCompliance(env.pp.join(dir, 'roster.yaml'))) no(`paradigm: its one-time notice would write .paradigm/${PARADIGM_MARKER}`);
+  const [sub, ...rest] = args.map((a) => a.lit!);
+  if ((sub === 'status' || sub === 'st') && rest.length === 0) return;
+  if (sub === 'doctor') {
+    if (verbArgs(rest, 'paradigm doctor', ['--context', '--explain']).length === 0) return;
+    no('paradigm doctor: an operand');
+  }
+  if (sub === 'ripple') {
+    const ops = verbArgs(rest, 'paradigm ripple', ['--json', '-q', '--quiet'], ['-d', '--depth'], /^\d{1,3}$/);
+    if (ops.length < 1 || ops.length > 2) no('paradigm ripple: SYMBOL [PATH]');
+    if (ops[1] !== undefined) checkPath(ops[1], env);
+    return;
+  }
+  if (sub === 'purpose' && rest[0] === 'validate') {
+    const ops = verbArgs(rest.slice(1), 'paradigm purpose validate', []);
+    if (ops.length > 1) no('paradigm purpose validate: at most one PATH');
+    if (ops[0] !== undefined) checkPath(ops[0], env);
+    return;
+  }
+  if (sub === 'task' && rest[0] === 'ls') {
+    const ops = verbArgs(rest.slice(1), 'paradigm task ls', ['--json', '--mine'], ['-p', '--priority', '-t', '--tag', '-n', '--limit']);
+    if (ops.length > 1 || (ops[0] !== undefined && !TASK_LS_STATUS.has(ops[0]))) no('paradigm task ls: a status of active|open|done|shelved|all');
+    return;
+  }
+  if (sub === 'task' && rest[0] === 'show') {
+    if (verbArgs(rest.slice(1), 'paradigm task show', ['--json']).length === 1) return;
+    no('paradigm task show: one REF');
+  }
+  no(`paradigm: ${sub === undefined ? 'no verb' : `verb ${[sub, ...rest.slice(0, 1)].join(' ')}`} is not a read verb`);
+};
+
+const GNOMON_MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+/**
+ * `gnomon` (default home only: a `<home>` operand or `--home` is a card): desk stats [--json]; daemon status;
+ * mod list; mod status [NAME]; rules list [--json]; trace status; replay [--json] [--expect sha256:HEX].
+ * Each reads the Gnomon home and prints counts, names, hashes or state, never a key or a log row's content (bare
+ * `gnomon trace` prints prompt text: not here). NOT: every other verb (mod install/link/pause/start/uninstall/config,
+ * rules revoke, trace on/off, daemon start/stop, mode, identity, up, setup, …).
+ */
+const gnomonRule: Rule = (args, env, name) => {
+  anchoredOnly(env, name);
+  staticOnly(args, name);
+  const [sub, ...rest] = args.map((a) => a.lit!);
+  const is = (...want: string[]): boolean => rest.length === want.length && want.every((w, i) => rest[i] === w);
+  if (sub === 'desk' && (is('stats') || is('stats', '--json'))) return;
+  if (sub === 'daemon' && is('status')) return;
+  if (sub === 'mod' && (is('list') || is('status') || (rest.length === 2 && rest[0] === 'status' && GNOMON_MOD_NAME.test(rest[1]!)))) return;
+  if (sub === 'rules' && (is('list') || is('list', '--json'))) return;
+  if (sub === 'trace' && is('status')) return;
+  if (sub === 'replay') {
+    if (verbArgs(rest, 'gnomon replay', ['--json'], ['--expect'], /^sha256:[0-9a-f]{64}$/).length === 0) return;
+    no('gnomon replay: a home operand');
+  }
+  no(`gnomon: ${sub === undefined ? 'no verb' : `verb ${[sub, ...rest.slice(0, 1)].join(' ')}`} is not a read verb`);
+};
+
 export const COMMANDS: Readonly<Record<string, Rule>> = Object.freeze({
   cat: reader(), head: reader(), tail: reader(), cut: reader(), cmp: reader(), realpath: reader(), df: reader(),
   wc: reader('', ['--files0-from']),
   ls: reader('LR', ['--dereference', '--recursive'], true),
-  grep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
-  egrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
-  fgrep: reader('rRSOdD', ['--recursive', '--dereference-recursive', '--directories', '--devices'], false, 'f'),
+  grep: grepRule(), egrep: grepRule(), fgrep: grepRule(),
+  rg: rgRule, fd: fdRule, tree: treeRule, paradigm: paradigmRule, gnomon: gnomonRule,
   stat: reader('L', ['--dereference']),
   du: reader('L', ['--dereference', '--files0-from'], true, 'X'),
   diff: diffRule,
@@ -1646,7 +1956,9 @@ export const shQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /**
  * K1 (TD-2026-10-20-086): the command as the kernel lets it run after a read-only pass — in `root` (the realpath the
- * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked),
+ * classifier assumed as ctx.cwd), with CDPATH unset (so a relative cd means the directory the classifier checked)
+ * and RIPGREP_CONFIG_PATH and GREP_OPTIONS unset (RW: an rg config file may add any flag, --pre included; Aegis
+ * L1: an older GNU grep reads extra flags, -R included, from GREP_OPTIONS),
  * the original text inside a brace group on its own lines (a heredoc's delimiter line and a trailing `# comment`
  * end before the closing `}`). zsh: `cd -q` (no chpwd hooks), then chpwd/cd functions removed, chpwd_functions
  * emptied and IGNORE_BRACES off (Aegis M2, L1); bash: no -q, a `cd` function removed, `set -B`; unknown: picked at
@@ -1682,5 +1994,5 @@ export function anchorCommand(command: string, root: string, flavour: ShellFlavo
   const bash = `builtin cd -- ${q} && { builtin unset -f cd; builtin set -B; }`;
   const pre = flavour === 'zsh' ? zsh : flavour === 'bash' ? bash : `if [ -n "\${ZSH_VERSION-}" ]; then ${zsh}; else ${bash}; fi`;
   // L1 guard: brace expansion must really be on for this command (zsh may fix IGNORE_BRACES at parse time): else nothing runs
-  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH && ${anchorGitEnv()} && {\n${command}\n}`;
+  return `${pre} && builtin set -- x{a,b} && builtin test "$#" -eq 2 && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && ${anchorGitEnv()} && {\n${command}\n}`;
 }
