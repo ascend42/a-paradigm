@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, read_line_capped, ChannelLine, LineRead, MAX_LINE};
-use gnomon_wrapper::kernel::{check_trust_root, child_command};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_MODE};
 use gnomon_wrapper::loopback::{preflight, setup_preflight};
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
 use gnomon_wrapper::surface::{IPC_DISABLED_SCRIPT, SURFACE_SCRIPT};
@@ -114,10 +114,12 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
     // Aegis C1: node and the kernel tree are re-hashed against the build's pins before EVERY spawn
     let t = match check_trust_root() {
         Ok(t) => t,
+        // bundle (release): the signed app's own node or kernel changed; dev: the checkout moved on since the build
+        Err(e) if BUILD_MODE == "bundle" => return show_status(&app, &sh, "Gnomon.app is incomplete or was modified", &e, true),
         Err(e) => return show_status(&app, &sh, "Gnomon.app was built against a different node or kernel", &e, true),
     };
     let (node, js) = (t.node.clone(), t.gnomon_js.clone());
-    sh.log(&format!("node {} (recorded {} via {}; sha256 equals the build pin); kernel {} (tree equals the build pin)", node.display(), t.node_recorded.display(), t.node_source, js.display()));
+    sh.log(&format!("[{BUILD_MODE}] node {} (recorded {} via {}; sha256 equals the build pin); kernel {} (tree equals the build pin)", node.display(), t.node_recorded.display(), t.node_source, js.display()));
     let env: Vec<(String, String)> = std::env::vars().collect();
     let stderr = sh.log.lock().unwrap().as_ref().and_then(|f| f.try_clone().ok()).map(Stdio::from).unwrap_or_else(Stdio::null);
     let mut child = match child_command(&node, &js, None, &env, stderr).spawn() {
@@ -218,6 +220,12 @@ fn stop_kernel(sh: &Shared) {
 }
 
 fn main() {
+    // release-darwin.mjs asks the BUILT binary which mode it was compiled in, before signing (Aegis M2 high 2):
+    // `bundle` or `dev` on stdout, then exit, before any window or kernel exists
+    if std::env::args().nth(1).as_deref() == Some("--build-mode") {
+        println!("{BUILD_MODE}");
+        return;
+    }
     let sh = Arc::new(Shared { phase: Mutex::new(Phase::Status), status: Mutex::new(json!({ "state": "starting the kernel" })), stdin: Mutex::new(None), child: Mutex::new(None), quitting: AtomicBool::new(false), stopped: AtomicBool::new(false), log: Mutex::new(open_log()) });
     let setup_sh = sh.clone();
     let app = tauri::Builder::default()

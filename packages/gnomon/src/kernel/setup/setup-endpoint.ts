@@ -52,6 +52,7 @@ import { readRegistry, registryPath } from '../identity/registry.js';
 import { Provisioner, type ProvisionEvent } from '../identity/provisioner.js';
 import type { HelperTransport, HelperVerifier, PinnedHelper } from '../identity/helper.js';
 import { runPreflight, type PreflightReport } from './preflight.js';
+import { helperPathFor } from '../lifecycle/app-bundle.js';
 
 export interface SetupGrant {
   port: number;
@@ -454,7 +455,7 @@ export class SetupEndpoint {
           const ex = this.#report?.existing;
           if (!ex || this.#registered || this.#provisioned) throw new RpcRefusal('FORBIDDEN', 'nothing-to-complete', 'this home has nothing to finish');
           // I5: the helper comes from identity.json; I10: the saved, root-signed row is appended (0 prompts)
-          const r = await this.#job(() => this.#engine(ex.helperPath).completeDevice());
+          const r = await this.#job(() => this.#engine(helperPathFor(ex.helperPath)).completeDevice());
           if (!r.ok) {
             this.#o.onNotice?.(`finishing setup failed: ${r.message}`);
             throw new RpcRefusal('FORBIDDEN', r.reason, r.message);

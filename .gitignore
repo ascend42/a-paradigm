@@ -225,3 +225,6 @@ packages/warpline/probe-*/
 
 # Atelier reference renders
 .atelier/sessions/*/refs/
+
+# T-2026-10-21-029: Gnomon.app release output (packages/gnomon/scripts/release-darwin.mjs)
+packages/gnomon/release/

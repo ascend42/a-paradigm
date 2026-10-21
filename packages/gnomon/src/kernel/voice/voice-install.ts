@@ -35,6 +35,7 @@ import * as path from 'node:path';
 import { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM } from '@a-company/gnomon-contracts';
 import { versionAtLeast } from '../identity/helper.js';
 import { DISABLE_SIGUSR1 } from '../lifecycle/env.js';
+import { appBundleOf } from '../lifecycle/app-bundle.js';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 import { voiceChildEnv, type VoicePrepared } from './voice-child.js';
 
@@ -52,9 +53,17 @@ export function voiceBinDir(home: string): string {
  * daemon start, never imported: @a-company/gnomon-voice is not a dependency of the kernel (G-SEC-01, zero runtime
  * dependencies). Looked for, in order: an installed package next to the kernel (node_modules/@a-company/gnomon-voice)
  * walking up from this file, then the workspace sibling (packages/gnomon-voice). Any other OS: unavailable.
+ * Inside a release Gnomon.app (#app-bundle, T-2026-10-21-029) ONLY the app's own Contents/Resources/gnomon-voice is
+ * considered: the walk never leaves the bundle (no ~/node_modules from above the app).
  */
 export function resolveVoiceClientEntry(platform: NodeJS.Platform = process.platform, from: string = fileURLToPath(import.meta.url)): { entry: string | null; reason?: string } {
   if (platform !== 'darwin') return { entry: null, reason: 'voice runs on macOS only for now' };
+  const bundle = appBundleOf(from);
+  if (bundle) {
+    if (!isVoicePackage(bundle.voicePackage)) return { entry: null, reason: 'the voice client is not installed in this Gnomon.app' };
+    const cli = path.join(bundle.voicePackage, 'dist', 'cli.js');
+    return fs.existsSync(cli) ? { entry: cli } : { entry: null, reason: 'the voice client is not built' };
+  }
   let found: string | null = null;
   let packaged = false;
   for (let dir = path.dirname(from); ; dir = path.dirname(dir)) {
@@ -305,6 +314,15 @@ function nativeDeps(sourcePkg: string): Array<{ name: string; dir: string }> {
 }
 
 /**
+ * Where GnomonVoiceIO.app is copied FROM: inside a release Gnomon.app, its Contents/Helpers/GnomonVoiceIO.app
+ * (#app-bundle; bundle-relative, so a moved app still finds it); otherwise `<gnomon-voice>/bin/darwin` beside the
+ * client entry. The copy is verified by requirement + release pin either way (installVoiceApp).
+ */
+export function voiceIoSourceApp(entry: string, from: string = fileURLToPath(import.meta.url)): string {
+  return appBundleOf(from)?.voiceIoApp ?? path.resolve(path.dirname(entry), '..', 'bin', 'darwin', VOICE_APP_NAME);
+}
+
+/**
  * Verify the client's dist against the stamp-pinned manifest, copy all of dist (+ the native engine packages) into
  * `<home>/bin/voice/client/` and pin every copied file. The source is read once, here; nothing runs from it. The
  * native packages are outside dist, so they are pinned at copy (trust on first copy, per daemon start).
@@ -435,6 +453,8 @@ export function createVoicePrepare(o: {
   expectedManifest: string | null | undefined;
   installApp?: typeof installVoiceApp;
   fetchModels?: typeof fetchVoiceModels;
+  /** where GnomonVoiceIO.app is copied from (default voiceIoSourceApp: the app bundle's Helpers, else beside the client) */
+  sourceApp?: string;
 }): (report: (phase: 'installing' | 'downloading-models', mb?: number) => void) => Promise<VoicePrepared> {
   let pin: VoiceClientPin | null = null;
   let refused: VoiceClientRefused | null = null;
@@ -447,7 +467,7 @@ export function createVoicePrepare(o: {
     if (refused || !pin) throw refused ?? new VoiceClientRefused('the voice client is not installed');
     report('installing');
     verifyVoiceClient(pin);
-    const sourceApp = path.resolve(path.dirname(o.entry), '..', 'bin', 'darwin', VOICE_APP_NAME);
+    const sourceApp = o.sourceApp ?? voiceIoSourceApp(o.entry);
     const { appPin, ...prepared } = (o.installApp ?? installVoiceApp)({ home: o.home, sourceApp, devUnsigned: o.devUnsigned });
     await (o.fetchModels ?? fetchVoiceModels)({ home: o.home, entry: pin.entry, report: (mb) => report('downloading-models', mb) });
     verifyVoiceClient(pin);

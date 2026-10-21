@@ -30,6 +30,7 @@ import { nsFromRootPublicKey } from '@a-company/gnomon-contracts';
 import { p256KeyId } from '../log/signer.js';
 import { ensureKeysDir, keysDir } from './device-key.js';
 import { HardwareRootAuthority, HelperApprovalsKey, p256FromX963, pemOf } from './hardware.js';
+import { helperPathFor } from '../lifecycle/app-bundle.js';
 import { helperOnceSync, HelperProcess, HelperRepin, HelperUnavailableError, pinHelper, SupervisedHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
 
 export const IDENTITY_FILE = 'identity.json';
@@ -187,9 +188,12 @@ export interface OpenedIdentity {
 export async function openHardwareIdentity(home: string, o: { verifier?: HelperVerifier; start?: (pin: PinnedHelper) => HelperTransport } = {}): Promise<OpenedIdentity | null> {
   const record = readIdentity(home);
   if (!record) return null;
+  // #app-bundle (T-2026-10-21-029): inside a release Gnomon.app the app's own helper, wherever the app now lives;
+  // the recorded path otherwise. Trust is the signature + release pin either way (pinHelper), never the path.
+  const helperPath = helperPathFor(record.helperPath);
   let pin: PinnedHelper;
   try {
-    pin = pinHelper(record.helperPath, o.verifier ? { verifier: o.verifier } : {});
+    pin = pinHelper(helperPath, o.verifier ? { verifier: o.verifier } : {});
   } catch (e) {
     throw new IdentityError('helper', e instanceof Error ? e.message : 'the helper could not be pinned');
   }
@@ -207,7 +211,7 @@ export async function openHardwareIdentity(home: string, o: { verifier?: HelperV
     }
     const approvals = new HelperApprovalsKey({ gen: record.gen, approvalsPublicKeyPem: a.row.publicKeyPem }, record.principalId, helper);
     const repinner = new HelperRepin({
-      helperPath: record.helperPath,
+      helperPath,
       holder,
       helper,
       ...(o.verifier ? { verifier: o.verifier } : {}),

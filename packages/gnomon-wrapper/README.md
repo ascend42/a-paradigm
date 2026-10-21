@@ -9,8 +9,9 @@ is macOS (WKWebView). Windows (WebView2) comes in the parity phase.
 Double-click Gnomon.app and:
 
 1. A window opens on the app's bundled status page ("starting the kernel").
-2. The app runs `node --disable-sigusr1 <checkout>/packages/gnomon/dist/cli/gnomon.js up --wrapper`
-   as a supervised child. This is the same hardened in-process path as
+2. The app runs `node --disable-sigusr1 <kernel>/dist/cli/gnomon.js up --wrapper`
+   as a supervised child. A release app uses its bundled node and
+   `Contents/Resources/kernel`; a dev build uses the checkout it was built in. This is the same hardened in-process path as
    `gnomon up` in a terminal: the hardware identity via the signed helper, and
    a refusal of `NODE_OPTIONS` or any node flag. The child gets a clean
    environment: `HOME USER LOGNAME LANG TMPDIR SHELL` plus a fixed `PATH`.
@@ -58,25 +59,100 @@ Security posture:
 - **Logs.** `~/Library/Logs/Gnomon/kernel.log` (0600) holds the kernel's stderr
   and the wrapper's own lines. It never contains a token or a key.
 
-Trust root (pinned at build time, re-checked before every spawn):
+Trust root (pinned at build time, re-checked before every spawn). The build
+has two modes, chosen when it is compiled (`build.rs`, `GNOMON_BUILD_MODE`):
 
-- **Node.** The build records the node path as found (`GNOMON_WRAPPER_NODE`,
-  else `which node`, so `/opt/homebrew/bin/node` stays a symlink) and the
-  sha256 of its realpath target.
-- **Kernel.** The build records `packages/gnomon` (`GNOMON_WRAPPER_GNOMON_PKG`
-  overrides it) and a hash of its `dist/` plus `package.json`
-  (`gnomon-wrapper-kernel-tree:v1`). The dist bundles its workspace deps.
-
-Before each launch the app re-hashes both. On a mismatch it refuses with
-"Gnomon.app was built against a different node/kernel … Rebuild the app". A
-`brew upgrade node`, `npm run build:gnomon` or `git pull` all cause that
-mismatch.
+- **Bundle (a release app).** The release script stages the node and the
+  kernel first, then builds with `GNOMON_WRAPPER_BUNDLE_STAGE=<stage>`. The
+  binary records the **bundle-relative** paths `Resources/node/bin/node` and
+  `Resources/kernel` (`src/layout.rs`, shared with the app) and the hashes of
+  what was staged: the sha256 of the signed node and the kernel tree hash. At
+  every launch the app finds `Contents` from its own executable
+  (`<X>.app/Contents/MacOS/gnomon-wrapper`, realpath), re-hashes both and
+  refuses a mismatch, a symlink, a hard link, or a path that leaves the bundle
+  with "reinstall Gnomon". Then, right before the spawn, it checks the node's
+  code signature with SecStaticCode (`src/codesign.rs`) against the compiled
+  requirement: our team and identifier `gnomon.node`. Nothing from the build
+  machine is compiled in, so the app runs wherever it is copied. A
+  release-profile build without a stage fails unless `GNOMON_WRAPPER_DEV=1`
+  is set (`build-darwin.mjs` sets it for dev apps). `gnomon-wrapper
+  --build-mode` prints `bundle` or `dev`.
+- **Dev (founder dogfooding from a checkout).** As before: the build records
+  the node path as found (`GNOMON_WRAPPER_NODE`, else `which node`, so
+  `/opt/homebrew/bin/node` stays a symlink) and the sha256 of its realpath
+  target, plus `packages/gnomon` (`GNOMON_WRAPPER_GNOMON_PKG` overrides it)
+  and a hash of its `dist/` plus `package.json`
+  (`gnomon-wrapper-kernel-tree:v1`). On a mismatch it refuses with "Gnomon.app
+  was built against a different node/kernel … Rebuild the app". A
+  `brew upgrade node`, `npm run build:gnomon` or `git pull` all cause that
+  mismatch.
 
 The local lane config's runner node is not used until the wrapper can verify
 its root signature. The pins hold only up to the spawn: a same-user process
 could still swap the files in that window, which is the §15.1 posture.
 
-## Build, sign, notarize (founder, macOS)
+## Bundle layout (release, 8.0 M2)
+
+One `Gnomon.app` per arch (TD-2026-10-21-758), built and signed once per
+release by `packages/gnomon/scripts/release-darwin.mjs` on the founder's Mac.
+It runs on any Mac, whatever Node the user has (or none):
+
+```
+Gnomon.app/Contents/
+  MacOS/gnomon-wrapper                 this Tauri binary (bundle mode)
+  Info.plist, Resources/icon.icns      from cargo tauri build
+  Resources/node/bin/node              official Node 24.x (bundled-node.lock.json), re-signed, NodeEntitlements.plist
+  Resources/node/LICENSE
+  Resources/kernel/dist/…              npm run build:release (GUI embedded, helper/voice-io sha256 compiled in)
+  Resources/kernel/package.json
+  Resources/gnomon-voice/              the voice client: package.json, dist/, voice-models.manifest.json,
+    node_modules/sherpa-onnx-node/     the native engine and its darwin-<arch> package (.node/.dylib signed)
+    node_modules/sherpa-onnx-darwin-<arch>/
+  Helpers/GnomonHelper.app             signed by its own build (profile, keychain group)
+  Helpers/GnomonVoiceIO.app            signed by its own build (audio-input only)
+```
+
+- **Node** is never the builder's `which node`. `bundled-node.lock.json` names
+  the official tarball and its sha256 per arch. Only
+  `node packages/gnomon/scripts/bump-bundled-node.mjs --version 24.x.y` writes
+  it: the script gpg-verifies `SHASUMS256.txt` against the release keys in
+  `node-release-keys.json` and records the signer. The release script refuses
+  a lock without that provenance. It downloads the tarball from nodejs.org (or
+  a cache) and refuses it unless it matches. Node is signed with identifier
+  `gnomon.node` and `allow-jit` only (`NodeEntitlements.plist`).
+- **Kernel runtime deps.** None are copied. The kernel has zero runtime
+  dependencies (G-SEC-01), and tsup already inlines `gnomon-contracts`, so
+  `Resources/kernel` is `dist/` plus `package.json`. The voice client is a
+  pruned copy: its package, dist, models manifest and the two sherpa packages.
+  The kernel copies it into `<home>/bin/voice/client` and pins it, as before.
+- **Children.** The wrapper spawns the kernel with the bundled node, so the
+  kernel's `process.execPath` is that node. Every node child (gnomon-web, mods,
+  the voice client, the model fetch, a successor) is spawned with it, never
+  with PATH `node`.
+- **Helpers.** A kernel running from a bundle finds the helper, voice-io and
+  voice client inside its own app (`src/kernel/lifecycle/app-bundle.ts`),
+  from its own location. A moved app (M4 copies it to `~/Applications`)
+  still finds them. The app's own helper also wins over a stale
+  `identity.json` path. Trust is still the code-signing requirement plus the
+  release sha256 pin, never the path.
+- **Signing order (inside-out).** The sherpa libs come first, then node.
+  Signing rewrites node's bytes, so the pin is taken after. Then
+  `cargo tauri build` pins the stage, the app is assembled, and the outer app
+  is signed (empty `Entitlements.plist`, hardened runtime, no `--deep`: the
+  nested code is already signed). Then it is verified, optionally notarized
+  and stapled, and zipped (`ditto -c -k --keepParent`) with a `.sha256`.
+
+```sh
+node packages/gnomon/scripts/release-darwin.mjs                       # signed, this Mac's arch → packages/gnomon/release/
+node packages/gnomon/scripts/release-darwin.mjs --notarize            # + notarytool (profile gnomon-notary) + staple
+node packages/gnomon/scripts/release-darwin.mjs --unsigned            # ad-hoc (CI, any Mac)
+node packages/gnomon/scripts/release-darwin.mjs --dry-run --unsigned  # layout + pins only: no swift/npm/cargo/network/codesign
+```
+
+Build each arch on a Mac of that arch: the Swift helpers, cargo and the sherpa
+platform package build for the host only.
+
+## Dev build, sign, notarize (founder, macOS)
 
 On a fresh machine, install Rust and the Tauri CLI once:
 

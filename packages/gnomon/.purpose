@@ -899,6 +899,69 @@ components:
     tests:
       - test/release-pins.test.ts
       - test/daemon-lifecycle.test.ts
+  app-bundle:
+    description: >-
+      #app-bundle (T-2026-10-21-029, TD-2026-10-21-758 zero-build; 8.0 M2) —
+      where a kernel running from a release Gnomon.app finds its siblings,
+      derived from its OWN file's realpath at run time (never recorded), so a
+      moved or copied app (M4: ~/Applications) still works. Layout:
+      <X>.app/Contents/Resources/kernel (this kernel), Resources/node/bin/node
+      (the bundled node: the wrapper spawns the kernel with it, so
+      process.execPath and every child — gnomon-web, mods, the voice client,
+      the model fetch, successors — use it, never PATH node),
+      Resources/gnomon-voice (the voice client + sherpa), Helpers/GnomonHelper.app,
+      Helpers/GnomonVoiceIO.app. appBundleOf(from) is null outside a bundle,
+      where every caller keeps its monorepo / node_modules lookup. In a bundle:
+      defaultHelperPath and helperPathFor (identity-cli, provision.ts
+      openHardwareIdentity, setup-cli and setup-endpoint completeDevice) use the
+      app's own helper over a recorded identity.json path (stale after a move);
+      resolveVoiceClientEntry looks ONLY in Resources/gnomon-voice (never walks
+      above the app); voiceIoSourceApp copies voice-io from Helpers. Trust is
+      unchanged: requirement + release sha256 pin (#release-pins), never path.
+      appInstallDir (M4's one install-location choice): /Applications when
+      writable without sudo, else ~/Applications (App Management protection).
+    path: src/kernel/lifecycle/app-bundle.ts
+    type: module
+    tags: [kernel, lifecycle, release, distribution]
+    related: ["#release-pins", "#release-darwin", "#identity", "#gnomon-voice", "#gnomon-wrapper"]
+    tests:
+      - test/app-bundle.test.ts
+  release-darwin:
+    description: >-
+      #release-darwin (T-2026-10-21-029, TD-2026-10-21-758; 8.0 M2) —
+      scripts/release-darwin.mjs builds ONE relocatable Gnomon.app per arch on
+      the founder's Mac (host arch only; another arch is refused): helper and
+      voice-io (their own signed builds), build:gnomon + build:release (#release-pins
+      compiled in), the official Node 24 tarball from nodejs.org REFUSED unless it
+      hashes to packages/gnomon-wrapper/bundled-node.lock.json (never which node),
+      a Contents-shaped stage (Resources/node, Resources/kernel = dist +
+      package.json only: zero runtime deps, Resources/gnomon-voice = package,
+      dist, models manifest, sherpa-onnx-node + its darwin-<arch> package),
+      inside-out signing in the stage (sherpa libs, then node with
+      NodeEntitlements.plist), cargo tauri build with
+      GNOMON_WRAPPER_BUNDLE_STAGE (build.rs pins bundle-relative paths and the
+      staged hashes), assembly with Helpers/ (ditto, signatures kept; the
+      assembled app must re-hash to the staged pins), the app signed with its
+      empty Entitlements.plist (no --deep), verify --strict --deep + the wrapper
+      requirement, optional --notarize (notarize-darwin.mjs, keychain profile
+      gnomon-notary), then ditto -c -k --keepParent zip + .sha256. --unsigned
+      = ad-hoc (CI/tests); --dry-run = no swift/npm/cargo/network/codesign,
+      placeholder binaries, the real layout and pin logic. kernelTreeHash is the
+      JS twin of the wrapper's tree.rs (shared test vector).
+      Aegis M2 review: the lock must carry gpg provenance from
+      scripts/bump-bundled-node.mjs (SHASUMS256.txt.sig verified against the
+      vendored Node release keys, both tarballs checked, signer recorded);
+      staged trees refuse symlinks (dereference false); node is signed with
+      identifier gnomon.node and verified with codesign -R against the
+      requirement the wrapper compiles; the built wrapper must report
+      --build-mode bundle before signing; --unsigned signs node ad-hoc without
+      the hardened runtime (ad-hoc sherpa addons fail library validation).
+    path: scripts/release-darwin.mjs
+    type: script
+    tags: [release, distribution, signing]
+    related: ["#app-bundle", "#release-pins", "#gnomon-wrapper", "#gnomon-helper", "#gnomon-voice"]
+    tests:
+      - test/release-darwin.test.ts
   gui-resume:
     description: >-
       #gui-resume (TD-2026-10-19-063, founder ruling "ONE Touch ID") — the

@@ -23,6 +23,7 @@
   "scripts": {
     "build": "tsup && node scripts/build-stamp.mjs",
     "build:release": "node scripts/build-release.mjs",
+    "release:darwin": "node scripts/release-darwin.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:perf",

@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, ChannelLine};
-use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_KERNEL_TREE, BUILD_NODE};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_KERNEL_TREE, BUILD_MODE, BUILD_NODE};
 use gnomon_wrapper::loopback::{http_get_with_head, preflight, PreflightError};
 use gnomon_wrapper::verify::SigError;
 
@@ -31,6 +31,12 @@ fn tmp() -> PathBuf {
 
 #[test]
 fn native_preflight_against_a_live_dev_kernel() {
+    if BUILD_MODE == "bundle" {
+        // a bundle build resolves node and kernel from ITS app (Contents/MacOS); a test binary has no bundle.
+        // The bundle trust root is covered by kernel.rs's relocation tests; this rig is the dev path.
+        eprintln!("SKIP live_kernel: a bundle-mode build (GNOMON_WRAPPER_BUNDLE_STAGE) runs only inside its Gnomon.app");
+        return;
+    }
     if BUILD_NODE.is_empty() || BUILD_KERNEL_TREE.is_empty() {
         // CI=true never skips: the native job builds packages/gnomon/dist first (gnomon.yml)
         assert!(std::env::var("CI").is_err(), "live_kernel would SKIP on CI: build packages/gnomon/dist before cargo test");

@@ -9,8 +9,10 @@
 //! parity phase; the seams are `nav::APP_ORIGIN` and `kernel::child_command`.
 
 pub mod bundle;
+pub mod codesign;
 pub mod contract;
 pub mod kernel;
+pub mod layout;
 pub mod logfile;
 pub mod loopback;
 pub mod nav;

@@ -31,6 +31,7 @@ import { PRINCIPAL_NAME_PATTERN } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
 import { defaultHelperPath, sanitizeHost, sanitizeName } from './identity-cli.js';
+import { helperPathFor } from '../kernel/lifecycle/app-bundle.js';
 import { unsafeRuntime, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 import { daemonState, resolveGnomonHome } from '../kernel/lifecycle/index.js';
 import {
@@ -324,7 +325,7 @@ async function alreadySetUp(io: LaunchTtyIo, home: string, rec: IdentityRecord, 
     return { code: SETUP_EXIT_REFUSED, provisioned: false, home };
   }
   // I5: the helper comes from identity.json (completeDevice opens it like the daemon does)
-  const r = await engine(rec.helperPath).completeDevice();
+  const r = await engine(helperPathFor(rec.helperPath)).completeDevice();
   if (!r.ok) {
     refused(io.stderr, 'setup', r.reason, r.message);
     return { code: SETUP_EXIT_REFUSED, provisioned: false, home };

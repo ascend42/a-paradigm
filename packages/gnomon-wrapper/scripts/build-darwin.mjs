@@ -44,7 +44,8 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
 
   const cargoBin = path.join(process.env.HOME ?? '', '.cargo', 'bin');
   const cargo = existsSync(path.join(cargoBin, 'cargo')) ? path.join(cargoBin, 'cargo') : 'cargo';
-  const env = { ...process.env, PATH: `${cargoBin}:${process.env.PATH ?? ''}` };
+  // a DEV app pinned to this checkout: build.rs refuses a release build without a stage unless this is explicit
+  const env = { ...process.env, GNOMON_WRAPPER_DEV: '1', PATH: `${cargoBin}:${process.env.PATH ?? ''}` };
   say('cargo tauri build --bundles app --no-sign (release) …');
   const b = spawnSync(cargo, ['tauri', 'build', '--bundles', 'app', '--no-sign'], { cwd: PKG_ROOT, env, stdio: ['ignore', 'inherit', 'inherit'], timeout: 1_800_000 });
   if (b.status !== 0) fail('cargo tauri build failed (output above)');

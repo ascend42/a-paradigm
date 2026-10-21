@@ -5,6 +5,19 @@
 //                            read from packages/gnomon/src/kernel/web/gui-bundle.ts
 //   GNOMON_GUI_BUNDLE_FILES  that bundle's file names (comma-separated), for the
 //                            served-hash check (the wrapper re-hashes what the port serves)
+//   GNOMON_BUILD_MODE        "bundle" | "dev" (below)
+// BUNDLE mode (TD-2026-10-21-758, 8.0 M2; the release script sets GNOMON_WRAPPER_BUNDLE_STAGE to a Contents-shaped
+// stage holding Resources/node/bin/node and Resources/kernel, src/layout.rs): the paths are BUNDLE-RELATIVE
+// (layout::NODE_REL, layout::KERNEL_REL, resolved at run time from the app's own executable) and the pins are the
+// hashes of what the release built and staged:
+//   GNOMON_BUILD_NODE        layout::NODE_REL      GNOMON_BUILD_NODE_SOURCE "bundle"
+//   GNOMON_BUILD_NODE_SHA256 sha256 of the staged (already signed) node
+//   GNOMON_BUILD_GNOMON_PKG  layout::KERNEL_REL    GNOMON_BUILD_KERNEL_TREE its kernel tree hash
+//   GNOMON_BUILD_NODE_REQUIREMENT the designated requirement the node must meet at spawn (layout::node_requirement
+//                            of GNOMON_WRAPPER_BUNDLE_SIGNING = developer-id | adhoc; src/codesign.rs)
+// A bundle build with a missing or unhashable stage FAILS (never a pinless bundle), and a RELEASE-profile build
+// without a stage FAILS unless GNOMON_WRAPPER_DEV=1 opts into a dev app (Aegis M2 high 2).
+// DEV mode (no stage; founder dogfooding from a checkout, unchanged):
 //   GNOMON_BUILD_NODE        the node the app runs its kernel child with, AS FOUND
 //                            (a symlink such as /opt/homebrew/bin/node is kept, so a
 //                            `brew upgrade` is detected rather than followed silently):
@@ -22,6 +35,9 @@ use std::process::Command;
 
 #[path = "src/tree.rs"]
 mod tree;
+#[path = "src/layout.rs"]
+#[allow(dead_code)]
+mod layout;
 
 fn gui_pin(manifest: &Path) -> (String, Vec<String>) {
     let src = manifest.join("../gnomon/src/kernel/web/gui-bundle.ts");
@@ -64,11 +80,31 @@ fn build_node() -> (String, String, &'static str) {
     (found, sha, source)
 }
 
-fn main() {
-    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let (hash, files) = gui_pin(&manifest);
-    println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_HASH={hash}");
-    println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_FILES={}", files.join(","));
+/// BUNDLE mode: bundle-relative paths + the hashes of the staged node and kernel (src/layout.rs).
+fn bundle_pins(stage: &Path) {
+    let node = stage.join(layout::NODE_REL);
+    let kernel = stage.join(layout::KERNEL_REL);
+    println!("cargo:rerun-if-changed={}", node.display());
+    println!("cargo:rerun-if-changed={}", kernel.join("dist").display());
+    println!("cargo:rerun-if-changed={}", kernel.join("package.json").display());
+    let (sha, tree) = layout::bundle_hashes(stage).unwrap_or_else(|e| panic!("gnomon-wrapper build: the bundle stage {} does not hash: {e}", stage.display()));
+    // how the release signed the staged node (release-darwin.mjs): decides the requirement checked at spawn
+    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_BUNDLE_SIGNING");
+    let signing = std::env::var("GNOMON_WRAPPER_BUNDLE_SIGNING").unwrap_or_default();
+    let req = layout::node_requirement(&signing).unwrap_or_else(|e| panic!("gnomon-wrapper build: GNOMON_WRAPPER_BUNDLE_SIGNING: {e}"));
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_REQUIREMENT={req}");
+    println!("cargo:rustc-env=GNOMON_BUILD_MODE=bundle");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE={}", layout::NODE_REL);
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={sha}");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE=bundle");
+    println!("cargo:rustc-env=GNOMON_BUILD_GNOMON_PKG={}", layout::KERNEL_REL);
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_TREE={tree}");
+}
+
+/// DEV mode: the builder's node as found and this checkout's packages/gnomon, absolute (founder dogfooding).
+fn dev_pins(manifest: &Path) {
+    println!("cargo:rustc-env=GNOMON_BUILD_MODE=dev");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_REQUIREMENT=");
     let (node, node_sha, source) = build_node();
     println!("cargo:rustc-env=GNOMON_BUILD_NODE={node}");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={node_sha}");
@@ -86,5 +122,24 @@ fn main() {
     println!("cargo:rerun-if-changed={}", pkg.join("package.json").display());
     let tree = tree::kernel_tree_hash(&pkg).unwrap_or_default();
     println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_TREE={tree}");
+}
+
+fn main() {
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let (hash, files) = gui_pin(&manifest);
+    println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_HASH={hash}");
+    println!("cargo:rustc-env=GNOMON_GUI_BUNDLE_FILES={}", files.join(","));
+    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_BUNDLE_STAGE");
+    println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_DEV");
+    // Aegis M2 high 2: a RELEASE profile never silently becomes a dev build. Without a stage it fails unless the dev
+    // opt-in is explicit (scripts/build-darwin.mjs sets GNOMON_WRAPPER_DEV=1); a set-but-empty stage always fails.
+    let release_profile = std::env::var("PROFILE").as_deref() == Ok("release");
+    let dev_opt_in = std::env::var("GNOMON_WRAPPER_DEV").as_deref() == Ok("1");
+    match std::env::var("GNOMON_WRAPPER_BUNDLE_STAGE") {
+        Ok(stage) if !stage.is_empty() => bundle_pins(Path::new(&stage)),
+        Ok(_) => panic!("gnomon-wrapper build: GNOMON_WRAPPER_BUNDLE_STAGE is set but empty; a bundle build needs the release stage"),
+        Err(_) if release_profile && !dev_opt_in => panic!("gnomon-wrapper build: a release build without GNOMON_WRAPPER_BUNDLE_STAGE; build releases with packages/gnomon/scripts/release-darwin.mjs, or set GNOMON_WRAPPER_DEV=1 for a dev app pinned to this checkout"),
+        Err(_) => dev_pins(&manifest),
+    }
     tauri_build::build();
 }

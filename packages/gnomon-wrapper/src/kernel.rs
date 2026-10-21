@@ -18,21 +18,36 @@
 //! (stated in spec §11.1 / G-GUI-12): the pin holds only up to the spawn — a
 //! same-user process can still swap the files between the check and node's
 //! own reads, the §15.1 posture for same-user writers.
+//!
+//! BUNDLE vs DEV (TD-2026-10-21-758, 8.0 M2; build.rs, src/layout.rs): a RELEASE app (BUILD_MODE "bundle") pins
+//! BUNDLE-RELATIVE paths (Contents/Resources/node/bin/node, Contents/Resources/kernel) and the hashes of the node and
+//! kernel the release staged; [`check_trust_root`] resolves them from the app's OWN executable
+//! (`<X>.app/Contents/MacOS/gnomon-wrapper`) at every spawn, so a copied or moved app still runs and a modified one
+//! is refused. A DEV app (BUILD_MODE "dev", founder dogfooding) keeps the absolute checkout pins exactly as before.
 //! The local lane config's runner node (`local.signed.json`) is NOT a source
 //! (Aegis C2): the wrapper does not verify its root signature yet.
 //! Windows (the parity phase) needs its own pipe + job-object spawn: this is the seam.
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::codesign::verify_static_code;
+use crate::layout::{bundle_hashes, contents_of, inside, KERNEL_REL, NODE_REL};
 use crate::tree::{kernel_tree_hash, sha256_file};
 
+/// "bundle" (a release Gnomon.app: bundle-relative pins) | "dev" (a checkout build: absolute pins).
+pub const BUILD_MODE: &str = env!("GNOMON_BUILD_MODE");
 pub const BUILD_NODE: &str = env!("GNOMON_BUILD_NODE");
+/// bundle mode: the designated requirement the bundled node must meet right before the spawn (codesign.rs); dev: empty.
+pub const BUILD_NODE_REQUIREMENT: &str = env!("GNOMON_BUILD_NODE_REQUIREMENT");
 pub const BUILD_NODE_SHA256: &str = env!("GNOMON_BUILD_NODE_SHA256");
 pub const BUILD_NODE_SOURCE: &str = env!("GNOMON_BUILD_NODE_SOURCE");
 pub const BUILD_GNOMON_PKG: &str = env!("GNOMON_BUILD_GNOMON_PKG");
 pub const BUILD_KERNEL_TREE: &str = env!("GNOMON_BUILD_KERNEL_TREE");
 
-/// The command that rebuilds the app (named in every trust-root refusal).
+/// What a bundle-mode refusal tells the user: the signed app was modified, so it is replaced, never rebuilt.
+pub const REINSTALL: &str = "reinstall Gnomon (npm i -g @a-company/paradigm, then run gnomon)";
+
+/// The command that rebuilds the app (named in every dev trust-root refusal).
 pub const REBUILD: &str = "node packages/gnomon-wrapper/scripts/build-darwin.mjs (from the a-paradigm checkout, after npm run build:gnomon)";
 
 /// The env names copied from the app's own environment (all others are dropped).
@@ -45,14 +60,41 @@ pub struct TrustRoot {
     pub node: PathBuf,
     /// the node path as recorded at build (may be a symlink)
     pub node_recorded: PathBuf,
-    /// "build-env" | "which"
+    /// "build-env" | "which" (dev) | "bundle" (release: `node_recorded` is the bundle-relative path)
     pub node_source: &'static str,
     pub gnomon_js: PathBuf,
 }
 
-/// The node + kernel pins recorded in this binary, re-checked now.
+/// The node + kernel pins recorded in this binary, re-checked now (bundle: from this app's own location).
 pub fn check_trust_root() -> Result<TrustRoot, String> {
+    if BUILD_MODE == "bundle" {
+        let exe = std::env::current_exe().map_err(|e| format!("Gnomon.app cannot locate itself ({e}); {REINSTALL}"))?;
+        return check_bundle_trust_root_with(&exe, BUILD_NODE_SHA256, BUILD_KERNEL_TREE, BUILD_NODE_REQUIREMENT);
+    }
     check_trust_root_with(BUILD_NODE, BUILD_NODE_SHA256, BUILD_NODE_SOURCE, Path::new(BUILD_GNOMON_PKG), BUILD_KERNEL_TREE)
+}
+
+/// BUNDLE mode over explicit pins (tests): `exe` is the running app executable; node and kernel are resolved
+/// inside ITS bundle (layout.rs) and must hash to the release pins. Nothing absolute from the build machine is used.
+/// LAST, right before the caller spawns (Aegis M2 high 1): the node's code signature is verified against
+/// `requirement` (SecStaticCode, codesign.rs) on top of the hash, so a swap after the hash must also carry our team's
+/// valid signature. The window from here to posix_spawn's own read remains (spec §18.1: App Management protection).
+pub fn check_bundle_trust_root_with(exe: &Path, node_sha: &str, tree: &str, requirement: &str) -> Result<TrustRoot, String> {
+    if node_sha.is_empty() || tree.is_empty() || requirement.is_empty() {
+        return Err(format!("this Gnomon.app carries no node, kernel or code-requirement pin; {REINSTALL}"));
+    }
+    let contents = contents_of(exe).map_err(|e| format!("Gnomon.app is not a complete app bundle: {e}; {REINSTALL}"))?;
+    let (sha, k) = bundle_hashes(&contents).map_err(|e| format!("Gnomon.app's bundled node or kernel is unreadable or was modified ({e}); {REINSTALL}"))?;
+    if sha != node_sha {
+        return Err(format!("Gnomon.app's bundled node ({NODE_REL}) does not hash to the release pin: the app was modified; {REINSTALL}"));
+    }
+    if k != tree {
+        return Err(format!("Gnomon.app's bundled kernel ({KERNEL_REL}) does not hash to the release pin: the app was modified; {REINSTALL}"));
+    }
+    let node = inside(&contents, NODE_REL)?;
+    let pkg = inside(&contents, KERNEL_REL)?;
+    verify_static_code(&node, requirement).map_err(|e| format!("Gnomon.app's bundled node failed its code-signature check ({e}); {REINSTALL}"))?;
+    Ok(TrustRoot { node: node.clone(), node_recorded: PathBuf::from(NODE_REL), node_source: "bundle", gnomon_js: pkg.join("dist/cli/gnomon.js") })
 }
 
 /// [`check_trust_root`] over explicit pins (tests).
@@ -214,6 +256,175 @@ mod tests {
     fn falsifier_an_app_built_without_node_or_dist_refuses() {
         assert!(check_trust_root_with("", "", "none", Path::new("/nope"), "sha256:x").unwrap_err().contains("without a node"));
         assert!(check_trust_root_with("/bin/sh", "x", "which", Path::new("/nope"), "").unwrap_err().contains("before the kernel"));
+    }
+
+    fn signed_copy(from: &Path, to: &Path, identifier: &str) {
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(from, to).unwrap();
+        let ok = Command::new("/usr/bin/codesign").args(["--force", "--sign", "-", "--identifier", identifier]).arg(to).output().unwrap();
+        assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stderr));
+    }
+
+    fn req() -> String {
+        crate::layout::node_requirement("adhoc").unwrap()
+    }
+
+    /// A private scratch release app: X.app/Contents/{MacOS/gnomon-wrapper, Resources/node/bin/node, Resources/kernel}.
+    fn app_rig(tag: &str) -> (PathBuf, PathBuf) {
+        let d = std::env::temp_dir().canonicalize().unwrap().join(format!("gw-bundle-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let c = d.join("first/Gnomon.app/Contents");
+        std::fs::create_dir_all(c.join("MacOS")).unwrap();
+        std::fs::write(c.join("MacOS/gnomon-wrapper"), b"wrapper").unwrap();
+        std::fs::create_dir_all(c.join("Resources/node/bin")).unwrap();
+        // a real Mach-O, ad-hoc signed with the bundled node's identifier (what an --unsigned release produces)
+        signed_copy(Path::new("/usr/bin/true"), &d.join("pristine-node"), crate::layout::NODE_IDENTIFIER);
+        std::fs::copy(d.join("pristine-node"), c.join(NODE_REL)).unwrap();
+        std::fs::create_dir_all(c.join("Resources/kernel/dist/cli")).unwrap();
+        std::fs::write(c.join("Resources/kernel/dist/cli/gnomon.js"), b"console.log(1)\n").unwrap();
+        std::fs::write(c.join("Resources/kernel/package.json"), b"{\"type\":\"module\"}\n").unwrap();
+        (d, c)
+    }
+
+    #[test]
+    fn relocation_a_moved_bundle_resolves_inside_its_new_location() {
+        let (d, c) = app_rig("move");
+        // the pins build.rs would compile from a stage with the same bytes (layout::bundle_hashes is shared)
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        let t = check_bundle_trust_root_with(&c.join("MacOS/gnomon-wrapper"), &sha, &tree, &req()).unwrap();
+        assert_eq!(t.node, c.join(NODE_REL));
+        assert_eq!(t.gnomon_js, c.join("Resources/kernel/dist/cli/gnomon.js"));
+        assert_eq!((t.node_source, t.node_recorded.as_path()), ("bundle", Path::new(NODE_REL)));
+        // M4 copies the app to ~/Applications: move it, the old location is gone, the same pins hold at the new one
+        std::fs::create_dir_all(d.join("Applications")).unwrap();
+        std::fs::rename(d.join("first/Gnomon.app"), d.join("Applications/Gnomon.app")).unwrap();
+        std::fs::remove_dir_all(d.join("first")).unwrap();
+        let moved = d.join("Applications/Gnomon.app/Contents");
+        let t2 = check_bundle_trust_root_with(&moved.join("MacOS/gnomon-wrapper"), &sha, &tree, &req()).unwrap();
+        assert_eq!(t2.node, moved.join(NODE_REL));
+        assert_eq!(t2.gnomon_js, moved.join("Resources/kernel/dist/cli/gnomon.js"));
+        // a symlink to the app's executable resolves to the real bundle (realpath), not the link's directory
+        std::os::unix::fs::symlink(moved.join("MacOS/gnomon-wrapper"), d.join("gnomon-link")).unwrap();
+        assert_eq!(check_bundle_trust_root_with(&d.join("gnomon-link"), &sha, &tree, &req()).unwrap().node, moved.join(NODE_REL));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn build_pins_from_the_stage_equal_the_assembled_bundle() {
+        // build.rs hashes a Contents-shaped STAGE (not inside any .app); the release script then copies the same bytes
+        // into Gnomon.app/Contents: the app's run-time recomputation must equal the compiled pins
+        let (d, c) = app_rig("stage");
+        let stage = d.join("stage/Contents");
+        std::fs::create_dir_all(stage.join("Resources/node/bin")).unwrap();
+        std::fs::copy(c.join(NODE_REL), stage.join(NODE_REL)).unwrap();
+        std::fs::create_dir_all(stage.join("Resources/kernel/dist/cli")).unwrap();
+        std::fs::copy(c.join("Resources/kernel/dist/cli/gnomon.js"), stage.join("Resources/kernel/dist/cli/gnomon.js")).unwrap();
+        std::fs::copy(c.join("Resources/kernel/package.json"), stage.join("Resources/kernel/package.json")).unwrap();
+        let pins = bundle_hashes(&stage).unwrap();
+        assert_eq!(pins, bundle_hashes(&c).unwrap());
+        assert!(check_bundle_trust_root_with(&c.join("MacOS/gnomon-wrapper"), &pins.0, &pins.1, &req()).is_ok());
+        // a stage without the node fails (build.rs panics: never a pinless bundle)
+        std::fs::remove_file(stage.join(NODE_REL)).unwrap();
+        assert!(bundle_hashes(&stage).is_err());
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// The release script's JS twin (packages/gnomon/scripts/release-darwin.mjs kernelTreeHash, asserted to the same
+    /// constant in packages/gnomon/test/release-darwin.test.ts) computes the identical gnomon-wrapper-kernel-tree:v1.
+    #[test]
+    fn the_kernel_tree_hash_equals_the_release_scripts_vector() {
+        let (d, pkg, _) = rig("vector");
+        assert_eq!(kernel_tree_hash(&pkg).unwrap(), "sha256:1c36bf6b177d07ce096f770c9cd046f3b297cc562b7ad77b495aefc9e01035f9");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn falsifier_a_modified_bundle_is_refused_with_reinstall() {
+        let (d, c) = app_rig("mod");
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        let exe = c.join("MacOS/gnomon-wrapper");
+        std::fs::write(c.join(NODE_REL), b"another node").unwrap();
+        let e = check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err();
+        assert!(e.contains("bundled node") && e.contains("reinstall Gnomon"), "{e}");
+        std::fs::remove_file(c.join(NODE_REL)).unwrap();
+        std::fs::copy(d.join("pristine-node"), c.join(NODE_REL)).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).is_ok());
+        std::fs::write(c.join("Resources/kernel/dist/extra.js"), b"x").unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err().contains("bundled kernel"));
+        std::fs::remove_file(c.join("Resources/kernel/dist/extra.js")).unwrap();
+        // node swapped for a symlink to an identical file OUTSIDE the bundle: refused (never followed out)
+        std::fs::copy(d.join("pristine-node"), d.join("outside-node")).unwrap();
+        std::fs::remove_file(c.join(NODE_REL)).unwrap();
+        std::os::unix::fs::symlink(d.join("outside-node"), c.join(NODE_REL)).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err().contains("symlink"));
+        // not inside an app bundle at all, or no pins compiled
+        assert!(check_bundle_trust_root_with(&d.join("outside-node"), &sha, &tree, &req()).unwrap_err().contains("not a complete app bundle"));
+        assert!(check_bundle_trust_root_with(&exe, "", "", &req()).unwrap_err().contains("no node, kernel or code-requirement pin"));
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, "").unwrap_err().contains("code-requirement pin"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn falsifier_the_node_signature_is_checked_on_top_of_the_hash() {
+        let (d, c) = app_rig("sig");
+        let exe = c.join("MacOS/gnomon-wrapper");
+        // a node signed under ANOTHER identifier, with pins recomputed to match it (an attacker who can also forge
+        // the hash pin still needs our signature): refused by the requirement, not the hash
+        std::fs::remove_file(c.join(NODE_REL)).unwrap();
+        signed_copy(Path::new("/usr/bin/true"), &c.join(NODE_REL), "evil.node");
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        let e = check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err();
+        assert!(e.contains("code-signature check") && e.contains("reinstall Gnomon"), "{e}");
+        // the shipped (developer-id) requirement refuses an ad-hoc node even with the right identifier
+        std::fs::remove_file(c.join(NODE_REL)).unwrap();
+        std::fs::copy(d.join("pristine-node"), c.join(NODE_REL)).unwrap();
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).is_ok());
+        let team = crate::layout::node_requirement("developer-id").unwrap();
+        assert!(team.contains("SW4BMQ8PNL") && team.contains("gnomon.node"));
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &team).unwrap_err().contains("code-signature check"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn falsifier_a_hard_linked_pinned_file_is_refused() {
+        let (d, c) = app_rig("nlink");
+        let exe = c.join("MacOS/gnomon-wrapper");
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        // a second name for node OUTSIDE the bundle: it could be rewritten through that name
+        std::fs::hard_link(c.join(NODE_REL), d.join("node-alias")).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err().contains("hard-linked"));
+        std::fs::remove_file(d.join("node-alias")).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).is_ok());
+        std::fs::hard_link(c.join("Resources/kernel/dist/cli/gnomon.js"), d.join("js-alias")).unwrap();
+        assert!(check_bundle_trust_root_with(&exe, &sha, &tree, &req()).unwrap_err().contains("hard-linked"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_layout_refuses_paths_that_are_not_an_app_executable() {
+        let (d, c) = app_rig("shape");
+        assert_eq!(contents_of(&c.join("MacOS/gnomon-wrapper")).unwrap(), c);
+        std::fs::write(c.join("Resources/stray"), b"x").unwrap();
+        assert!(contents_of(&c.join("Resources/stray")).is_err());
+        std::fs::create_dir_all(d.join("plain/Contents/MacOS")).unwrap();
+        std::fs::write(d.join("plain/Contents/MacOS/w"), b"x").unwrap();
+        assert!(contents_of(&d.join("plain/Contents/MacOS/w")).unwrap_err().contains(".app"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn this_build_is_dev_or_a_complete_bundle() {
+        assert!(BUILD_MODE == "dev" || BUILD_MODE == "bundle", "{BUILD_MODE}");
+        if BUILD_MODE == "bundle" {
+            assert_eq!((BUILD_NODE, BUILD_GNOMON_PKG, BUILD_NODE_SOURCE), (NODE_REL, KERNEL_REL, "bundle"));
+            assert!(BUILD_KERNEL_TREE.starts_with("sha256:") && BUILD_NODE_SHA256.len() == 64);
+            // a bundle build compiles NO absolute path from the build machine
+            assert!(!BUILD_NODE.starts_with('/') && !BUILD_GNOMON_PKG.starts_with('/'));
+            assert!(BUILD_NODE_REQUIREMENT.contains("identifier \"gnomon.node\""));
+        } else {
+            assert!(BUILD_NODE_REQUIREMENT.is_empty());
+        }
     }
 
     #[test]

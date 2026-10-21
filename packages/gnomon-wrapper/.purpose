@@ -70,6 +70,39 @@ components:
       --ink, --fail per theme (light / prefers-color-scheme dark) and its
       --mono stack (JetBrains Mono): it cannot import styles.css, so the
       values are duplicated and must change with it.
+      8.0 M2 (T-2026-10-21-029, TD-2026-10-21-758 zero-build): two build
+      modes, chosen at BUILD time (build.rs, GNOMON_BUILD_MODE). BUNDLE (the
+      release script sets GNOMON_WRAPPER_BUNDLE_STAGE to a Contents-shaped
+      stage): build.rs pins the BUNDLE-RELATIVE paths of src/layout.rs
+      (Resources/node/bin/node, Resources/kernel; shared verbatim with the
+      app like tree.rs) and the sha256 of the staged, already-signed node and
+      the kernel tree hash of the staged kernel; a stage that does not hash
+      fails the build. At every spawn check_trust_root resolves Contents from
+      current_exe's realpath (must be <X>.app/Contents/MacOS), refuses a node
+      or kernel that is a symlink or reaches outside the bundle, and refuses a
+      hash mismatch with "reinstall Gnomon" — so the app runs from any
+      location (moved/copied) and a modified one is refused (Aegis C1 intent
+      kept). DEV (no stage): the absolute checkout pins exactly as before, for
+      founder dogfooding. NodeEntitlements.plist (allow-jit,
+      allow-unsigned-executable-memory only) signs the bundled node;
+      bundled-node.lock.json pins the official Node 24.x tarball per arch.
+      Tests: kernel.rs relocation (an app moved to another directory resolves
+      at its new location, through a symlink too), stage pins == assembled
+      bundle, modified/symlinked node or kernel refused, non-.app executable
+      refused, and a tree-hash vector shared with the release script's JS twin.
+      Aegis M2 review: right before the spawn src/codesign.rs verifies the
+      bundled node with SecStaticCodeCheckValidity (strict, all architectures)
+      against GNOMON_BUILD_NODE_REQUIREMENT (layout::node_requirement:
+      developer-id = Apple anchor + Developer ID + team SW4BMQ8PNL + identifier
+      gnomon.node; adhoc = identifier only, for --unsigned), on top of the
+      hash; pinned files with nlink > 1 are refused; a release-profile build
+      without a stage panics unless GNOMON_WRAPPER_DEV=1 (build-darwin.mjs sets
+      it); `gnomon-wrapper --build-mode` prints bundle|dev and the release
+      script refuses to sign anything else. NodeEntitlements.plist is allow-jit
+      only (measured on arm64). node-release-keys.json vendors the Node release
+      key fingerprints bump-bundled-node.mjs verifies SHASUMS256.txt against.
+      Residual: check-to-posix_spawn window, covered by App Management
+      protection (spec §18.1).
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]

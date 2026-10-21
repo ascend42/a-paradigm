@@ -57,6 +57,7 @@ import {
   type ProvisionOutcome,
 } from '../kernel/identity/index.js';
 import { daemonState, resolveGnomonHome } from '../kernel/lifecycle/index.js';
+import { bundledHelperPath, helperPathFor } from '../kernel/lifecycle/app-bundle.js';
 
 export const EXIT_OK = 0;
 export const EXIT_REFUSED = 1;
@@ -89,8 +90,14 @@ export interface IdentityDeps {
 
 const HELPER_EXE_IN_APP = path.join('Contents', 'MacOS', 'gnomon-helper');
 
-/** The helper next to this package in the monorepo / install (packages/gnomon-helper/bin/darwin). */
+/**
+ * The helper this kernel uses by default: inside a release Gnomon.app, the app's own Contents/Helpers/GnomonHelper.app
+ * (#app-bundle, T-2026-10-21-029: bundle-relative, so a moved app still finds it); otherwise the helper next to this
+ * package in the monorepo / install (packages/gnomon-helper/bin/darwin).
+ */
 export function defaultHelperPath(metaUrl: string = import.meta.url): string {
+  const bundled = bundledHelperPath(fileURLToPath(metaUrl));
+  if (bundled) return bundled;
   const dir = path.dirname(fileURLToPath(metaUrl));
   for (const up of ['../../..', '../../../..', '../..']) {
     const cand = path.resolve(dir, up, 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app', HELPER_EXE_IN_APP);
@@ -261,7 +268,8 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
   };
   const p = new Provisioner({
     home,
-    helperPath: args.helper ?? existing?.helperPath ?? defaultHelperPath(),
+    // #app-bundle: inside a release app the app's own helper wins over a recorded (possibly stale, moved-app) path
+    helperPath: args.helper ?? (existing ? helperPathFor(existing.helperPath) : defaultHelperPath()),
     ...(deps.verifier ? { verifier: deps.verifier } : {}),
     ...(deps.start ? { start: deps.start } : {}),
     ...(deps.once ? { once: deps.once } : {}),
@@ -314,7 +322,7 @@ async function purgeKeys(argv: readonly string[], io: IdentityIo, deps: Identity
   if (existing?.gen === args.gen) return refused(io, 'in-use', `generation ${args.gen} is this home's live identity; rotate or recover instead`);
   const p = new Provisioner({
     home,
-    helperPath: args.helper ?? existing?.helperPath ?? defaultHelperPath(),
+    helperPath: args.helper ?? (existing ? helperPathFor(existing.helperPath) : defaultHelperPath()),
     ...(deps.verifier ? { verifier: deps.verifier } : {}),
     ...(deps.start ? { start: deps.start } : {}),
   });
