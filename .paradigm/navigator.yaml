@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T06:04:33.187Z'
+generated: '2026-10-21T06:06:20.929Z'
 structure: {}
 key_files:
   config:
@@ -806,6 +806,7 @@ symbols:
   '#purpose-component-brain-cli': packages/paradigm/src/commands/brain/
   '#purpose-component-DocsCommands': packages/paradigm/src/commands/docs/
   '#purpose-component-#docs-scaffold': packages/paradigm/src/commands/docs/
+  '#purpose-component-doctor-hook-health': packages/paradigm/src/commands/doctor/
   '#purpose-component-info-status': packages/paradigm/src/commands/doctor/
   '#purpose-component-context-audit': packages/paradigm/src/commands/doctor/
   '#purpose-component-agent-audit': packages/paradigm/src/commands/doctor/

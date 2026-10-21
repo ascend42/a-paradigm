@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-af92fbc6aa63cfd9e",
-    "generatedAt": "2026-10-21T06:04:33.170Z",
+    "generatedAt": "2026-10-21T06:06:20.911Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -11,7 +11,7 @@
     },
     "componentTypes": {
       "command": 114,
-      "utility": 64,
+      "utility": 65,
       "config": 11,
       "manager": 6,
       "engine": 9,
@@ -9779,6 +9779,17 @@
       "visualTags": [],
       "related": [],
       "componentType": "command"
+    },
+    "doctor-hook-health": {
+      "id": "doctor-hook-health",
+      "name": "Doctor Hook Health",
+      "symbol": "#doctor-hook-health",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af92fbc6aa63cfd9e/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "7.15.2 hook-health section (hook-health.ts). Per-hook p50/p95/max wall time, kills (a start with no end older than timeout + 5 s, or a killed end) and over-budget runs from the",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
     },
     "info-status": {
       "id": "info-status",
@@ -22117,6 +22128,10 @@
     "##docs-scaffold": {
       "category": "components",
       "id": "#docs-scaffold"
+    },
+    "#doctor-hook-health": {
+      "category": "components",
+      "id": "doctor-hook-health"
     },
     "#info-status": {
       "category": "components",

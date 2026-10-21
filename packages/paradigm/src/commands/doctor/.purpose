@@ -8,6 +8,13 @@ features:
     components:
       - '#context-audit'
 components:
+  doctor-hook-health:
+    description: 7.15.2 hook-health section (hook-health.ts). Per-hook p50/p95/max wall time, kills (a start with no end older than timeout + 5 s, or a killed end) and over-budget runs from the #hook-monitor ring; repo traits that slow hooks (nested git repos/worktrees under the root, .purpose count, aspect-anchor lines, untracked-file count); plugin cache staleness (user-scope install vs marketplace/repo plugin.json, project-scope pins older than the user install, from ~/.claude/plugins/installed_plugins.json). Every non-ok line carries a concrete remedy. Advisory, never throws.
+    file: hook-health.ts
+    type: utility
+    tags:
+      - doctor
+      - hooks
   doctor-handler:
     description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).
     type: handler
