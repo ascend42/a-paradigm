@@ -125,7 +125,14 @@ components:
       accepted socket to a deny-default child with no network-* rule; full
       duplex 4 MiB, client close, 5 repeated hand-offs, every child
       bind/listen (0.0.0.0, ::, en0, 127.0.0.1, ::1, no host), UDP bind,
-      outbound TCP and unix connect EPERM; pass on darwin. probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      outbound TCP and unix connect EPERM; pass on darwin. p-replay-order
+      (T-2026-10-21-008, re-review M-1/M-4, darwin, real pinned claude, haiku):
+      the ordering of SENT, replay, message_start/stop, tool_result and result
+      for a queued message (during a tool call, after the final message_stop,
+      back to back, inside a Stop-hook continuation) and for a blocking Stop
+      hook with and without --include-hook-events; finding: the replay line is
+      written on consumption, never on receipt, and hook_response lines appear
+      only with --include-hook-events (exit_code 2, outcome 'error'). probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
       cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
       rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
       probe id. p12 pins its whole tree with a committed package-lock.json
@@ -2779,7 +2786,10 @@ components:
       messages; one result closes every consumed turn, a queued message folded
       into the running turn included, releases each permit and writes
       turn.result{turn} = the latest closed; no replay seen = the head only;
-      the local lane names the turn it closes too); the
+      the local lane names the turn it closes too; re-review M-1: probe
+      p-replay-order shows the replay is written on consumption, so this
+      stands; a result with no outstanding turn writes
+      session.anomaly{hsid, why:'result-without-turn'}); the
       watch hashes ~/.claude.json only through its law-7 projection;
       stdout paused above a queue high-water mark and lines over 64 KiB
       logged as {lineHash, bytes}; init without apiKeySource logged absent.

@@ -79,6 +79,13 @@ prompt-free half and records `partial`.
   generated profile, because the profile denies writes to `~/.claude` and no transcript is written
   without it. Run it yourself: `node packages/gnomon/probes/run.mjs p-resume --timeout 600000` after
   `npm run build`.
+- **P-replay-order** (`p-replay-order`, T-2026-10-21-008, re-review M-1/M-4, darwin) runs the newest
+  pinned `claude` (`~/.gnomon/bin/claude-<sha>`, else `~/.local/share/claude/versions/<newest>`) with the
+  adapter's stream flags, haiku, about 10 one-word turns, no sandbox profile, env HOME/USER/LOGNAME/PATH
+  only. It records when a queued message's replay line is written relative to message_start and result,
+  and whether a blocking Stop hook emits `hook_response` lines. Finding (2.1.305): on consumption, never
+  on receipt; `hook_response` only with `--include-hook-events`. No TTY needed:
+  `node packages/gnomon/probes/run.mjs p-replay-order --timeout 900000`.
 - **S29-10** is a stub (`s29-10-voice-custody/README.md`). It needs the signed
   helper (M1.1) and the wrapper panel (M1.13).
 

@@ -328,7 +328,8 @@ interface Session {
   /**
    * review M2: how many outstanding turns Claude Code has CONSUMED (their user message came back as a replay line,
    * isReplay). A queued message folded into the running turn is replayed before that turn's result, so the result
-   * closes every consumed turn; with no replay seen it closes the head only (FIFO).
+   * closes every consumed turn; with no replay seen it closes the head only (FIFO). Re-review M-1: probe
+   * p-replay-order shows the echo is written on consumption, never on receipt.
    */
   consumedTurns: number;
   /** kernel clock (ms) when the last model turn closed (its result), for the #gnomon-voice busy guard (V2a) */
@@ -1003,6 +1004,15 @@ export class SessionSupervisor {
         // reviewer 7: FIFO — this result closes the oldest turn; review M2: and every later turn Claude Code already
         // consumed (a queued message folded into the running turn is replayed before this result). turn.result{turn}
         // names the latest turn it closes.
+        // re-review M-1, probe p-replay-order (claude 2.1.305, probes/results/p-replay-order.darwin.json): the replay
+        // line is written on CONSUMPTION, never on receipt. B sent during A's Bash call is echoed after A's tool_result,
+        // just before the message that answers both, and one result (num_turns 2) closes both; B sent after A's final
+        // message_stop, back to back with A, or inside a Stop-hook continuation is echoed after A's result, right before
+        // its own message_start, with its own result. So a consumed turn really is folded into this result.
+        if (s.turnIds.length === 0 && s.turnPermits.length === 0) {
+          // re-review M-1: a result with no outstanding turn is a stream shape we do not expect (names only)
+          await this.#o.log('session.anomaly', { hsid: s.hsid, why: 'result-without-turn' }, { session: s.hsid });
+        }
         const k = Math.min(Math.max(1, s.consumedTurns), Math.max(s.turnPermits.length, s.turnIds.length, 1));
         const closedIds = s.turnIds.splice(0, k);
         const closedPermits = s.turnPermits.splice(0, k);

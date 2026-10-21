@@ -1031,6 +1031,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     if (r.kind === 'turn.result') {
       // review M2: turn.result{turn} names the LATEST turn it closes; every open turn up to it closes too (a queued
       // message Claude Code folded into the running turn). A row without it (older logs) closes the oldest (FIFO).
+      // Re-review M-1, probe p-replay-order (claude 2.1.305): the echo is written on consumption, never on receipt,
+      // so the turns the kernel names as closed really were folded into this result.
       const at = typeof p?.turn === 'string' ? openTurns.indexOf(p.turn) : -1;
       const closed = openTurns.splice(0, at >= 0 ? at + 1 : Math.min(1, openTurns.length));
       progress = undefined;

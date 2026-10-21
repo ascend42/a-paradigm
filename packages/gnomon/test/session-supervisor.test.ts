@@ -712,6 +712,19 @@ describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
     expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
     expect(r.kinds('turn.result')[1]!.payload.turn).toBe(`turn:${s.hsid}/4`);
   });
+  it('re-review M-1: a result with no outstanding turn writes session.anomaly{why:result-without-turn}, names only', async () => {
+    const r = rig();
+    setMode(w, { extraLines: [{ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: [], result: 'stray' }] });
+    const s = await open(r.sup);
+    expect(await waitFor(() => r.kinds('session.anomaly').length === 1)).toBe(true);
+    expect(r.kinds('session.anomaly')[0]!.payload).toEqual({ hsid: s.hsid, why: 'result-without-turn' });
+    expect(r.kinds('turn.result')[0]!.payload.turn).toBeUndefined();
+    // a real turn afterwards pairs normally and writes no second anomaly
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
+    expect(r.kinds('turn.result')[1]!.payload.turn).toBe(`turn:${s.hsid}/1`);
+    expect(r.kinds('session.anomaly')).toHaveLength(1);
+  });
   it('reviewer 9: a caller turn permit is single-use', async () => {
     const r = rig();
     const s = await open(r.sup);

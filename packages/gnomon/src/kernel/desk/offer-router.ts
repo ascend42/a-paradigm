@@ -423,7 +423,10 @@ export class OfferRouter {
       return out;
     }
     // turn.result{turn} (review M2) names the latest turn it closes: every outstanding turn up to it closes (a queued
-    // message folded into the running turn); a row without it (older logs) closes the oldest one (FIFO)
+    // message folded into the running turn); a row without it (older logs) closes the oldest one (FIFO). Re-review M-1,
+    // probe p-replay-order (claude 2.1.305): Claude Code echoes a queued message when it CONSUMES it, never on receipt,
+    // so the turns the supervisor names as closed really were folded into this result (a result with no outstanding
+    // turn is the supervisor's session.anomaly{why:'result-without-turn'}; here it closes nothing)
     const at = typeof p.turn === 'string' ? s.turns.findIndex((t) => t.id === p.turn) : -1;
     const closed = s.turns.splice(0, at >= 0 ? at + 1 : Math.min(1, s.turns.length));
     const last = closed[closed.length - 1];
