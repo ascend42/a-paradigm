@@ -31,9 +31,16 @@
  *     the box, never act. PTT drafts keep the ring (the key hold was the human's gesture).
  *   - Never send words not shown (Aegis M3): an edit made while a send is in flight keeps hold and the edited text,
  *     and turns heard in flight append to it.
+ *   - Send word (TD-2026-10-21-514, $send-by-word; the 'word' send policy): a turn whose WHOLE cleaned text is the held
+ *     send word (exact or an enrolled variant, #send-word-matcher) is a command, never appended. It does nothing with
+ *     no draft, or unless the current draft has been VISIBLE for SEND_WORD_VISIBLE_MS ('painted' events: stamped after
+ *     paint by a double rAF, only while the page is visible and the draft's session is focused and attached; any text
+ *     change resets it). A near miss is neither sent nor appended (nearMiss: "Did you say '<word>'?"). A match starts
+ *     a SEND_WORD_GRACE_MS grace ("Sending… Esc keeps it"); then the send carries claim {by:'word', turnSeq}: the app
+ *     appends request.voice.send.claim before the one send path.
  */
 
-import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { matchSendWord, PIECE_CAP_MS, PIECE_GAP_MS, SEND_WORD_GRACE_MS, SEND_WORD_VISIBLE_MS, sanitizeDisplayText, type SendPolicy, type SendWord } from '@a-company/gnomon-contracts';
 
 export type Activity = 'speaking' | 'transcribing' | 'idle';
 export const DELAY_CHOICES: readonly (number | null)[] = Object.freeze([3000, 5000, 8000, 15000, null]);
@@ -84,6 +91,23 @@ export interface DictationState {
   holdEpoch: string | null;
   /** the human edited the composer while the send was in flight (Aegis M3) */
   editedInFlight: boolean;
+  /** TD-2026-10-21-514: the send policy (key | countdown | word | pieces) and the held send word */
+  policy: SendPolicy;
+  sendWord: SendWord | null;
+  /** the page is visible (document.visibilityState) */
+  pageVisible: boolean;
+  /** when the CURRENT draft text was first painted while visible + focused + attached (null: not yet, or reset) */
+  visibleSince: number | null;
+  /** a recognised send word's grace ("Sending… Esc keeps it"): the word turn's seq and when it began */
+  grace: { seq: number; startedAt: number } | null;
+  /** a near miss of the send word (the pill asks "Did you say '<word>'?") */
+  nearMiss: string | null;
+  /** the in-flight send's claim: the word turn (send word) or the piece's turns (pieces) */
+  claim: { by: 'word'; turnSeq: number } | { by: 'piece'; turnSeqs: number[] } | { by: 'hotkey' } | null;
+  /** Aegis M-5: the voice app's send key was pressed on an EDITED draft: held; only Enter sends it */
+  hotkeyHeld: boolean;
+  /** $send-by-pieces: when the current piece's first part arrived (the cap runs from here) */
+  pieceStartedAt: number | null;
 }
 
 export type HoldBy = 'gui' | 'voice' | 'detached';
@@ -103,10 +127,39 @@ export type DictationEvent =
   | { type: 'sendNow'; now: number }
   | { type: 'sent'; now: number }
   | { type: 'sendFailed'; now: number }
-  | { type: 'setDelay'; delayMs: number | null; now: number };
+  | { type: 'setDelay'; delayMs: number | null; now: number }
+  | { type: 'setPolicy'; policy: SendPolicy; sendWord: SendWord | null; now: number }
+  | { type: 'painted'; now: number }
+  | { type: 'pageVisible'; visible: boolean; now: number }
+  | { type: 'graceCancel'; now: number }
+  /** Aegis M-5: the voice app's send-now press (⌃⌥Return): a voice-origin send of an UNEDITED draft only */
+  | { type: 'sendNowKey'; now: number };
 
 export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): DictationState {
-  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false };
+  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null, hotkeyHeld: false };
+}
+
+/**
+ * $send-by-pieces (TD-2026-10-21-514): the current piece may go now — unedited dictated parts, not held, the session
+ * attached and not busy (its streaming state, from the kernel's rows), and either a PIECE_GAP_MS gap since the last
+ * speech (the voice app idle) or the piece reached PIECE_CAP_MS (it never grows past the cap).
+ */
+export function pieceDue(s: DictationState, now: number): boolean {
+  if (s.policy !== 'pieces' || !s.parts.length || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
+  const gap = s.activity === 'idle' && now - s.lastActivityAt >= PIECE_GAP_MS;
+  const cap = s.pieceStartedAt !== null && now - s.pieceStartedAt >= PIECE_CAP_MS;
+  return gap || cap;
+}
+
+/** The piece ring's drained fraction 0..1 toward the gap (null when no piece is gathering). */
+export function pieceFraction(s: DictationState, now: number): number | null {
+  if (s.policy !== 'pieces' || !s.parts.length || s.edited || s.hold || s.sending) return null;
+  return Math.min(1, Math.max(0, (now - s.lastActivityAt) / PIECE_GAP_MS));
+}
+
+/** The draft may be sent by the word now: a draft, visible ≥ SEND_WORD_VISIBLE_MS, page visible, focused, attached, idle. */
+export function wordReady(s: DictationState, now: number): boolean {
+  return hasDraft(s) && s.policy === 'word' && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -121,7 +174,7 @@ export const pttTurn = (payload: unknown): boolean => obj(payload)?.mode === 'pt
 
 /** The ring may run now (a PTT-only draft, no hold, a delay, idle, not streaming, focused here, not sending). */
 export function armed(s: DictationState): boolean {
-  return hasDraft(s) && s.parts.length > 0 && !ambientDraft(s) && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
+  return hasDraft(s) && s.parts.length > 0 && s.policy === 'countdown' && !ambientDraft(s) && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
 }
 
 /** Re-derive the ring after an event: `reset` restarts it at the full delay when armed. */
@@ -179,7 +232,9 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
     case 'context': {
       // the draft keeps its session; with no draft the dictation follows the attachment
       const hsid = hasDraft(s) || s.parts.length ? s.hsid : e.attached;
-      const n = detach({ ...s, attached: e.attached, hsid, focusedHere: hsid !== null && e.focused === hsid });
+      const focusedHere = hsid !== null && e.focused === hsid;
+      const lost = (s.focusedHere && !focusedHere) || s.attached !== e.attached;
+      const n = detach({ ...s, attached: e.attached, hsid, focusedHere, ...(lost ? { visibleSince: null, grace: null } : {}) });
       return settle(n, e.now, !s.focusedHere && n.focusedHere);
     }
     case 'turnRow': {
@@ -188,8 +243,17 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       const tt = turnText(e.payload);
       if (tt === null || !e.hsid || e.hsid !== s.attached) return n0;
       const t = tt.shown;
+      // TD-2026-10-21-514: under the word policy the send word is a COMMAND (never appended); a near miss is neither
+      if (s.policy === 'word' && s.sendWord) {
+        const m = matchSendWord(tt.shown, s.sendWord);
+        if (m === 'exact' || m === 'variant') {
+          if (s.grace || !wordReady(s, e.now)) return { ...n0, nearMiss: null }; // no draft, or not visible long enough: nothing
+          return { ...n0, nearMiss: null, grace: { seq: e.seq, startedAt: e.now } };
+        }
+        if (m === 'near') return { ...n0, nearMiss: s.sendWord.text };
+      }
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -209,7 +273,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return settle(e.hold ? { ...s, hold: true, holdBy: 'gui' } : { ...s, hold: false, holdBy: null }, e.now, e.hold !== s.hold);
     case 'userEdit': {
       if (e.text === s.text) return s;
-      const n = { ...s, text: e.text, edited: true, hold: true, holdBy: 'gui' as const, editedInFlight: s.editedInFlight || s.sending };
+      const n = { ...s, text: e.text, edited: true, hold: true, holdBy: 'gui' as const, editedInFlight: s.editedInFlight || s.sending, visibleSince: null, grace: null };
       if (!e.text.trim()) return settle({ ...n, parts: [], edited: false, hsid: s.attached }, e.now, false); // emptied: no draft left (hold stays)
       return settle(n, e.now, false);
     }
@@ -221,14 +285,36 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       if (e.busy === s.busy) return s;
       return settle({ ...s, busy: e.busy, lastActivityAt: e.now }, e.now, true);
     case 'tick':
+      // $send-by-pieces: the piece is due (gap or cap): send its parts with the piece claim
+      if (pieceDue(s, e.now)) return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'piece', turnSeqs: s.parts.map((p) => p.seq) } };
+      // the send word's grace ran out: send with the claim (still ready: visible, focused, attached)
+      if (s.grace && e.now - s.grace.startedAt >= SEND_WORD_GRACE_MS) {
+        if (!wordReady(s, e.now)) return { ...s, grace: null };
+        return { ...s, grace: null, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'word', turnSeq: s.grace.seq } };
+      }
       if (!armed(s) || s.ringStartedAt === null || s.delayMs === null) return s;
       return e.now - s.ringStartedAt >= s.delayMs ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s) } : s;
     case 'sendNow':
-      return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s) } : s;
+      return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: null } : s;
     case 'sent':
-      return settle(cleared(s), e.now, true);
+      return settle({ ...cleared(s), claim: null, visibleSince: null, nearMiss: null, pieceStartedAt: null, hotkeyHeld: false }, e.now, true);
     case 'sendFailed':
-      return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false }, e.now, false); // never loop a refused send: wait for the human
+      return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false, claim: null }, e.now, false); // never loop a refused send: wait for the human
+    case 'setPolicy':
+      return settle({ ...s, policy: e.policy, sendWord: e.sendWord, grace: null, nearMiss: null, ...(e.policy === 'countdown' ? {} : { ringStartedAt: null }) }, e.now, true);
+    case 'painted':
+      // stamped after paint (double rAF) only while visible + focused + attached; the first paint of this text wins
+      if (!hasDraft(s) || s.visibleSince !== null || !s.pageVisible || !s.focusedHere || s.attached === null || s.attached !== s.hsid) return s;
+      return { ...s, visibleSince: e.now };
+    case 'pageVisible':
+      return e.visible === s.pageVisible ? s : { ...s, pageVisible: e.visible, ...(e.visible ? {} : { visibleSince: null, grace: null }) };
+    case 'sendNowKey':
+      if (!hasDraft(s) || s.sending) return s;
+      // never send typed text on a key the voice app reports: an edited draft is held for Enter
+      if (s.edited) return { ...s, hold: true, holdBy: 'gui', hotkeyHeld: true, ringStartedAt: null };
+      return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: { by: 'hotkey' } };
+    case 'graceCancel':
+      return s.grace ? { ...s, grace: null, hold: true, holdBy: 'gui' } : s;
     case 'setDelay':
       return settle({ ...s, delayMs: e.delayMs }, e.now, true);
   }
@@ -253,11 +339,21 @@ export interface SendRequest {
   source?: 'voice';
 }
 
+/** TD-2026-10-21-514: the claim the app appends (request.voice.send.claim) right before a send-word send. */
+export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSeq: number } | { hsid: string; by: 'piece'; turnSeqs: number[] } | { hsid: string; by: 'hotkey' } | null {
+  if (!s.claim || !s.hsid) return null;
+  if (s.claim.by === 'hotkey') return { hsid: s.hsid, by: 'hotkey' };
+  return s.claim.by === 'word' ? { hsid: s.hsid, by: 'word', turnSeq: s.claim.turnSeq } : { hsid: s.hsid, by: 'piece', turnSeqs: [...s.claim.turnSeqs] };
+}
+
+export const HOTKEY_EDITED_NOTE = 'Edited draft: press Enter to send';
+
 /** The `session.send` params the draft makes, or null (nothing, or no session). */
 export function sendRequest(s: DictationState): SendRequest | null {
   if (!s.hsid || !hasDraft(s)) return null;
   if (!s.edited && s.parts.length) return { hsid: s.hsid, content: s.parts.map((p) => ({ text: p.send ?? p.text })), source: 'voice' };
-  return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length ? { source: 'voice' as const } : {}) };
+  // Aegis H-1: a send-word (or piece) send always carries the voice hint, even when the draft was emptied and retyped
+  return { hsid: s.hsid, content: [{ text: s.text }], ...(s.parts.length || s.claim ? { source: 'voice' as const } : {}) };
 }
 
 /** TD-2026-10-20-125: an ambient draft waits for the human's key press. */
@@ -272,13 +368,17 @@ export const AMBIENT_DRAFT_NOTE = 'draft · Enter sends (ambient never auto-send
  *   - 'ptt-manual': a push-to-talk draft with auto-send off: no countdown, nothing to hold.
  * A new dictation mode adds a state here and a row in DRAFT_CONTROLS; the composer's own send stays the one send.
  */
-export type DraftState = 'idle' | 'ambient' | 'ptt-countdown' | 'ptt-held' | 'ptt-manual';
+export type DraftState = 'idle' | 'ambient' | 'ptt-countdown' | 'ptt-held' | 'ptt-manual' | 'word-grace' | 'piece-ring';
 
 export interface DraftControls {
   /** the hold control beside the countdown: [Hold], [Resume], or none */
   hold: 'hold' | 'resume' | null;
   /** the countdown ring may show (it shows only while it runs: ringFraction) */
   ring: boolean;
+  /** TD-2026-10-21-514: the send word's grace line ("Sending… Esc keeps it") */
+  grace?: boolean;
+  /** the pieces batch ring (a piece is gathering; it sends at the gap or the cap) */
+  pieceRing?: boolean;
 }
 
 /** Per state, the dictation bar's controls. Sending is never here: the composer's send (Enter / ⌘Enter / [send]) is the one send control. */
@@ -288,10 +388,16 @@ export const DRAFT_CONTROLS: Readonly<Record<DraftState, Readonly<DraftControls>
   'ptt-countdown': Object.freeze({ hold: 'hold' as const, ring: true }),
   'ptt-held': Object.freeze({ hold: 'resume' as const, ring: false }),
   'ptt-manual': Object.freeze({ hold: null, ring: false }),
+  'word-grace': Object.freeze({ hold: null, ring: false, grace: true }),
+  'piece-ring': Object.freeze({ hold: null, ring: false, pieceRing: true }),
 });
+
+export const WORD_GRACE_LINE = 'Sending… Esc keeps it';
 
 export function draftState(s: DictationState): DraftState {
   if (!hasDraft(s) || !s.parts.length) return 'idle';
+  if (s.grace) return 'word-grace';
+  if (s.policy === 'pieces' && !s.edited && !s.hold) return 'piece-ring';
   if (ambientDraft(s)) return 'ambient';
   if (s.delayMs === null) return 'ptt-manual';
   return s.hold ? 'ptt-held' : 'ptt-countdown';
@@ -304,6 +410,11 @@ export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold && s.holdBy === 'detached') return 'draft held · voice detached';
+  if (s.grace) return WORD_GRACE_LINE;
+  if (s.hotkeyHeld) return HOTKEY_EDITED_NOTE;
+  if (s.nearMiss) return `Did you say '${s.nearMiss}'? Say it again or press Enter`;
+  if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
+  if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';
   if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE; // nothing counts down, so a hold means nothing here
   if (s.hold) return 'draft held';
   if (s.delayMs === null) return 'draft · auto-send off';
@@ -331,6 +442,8 @@ export const delayLabel = (d: number | null): string => (d === null ? 'off' : `$
 export interface DictationStatus {
   activity: Activity;
   holdToggles: number | null;
+  /** TD-2026-10-21-514: the voice app's ⌃⌥Return count (a change sends the draft: a hand origin) */
+  sendNows: number | null;
   /** the voice connection the counter belongs to (Aegis L5): status.voice.dictation.connEpoch, else the client restart count */
   epoch: string | null;
 }
@@ -341,5 +454,5 @@ export function dictationStatusOf(status: unknown): DictationStatus {
   const ce = d?.connEpoch;
   const restarts = obj(obj(obj(status)?.voice)?.client)?.restarts;
   const epoch = typeof ce === 'string' || typeof ce === 'number' ? `c:${ce}` : typeof restarts === 'number' ? `r:${restarts}` : null;
-  return { activity: a === 'speaking' || a === 'transcribing' ? a : 'idle', holdToggles: typeof d?.holdToggles === 'number' && Number.isSafeInteger(d.holdToggles) ? d.holdToggles : null, epoch };
+  return { activity: a === 'speaking' || a === 'transcribing' ? a : 'idle', holdToggles: typeof d?.holdToggles === 'number' && Number.isSafeInteger(d.holdToggles) ? d.holdToggles : null, sendNows: typeof d?.sendNows === 'number' && Number.isSafeInteger(d.sendNows) ? d.sendNows : null, epoch };
 }

@@ -71,6 +71,7 @@
  * first relay and never hold idle; every exit (idle included) stops them
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
+import { VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT } from '@a-company/gnomon-contracts';
 import { generateKeyPairSync } from 'node:crypto';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperPush, HelperTransport } from '../identity/helper.js';
@@ -132,7 +133,7 @@ import { StagedCardPickup } from '../modhost/control.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
-import { VoiceControl } from '../voice/voice-control.js';
+import { SEND_WORD_TRIAL_MS, VoiceControl } from '../voice/voice-control.js';
 import { defaultBuildStampPath, describeUpdate, readBuildStamp, writeKernelBuild, type BuildStamp } from './build-stamp.js';
 import { UpdateWatch } from './update-watch.js';
 import { mintResumeToken, resumeRecordOf, ResumeGate, RESUME_TOKEN_TTL_MS, type ResumeRecord } from '../web/resume.js';
@@ -141,6 +142,7 @@ import { readEnrolled } from '../voice/enrolment.js';
 import { VoiceChildSupervisor, type VoiceChildOptions } from '../voice/voice-child.js';
 import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-install.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
+import { cachedSendWordSource, parseSendWordRequest, writeSendWord, writeTrialWord } from '../voice/send-word-store.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
@@ -973,6 +975,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const sessions = createSessionPort(supervisor, runModes, {
     attributeHumanSend: (human, hsid, parts) => voice.attributeHumanSend(human, hsid, parts),
     releaseAttribution: (attr) => voice.releaseAttribution(attr),
+    // TD-2026-10-21-514: the origin of a human voice send (a claim, or the fail-closed send-word backstop)
+    originFor: (connId, human, hsid, attr) => voice.originFor(connId, human, hsid, attr ?? null),
+    peekAttribution: (human, hsid, parts) => voice.peekAttribution(human, hsid, parts),
   });
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
@@ -1073,17 +1078,28 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     localDrops: () => voiceReports.takeLocalDrops(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
+    // Aegis M-5: the voice app's send-now presses are voice-origin triggers (the kernel cannot verify the key)
+    sendNowPress: () => voiceReports.sendNowPress(),
+    // TD-2026-10-21-514: the held send word (GUI request and raw CLI share <home>/voice/send-word.json)
+    sendWordSource: cachedSendWordSource(home),
+    // pieces is refused at strictness L2 or above (the session's repo level; null while levels are unbuilt)
+    strictnessLevel: (hsid) => {
+      const sc = supervisor.scopeOf(hsid);
+      return sc ? runModes.repoView(sc.repoKey, sc.cwd).level : null;
+    },
     ...(opts.voice?.ambientIdleMs !== undefined ? { ambientIdleMs: opts.voice.ambientIdleMs } : {}),
     // V2a widening to conversation: the run-mode loosening path — a `strictness` card whose allow is fresh presence
     // (classes.ts: strictness.allow = 'fresh', never a cached unlock, never voice: VOICE_ALLOWLIST names no approving row)
-    presence: ({ asker, hsid, from, to, onAllow }) =>
+    presence: ({ asker, hsid, from, to, send, onAllow }) =>
       broker.raise({
         kind: 'strictness',
         requestedBy: asker.principal!,
         hsid,
         attended: true,
-        detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId },
-        lines: [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
+        detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId, ...(send ? { send, liabilityAck: VOICE_LIABILITY_ACK_HASH } : {}) },
+        lines: send === 'pieces'
+          ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
+          : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, ...(send === 'word' ? ['Send word: a spoken send word sends the draft; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT] : []), 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
         decisions: ['allow', 'deny'],
         timeoutMs: LOOSEN_TIMEOUT_MS,
         effect: async (decision) => {
@@ -1195,7 +1211,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const dispatcherCommon = {
     voice,
     voiceClient: {
-      start: () => voiceChild.start(),
+      start: (capture?: 'ptt' | 'open' | 'toggle') => voiceChild.start(capture),
       stop: () => voiceChild.stop(),
       connectionClosed: (connId: string) => {
         voiceReports.connectionClosed(connId); // Aegis L3: the closed connection's capture slot goes with it
@@ -1205,6 +1221,23 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       forget: (p: { name: string }) => voiceEnrol.forget(p),
       report: (p: unknown, connId?: string) => voiceReports.report(p, connId),
       stopSpeaking: () => voiceReports.stopSpeaking(),
+      micToggle: () => voiceReports.micToggle(),
+      micKey: (bare: boolean) => voiceReports.micKey(bare),
+      // TD-2026-10-21-514: the human sets or clears the held send word (persisted 0600; the kernel reads it back)
+      sendWord: async (p: unknown) => {
+        const r = parseSendWordRequest(p);
+        if (r.op === 'start' && r.trial) {
+          // the guided dialog's takes: held for adjacency only (memory + a 0600 file the voice client reads)
+          const t = voice.setTrialWord({ text: r.text, variants: [] });
+          writeTrialWord(home, { text: r.text }, Date.now() + SEND_WORD_TRIAL_MS);
+          return { trial: t ? { text: t.text } : null };
+        }
+        voice.setTrialWord(null);
+        writeTrialWord(home, null);
+        if (r.op === 'clear' && r.trial) return { trial: null, sendWord: ((x) => (x ? { text: x.text, variants: [...x.variants] } : null))(voice.sendWord()) };
+        const w = writeSendWord(home, r.op === 'clear' ? null : { text: r.text, variants: r.variants });
+        return { sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
+      },
     },
     mods: createModRelayPort(mods),
     sessions,

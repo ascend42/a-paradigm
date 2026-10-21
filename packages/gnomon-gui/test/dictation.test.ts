@@ -263,9 +263,9 @@ describe('dictation: Aegis conditions', () => {
 
 describe('dictation: adapters', () => {
   it('reads status.voice.dictation; an older kernel reads idle with no toggles', () => {
-    expect(dictationStatusOf({ voice: { dictation: { activity: 'speaking', holdToggles: 3, at: 'x' } } })).toEqual({ activity: 'speaking', holdToggles: 3, epoch: null });
-    expect(dictationStatusOf({ voice: {} })).toEqual({ activity: 'idle', holdToggles: null, epoch: null });
-    expect(dictationStatusOf(null)).toEqual({ activity: 'idle', holdToggles: null, epoch: null });
+    expect(dictationStatusOf({ voice: { dictation: { activity: 'speaking', holdToggles: 3, at: 'x' } } })).toEqual({ activity: 'speaking', holdToggles: 3, sendNows: null, epoch: null });
+    expect(dictationStatusOf({ voice: {} })).toEqual({ activity: 'idle', holdToggles: null, sendNows: null, epoch: null });
+    expect(dictationStatusOf(null)).toEqual({ activity: 'idle', holdToggles: null, sendNows: null, epoch: null });
   });
   it('the delay is stored per machine as 3000/5000/8000/15000/off; anything else is the 5 s default', () => {
     expect(parseDelay(null)).toBe(5000);
@@ -380,7 +380,7 @@ describe('founder report 2026-10-20: one send control; Hold only beside a countd
     expect(draftControls(s).hold).toBeNull();
   });
   it('no state carries a send control (the composer send is the only one)', () => {
-    for (const c of Object.values(DRAFT_CONTROLS)) expect(Object.keys(c).sort()).toEqual(['hold', 'ring']);
+    for (const c of Object.values(DRAFT_CONTROLS)) for (const k of Object.keys(c)) expect(['hold', 'ring', 'grace', 'pieceRing']).toContain(k); // never a send key
   });
 });
 

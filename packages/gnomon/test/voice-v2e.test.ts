@@ -76,6 +76,21 @@ function rig(o: Partial<VoiceChildOptions> = {}) {
 }
 const tick = () => new Promise((r) => setImmediate(r));
 
+describe('TD-2026-10-21-514: the capture kind reaches the kernel-spawned client', () => {
+  it('start(capture) spawns with --capture; another kind restarts the running client with it', async () => {
+    const r = rig();
+    await r.sup.start('toggle');
+    expect(r.spawns.at(-1)!.args.slice(-2)).toEqual(['--capture', 'toggle']);
+    await r.sup.start('toggle'); // same kind: idempotent
+    expect(r.spawns).toHaveLength(1);
+    await r.sup.start('open');
+    await tick();
+    expect(r.spawns).toHaveLength(2);
+    expect(r.spawns.at(-1)!.args.slice(-2)).toEqual(['--capture', 'open']);
+    expect(voiceChildArgs('/c', '/h', '/io')).not.toContain('--capture');
+  });
+});
+
 describe('#gnomon-voice V2e: VoiceChildSupervisor', () => {
   it('spawns `node --disable-sigusr1 <cli.js> run --fd 3 --home H --io <bin>` with fd 3 a pipe and an allow-list env', async () => {
     const r = rig();

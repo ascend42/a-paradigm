@@ -34,6 +34,13 @@ import type { VoiceAttribution } from '../voice/voice-control.js';
 export interface VoiceAttributionPort {
   attributeHumanSend(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
   releaseAttribution(attr: VoiceAttribution): void;
+  /**
+   * TD-2026-10-21-514: the origin of this human voice send — the connection's live request.voice.send.claim, or the
+   * fail-closed backstop (a pending send-word turn). null ⇒ hand. Never throws.
+   */
+  originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null): { sentBy: 'word' | 'piece' | 'hotkey' } | null;
+  /** Aegis L-4: a non-claiming match of the parts against pending voice turns (the origin check of a hint-less send) */
+  peekAttribution?(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
 }
 
 export interface SessionCallContext {
@@ -116,6 +123,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
       gateResumed(sup, ctx, p.hsid, 'session.send');
       let attr: VoiceAttribution | null = null;
+      let origin: { sentBy: 'word' | 'piece' | 'hotkey' } | null = null;
       if (p.source === 'voice' && voice) {
         try {
           attr = voice.attributeHumanSend(ctx.principal, p.hsid, texts as string[]);
@@ -123,9 +131,20 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
           attr = null; // attribution never refuses a human send
         }
       }
+      // TD-2026-10-21-514 (Aegis H-1): EVERY human send's origin, whatever its source hint — a live or stale claim on this
+      // connection, or the send-word / ambient backstop, stamps voice; else hand
+      if (voice?.originFor && ctx.principalClass === 'human') {
+        try {
+          // Aegis L-4: with no source hint the parts are still matched (without claiming) so the ambient backstop applies
+          const forOrigin = attr ?? (p.source !== 'voice' && voice.peekAttribution ? voice.peekAttribution(ctx.principal, p.hsid, texts as string[]) : null);
+          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, forOrigin);
+        } catch {
+          origin = { sentBy: 'word' }; // fail closed: an origin check that throws clamps the turn
+        }
+      }
       const text = texts.join(attr?.source === 'voice' ? ' ' : '\n');
       try {
-        return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}) });
+        return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}), ...(origin ? { voiceOrigin: origin } : {}) });
       } catch (err) {
         if (attr) voice?.releaseAttribution(attr);
         throw err;

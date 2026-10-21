@@ -20,7 +20,7 @@ public enum Command: Equatable {
     case playStop
     case playEnd
     case routeGet
-    case hotkeysSet([String: String])
+    case hotkeysSet([String: String], allowBare: Bool)
     case quit
 
     public var op: String {
@@ -100,11 +100,13 @@ public enum CommandParser {
                 out[k] = s
             }
             // validate here so a bad config is refused before anything is unregistered
-            do { _ = try HotkeyConfig.defaults.applying(out) } catch let e as HotkeyError {
+            if let ab = obj["allowBare"], !(ab is Bool) { throw bad("allowBare must be a boolean") }
+            let allowBare = (obj["allowBare"] as? Bool) ?? false
+            do { _ = try HotkeyConfig.defaults.applying(out, allowBare: allowBare) } catch let e as HotkeyError {
                 // a duplicate against the defaults may be fine against the live config; only syntax is checked here
                 if case .duplicate = e {} else { throw bad(e.description) }
             }
-            return (id, .hotkeysSet(out))
+            return (id, .hotkeysSet(out, allowBare: allowBare))
         default:
             throw CommandError(code: "unknown-op", message: "unknown op \(op)", id: id, op: op)
         }

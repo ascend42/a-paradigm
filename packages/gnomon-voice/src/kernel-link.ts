@@ -265,13 +265,30 @@ export class GnomonKernelLink implements KernelLink {
     return this.client.call('status', {});
   }
   #stopSpeakingSeq: number | null = null;
+  #micWanted: boolean | null = null;
+  #micToggleSeq: number | null = null;
+  #micKeyBare: boolean | null = null;
+  micToggleSeq(): number | null {
+    return this.#micToggleSeq;
+  }
+  micKeyBare(): boolean | null {
+    return this.#micKeyBare;
+  }
   async attachment(): Promise<VoiceAttachment | null> {
     const st = await this.status();
     this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
+    const vv = (st as { voice?: { micWanted?: unknown; micToggleSeq?: unknown; micKeyBare?: unknown } } | undefined)?.voice;
+    this.#micWanted = typeof vv?.micWanted === 'boolean' ? vv.micWanted : null;
+    this.#micToggleSeq = typeof vv?.micToggleSeq === 'number' ? vv.micToggleSeq : null;
+    this.#micKeyBare = typeof vv?.micKeyBare === 'boolean' ? vv.micKeyBare : null;
     return attachmentFromStatus(st);
   }
   stopSpeakingSeq(): number | null {
     return this.#stopSpeakingSeq;
+  }
+  /** TD-2026-10-21-514: status.voice.micWanted (the kernel-held mic state), or null when never reported. */
+  micWanted(): boolean | null {
+    return this.#micWanted;
   }
   async append(kind: string, payload: Record<string, unknown>): Promise<AppendResult> {
     const r = (await this.client.call('log.append', { kind, payload })) as Record<string, unknown> | null;

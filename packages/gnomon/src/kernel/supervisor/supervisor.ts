@@ -128,7 +128,8 @@ import { traceModeOf } from '../trace/mode.js';
 import { autoBashReadOnly, autoEditPass, READ_ONLY_ASK_MODE_REF, READ_ONLY_MODE_REF } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
-import type { RunMode } from '@a-company/gnomon-contracts';
+import type { RunMode, VoiceSentBy } from '@a-company/gnomon-contracts';
+import { clampAllows, pieceGuidance, VoiceClampBook, withVoiceOrigin } from './voice-clamp.js';
 import { guidanceHashOf } from '../voice/table-talk.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -294,7 +295,7 @@ export interface SupervisorOptions {
 
 /** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
 export interface SupervisorLogger {
-  component(id: string): { warn(message: string, data?: Record<string, unknown>): void };
+  component(id: string): { warn(message: string, data?: Record<string, unknown>): void; info?(message: string, data?: Record<string, unknown>): void };
 }
 
 export interface OpenRequest {
@@ -396,6 +397,8 @@ interface Session {
    * session's exit releases it
    */
   modelUncertain: { from: string; to: string; baseline: string | null; permit: PermitV1 } | null;
+  /** TD-2026-10-21-514 ^voice-origin-clamp: the outstanding voice-origin turns (created at the first send) */
+  voiceClamp?: VoiceClampBook;
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -412,6 +415,8 @@ interface PendingPermission {
   toolUseId: string | null;
   /** why the entry was closed before its card existed (a cancel / duplicate / exit during the raise): the expire `why` */
   closedWhy?: string;
+  /** TD-2026-10-21-514: raised under the voice-origin clamp (the answer row carries clamp:'voice') */
+  clamp?: 'voice';
 }
 
 const WIRE: Record<SessionRefusalCode, RefusalCode> = {
@@ -1157,6 +1162,8 @@ export class SessionSupervisor {
         s.consumedTurns = Math.max(0, s.consumedTurns - k);
         const turn = closedIds[closedIds.length - 1];
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
+        // TD-2026-10-21-514: the result that closes a voice-origin turn ends its clamp (after the result row: log first)
+        s.voiceClamp?.closed(closedIds);
         // voice busy guard: the reply's end is its message_stop when it was seen (the result may be ~30 s late);
         // the result is the fallback end. A turn still outstanding after this result streams next (re-armed).
         if (!s.replyDone) s.lastTurnEndAt = Date.now();
@@ -1174,7 +1181,12 @@ export class SessionSupervisor {
       case 'user':
         // review M2: a replayed human message (no tool results) is Claude Code consuming the next outstanding turn
         // re-review L-2: not before the stream is live (a resumed session's history replays)
-        if (ev.replay && ev.toolResults.length === 0 && s.replayLive) s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
+        if (ev.replay && ev.toolResults.length === 0 && s.replayLive) {
+          const before = s.consumedTurns;
+          s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
+          // Aegis M-3: the clamp book learns which turn Claude just consumed (the next outstanding one, FIFO)
+          if (s.consumedTurns > before) s.voiceClamp?.replayed(s.turnIds[s.consumedTurns - 1]);
+        }
         // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
         for (const r of ev.toolResults) {
           const tool = s.toolNames.get(r.toolUseId);
@@ -1251,12 +1263,15 @@ export class SessionSupervisor {
     const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
     // P8-D87 run modes: the EFFECTIVE mode, read now (a change takes effect at the next request)
     const mode = this.#modeTransition(s, repoKey);
+    // TD-2026-10-21-514 ^voice-origin-clamp: while a voice-origin turn is outstanding only a read-only modeRef may auto-pass
+    const clampBy = s.voiceClamp?.active() ?? null;
+    const mayAuto = (modeRef: string): boolean => clampBy === null || clampAllows(modeRef);
     if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
       await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
       return;
     }
-    if (mode === 'auto-edits' && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
+    if (mode === 'auto-edits' && mayAuto('mode:auto-edits') && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
       const pass = autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome());
       if (pass.ok) {
         // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
@@ -1273,7 +1288,7 @@ export class SessionSupervisor {
         }
       }
     }
-    if ((mode === 'auto-edits' || mode === 'ask') && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
+    if ((mode === 'auto-edits' || mode === 'ask') && mayAuto(mode === 'ask' ? READ_ONLY_ASK_MODE_REF : READ_ONLY_MODE_REF) && plan.cardKind === 'permission' && ev.toolName === 'Bash' && b && typeof b.auto === 'function') {
       // TD-2026-10-20-294 part 1: a PROVABLY read-only command (#shell-readonly; fails closed) passes with no card.
       // F1 (TD-2026-10-20-086): in `ask` too (modeRef mode:ask:read-only); never in `manual`
       const roRef = mode === 'ask' ? READ_ONLY_ASK_MODE_REF : READ_ONLY_MODE_REF;
@@ -1297,7 +1312,7 @@ export class SessionSupervisor {
         }
       }
     }
-    if (plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
+    if (plan.cardKind === 'permission' && mayAuto('rule:') && b && typeof b.auto === 'function') {
       // S-L1: an exact (repo, tool, inputHash) match of a kernel-derived `always` rule ⇒ allow with no card, approval.auto first
       let rule: { ruleId: string } | null = null;
       try {
@@ -1325,7 +1340,10 @@ export class SessionSupervisor {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
     }
-    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
+    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId, ...(clampBy !== null ? { clamp: 'voice' as const } : {}) };
+    // the card says it was asked during a voice-sent turn (detail.origin 'voice', the kernel-composed line)
+    const shown = clampBy !== null ? withVoiceOrigin(plan, clampBy) : plan;
+    if (clampBy !== null) this.#o.logger?.component('#supervisor').info?.('voice clamp applied', { hsid: s.hsid, tool: ev.toolName, sentBy: clampBy, signal: '!voice-clamp-applied' });
     s.pending.set(requestId, entry);
     let cardId: string;
     // ask-user: the answer is checked against the KERNEL-held questions before presence and before approval.decide,
@@ -1343,7 +1361,7 @@ export class SessionSupervisor {
         }
       : {};
     try {
-      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask, ...(plan.cardKind === 'permission' ? { ruleScope: { repoKey } } : {}) });
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: shown.detail, lines: shown.lines, block: shown.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never, ...ask, ...(plan.cardKind === 'permission' ? { ruleScope: { repoKey } } : {}) });
       cardId = card.cardId;
     } catch {
       await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny
@@ -1374,14 +1392,14 @@ export class SessionSupervisor {
       const parsed = parseAskAnswer(e.questions, note);
       if (!('error' in parsed)) {
         const line = permissionAllowLine(requestId, { ...e.input, answers: parsed.answers });
-        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length });
+        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length, ...(e.clamp ? { clamp: e.clamp } : {}) });
         return;
       }
     }
     if (e.cardKind === 'plan' && decision === 'approve-plan') s.planApproved = true; // manual: writes and exec may now raise cards
     const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
     const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
-    await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
+    await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision, ...(e.clamp ? { clamp: e.clamp } : {}) });
   }
 
   /** session.inject{origin:'kernel'} (a byte COUNT and a hash, never the text), then the line — only while running. */
@@ -1623,7 +1641,7 @@ export class SessionSupervisor {
     await this.#release(u.permit.permitId, s, `uncertain-${why}`);
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel' }): Promise<{ turn: string; steered?: boolean }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel'; voiceOrigin?: { sentBy: VoiceSentBy } }): Promise<{ turn: string; steered?: boolean }> {
     this.#refuseIfDraining('session.send'); // §2.4 rule 11: no new turn starts once a drain began (Claude and gnomon-local)
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
@@ -1667,8 +1685,14 @@ export class SessionSupervisor {
     await this.#o.log('session.inject', { hsid: s.hsid, origin: p.origin === 'kernel' ? 'kernel' : 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     // table talk: while voice is attached to this session, EVERY turn carries the guidance as a second text block;
     // contentHash stays the human's text alone (replay binds to it), turn.sent names the guidance by an opaque hash
-    const guidance = this.#turnGuidance(s.hsid);
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
+    // TD-2026-10-21-514: every turn carries a kernel-stamped origin; a voice-origin turn starts the clamp, and a piece
+    // reaches the agent with the piece note on the per-turn guidance block (argv never changes per turn)
+    const sentBy = p.voiceOrigin?.sentBy ?? null;
+    const book = (s.voiceClamp ??= new VoiceClampBook());
+    const base = this.#turnGuidance(s.hsid);
+    const guidance = sentBy === 'piece' ? [base, pieceGuidance(book.nextPiece())].filter((x): x is string => x !== null).join('\n\n') : base;
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), origin: sentBy !== null ? 'voice' : 'hand', ...(sentBy !== null ? { sentBy } : {}), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
+    book.sent(turnId(s.hsid, n), sentBy);
     this.#stdin(s, userMessageLine(p.text, guidance));
     return { turn: turnId(s.hsid, n) };
   }

@@ -55,7 +55,7 @@ final class CommandParserTests: XCTestCase {
 
     func testHotkeysSet() throws {
         let (_, c) = try parse(#"{"op":"hotkeys.set","bindings":{"talk":"cmd+shift+space","mode-toggle":"none"}}"#)
-        XCTAssertEqual(c, .hotkeysSet(["talk": "cmd+shift+space", "mode-toggle": "none"]))
+        XCTAssertEqual(c, .hotkeysSet(["talk": "cmd+shift+space", "mode-toggle": "none"], allowBare: false))
         XCTAssertEqual(code(#"{"op":"hotkeys.set"}"#), "bad-request")
         XCTAssertEqual(code(#"{"op":"hotkeys.set","bindings":{}}"#), "bad-request")
         XCTAssertEqual(code(#"{"op":"hotkeys.set","bindings":{"talk":3}}"#), "bad-request")

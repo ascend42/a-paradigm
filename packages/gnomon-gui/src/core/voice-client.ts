@@ -267,11 +267,11 @@ export function clientMenuEntries(c: ClientView, attachable: boolean): ClientMen
 }
 
 export type ClientRequest =
-  | { kind: 'request.voice.client'; payload: { op: 'start' | 'stop' | 'stop-speaking' } }
+  | { kind: 'request.voice.client'; payload: { op: 'start' | 'stop' | 'stop-speaking'; capture?: 'ptt' | 'open' | 'toggle' } }
   | { kind: 'request.voice.enrol'; payload: { name: string; consent: string } }
   | { kind: 'request.voice.forget'; payload: { name: string } };
 
-export const clientRequest = (op: 'start' | 'stop'): ClientRequest => ({ kind: 'request.voice.client', payload: { op } });
+export const clientRequest = (op: 'start' | 'stop', capture?: 'ptt' | 'open' | 'toggle'): ClientRequest => ({ kind: 'request.voice.client', payload: { op, ...(op === 'start' && capture ? { capture } : {}) } });
 /** Stop speaking (T-2026-10-19-026): narrows only (silences the voice app), so no card and no presence. */
 export const stopSpeakingRequest = (): ClientRequest => ({ kind: 'request.voice.client', payload: { op: 'stop-speaking' } });
 

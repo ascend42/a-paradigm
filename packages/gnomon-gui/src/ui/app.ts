@@ -15,7 +15,9 @@
  * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
+import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
+import { ACK_TEXT, acked, attachSend, captureOf, CAPTURE_KEY, clampedFrom, CLAMP_CHIP, parseCapturePref, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -39,7 +41,7 @@ import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
-import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -241,6 +243,8 @@ function paintChatHead(): void {
     meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
     meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}`));
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
+    // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
+    if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
     meta.appendChild(document.createTextNode(`${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
   }
   const t = s ? sessionTitle(s) : '';
@@ -329,8 +333,10 @@ function itemEl(it: FoldedItem): HTMLElement {
   }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
+  // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (+ "edits ask first")
+  const sentBy = it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
@@ -1225,6 +1231,47 @@ function focus(hsid: string | null): void {
 
 /* ── voice dictation (TD-2026-10-20-262; core/dictation.ts) ────────── */
 let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
+/** TD-2026-10-21-514: the voice preset (per machine) and a pending double-rAF visibility stamp */
+let voicePreset = parsePreset(localStorage.getItem(PRESET_KEY));
+let capturePref = parseCapturePref(localStorage.getItem(CAPTURE_KEY));
+/** TD-2026-10-21-514: the capture kind the voice app is (re)started with, from the preset and the listening choice */
+const currentCapture = (): 'ptt' | 'open' | 'toggle' => captureOf(voicePreset, capturePref);
+/** a running voice app is restarted with the new capture kind (the kernel restarts it only when the kind changed) */
+async function applyCapture(): Promise<void> {
+  if (!client || !canAttach(status) || needsStart(clientOf(status))) return;
+  await client.call('log.append', clientRequest('start', currentCapture())).catch((err: unknown) => notice(err instanceof RpcError ? refusalText(err.refusal) : 'the voice app was not restarted with the new listening mode', true));
+}
+/** the last ⌃⌥Return count seen (a baseline first: presses before this page never send) */
+let sendNowsSeen: { n: number; epoch: string | null } | null = null;
+
+/** TD-2026-10-21-514: the mic on/off from the GUI (palette, in-app `): the voice app toggles on a changed count. */
+async function micToggle(trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  try {
+    await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-toggle' } });
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic was not toggled', true);
+  }
+}
+
+/** The Mic key switch: ⌃` (default, global) or a bare ` everywhere (opt-in, with its warning). */
+async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  try {
+    await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-key', bare } });
+    notice(bare ? 'Mic key: ` everywhere. While Gnomon voice runs, ` will not type in any app.' : 'Mic key: ⌃` (and ` inside Gnomon)');
+    await refreshStatus();
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic key was not changed', true);
+  }
+}
+const micKeyBareOf = (st: unknown): boolean => (st as { voice?: { micKeyBare?: unknown } } | null)?.voice?.micKeyBare === true;
+/** a bare ` in-app: only while this window is focused and focus is not in an editable field */
+function editableFocus(): boolean {
+  const a = document.activeElement as HTMLElement | null;
+  return !!a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+}
+let paintStamp = false;
 let dictTimer: ReturnType<typeof setInterval> | null = null;
 let dictTicks = 0;
 let dictLive = '';
@@ -1245,6 +1292,156 @@ function dispatchDictation(e: DictationEvent): void {
   if (dict.sending && !prev.sending) void sendDictation();
   syncDictationTimer();
   paintDictation();
+  stampPainted();
+}
+
+/**
+ * TD-2026-10-21-514: the send word may only send a draft that has been VISIBLE ≥ 1 s. Stamped after paint (a double
+ * requestAnimationFrame: the frame after the one that painted it), only while the page is visible.
+ */
+function stampPainted(): void {
+  if (paintStamp || dict.policy !== 'word' || dict.visibleSince !== null || !hasDraft(dict) || !dict.focusedHere || document.visibilityState !== 'visible') return;
+  paintStamp = true;
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      paintStamp = false;
+      if (document.visibilityState === 'visible') dispatchDictation({ type: 'painted', now: Date.now() });
+    }),
+  );
+}
+
+/** TD-2026-10-21-514: the preset's send policy and the kernel-held send word reach the reducer. */
+function syncVoicePolicy(): void {
+  const policy = policyOf(voicePreset);
+  const word = sendWordOf(status);
+  if (policy !== dict.policy || JSON.stringify(word) !== JSON.stringify(dict.sendWord)) dispatchDictation({ type: 'setPolicy', policy, sendWord: word, now: Date.now() });
+}
+
+/** Choose a preset (pill menu, palette): Send word and Pieces ask for the one-time liability acknowledgement first. */
+async function chooseVoicePreset(p: typeof voicePreset, trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  const me = myPrincipal();
+  const step = choosePreset(p, { acked: acked(localStorage, me), sendWord: sendWordOf(status) });
+  if (step === 'needs-ack') return openAck(p);
+  if (step === 'needs-word') return openTeach(p);
+  applyVoicePreset(p);
+}
+
+function myPrincipal(): string | null {
+  const p = (status as { principal?: unknown } | null)?.principal;
+  return typeof p === 'string' ? p : null;
+}
+
+function applyVoicePreset(p: typeof voicePreset): void {
+  voicePreset = p;
+  localStorage.setItem(PRESET_KEY, p);
+  syncVoicePolicy();
+  void applyCapture();
+  notice(`voice: ${PRESET_LABELS[p]} · ${PRESET_NOTES[p]}${attachSend(p) ? ' (re-attach voice to apply its send ceiling)' : ''}`);
+  if (!$('voice-menu').hidden) paintVoiceMenu();
+}
+
+/* ── the liability acknowledgement (TD-2026-10-21-514: Send word and Pieces are liability modes) ── */
+let ackFor: typeof voicePreset | null = null;
+function openAck(p: typeof voicePreset): void {
+  closeVoiceMenu();
+  ackFor = p;
+  put($('ack-mode'), `${PRESET_LABELS[p]}: ${PRESET_NOTES[p]}`);
+  put($('ack-text'), ACK_TEXT);
+  const box = $<HTMLInputElement>('ack-agree');
+  box.checked = false;
+  ($('ack-go') as HTMLButtonElement).disabled = true;
+  $('ack-dialog').hidden = false;
+  box.focus();
+}
+function closeAck(): void {
+  $('ack-dialog').hidden = true;
+  ackFor = null;
+}
+function submitAck(trusted: boolean): void {
+  const p = ackFor;
+  const me = myPrincipal();
+  if (!trusted || !p || !me || !$<HTMLInputElement>('ack-agree').checked) return;
+  recordAck(localStorage, me);
+  closeAck();
+  void chooseVoicePreset(p, true);
+}
+
+/* ── "Teach Gnomon your send word" (guided: pick, validate, lead-in, 3 takes, test, done) ── */
+let teach: TeachState | null = null;
+let teachFor: typeof voicePreset | null = null;
+function teachOpen(): boolean {
+  return teach !== null && !$('sendword-dialog').hidden;
+}
+function openTeach(p: typeof voicePreset | null): void {
+  closeVoiceMenu();
+  teach = initialTeach();
+  teachFor = p;
+  const sug = $('sendword-suggestions');
+  clear(sug);
+  for (const w of TEACH_SUGGESTIONS) sug.appendChild(h(doc, 'button', { class: 'key quiet', type: 'button', 'data-sendword': w }, w) as unknown as Node);
+  $<HTMLInputElement>('sendword-custom').value = '';
+  $('sendword-dialog').hidden = false;
+  paintTeach();
+  $('sendword-custom').focus();
+}
+async function closeTeach(): Promise<void> {
+  $('sendword-dialog').hidden = true;
+  const was = teach;
+  teach = null;
+  teachFor = null;
+  // a trial word never outlives the dialog
+  if (client && was && was.step !== 'pick' && was.step !== 'done') await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'clear', trial: true } }).catch(() => undefined); // Aegis L-2: only the trial; the held word stays
+}
+function paintTeach(): void {
+  const s = teach;
+  if (!s) return;
+  const attached = voiceStatusOf(status).hsid !== null;
+  put($('sendword-line'), !attached && s.step !== 'pick' && s.step !== 'confirm-common' && s.step !== 'done' ? 'Attach voice to a session first (the takes are heard through it).' : teachLine(s));
+  $('sendword-pick').hidden = s.step !== 'pick';
+  put($('sendword-heard'), s.heard === null ? '' : `I heard: “${s.heard}”`);
+  put($('sendword-hint'), s.hint ?? (s.step === 'takes' || s.step === 'test' ? `${s.takes.length} of ${TAKES_NEEDED} takes${s.variants.length ? ` · also heard as ${s.variants.map((v) => `“${v}”`).join(', ')}` : ''}` : ''));
+  const go = $<HTMLButtonElement>('sendword-go');
+  go.hidden = !(s.step === 'pick' || s.step === 'confirm-common' || s.step === 'done');
+  put(go, s.step === 'done' ? 'Save' : s.step === 'confirm-common' ? 'Use it' : 'Continue');
+  $('sendword-no').hidden = s.step !== 'confirm-common';
+}
+async function teachStep(e: TeachEvent): Promise<void> {
+  if (!teach) return;
+  const prev = teach;
+  teach = reduceTeach(teach, e);
+  // entering the lead-in (or each heard take): the kernel holds the word as a trial so the short takes are attributed
+  if (client && teach.step !== 'pick' && teach.step !== 'confirm-common' && teach.step !== 'done' && (prev.step !== teach.step || e.type === 'heard'))
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: { op: 'start', word: teach.word, trial: true } }).catch((err: unknown) => {
+      if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the voice app could not be told the word' };
+    });
+  paintTeach();
+}
+async function submitTeach(trusted: boolean): Promise<void> {
+  if (!trusted || !teach || !client) return;
+  if (teach.step === 'pick') return teachStep({ type: 'pick', text: $<HTMLInputElement>('sendword-custom').value });
+  if (teach.step === 'confirm-common') return teachStep({ type: 'confirmCommon', yes: true });
+  const commit = teachCommit(teach);
+  if (!commit) return;
+  try {
+    await client.call('log.append', { kind: 'request.voice.sendword', payload: commit });
+    await refreshStatus();
+    const p = teachFor;
+    $('sendword-dialog').hidden = true;
+    teach = null;
+    teachFor = null;
+    if (p) void chooseVoicePreset(p, true);
+    else notice('send word saved');
+  } catch (err) {
+    if (teach) teach = { ...(teach as TeachState), hint: err instanceof RpcError ? refusalText(err.refusal) : 'the send word was not saved' };
+    paintTeach();
+  }
+}
+/** While the dialog listens, a voice turn is a take (never a draft): its text, or null when it was withheld. */
+function teachHeard(p: Record<string, unknown> | null): void {
+  // a take of the word being taught is stamped trialTake (never forwardable, Aegis L-3); the lead-in is a normal turn
+  const text = p && (p.forwardable === true || p.trialTake === true) && typeof p.text === 'string' && p.text.trim() ? p.text : null;
+  void teachStep({ type: 'heard', text });
 }
 
 /** A live row: a dictated turn for the composer, or the draft session's streaming (resets the ring). */
@@ -1253,6 +1450,11 @@ function dictationRow(r: Row): void {
   const now = Date.now();
   if (r.kind === 'voice.turn.user') {
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
+    // the send-word dialog is listening: this turn is a take, never a draft
+    if (teachOpen() && r.seq > dict.lastSeq) {
+      dict = { ...dict, lastSeq: r.seq };
+      return teachHeard(p);
+    }
     dispatchDictation({ type: 'turnRow', seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, now });
   }
   if (dict.hsid && r.session === dict.hsid) dispatchDictation({ type: 'busy', busy: store.sessions.get(dict.hsid)?.state === 'streaming', now });
@@ -1264,9 +1466,17 @@ function syncDictationContext(): void {
   const on = dictationOn();
   dispatchDictation({ type: 'context', attached: on ? voiceStatusOf(status).hsid : null, focused, now });
   if (!on) return;
+  syncVoicePolicy();
   const d = dictationStatusOf(status);
   if (d.activity !== dict.activity) dispatchDictation({ type: 'activity', activity: d.activity, now });
   if (d.holdToggles !== null && (d.holdToggles !== dict.holdToggles || d.epoch !== dict.holdEpoch)) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, epoch: d.epoch, now });
+  // TD-2026-10-21-514: ⌃⌥Return in the voice app sends the draft through the one send path (a hand origin)
+  if (d.sendNows !== null) {
+    const fresh = sendNowsSeen !== null && sendNowsSeen.epoch === d.epoch && d.sendNows > sendNowsSeen.n;
+    sendNowsSeen = { n: d.sendNows, epoch: d.epoch };
+    // Aegis M-5: a voice-origin (clamped) send of an unedited draft; an edited one is held for Enter
+    if (fresh && hasDraft(dict) && dict.focusedHere) dispatchDictation({ type: 'sendNowKey', now });
+  }
 }
 
 function setDictationDelay(d: number | null): void {
@@ -1301,6 +1511,9 @@ async function sendDictation(): Promise<void> {
   if (echo) local.push(echo);
   schedule(new Set([`transcript:${req.hsid}`]));
   try {
+    // TD-2026-10-21-514 ($send-by-word): the claim first; the kernel consumes the word and stamps this send voice-origin
+    const claim = sendClaim(dict);
+    if (claim) await client.call('log.append', { kind: 'request.voice.send.claim', payload: claim });
     const r = await client.call<{ turn?: unknown }>('session.send', req);
     if (echo) stampEcho(echo, r);
     dispatchDictation({ type: 'sent', now: Date.now() });
@@ -1323,10 +1536,11 @@ function paintDictation(): void {
   const bar = $('dictation');
   bar.hidden = !on || !dict.focusedHere;
   const now = Date.now();
-  const frac = ringFraction(dict, now);
+  // $send-by-pieces: the piece ring drains toward the gap that sends the piece
+  const frac = draftControls(dict).pieceRing ? pieceFraction(dict, now) : ringFraction(dict, now);
   const rem = ringRemaining(dict, now);
   const controls = draftControls(dict);
-  $('dictation-ring').hidden = frac === null || !controls.ring;
+  $('dictation-ring').hidden = frac === null || !(controls.ring || controls.pieceRing);
   if (frac !== null) $('dictation-arc').setAttribute('stroke-dashoffset', String(Math.round(frac * 1000) / 10));
   put($('dictation-secs'), rem === null ? '' : `${Math.ceil(rem / 1000)} s`);
   const line = on ? liveLine(dict, now) : '';
@@ -1365,6 +1579,7 @@ async function refreshStatus(): Promise<void> {
   paintMode();
   paintVoice();
   paintSessions();
+  paintTeach();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
@@ -1604,7 +1819,10 @@ function paintVoice(): void {
   btn.className = cp.tail !== null ? [...new Set(`${p.className} ${cp.className}`.split(' '))].join(' ') : p.className;
   btn.title = cp.tail !== null ? `${p.title} ${cp.title}` : p.title;
   btn.dataset.state = p.state;
-  put($('voice-label'), p.label);
+  // privacy (Aegis): with the bare ` mic key on, the pill always says when the mic is live
+  const bareLive = micKeyBareOf(status) && (status as { voice?: { micWanted?: unknown } } | null)?.voice?.micWanted !== false && v.state !== 'off';
+  put($('voice-label'), bareLive ? `${p.label} · mic live` : p.label);
+  btn.classList.toggle('mic-live', bareLive);
   put($('voice-target'), p.target ? `· ${p.target}` : '');
   if (cp.label !== null) {
     btn.className = `voice-pill kernel-owned ${cp.className}`;
@@ -1718,7 +1936,22 @@ function paintVoiceMenu(): void {
       picks.appendChild(h(doc, 'button', { class: `key quiet${d === dict.delayMs ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(d === dict.delayMs), 'data-dictation-delay': serializeDelay(d) }, delayLabel(d)) as unknown as Node);
     menu.appendChild(picks);
   }
-  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃⌥H holds the dictation`) as unknown as Node);
+  if (canAttach(status)) {
+    // TD-2026-10-21-514: the presets, a segmented control (Send word and Pieces ask for the acknowledgement once)
+    const seg = h(doc, 'span', { class: 'mode-item scope voice-presets', role: 'group', 'aria-label': 'voice preset' }, h(doc, 'span', { class: 'mode-name' }, 'Send')) as unknown as HTMLElement;
+    for (const p of VOICE_PRESET_IDS)
+      seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
+    menu.appendChild(seg);
+    // TD-2026-10-21-514: how the ambient presets listen — always on, or the mic key toggles listening (toggle capture)
+    if (voicePreset !== 'talk')
+      menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(capturePref === 'toggle'), 'data-capture': capturePref === 'toggle' ? 'open' : 'toggle' }, h(doc, 'span', { class: 'mode-name' }, `Listening: ${capturePref === 'toggle' ? 'the mic key turns it on and off' : 'always on while attached'}`), h(doc, 'span', { class: 'mode-note' }, capturePref === 'toggle' ? 'switch to always on' : 'let the mic key toggle listening (starts off)')) as unknown as Node);
+    // the Mic key switch (TD-2026-10-21-514): ⌃` by default; a bare ` everywhere only by opt-in, with the warning
+    const bare = micKeyBareOf(status);
+    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(bare), 'data-mic-key': bare ? 'ctrl' : 'bare' }, h(doc, 'span', { class: 'mode-name' }, `Mic key: ${bare ? '` everywhere' : '⌃` (` inside Gnomon)'}`), h(doc, 'span', { class: 'mode-note' }, bare ? 'switch back to ⌃`' : 'use a bare ` everywhere: while Gnomon voice runs, ` will not type in any app')) as unknown as Node);
+    const sw = sendWordOf(status);
+    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-sendword': '1' }, h(doc, 'span', { class: 'mode-name' }, sw ? 'Change your send word' : 'Teach Gnomon your send word'), h(doc, 'span', { class: 'mode-note' }, sw ? `now “${sw.text}”` : 'a guided step: say it a few times')) as unknown as Node);
+  }
+  menu.appendChild(h(doc, 'span', { class: 'mode-note voice-keys' }, `hotkeys (voice app): hold ${v.hotkey} to talk · ⌃\` mic on/off · ⌃⌥H holds the dictation · ⌃⌥Return sends`) as unknown as Node);
 }
 function openVoiceMenu(): void {
   // voice drops fix: opening the menu is the human's dismiss of a sticky drop on the pill (core/capture.ts)
@@ -1747,14 +1980,19 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   const plan = planVoice(v, to, hsid, voicePresenceDone);
   if (plan.kind === 'blocked') return notice(`${VOICE_TITLE[to]} is not allowed: ${plan.reason}`, true);
   if (plan.kind === 'same') return;
-  const req = voiceRequest(v, to, hsid);
+  const req0 = voiceRequest(v, to, hsid);
+  // TD-2026-10-21-514: an ambient attach asks for the preset's send ceiling (word | pieces; pieces takes a presence card)
+  const ceil = attachSend(voicePreset);
+  // Aegis M-4: the liability acknowledgement (recorded by the dialog) rides the attach; the kernel writes it into the start row
+  const ackOk = acked(localStorage, myPrincipal());
+  const req = req0 && req0.kind === 'voice.session.start' && req0.payload.mode === 'conversation' && ceil && ackOk ? { ...req0, payload: { ...req0.payload, send: ceil, liabilityAck: VOICE_LIABILITY_ACK_HASH } } : req0;
   if (!req) return;
   if (voiceBusy) return;
   voiceBusy = true;
   try {
     // V2e seamless: attaching (or choosing Ambient) while the voice app is not running starts it in the same gesture
     if (to !== 'off' && needsStart(clientOf(status))) {
-      await client.call('log.append', clientRequest('start'));
+      await client.call('log.append', clientRequest('start', currentCapture()));
       notice('Starting voice…');
     }
     const r = await client.call<Record<string, unknown>>('log.append', req);
@@ -1796,7 +2034,7 @@ async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<vo
   if (!client) return notice('not connected: the voice app was not changed', true);
   if (!canAttach(status)) return notice('only a human connection starts or stops the voice app', true);
   try {
-    await client.call('log.append', clientRequest(op));
+    await client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op));
     notice(null);
   } catch (err) {
     notice(err instanceof RpcError ? refusalText(err.refusal) : `the voice app was not ${op === 'start' ? 'started' : 'stopped'}`, true);
@@ -1859,7 +2097,7 @@ async function submitEnrol(trusted: boolean): Promise<void> {
     if (!v.ok) return void put($('enrol-line'), v.reason);
     try {
       // the voice app records the phrases (it watches for this enrolment); start it first if it is not running
-      if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start'));
+      if (needsStart(clientOf(status))) await client.call('log.append', clientRequest('start', currentCapture()));
       const r = await client.call<Record<string, unknown>>('log.append', v.req);
       store.enrol = enrolSent(s, (v.req.payload as { name: string }).name, typeof r.cardId === 'string' ? r.cardId : null);
     } catch (err) {
@@ -1964,6 +2202,9 @@ function run(id: string, trusted: boolean): void {
   $('palette').hidden = true;
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
+  else if (id.startsWith('voice.preset.')) void chooseVoicePreset(parsePreset(id.slice('voice.preset.'.length)), trusted);
+  else if (id === 'voice.sendword.teach') openTeach(null);
+  else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
   else if (id === 'mods.open') modsPanel.open();
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
@@ -2208,10 +2449,39 @@ function wire(): void {
     void setMode(b.dataset.mode as RunMode, defaultScope(currentMode()), e.isTrusted);
   });
   $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu()));
+  // TD-2026-10-21-514: the guided send-word dialog and the liability acknowledgement (in-app dialogs, never prompt/confirm)
+  $('sendword-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitTeach(e.isTrusted);
+  });
+  $('sendword-cancel').addEventListener('click', () => void closeTeach());
+  $('sendword-no').addEventListener('click', () => void teachStep({ type: 'confirmCommon', yes: false }));
+  $('sendword-suggestions').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-sendword]') as HTMLElement | null;
+    if (b && e.isTrusted) void teachStep({ type: 'pick', text: b.dataset.sendword! });
+  });
+  $('ack-agree').addEventListener('change', () => (($('ack-go') as HTMLButtonElement).disabled = !$<HTMLInputElement>('ack-agree').checked));
+  $('ack-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitAck(e.isTrusted);
+  });
+  $('ack-cancel').addEventListener('click', () => closeAck());
   $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
     const dd = (e.target as HTMLElement).closest('[data-dictation-delay]') as HTMLElement | null;
     if (dd) return setDictationDelay(parseDelay(dd.dataset.dictationDelay!));
+    const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
+    if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
+    if ((e.target as HTMLElement).closest('[data-voice-sendword]') && e.isTrusted) return openTeach(null);
+    const cp = (e.target as HTMLElement).closest('[data-capture]') as HTMLElement | null;
+    if (cp && e.isTrusted) {
+      capturePref = parseCapturePref(cp.dataset.capture ?? null);
+      localStorage.setItem(CAPTURE_KEY, capturePref);
+      void applyCapture();
+      return paintVoiceMenu();
+    }
+    const mk = (e.target as HTMLElement).closest('[data-mic-key]') as HTMLElement | null;
+    if (mk) return void setMicKey(mk.dataset.micKey === 'bare', e.isTrusted);
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
     if (vc) {
       const id = vc.dataset.voiceClient!;
@@ -2299,7 +2569,14 @@ function wire(): void {
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
     if (r) run(r.dataset.id!, e.isTrusted);
   });
+  // TD-2026-10-21-514: a hidden page never counts toward the send word's visibility
+  document.addEventListener('visibilitychange', () => dispatchDictation({ type: 'pageVisible', visible: document.visibilityState === 'visible', now: Date.now() }));
   document.addEventListener('keydown', (e) => {
+    // TD-2026-10-21-514: a bare ` toggles the mic inside Gnomon (window focused, not typing in a field)
+    if (e.key === '`' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && document.hasFocus() && !editableFocus() && canAttach(status)) {
+      e.preventDefault();
+      return void micToggle(e.isTrusted);
+    }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openPalette();
@@ -2307,6 +2584,13 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
+    } else if (e.key === 'Escape' && !$('ack-dialog').hidden) {
+      closeAck();
+    } else if (e.key === 'Escape' && !$('sendword-dialog').hidden) {
+      void closeTeach();
+    } else if (e.key === 'Escape' && dict.grace) {
+      e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
+      dispatchDictation({ type: 'graceCancel', now: Date.now() });
     } else if (e.key === 'Escape' && settings.isOpen()) {
       settings.close();
     } else if (e.key === 'Escape' && modsPanel.isOpen()) {

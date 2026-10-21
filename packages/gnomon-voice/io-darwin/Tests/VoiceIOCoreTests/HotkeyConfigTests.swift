@@ -4,10 +4,13 @@ import XCTest
 final class HotkeyConfigTests: XCTestCase {
     func testDefaults() {
         let d = HotkeyConfig.defaults
-        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+alt+m", "mode-toggle": "ctrl+alt+a", "hold-toggle": "ctrl+alt+h", "stop-speaking": "ctrl+alt+."])
+        XCTAssertEqual(d.json, ["talk": "ctrl+alt+space", "mic-toggle": "ctrl+`", "mode-toggle": "ctrl+alt+a", "hold-toggle": "ctrl+alt+h", "stop-speaking": "ctrl+alt+.", "send-now": "ctrl+alt+return"])
         XCTAssertEqual(d.bindings[.talk]?.keyCode, 0x31)
         XCTAssertEqual(d.bindings[.talk]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
-        XCTAssertEqual(d.bindings[.micToggle]?.keyCode, 0x2E)
+        XCTAssertEqual(d.bindings[.micToggle]?.keyCode, 0x32) // kVK_ANSI_Grave
+        XCTAssertEqual(d.bindings[.micToggle]?.modifiers, HotkeySpec.controlKey)
+        XCTAssertEqual(d.bindings[.sendNow]?.keyCode, 0x24)
+        XCTAssertEqual(d.bindings[.sendNow]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
         XCTAssertEqual(d.bindings[.modeToggle]?.keyCode, 0x00)
         XCTAssertEqual(d.bindings[.holdToggle]?.keyCode, 0x04)
         XCTAssertEqual(d.bindings[.holdToggle]?.modifiers, HotkeySpec.controlKey | HotkeySpec.optionKey)
@@ -45,17 +48,35 @@ final class HotkeyConfigTests: XCTestCase {
     func testPartialUpdateKeepsOthers() throws {
         let c = try HotkeyConfig.defaults.applying(["talk": "cmd+alt+t"])
         XCTAssertEqual(c.json["talk"], "alt+cmd+t")
-        XCTAssertEqual(c.json["mic-toggle"], "ctrl+alt+m")
+        XCTAssertEqual(c.json["mic-toggle"], "ctrl+`")
         let off = try c.applying(["mode-toggle": "none"])
         XCTAssertNil(off.bindings[.modeToggle])
         XCTAssertEqual(off.json["mode-toggle"], "none")
     }
 
     func testDuplicateAndUnknownActionRefused() {
-        XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["talk": "alt+ctrl+m"])) { XCTAssertEqual($0 as? HotkeyError, .duplicate("ctrl+alt+m")) }
+        XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["talk": "ctrl+grave"])) { XCTAssertEqual($0 as? HotkeyError, .duplicate("ctrl+`")) }
         XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["shout": "ctrl+alt+s"])) { XCTAssertEqual($0 as? HotkeyError, .unknownAction("shout")) }
         // swapping two bindings in one update is fine
-        XCTAssertNoThrow(try HotkeyConfig.defaults.applying(["mic-toggle": "ctrl+alt+a", "mode-toggle": "ctrl+alt+m"]))
+        XCTAssertNoThrow(try HotkeyConfig.defaults.applying(["mic-toggle": "ctrl+alt+a", "mode-toggle": "ctrl+`"]))
+    }
+
+    // TD-2026-10-21-514: the grave key, bare only by opt-in and only for mic-toggle; send-now is Carbon id 6
+    func testGraveAndBareOptIn() throws {
+        XCTAssertEqual(try HotkeySpec.parse("ctrl+backtick")?.canonical, "ctrl+`")
+        XCTAssertEqual(try HotkeySpec.parse("ctrl+grave")?.keyCode, 0x32)
+        XCTAssertThrowsError(try HotkeySpec.parse("`")) { XCTAssertEqual($0 as? HotkeyError, .needsModifier("`")) }
+        XCTAssertEqual(try HotkeySpec.parse("grave", allowBare: true)?.canonical, "`")
+        XCTAssertThrowsError(try HotkeySpec.parse("a", allowBare: true)) { XCTAssertEqual($0 as? HotkeyError, .needsModifier("a")) }
+        XCTAssertThrowsError(try HotkeySpec.parse("shift+`", allowBare: true)) { XCTAssertEqual($0 as? HotkeyError, .needsModifier("shift+`")) }
+        // bare grave for mic-toggle only, and only with allowBare
+        XCTAssertEqual(try HotkeyConfig.defaults.applying(["mic-toggle": "`"], allowBare: true).json["mic-toggle"], "`")
+        XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["mic-toggle": "`"]))
+        XCTAssertThrowsError(try HotkeyConfig.defaults.applying(["talk": "`"], allowBare: true))
+        // F-keys stay bare-capable for mic-toggle
+        XCTAssertEqual(try HotkeyConfig.defaults.applying(["mic-toggle": "f9"]).json["mic-toggle"], "f9")
+        XCTAssertEqual(HotkeyAction.sendNow.carbonId, 6)
+        XCTAssertEqual(HotkeyAction(carbonId: 2), .micToggle)
     }
 
     func testCarbonIds() {

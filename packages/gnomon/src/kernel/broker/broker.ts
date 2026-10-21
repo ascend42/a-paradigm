@@ -95,6 +95,24 @@ export function fail(code: RefusalCode, reason: string, message: string, data?: 
   return new RefusedError(refuse({ code, ...(gate ? { gate } : {}), data: { ...rest, reason } }), `#approval-broker: ${message}`);
 }
 
+/** Decisions that narrow (a voice deny is unchanged by the voice-origin rule). */
+const VOICE_ORIGIN_NARROWING: readonly string[] = Object.freeze(['deny', 'reject', 'withdraw']);
+
+/**
+ * TD-2026-10-21-514 (^voice-origin-clamp, G-VOX-19): approving BY VOICE a card raised during a voice-origin turn
+ * (detail.origin 'voice') needs a logged readback AND confirm (voice.readbackHash + voice.confirmHash). Returns the
+ * refusal, or null when the rule does not apply or is met. Deny-direction decisions are unchanged. The reason is the
+ * reserved `voice-readback-missing` with data.cause 'voice-origin-confirm' (a new reason would move clientApiId).
+ */
+export function voiceOriginConfirmRefusal(detail: unknown, decision: unknown, voice: unknown, cardId?: string): RefusedError | null {
+  const d = detail !== null && typeof detail === 'object' ? (detail as Record<string, unknown>) : null;
+  if (!d || d.origin !== 'voice' || typeof decision !== 'string' || VOICE_ORIGIN_NARROWING.includes(decision)) return null;
+  const v = voice !== null && typeof voice === 'object' ? (voice as Record<string, unknown>) : null;
+  const has = (k: string): boolean => typeof v?.[k] === 'string' && /^sha256:[0-9a-f]{64}$/.test(v[k] as string);
+  if (has('readbackHash') && has('confirmHash')) return null;
+  return fail('FORBIDDEN', 'voice-readback-missing', 'this card was asked during a voice-sent turn: approving it by voice needs a readback and confirm', { gate: 'voice', cause: 'voice-origin-confirm', ...(cardId ? { cardId } : {}) });
+}
+
 /** The voice principal's every approve form before Move 4 (G-ABI-02 voice row): FORBIDDEN gate voice, reason voice-off (§3.1 I4). */
 export function voiceApproveRefusal(): RefusedError {
   return fail('FORBIDDEN', 'voice-off', 'voice approvals are off: no grant.voice-approvals row and no voice arm exist before Move 4 (§14.7)', { gate: 'voice' });
@@ -735,13 +753,24 @@ export class ApprovalBroker {
       return typeof id === 'string' && this.#cards.get(id)?.handOnly === true;
     };
     const voiceHandOnly = (): RefusedError => fail('FORBIDDEN', 'voice-hand-only', 'this card is decided by hand only, never by voice (§14.7: the claude-binary re-pin)', { gate: 'voice' });
-    if (ctx.principalClass === 'voice') throw handOnly() ? voiceHandOnly() : voiceApproveRefusal();
+    // TD-2026-10-21-514: an origin-voice card approved by voice without readback + confirm names its own refusal first
+    const originVoice = (): RefusedError | null => {
+      if (params === null || typeof params !== 'object') return null;
+      const q = params as { cardId?: unknown; decision?: unknown; voice?: unknown };
+      const r0 = typeof q.cardId === 'string' ? this.#cards.get(q.cardId) : undefined;
+      return r0 ? voiceOriginConfirmRefusal(r0.detail, q.decision, q.voice, q.cardId as string) : null;
+    };
+    if (ctx.principalClass === 'voice') throw handOnly() ? voiceHandOnly() : (originVoice() ?? voiceApproveRefusal());
     if (ctx.principalClass !== 'human') throw fail('FORBIDDEN', 'matrix', `approve is human-only; a ${ctx.principalClass} principal never decides a card (B4)`);
     if (params === null || typeof params !== 'object' || Array.isArray(params)) throw fail('BAD_REQUEST', 'bad-params', 'approve takes {cardId, decision, note?, decisionSig}');
     const p = params as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !(APPROVE_KEYS as readonly string[]).includes(k));
     if (extra.length) throw fail('BAD_REQUEST', 'bad-params', `unknown approve params: ${extra.join(', ')}`);
     if ((p.via === 'voice' || 'voice' in p) && handOnly()) throw voiceHandOnly();
+    if (p.via === 'voice' || 'voice' in p) {
+      const ov = originVoice();
+      if (ov) throw ov;
+    }
     if (p.via === 'voice' || 'voice' in p) throw fail('FORBIDDEN', 'voice-off', 'the voice intent form is refused: voice approvals are off (§14.7)', { gate: 'voice' });
     if (p.via === 'link') throw fail('FORBIDDEN', 'peer-via', 'no decision ever arrives over a link (§3.9)', { gate: 'link' });
     if (p.via !== undefined) throw fail('BAD_REQUEST', 'bad-params', 'via is set by the kernel from the connection, not by the caller');

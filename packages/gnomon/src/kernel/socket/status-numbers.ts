@@ -75,6 +75,9 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'voice.dictation.holdToggles': 'gauge', // the voice app's hold-toggle presses on this voice connection (a counter; TD-2026-10-20-262)
   // T-2026-10-19-026: the human's Stop speaking presses since the kernel started (a counter; the voice app acts on a change)
   'voice.stopSpeakingSeq': 'gauge',
+  // TD-2026-10-21-514: the GUI's in-app mic key count (the voice client toggles the mic on a change)
+  'voice.micToggleSeq': 'gauge',
+  'voice.dictation.sendNows': 'gauge', // the voice app's send-now (⌃⌥Return) presses on this voice connection (a counter)
 });
 
 export interface StatusNumberFinding {

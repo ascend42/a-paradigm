@@ -59,6 +59,8 @@ export interface DictationReport {
   activity: DictationActivity;
   /** the hold-toggle hotkey presses this client made (monotone; the GUI holds or releases its send countdown on a change) */
   holdToggles: number;
+  /** TD-2026-10-21-514: send-now hotkey presses (monotone per voice connection; the GUI sends on a change) */
+  sendNows?: number;
   at: string;
 }
 
@@ -71,7 +73,7 @@ export interface PlaybackReport {
 /** T-2026-10-20-005 A1: the client's per-segment capture states and drop reasons (closed; mirrors gnomon-voice). */
 export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
 export type CaptureState = (typeof CAPTURE_STATES)[number];
-export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused', 'mic-off'] as const;
 export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
 export interface CaptureReport {
   state: CaptureState;
@@ -135,6 +137,11 @@ const CAPTURE_GUI_KEYS = [...CAPTURE_STATUS_KEYS, 'text'];
  * voice, read token) gets the capture without them. Every other unknown field is dropped too (an allow-list).
  */
 export function voiceStatusFor(voice: Record<string, unknown>, credential: string | undefined, cls?: string): Record<string, unknown> {
+  // TD-2026-10-21-514: the held send word reaches the human class only
+  if (cls !== 'human' && 'sendWord' in voice) {
+    const { sendWord: _hidden, ...rest } = voice;
+    voice = rest;
+  }
   const c = voice.capture as Record<string, unknown> | null | undefined;
   if (!c || typeof c !== 'object') return voice;
   const allowed = cls === 'human' && credential === 'gui' ? CAPTURE_GUI_KEYS : CAPTURE_STATUS_KEYS;
@@ -197,6 +204,8 @@ export class VoiceReports {
   #enrolment: EnrolmentReport | null = null;
   #notice: { text: string; code?: string; at: string } | null = null;
   #dictation: DictationReport | null = null;
+  /** TD-2026-10-21-514: the mic state the human wants (null = never reported; the client restores it at start) */
+  #micWanted: boolean | null = null;
   #playback: PlaybackReport | null = null;
   #capture: CaptureReport | null = null;
   #prints: PrintsReport | null = null;
@@ -212,6 +221,11 @@ export class VoiceReports {
   #localDrops = new Map<string, number>();
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
   #dictationConn: string | undefined;
+  /** Aegis M-5: the last send-now press the voice app reported (kernel clock), and its count */
+  #sendNowPress: { n: number; at: number } | null = null;
+  sendNowPress(): { n: number; at: number } | null {
+    return this.#sendNowPress;
+  }
   readonly #now: () => number;
 
   constructor(now: () => number = Date.now) {
@@ -246,12 +260,19 @@ export class VoiceReports {
     let dictation: DictationReport | undefined;
     if (o.dictation !== undefined) {
       const d = o.dictation as Record<string, unknown> | null;
-      if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => k !== 'activity' && k !== 'holdToggles')) throw bad('dictation is {activity, holdToggles}');
+      if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => k !== 'activity' && k !== 'holdToggles' && k !== 'sendNows' && k !== 'micWanted')) throw bad('dictation is {activity, holdToggles, sendNows?, micWanted?}');
+      if (d.sendNows !== undefined && (typeof d.sendNows !== 'number' || !Number.isSafeInteger(d.sendNows) || d.sendNows < 0)) throw bad('dictation.sendNows is a non-negative integer');
+      if (d.micWanted !== undefined && typeof d.micWanted !== 'boolean') throw bad('dictation.micWanted is a boolean');
+      // TD-2026-10-21-514: the kernel holds micWanted across client restarts (no TTL: a state, not an edge)
+      if (typeof d.micWanted === 'boolean') this.#micWanted = d.micWanted;
       if (!(DICTATION_ACTIVITY as readonly unknown[]).includes(d.activity)) throw bad(`dictation.activity is ${DICTATION_ACTIVITY.join(' | ')}`);
       if (typeof d.holdToggles !== 'number' || !Number.isSafeInteger(d.holdToggles) || d.holdToggles < 0) throw bad('dictation.holdToggles is a non-negative integer');
       const sameConn = this.#dictationConn === connId;
       if (this.#dictation && sameConn && d.holdToggles < this.#dictation.holdToggles) throw bad(`dictation.holdToggles is monotone (was ${this.#dictation.holdToggles})`);
-      dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, at };
+      if (this.#dictation && sameConn && typeof d.sendNows === 'number' && d.sendNows < (this.#dictation.sendNows ?? 0)) throw bad(`dictation.sendNows is monotone (was ${this.#dictation.sendNows})`);
+      dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, ...(typeof d.sendNows === 'number' ? { sendNows: d.sendNows } : {}), at };
+      // Aegis M-5: a raised count is a press (a new connection's first report is only its baseline)
+      if (typeof d.sendNows === 'number' && this.#dictation && sameConn && d.sendNows > (this.#dictation.sendNows ?? 0)) this.#sendNowPress = { n: d.sendNows, at: Date.now() };
     }
     let playback: PlaybackReport | undefined;
     if (o.playback !== undefined) {
@@ -365,6 +386,19 @@ export class VoiceReports {
   }
 
   /** request.voice.client{op:'stop-speaking'} (human only): one more stop for the client to act on. */
+  /** TD-2026-10-21-514: the GUI's in-app ` (mic on/off) bumps a count the voice client watches, like ⏹. */
+  #micToggleSeq = 0;
+  micToggle(): { micToggleSeq: number } {
+    this.#micToggleSeq++;
+    return { micToggleSeq: this.#micToggleSeq };
+  }
+  /** TD-2026-10-21-514: the Mic key switch: bare ` global (opt-in) or ⌃` (default); the client re-binds on a change */
+  #micKeyBare = false;
+  micKey(bare: boolean): { micKeyBare: boolean } {
+    this.#micKeyBare = bare;
+    return { micKeyBare: bare };
+  }
+
   stopSpeaking(): { stopSpeakingSeq: number } {
     this.#stopSpeakingSeq++;
     return { stopSpeakingSeq: this.#stopSpeakingSeq };
@@ -376,9 +410,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare };
   }
 }
 

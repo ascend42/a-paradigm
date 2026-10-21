@@ -230,6 +230,11 @@ export class SpawnedAudioIO implements AudioIO {
   }
 
   /** One command → its one reply; rejects with AudioIOError on ok:false (e.g. mic-denied, hotkey-taken). */
+  /** TD-2026-10-21-514: the Mic key switch re-binds mic-toggle (bare ` only with allowBare). */
+  async setHotkeys(bindings: Record<string, string>, allowBare: boolean): Promise<void> {
+    await this.command('hotkeys.set', { bindings, allowBare });
+  }
+
   command(op: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     const id = `c${this.#nextId++}`;
     return new Promise((resolve, reject) => {
@@ -300,7 +305,11 @@ export class SpawnedAudioIO implements AudioIO {
         // talk → push-to-talk; mic-toggle (⌃⌥M) / mode-toggle (⌃⌥A) / hold-toggle (⌃⌥H, dictation) / stop-speaking (⌃⌥.)
         // → local controls, on key down only
         if (m.action === 'talk') this.#ev.emit('hotkey', m.phase === 'down', at);
-        else if ((m.action === 'mic-toggle' || m.action === 'mode-toggle' || m.action === 'hold-toggle' || m.action === 'stop-speaking') && m.phase === 'down') this.#ev.emit('control', m.action, at);
+        else if ((m.action === 'mic-toggle' || m.action === 'mode-toggle' || m.action === 'hold-toggle' || m.action === 'stop-speaking' || m.action === 'send-now') && m.phase === 'down') this.#ev.emit('control', m.action, at);
+        break;
+      case 'system':
+        // TD-2026-10-21-514: screen lock, sleep or user switch ⇒ the mic turns off (a forced mic-off control)
+        this.#ev.emit('control', 'mic-off', at);
         break;
       case 'playback.start':
         if (this.#pending && this.#pending.t0 === undefined) this.#pending.t0 = typeof m.audibleAtUs === 'number' ? this.#wall(m.audibleAtUs) : at;

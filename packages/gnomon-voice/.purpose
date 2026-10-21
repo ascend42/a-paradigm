@@ -13,6 +13,13 @@ description: >-
 components:
   gnomon-voice:
     description: >-
+      TD-2026-10-21-514 (short words by adjacency, src/send-word.ts): the
+      client reads the kernel-held <home>/voice/send-word.json (stat cached,
+      canonical via #send-word-matcher, a broken file holds no word); a
+      segment under 1500 ms from an unknown speaker that IS the send word is
+      appended for the last verified, accepted (draft) speaker with
+      speakerBasis 'adjacent' and the canonical word as text; the kernel
+      re-checks every condition (test/send-word-adjacency.test.ts).
       The voice client core in Node, @a-company/gnomon-voice (spec §14, slice
       V2c, TD-2026-10-19-298, T-2026-10-19-026). V2e: the kernel spawns it
       as `gnomon-voice run --fd 3 --home H --io P`; fd 3 is a socketpair
@@ -132,6 +139,15 @@ components:
     flows: [$voice-turn]
   gnomon-voice-io:
     description: >-
+      TD-2026-10-21-514 mic key: mic-toggle (Carbon id 2) defaults to ctrl+`
+      (kVK_ANSI_Grave 0x32; grave / backtick synonyms); a bare ` only via
+      hotkeys.set{allowBare:true} and only for mic-toggle (F-keys stay
+      bare-capable); send-now (Carbon id 6, default ctrl+alt+return, a hand
+      origin) is counted by the client as dictation.sendNows; a `system`
+      event (screen lock, system or display sleep, user switch) turns the mic
+      off. The client discards in-flight audio on mic off (capture drop
+      mic-off, a mic epoch) and reports dictation.micWanted, which the kernel
+      holds (status.voice.micWanted) and the client restores at start.
       Hotkeys talk, mic-toggle, mode-toggle, hold-toggle (carbonId 4,
       default ctrl+alt+h, TD-2026-10-20-262 dictation hold) and stop-speaking
       (carbonId 5, default ctrl+alt+. — the period key, kVK_ANSI_Period 0x2F,

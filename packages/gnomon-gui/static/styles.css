@@ -965,3 +965,14 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .field[aria-invalid="true"] { border-color: var(--fail-edge); }
 .workshop-install-result { margin-left: 8px; }
 .key[aria-busy="true"] { cursor: progress; }
+
+/* TD-2026-10-21-514: the send-word suggestions */
+.sendword-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+
+/* TD-2026-10-21-514: sent-by label and the clamp chip */
+.who .sent-by { margin-left: 6px; opacity: .7; font-size: .9em; }
+.who .sent-by.asks-first { opacity: .9; }
+.clamp-chip { margin-left: 8px; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: .85em; }
+
+/* privacy: the bare-key mic is live */
+#voice-pill.mic-live { outline: 1px solid currentColor; }

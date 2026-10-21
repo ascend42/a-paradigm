@@ -48,6 +48,7 @@
  * kernel stores no text for spk:unknown-N under V2a) and nothing is sent. No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
+import { isSendWord, SEND_WORD_SHORT_MS, type SendWord } from '@a-company/gnomon-contracts';
 import { kernelSpeakable, sentences } from './speakable.js';
 import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
@@ -63,7 +64,7 @@ export type DictationActivity = 'speaking' | 'transcribing' | 'idle';
 export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
 export type CaptureState = (typeof CAPTURE_STATES)[number];
 /** Why a segment was not captured (status.voice.capture.reason). Closed; the kernel refuses any other value. */
-export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused', 'mic-off'] as const;
 export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
 /** voice drops fix: on reason 'refused', the kernel's verdict (a voice-* refusal reason) and its V2a cause */
 export interface CaptureRefusal {
@@ -217,6 +218,13 @@ export interface VoiceClientOptions {
   delivery?: Delivery;
   /** B1 live words (default on when the STT engine has transcribeWords) */
   partials?: boolean;
+  /**
+   * TD-2026-10-21-514 capture kind: 'toggle' = the mic key turns ambient capture on and off, and the mic STARTS OFF
+   * unless the kernel holds micWanted:true (unknown ⇒ off). 'ptt' / 'open' (default) keep the mic on at start.
+   */
+  capture?: 'ptt' | 'open' | 'toggle';
+  /** TD-2026-10-21-514: the held send word (run.ts: <home>/voice/send-word.json); absent ⇒ no adjacency */
+  sendWord?: () => SendWord | null;
 }
 
 /** The one notice for a print from an older speaker front end (it is ignored until the speaker enrols again). */
@@ -284,6 +292,8 @@ export class VoiceClient {
   #work: Promise<void> = Promise.resolve();
   #turnN = 0;
   #lastTurnMs = 0;
+  /** TD-2026-10-21-514: the last enrolled speaker whose turn the kernel accepted (the draft speaker for adjacency) */
+  #draftSpeaker: string | null = null;
   #agentN = 0;
   #lastAgentMs = 0;
   #closed = false;
@@ -293,6 +303,10 @@ export class VoiceClient {
   readonly #delivery: Delivery;
   #activity: DictationActivity = 'idle';
   #holdToggles = 0;
+  /** TD-2026-10-21-514: send-now hotkey presses (⌃⌥Return; the GUI sends its draft on a change: a hand origin) */
+  #sendNows = 0;
+  /** bumped on every mic off: a segment captured under an older epoch is discarded (in-flight audio) */
+  #micEpoch = 0;
   /** the stale-print names last reported (JSON; null before the first report) */
   #staleReported: string | null = null;
   #staleNoticed = false;
@@ -344,6 +358,14 @@ export class VoiceClient {
   }
 
   /** ⌃⌥H: one more hold toggle, reported to the kernel (status.voice.dictation.holdToggles; the GUI acts on a change). */
+  /** ⌃⌥Return send-now: counted and reported like holdToggles; the GUI sends the composer draft (hand origin). */
+  sendNow(): number {
+    this.#sendNows++;
+    this.#flow.info('send now', { sendNows: this.#sendNows });
+    this.#report();
+    return this.#sendNows;
+  }
+
   holdToggle(): number {
     this.#holdToggles++;
     this.#flow.info('hold toggled', { holdToggles: this.#holdToggles });
@@ -579,7 +601,7 @@ export class VoiceClient {
 
   /** request.voice.report{dictation}, serialized so holdToggles reaches the kernel in order (monotone). */
   #report(): void {
-    const dictation = { activity: this.#activity, holdToggles: this.#holdToggles };
+    const dictation = { activity: this.#activity, holdToggles: this.#holdToggles, sendNows: this.#sendNows, micWanted: this.#o.audio.micOn };
     this.#reports = this.#reports.then(async () => {
       try {
         await this.#o.link.append('request.voice.report', { dictation });
@@ -622,9 +644,14 @@ export class VoiceClient {
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
       a.on('level', (db) => this.#onLevel(db)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
-      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
+      a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'mic-off' ? this.setMicWanted(false) : action === 'send-now' ? this.sendNow() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
+    // toggle capture starts off (no report: the kernel's micWanted, read below, may turn it back on)
+    if (this.#o.capture === 'toggle' && a.micOn) {
+      this.#micEpoch++;
+      await a.setMic(false).catch(() => undefined);
+    }
     await this.#reportPrints();
     // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
     const tts = this.#o.engines.tts;
@@ -653,7 +680,12 @@ export class VoiceClient {
     this.#refreshed = true;
     const prev = this.#attachment;
     this.#attachment = next;
-    if (!readFailed) this.#checkStopSeq();
+    if (!readFailed) {
+      this.#checkStopSeq();
+      this.#restoreMic();
+      this.#checkMicSeq();
+      void this.#applyMicKey();
+    }
     // a detach (a SUCCESSFUL read with no or another attachment) stops speech; a failed read never does
     if (changed && prev && !readFailed) this.stopSpeaking('detach');
     // the same attachment whose follow ended (the kernel ends voice readers on any attachment change): follow again
@@ -692,6 +724,45 @@ export class VoiceClient {
     } finally {
       this.#following = false;
     }
+  }
+
+  /** TD-2026-10-21-514: the GUI's in-app ` shows up as a changed status count: toggle the mic. */
+  #micSeq: number | null = null;
+  #checkMicSeq(): void {
+    const seq = this.#o.link.micToggleSeq?.() ?? null;
+    if (seq === null) return;
+    const before = this.#micSeq;
+    this.#micSeq = seq;
+    if (before !== null && seq !== before) void this.toggleMic();
+  }
+
+  /** The Mic key switch: bare ` (opt-in) or ⌃` for mic-toggle, re-bound on gnomon-voice-io when it changes. */
+  #micKeyApplied: boolean | null = null;
+  async #applyMicKey(): Promise<void> {
+    const bare = this.#o.link.micKeyBare?.() ?? null;
+    if (bare === null || bare === this.#micKeyApplied || !this.#o.audio.setHotkeys) return;
+    this.#micKeyApplied = bare;
+    try {
+      await this.#o.audio.setHotkeys({ 'mic-toggle': bare ? '`' : 'ctrl+`' }, bare);
+      if (bare) this.#notice('info', 'While Gnomon voice runs, ` will not type in any app.');
+    } catch (err) {
+      this.#micKeyApplied = null;
+      this.#notice('warn', `The mic key was not changed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** TD-2026-10-21-514: once per client, a kernel-held micWanted:false keeps the mic off across a restart. */
+  #micRestored = false;
+  #restoreMic(): void {
+    if (this.#micRestored) return;
+    const w = this.#o.link.micWanted?.() ?? null;
+    if (w === null) {
+      if (this.#o.capture === 'toggle') this.#micRestored = true; // unknown ⇒ toggle capture stays off
+      return;
+    }
+    this.#micRestored = true;
+    if (w === false && this.#o.audio.micOn) void this.setMicWanted(false);
+    if (w === true && !this.#o.audio.micOn && this.#o.capture === 'toggle') void this.setMicWanted(true);
   }
 
   /** The human's ⏹ (GUI button / Esc → request.voice.client{op:'stop-speaking'}) shows up as a changed status count. */
@@ -736,7 +807,17 @@ export class VoiceClient {
    * kernel: the attachment and its ceiling are the human's.
    */
   async toggleMic(): Promise<boolean> {
-    const on = !this.#o.audio.micOn;
+    return this.setMicWanted(!this.#o.audio.micOn);
+  }
+
+  /**
+   * TD-2026-10-21-514: the mic on or off. Off tears capture down and DISCARDS in-flight audio (an open segment ends
+   * dropped 'mic-off'); the wanted state is reported to the kernel (request.voice.report{dictation.micWanted}), which
+   * holds it across client restarts (status.voice.micWanted; restored at start).
+   */
+  async setMicWanted(on: boolean): Promise<boolean> {
+    if (on === this.#o.audio.micOn) return on;
+    if (!on) this.#micEpoch++; // first, so a segment already in the STT is discarded too
     try {
       await this.#o.audio.setMic(on);
     } catch (err) {
@@ -747,9 +828,14 @@ export class VoiceClient {
       this.#pttHeld = false;
       this.#pttFrames = [];
       this.#o.engines.vad.reset();
+      // in-flight audio is discarded: an open (hearing) segment ends dropped mic-off, its audio and words with it
+      const seg = this.#cap?.state === 'hearing' ? this.#cap.segId : this.#live?.segId;
+      if (seg !== undefined) this.#endCapture(seg, 'dropped', 'mic-off');
+      this.#live = null;
     }
     this.#flow.info('mic toggled', { on });
-    const said = on ? 'Mic on.' : 'Mic off. Press ⌃⌥M to turn it back on.';
+    this.#report();
+    const said = on ? 'Mic on.' : 'Mic off · ⌃` to listen';
     this.#notice('info', said);
     await this.relayNotice(said, on ? 'mic-on' : 'mic-off');
     return on;
@@ -965,8 +1051,9 @@ export class VoiceClient {
     };
     this.#pending++;
     this.#recompute();
+    const epoch = this.#micEpoch; // TD-2026-10-21-514: a mic-off while this segment is in flight discards it
     this.#work = this.#work
-      .then(() => this.#utterance(seg, a, mode as 'ptt' | 'ambient', end))
+      .then(() => (this.#micEpoch !== epoch ? end('dropped', 'mic-off') : this.#utterance(seg, a, mode as 'ptt' | 'ambient', end, epoch)))
       .catch((err) => {
         this.#log.warn('utterance failed', { error: err instanceof Error ? err.message : String(err) });
         end('dropped', 'no-words'); // the STT or the verifier failed: no words came out of it
@@ -978,7 +1065,7 @@ export class VoiceClient {
       });
   }
 
-  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason, why?: CaptureRefusal) => void): Promise<void> {
+  async #utterance(seg: VadSegment, a: VoiceAttachment, mode: 'ptt' | 'ambient', end: (state: 'captured' | 'dropped', reason?: CaptureDropReason, why?: CaptureRefusal) => void, epoch = this.#micEpoch): Promise<void> {
     // the final transcript is always the FULL-segment decode (never the live words)
     this.#sttBusy++;
     let text: string;
@@ -988,13 +1075,19 @@ export class VoiceClient {
       this.#sttBusy--;
     }
     if (!text) return end('dropped', 'no-words');
+    if (this.#micEpoch !== epoch) return end('dropped', 'mic-off'); // the mic went off during the STT: discarded
     const who = await this.#verifier.identify(seg.samples, seg.sampleRate);
     // the stale list is re-read after every identify (reported only when it changed)
     const stale = await this.#reportPrints();
     // the samples are not kept past this point (G-VOX-05)
     if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return end('dropped', 'not-attached'); // attachment moved under us
-    const enrolled = who.name !== undefined;
-    const speakerId = enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
+    // TD-2026-10-21-514 short words by adjacency: a segment too short to verify (an unknown speaker, never one
+    // attributed to someone else) that IS the send word goes to the draft speaker; the kernel re-checks all of it
+    const word = this.#o.sendWord?.() ?? null;
+    const adjacent = who.name === undefined && this.#draftSpeaker !== null && seg.t1 - seg.t0 < SEND_WORD_SHORT_MS && isSendWord(text, word);
+    if (adjacent) text = word!.text;
+    const enrolled = who.name !== undefined || adjacent;
+    const speakerId = adjacent ? this.#draftSpeaker! : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
     const turnId = turnStamp('u', ms, ++this.#turnN);
@@ -1007,7 +1100,7 @@ export class VoiceClient {
     // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
     const gatedMs = gatedSpeechMsOf(who.speechMs);
     const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...calib };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
     let verdict: AppendResult;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
@@ -1028,6 +1121,7 @@ export class VoiceClient {
       // so the kernel's local-drop tally never counts a kernel refusal as a client-local drop
       return end('dropped', verdict.refused === 'voice-speaker' ? 'not-enrolled' : 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
     }
+    if (!adjacent) this.#draftSpeaker = speakerId; // a verified, accepted turn: its speaker is the draft speaker
     if (!direct) {
       this.#flow.info('turn dictated (composer)', { turnId });
       return end('captured');

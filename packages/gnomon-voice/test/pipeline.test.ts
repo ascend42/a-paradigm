@@ -404,6 +404,17 @@ describe('capture states (T-2026-10-20-005 A1, TD-2026-10-20-086)', () => {
     expect(gatedSpeechMsOf(undefined)).toBeUndefined();
   });
 
+  it('TD-2026-10-21-514: turning the mic off discards the open segment (dropped mic-off)', async () => {
+    const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', texts: ['never sent'] });
+    audio.captureWav(toneWav(600, 0.5));
+    audio.silence(400);
+    await client.toggleMic(); // before the queued utterance runs: its audio is discarded
+    audio.silence(400);
+    await client.idle();
+    expect(dropReasons(link)).toContain('mic-off');
+    expect(link.appends.filter((x) => x.kind === 'voice.turn.user')).toEqual([]); // only the mic-state report was appended
+  });
+
   it('every reason of the closed enum is emitted by some drop site', () => {
     expect([...seen].sort()).toEqual([...CAPTURE_DROP_REASONS].sort());
   });

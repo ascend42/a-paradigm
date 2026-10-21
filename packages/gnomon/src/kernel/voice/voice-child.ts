@@ -82,8 +82,12 @@ export function voiceChildEnv(source: NodeJS.ProcessEnv, home: string): NodeJS.P
   return env;
 }
 
-export function voiceChildArgs(entry: string, home: string, ioBinary: string): string[] {
-  return [DISABLE_SIGUSR1, entry, 'run', '--fd', '3', '--home', home, '--io', ioBinary];
+/** TD-2026-10-21-514: the capture kinds the human may start the client with (gnomon-voice run --capture) */
+export const VOICE_CAPTURE_KINDS = ['ptt', 'open', 'toggle'] as const;
+export type VoiceCaptureKind = (typeof VOICE_CAPTURE_KINDS)[number];
+
+export function voiceChildArgs(entry: string, home: string, ioBinary: string, capture: VoiceCaptureKind | null = null): string[] {
+  return [DISABLE_SIGUSR1, entry, 'run', '--fd', '3', '--home', home, '--io', ioBinary, ...(capture ? ['--capture', capture] : [])];
 }
 
 export const VOICE_BACKOFF_MIN_MS = 1_000;
@@ -145,8 +149,22 @@ export class VoiceChildSupervisor {
     };
   }
 
-  /** A human start (or an auto-start on attach): keep the client up. Idempotent. */
-  start(): Promise<VoiceChildStatus> {
+  /** TD-2026-10-21-514: the capture kind the next spawn runs with (null = the client's default) */
+  #capture: VoiceCaptureKind | null = null;
+
+  /**
+   * A human start (or an auto-start on attach): keep the client up. Idempotent. A start naming ANOTHER capture kind
+   * restarts a running client with it (the GUI's preset / Mic key toggle choice).
+   */
+  async start(capture?: VoiceCaptureKind): Promise<VoiceChildStatus> {
+    if (capture !== undefined && capture !== this.#capture) {
+      this.#capture = capture;
+      if (this.#child || this.#starting) await this.stop();
+    }
+    return this.#startNow();
+  }
+
+  #startNow(): Promise<VoiceChildStatus> {
     if (this.#closed) return Promise.resolve(this.status());
     if (this.#o.clientEntry === null) {
       this.#lastError = this.#o.unavailableReason ?? 'the voice client is not installed';
@@ -207,7 +225,7 @@ export class VoiceChildSupervisor {
     this.#devUnsigned = prepared.devUnsigned;
     if (!this.#wanted || this.#closed) return void this.#set('stopped');
     this.#set('starting');
-    const child = this.#o.spawn(this.#o.execPath ?? process.execPath, voiceChildArgs(prepared.clientEntry ?? this.#o.clientEntry!, this.#o.home, prepared.ioBinary), {
+    const child = this.#o.spawn(this.#o.execPath ?? process.execPath, voiceChildArgs(prepared.clientEntry ?? this.#o.clientEntry!, this.#o.home, prepared.ioBinary, this.#capture), {
       stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
       env: voiceChildEnv(this.#o.sourceEnv ?? process.env, this.#o.home),
       cwd: this.#o.home,

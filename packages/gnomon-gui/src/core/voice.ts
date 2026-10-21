@@ -157,7 +157,7 @@ export function planVoice(v: VoiceView, to: VoiceState, hsid: string | null, pre
   return { kind: 'free' };
 }
 
-export type VoiceRequest = { kind: 'voice.session.start'; payload: { hsid: string; mode: 'ptt' | 'conversation'; continues?: string } } | { kind: 'voice.session.end'; payload: { voiceSessionId?: string } };
+export type VoiceRequest = { kind: 'voice.session.start'; payload: { hsid: string; mode: 'ptt' | 'conversation'; continues?: string; send?: 'word' | 'pieces'; liabilityAck?: string } } | { kind: 'voice.session.end'; payload: { voiceSessionId?: string } };
 
 /** The `log.append` params of a voice choice (null: Off with nothing attached). A switch on the same session continues its voice session. */
 export function voiceRequest(v: VoiceView, to: VoiceState, hsid: string | null): VoiceRequest | null {

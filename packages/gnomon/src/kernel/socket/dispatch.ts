@@ -321,12 +321,13 @@ export interface DispatcherOptions {
 }
 
 /** What the dispatcher needs of #gnomon-voice (voice/voice-control.ts VoiceControl). */
-export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'>;
+export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'> & Partial<Pick<VoiceControl, 'claimSend'>>;
 
 /** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
 /** V2e: the kernel-spawned voice client, started and stopped only by the human (request.voice.client{op}). */
 export interface VoiceClientPort {
-  start(): Promise<unknown>;
+  /** TD-2026-10-21-514: an optional capture kind (ptt | open | toggle) the client is (re)started with */
+  start(capture?: 'ptt' | 'open' | 'toggle'): Promise<unknown>;
   stop(): Promise<unknown>;
   connectionClosed(connId: string): void;
   /**
@@ -338,6 +339,14 @@ export interface VoiceClientPort {
   forget?(payload: { name: string }): Promise<unknown>;
   /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
   stopSpeaking?(): unknown;
+  /** TD-2026-10-21-514: request.voice.client{op:'mic-toggle'} (the GUI's in-app `) and {op:'mic-key', bare} (the Mic key switch) */
+  micToggle?(): unknown;
+  micKey?(bare: boolean): unknown;
+  /**
+   * TD-2026-10-21-514: request.voice.sendword{op:'start', word, variants?} | {op:'clear'} (human only, never a row): the
+   * daemon validates, persists ~/.gnomon/voice/send-word.json (0600) and hands the word to #gnomon-voice to hold.
+   */
+  sendWord?(payload: unknown): Promise<unknown>;
   /** V2e: request.voice.report{enrolment?, notice?, dictation?, playback?, capture?, prints?} (voice principal only; relayed in status.voice, never logged; connId = the reporting connection). */
   report?(payload: unknown, connId?: string): unknown;
 }
@@ -352,6 +361,9 @@ export const VOICE_REPORT_REQUEST = 'request.voice.report' as const;
  * is served here and never written as a row (it is not in the §9.1 registry, so no contract id moves).
  */
 export const VOICE_CLIENT_REQUEST = 'request.voice.client' as const;
+/** TD-2026-10-21-514: the GUI's send claim and the held send word (dispatcher-only, never rows; no id moves). */
+export const VOICE_SEND_CLAIM_REQUEST = 'request.voice.send.claim' as const;
+export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
 
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
@@ -870,7 +882,15 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         const op = (pa.payload as { op?: unknown } | null | undefined)?.op;
         const stopSpeaking = o.voiceClient.stopSpeaking;
-        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'}}`);
+        const vcp = (pa.payload ?? {}) as Record<string, unknown>;
+        // TD-2026-10-21-514: the in-app mic key and the Mic key switch (the human's own gestures; no card: a bare key is a local binding)
+        if (op === 'start' && Object.keys(vcp).length === 2 && !extra.length) {
+          if (vcp.capture !== 'ptt' && vcp.capture !== 'open' && vcp.capture !== 'toggle') throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start', capture?: 'ptt'|'open'|'toggle'}}`);
+          return { voiceClient: await o.voiceClient.start(vcp.capture) };
+        }
+        if (op === 'mic-toggle' && o.voiceClient.micToggle && Object.keys(vcp).length === 1 && !extra.length) return { voiceClient: o.voiceClient.micToggle() };
+        if (op === 'mic-key' && o.voiceClient.micKey && Object.keys(vcp).length === 2 && typeof vcp.bare === 'boolean' && !extra.length) return { voiceClient: o.voiceClient.micKey(vcp.bare) };
+        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'|'mic-toggle'} | {op:'mic-key', bare}}`);
         // T-2026-10-19-026: ⏹ Stop speaking narrows (silences the voice app) ⇒ no card, no presence
         if (op === 'stop-speaking') return { voiceClient: stopSpeaking!.call(o.voiceClient) };
         return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };
@@ -882,6 +902,27 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length || !ep || typeof ep !== 'object' || Object.keys(ep).some((k) => k !== 'name' && k !== 'consent') || typeof ep.name !== 'string' || typeof ep.consent !== 'string') throw new RpcRefusal('BAD_REQUEST', 'bad-params', shape);
         try {
           return await o.voiceClient.enrol({ connId: s.connId, principal: s.principal }, { name: ep.name, consent: ep.consent }); // {pending, cardId}
+        } catch (err) {
+          if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-21-514 ($send-by-word, $send-by-pieces): the GUI's claim before a voice-origin send (human, first party)
+      if (pa?.kind === VOICE_SEND_CLAIM_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voice?.claimSend) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_SEND_CLAIM_REQUEST}', payload:{hsid, by, turnSeq | turnSeqs}}`);
+        try {
+          return o.voice.claimSend({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-21-514: the human sets or clears the held send word (narrowing or a liability the GUI acknowledged)
+      if (pa?.kind === VOICE_SENDWORD_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.voiceClient?.sendWord) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_SENDWORD_REQUEST}', payload:{op:'start', word, variants?} | {op:'clear'}}`);
+        try {
+          return await o.voiceClient.sendWord(pa.payload);
         } catch (err) {
           if (err instanceof TypeError) throw new RpcRefusal('BAD_REQUEST', 'bad-params', err.message);
           throw asRpcRefusal(err);

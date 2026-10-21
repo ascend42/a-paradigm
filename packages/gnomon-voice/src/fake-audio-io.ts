@@ -113,6 +113,10 @@ export class FakeAudioIO implements AudioIO {
     this.micOn = on;
     this.micOps.push(on);
   }
+  readonly hotkeyOps: Array<{ bindings: Record<string, string>; allowBare: boolean }> = [];
+  async setHotkeys(bindings: Record<string, string>, allowBare: boolean): Promise<void> {
+    this.hotkeyOps.push({ bindings, allowBare });
+  }
   /** Press a control hotkey (mic-toggle / mode-toggle / hold-toggle). */
   control(action: ControlAction): void {
     this.#ev.emit('control', action, this.clock);
