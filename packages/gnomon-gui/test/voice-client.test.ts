@@ -178,11 +178,12 @@ describe('attached: the live state stands and the real voice-app condition is ap
     expect(APP).toMatch(/function syncClientPoll\(\)[\s\S]{0,200}clientPollWanted\([\s\S]{0,300}capturePollMs\([\s\S]{0,200}\?\? CLIENT_POLL_MS\) : null;[\s\S]{0,120}clearInterval\(clientPoll\)[\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), ms\)/);
   });
   it('the page appends the tail to the live pill and shows the tail\'s action', () => {
+    // #gui-voice-ladder: the live rung stands; the voice app's condition is the pill's ONE fact (dashed edge = its trouble)
     const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
-    expect(css).toMatch(/\.voice-pill\.voice-ambient:is\(\.voice-noclient, \.voice-setup, \.voice-crashed, \.voice-unavailable, \.voice-nudge\) \{ color: var\(--warn-ink\); background: var\(--warn-bg\);/);
+    expect(css).toMatch(/\.voice-pill\.voice-trouble \{ border-style: dashed; \}/);
     const fn = APP.slice(APP.indexOf('function paintVoice('), APP.indexOf('function paintCapture('));
-    expect(fn).toContain('const p = pillOf(v, cp.tail);');
-    expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('pillOf(v, cp.tail)'));
+    expect(fn).toContain('clientFact: clientFactOf(cp.label, cp.tail),');
+    expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('voicePillOf('));
     expect(fn).toContain('act.hidden = cp.action === null;');
   });
 });
@@ -214,11 +215,12 @@ describe('start / stop / auto-start send the right appends', () => {
     expect(fn.indexOf("client.call<Record<string, unknown>>('log.append', req)")).toBeGreaterThan(fn.indexOf("clientRequest('start', currentCapture())"));
   });
   it('the page: Start / Stop are trusted gestures from a human connection only; the pill action and menu route to them', () => {
-    const fn = APP.slice(APP.indexOf('async function voiceClientOp('), APP.indexOf('function openEnrol('));
+    const fn = APP.slice(APP.indexOf('async function voiceClientOp('), APP.indexOf('function openEnrolFlow('));
     expect(fn).toMatch(/if \(!trusted\) return;/);
     expect(fn).toMatch(/if \(!canAttach\(status\)\) return notice/);
     expect(fn).toContain("client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op))"); // TD-2026-10-21-514: the start carries the capture kind
-    expect(APP).toContain("void voiceClientOp(id === 'voice.client.stop' ? 'stop' : 'start', e.isTrusted)");
+    // the ladder holds rungs only (#gui-voice-ladder): Start / Stop are the pill's own action, Settings and the palette
+    expect(APP).toContain("else if (id === 'voice.client.start') void voiceClientOp('start', trusted);");
     expect(APP).toContain("if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted)");
   });
   it('palette: voice.client.start / stop / enrol exist and are never block-safe', () => {
@@ -335,7 +337,9 @@ describe('"Teach Gnomon your voice"', () => {
     const forget = APP.slice(APP.indexOf('async function forgetVoice('), APP.indexOf('let toastTimer'));
     expect(forget).toMatch(/if \(!trusted \|\| !client \|\| !canAttach\(status\)\) return;/);
     expect(forget).toContain('forgetRequest(name)');
-    expect(HTML).toContain('id="enrol-dialog"');
+    // the enrolment is inline under "your voice" in the Voice settings sheet (no dialog of its own)
+    expect(HTML).toContain('id="voice-settings"');
+    expect(HTML).not.toContain('id="enrol-dialog"');
     // Aegis L2: the dev-unsigned banner is persistent (an alert repainted from status, never a timed toast)
     expect(HTML).toMatch(/id="voice-dev"[^>]*role="alert"/);
     expect(APP).toContain("$('voice-dev').hidden = dev === null;");
@@ -413,7 +417,7 @@ describe('a voice connection never gets these controls', () => {
     }
   });
   it('the page refuses enrol / start from a non-human connection', () => {
-    expect(APP.slice(APP.indexOf('function openEnrol('), APP.indexOf('function paintEnrol(')).match(/canAttach\(status\)/)).not.toBeNull();
+    expect(APP.slice(APP.indexOf('function openEnrolFlow('), APP.indexOf('function openEnrol(')).match(/canAttach\(status\)/)).not.toBeNull();
     expect(APP.slice(APP.indexOf('async function submitEnrol('), APP.indexOf('async function closeEnrol(')).match(/canAttach\(status\)/)).not.toBeNull();
   });
 });

@@ -324,12 +324,15 @@ describe('dictation: page wiring (read from the source)', () => {
     expect(html).not.toContain('dictation-send');
     expect(app).not.toContain('dictation-send');
     const composer = /<form id="composer"[^]*?<\/form>/.exec(html)![0];
-    expect(composer.match(/<button/g)?.length).toBe(2); // [Hold] (countdown only) and the one send
+    // [Hold] (countdown only), the ⤢ tall-view key (#gui-composer) and the ONE send
+    expect(composer.match(/<button/g)?.length).toBe(3);
+    expect(composer.match(/<button id="composer-tall"[^>]*type="button"/g)?.length).toBe(1);
     expect(composer.match(/type="submit"/g)?.length).toBe(1);
     expect(composer.match(/>\s*send\s*</gi)?.length).toBe(1);
     expect(app).toMatch(/hold\.hidden = controls\.hold === null/);
     expect(html).toMatch(/id="dictation-live"[^>]*aria-live="polite"/);
-    expect(app).toContain('DELAY_CHOICES');
+    // the delay picks moved from the pill menu to the Voice settings sheet's timing row (#gui-voice-settings)
+    expect(readFileSync(path.join(ROOT, 'src', 'ui', 'voice-settings.ts'), 'utf8')).toContain('DELAY_CHOICES');
     expect(app).toContain('DELAY_KEY');
   });
   it('reduced motion shows a text countdown instead of the draining ring', () => {
@@ -396,7 +399,7 @@ describe('composer: one container, not a box inside a box (founder report 2026-1
     expect(rules(/\.composer textarea\.field:focus-visible/).join(';')).toMatch(/outline:\s*none/);
   });
   it('keyboard focus stays visible: the ring moves to the one container, on the shared focus token', () => {
-    expect(rules(/^\.composer:has\(> textarea\.field:focus-visible\)$/).join(';')).toMatch(/outline:\s*2px solid var\(--key-edge\)/);
+    expect(rules(/^\.composer:has\(textarea\.field:focus-visible\)$/).join(';')).toMatch(/outline:\s*2px solid var\(--key-edge\)/);
   });
   it('no theme or state rule gives the composer textarea a border back', () => {
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {

@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
+import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
+import { ladderEntries } from '../src/core/voice-ladder.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
@@ -94,19 +95,11 @@ describe('voice: attach and switch send the right appends', () => {
     expect(planVoice(ptt, 'ambient', A, false)).toEqual({ kind: 'presence' });
     expect(planVoice(ptt, 'ambient', A, true)).toEqual({ kind: 'free' });
     expect(planVoice(voiceStatusOf(off({ ambientConfirmed: true })), 'ambient', A, false)).toEqual({ kind: 'free' });
-    expect(voiceMenuEntries(ptt, A, true, false).find((e) => e.state === 'ambient')?.note).toContain('needs Touch ID');
-    expect(voiceMenuEntries(ptt, A, true, false).find((e) => e.state === 'off')?.note).not.toContain('Touch ID');
   });
   it('a ceiling blocks a louder state with its reason; nothing focused blocks an attach', () => {
     const capped = voiceStatusOf(v2aAttached('ptt', { maxMode: 'ptt' }));
     expect(planVoice(capped, 'ambient', A, true)).toEqual({ kind: 'blocked', reason: 'voice ceiling push-to-talk' });
     expect(planVoice(voiceStatusOf(off()), 'ptt', null, false)).toEqual({ kind: 'blocked', reason: 'no session focused' });
-  });
-  it('the menu offers Off / Push-to-talk / Ambient, marks the current one, and "Attach to <focused>" when another session is focused', () => {
-    const m = voiceMenuEntries(voiceStatusOf(v1Attached('ptt')), B, true, false);
-    expect(m.map((e) => e.label)).toEqual(['Off', 'Push-to-talk', 'Ambient', `Attach to ${B.slice(-10)}`]);
-    expect(m.find((e) => e.state === 'ptt')?.current).toBe(true);
-    expect(voiceMenuEntries(voiceStatusOf(v1Attached('ptt')), A, true, false).some((e) => e.id === 'voice.attach')).toBe(false);
   });
 });
 
@@ -117,15 +110,15 @@ describe('voice: a voice connection is never offered attach controls', () => {
     expect(canAttach({ principalKind: 'agent' })).toBe(false);
     expect(canAttach(null)).toBe(false);
   });
-  it('a non-human connection sees the states but every one disabled, and no Attach entry', () => {
-    const m = voiceMenuEntries(voiceStatusOf({ principalKind: 'voice', voice: { attached: { voiceSessionId: VS, hsid: A, mode: 'ptt' } } }), B, false, false);
+  it('a non-human connection sees the ladder but every rung disabled, with the reason in words', () => {
+    const m = ladderEntries({ rung: 'talk', hotkey: '⌃⌥Space', attachable: false, target: B, ceiling: 'ambient', acked: true, sendWord: null });
     expect(m.every((e) => e.disabled)).toBe(true);
-    expect(m.some((e) => e.id === 'voice.attach')).toBe(false);
+    expect(m.every((e) => e.why === 'only you, from this window, can attach voice')).toBe(true);
   });
   it('voice attaches from the header pill menu only (fidelity 2: no rail row), and setVoice refuses without canAttach', () => {
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
     expect(app).not.toMatch(/voiceRowEl|data-voice-row/);
-    expect(app).toMatch(/voiceMenuEntries\(v, focused, canAttach\(status\), voicePresenceDone\)/);
+    expect(app).toMatch(/ladderEntries\(\{ \.\.\.readiness\(\), rung: rungOf\(v, voicePreset\), hotkey: v\.hotkey, attachable: canAttach\(status\)/);
     expect(app).toMatch(/if \(!canAttach\(status\)\) return notice\('only a human connection attaches voice', true\);/);
   });
 });
@@ -244,7 +237,7 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(html).toContain('id="voice-meter"');
   });
   it('a choice is sent only on a trusted gesture; an ambient presence card is approved allow in the same gesture', () => {
-    expect(app).toMatch(/async function setVoice\(to: VoiceState, hsid: string \| null, trusted: boolean\): Promise<void> \{\s*if \(!trusted\) return;/);
+    expect(app).toMatch(/async function setVoice\(to: VoiceState, hsid: string \| null, trusted: boolean, send: 'word' \| 'pieces' \| null = attachSend\(voicePreset\)\): Promise<void> \{\s*if \(!trusted\) return;/);
     expect(app).toMatch(/client\.call<Record<string, unknown>>\('log\.append', req\);\s*if \(r\.pending === true && typeof r\.cardId === 'string'\) \{[\s\S]{0,200}if \(!isVoiceWidenCard\(store\.cards\.get\(r\.cardId\), hsid\)\) \{\s*focusCard\(r\.cardId\);[\s\S]{0,200}return;[\s\S]{0,300}client\.call\('approve', \{ cardId: r\.cardId, decision: 'allow' \}\)/);
     expect(app).toContain('voicePresenceDone = false; // ambient\'s Touch ID is once per GUI login');
     // an undecided widen card (strictness, detail.op voice.widen) is focused in the stack
@@ -255,29 +248,28 @@ describe('voice: palette, blocks and page wiring', () => {
     // the one timer is V2e's light status poll while the enrol dialog waits on the voice app (syncEnrolPoll), and the dictation tick + ~300 ms status poll while a draft exists (syncDictationTimer, TD-2026-10-20-262), and the ~300 ms status re-read while the voice app speaks (syncSpeakPoll, T-2026-10-19-026), and the 2 s re-read while voice is attached or the app is in a transient phase (syncClientPoll, T-2026-10-20-002)
     expect(app.replace(/function syncEnrolPoll\([\s\S]*?\n\}\n/, '').replace(/function syncDictationTimer\([\s\S]*?\n\}\n/, '').replace(/function syncSpeakPoll\([\s\S]*?\n\}\n/, '').replace(/function syncClientPoll\([\s\S]*?\n\}\n/, '')).not.toMatch(/setInterval\(/);
   });
-  it('contrast and motion: ambient uses the fixture voice-armed pair, the pulse stops under reduced motion', () => {
+  it('contrast and motion: the clamp uses the fixture warning pair, the pulse stops under reduced motion', () => {
     const fx = JSON.parse(readFileSync(path.join(ROOT, '..', '..', 'docs', 'specs', 'gnomon-fixtures', 'contrast.json'), 'utf8'));
     const pair = fx.themes.day.pairs.find((p: { what: string }) => p.what.startsWith('voice-armed'));
     expect(css).toContain(`--warn-ink: ${pair.fg};`);
     expect(css).toContain(`--warn-bg: ${pair.bg};`);
-    expect(css).toMatch(/\.voice-pill\.voice-ambient \{ color: var\(--warn-ink\); background: var\(--warn-bg\);/);
+    // Atelier 2026-10-21 pill: a clamped voice-sent turn is the 2px amber edge with the fact in --warn-ink
+    expect(css).toMatch(/\.voice-pill\.clamp \{ border: 2px solid var\(--warn-edge\);/);
+    expect(css).toMatch(/\.voice-fact\.clamp \{ color: var\(--warn-ink\); \}/);
     expect(css).toContain(`--slate: ${fx.themes.day.text.slate};`);
     expect(css).toContain(`--slate: ${fx.themes.night.text.slate};`);
     expect(css).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}animation: none !important/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
   });
-  it('S1: the live mic is amber and static (amber = armed, vermilion = failure only); push-to-talk never uses slate', () => {
-    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^\.voice-(pill|meter|item|row-btn|choice)/.test(l));
-    const amb = rules.find((l) => l.startsWith('.voice-pill.voice-ambient {'))!;
-    expect(amb).toMatch(/border: 1px solid var\(--warn-edge\);/);
-    expect(rules.find((l) => l.startsWith('.voice-pill.voice-ambient .voice-dot'))).toMatch(/background: var\(--warn-edge\)/);
+  it('the pill (Atelier 2026-10-21): an open mic is a filled --stamp dot with a soft ring, static; amber only for the clamp, vermilion only for speech not sent', () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /^\.voice-(pill|meter|fact|dot)/.test(l));
+    expect(rules.find((l) => l.startsWith('.voice-pill.live .voice-dot'))).toMatch(/background: var\(--stamp\); border-color: var\(--stamp\); box-shadow: 0 0 0 3px/);
     for (const l of rules) {
-      expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring/);
-      if (/voice-ptt|voice-nudge/.test(l)) expect(l, l).not.toMatch(/slate/);
-      if (/voice-ambient/.test(l) && !/voice-crashed \{/.test(l)) expect(l, l).not.toMatch(/--fail/);
+      expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring|slate/);
+      if (/--warn-/.test(l)) expect(l, l).toMatch(/clamp/);
+      if (/--fail/.test(l)) expect(l, l).toMatch(/^\.voice-fact\.fail \{/);
     }
-    expect(css).toMatch(/\.voice-pill\.voice-crashed \{ color: var\(--fail\); border-color: var\(--fail-edge\);/); // a failure keeps vermilion
-    expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--warn-edge\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level
+    expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--stamp\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level
     expect(css).not.toMatch(/@keyframes voice-(pulse|ring|meter)/);
   });
 });

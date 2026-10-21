@@ -61,7 +61,8 @@ describe('Stop speaking: the page wiring', () => {
   });
   it('Esc comes after the menus and dialogs, and is gated by escStopsSpeaking', () => {
     const esc = APP.indexOf("e.key === 'Escape' && escStopsSpeaking(");
-    expect(esc).toBeGreaterThan(APP.indexOf("e.key === 'Escape' && !$('enrol-dialog').hidden"));
+    expect(APP.indexOf("e.key === 'Escape' && voiceSheet.isOpen()")).toBeGreaterThan(0);
+    expect(esc).toBeGreaterThan(APP.indexOf("e.key === 'Escape' && voiceSheet.isOpen()")); // the Voice settings sheet (and its inline teaching) first
     expect(APP.slice(esc, esc + 600)).toMatch(/composer/);
   });
   it('the poll is an interval of SPEAK_POLL_MS, synced on every status read and started by a voice row', () => {
