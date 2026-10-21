@@ -2216,7 +2216,9 @@ components:
       it names (FIFO when absent). Review R3: session.exited, session.open and
       session.drained drop the turn state (outstanding turns, message text,
       evaluation marks; mutes stay, L7), since a resumed session restarts
-      its turn ids at /1. Pause
+      its turn ids at /1. Review R4: the turn.result fallback writes no row
+      for an errored or interrupted turn (isError, or a subtype other than
+      success). Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by

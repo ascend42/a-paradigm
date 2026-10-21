@@ -365,6 +365,8 @@ export class OfferRouter {
     s.msgId = null;
     s.evaluated = null;
     if (replyTurnId === null || done) return [];
+    // review R4: an errored or interrupted turn (isError, or a subtype other than success) offers nothing, writes no row
+    if (p.isError === true || (typeof p.subtype === 'string' && p.subtype !== 'success')) return [];
     // fallback: the turn's end was not seen (no message_delta end_turn); evaluated here, with today's streaming rule
     const row = this.#offerFor(hsid, reply, replyTurnId, s.turns.length);
     return row ? [row] : [];

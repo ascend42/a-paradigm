@@ -524,4 +524,18 @@ describe('#offer-router: session boundaries and errored turns (review R3, R4)', 
       expect(t.suppressed).toEqual([]);
     });
   }
+  it('R4: the turn.result fallback writes no row for an errored or interrupted turn', () => {
+    for (const payload of [{ isError: true, subtype: 'success' }, { isError: false, subtype: 'error_during_execution' }, { isError: false, subtype: 'error_max_turns' }]) {
+      const t = rig();
+      t.commit(sent(1));
+      t.commit(ev(assistantLine(offerReply('a', BLOCK))));
+      expect(t.commit({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, ...payload } })).toEqual([]);
+      expect(t.suppressed).toEqual([]);
+      // the next turn is evaluated normally
+      t.commit(sent(2));
+      t.commit(ev(assistantLine('plain')));
+      t.commit({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, subtype: 'success', isError: false } });
+      expect(t.suppressed).toEqual([{ hsid: HSID, turn: `turn:${HSID}/2`, why: 'no-block' }]);
+    }
+  });
 });
