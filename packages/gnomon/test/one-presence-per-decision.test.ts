@@ -194,6 +194,24 @@ describe('G-ID-10: nothing appended on failure; the card stays pending', () => {
     expect(readGrants(home, r.root).installs).toHaveLength(1);
   });
 
+  it('Aegis M3: a deny of an install whose rows are already written is refused; the card stays pending, the rows stay', async () => {
+    const home = tmp();
+    const r = rig();
+    const cardId = stage(home);
+    const card = await raiseInstallCard(r.broker, { home, name: 'acme.diff-lens', cardId, authority: r.root });
+    const other = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: r.helper.publicPem('root') }, { once: (req) => r.helper.handle(req) });
+    const p = prepareInstall(home, 'acme.diff-lens', cardId, 'install', { authority: other });
+    appendSignedGrantRows(home, other, p.rows, p.rows.map((x) => other.signRow(x)));
+    const written = grantsBytes(home);
+    await refusal(r.broker.approve(gui(), { cardId: card.cardId, decision: 'deny' }));
+    expect(r.broker.card(card.cardId)!.state).toBe('pending');
+    expect(readStaged(home, 'acme.diff-lens', cardId)!.card.state).toBe('pending');
+    expect(grantsBytes(home)).toBe(written);
+    expect(() => prepareInstall(home, 'acme.diff-lens', cardId, 'deny', { authority: other })).toThrow(/already written; finish the install/);
+    await r.broker.approve(gui(), { cardId: card.cardId, decision: 'install' }); // finishing still works
+    expect(readStaged(home, 'acme.diff-lens', cardId)!.card.state).toBe('decided');
+  });
+
   it('C5d: a second root decision of the same home while one is in flight is refused at once (never queued)', async () => {
     const home = tmp();
     let second: Promise<unknown> | null = null;

@@ -818,6 +818,11 @@ export function prepareInstall(home: string, name: string, cardId: string, decis
     throw new ManifestRefusal('NOT_INSTALLED', `install card ${cardId} is already decided`, { name, cardId });
   }
   const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
+  if (decision === 'deny' && rowsOfDecision(home, opts.authority, cardId).at(-1)?.kind === 'grant.install') {
+    // Aegis M3: this card's rows are ALREADY written (trust, capability, install live); a deny would record a denial
+    // over a live install
+    throw new ManifestRefusal('GRANT', `install card ${cardId}: its rows are already written; finish the install (decide install) or uninstall the mod`, { name, cardId, written: true });
+  }
   if (decision === 'install' && already) {
     // Aegis F4: written but not decided: the rows this card's decision wrote, verified; commit only records the decision
     const written = rowsOfDecision(home, opts.authority, cardId);
