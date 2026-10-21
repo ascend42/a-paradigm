@@ -6,7 +6,7 @@
  * state asks for.
  *
  *   - Composer input: a `voice.turn.user` row goes into the composer only when the kernel stamped it
- *     `forwardable: true`, its text is non-empty, it carries no `intercepted`, it is for the attached session, it
+ *     `forwardable: true` and not `trialTake` (a take of the send word being taught is never a draft), its text is non-empty, it carries no `intercepted`, it is for the attached session, it
  *     arrived live after dictation started (`seq > sinceSeq`: no backlog) and it was not inserted before (seq
  *     high-water). Consecutive turns append with one space.
  *   - The ring: armed while a draft exists, no hold, a delay is set (not off), the voice app is idle, the session is
@@ -198,6 +198,8 @@ export function insertableText(payload: unknown): string | null {
 export function turnText(payload: unknown): { shown: string; send: string } | null {
   const p = obj(payload);
   if (!p || p.forwardable !== true || p.partial === true) return null;
+  // a take of the send word being taught (the attended trial) is never a draft, whatever else the row says
+  if (p.trialTake === true) return null;
   if (p.intercepted !== undefined && p.intercepted !== null && p.intercepted !== false) return null;
   if (p.refusal !== undefined || p.refused !== undefined) return null;
   if (typeof p.text !== 'string') return null;

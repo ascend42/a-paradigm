@@ -281,7 +281,7 @@ export class GuiStore {
           if (t.trim()) s.firstUser = t;
         }
       }
-      if (r.kind === 'voice.turn.user' && p.partial !== true && typeof p.text === 'string' && p.text.trim()) {
+      if (r.kind === 'voice.turn.user' && p.partial !== true && p.trialTake !== true && typeof p.text === 'string' && p.text.trim()) {
         this.#voiceTexts.set(r.seq, p.text);
         if (this.#voiceTexts.size > 256) this.#voiceTexts.delete(this.#voiceTexts.keys().next().value!);
       }
@@ -749,6 +749,8 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
   if (isPartial(r, p)) return null;
   switch (r.kind) {
     case 'voice.turn.user': {
+      // a take of the send word being taught (the attended trial, spec §14.7) belongs to its dialog: never a chat line
+      if (p.trialTake === true) return null;
       // voice drops fix: a turn the kernel refused at receipt is stored hash-only (no text), so it is checked BEFORE
       // the empty-text rule: "voice not sent · Claude was still finishing · 4.8 s" (the reason in words, never text)
       const k = kernelRefusalOf(p);
