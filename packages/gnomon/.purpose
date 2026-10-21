@@ -2212,7 +2212,8 @@ components:
       not-offerable | kind-undeclared | malformed; name/offerKind only when
       the block named them; names only, never message text; at most one per
       completed turn, no-block only while the session has an offerable mod.
-      Pause
+      Review M2: turn.result{turn} closes every outstanding turn up to the one
+      it names (FIFO when absent). Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by
@@ -2753,7 +2754,12 @@ components:
       releases the permit, kills a stray child, removes the session dir;
       layers hashed before the law-7 scan and re-checked right before spawn;
       child HOME forced to the scanned user home; caller turn permits must be
-      live, unexpired, subscription and single-use; turn permits FIFO; the
+      live, unexpired, subscription and single-use; turn permits FIFO
+      (review M2: turnIds beside them and consumedTurns, the replayed human
+      messages; one result closes every consumed turn, a queued message folded
+      into the running turn included, releases each permit and writes
+      turn.result{turn} = the latest closed; no replay seen = the head only;
+      the local lane names the turn it closes too); the
       watch hashes ~/.claude.json only through its law-7 projection;
       stdout paused above a queue high-water mark and lines over 64 KiB
       logged as {lineHash, bytes}; init without apiKeySource logged absent.

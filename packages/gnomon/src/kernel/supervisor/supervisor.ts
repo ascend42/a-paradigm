@@ -323,6 +323,14 @@ interface Session {
   spawnPermit: PermitV1;
   /** FIFO: the head is the turn the next result closes */
   turnPermits: string[];
+  /** review M2: the outstanding turns' ids, parallel to turnPermits (turn.result{turn} names the latest one it closes) */
+  turnIds: string[];
+  /**
+   * review M2: how many outstanding turns Claude Code has CONSUMED (their user message came back as a replay line,
+   * isReplay). A queued message folded into the running turn is replayed before that turn's result, so the result
+   * closes every consumed turn; with no replay seen it closes the head only (FIFO).
+   */
+  consumedTurns: number;
   /** kernel clock (ms) when the last model turn closed (its result), for the #gnomon-voice busy guard (V2a) */
   lastTurnEndAt?: number;
   watchHash: string;
@@ -785,7 +793,7 @@ export class SessionSupervisor {
       await this.#o.children.track({ kind: 'session', child: c, hsid, intent });
       tracked = true;
       const s: Session = {
-        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
+        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0,
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
       };
@@ -933,6 +941,8 @@ export class SessionSupervisor {
     s.controlWaiters.clear();
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
+    s.turnIds = [];
+    s.consumedTurns = 0;
     await this.#dropUncertain(s, 'session-exited'); // Aegis M1: a timed-out switch's held permit ends with the session
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
     this.#sessions.delete(s.hsid);
@@ -990,10 +1000,17 @@ export class SessionSupervisor {
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       case 'result': {
-        await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}) });
-        const head = s.turnPermits.shift(); // reviewer 7: FIFO — this result closes the oldest turn only
+        // reviewer 7: FIFO — this result closes the oldest turn; review M2: and every later turn Claude Code already
+        // consumed (a queued message folded into the running turn is replayed before this result). turn.result{turn}
+        // names the latest turn it closes.
+        const k = Math.min(Math.max(1, s.consumedTurns), Math.max(s.turnPermits.length, s.turnIds.length, 1));
+        const closedIds = s.turnIds.splice(0, k);
+        const closedPermits = s.turnPermits.splice(0, k);
+        s.consumedTurns = Math.max(0, s.consumedTurns - k);
+        const turn = closedIds[closedIds.length - 1];
+        await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
         s.lastTurnEndAt = Date.now();
-        if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
+        for (const head of closedPermits) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         this.#wake(); // §2.4 rule 11: a turn boundary
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
@@ -1003,6 +1020,8 @@ export class SessionSupervisor {
         await this.#onPermission(s, ev);
         return;
       case 'user':
+        // review M2: a replayed human message (no tool results) is Claude Code consuming the next outstanding turn
+        if (ev.replay && ev.toolResults.length === 0) s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
         // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
         for (const r of ev.toolResults) {
           const tool = s.toolNames.get(r.toolUseId);
@@ -1464,6 +1483,7 @@ export class SessionSupervisor {
     this.#usedTurnPermits.add(permit.permitId);
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
+    s.turnIds.push(turnId(s.hsid, n));
     const contentHash = turnContentHash(p.text);
     // origin kernel: a KERNEL-templated turn (#offer-router's open text), never model or client text
     await this.#o.log('session.inject', { hsid: s.hsid, origin: p.origin === 'kernel' ? 'kernel' : 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });

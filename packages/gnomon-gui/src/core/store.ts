@@ -898,7 +898,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
    */
   const echoTurn: Array<WaitingTurn | null> = []; // parallel to `echoes`: the waiting message each echo opened
   const waiting: WaitingTurn[] = [];
-  let open = 0; // turn.sent rows with no turn.result yet
+  const openTurns: string[] = []; // review M2: the turn ids of turn.sent rows with no turn.result yet, in send order
   let activeUnsent = false; // the running turn's message is shown but its turn.sent has not arrived yet
   let activeTurn: string | undefined; // review M1: that message's stamped turn id, when session.send has returned it
   let turnSince: string | undefined;
@@ -922,7 +922,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     // a multi-part voice message is ONE turn (one turn.sent cites every part)
     if (how === 'voice-message' && last && !last.sent) last.idx.push(items.length - 1);
     else if (how === 'voice-message' && activeUnsent && !waiting.length) return;
-    else if (open > 0 || waiting.length || activeUnsent) waiting.push({ idx: [items.length - 1], sent: false, ...(placedTurn !== undefined ? { turn: placedTurn } : {}) });
+    else if (openTurns.length > 0 || waiting.length || activeUnsent) waiting.push({ idx: [items.length - 1], sent: false, ...(placedTurn !== undefined ? { turn: placedTurn } : {}) });
     else {
       activeUnsent = true;
       activeTurn = placedTurn;
@@ -944,7 +944,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   /** A session boundary (exit, drain, orphan, open / resume): no turn runs and nothing waits any more. */
   const settle = (): void => {
     waiting.length = 0;
-    open = 0;
+    openTurns.length = 0;
     activeUnsent = false;
     activeTurn = undefined;
     progress = undefined;
@@ -1007,7 +1007,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     const p = objOf(r.payload);
     if (r.kind === 'turn.sent') {
       turnGuidance = typeof p?.guidanceHash === 'string' ? p.guidanceHash : null;
-      open++;
+      openTurns.push(typeof p?.turn === 'string' ? p.turn : `seq:${r.seq}`);
       // review M1: a stamped message pairs with ITS turn.sent exactly; an unstamped one (session.send still in flight)
       // pairs in send order with the first turn.sent no stamp claims
       const id = typeof p?.turn === 'string' ? p.turn : undefined;
@@ -1021,7 +1021,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
           if (id !== undefined) w.turn = id;
         }
       }
-      if (open === 1 && waiting.length === 0) {
+      if (openTurns.length === 1 && waiting.length === 0) {
         turnSince = r.at;
         turnKey = String(r.seq);
         progress = undefined;
@@ -1029,14 +1029,20 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     }
     if (r.kind === 'session.exited' || r.kind === 'session.orphaned' || r.kind === 'session.drained' || r.kind === 'session.open') settle();
     if (r.kind === 'turn.result') {
-      // the OLDEST running turn's result (FIFO): under that turn's output, then the next waiting message starts
-      open = Math.max(0, open - 1);
+      // review M2: turn.result{turn} names the LATEST turn it closes; every open turn up to it closes too (a queued
+      // message Claude Code folded into the running turn). A row without it (older logs) closes the oldest (FIFO).
+      const at = typeof p?.turn === 'string' ? openTurns.indexOf(p.turn) : -1;
+      const closed = openTurns.splice(0, at >= 0 ? at + 1 : Math.min(1, openTurns.length));
       progress = undefined;
       const it = kernelItem(r);
       if (it) push(r, 0, it);
       else hidden++;
-      startNext();
-      if (open > 0) {
+      // a folded turn's message no longer waits (its replay normally already started it)
+      for (let i = waiting.length - 1; i >= 0; i--) if (waiting[i]!.turn !== undefined && closed.includes(waiting[i]!.turn!)) waiting.splice(i, 1);
+      // the next waiting message starts, unless it is stamped for a later turn while another turn runs first
+      const next = waiting[0];
+      if (next && (next.turn === undefined || openTurns.length === 0 || openTurns[0] === next.turn)) startNext();
+      if (openTurns.length > 0) {
         turnSince = r.at;
         turnKey = String(r.seq);
       }
@@ -1117,11 +1123,11 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
           echoes.push(oneLine(v.text)); // claude's replay of the same words shows once
           voiceEcho.set(r.seq, oneLine(v.text));
           shownVoiceSeqs.add(r.seq);
-          // the turn.sent fallback line IS its own turn's message (that turn.sent is already counted in `open`)
+          // the turn.sent fallback line IS its own turn's message (that turn.sent is already in `openTurns`)
           const own = r.kind === 'turn.sent';
-          if (own) open--;
+          const ownTurn = own ? openTurns.pop() : undefined;
           push(r, v.part ?? 0, v, 'voice-message');
-          if (own) open++;
+          if (ownTurn !== undefined) openTurns.push(ownTurn);
           const w = lastWaiting();
           if (own && w) w.sent = true;
           else if (own) activeUnsent = false;
@@ -1135,7 +1141,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     else hidden++;
   }
   // T-2026-10-21-007: the running turn shows a `working` row under its output until its turn.result (live sessions only)
-  if (opts.live && !opts.raw && open > 0 && turnSince) {
+  if (opts.live && !opts.raw && openTurns.length > 0 && turnSince) {
     const last = rows[rows.length - 1];
     place({ key: `work:${turnKey}`, seq: last ? last.seq : 0, role: 'working', text: 'working…', at: turnSince, live: { since: turnSince, ...(progress ? { progress } : {}) } }, 'turn');
   }

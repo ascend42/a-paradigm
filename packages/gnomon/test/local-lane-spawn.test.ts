@@ -114,6 +114,8 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     expect(t2.steered).toBeUndefined();
     expect(rows.filter((r) => r.kind === 'turn.sent')).toHaveLength(2);
     expect(await waitFor(() => rows.filter((r) => r.kind === 'turn.result').length === 2, 15_000)).toBe(true);
+    // review M2: each local turn.result names the turn it closes
+    expect(rows.filter((r) => r.kind === 'turn.result').map((r) => r.payload.turn)).toEqual([t1.turn, t2.turn]);
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
   });

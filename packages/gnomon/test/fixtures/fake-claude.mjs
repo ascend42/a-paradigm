@@ -164,6 +164,9 @@ process.stdin.on('data', (c) => {
     n++;
     const id = `msg_${n}`;
     out({ ...m, isReplay: true });
+    // mode.foldPairs (review M2): a queued message folded into the running turn, as Claude Code does (founder log,
+    // seq 4863): an odd message is replayed and held; the next one is replayed mid-turn and ONE result answers both
+    if (mode.foldPairs && n % 2 === 1) continue;
     if (mode.permissionAsk) {
       let k = 0;
       for (const st of mode.permissionAsk.steps ?? []) {

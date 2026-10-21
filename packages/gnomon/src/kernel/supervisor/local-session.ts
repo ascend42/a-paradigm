@@ -521,7 +521,9 @@ export class LocalLane {
         else await usage('turn.usage', s.meter.message(ev.tokens));
         return;
       case 'end': {
-        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}) });
+        // review M2: turn.result{turn} names the turn it closes (the oldest in flight; the local lane never folds turns)
+        const closing = s.turnPermits.length > 0 ? s.turns - s.turnPermits.length + 1 : 0;
+        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);

@@ -420,6 +420,14 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
 });
 
+/**
+ * turn.result{turn} (review M2, a deliberate clientApiId move): the id of the LATEST turn the result closes. The
+ * supervisor closes every outstanding turn up to and including it: a queued message Claude Code folded into the
+ * running turn (its replay arrived before that turn's result) is closed by the same result. A row written before
+ * this field (no `turn`) pairs in send order (FIFO), the oldest open turn first.
+ */
+export const TURN_RESULT_PAIRING = Object.freeze({ key: 'turn', pattern: TURN_ID_PATTERN.source, closesThrough: true, absent: 'fifo' } as const);
+
 /** request.offer.mute{scope} (CLOSED): a mod is muted per repo (A3: Neurons on everywhere, mute per repo). */
 export const OFFER_MUTE_SCOPES = ['repo'] as const;
 /** request.mod.install{source} (CLOSED, A8): a git URL or a local folder. No registry. */

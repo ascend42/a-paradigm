@@ -57,6 +57,13 @@ components:
       OFFER_SUPPRESS_REASONS (no-block, turn-streaming, pending-card, not-offerable,
       kind-undeclared, malformed); name/offerKind present exactly when why is not in
       OFFER_SUPPRESS_UNNAMED (no-block, malformed); descriptor desk.suppress.
+      Review M2 (one deliberate clientApiId move,
+      sha256:eda8c627...1114 ->
+      sha256:4c2b93711b219bff751f985286ba489bbc7015ad94627e954253186d3eeeaf2c):
+      TURN_RESULT_PAIRING, descriptor turnResult: turn.result{turn} names the LATEST
+      turn the result closes; every outstanding turn up to it closes too (a queued
+      message Claude Code folded into the running turn); absent on older rows = FIFO.
+      Test: test/turn-result.test.ts.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

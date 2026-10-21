@@ -486,3 +486,22 @@ describe('#offer-router: offer.suppressed is a kernel log row (T-2026-10-21-006,
     expect(t.suppressed.map((p) => p.turn)).toEqual([1, 2, 3].map((k) => `turn:${HSID}/${k}`));
   });
 });
+
+describe('#offer-router: turn.result{turn} pairs by id (review M2)', () => {
+  const ev = (line: string): CommittedRow => ({ kind: 'turn.event', session: HSID, payload: { hsid: HSID, line } });
+  const sent = (k: number): CommittedRow => ({ kind: 'turn.sent', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}` } });
+  const resultOf = (k: number): CommittedRow => ({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}`, subtype: 'success', isError: false } });
+  it('a folded queued turn (two turn.sent, one result naming the second) closes both; the next turn is evaluated normally', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(sent(2)); // folded into turn 1 by Claude Code
+    t.commit(ev(assistantLine(offerReply('a', BLOCK))));
+    t.commit(resultOf(2));
+    // nothing is left outstanding: turn 3's block is not suppressed as turn-streaming
+    t.commit(sent(3));
+    t.commit(ev(assistantLine(offerReply('b', BLOCK))));
+    const rows = t.commit(resultOf(3));
+    expect(rows.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/3`);
+  });
+});

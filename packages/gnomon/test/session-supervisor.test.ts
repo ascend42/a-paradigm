@@ -687,6 +687,31 @@ describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
     const released = r.kinds('permit.release').map((x) => x.payload.permitId).filter((id) => sent.includes(id));
     expect(released).toEqual(sent);
   });
+  it('review M2: turn.result{turn} names the turn it closes, in send order', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'two' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
+    expect(r.kinds('turn.result').map((x) => x.payload.turn)).toEqual([`turn:${s.hsid}/1`, `turn:${s.hsid}/2`]);
+  });
+  it('review M2: a queued message folded into the running turn is closed by the same result (one result, both permits released)', async () => {
+    const r = rig();
+    setMode(w, { foldPairs: true });
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'two' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
+    expect(r.kinds('turn.result')[0]!.payload.turn).toBe(`turn:${s.hsid}/2`);
+    const sent = r.kinds('turn.sent').map((x) => x.payload.permitId);
+    expect(await waitFor(() => sent.every((id) => r.kinds('permit.release').some((x) => x.payload.permitId === id)))).toBe(true);
+    expect(r.sup.turnBusy(s.hsid).streaming).toBe(false);
+    // the next pair folds the same way: turn 4's result closes turns 3 and 4
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'three' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'four' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
+    expect(r.kinds('turn.result')[1]!.payload.turn).toBe(`turn:${s.hsid}/4`);
+  });
   it('reviewer 9: a caller turn permit is single-use', async () => {
     const r = rig();
     const s = await open(r.sup);

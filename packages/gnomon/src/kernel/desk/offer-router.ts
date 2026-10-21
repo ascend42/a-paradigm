@@ -343,10 +343,13 @@ export class OfferRouter {
       }
       return out;
     }
-    // turn.result: the turn that ended is the oldest outstanding one (FIFO, as the supervisor releases permits)
-    const replyTurnId = s.turns.shift() ?? null;
+    // turn.result{turn} (review M2) names the latest turn it closes: every outstanding turn up to it closes (a queued
+    // message folded into the running turn); a row without it (older logs) closes the oldest one (FIFO)
+    const at = typeof p.turn === 'string' ? s.turns.indexOf(p.turn) : -1;
+    const closed = s.turns.splice(0, at >= 0 ? at + 1 : Math.min(1, s.turns.length));
+    const replyTurnId = closed[closed.length - 1] ?? null;
     const reply = s.texts.join('\n\n');
-    const done = replyTurnId !== null && s.evaluated === replyTurnId;
+    const done = replyTurnId !== null && closed.some((t) => s.evaluated === t);
     s.texts = [];
     s.msgId = null;
     s.evaluated = null;

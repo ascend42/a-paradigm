@@ -313,3 +313,51 @@ describe('review M1: a refused or failed send is no turn; a stamped echo pairs w
     expect(app).toMatch(/\$\{mine\.length\}\.\$\{localRev\}/);
   });
 });
+
+describe('review M2: a result pairs with the turn it names; a folded queued turn settles with it', () => {
+  const stamped = (seq: number, hms: string, text: string, k: number): Row => ({ ...echo(seq, hms, text), turn: `turn:${H}/${k}` });
+  const resultOf = (seq: number, hms: string, k: number): Row => row(seq, 'turn.result', hms, { cost: 0.01, isError: false, subtype: 'success', usage: { tokens: 1 }, turn: `turn:${H}/${k}` });
+  it("the founder's fold (seq 4795-5146): turn 4 is replayed mid-turn-3, one result{turn 4} closes both, nothing keeps ticking", () => {
+    const rows: Row[] = [
+      stamped(4720.5, '01:57:20.800', 'maybe a quick paradigm symbols check?', 3),
+      row(4721, 'turn.sent', '01:57:20.893', { turn: `turn:${H}/3` }),
+      ev(4728, '01:57:48.891', replay('maybe a quick paradigm symbols check?'), 'user'),
+      ev(4772, '01:57:50.322', { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu', name: 'Bash', input: { command: 'paradigm doctor' } }] } }, 'assistant'),
+      stamped(4794.5, '01:59:48.400', 'so what happened?', 4),
+      row(4795, 'turn.sent', '01:59:48.443', { turn: `turn:${H}/4` }),
+      ev(4862, '02:01:45.045', { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu', content: 'ok' }] } }, 'user'),
+      ev(4863, '02:01:45.179', replay('so what happened?'), 'user'),
+      ev(5138, '02:01:55.934', say('The symbols themselves look fine.'), 'assistant'),
+    ];
+    const running = view(rows);
+    expect(running[running.length - 1]!.role).toBe('working');
+    const done = view([...rows, resultOf(5146, '02:02:25.922', 4)]);
+    expect(done.some((x) => x.role === 'working')).toBe(false);
+    expect(hasLive(done)).toBe(false);
+    expect(done[done.length - 1]!.role).toBe('result');
+  });
+  it('without a turn id (an older log) the result still closes the oldest open turn (FIFO fallback)', () => {
+    const rows: Row[] = [
+      echo(1.5, '10:00:00', 'one'),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      echo(2.5, '10:00:01', 'two'),
+      row(3, 'turn.sent', '10:00:01.1', { turn: `turn:${H}/2` }),
+      ev(4, '10:00:02', say('answer one'), 'assistant'),
+      result(5, '10:00:03', 0.01, 1),
+    ];
+    expect(roles(view(rows))).toEqual(['user: one', 'assistant: answer one', 'result: success · $0.0100 · 1 tokens', 'user: two', 'working: working…']);
+  });
+  it('a result naming a later turn closes the earlier open ones too (no working row left for a folded turn)', () => {
+    const rows: Row[] = [
+      stamped(1.5, '10:00:00', 'one', 1),
+      row(2, 'turn.sent', '10:00:00.1', { turn: `turn:${H}/1` }),
+      stamped(2.5, '10:00:01', 'two', 2),
+      row(3, 'turn.sent', '10:00:01.1', { turn: `turn:${H}/2` }),
+      ev(4, '10:00:02', say('both answered'), 'assistant'),
+      resultOf(5, '10:00:03', 2),
+    ];
+    const f = view(rows);
+    expect(f.some((x) => x.role === 'working')).toBe(false);
+    expect(f.filter((x) => x.role === 'user')).toHaveLength(2);
+  });
+});

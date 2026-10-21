@@ -433,7 +433,11 @@ components:
       (Row.turn) is stamped with the turn id session.send returns and pairs with turn.sent{turn} EXACTLY (an
       unstamped echo, its send still in flight, pairs in send order with the first turn.sent no stamp claims);
       a refused or network-failed send marks the echo unsent (Row.unsent): it never waits, never becomes the
-      running message, and its reason shows under it, so the next send gets the right clock and order. CSS .trow.role-working
+      running message, and its reason shows under it, so the next send gets the right clock and order.
+      Review M2: open turns are tracked by id (openTurns); turn.result{turn} closes every open turn up to the one
+      it names (a queued message Claude Code folded into the running turn settles with it, no working row left
+      ticking); a waiting message stamped for a closed turn is dropped, and the next waiting message starts only
+      when it is unstamped or its turn is the next open one; a row without turn (older logs) closes the oldest. CSS .trow.role-working
       (spinner, still under reduced motion) and .role-activity.live.
     dogfood-layout-chat: >-
       Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
