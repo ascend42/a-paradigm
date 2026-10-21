@@ -181,14 +181,17 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const take = await r.turn('ship hit', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 400, t1: r.clock.t });
     expect(take).toMatchObject({ forwardable: false, trialTake: true });
     expect(take).not.toHaveProperty('refused');
-    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, text: 'ship hit', trialVerdict: 'variant' });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, trialVerdict: 'variant' });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('refusedReason');
+    // Aegis M-2: the take's row is hash-only (the heard text lives only in kernel memory, shown in status)
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    expect(r.rows.at(-1)!.payload).toHaveProperty('textHash');
     expect(r.v.status().sendWordTrial).toMatchObject({ take: 2, takes: 1, correct: 0, variants: ['ship hit'], last: { heard: 'ship hit', verdict: 'variant' } });
     // never claimable, never a pending dictation turn: a send of its words is attributed to nothing
     expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
     // a sentence during the trial is a take too (never a draft) and its text is never kept
     await r.turn('I am teaching my send word now');
-    expect(r.rows.at(-1)!.payload).toMatchObject({ trialTake: true, forwardable: false, textWithheld: true, trialVerdict: 'unclear' });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ trialTake: true, forwardable: false, trialVerdict: 'unclear' });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     // the save rule: no correct take yet
     expect(await refusal(() => r.v.saveTrial())).toMatchObject({ code: 'BAD_REQUEST', reason: 'sendword-no-correct-take' });
@@ -199,6 +202,16 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', take: null, takes: 3, correct: 1 });
     await r.send(['ship it']);
     expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
+    // Aegis M-2: once ready, take capture stops — an unenrolled voice is refused again (hash only), an enrolled
+    // turn is an ordinary turn, and the count does not move
+    const after = await r.turn('ship it', { speakerId: 'spk:unknown-2', speakerEnrolled: false });
+    expect(after).toMatchObject({ refused: 'voice-speaker' });
+    expect(after).not.toHaveProperty('trialTake');
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    const ordinary = await r.turn('and then the docs');
+    expect(ordinary).toMatchObject({ forwardable: true });
+    expect(ordinary).not.toHaveProperty('trialTake');
+    expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', takes: 3 });
     expect(r.v.saveTrial()).toEqual({ text: 'ship it', variants: ['ship hit'] });
     expect(r.v.status().sendWordTrial).toBeNull();
   });

@@ -82,17 +82,19 @@
  *     conversation ceiling; pieces takes one fresh presence per GUI login (the voice.widen strictness card with
  *     send:'pieces') and is refused voice-strictness at strictness L2 or above.
  *   - the ATTENDED TRIAL ("Teach your send word"; spec §14.7 trial semantics): while a human GUI request holds a trial
- *     (request.voice.sendword{op:'start', trial:true}, at most SEND_WORD_TRIAL_MS), EVERY voice.turn.user of the
- *     attached human's voice principal (not intercepted, not inside the echo guard) is a TAKE: no speaker check and no
- *     adjacency (a take can send nothing), stamped trialTake:true, forwardable:false, isWord false, never a dictation
- *     turn, never an adjacency anchor, and refused on the direct send path (voice-grammar, cause trial-take). The row keeps only the take's cleaned text when it is a send word's length
- *     (trialTakeText), else no text. The kernel is the ONE take counter (#send-word-matcher recordTrialTake; at most
- *     SEND_WORD_TRIAL_MAX_TAKES), shown as status.voice.sendWordTrial (human class only); {op:'save'} commits the word
- *     and its collected variants only after a take heard as the word itself.
+ *     (request.voice.sendword{op:'start', trial:true}, at most SEND_WORD_TRIAL_MS) and it is LISTENING, EVERY
+ *     voice.turn.user of the attached human's voice principal (not intercepted, not inside the echo guard) is a TAKE: no
+ *     speaker check and no adjacency (a take can send nothing), stamped trialTake:true, forwardable:false, isWord false,
+ *     never a dictation turn, never an adjacency anchor, and refused on the direct send path (voice-grammar, cause
+ *     trial-take). The take's row is HASH-ONLY plus trialVerdict (Aegis M-2); its cleaned text lives only in kernel
+ *     memory (the trial state). Once the trial is ready or exhausted no turn is a take. The kernel is the ONE take
+ *     counter (#send-word-matcher recordTrialTake; at most SEND_WORD_TRIAL_MAX_TAKES), shown as
+ *     status.voice.sendWordTrial (human class only); {op:'save', dropVariants?} commits the word and its collected
+ *     variants (minus the dropped ones) only after a take heard as the word itself.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
-import { canonicalSendWord, classifyTrialTake, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, trialTakeText, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -706,8 +708,10 @@ export class VoiceControl {
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
-        // the attended trial: a turn of the attached human's voice principal is a take (no speaker check, no adjacency)
-        const trial = p.intercepted === undefined && a !== null && voicePrincipalOf(a.owner) === c.principal ? this.#liveTrial() : null;
+        // the attended trial: a turn of the attached human's voice principal is a take (no speaker check, no adjacency),
+        // only while the trial is LISTENING (Aegis M-2: once ready or exhausted, take capture stops)
+        const live = p.intercepted === undefined && a !== null && voicePrincipalOf(a.owner) === c.principal ? this.#liveTrial() : null;
+        const trial = live && live.state.state === 'listening' ? live : null;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
@@ -751,13 +755,12 @@ export class VoiceControl {
           const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
           stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}), ...(drops ? { localDrops: drops } : {}) };
         } else if (trial) {
-          // a take: hash-only fields plus the cleaned take text when it is a send word's length (never a sentence)
+          // a take: the row is HASH-ONLY plus its verdict (Aegis M-2: never the heard text, whoever spoke); the cleaned
+          // take text lives only in kernel memory (the trial state: status.voice.sendWordTrial, human class only)
           const kept: Record<string, unknown> = {};
           for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
-          const heard = trialTakeText(p.text);
-          const verdict = classifyTrialTake(p.text, trial.state.word).verdict;
           const next = recordTrialTake(trial.state, p.text);
-          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, forwardable: false, trialTake: true, trialVerdict: verdict, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, ...(heard !== null ? { text: heard } : { textWithheld: true }), ...(drops ? { localDrops: drops } : {}) };
+          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, forwardable: false, trialTake: true, trialVerdict: next.last!.verdict, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, ...(drops ? { localDrops: drops } : {}) };
           commit.push(() => {
             if (this.#trial === trial) trial.state = next; // the ONE take counter (a trial replaced meanwhile is not touched)
           });

@@ -3592,8 +3592,10 @@ flows:
       no adjacency, stamped trialTake, forwardable:false, isWord false, never
       a dictation turn or adjacency anchor, and never sent (Aegis M-1: the
       voice principal's direct session.send of a take is refused
-      voice-grammar, cause trial-take), its text kept only at a send
-      word's length; the kernel is the ONE take counter
+      voice-grammar, cause trial-take); a take is captured only while the
+      trial is listening, and its row is hash-only plus trialVerdict (Aegis
+      M-2: the heard text lives only in kernel memory for status); the
+      kernel is the ONE take counter
       (status.voice.sendWordTrial, human class only: word, state, take,
       takes, maxTakes 4, correct, variants, last, until) and
       request.voice.sendword{op:'save', dropVariants?} commits the word and
