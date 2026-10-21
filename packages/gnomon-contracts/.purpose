@@ -64,6 +64,8 @@ components:
       turn the result closes; every outstanding turn up to it closes too (a queued
       message Claude Code folded into the running turn); absent on older rows = FIFO.
       Test: test/turn-result.test.ts.
+      Review C1 (no id move): offer.suppressed's turn must embed the payload's
+      hsid (turn:<hsid>/<n>), checked in validateKindPayload.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

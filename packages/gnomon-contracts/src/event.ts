@@ -650,6 +650,11 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'offer.suppressed': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('turn' in v) c.str('turn', v.turn, TURN_ID_PATTERN, 'turn:<hsid>/<n>');
+      // review C1: the turn is one of THIS session's turns (its id embeds the payload's hsid)
+      if (typeof v.turn === 'string' && typeof v.hsid === 'string') {
+        const m = TURN_ID_PATTERN.exec(v.turn);
+        if (m && m[1] !== v.hsid) c.fail('turn', 'must be a turn of the payload hsid (turn:<hsid>/<n>)');
+      }
       if ('why' in v) c.closedEnum('why', v.why, OFFER_SUPPRESS_REASONS);
       if ('name' in v) {
         c.str('name', v.name, OFFER_MOD_PATTERN, 'a mod id <publisher>.<name>');

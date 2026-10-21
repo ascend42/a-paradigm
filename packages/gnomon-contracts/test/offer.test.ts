@@ -308,6 +308,12 @@ describe('8.0:T-2026-10-21-006 offer.suppressed (founder ruling: suppressions on
   const turn = `turn:${hsid}/7`;
   const ok = (p: unknown) => expect(validateKindPayload('offer.suppressed', p)).toEqual([]);
   const bad = (p: unknown) => expect(validateKindPayload('offer.suppressed', p).length).toBeGreaterThan(0);
+  it('review C1: the turn must be one of the payload hsid\'s turns', () => {
+    ok({ hsid, turn, why: 'no-block' });
+    const other = mintHsid();
+    bad({ hsid, turn: `turn:${other}/7`, why: 'no-block' });
+    expect(validateKindPayload('offer.suppressed', { hsid, turn: `turn:${other}/7`, why: 'no-block' }).join(' ')).toMatch(/turn of the payload hsid/);
+  });
   it('is registered kernel-owned, normal, under its own tag, and its reasons ride the descriptor', () => {
     expect(RESERVATION_TAGS).toContain('8.0:T-2026-10-21-006');
     expect(EVENT_KINDS['offer.suppressed']).toMatchObject({ owner: 'kernel', sensitivity: 'normal', reserved: '8.0:T-2026-10-21-006' });
