@@ -5,6 +5,24 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.2] — 2026-10-21
+
+**Read-only commands are read-only** (`#command-policy`). On every command, read-only ones included, the CLI's preAction hook wrote `.paradigm/.v6-0-4-migration-acknowledged` the first time it ran in a cohort-C project, and `paradigm lore list/show` moved legacy root-level lore entries into dated directories. A read verb could therefore change the project.
+
+### Fixed
+- **A declared read-only command set** (`src/core/command-policy.ts`, `READ_ONLY_COMMANDS`): `status`, `doctor`, `ripple`, `integrity`, `purpose validate`, `portal validate`, `task ls`, `task show`, `lore list`, `lore show` and `notices`. These commands make no filesystem writes (project or HOME) and no network calls, global hooks included. Any other command is a write command.
+- **The migration notice on a read-only command prints but never writes** (`#migration-notices`). Notices now go to stderr, so `--json` stdout stays clean, and print at most once per process. On a write command the notice prints and is acknowledged, as before.
+- **Lore reads never migrate.** `loadLoreEntries` shows legacy root-level entries exactly as they will look once migrated, without moving any file. Every lore write migrates first. `paradigm migrate` has a new `lore-legacy-entries` step.
+
+### Added
+- `paradigm notices` lists pending notices (read-only). `paradigm notices ack <id|all>` silences one. `PARADIGM_NO_NOTICES=1` hides notices for a process without writing anything.
+- **Read-only harness** (`src/__tests__/readonly-commands.test.ts`). It runs every read-only command, 28 invocations, as a real CLI process against a temp cohort-C project (with a legacy lore entry and a git repo) and a temp HOME, then asserts both trees are byte-identical (paths, bytes, modes, mtimes). Every `READ_ONLY_COMMANDS` entry must have a case. `PARADIGM_CLI_UNDER_TEST=<dist/index.js>` runs it against a built bundle. Against the 7.15.0 bundle it fails 26 of 28 cases.
+
+### Packages
+- `@a-company/paradigm` 7.15.2
+- plugin 7.15.2
+- `@a-company/paradigm-mcp` unchanged (7.15.0)
+
 ## [7.15.0] — 2026-10-14
 
 **Symbol integrity, Phase 1** (T-2026-10-13-001, TD-2026-10-13-661). A three-agent review of the symbol layer found the deterministic core sound, but found that identity and freshness gave silently wrong answers. The worst case: `paradigm_ripple` reported **0 dependents and "safe to proceed" for a `portal.yaml` gate used by a `.purpose` component** (reproduced). This release fixes correctness only. Typed edges, one ripple engine and aliases are Phase 2 (T-2026-10-13-002); efficiency and cleanup are Phase 3 (T-2026-10-13-003).
