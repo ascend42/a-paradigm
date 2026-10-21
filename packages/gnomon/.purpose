@@ -2240,7 +2240,9 @@ components:
       one settles without a row. Re-review L-1: with replay lines an
       unconsumed queued turn is not "streaming"; without them a message after
       every outstanding turn is evaluated continues the previous message's
-      turn. Re-review M-2: a retired offer that was
+      turn. Re-review L-2: replay lines before the stream is live (the
+      first system.init or turn.sent since a session boundary) are ignored,
+      in the router and the supervisor's consumedTurns. Re-review M-2: a retired offer that was
       still undecided is the kernel row offer.retired{offerId, hsid,
       why:'continued'} (OFFER_SEED_KINDS: folded at boot), and a decide on
       it is refused 'retired'. Review C2: gnomon desk stats folds only

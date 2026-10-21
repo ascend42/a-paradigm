@@ -332,6 +332,11 @@ interface Session {
    * p-replay-order shows the echo is written on consumption, never on receipt.
    */
   consumedTurns: number;
+  /**
+   * re-review L-2: replay lines count only once the stream is live (the first system.init after spawn, or the first
+   * turn sent): a replay before it (a resumed session's history) never marks an outstanding turn consumed
+   */
+  replayLive: boolean;
   /** kernel clock (ms) when the last model turn closed (its result), for the #gnomon-voice busy guard (V2a) */
   lastTurnEndAt?: number;
   watchHash: string;
@@ -794,7 +799,7 @@ export class SessionSupervisor {
       await this.#o.children.track({ kind: 'session', child: c, hsid, intent });
       tracked = true;
       const s: Session = {
-        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0,
+        hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0, replayLive: false,
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
       };
@@ -973,6 +978,7 @@ export class SessionSupervisor {
     };
     switch (ev.kind) {
       case 'init':
+        s.replayLive = true; // re-review L-2
         if (ev.model !== null) s.seenModel = ev.model;
         if (ev.apiKeySource !== null && ev.apiKeySource !== 'none') {
           await this.#o.log('billing.api.refused', { hsid: s.hsid, where: ['init.apiKeySource'], keys: [ev.apiKeySource] }, { session: s.hsid });
@@ -1031,7 +1037,8 @@ export class SessionSupervisor {
         return;
       case 'user':
         // review M2: a replayed human message (no tool results) is Claude Code consuming the next outstanding turn
-        if (ev.replay && ev.toolResults.length === 0) s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
+        // re-review L-2: not before the stream is live (a resumed session's history replays)
+        if (ev.replay && ev.toolResults.length === 0 && s.replayLive) s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
         // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
         for (const r of ev.toolResults) {
           const tool = s.toolNames.get(r.toolUseId);
@@ -1494,6 +1501,7 @@ export class SessionSupervisor {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     s.turnIds.push(turnId(s.hsid, n));
+    s.replayLive = true; // re-review L-2: the first turn sent makes the stream live too
     const contentHash = turnContentHash(p.text);
     // origin kernel: a KERNEL-templated turn (#offer-router's open text), never model or client text
     await this.#o.log('session.inject', { hsid: s.hsid, origin: p.origin === 'kernel' ? 'kernel' : 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });

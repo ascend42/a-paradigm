@@ -165,6 +165,8 @@ interface SessionState {
   ended: boolean;
   /** review R2: a replay line was seen in this session (started marks are trustworthy) */
   replays: boolean;
+  /** re-review L-2: the stream is live (a system.init or a turn.sent since the session boundary); replays before it are history */
+  live: boolean;
   muted: Set<string>;
   stopped: boolean;
   latest: string | null;
@@ -195,6 +197,8 @@ interface ChainLine {
   replay?: boolean;
   /** review R2: a Stop hook blocked the stop (the turn continues) */
   hookBlock?: boolean;
+  /** re-review L-2: system.init (the stream is live) */
+  init?: boolean;
 }
 
 function chainLine(line: string): ChainLine | null {
@@ -212,6 +216,7 @@ function chainLine(line: string): ChainLine | null {
     const text = typeof c === 'string' ? c.trim().length > 0 : Array.isArray(c) && c.some((b) => isObj(b) && b.type === 'text') && !c.some((b) => isObj(b) && b.type === 'tool_result');
     return text ? { msgId: null, start: false, text: null, stop: null, replay: true } : null;
   }
+  if (o.type === 'system' && o.subtype === 'init') return { msgId: null, start: false, text: null, stop: null, init: true };
   if (o.type === 'system' && o.subtype === 'hook_response' && o.hook_event === 'Stop') {
     // re-review M-4: SPECULATIVE with today's argv. Probe p-replay-order (claude 2.1.305): Claude Code writes
     // hook_response lines only under --include-hook-events, which buildClaudeArgv does not pass; a blocking Stop hook
@@ -266,7 +271,7 @@ export class OfferRouter {
     let s = this.#sessions.get(hsid);
     if (!s) {
       if (this.#sessions.size >= MAX_SESSIONS) this.#sessions.delete(this.#sessions.keys().next().value!);
-      s = { exited: false, turns: [], texts: [], msgId: null, msgTurn: null, ended: false, replays: false, muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      s = { exited: false, turns: [], texts: [], msgId: null, msgTurn: null, ended: false, replays: false, live: false, muted: new Set(), stopped: false, latest: null, calls: new Map() };
       this.#sessions.set(hsid, s);
     } else {
       // LRU: a touched session moves to the back of the eviction order
@@ -382,6 +387,7 @@ export class OfferRouter {
         s.msgTurn = null;
         s.ended = false;
         s.replays = false;
+        s.live = false;
         return [];
       }
     }
@@ -389,6 +395,7 @@ export class OfferRouter {
     const s = this.#s(hsid);
     if (e.kind === 'turn.sent') {
       if (typeof p.turn === 'string') s.turns.push({ id: p.turn, evaluated: false, started: false, offer: null });
+      s.live = true; // re-review L-2
       s.latest = null; // L1: a new turn retires the shown offer (the kernel is as strict as the GUI)
       return [];
     }
@@ -397,6 +404,12 @@ export class OfferRouter {
       const out = this.#kept(hsid, s, p.line);
       const c = chainLine(p.line);
       if (!c) return out;
+      if (c.init) {
+        s.live = true;
+        return out;
+      }
+      // re-review L-2: a replay before the stream is live (a resumed session's history) marks nothing
+      if (c.replay && !s.live) return out;
       if (c.replay) {
         // review R2: Claude Code consumed the next outstanding turn; an earlier started turn whose reply has not ended
         // was FOLDED into this one (one reply answers both): it is settled without a row

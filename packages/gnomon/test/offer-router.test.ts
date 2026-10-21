@@ -660,6 +660,26 @@ describe('#offer-router: a Stop-hook continuation replaces the evaluation (revie
     const cont = t.commit(ev(messageStartLine('msg_3')));
     expect(cont).toEqual([{ kind: 'offer.retired', session: HSID, payload: { offerId: shown[0]!.payload.offerId, hsid: HSID, why: 'continued' } }]);
   });
+  it('re-review L-2: a replay line before the stream is live (resumed history) is ignored', () => {
+    const t = rig();
+    t.commit({ kind: 'session.open', session: HSID, payload: { hsid: HSID } });
+    t.commit(ev(replayOf('an old message from the transcript')));
+    t.commit(sent(1));
+    t.commit(ev(messageStartLine('msg_1')));
+    t.commit(sent(2));
+    // no live replay was seen: turn 2 still counts as streaming (the history replay did not switch to started marks)
+    expect(reply(t, 'msg_1', offerReply('a', BLOCK))).toEqual([]);
+    expect(t.suppressed.map((x) => x.why)).toEqual(['turn-streaming']);
+    // after a system.init the replay lines count again
+    const u = rig();
+    u.commit({ kind: 'session.open', session: HSID, payload: { hsid: HSID } });
+    u.commit(ev(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'x' })));
+    u.commit(ev(replayOf('hi')));
+    u.commit(sent(1));
+    u.commit(ev(messageStartLine('msg_1')));
+    u.commit(sent(2));
+    expect(reply(u, 'msg_1', offerReply('a', BLOCK)).map((r) => r.kind)).toEqual(['offer.shown']);
+  });
   it('re-review M-4: the Stop hook block match is exact (outcome blocked, decision block or exit_code 2)', () => {
     const hook = (o: Record<string, unknown>) => ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', ...o }));
     for (const [o, retires] of [
