@@ -648,7 +648,14 @@ components:
       change resets it); a near miss asks "Did you say …?"; a 1 s grace
       ("Sending… Esc keeps it", draft state word-grace) then
       request.voice.send.claim and the one send path. An ambient attach asks
-      for the preset's send ceiling. Labels: sentLabel(turn.sent), CLAMP_CHIP.
+      for the preset's send ceiling (with liabilityAck once the in-app
+      acknowledgement dialog recorded it). Labels: sentLabel(turn.sent) on
+      voice messages and CLAMP_CHIP in the session header; the guided
+      "Teach Gnomon your send word" dialog (core/send-word-teach.ts: pick,
+      lead-in, 3 takes, test, save); Pieces (gap 1500 / cap 8000 ms, hold
+      while busy, piece claim, piece ring); Mic key switch, Listening
+      (open / toggle) choice sent as the client's capture kind, voice.preset.*
+      palette commands, in-app bare `, send-now from the voice app.
       ONE SEND CONTROL (founder report 2026-10-20): the composer's own send
       (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no
       Send of its own. draftState / DRAFT_CONTROLS map the draft's state to

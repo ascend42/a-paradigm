@@ -3560,7 +3560,17 @@ flows:
       consumed atomically, bound to the connection for 5 s) →
       session.send{source:'voice'} gets origin 'voice', sentBy 'word' →
       ^voice-origin-clamp until its turn.result. Backstop: an unclaimed
-      pending word turn stamps voice anyway.
+      pending word turn stamps voice anyway. Aegis fixes: the origin check
+      runs on EVERY human send (stale or wrong-session claims stamp voice;
+      under a word+ ceiling an ambient-matched send is a piece, so Enter on
+      an ambient draft is clamped); a voice turn closes only after its own
+      replay and a later result; a short word passes adjacency with or
+      without speakerBasis; a word or pieces attach carries liabilityAck
+      (sha256 of the ack text), recorded in the kernel-written start row.
+      The guided dialog teaches the word as a TRIAL (adjacency only, 2 min,
+      send-word-trial.json 0600). request.voice.client mic-toggle /
+      mic-key / start{capture} drive the mic, the Mic key and the capture
+      kind of the kernel-spawned client (--capture ptt|open|toggle).
     steps: ["#gui-dictation", "#gnomon-voice", "#send-word-matcher", "#supervisor"]
     tags: [gnomon, voice]
     oracles: [G-VOX-20, G-VOX-20b]
