@@ -26,13 +26,25 @@ import Foundation
 /// capped at 12 h and 512 signatures, and a kept fresh sign reports those bounds (`bounds`) so the kernel can stop
 /// applying the 1.6.0 bounds. The unlock key is still the request's `connId` string; the kernel now sends the GUI
 /// device's `udev:` key there, so the unlock survives a reconnect. Same protocol (additive reply field).
-let gnomonHelperVersion = "1.7.0"
+/// 1.8.0 (TD-2026-10-20-514; Aegis C1-C3, C7): `decision.sign` — ONE fresh presence signs a card decision's
+/// approvals messages (decisionSig + presence challenge) AND every root row it needs: the gnomon-root-decision:v2
+/// row (rowsDigest over the card's detail.rootRows, sent as `intent`) and the rows the card showed, in order, within
+/// the card kind's closed row table. The helper's own line (what every row grants, every digest) goes FIRST in the
+/// dialog; the context is invalidated at once — never cached, never kept. `probe-decision` is the on-device check
+/// (C4). Additive op: same protocol, the kernel's 1.6.0 floor stays; the kernel picks decision.sign from info.version.
+let gnomonHelperVersion = "1.8.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
 enum Bounds {
     static let maxLineBytes = 1 << 20          // one request line
     static let maxMessages = 4                 // per sign request
+    static let maxDecisionMessages = 10        // per decision.sign request (approvals + root, TD-2026-10-20-514)
+    static let maxDecisionApprovals = 2        // decision.sign: one approve:v1 and one presence:v1 at most
+    static let maxDecisionRootRows = 8         // decision.sign: the decision row + every grant row of one card
+    static let maxDecisionBytes = 256 * 1024   // decision.sign: total decoded bytes (approvals + root + intent), Aegis C7
+    static let maxDecisionLineChars = 1200     // decision.sign: the helper's own dialog line (UTF-16 units), never truncated
+    static let maxDecisionReasonChars = 160    // decision.sign: the kernel's text, AFTER the helper's line
     static let maxMessageBytes = 65_536        // per message, decoded
     static let maxReasonChars = 512            // the caller's part of the presence prompt (the helper appends its own line)
     static let maxConnIdChars = 128
@@ -251,6 +263,233 @@ func helperLine(key: KeyClass, messages: [Data]) -> String {
         }
     }
     return parts.joined(separator: "; ")
+}
+
+/* ── decision.sign (helper 1.8.0, TD-2026-10-20-514; Aegis C1–C3, C7) ──────── */
+
+let approveDomain = "gnomon:approve:v1\n"
+let presenceDomain = "gnomon:presence:v1\n"
+let rowDomain = "gnomon:row-sig:v1\n"
+let rootDecisionSchemaV1 = "gnomon-root-decision:v1"
+let rootDecisionSchemaV2 = "gnomon-root-decision:v2"
+let voiceEnrolSchema = "voiceEnrolRow:v1"
+
+/// What an approve:v1 message names: (cardId, decision, contentHash), v1 or decisionSig v2 layout. nil = not that layout.
+struct ApproveFields: Equatable {
+    let cardId: String
+    let decision: String
+    let contentHash: String
+}
+
+func parseApprove(_ m: Data) -> ApproveFields? {
+    let d = Data(approveDomain.utf8)
+    guard m.starts(with: d) else { return nil }
+    var f = String(decoding: m[(m.startIndex + d.count)...], as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    // decisionSig v2 (P8-D98): first line gnomon:decision:v2, then the v1 fields, then the answer digest
+    if f.first == "gnomon:decision:v2" { f.removeFirst() }
+    guard f.count >= 4, !f[0].isEmpty, !f[1].isEmpty, !f[2].isEmpty else { return nil }
+    return ApproveFields(cardId: f[0], decision: f[1], contentHash: f[2])
+}
+
+/// A decision.sign batch, validated and bound (decisionBatch).
+struct DecisionBatch {
+    let approvals: [Data]
+    let root: [Data]
+    /// root rows parsed; rows[0] is the gnomon-root-decision:v2 row
+    let rows: [Json]
+    let anchor: ApproveFields
+    let cardKind: String
+}
+
+struct BatchRefusal: Error {
+    let why: String
+}
+
+/// The kind a root row names in the closed table: a grant row's `kind`, `voice.enrol` for an enrol row, else its schemaVersion.
+func rowKind(_ r: Json) -> String {
+    if r["schemaVersion"] as? String == voiceEnrolSchema { return r["op"] as? String == "enrol" ? "voice.enrol" : "voice.\(r["op"] as? String ?? "?")" }
+    return (r["kind"] as? String) ?? (r["schemaVersion"] as? String) ?? "row"
+}
+
+/// The fields a row's intent (detail.rootRows) leaves out: set when the row is built, never shown on the card.
+func volatileFields(_ r: Json) -> [String] {
+    r["schemaVersion"] as? String == voiceEnrolSchema ? ["createdAt", "seq", "at"] : ["createdAt"]
+}
+
+/// Aegis C3: the closed per-cardKind row table (rows after the decision row). nil = allowed.
+func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
+    let kinds = rows.map(rowKind)
+    switch cardKind {
+    case "install":
+        guard kinds.filter({ $0 == "grant.install" }).count == 1, kinds.last == "grant.install" else { return "an install signs exactly one grant.install, last" }
+        for k in kinds.dropLast() {
+            guard ["grant.trust", "grant.capability", "grant.egress", "grant.publisher"].contains(k) else { return "an install never signs a \(k) row" }
+            guard kinds.filter({ $0 == k }).count <= 1 else { return "an install signs at most one \(k) row" }
+        }
+        if let c = rows.first(where: { rowKind($0) == "grant.capability" }) {
+            guard c["manifestHash"] is String, c["deviceId"] == nil else { return "an install's capability row names its manifest, never a device" }
+        }
+        if let p = rows.first(where: { rowKind($0) == "grant.publisher" }) {
+            let name = rows.last?["name"] as? String ?? ""
+            guard let pub = p["publisher"] as? String, name.hasPrefix(pub + ".") else { return "the publisher row names another publisher than the installed mod" }
+        }
+        return nil
+    case "uninstall":
+        return kinds == ["grant.uninstall"] ? nil : "an uninstall signs exactly one grant.uninstall"
+    case "voice.enrol":
+        return kinds == ["voice.enrol"] ? nil : "a voice enrolment signs exactly one enrol row"
+    case "mod.mcp.config", "api-token", "peer-pair", "grant":
+        return kinds.isEmpty ? nil : "a \(cardKind) decision signs only its decision row"
+    default:
+        return "no row table for card kind \(String(cardKind.prefix(40)))"
+    }
+}
+
+func sha256Tag(_ d: Data) -> String {
+    "sha256:" + SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined()
+}
+
+/// THE binding rule of a decision batch (TD-2026-10-20-514 + Aegis C1d/C3; the kernel's mirror is gnomon
+/// src/kernel/identity/decision-batch.ts, both checked against gnomon-contracts
+/// test/fixtures/decision-batch-vectors.json). Throws BatchRefusal (`batch-refused`).
+///   - rows[0] is the ONE gnomon-root-decision:v2 row {cardId, cardKind, decision, contentHash, approver, rowsDigest};
+///     no other decision row anywhere. An approve message, when present, names the same cardId/decision/contentHash.
+///   - sha256(intent) == rowsDigest, and each later row with its volatile fields dropped deep-equals intent[i]
+///     (same count, same order): what the card showed (detail.rootRows, inside contentHash) is what gets signed.
+///   - every later row carries the anchor's cardId; every manifestHash is the same one; the cardKind's row table holds.
+/// Tighten here AND in the TS mirror (one function each side) — the shared vectors keep them equal.
+func bindDecisionBatch(approve: ApproveFields?, rows: [Json], intent: Data) throws -> (anchor: ApproveFields, cardKind: String) {
+    guard let d = rows.first, d["schemaVersion"] as? String == rootDecisionSchemaV2 else { throw BatchRefusal(why: "the first root row is not a gnomon-root-decision:v2 row") }
+    for r in rows.dropFirst() {
+        let sv = r["schemaVersion"] as? String
+        guard sv != rootDecisionSchemaV2, sv != rootDecisionSchemaV1 else { throw BatchRefusal(why: "two root decision rows") }
+    }
+    guard let c = d["cardId"] as? String, let k = d["cardKind"] as? String, let dec = d["decision"] as? String, let h = d["contentHash"] as? String,
+          d["approver"] is String, let digest = d["rowsDigest"] as? String else { throw BatchRefusal(why: "the decision row does not name a card, kind, decision, content hash, approver and rows digest") }
+    let anchor = ApproveFields(cardId: c, decision: dec, contentHash: h)
+    if let a = approve, a != anchor { throw BatchRefusal(why: "the decision row names another card, decision or content hash than the approval") }
+    guard sha256Tag(intent) == digest else { throw BatchRefusal(why: "the intent does not hash to the decision row's rowsDigest") }
+    guard let shown = (try? JSONSerialization.jsonObject(with: intent)) as? [Any] else { throw BatchRefusal(why: "the intent is not a JSON array") }
+    let later = Array(rows.dropFirst())
+    guard shown.count == later.count else { throw BatchRefusal(why: "the rows signed are not the rows the card showed (count)") }
+    var mh: String?
+    for (i, r) in later.enumerated() {
+        var bare = r
+        for f in volatileFields(r) { bare.removeValue(forKey: f) }
+        guard let want = shown[i] as? Json, NSDictionary(dictionary: bare).isEqual(to: want) else { throw BatchRefusal(why: "root row \(i + 1) is not the row the card showed") }
+        guard r["cardId"] as? String == c else { throw BatchRefusal(why: "a root row does not name the decided card") }
+        if let v = r["manifestHash"] {
+            guard let s = v as? String else { throw BatchRefusal(why: "a manifestHash is not a string") }
+            if let m = mh, m != s { throw BatchRefusal(why: "two rows name different manifest hashes") }
+            mh = s
+        }
+    }
+    if let why = rowTableRefusal(cardKind: k, rows: later) { throw BatchRefusal(why: why) }
+    return (anchor, k)
+}
+
+/// Validate a decision.sign request before any key is touched: shapes and bounds (`bad-request`), domains
+/// (`domain-refused`), then the binding (`batch-refused`).
+func decisionBatch(_ req: Json) throws -> DecisionBatch {
+    func decode(_ v: Any?, _ key: String, min: Int, max: Int) throws -> [Data] {
+        guard let arr = (v ?? [Any]()) as? [Any], arr.count >= min, arr.count <= max else { throw bad("\(key) must be an array of \(min)..\(max) base64 strings") }
+        return try arr.map { item in
+            guard let s = item as? String, let d = Data(base64Encoded: s), !d.isEmpty, d.count <= Bounds.maxMessageBytes else {
+                throw bad("each message must be base64 of 1..\(Bounds.maxMessageBytes) bytes")
+            }
+            return d
+        }
+    }
+    let approvals = try decode(req["approvals"], "approvals", min: 0, max: Bounds.maxDecisionApprovals)
+    let root = try decode(req["root"], "root", min: 1, max: Bounds.maxDecisionRootRows)
+    guard approvals.count + root.count <= Bounds.maxDecisionMessages else { throw bad("a decision signs at most \(Bounds.maxDecisionMessages) messages") }
+    guard let i = req["intent"] as? String, let intent = Data(base64Encoded: i), !intent.isEmpty, intent.count <= Bounds.maxMessageBytes else { throw bad("intent must be base64 of the card's rootRows JSON") }
+    guard (approvals + root).reduce(intent.count, { $0 + $1.count }) <= Bounds.maxDecisionBytes else { throw bad("a decision signs at most \(Bounds.maxDecisionBytes) bytes") }
+    var approve: ApproveFields?
+    var presences = 0
+    for m in approvals {
+        if m.starts(with: Data(approveDomain.utf8)) {
+            guard approve == nil else { throw bad("at most one approve message per decision") }
+            guard let f = parseApprove(m) else { throw bad("the approve message is not a decision preimage") }
+            approve = f
+        } else if m.starts(with: Data(presenceDomain.utf8)) {
+            presences += 1
+            guard presences <= 1 else { throw bad("at most one presence message per decision") }
+        } else {
+            // fresh domains only: never approve-voice:v1, never a row (G-BRK-06, C7)
+            throw HelperError("domain-refused", "the approvals key signs only approve:v1 and presence:v1 in a decision")
+        }
+    }
+    var rows: [Json] = []
+    for m in root {
+        let d = Data(rowDomain.utf8)
+        guard m.starts(with: d) else { throw HelperError("domain-refused", "the root key signs only row-sig:v1 rows") }
+        guard let obj = (try? JSONSerialization.jsonObject(with: m.subdata(in: d.count..<m.count))) as? Json else { throw bad("each root row must be a JSON object") }
+        rows.append(obj)
+    }
+    do {
+        let (anchor, kind) = try bindDecisionBatch(approve: approve, rows: rows, intent: intent)
+        return DecisionBatch(approvals: approvals, root: root, rows: rows, anchor: anchor, cardKind: kind)
+    } catch let e as BatchRefusal {
+        throw HelperError("batch-refused", e.why)
+    }
+}
+
+/// What one row says on the dialog (Aegis C2), from the bytes signed; nil = a field the dialog cannot show.
+func rowShown(_ r: Json, compactCaps: Bool) -> String? {
+    func s(_ k: String) -> String? { r[k] as? String }
+    switch rowKind(r) {
+    case "grant.install":
+        guard let n = s("name"), let src = s("source"), let p = s("packageHash") else { return nil }
+        return "install \(n) from \(src) \(p.prefix(19))"
+    case "grant.trust":
+        guard let t = s("tier") else { return nil }
+        return "trust \(t)"
+    case "grant.capability":
+        guard let caps = r["capabilities"] as? [String], !caps.isEmpty else { return nil }
+        let reads = (r["read"] as? [String])?.count ?? 0
+        let tail = reads > 0 ? " (reads \(reads) paths)" : ""
+        return compactCaps ? "\(caps.count) capabilities sha:\(digest12(Data(caps.joined(separator: ",").utf8)))\(tail)" : "capabilities \(caps.joined(separator: ","))\(tail)"
+    case "grant.egress":
+        guard let hosts = r["hosts"] as? [String], !hosts.isEmpty else { return nil }
+        return "egress \(hosts.joined(separator: " "))"
+    case "grant.publisher":
+        guard let p = s("publisher"), let h = s("host"), let n = s("namespace") else { return nil }
+        return "publisher \(p) → \(h)/\(n)"
+    case "grant.uninstall":
+        guard let n = s("name") else { return nil }
+        return "uninstall \(n)"
+    case "voice.enrol":
+        guard let sp = s("speakerId") else { return nil }
+        return "voice enrol \(sp)"
+    default:
+        return nil
+    }
+}
+
+/// The helper's OWN line for a decision (Aegis H3 + C2): the decision, then what EVERY row grants, in full, then
+/// every digest it signs (approvals first, then root rows). It goes FIRST in the dialog. Nothing is truncated: a
+/// line that does not fit (capabilities may compact to a count + digest) is refused `too-large-to-show`.
+func decisionLine(_ b: DecisionBatch) throws -> String {
+    let digests = (b.approvals + b.root).map(digest12).joined(separator: " ")
+    func build(_ compact: Bool) throws -> String {
+        let parts = try b.rows.dropFirst().map { r -> String in
+            guard let t = rowShown(r, compactCaps: compact) else { throw HelperError("batch-refused", "a root row cannot be shown on the dialog") }
+            return t
+        }
+        let head = "Gnomon Helper: ONE presence signs \(b.anchor.decision) on \(b.cardKind) \(b.anchor.cardId) \(b.anchor.contentHash.prefix(19))"
+        return head + (parts.isEmpty ? "" : "; " + parts.joined(separator: "; ")) + "; digests \(digests)"
+    }
+    var line = try build(false)
+    if line.utf16.count > Bounds.maxDecisionLineChars { line = try build(true) }
+    guard line.utf16.count <= Bounds.maxDecisionLineChars else { throw HelperError("batch-refused", "too-large-to-show") }
+    guard promptSafe(line) == line else { throw HelperError("batch-refused", "a root row holds a character the dialog cannot show") }
+    return line
+}
+
+/// The dialog text of a decision: the helper's line FIRST, the kernel's reason after it, capped (Aegis C2).
+func decisionPromptText(_ line: String, _ callerReason: String) -> String {
+    "\(line)\n\(String(promptSafe(callerReason).prefix(Bounds.maxDecisionReasonChars)))"
 }
 
 /// A connId as the prompt shows it: in full up to 48 characters, else a stable short hash (Aegis L4: never a

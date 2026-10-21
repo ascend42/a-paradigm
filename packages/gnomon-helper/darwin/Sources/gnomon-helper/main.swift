@@ -14,6 +14,13 @@
 //                                  run loop that observes lock / screensaver /
 //                                  display sleep / system sleep / user switch
 //                                  (SessionWatch.swift) and PUSHES an event.
+//   gnomon-helper probe-decision <gen>
+//                                  Aegis C4 hardware probe (TD-2026-10-20-514), run by the founder ON DEVICE:
+//                                  ONE evaluatePresence (one dialog), then the approvals key AND the root key of
+//                                  <gen> each sign a probe message under that one context; both are verified by
+//                                  their public keys. Then the negative case: a NEW, unevaluated context with
+//                                  interactionNotAllowed must fail to sign with the root key, showing no dialog.
+//                                  Prints one JSON line; exit 0 only when every check holds.
 //   gnomon-helper once             one request line in, one reply line out
 //                                  (root signatures from the CLI; no observer,
 //                                  it holds nothing past its one reply)
@@ -33,6 +40,11 @@
 //                                               Deleting approvals drops every unlock and arm.
 //   sign        {key, gen, mode: fresh|cached, connId?, keep?, reason, messages[]}
 //                                             → {sigs[], kept}   NEVER the voice domain (G-BRK-06)
+//   decision.sign {gen, reason, connId?, approvals: [b64 ×0..2], root: [b64 ×1..8]}   (1.8.0, TD-2026-10-20-514)
+//                                             → {approvalSigs[], rootSigs[], shown, kept: false}  ONE fresh presence
+//                                               signs a card decision's approve:v1 + presence:v1 messages and every
+//                                               row-sig:v1 root row; refuses keep; bad-request / domain-refused /
+//                                               batch-refused (decisionBatchRefusal) before any key is touched
 //   presence.available                        → {available, biometrics, error?}  (LAContext canEvaluatePolicy; NEVER a prompt)
 //   unlock.drop {connId}                      → {dropped}
 //   unlock.drop-all                           → {dropped: n}
@@ -93,7 +105,14 @@ case "serve":
     exit(0)
 case "once":
     exit(server.serve(onlyOne: true, output: output))
+case "probe-decision":
+    guard arguments.count == 2, let gen = try? generation(["gen": arguments[1]]) else {
+        FileHandle.standardError.write(Data("usage: gnomon-helper probe-decision <gen>\n".utf8))
+        exit(64)
+    }
+    output.emit(replyLine(probeDecision(gen: gen)))
+    exit(0)
 default:
-    FileHandle.standardError.write(Data("usage: gnomon-helper --version | serve | once\n".utf8))
+    FileHandle.standardError.write(Data("usage: gnomon-helper --version | serve | once | probe-decision <gen>\n".utf8))
     exit(64)
 }

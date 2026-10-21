@@ -41,7 +41,7 @@ final class Server {
     /// those, without presence — Aegis round 3: a pair, never a whole generation).
     var createdHere = Set<String>()
 
-    /// Seams for tests (the arm paths only; production: the real prompt, the Secure Enclave key, CGSession).
+    /// Seams for tests (the arm paths and decision.sign; production: the real prompt, the Secure Enclave key, CGSession).
     let presence: (String) throws -> LAContext
     let signer: (KeyClass, String, LAContext, [Data]) throws -> [String]
     let session: SessionProbe
@@ -159,6 +159,23 @@ final class Server {
             default:
                 throw bad("mode must be fresh (root, approvals) or cached (approvals)")
             }
+
+        case "decision.sign":
+            // TD-2026-10-20-514 (1.8.0): ONE fresh presence per card decision. Everything is validated and bound
+            // before the prompt (Aegis C1d intent, C3 row table, C7 bounds); then one evaluation signs the approvals messages and every root row, all or nothing.
+            guard req["keep"] == nil else { throw bad("decision.sign never keeps an unlock") }
+            guard req["mode"] == nil else { throw bad("decision.sign has no mode: it is always one fresh presence") }
+            let g = try generation(req)
+            _ = try connId(req) // validated (the kernel's connection, informational)
+            let batch = try decisionBatch(req)
+            let why = try reason(req)
+            let line = try decisionLine(batch)
+            let ctx = try presence(decisionPromptText(line, why))
+            defer { ctx.invalidate() } // no reuse window, no cached root unlock
+            let approvalSigs = batch.approvals.isEmpty ? [] : try signer(.approvals, g, ctx, batch.approvals)
+            let rootSigs = try signer(.root, g, ctx, batch.root)
+            guard approvalSigs.count == batch.approvals.count, rootSigs.count == batch.root.count else { throw HelperError("sign", "a signature is missing") }
+            return ["approvalSigs": approvalSigs, "rootSigs": rootSigs, "shown": line, "kept": false]
 
         case "arm.open":
             // §14.7: a FRESH presence evaluation, bound to {humanConnId, voiceConnId}, kept per armId

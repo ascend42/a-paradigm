@@ -6,7 +6,10 @@
 // gnomon.probe) is signed into SW4BMQ8PNL.gnomon.probe and never lists this one.
 //
 //   root       SE P-256, .privateKeyUsage + .userPresence; FRESH presence per
-//              signature (a new LAContext, evaluated, then invalidated).
+//              DECISION (helper 1.8.0, TD-2026-10-20-514): a new LAContext,
+//              evaluated once, signs that one card decision's root rows (and
+//              its approvals messages, decision.sign) and is then invalidated.
+//              Never cached, never kept, no reuse window.
 //   approvals  SE P-256, .privateKeyUsage + .userPresence; fresh presence, or
 //              a per-connection CACHED unlock: the evaluated LAContext is held
 //              here keyed by the kernel's connId (the kernel holds only the
@@ -206,4 +209,37 @@ final class Unlocks {
             byConn.removeValue(forKey: k)
         }
     }
+}
+
+/// Aegis C4: the on-device probe of the decision.sign assumption — one evaluated context authorises BOTH keys of a
+/// generation, and an unevaluated context with interactionNotAllowed authorises neither (and shows nothing).
+func probeDecision(gen: String) -> Json {
+    var out: Json = ["probe": "decision", "gen": gen, "version": gnomonHelperVersion]
+    var nonce = Data(count: 16)
+    _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+    let approvalsMsg = Data("gnomon:presence:v1\ngnomon-probe:v1\n\(nonce.base64EncodedString())".utf8)
+    let rootMsg = Data("gnomon:row-sig:v1\n{\"nonce\":\"\(nonce.base64EncodedString())\",\"schemaVersion\":\"gnomon-probe:v1\"}".utf8)
+    do {
+        let ctx = try evaluatePresence("Gnomon Helper probe: ONE presence for two keys (approvals + root of \(gen)). Nothing is granted.")
+        defer { ctx.invalidate() }
+        let a = try signAll(try loadPrivateKey(.approvals, gen, context: ctx), [approvalsMsg])[0]
+        let r = try signAll(try loadPrivateKey(.root, gen, context: ctx), [rootMsg])[0]
+        out["approvalsVerifies"] = verifyBy(.approvals, gen, message: approvalsMsg, signature: Data(base64Encoded: a)!)
+        out["rootVerifies"] = verifyBy(.root, gen, message: rootMsg, signature: Data(base64Encoded: r)!)
+    } catch let e as HelperError {
+        out["error"] = e.code
+        out["message"] = e.message
+    } catch {
+        out["error"] = "internal"
+    }
+    // negative: never evaluated, interaction not allowed — must fail, with no dialog
+    let cold = LAContext()
+    cold.interactionNotAllowed = true
+    let started = Date()
+    let coldSigned = (try? signAll(try loadPrivateKey(.root, gen, context: cold), [rootMsg])) != nil
+    cold.invalidate()
+    out["unevaluatedRefused"] = !coldSigned
+    out["unevaluatedSeconds"] = Date().timeIntervalSince(started)
+    out["ok"] = out["approvalsVerifies"] as? Bool == true && out["rootVerifies"] as? Bool == true && !coldSigned
+    return out
 }

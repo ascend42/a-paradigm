@@ -1,0 +1,627 @@
+{
+  "schema": "gnomon-decision-batch-vectors:v2",
+  "note": "TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).",
+  "vectors": [
+    {
+      "name": "install: approve + presence, the decision row and all five grant rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:8e509b59cfe6515c69e45d30ba7baf5c29f430256ccf45ae84e19540d45e09e9\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"capabilities\":[\"tools:call\",\"fs:read\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.capability\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"host\":\"git.example.com\",\"kind\":\"grant.publisher\",\"namespace\":\"acme\",\"publisher\":\"acme\",\"schemaVersion\":\"grantRow:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"capabilities\":[\"tools:call\",\"fs:read\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.capability\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"host\":\"git.example.com\",\"kind\":\"grant.publisher\",\"namespace\":\"acme\",\"publisher\":\"acme\",\"schemaVersion\":\"grantRow:v2\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs install on install card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust community; capabilities tools:call,fs:read; egress api.example.com; publisher acme → git.example.com/acme; install acme.diff-lens from package sha256:eeeeeeeeeeee; digests 20625fbfd302 1a09afa1106a a9684da1ab30 e4612c1337d4 b98612bf5ef3 b10a41c952fb 0ce956d8a64c 10792381ba03"
+    },
+    {
+      "name": "install: minimal (trust, install)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:4d4af0251ec44915fef95413ac1653fd5f3d7ab85e8ad084cb9b01529d9af3b0\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs install on install card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust community; install acme.diff-lens from package sha256:eeeeeeeeeeee; digests 20625fbfd302 1a09afa1106a 943d0b788ba2 e4612c1337d4 10792381ba03"
+    },
+    {
+      "name": "install: capabilities too long for the line compact to a count and digest",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:976d8618c4749f6f258b34b71fb338f87752c362dd5716405a1a66f75d47c118\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"capabilities\":[\"tools:call-xxxxxxxxxx-0\",\"tools:call-xxxxxxxxxx-1\",\"tools:call-xxxxxxxxxx-2\",\"tools:call-xxxxxxxxxx-3\",\"tools:call-xxxxxxxxxx-4\",\"tools:call-xxxxxxxxxx-5\",\"tools:call-xxxxxxxxxx-6\",\"tools:call-xxxxxxxxxx-7\",\"tools:call-xxxxxxxxxx-8\",\"tools:call-xxxxxxxxxx-9\",\"tools:call-xxxxxxxxxx-10\",\"tools:call-xxxxxxxxxx-11\",\"tools:call-xxxxxxxxxx-12\",\"tools:call-xxxxxxxxxx-13\",\"tools:call-xxxxxxxxxx-14\",\"tools:call-xxxxxxxxxx-15\",\"tools:call-xxxxxxxxxx-16\",\"tools:call-xxxxxxxxxx-17\",\"tools:call-xxxxxxxxxx-18\",\"tools:call-xxxxxxxxxx-19\",\"tools:call-xxxxxxxxxx-20\",\"tools:call-xxxxxxxxxx-21\",\"tools:call-xxxxxxxxxx-22\",\"tools:call-xxxxxxxxxx-23\",\"tools:call-xxxxxxxxxx-24\",\"tools:call-xxxxxxxxxx-25\",\"tools:call-xxxxxxxxxx-26\",\"tools:call-xxxxxxxxxx-27\",\"tools:call-xxxxxxxxxx-28\",\"tools:call-xxxxxxxxxx-29\",\"tools:call-xxxxxxxxxx-30\",\"tools:call-xxxxxxxxxx-31\",\"tools:call-xxxxxxxxxx-32\",\"tools:call-xxxxxxxxxx-33\",\"tools:call-xxxxxxxxxx-34\",\"tools:call-xxxxxxxxxx-35\",\"tools:call-xxxxxxxxxx-36\",\"tools:call-xxxxxxxxxx-37\",\"tools:call-xxxxxxxxxx-38\",\"tools:call-xxxxxxxxxx-39\",\"tools:call-xxxxxxxxxx-40\",\"tools:call-xxxxxxxxxx-41\",\"tools:call-xxxxxxxxxx-42\",\"tools:call-xxxxxxxxxx-43\",\"tools:call-xxxxxxxxxx-44\",\"tools:call-xxxxxxxxxx-45\",\"tools:call-xxxxxxxxxx-46\",\"tools:call-xxxxxxxxxx-47\",\"tools:call-xxxxxxxxxx-48\",\"tools:call-xxxxxxxxxx-49\",\"tools:call-xxxxxxxxxx-50\",\"tools:call-xxxxxxxxxx-51\",\"tools:call-xxxxxxxxxx-52\",\"tools:call-xxxxxxxxxx-53\",\"tools:call-xxxxxxxxxx-54\",\"tools:call-xxxxxxxxxx-55\",\"tools:call-xxxxxxxxxx-56\",\"tools:call-xxxxxxxxxx-57\",\"tools:call-xxxxxxxxxx-58\",\"tools:call-xxxxxxxxxx-59\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.capability\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"capabilities\":[\"tools:call-xxxxxxxxxx-0\",\"tools:call-xxxxxxxxxx-1\",\"tools:call-xxxxxxxxxx-2\",\"tools:call-xxxxxxxxxx-3\",\"tools:call-xxxxxxxxxx-4\",\"tools:call-xxxxxxxxxx-5\",\"tools:call-xxxxxxxxxx-6\",\"tools:call-xxxxxxxxxx-7\",\"tools:call-xxxxxxxxxx-8\",\"tools:call-xxxxxxxxxx-9\",\"tools:call-xxxxxxxxxx-10\",\"tools:call-xxxxxxxxxx-11\",\"tools:call-xxxxxxxxxx-12\",\"tools:call-xxxxxxxxxx-13\",\"tools:call-xxxxxxxxxx-14\",\"tools:call-xxxxxxxxxx-15\",\"tools:call-xxxxxxxxxx-16\",\"tools:call-xxxxxxxxxx-17\",\"tools:call-xxxxxxxxxx-18\",\"tools:call-xxxxxxxxxx-19\",\"tools:call-xxxxxxxxxx-20\",\"tools:call-xxxxxxxxxx-21\",\"tools:call-xxxxxxxxxx-22\",\"tools:call-xxxxxxxxxx-23\",\"tools:call-xxxxxxxxxx-24\",\"tools:call-xxxxxxxxxx-25\",\"tools:call-xxxxxxxxxx-26\",\"tools:call-xxxxxxxxxx-27\",\"tools:call-xxxxxxxxxx-28\",\"tools:call-xxxxxxxxxx-29\",\"tools:call-xxxxxxxxxx-30\",\"tools:call-xxxxxxxxxx-31\",\"tools:call-xxxxxxxxxx-32\",\"tools:call-xxxxxxxxxx-33\",\"tools:call-xxxxxxxxxx-34\",\"tools:call-xxxxxxxxxx-35\",\"tools:call-xxxxxxxxxx-36\",\"tools:call-xxxxxxxxxx-37\",\"tools:call-xxxxxxxxxx-38\",\"tools:call-xxxxxxxxxx-39\",\"tools:call-xxxxxxxxxx-40\",\"tools:call-xxxxxxxxxx-41\",\"tools:call-xxxxxxxxxx-42\",\"tools:call-xxxxxxxxxx-43\",\"tools:call-xxxxxxxxxx-44\",\"tools:call-xxxxxxxxxx-45\",\"tools:call-xxxxxxxxxx-46\",\"tools:call-xxxxxxxxxx-47\",\"tools:call-xxxxxxxxxx-48\",\"tools:call-xxxxxxxxxx-49\",\"tools:call-xxxxxxxxxx-50\",\"tools:call-xxxxxxxxxx-51\",\"tools:call-xxxxxxxxxx-52\",\"tools:call-xxxxxxxxxx-53\",\"tools:call-xxxxxxxxxx-54\",\"tools:call-xxxxxxxxxx-55\",\"tools:call-xxxxxxxxxx-56\",\"tools:call-xxxxxxxxxx-57\",\"tools:call-xxxxxxxxxx-58\",\"tools:call-xxxxxxxxxx-59\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.capability\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs install on install card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust community; 60 capabilities sha:5e2710ac220f; install acme.diff-lens from package sha256:eeeeeeeeeeee; digests 20625fbfd302 1a09afa1106a fa9010fb5cd2 e4612c1337d4 27f82247901b 10792381ba03"
+    },
+    {
+      "name": "mod.mcp.config: the decision row only",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"mod.mcp.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on mod.mcp.config card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; digests 86df9d57b51c 1a09afa1106a 66ae7fbfb51c"
+    },
+    {
+      "name": "api-token: the decision row only",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nuse-api-token\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"api-token\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"use-api-token\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs use-api-token on api-token card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; digests 036dd9c10ccc 1a09afa1106a d954e6bf547a"
+    },
+    {
+      "name": "a decisionSig v2 approval anchors the same way",
+      "approvals": [
+        "gnomon:approve:v1\ngnomon:decision:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nanswer\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\nsha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"grant\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"answer\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs answer on grant card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; digests 95f6daf47de9 1a09afa1106a 699833a6673f"
+    },
+    {
+      "name": "voice.enrol: one enrol row, seq and at volatile",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"voice.enrol\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:9ab1ffafe736ba2b60b635474478ca615faf27ceb36da5d92829d6e077d57de3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"at\":\"2026-10-20T12:00:00.000Z\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"seq\":3,\"speakerId\":\"spk:abcdefgh/ana\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"speakerId\":\"spk:abcdefgh/ana\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on voice.enrol card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; voice enrol spk:abcdefgh/ana; digests 86df9d57b51c 1a09afa1106a fda54c5e6176 715c53257860"
+    },
+    {
+      "name": "uninstall, root-only form (presence + the decision row anchors)",
+      "approvals": [
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"uninstall\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:c69d62620fc99bab8cab2afa32715c790b9946655891d8a0de74d29c6a6c0bda\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.uninstall\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.uninstall\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on uninstall card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; uninstall acme.diff-lens; digests 1a09afa1106a a00f8caffdfd ae65b68a776e"
+    },
+    {
+      "name": "uninstall with no approvals messages at all",
+      "approvals": [],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"uninstall\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:c69d62620fc99bab8cab2afa32715c790b9946655891d8a0de74d29c6a6c0bda\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.uninstall\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.uninstall\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on uninstall card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; uninstall acme.diff-lens; digests a00f8caffdfd ae65b68a776e"
+    },
+    {
+      "name": "the decision row is not first",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:4d4af0251ec44915fef95413ac1653fd5f3d7ab85e8ad084cb9b01529d9af3b0\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the first root row is not a gnomon-root-decision:v2 row"
+    },
+    {
+      "name": "two decision rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "two root decision rows"
+    },
+    {
+      "name": "a v1 decision row is not accepted by decision.sign",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"schemaVersion\":\"gnomon-root-decision:v1\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "the first root row is not a gnomon-root-decision:v2 row"
+    },
+    {
+      "name": "the decision row names another decision than the approval",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"deny\",\"rowsDigest\":\"sha256:4d4af0251ec44915fef95413ac1653fd5f3d7ab85e8ad084cb9b01529d9af3b0\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the decision row names another card, decision or content hash than the approval"
+    },
+    {
+      "name": "the decision row names another card than the approval",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:d0d8d5912d490f12bcdc7d2cc5a72d919e386548891ba8872647cf0136af5d14\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the decision row names another card, decision or content hash than the approval"
+    },
+    {
+      "name": "the decision row names another content hash than the approval",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the decision row names another card, decision or content hash than the approval"
+    },
+    {
+      "name": "a grant row names another card",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:4152255fa8e6232714603dbf7fb2ab65ae935f721d8c1b10b9a7914e2eea8c43\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
+      "name": "a grant row carries no cardId",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:a90366ceab6ab58ff851a0208d8c2e672e19b079498436dd7b34720ee8038b0f\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
+      "name": "two rows name different manifest hashes",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:817a608034bee02ebc148629d330993a26e70a65ff63a666c81db7242e8baea4\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "two rows name different manifest hashes"
+    },
+    {
+      "name": "root-only form without a decision row",
+      "approvals": [
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.uninstall\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "the first root row is not a gnomon-root-decision:v2 row"
+    },
+    {
+      "name": "the intent does not hash to rowsDigest",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:4d4af0251ec44915fef95413ac1653fd5f3d7ab85e8ad084cb9b01529d9af3b0\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"first-party\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the intent does not hash to the decision row's rowsDigest"
+    },
+    {
+      "name": "C1 falsifier: an extra grant.egress row the card never showed",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:4d4af0251ec44915fef95413ac1653fd5f3d7ab85e8ad084cb9b01529d9af3b0\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the rows signed are not the rows the card showed (count)"
+    },
+    {
+      "name": "C1 falsifier: a changed egress host",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:55e271240c324f9cda281cd3816b9446a704f35bdd6b96db226d23c141c4dd75\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"hosts\":[\"evil.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "root row 2 is not the row the card showed"
+    },
+    {
+      "name": "C1 falsifier: reordered rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:55e271240c324f9cda281cd3816b9446a704f35bdd6b96db226d23c141c4dd75\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"hosts\":[\"api.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "root row 1 is not the row the card showed"
+    },
+    {
+      "name": "C3: grant.install is not last",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:d0a718390ea06fa05385bca0eb20887a731c477490e4922f92a5ef7c221a7ec6\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}]",
+      "error": "batch-refused",
+      "why": "an install signs exactly one grant.install, last"
+    },
+    {
+      "name": "C3: two trust rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:f61b0b9dec780b082bc698adc7aef881237703512c4c4fee5c15149f34599d78\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "an install signs at most one grant.trust row"
+    },
+    {
+      "name": "C3: an install never signs grant.bind",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:e5bc1e6b436c69677022f21cd3c7a912abb6633bb55c3e0f645432532f4d44b6\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.bind\",\"kinds\":[\"x\"],\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"principal\":\"p:abcdefgh/matt\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.bind\",\"kinds\":[\"x\"],\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"principal\":\"p:abcdefgh/matt\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "an install never signs a grant.bind row"
+    },
+    {
+      "name": "C3: an install capability row never names a device",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:f69fb06ddd8b0d4280b32ef5d67b6690dc97524d82c3d77c2472609319b633d8\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"capabilities\":[\"tools:call\",\"fs:read\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"deviceId\":\"dev:x\",\"kind\":\"grant.capability\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"capabilities\":[\"tools:call\",\"fs:read\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"deviceId\":\"dev:x\",\"kind\":\"grant.capability\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "an install's capability row names its manifest, never a device"
+    },
+    {
+      "name": "C3: the publisher row names another publisher",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:13353f915ed89b898820ff88cb2ff02179cd969374f687efce60ca5b737d54cd\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"host\":\"git.example.com\",\"kind\":\"grant.publisher\",\"namespace\":\"acme\",\"publisher\":\"other\",\"schemaVersion\":\"grantRow:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"host\":\"git.example.com\",\"kind\":\"grant.publisher\",\"namespace\":\"acme\",\"publisher\":\"other\",\"schemaVersion\":\"grantRow:v2\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "the publisher row names another publisher than the installed mod"
+    },
+    {
+      "name": "C3: an uninstall never signs a grant.install",
+      "approvals": [
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"uninstall\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "an uninstall signs exactly one grant.uninstall"
+    },
+    {
+      "name": "C3: a mod.mcp.config decision signs no grant row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"mod.mcp.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:a666f6df4d64b9e90d53c5d6ee09036d0303e62843bf6aa3c2e508686bfb71f8\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}]",
+      "error": "batch-refused",
+      "why": "a mod.mcp.config decision signs only its decision row"
+    },
+    {
+      "name": "C3: an unknown card kind",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"permission\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "no row table for card kind permission"
+    },
+    {
+      "name": "C3: a voice enrolment for another card",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"voice.enrol\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:5cc1ca596cbe94a3e4b8955cdcabe5b96b54ace3d2d09ae36156b5b7067a6fba\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"at\":\"2026-10-20T12:00:00.000Z\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"seq\":3,\"speakerId\":\"spk:abcdefgh/ana\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"speakerId\":\"spk:abcdefgh/ana\"}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
+      "name": "C2: egress hosts that do not fit the line are refused, never truncated",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:5b3bdc737eca21004d9176c582e41675c19520de41299649af090095658e9410\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"hosts\":[\"h0-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h1-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h2-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h3-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h4-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h5-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h6-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h7-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h8-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h9-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h10-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h11-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h12-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h13-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h14-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h15-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h16-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h17-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h18-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h19-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h20-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h21-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h22-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h23-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h24-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h25-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h26-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h27-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h28-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h29-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"hosts\":[\"h0-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h1-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h2-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h3-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h4-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h5-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h6-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h7-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h8-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h9-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h10-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h11-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h12-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h13-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h14-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h15-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h16-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h17-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h18-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h19-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h20-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h21-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h22-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h23-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h24-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h25-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h26-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h27-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h28-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\",\"h29-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example.com\"],\"kind\":\"grant.egress\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "too-large-to-show"
+    },
+    {
+      "name": "C2: a tier with a control character is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:19acf700da9610b1b212189563bd2f486793f8828806fa05158bee2ad62880e5\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"first\\u0007party\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"first\\u0007party\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "batch-refused",
+      "why": "a root row holds a character the dialog cannot show"
+    },
+    {
+      "name": "two approve messages",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "bad-request",
+      "why": "at most one approve message per decision"
+    },
+    {
+      "name": "two presence messages",
+      "approvals": [
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "bad-request",
+      "why": "at most one presence message per decision"
+    },
+    {
+      "name": "no root rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [],
+      "intent": "[]",
+      "error": "bad-request",
+      "why": "root must be an array of 1..8"
+    },
+    {
+      "name": "nine root rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[]",
+      "error": "bad-request",
+      "why": "root must be an array of 1..8"
+    },
+    {
+      "name": "a root row that is not a JSON object",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n[1,2]"
+      ],
+      "intent": "[]",
+      "error": "bad-request",
+      "why": "each root row must be a JSON object"
+    },
+    {
+      "name": "no intent",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": null,
+      "error": "bad-request",
+      "why": "no intent"
+    },
+    {
+      "name": "a voice decision among the approvals",
+      "approvals": [
+        "gnomon:approve-voice:v1\nx",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "domain-refused",
+      "why": "the approvals key signs only approve:v1 and presence:v1 in a decision"
+    },
+    {
+      "name": "a row-sig message among the approvals",
+      "approvals": [
+        "gnomon:row-sig:v1\n{}",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"install\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"install\",\"rowsDigest\":\"sha256:6257835849ebd07d8f5c2f49a2f823e2f34bb3341d236dee97eaa3ed5fb1dbf3\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
+      "error": "domain-refused",
+      "why": "the approvals key signs only approve:v1 and presence:v1 in a decision"
+    },
+    {
+      "name": "an approve message among the root rows",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\ninstall\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:approve:v1\nx"
+      ],
+      "intent": "[]",
+      "error": "domain-refused",
+      "why": "the root key signs only row-sig:v1 rows"
+    }
+  ]
+}
