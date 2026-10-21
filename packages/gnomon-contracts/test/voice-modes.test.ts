@@ -99,6 +99,15 @@ describe('#send-word-matcher', () => {
     expect(acceptableVariant('slim', 'send')).toBe(false); // distance 2: the old flat bound took it, the relative bound does not
     expect(acceptableVariant('ship at', 'ship it')).toBe(true); // a longer key keeps distance 2
   });
+
+  it('Aegis M-3: canonicalSendWord applies the variant guard on every path (a stored poisoned variant is dropped)', () => {
+    expect(canonicalSendWord({ text: 'send', variants: ['and', 'so', 'sand', 'end', 'sent'] })).toEqual({ text: 'send', variants: ['sand', 'sent'] });
+    expect(canonicalSendWord({ text: 'over', variants: ['of', 'or', 'for'] })).toEqual({ text: 'over', variants: [] });
+    expect(canonicalSendWord({ text: 'ship it', variants: ['shipped'] })).toEqual({ text: 'ship it', variants: [] }); // word count
+    const w = canonicalSendWord({ text: 'send', variants: ['and'] })!;
+    expect(isSendWord('and', w)).toBe(false);
+    expect(isSendWord('send', w)).toBe(true);
+  });
 });
 
 describe('the attended send-word trial (spec §14.7 trial semantics)', () => {

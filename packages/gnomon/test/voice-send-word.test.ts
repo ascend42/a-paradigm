@@ -255,7 +255,9 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
   it('the held word is shown to the human class only', async () => {
     const r = rig();
     const st = r.v.status();
-    expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
+    expect(st.sendWord).toEqual({ text: 'over and out', variants: ['over an out'] });
+    // Aegis M-3: setSendWord (the raw {op:'start', variants}) holds only guarded variants; a lone "and" never sends
+    expect(r.v.setSendWord({ text: 'send', variants: ['and', 'sand'] })).toEqual({ text: 'send', variants: ['sand'] });    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
     expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWord');
     expect(() => r.v.setSendWord({ text: 'approve' })).toThrow(RefusedError);
   });
@@ -370,6 +372,10 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
       expect(() => writeSendWord(home, { text: 'deny' })).toThrow(TypeError);
       fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"allow"}\n');
       expect(readSendWord(home)).toBeNull();
+      // Aegis M-3: the variant guard holds on the write AND the read-back (a file written before the guard)
+      expect(writeSendWord(home, { text: 'send', variants: ['and', 'sand', 'so'] })).toEqual({ text: 'send', variants: ['sand'] });
+      fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"over","variants":["of","or","for","ship it"]}\n');
+      expect(readSendWord(home)).toEqual({ text: 'over', variants: [] });
       writeSendWord(home, null);
       expect(fs.existsSync(sendWordPath(home))).toBe(false);
       expect(src()).toBeNull();
@@ -385,6 +391,9 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     try {
       expect(await runVoiceCommand(['send-word', 'set', 'Ship', 'it', '--variant', 'ship at', '--home', home], io, { env: {} })).toBe(0);
       expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['ship at'] });
+      // Aegis M-3: the raw form gets the same variant guard (a function word is dropped, never held)
+      expect(await runVoiceCommand(['send-word', 'set', 'send', '--variant', 'and', '--variant', 'sand', '--home', home], io, { env: {} })).toBe(0);
+      expect(readSendWord(home)).toEqual({ text: 'send', variants: ['sand'] });
       expect(await runVoiceCommand(['send-word', 'set', 'approve', '--home', home], io, { env: {} })).toBe(1);
       expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: { GNOMON_HSID: 'hs:x' } })).toBe(1);
       expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: {} })).toBe(0);

@@ -21,7 +21,8 @@
  * #send-word-matcher: ONE matcher, shared by the GUI dictation reducer, the voice client (short words by adjacency)
  * and the kernel (the claim check and the fail-closed backstop), so every side agrees on what the send word is.
  *   exact     the whole cleaned utterance equals the cleaned send word
- *   variant   it equals an enrolled ASR variant (from "Teach Gnomon your send word")
+ *   variant   it equals an enrolled ASR variant (from "Teach Gnomon your send word"); a variant is held only when it
+ *             passes the variant guard (acceptableVariant), on every path (canonicalSendWord)
  *   near      same word count, phonetic key within SEND_WORD_NEAR_DISTANCE (Metaphone, Levenshtein) — never sent
  *             and never appended; the GUI asks "Did you say '<word>'?"
  *   none      anything else (a sentence that merely contains the word is none: the word is a standalone utterance)
@@ -156,7 +157,13 @@ export function validateSendWord(word: unknown): { ok: true; text: string; warn?
   return (SEND_WORD_COMMON as readonly string[]).includes(t) ? { ok: true, text: t, warn: 'common' } : { ok: true, text: t };
 }
 
-/** A held send word in canonical form (cleaned text, cleaned unique variants ≠ text, at most SEND_WORD_MAX_VARIANTS), or null. */
+/**
+ * A held send word in canonical form (cleaned text; cleaned unique variants ≠ text that pass the variant guard,
+ * #send-word-matcher acceptableVariant; at most SEND_WORD_MAX_VARIANTS), or null. Aegis M-3: EVERY path that holds a
+ * word goes through here (the trial save, the raw CLI and {op:'start', variants}, the send-word.json read-back in the
+ * kernel and the voice client), so a variant the guard refuses is DROPPED wherever it came from (a file written before
+ * the guard reads back without it).
+ */
 export function canonicalSendWord(v: unknown): SendWord | null {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as { text?: unknown; variants?: unknown };
@@ -164,7 +171,7 @@ export function canonicalSendWord(v: unknown): SendWord | null {
   if (!ok.ok) return null;
   const raw = Array.isArray(o.variants) ? o.variants : [];
   if (raw.length > SEND_WORD_MAX_VARIANTS || !raw.every((x) => typeof x === 'string')) return null;
-  const variants = [...new Set(raw.map((x) => normalizeUtterance(x)).filter((x) => x && x !== ok.text && x.length <= SEND_WORD_MAX_CHARS * 2))];
+  const variants = [...new Set(raw.map((x) => normalizeUtterance(x)).filter((x) => x && x !== ok.text && acceptableVariant(x, ok.text)))];
   return Object.freeze({ text: ok.text, variants: Object.freeze(variants) });
 }
 
