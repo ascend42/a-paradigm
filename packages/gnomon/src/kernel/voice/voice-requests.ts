@@ -4,9 +4,12 @@
  * The dispatcher-only voice requests of slice V2e (T-2026-10-19-026). None is a §9.1 kind and none is ever written
  * as a row under its own name, so CLIENT_API_ID does not move (the same path as request.voice.client):
  *
- *   request.voice.enrol{name, consent}  human only → a fresh-presence `strictness` card, detail.op 'voice.enrol';
- *                                       its allow effect writes the root-signed enrolment row (enrolSpeaker, the
- *                                       row `gnomon voice enrol` writes). Reply {pending, cardId}.
+ *   request.voice.enrol{name, consent}  human only → a `strictness` card, detail.op 'voice.enrol', whose allow is ROOT
+ *                                       class (TD-2026-10-20-514, Aegis Q3/F3: rootDecisions ['allow'], hand-only):
+ *                                       prepare builds the enrol row (seq under the enrolments lock, consentHash, the
+ *                                       cardId), ONE presence signs it with the decision, the effect commits it
+ *                                       (commitEnrol re-checks seq). The consent text never enters the card. Reply
+ *                                       {pending, cardId}.
  *   request.voice.forget{name}          human only, NO card: a forget narrows (spec D62: narrowing needs no
  *                                       presence). Writes the root-signed forget row (forgetSpeaker). Reply
  *                                       {forgotten: true, speakerId}.
@@ -38,9 +41,10 @@
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
-import type { CardV1 } from '@a-company/gnomon-contracts';
+import { mintId, type CardV1 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
-import { enrolSpeaker, forgetSpeaker, speakerIdFor } from './enrolment.js';
+import { commitEnrol, consentHashOf, enrolIntent, forgetSpeaker, prepareEnrol, speakerIdFor, type VoiceEnrolRow } from './enrolment.js';
+import { beginRootDecision } from '../manifest/grant-lock.js';
 
 export const VOICE_FORGET_REQUEST = 'request.voice.forget' as const;
 export const VOICE_REPORT_REQUEST = 'request.voice.report' as const;
@@ -364,17 +368,39 @@ export class VoiceEnrolCards {
     if (this.#o.root.ns === null) throw bad('this home has no root identity yet (gnomon setup)');
     const speakerId = speakerIdFor(this.#o.root.ns, p.name); // throws TypeError on a bad name
     if (p.consent.trim().length === 0 || p.consent.length > 1024) throw bad('enrolment needs recorded consent (1..1024 chars)');
+    const cardId = mintId('card');
+    const ns = this.#o.root.ns;
+    // TD-2026-10-20-514 (Aegis Q3/F3): ROOT class; ONE presence signs the decision and the enrol row. The secret consent
+    // text never enters the card (detail, lines or the logged approval.request): only its hash and length do
+    const consentHash = consentHashOf(p.consent);
     const card = await this.#o.broker.raise({
       kind: 'strictness',
+      cardId,
       requestedBy: asker.principal,
       attended: true,
-      detail: { op: 'voice.enrol', name: p.name, speakerId, consent: p.consent, connId: asker.connId },
-      lines: [`Voice: enrol the speaker "${p.name}"`, `Consent recorded: ${plain(p.consent, 200)}`, 'Only enrolled speakers are sent to a session; the voiceprint never leaves this Mac', 'Allow needs Touch ID; deny or no answer enrols nobody'],
+      detail: { op: 'voice.enrol', name: p.name, speakerId, consentHash, consentChars: p.consent.length, connId: asker.connId, rootRows: [enrolIntent(ns, { name: p.name, consent: p.consent, cardId })] },
+      lines: [`Voice: enrol the speaker "${p.name}"`, `Consent recorded: ${p.consent.length} characters (${consentHash.slice(0, 19)}…; the text stays on this Mac)`, 'Only enrolled speakers are sent to a session; the voiceprint never leaves this Mac', 'Allow needs Touch ID and the root key; deny or no answer enrols nobody'],
       decisions: ['allow', 'deny'],
+      rootDecisions: ['allow'],
+      handOnly: true,
       timeoutMs: VOICE_ENROL_CARD_TTL_MS,
-      effect: async (decision: string) => {
+      prepare: (decision: string) => {
+        if (decision !== 'allow') return null;
+        const release = beginRootDecision(this.#o.home); // C5d: one in-flight root decision per home
+        try {
+          const row = prepareEnrol(this.#o.home, this.#o.root, { name: p.name, consent: p.consent, cardId });
+          return { rows: [row as unknown as Record<string, unknown>], release };
+        } catch (e) {
+          release();
+          throw e;
+        }
+      },
+      effect: async (decision: string, ctx: { prepared?: { rows: Record<string, unknown>[] }; rowSigs?: ReadonlyArray<{ signer: string; sig: string }> }) => {
         if (decision !== 'allow') return;
-        await enrolSpeaker(this.#o.home, this.#o.root, { name: p.name, consent: p.consent });
+        const row = ctx.prepared?.rows[0] as VoiceEnrolRow | undefined;
+        const sig = ctx.rowSigs?.[0];
+        if (!row || !sig) throw new Error('#gnomon-voice: an enrolment commits only its prepared, signed row');
+        commitEnrol(this.#o.home, this.#o.root, row, sig, p.consent);
         this.#o.onEnrolled?.(p.name);
         this.#o.onChange?.();
       },

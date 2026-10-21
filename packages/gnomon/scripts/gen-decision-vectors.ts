@@ -71,6 +71,7 @@ add('C3: the publisher row names another publisher', A, batch('install', 'instal
 add('C3: an uninstall never signs a grant.install', [presence], batch('uninstall', 'allow', [inst()]));
 add('C3: a mod.mcp.config decision signs no grant row', [approve(C, 'allow'), presence], batch('mod.mcp.config', 'allow', [trust()]));
 add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('permission', 'allow', []));
+add('F3: a voice enrolment row without a cardId is refused', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: undefined })]));
 add('C3: a voice enrolment for another card', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: C2 })]));
 add('C2: egress hosts that do not fit the line are refused, never truncated', A, batch('install', 'install', [trust(), egress({ hosts: Array.from({ length: 30 }, (_, i) => `h${i}-${'y'.repeat(40)}.example.com`) }), inst()]));
 add('C2: a tier with a control character is refused', A, batch('install', 'install', [trust({ tier: 'first\u0007party' }), inst()]));

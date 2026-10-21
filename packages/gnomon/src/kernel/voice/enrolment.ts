@@ -23,6 +23,8 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { appendSignedRegistryRow, deviceRowFor, type DeviceEntry } from '../identity/registry.js';
 import { ensureKeysDir, keysDir, writeNewDeviceKey } from '../identity/device-key.js';
+import { createHash } from 'node:crypto';
+import { appendLinesDurably, withHomeFileLock } from '../manifest/grant-lock.js';
 
 export const VOICE_ENROL_ROW_SCHEMA = 'voiceEnrolRow:v1' as const;
 export const VOICE_KEY_FILE = 'voice.key';
@@ -35,6 +37,10 @@ export interface VoiceEnrolRow {
   seq: number;
   speakerId: string;
   consent?: string;
+  /** TD-2026-10-20-514 (Aegis Q3/F3): a card-decided enrolment signs sha256:<utf8 consent>, never the text */
+  consentHash?: string;
+  /** TD-2026-10-20-514: the card whose ONE decision.sign signed this row (the helper's batch binds it) */
+  cardId?: string;
   printRef?: string;
   at: string;
 }
@@ -107,7 +113,49 @@ function appendLine(home: string, line: unknown): void {
   }
 }
 
-/** Root-signed enrolment of a speaker (recorded consent). */
+/** sha256:<hex> of the consent text (utf8): what a card-decided enrol row signs. */
+export function consentHashOf(consent: string): string {
+  return `sha256:${createHash('sha256').update(consent, 'utf8').digest('hex')}`;
+}
+
+/** Where a card-decided enrolment keeps its consent text (0600, never leaves the box; the row signs only its hash). */
+export function consentPath(home: string, consentHash: string): string {
+  return path.join(voiceDir(home), 'consents', `${consentHash.slice('sha256:'.length)}.txt`); // hex only: no ':' in a file name
+}
+
+/** What an enrol card shows it will sign (detail.rootRows[0]): the row without its volatile seq / at. */
+export function enrolIntent(ns: string, p: { name: string; consent: string; cardId: string }): Record<string, unknown> {
+  return { schemaVersion: VOICE_ENROL_ROW_SCHEMA, op: 'enrol', speakerId: speakerIdFor(ns, p.name), consentHash: consentHashOf(p.consent), cardId: p.cardId };
+}
+
+/**
+ * TD-2026-10-20-514 (Aegis Q3/F3): BUILD the enrol row of a card decision (unsigned). seq is computed under the
+ * enrolments lock; commitEnrol rebuilds it under the same lock and refuses loudly when it moved (verifiedRows would
+ * silently skip a non-increasing seq). The row stays voiceEnrolRow:v1 with an optional cardId + consentHash: v1
+ * readers ignore the new fields, and the helper's decision.sign (1.8.0) already binds a v1 enrol row by its cardId.
+ */
+export function prepareEnrol(home: string, root: RowVerifier & { ns: string | null }, p: { name: string; consent: string; cardId: string; now?: Date }): VoiceEnrolRow {
+  if (root.ns === null) throw new TypeError('#gnomon-voice: this home has no root identity yet (gnomon setup)');
+  if (typeof p.consent !== 'string' || p.consent.trim().length === 0 || p.consent.length > 1024) throw new TypeError('#gnomon-voice: enrolment needs recorded consent (1..1024 chars)');
+  const seq = withHomeFileLock(home, 'enrolments', () => (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1);
+  return { ...(enrolIntent(root.ns, p) as Omit<VoiceEnrolRow, 'seq' | 'at'>), seq, at: (p.now ?? new Date()).toISOString() };
+}
+
+/** Commit a prepared, root-signed enrol row: signature verified, seq re-checked under the lock, one durable write. */
+export function commitEnrol(home: string, root: RowVerifier, row: VoiceEnrolRow, sig: { signer: string; sig: string }, consent: string): void {
+  if (!root.verifyRow(sig.signer, row, sig.sig)) throw new Error('#gnomon-voice: the enrol row\'s root signature does not verify; nothing was written');
+  if (row.consentHash !== consentHashOf(consent)) throw new Error('#gnomon-voice: the consent does not match the signed consentHash; nothing was written');
+  withHomeFileLock(home, 'enrolments', () => {
+    const want = (verifiedRows(home, root).at(-1)?.seq ?? 0) + 1;
+    if (row.seq !== want) throw new Error(`#gnomon-voice: the enrolments moved since this decision was signed (seq ${row.seq}, next is ${want}); nothing was written, decide again`);
+    const cp = consentPath(home, row.consentHash!);
+    fs.mkdirSync(path.dirname(cp), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(cp, consent, { mode: 0o600 });
+    appendLinesDurably(enrolmentsPath(home), [JSON.stringify({ row, ...sig })]);
+  });
+}
+
+/** Root-signed enrolment of a speaker (recorded consent): the CLI path (`gnomon voice enrol`). */
 export async function enrolSpeaker(home: string, root: RootAuthority, p: { name: string; consent: string; printRef?: string; now?: Date }): Promise<VoiceEnrolRow> {
   if (root.ns === null) root.signRow(null); // refuses with the unprovisioned-root refusal
   if (typeof p.consent !== 'string' || p.consent.trim().length === 0 || p.consent.length > 1024) throw new TypeError('#gnomon-voice: enrolment needs recorded consent (1..1024 chars)');

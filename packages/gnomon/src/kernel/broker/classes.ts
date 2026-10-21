@@ -44,6 +44,8 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
   // TD-2026-10-19-298 (Aegis V2a L2): a `strictness` card is raised for detail.op 'mode.loosen' (run-mode.ts) AND
   // 'voice.widen' (#gnomon-voice); a consumer that reads strictness cards must branch on detail.op — voice.widen is
   // not a strictness or run-mode change
+  // TD-2026-10-20-514 (Aegis Q3): a voice.enrol strictness card raises allow to ROOT via RaiseInput.rootDecisions
+  // (its effect uses the root key: never standing, never by voice); mode.loosen / voice.widen stay fresh
   strictness: { allow: 'fresh', deny: 'cached' },
   incident: { accept: 'cached', reject: 'cached' },
   // P8-D98 (TD-2026-10-19-528 F3): gnomon daemon stop raises a signed daemon-stop card decided with Touch ID (fresh).

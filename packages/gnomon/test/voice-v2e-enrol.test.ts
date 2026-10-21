@@ -8,7 +8,8 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { DevTestRootAuthority, DEV_TEST_ROOT_ACK } from '../src/kernel/identity/root-authority.js';
-import { readEnrolled, enrolSpeaker } from '../src/kernel/voice/enrolment.js';
+import { consentHashOf, readEnrolled, enrolSpeaker } from '../src/kernel/voice/enrolment.js';
+import { intentOf } from '../src/kernel/identity/decision-batch.js';
 import { VoiceEnrolCards } from '../src/kernel/voice/voice-requests.js';
 import { VoiceControl, type VoiceAppendRow } from '../src/kernel/voice/voice-control.js';
 import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
@@ -23,30 +24,49 @@ function setup() {
   const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
   const raised: Array<Record<string, unknown>> = [];
   const asked: string[] = [];
-  const broker = { raise: async (input: Record<string, unknown>) => (raised.push(input), { cardId: `card:01J${String(raised.length).padStart(23, '0')}` } as never) };
+  const broker = { raise: async (input: Record<string, unknown>) => (raised.push(input), { cardId: input.cardId } as never) };
   return { home, root, raised, cards: new VoiceEnrolCards({ home, root, broker, onEnrolled: (n) => void asked.push(n) }), asked };
 }
 
 describe('#gnomon-voice V2e: GUI enrolment (request.voice.enrol / forget)', () => {
-  it('enrol raises one fresh-presence card; only its allow effect writes the root-signed row', async () => {
+  it('enrol raises one ROOT-class card (TD-2026-10-20-514): prepare builds the row, the effect commits it signed; no consent text on the card', async () => {
     const { home, root, raised, cards, asked } = setup();
-    const out = await cards.enrol({ connId: 'conn:H', principal: `p:${root.ns}/founder` }, { name: 'founder', consent: 'I consent to local voice enrolment' });
+    const consent = 'I consent to local voice enrolment';
+    const out = await cards.enrol({ connId: 'conn:H', principal: `p:${root.ns}/founder` }, { name: 'founder', consent });
     expect(out).toEqual({ pending: true, cardId: expect.stringMatching(/^card:/) });
     const c = raised[0]!;
-    expect(c).toMatchObject({ kind: 'strictness', decisions: ['allow', 'deny'], attended: true, detail: { op: 'voice.enrol', name: 'founder', speakerId: `spk:${root.ns}/founder` } });
-    expect(KIND_DECISIONS.strictness.allow).toBe('fresh');
+    expect(c).toMatchObject({ kind: 'strictness', decisions: ['allow', 'deny'], rootDecisions: ['allow'], handOnly: true, attended: true, detail: { op: 'voice.enrol', name: 'founder', speakerId: `spk:${root.ns}/founder`, consentHash: consentHashOf(consent) } });
+    expect(JSON.stringify([c.detail, c.lines])).not.toContain(consent); // the secret consent never enters the card
+    const shown = (c.detail as { rootRows: unknown[] }).rootRows;
+    expect(shown).toEqual([{ schemaVersion: 'voiceEnrolRow:v1', op: 'enrol', speakerId: `spk:${root.ns}/founder`, consentHash: consentHashOf(consent), cardId: c.cardId }]);
     expect(readEnrolled(home, root).size).toBe(0); // nothing before the decision
-    const effect = c.effect as (d: string) => Promise<void>;
-    await effect('deny');
+    const prepare = c.prepare as (d: string) => { rows: Record<string, unknown>[]; release(): void } | null;
+    const effect = c.effect as (d: string, ctx: Record<string, unknown>) => Promise<void>;
+    expect(prepare('deny')).toBeNull();
+    await effect('deny', {});
     expect(readEnrolled(home, root).size).toBe(0);
     expect(asked).toEqual([]);
-    await effect('allow');
+    const prepared = prepare('allow')!;
+    prepared.release();
+    expect(intentOf(prepared.rows[0]!)).toEqual(shown[0]);
+    await effect('allow', { prepared, rowSigs: [root.signRow(prepared.rows[0])] });
     expect([...readEnrolled(home, root)]).toEqual([`spk:${root.ns}/founder`]);
     expect(asked).toEqual(['founder']); // the daemon sets status.voice.enrolment{name, phase:'requested'} for the client
     // forget: no card, the root-signed forget row at once
     expect(await cards.forget({ name: 'founder' })).toEqual({ forgotten: true, speakerId: `spk:${root.ns}/founder` });
     expect(readEnrolled(home, root).size).toBe(0);
     expect(raised).toHaveLength(1);
+  });
+  it('a stale seq (another row landed after prepare) refuses loudly; nothing is written', async () => {
+    const { home, root, raised, cards } = setup();
+    await cards.enrol({ connId: 'conn:H', principal: `p:${root.ns}/founder` }, { name: 'founder', consent: 'yes I consent' });
+    const c = raised[0]!;
+    const prepared = (c.prepare as (d: string) => { rows: Record<string, unknown>[]; release(): void })('allow');
+    prepared.release();
+    await enrolSpeaker(home, root, { name: 'other', consent: 'other consents' }); // takes the seq
+    const effect = c.effect as (d: string, ctx: Record<string, unknown>) => Promise<void>;
+    await expect(effect('allow', { prepared, rowSigs: [root.signRow(prepared.rows[0])] })).rejects.toThrow(/moved since this decision was signed/);
+    expect([...readEnrolled(home, root)]).toEqual([`spk:${root.ns}/other`]);
   });
   it('refuses a bad name or empty consent before any card (TypeError ⇒ BAD_REQUEST at the dispatcher)', async () => {
     const { raised, cards } = setup();

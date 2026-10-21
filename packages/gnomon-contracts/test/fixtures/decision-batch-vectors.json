@@ -451,6 +451,20 @@
       "why": "no row table for card kind permission"
     },
     {
+      "name": "F3: a voice enrolment row without a cardId is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"voice.enrol\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:ee22deaadd921da2bb3bb5f1cc974a0fb1f3c242bfbb68574422949554c538b7\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"at\":\"2026-10-20T12:00:00.000Z\",\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"seq\":3,\"speakerId\":\"spk:abcdefgh/ana\"}"
+      ],
+      "intent": "[{\"consentHash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"op\":\"enrol\",\"schemaVersion\":\"voiceEnrolRow:v1\",\"speakerId\":\"spk:abcdefgh/ana\"}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
       "name": "C3: a voice enrolment for another card",
       "approvals": [
         "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",

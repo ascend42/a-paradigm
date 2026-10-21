@@ -17,6 +17,8 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
 import { appendGrantRow, appendSignedGrantRows, effectiveInstall, grantsPath, MANIFEST_FILE, readGrants, readStaged, removeTree, stageInstall } from '../src/kernel/manifest/index.js';
 import { prepareInstall } from '../src/kernel/manifest/install.js';
+import { readEnrolled } from '../src/kernel/voice/enrolment.js';
+import { VoiceEnrolCards } from '../src/kernel/voice/voice-requests.js';
 import { requestUninstall, StagedCardPickup, uninstallRequested } from '../src/kernel/modhost/control.js';
 import { CountingFakeHelper, FakeHelper } from './helper-fake.js';
 
@@ -270,5 +272,31 @@ describe('G-ID-09: one presence per uninstall decision', () => {
     expect(grantsBytes(home)).toBe(before);
     await pickup.scan();
     expect(r.broker.card(card.cardId)!.state).toBe('expired');
+  });
+});
+
+describe('G-ID-09: voice.enrol is root class at ONE presence (Aegis Q3/F3)', () => {
+  it('allow: ONE prompt signs the decision and the enrol row; the speaker is enrolled; the consent never reaches the log', async () => {
+    const home = tmp();
+    const r = rig();
+    const consent = 'I, ana, consent to local voice enrolment';
+    const cards = new VoiceEnrolCards({ home, root: r.root, broker: r.broker as never });
+    const { cardId } = await cards.enrol({ connId: gui().connId, principal: HUMAN }, { name: 'ana', consent });
+    await r.broker.approve(gui(), { cardId, decision: 'allow' });
+    expect(r.helper.evaluations).toBe(1);
+    expect(r.onceCalls()).toBe(0);
+    expect([...readEnrolled(home, r.root)]).toEqual([`spk:${r.root.ns}/ana`]);
+    expect(JSON.stringify(r.rows)).not.toContain(consent);
+    expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload.rootKind).toBe('voice.enrol');
+  });
+
+  it('deny: ONE prompt, nobody enrolled', async () => {
+    const home = tmp();
+    const r = rig();
+    const cards = new VoiceEnrolCards({ home, root: r.root, broker: r.broker as never });
+    const { cardId } = await cards.enrol({ connId: gui().connId, principal: HUMAN }, { name: 'ana', consent: 'yes' });
+    await r.broker.approve(gui(), { cardId, decision: 'deny' });
+    expect(r.helper.evaluations).toBe(1);
+    expect(readEnrolled(home, r.root).size).toBe(0);
   });
 });
