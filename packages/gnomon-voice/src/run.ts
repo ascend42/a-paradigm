@@ -13,6 +13,7 @@ import type { AudioIO, KernelLink, VoiceEngines, VoiceLogger } from './types.js'
 import { silentLogger } from './types.js';
 import type { VoicePrint } from './speaker.js';
 import { SPEAKING_POLL_MS, VoiceClient, type ClientMode, type Notice, type Delivery } from './voice-client.js';
+import { sendWordFileSource } from './send-word.js';
 
 export interface RunLink extends KernelLink {
   status(): Promise<unknown>;
@@ -65,7 +66,7 @@ export async function runVoice(o: RunOptions): Promise<{ reason: RunEnd; detail?
   const boot = (async () => {
     const principal = principalFromStatus(await o.link.status());
     if (!principal) throw new Error('the kernel did not say which voice principal this is (status.voice.principal)');
-    client = new VoiceClient({ audio: o.audio, engines: o.engines, link: o.link, ns: nsOf(principal), prints: o.prints, mode: o.mode ?? 'ptt', delivery: o.delivery ?? 'composer', ...(o.log ? { log: o.log } : {}), ...(o.notice ? { notice: o.notice } : {}) });
+    client = new VoiceClient({ audio: o.audio, engines: o.engines, link: o.link, ns: nsOf(principal), prints: o.prints, mode: o.mode ?? 'ptt', delivery: o.delivery ?? 'composer', ...(o.enrol ? { sendWord: sendWordFileSource(o.enrol.home) } : {}), ...(o.log ? { log: o.log } : {}), ...(o.notice ? { notice: o.notice } : {}) });
     await client.start();
     const c = client;
     if (o.enrol && o.engines.vad && o.engines.speaker) {

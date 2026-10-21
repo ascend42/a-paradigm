@@ -48,6 +48,7 @@
  * kernel stores no text for spk:unknown-N under V2a) and nothing is sent. No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
+import { isSendWord, SEND_WORD_SHORT_MS, type SendWord } from '@a-company/gnomon-contracts';
 import { kernelSpeakable, sentences } from './speakable.js';
 import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
@@ -217,6 +218,8 @@ export interface VoiceClientOptions {
   delivery?: Delivery;
   /** B1 live words (default on when the STT engine has transcribeWords) */
   partials?: boolean;
+  /** TD-2026-10-21-514: the held send word (run.ts: <home>/voice/send-word.json); absent ⇒ no adjacency */
+  sendWord?: () => SendWord | null;
 }
 
 /** The one notice for a print from an older speaker front end (it is ignored until the speaker enrols again). */
@@ -284,6 +287,8 @@ export class VoiceClient {
   #work: Promise<void> = Promise.resolve();
   #turnN = 0;
   #lastTurnMs = 0;
+  /** TD-2026-10-21-514: the last enrolled speaker whose turn the kernel accepted (the draft speaker for adjacency) */
+  #draftSpeaker: string | null = null;
   #agentN = 0;
   #lastAgentMs = 0;
   #closed = false;
@@ -993,8 +998,13 @@ export class VoiceClient {
     const stale = await this.#reportPrints();
     // the samples are not kept past this point (G-VOX-05)
     if (this.#closed || this.#attachment?.voiceSessionId !== a.voiceSessionId) return end('dropped', 'not-attached'); // attachment moved under us
-    const enrolled = who.name !== undefined;
-    const speakerId = enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
+    // TD-2026-10-21-514 short words by adjacency: a segment too short to verify (an unknown speaker, never one
+    // attributed to someone else) that IS the send word goes to the draft speaker; the kernel re-checks all of it
+    const word = this.#o.sendWord?.() ?? null;
+    const adjacent = who.name === undefined && this.#draftSpeaker !== null && seg.t1 - seg.t0 < SEND_WORD_SHORT_MS && isSendWord(text, word);
+    if (adjacent) text = word!.text;
+    const enrolled = who.name !== undefined || adjacent;
+    const speakerId = adjacent ? this.#draftSpeaker! : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
     const turnId = turnStamp('u', ms, ++this.#turnN);
@@ -1007,7 +1017,7 @@ export class VoiceClient {
     // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
     const gatedMs = gatedSpeechMsOf(who.speechMs);
     const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...calib };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
     let verdict: AppendResult;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
@@ -1028,6 +1038,7 @@ export class VoiceClient {
       // so the kernel's local-drop tally never counts a kernel refusal as a client-local drop
       return end('dropped', verdict.refused === 'voice-speaker' ? 'not-enrolled' : 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
     }
+    if (!adjacent) this.#draftSpeaker = speakerId; // a verified, accepted turn: its speaker is the draft speaker
     if (!direct) {
       this.#flow.info('turn dictated (composer)', { turnId });
       return end('captured');

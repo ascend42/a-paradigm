@@ -2,7 +2,7 @@
   "name": "@a-company/gnomon-voice",
   "version": "0.1.0",
   "private": true,
-  "description": "gnomon-voice: the Gnomon voice client core (spec §14; voice slice V2c, TD-2026-10-19-298). Silero VAD, Parakeet TDT STT, Kokoro TTS and speaker verification via sherpa-onnx-node, driving the kernel as the talk-only voice principal. Audio never touches disk (G-VOX-05).",
+  "description": "gnomon-voice: the Gnomon voice client core (spec \u00a714; voice slice V2c, TD-2026-10-19-298). Silero VAD, Parakeet TDT STT, Kokoro TTS and speaker verification via sherpa-onnx-node, driving the kernel as the talk-only voice principal. Audio never touches disk (G-VOX-05).",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +28,7 @@
     "sherpa-onnx-node": "1.13.8"
   },
   "devDependencies": {
+    "@a-company/gnomon-contracts": "1.0.0",
     "@types/node": "^24.0.0",
     "tsup": "^8.0.1",
     "typescript": "^5.9.3",

@@ -222,6 +222,22 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
       fs.rmSync(home, { recursive: true, force: true });
     }
   });
+  it('gnomon voice send-word set|clear: canonical word, refuses an approval phrase and a kernel-spawned shell', async () => {
+    const { runVoiceCommand } = await import('../src/cli/voice-cli.js');
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-swc-')));
+    const sink = () => ({ text: '', write(s: string) { this.text += s; return true; } });
+    const io = { stdout: sink() as never, stderr: sink() as never };
+    try {
+      expect(await runVoiceCommand(['send-word', 'set', 'Ship', 'it', '--variant', 'ship at', '--home', home], io, { env: {} })).toBe(0);
+      expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['ship at'] });
+      expect(await runVoiceCommand(['send-word', 'set', 'approve', '--home', home], io, { env: {} })).toBe(1);
+      expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: { GNOMON_HSID: 'hs:x' } })).toBe(1);
+      expect(await runVoiceCommand(['send-word', 'clear', '--home', home], io, { env: {} })).toBe(0);
+      expect(readSendWord(home)).toBeNull();
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
   it('the request shape is strict', () => {
     expect(parseSendWordRequest({ op: 'clear' })).toEqual({ op: 'clear' });
     expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [] });

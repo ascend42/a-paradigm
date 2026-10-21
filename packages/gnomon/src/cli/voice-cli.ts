@@ -6,6 +6,8 @@
  * registers it as `p:<ns>/voice`; `enrol` / `forget` append root-signed rows to `<home>/voice/enrolments.jsonl`
  * (enrolment.ts). Refused from a kernel-spawned shell (GNOMON_HSID) like every root-signed verb. Never by voice.
  */
+import { acceptableVariant, validateSendWord } from '@a-company/gnomon-contracts';
+import { writeSendWord } from '../kernel/voice/send-word-store.js';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { resolveGnomonHome } from '../kernel/lifecycle/index.js';
@@ -22,12 +24,18 @@ export const VOICE_EXIT_USAGE = 64;
 export const VOICE_USAGE = `usage: gnomon voice setup [--home <abs>]
        gnomon voice enrol <name> --consent <text> [--home <abs>]
        gnomon voice forget <name> [--home <abs>]
+       gnomon voice send-word set <word> [--variant <heard>]... [--home <abs>]
+       gnomon voice send-word clear [--home <abs>]
 
   setup   write the voice device key and register it (root-signed, Touch ID)
           as this home's voice principal p:<ns>/voice
   enrol   enrol a speaker with recorded consent (root-signed); only enrolled
           speakers' push-to-talk turns are sent to a session
   forget  delete a speaker's enrolment and voiceprint (root-signed)
+  send-word
+          set or clear the spoken send word (1-3 words, never an approval
+          phrase); the GUI's "Teach Gnomon your send word" is the guided form.
+          A voice-sent turn asks before every edit (TD-2026-10-21-514).
 
   Speaker recognition is not authentication. Voice is talk-only: it never
   approves anything.
@@ -57,6 +65,7 @@ export async function runVoiceCommand(argv: readonly string[], io: { stdout: Out
     io.stdout.write(`gnomon ${GNOMON_VERSION}\n${VOICE_USAGE}`);
     return sub === undefined ? VOICE_EXIT_USAGE : VOICE_EXIT_OK;
   }
+  if (sub === 'send-word') return sendWordCommand(argv.slice(1), io, env, usage);
   if (sub !== 'setup' && sub !== 'enrol' && sub !== 'forget') return usage(`unknown voice command ${JSON.stringify(sub.slice(0, 32))}`);
   let name: string | undefined;
   let consent: string | undefined;
@@ -115,4 +124,51 @@ export async function runVoiceCommand(argv: readonly string[], io: { stdout: Out
   } finally {
     opened.close?.();
   }
+}
+
+/** TD-2026-10-21-514: `gnomon voice send-word set <word> [--variant <heard>]… | clear` — the raw form of the GUI dialog. */
+function sendWordCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }, env: NodeJS.ProcessEnv, usage: (m: string) => number): number {
+  const op = argv[0];
+  if (op !== 'set' && op !== 'clear') return usage('gnomon voice send-word set <word> | clear');
+  let home: string | undefined;
+  const words: string[] = [];
+  const variants: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === '--home') {
+      const h = argv[++i];
+      if (h === undefined || !path.isAbsolute(h)) return usage('--home takes an absolute path');
+      home = h;
+    } else if (a === '--variant') {
+      const v = argv[++i];
+      if (v === undefined) return usage('--variant takes a heard form of the word');
+      variants.push(v);
+    } else if (!a.startsWith('-') && op === 'set') words.push(a);
+    else return usage(`unexpected argument ${JSON.stringify(a.slice(0, 32))}`);
+  }
+  if (op === 'set' && words.length === 0) return usage('gnomon voice send-word set needs the word');
+  if (env.GNOMON_HSID) {
+    refused(io.stderr, 'FORBIDDEN', 'forbidden', 'gnomon voice send-word is a human-only verb; it is refused from a kernel-spawned shell');
+    return VOICE_EXIT_REFUSED;
+  }
+  const h = path.resolve(home ?? resolveGnomonHome({ env }));
+  if (op === 'clear') {
+    writeSendWord(h, null);
+    heading(io.stdout, 'cleared', 'send word');
+    return VOICE_EXIT_OK;
+  }
+  const text = words.join(' ');
+  const v = validateSendWord(text);
+  if (!v.ok) {
+    refused(io.stderr, 'BAD_REQUEST', 'bad-params', `not a usable send word (${v.reason}): 1-3 words, never an approval or command phrase`);
+    return VOICE_EXIT_REFUSED;
+  }
+  const w = writeSendWord(h, { text, variants: variants.filter((x) => acceptableVariant(x, text)) });
+  heading(io.stdout, 'set', 'send word');
+  readout(io.stdout, [
+    ['word', w!.text],
+    ['variants', w!.variants.join(', ') || '-'],
+    ...(v.warn === 'common' ? ([['note', 'a very common word: it may send by accident']] as const) : []),
+  ]);
+  return VOICE_EXIT_OK;
 }
