@@ -9,6 +9,10 @@
 # Checks 1–13 are defined in paradigm-common.sh (shared with Cursor hook).
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin Stop 30000 10000
+
 INPUT=$(cat)
 
 # Extract cwd from input (try jq first, fallback to grep)

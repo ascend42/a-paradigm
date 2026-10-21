@@ -20,6 +20,10 @@
 # declares a legible solo session; orchestrating clears the gate naturally.
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin UserPromptSubmit 5000 2000
+
 INPUT=$(cat)
 
 # Kill switch

@@ -14,6 +14,10 @@
 # Uses a session marker (.paradigm/.nav-reminded) to fire at most once.
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PreToolUse-Glob 5000 2000
+
 INPUT=$(cat)
 
 # Extract cwd from input
