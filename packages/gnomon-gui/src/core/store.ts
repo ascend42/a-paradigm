@@ -26,7 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
-import { projectHue, sha256Tagged } from '@a-company/gnomon-contracts';
+import { projectHue, sha256Tagged, validateKindPayload } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { rootRowsOf, rowsDigestCheck } from './render.js';
 import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
@@ -80,8 +80,10 @@ export interface SessionRow {
   /** S2: the session.open cwd (the key of the one project hue, projectHue) and its at (the chat header's "started"). */
   cwd?: string | null;
   openedAt?: string | null;
-  /** S2: the first user message (the session's human name, sessionTitle); null until one is seen. */
+  /** S2: the first user message (the session's derived name, sessionTitle); null until one is seen. */
   firstUser?: string | null;
+  /** 8.0:session-rename: the name the human gave it (the kernel's last session.renamed); null = the derived title. */
+  name?: string | null;
 }
 
 /** Session states that mean the session is gone (it can only come back through a session.open of a resume). */
@@ -265,6 +267,8 @@ export class GuiStore {
       else if (r.kind === 'session.exited' || r.kind === 'session.stop' || r.kind === 'session.exit' || r.kind === 'session.end') s.state = 'ended';
       else if (isLiveState(s.state) && r.kind === 'turn.partial') s.state = 'streaming';
       else if (isLiveState(s.state) && r.kind === 'turn.result') s.state = 'idle';
+      // 8.0:session-rename: the kernel's session.renamed (normalised display text; '' = back to the derived title)
+      if (r.kind === 'session.renamed' && r.view === 'full' && validateKindPayload('session.renamed', p).length === 0 && p.hsid === hsid) s.name = (p.name as string) || null;
       if (!s.firstUser) {
         // S2 session names: the first thing the human said (claude's replay of it, or a sent voice turn)
         if (r.kind === 'turn.event' && r.view === 'full' && typeof p.line === 'string') s.firstUser = lineItems(p.line).find((it) => it.role === 'user' && it.text.trim())?.text ?? null;
@@ -812,6 +816,8 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
       return { role: 'system', text: `${objOf(p.resume) ? 'session resumed' : 'session opened'}${typeof p.model === 'string' ? ` · ${p.model}` : ''}${typeof p.cwd === 'string' ? ` · ${p.cwd}` : ''}` };
     case 'session.model': // #gui-model-picker: the kernel's record of a mid-session switch
       return { role: 'system', text: sessionModelLine(p) };
+    case 'session.renamed': // #gui-session-rename: the kernel's record of a rename
+      return { role: 'system', text: typeof p.name === 'string' && p.name ? `renamed · ${p.name}` : 'name cleared · the title is the first message again' };
     case 'session.exited':
       return { role: 'system', text: `session ended${typeof p.reason === 'string' ? ` · ${p.reason}` : ''}${typeof p.code === 'number' ? ` · exit ${p.code}` : ''}${typeof p.signal === 'string' ? ` · ${p.signal}` : ''}` };
     case 'session.orphaned':
@@ -1163,12 +1169,27 @@ export function groupHue(repo: string, sessions: ReadonlyArray<Pick<SessionRow, 
 export const TITLE_MAX = 28;
 const baseName = (p: string): string => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
 
-/** S2.2: a session's human name: its first user message cut to 28 chars, else `<repo basename> · <hsid tail 4>`. */
-export function sessionTitle(s: Pick<SessionRow, 'hsid' | 'repo' | 'cwd' | 'firstUser'>): string {
+type TitleOf = Pick<SessionRow, 'hsid' | 'repo' | 'cwd' | 'firstUser'> & { name?: string | null };
+/** A title cut to TITLE_MAX code points (never inside a surrogate pair), with … when cut. */
+function cutTitle(t: string): string {
+  const cps = [...t];
+  return cps.length > TITLE_MAX ? `${cps.slice(0, TITLE_MAX - 1).join('').trimEnd()}…` : t;
+}
+/** S2.2: the derived name, in full: the first user message on one line, else `<repo basename> · <hsid tail 4>`. */
+export function derivedTitle(s: TitleOf): string {
   const first = s.firstUser ? oneLine(s.firstUser) : '';
-  if (first) return first.length > TITLE_MAX ? `${first.slice(0, TITLE_MAX - 1).trimEnd()}…` : first;
+  if (first) return first;
   const where = s.repo && s.repo !== UNSCOPED ? s.repo : s.cwd ? s.cwd : 'session';
   return `${baseName(where)} · ${s.hsid.slice(-4)}`;
+}
+/** 8.0:session-rename: the full title (the tooltip): the human's name when one is set, else the derived one. */
+export function sessionFullTitle(s: TitleOf): string {
+  return s.name || derivedTitle(s);
+}
+/** S2.2: a session's display name: the human's name (session.renamed) or its first user message, cut to 28 chars, else
+ * `<repo basename> · <hsid tail 4>`. A name is display text only: the GUI never routes or matches by it. */
+export function sessionTitle(s: TitleOf): string {
+  return s.name || s.firstUser ? cutTitle(sessionFullTitle(s)) : derivedTitle(s);
 }
 
 export type NoteTone = 'need' | 'fail' | 'plain';

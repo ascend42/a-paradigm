@@ -15,6 +15,17 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-session-rename:
+    description: >-
+      8.0:session-rename (founder ask: rename a session). core/rename.ts
+      (PURE): renameRequest (log.append request.session.rename{hsid, name}),
+      planRename (contracts normalizeSessionName preview: unchanged sends
+      nothing, '' resets, a refused name is a notice), bindInlineRename
+      (Enter saves, Esc cancels, blur saves, settles once). core/store.ts
+      folds the kernel's session.renamed into SessionRow.name; sessionTitle
+      shows the name (cut to 28), sessionFullTitle is the tooltip text,
+      derivedTitle the placeholder; the transcript shows a "renamed" line.
+      The header / list / palette wiring in ui/app.ts is NOT built yet.
   gui-model-picker:
     description: >-
       Founder ask 2026-10-20 ("is there no way to change the model of what
