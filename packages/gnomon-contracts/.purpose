@@ -526,7 +526,10 @@ components:
       zero deps) mirror RELEASE_MANIFEST_V1_SCHEMA
       (schemas/release-manifest.v1.schema.json, generated; in BUILD_SCHEMAS,
       NOT CONTRACT_SCHEMAS, so it is not a clientApiId input);
-      releaseArtifactFor picks the exact-arch entry, else universal. Written
+      releaseArtifactFor picks the exact-arch entry, else universal. Additive
+      (T-2026-10-21-030, Aegis M3 high 2): optional appZips[{arch arm64|x64,
+      sha256}] (one per arch, closed) = the published Gnomon.app.zip per arch,
+      compiled into the npm @a-company/gnomon; releaseAppZipFor reads it. Written
       by packages/gnomon/scripts/write-release-manifest.mjs, compiled into the
       kernel bundle by build-release.mjs (tsup define), enforced by the
       kernel's #release-pins. Also VOICE_IO_TEAM / VOICE_IO_IDENTIFIER /

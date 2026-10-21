@@ -228,3 +228,8 @@ packages/warpline/probe-*/
 
 # T-2026-10-21-029: Gnomon.app release output (packages/gnomon/scripts/release-darwin.mjs)
 packages/gnomon/release/
+
+# T-2026-10-21-030 (8.0 M3): release zips copied into the platform packages, and the prepack copy of the mods
+packages/gnomon-darwin-*/Gnomon.app.zip
+packages/gnomon-darwin-*/Gnomon.app.zip.sha256
+packages/gnomon/gnomon-mods/

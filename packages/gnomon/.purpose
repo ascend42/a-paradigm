@@ -6,9 +6,10 @@ description: >-
   SCAFFOLD (research 29 §1/§4): the §18 layout with a src/ prefix, placeholder
   bins that print their version, the import fence, the zero-deps check, the
   G-WIN-05 registry skeleton and the M1.0 probe harness. Node >= 24 for Gnomon
-  packages only; private and outside the root build/test scripts until the 8.0
-  cut (G-MIG-01) — use `npm run build:gnomon` / `npm run test:gnomon`. Will ship
-  later as a signed Node SEA (tsup emits one self-contained file per entry).
+  packages only. 8.0 M3 (T-2026-10-21-030): published as @a-company/gnomon with
+  the darwin platform packages as optional deps (#gnomon-npm-packaging) and part
+  of the root build/test scripts (`npm run build:gnomon` / `npm run test:gnomon`
+  still run it alone). Ships to users as the signed Gnomon.app (§18.1).
 
 components:
   gnomon-kernel:
@@ -956,11 +957,83 @@ components:
       requirement the wrapper compiles; the built wrapper must report
       --build-mode bundle before signing; --unsigned signs node ad-hoc without
       the hardened runtime (ad-hoc sherpa addons fail library validation).
+      8.0 M3 (T-2026-10-21-030): step 10 copies the zip + sha256 into the npm
+      platform package as Gnomon.app.zip(.sha256) (copyIntoPlatformPackage; a
+      SIGNED release defaults to packages/gnomon-darwin-<arch>, an --unsigned
+      or --dry-run build only with --package-dir); --dry-run --zip runs the
+      ditto zip on the placeholder app, whose placeholder GnomonHelper.app
+      carries a versioned framework with real symlinks (PLACEHOLDER_FRAMEWORK)
+      for the pack round trip.
     path: scripts/release-darwin.mjs
     type: script
     tags: [release, distribution, signing]
     related: ["#app-bundle", "#release-pins", "#gnomon-wrapper", "#gnomon-helper", "#gnomon-voice"]
     tests:
+      - test/release-darwin.test.ts
+  gnomon-npm-packaging:
+    description: >-
+      #gnomon-npm-packaging (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3) —
+      @a-company/gnomon is PUBLIC (publishConfig access public; files dist +
+      gnomon-mods; bins gnomon, gnomond, gnomon-web; exports ./cli and
+      ./package.json for the paradigm shim). Its tarball carries no unpublished
+      dependency: gnomon-contracts is a devDependency inlined by tsup
+      (noExternal; the G-KRN-02 dist scan), and scripts/prepack.mjs copies the
+      first-party mods (packages/gnomon-mods, no package.json, symlinks
+      refused) to packages/gnomon/gnomon-mods byte for byte so
+      findFirstPartyRoot resolves them beside an installed kernel with their
+      pinned packageHash; postpack removes the copy. gnomon-local, mod-sdk and
+      gui are not runtime imports and do not ship. optionalDependencies are
+      exactly @a-company/gnomon-darwin-{arm64,x64} at this version (the one
+      G-SEC-01 exception: zip-only packages the kernel never imports).
+      Lockstep: scripts/sync-gnomon-versions.mjs (repo root; --check for CI)
+      makes both platform package versions, these optional deps and
+      @a-company/paradigm's exact dependency follow this package's version;
+      test/version-lockstep.test.ts fails on drift. The platform packages are
+      excluded from the root workspaces ("!packages/gnomon-darwin-*"): their
+      os/cpu fields make npm install fail on the other arch. Acceptance:
+      scripts/pack-roundtrip.mjs builds a zip with release-darwin --dry-run
+      --unsigned --zip (or takes --zip <signed zip>), copies it into a copy of
+      the platform package, npm pack, tar -x, ditto -x -k, then checks the
+      file set, the sha256, the app layout (missingFromLayout), every symlink
+      against the source app and each framework's Versions/Current, and runs
+      codesign --verify --strict --deep + spctl -a only for a Developer ID
+      signature (otherwise skipped with a message); it reports packed and
+      unpacked sizes.
+      Aegis M3 review: (high 1) nothing unsigned or dev is publishable.
+      `npm run publish:gnomon` runs scripts/gate-gnomon-publish.mjs FIRST as a
+      plain command (lifecycle hooks are skippable with --ignore-scripts; it is
+      also gnomon's prepublishOnly): lockstep; each platform package has no
+      scripts and exact files, and its zip, unpacked with ditto into a temp
+      dir, passes codesign --verify --deep --strict -R (the wrapper
+      requirement, team OU SW4BMQ8PNL), xcrun stapler validate and spctl -a -t
+      exec; gnomon's dist is a RELEASE build of this version whose compiled
+      appZips equal both zips. prepack refuses a non-release dist too.
+      release-darwin's `signed` now means Developer ID + notarized + stapled
+      (stapler validate after notarize) and --package-dir refuses anything
+      else without --allow-unsigned-for-tests. (high 2) each zip's sha256 is
+      COMPILED into the published gnomon: scripts/seal-npm-release.mjs runs
+      build-release.mjs with write-release-manifest --app-zip <arch>=<zip> for
+      both platform zips (release-manifest:v1 appZips); src/kernel/lifecycle/
+      app-zip.ts verifyAppZip checks a zip against that pin (dev ⇒ refused
+      `dev`, no entry ⇒ `unpinned`, mismatch ⇒ `checksum`) and never reads the
+      shipped .sha256; platformPackageZip realpaths the resolved package and
+      checks its name. Exported as appZip from the package index; the M4
+      installer must call it before unpacking. Changesets cannot exclude
+      these packages (its `ignore` is versioning-only and rejects
+      non-workspace packages and paradigm's dependency on gnomon), so
+      release.yml's `changeset publish` is stopped by gnomon's prepack and
+      prepublishOnly gate instead, and never sees the platform packages
+      (not workspaces).
+    path: scripts/prepack.mjs
+    type: script
+    tags: [release, distribution, npm, gnomon]
+    related: ["#release-darwin", "#gnomon-darwin-arm64", "#gnomon-darwin-x64", "#gnomon-shim", "#mods-admin"]
+    tests:
+      - test/version-lockstep.test.ts
+      - test/pack-roundtrip.test.ts
+      - test/sec-01.test.ts
+      - test/app-zip.test.ts
+      - test/gate-gnomon-publish.test.ts
       - test/release-darwin.test.ts
   gui-resume:
     description: >-

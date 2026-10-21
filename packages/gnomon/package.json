@@ -1,7 +1,6 @@
 {
   "name": "@a-company/gnomon",
   "version": "8.0.0",
-  "private": true,
   "description": "Gnomon — the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,7 +9,9 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./cli": "./dist/cli/gnomon.js",
+    "./package.json": "./package.json"
   },
   "bin": {
     "gnomon": "dist/cli/gnomon.js",
@@ -18,7 +19,8 @@
     "gnomon-web": "dist/transport/gnomon-web.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "gnomon-mods"
   ],
   "scripts": {
     "build": "tsup && node scripts/build-stamp.mjs",
@@ -31,7 +33,10 @@
     "probe": "node probes/run.mjs",
     "test:perf": "node scripts/test-perf.mjs",
     "repin:first-party": "node scripts/repin-first-party.mjs",
-    "install:darwin": "node scripts/install-darwin.mjs"
+    "install:darwin": "node scripts/install-darwin.mjs",
+    "prepack": "node scripts/prepack.mjs",
+    "postpack": "node scripts/prepack.mjs --clean",
+    "prepublishOnly": "node ../../scripts/gate-gnomon-publish.mjs"
   },
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",
@@ -39,6 +44,13 @@
     "tsup": "^8.0.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
+  },
+  "optionalDependencies": {
+    "@a-company/gnomon-darwin-arm64": "8.0.0",
+    "@a-company/gnomon-darwin-x64": "8.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "author": "ascend42",
   "license": "MIT",

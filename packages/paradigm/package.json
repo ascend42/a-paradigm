@@ -9,12 +9,14 @@
     "paradigm": "./dist/index.js",
     "paradigm-mcp": "./dist/mcp.js",
     "sentinel": "./dist/sentinel.js",
-    "sentinel-mcp": "./dist/sentinel-mcp.js"
+    "sentinel-mcp": "./dist/sentinel-mcp.js",
+    "gnomon": "./bin/gnomon.js"
   },
   "files": [
     "dist",
     "templates",
-    "platform-ui/dist"
+    "platform-ui/dist",
+    "bin"
   ],
   "scripts": {
     "build": "node scripts/generate-hooks.mjs && tsup && npm run build:platform-ui && npm run build:sentinel-assets",
@@ -29,6 +31,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@a-company/gnomon": "8.0.0",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
     "@a-company/registry-client": "^0.1.0",

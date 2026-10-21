@@ -356,6 +356,22 @@ features:
       - '#pipeline-abort'
       - '#pipeline-list'
 components:
+  gnomon-shim:
+    description: >-
+      The `gnomon` bin of @a-company/paradigm (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3). npm does not link a
+      dependency's bins on a global install, so this Node >= 20 shim resolves the exact-version @a-company/gnomon
+      dependency, then that package's @a-company/gnomon-darwin-<arch> optional dependency, and runs gnomon's own CLI
+      (bin.gnomon) with process.execPath, the same args, inherited stdio, forwarded SIGINT/SIGTERM/SIGHUP and the
+      child's exit code. Off macOS, or when npm skipped the platform package, it prints one plain line ("Gnomon runs
+      on macOS only in 8.0; Windows and Linux are planned") and exits 69. Aegis M3 medium 3: each resolved package is
+      realpath'd and must sit under allowedRoots (paradigm's own node_modules, the node_modules it is hoisted into, or the
+      monorepo's node_modules / packages in dev) with the expected package.json name, so a package planted higher in the
+      path or reached through NODE_PATH is refused. Plain JS outside tsup; ships via files: bin.
+    type: bin
+    file: bin/gnomon.js
+    related: ["#gnomon-npm-packaging", "#gnomon-darwin-arm64", "#gnomon-darwin-x64"]
+    tests:
+      - tests/gnomon-shim.test.ts
   migration-detector:
     description: Detects project state by reading migrate.yaml, config.yaml, and filesystem to determine pending migrations
     type: detector

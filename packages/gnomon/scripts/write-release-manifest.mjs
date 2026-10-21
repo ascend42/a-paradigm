@@ -9,6 +9,9 @@
  *   node packages/gnomon/scripts/write-release-manifest.mjs --out <file>
  *     [--helper <exe>] [--voice-io <exe>] [--dist <dir>] [--release <version>] [--arch arm64|x64|universal]
  *     [--no-codesign]   tests only: skip the codesign check (never for a shipped release)
+ *     [--app-zip <arch>=<zip>]...   (T-2026-10-21-030, Aegis M3 high 2) the published Gnomon.app.zip per arch: its
+ *                       sha256 becomes `appZips` and is compiled into the @a-company/gnomon that npm publishes, so the
+ *                       zip is checked against the CODE, never the .sha256 shipped beside it (scripts/seal-npm-release.mjs)
  *
  * Defaults: the helper and voice-io executables inside their .app in packages/gnomon-helper/bin/darwin and
  * packages/gnomon-voice/bin/darwin; dist = packages/gnomon/dist (its index.js gives the requirements and floors this
@@ -44,6 +47,20 @@ function arg(argv, name) {
   const v = argv[i + 1];
   if (v === undefined || v.startsWith('--')) fail(`${name} needs a value`, 64);
   return v;
+}
+
+/** Every `--app-zip <arch>=<file>` (repeatable; arm64 or x64, one each). */
+export function appZipArgs(argv) {
+  const out = [];
+  argv.forEach((a, i) => {
+    if (a !== '--app-zip') return;
+    const v = argv[i + 1] ?? '';
+    const m = /^(arm64|x64)=(.+)$/.exec(v);
+    if (!m) fail('--app-zip needs <arm64|x64>=<zip>', 64);
+    if (out.some((o) => o.arch === m[1])) fail(`--app-zip ${m[1]} given twice`, 64);
+    out.push({ arch: m[1], zip: m[2] });
+  });
+  return out;
 }
 
 const atLeast = (v, min) => {
@@ -111,12 +128,23 @@ export async function main(argv = process.argv.slice(2)) {
       artifact({ name: 'gnomon-voice-io', exe: arg(argv, '--voice-io') ?? DEFAULT_VOICE_IO, requirement: kernel.VOICE_IO_REQUIREMENT, floor: kernel.MIN_VOICE_IO_VERSION, codesign, arch }),
     ],
   };
+  const appZips = appZipArgs(argv).map(({ arch: a, zip }) => {
+    let real;
+    try {
+      real = realpathSync.native(zip);
+    } catch {
+      return fail(`no app zip at ${zip}`);
+    }
+    if (!statSync(real).isFile()) fail(`${real} is not a file`);
+    return { arch: a, sha256: createHash('sha256').update(readFileSync(real)).digest('hex') };
+  });
+  if (appZips.length) manifest.appZips = appZips;
   const errors = validateReleaseManifestV1(manifest);
   if (errors.length) fail(`the manifest does not validate: ${errors.join('; ')}`);
   const tmp = `${out}.${process.pid}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o644 });
   renameSync(tmp, out);
-  process.stdout.write(`write-release-manifest: ${release} → ${out}\n${manifest.artifacts.map((a) => `  ${a.name} ${a.version} ${a.arch} ${a.sha256.slice(0, 16)}…`).join('\n')}\n`);
+  process.stdout.write(`write-release-manifest: ${release} → ${out}\n${manifest.artifacts.map((a) => `  ${a.name} ${a.version} ${a.arch} ${a.sha256.slice(0, 16)}…`).join('\n')}\n${(manifest.appZips ?? []).map((z) => `  Gnomon.app.zip ${z.arch} ${z.sha256.slice(0, 16)}…\n`).join('')}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) await main();

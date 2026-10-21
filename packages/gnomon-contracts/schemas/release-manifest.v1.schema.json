@@ -57,6 +57,32 @@
       },
       "minItems": 1,
       "maxItems": 8
+    },
+    "appZips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "arch": {
+            "type": "string",
+            "enum": [
+              "arm64",
+              "x64"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "arch",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 2
     }
   },
   "required": [

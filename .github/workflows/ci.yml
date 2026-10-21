@@ -12,7 +12,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20, 22]
+        # 24: the Gnomon suites in `npm test` run only on Node >= 24 (scripts/gnomon-node-gate.mjs; T-2026-10-21-030)
+        node-version: [20, 22, 24]
 
     steps:
       - name: Checkout

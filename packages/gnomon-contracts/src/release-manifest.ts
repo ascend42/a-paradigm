@@ -54,24 +54,45 @@ export interface ReleaseArtifactV1 {
   arch: ReleaseArch;
 }
 
+/** The arches an npm platform package ships a zipped Gnomon.app for (T-2026-10-21-030; never `universal`). */
+export const APP_ZIP_ARCHES = ['arm64', 'x64'] as const;
+export type AppZipArch = (typeof APP_ZIP_ARCHES)[number];
+
+/**
+ * The sha256 of one arch's `Gnomon.app.zip` (@a-company/gnomon-darwin-<arch>), compiled into the @a-company/gnomon
+ * that npm publishes beside it (T-2026-10-21-030, Aegis M3 high 2). The zip is checked against THIS before it is
+ * unpacked, never against the .sha256 file shipped next to it. Additive (optional) to release-manifest:v1.
+ */
+export interface ReleaseAppZipV1 {
+  arch: AppZipArch;
+  /** sha256 (hex) of the ditto zip as published */
+  sha256: string;
+}
+
 export interface ReleaseManifestV1 {
   schemaVersion: typeof RELEASE_MANIFEST_V1;
   /** the Gnomon release these artifacts ship in */
   release: string;
   artifacts: ReleaseArtifactV1[];
+  /** OPTIONAL (additive, M3): the published app zips, at most one per arch */
+  appZips?: ReleaseAppZipV1[];
 }
 
+/** The REQUIRED top-level keys; RELEASE_MANIFEST_V1_OPTIONAL_KEYS may also appear. */
 export const RELEASE_MANIFEST_V1_KEYS = ['schemaVersion', 'release', 'artifacts'] as const;
+export const RELEASE_MANIFEST_V1_OPTIONAL_KEYS = ['appZips'] as const;
+export const RELEASE_APP_ZIP_V1_KEYS = ['arch', 'sha256'] as const;
 export const RELEASE_ARTIFACT_V1_KEYS = ['name', 'version', 'sha256', 'requirement', 'arch'] as const;
 
 /** Problems (empty = valid). Hand-written, zero deps; the same rules as the JSON Schema plus one per (name, arch). */
 export function validateReleaseManifestV1(value: unknown): string[] {
   if (!isPlainObject(value)) return ['release-manifest:v1 must be an object'];
   const errors: string[] = [];
-  for (const k of Object.keys(value)) if (!(RELEASE_MANIFEST_V1_KEYS as readonly string[]).includes(k)) errors.push(`unknown property "${k}"`);
+  for (const k of Object.keys(value)) if (![...RELEASE_MANIFEST_V1_KEYS, ...RELEASE_MANIFEST_V1_OPTIONAL_KEYS].includes(k as never)) errors.push(`unknown property "${k}"`);
   for (const k of RELEASE_MANIFEST_V1_KEYS) if (!(k in value)) errors.push(`missing property "${k}"`);
   if ('schemaVersion' in value && value.schemaVersion !== RELEASE_MANIFEST_V1) errors.push(`schemaVersion must be ${RELEASE_MANIFEST_V1}`);
   if ('release' in value && (typeof value.release !== 'string' || !RELEASE_VERSION_PATTERN.test(value.release))) errors.push('release must be a semver version');
+  if ('appZips' in value) errors.push(...appZipErrors(value.appZips));
   if (!('artifacts' in value)) return errors;
   const arts = value.artifacts;
   if (!Array.isArray(arts) || arts.length < 1 || arts.length > RELEASE_ARTIFACTS_MAX) return [...errors, `artifacts must be an array of 1..${RELEASE_ARTIFACTS_MAX}`];
@@ -95,6 +116,28 @@ export function validateReleaseManifestV1(value: unknown): string[] {
     }
   });
   return errors;
+}
+
+function appZipErrors(zips: unknown): string[] {
+  if (!Array.isArray(zips) || zips.length < 1 || zips.length > APP_ZIP_ARCHES.length) return [`appZips must be an array of 1..${APP_ZIP_ARCHES.length}`];
+  const errors: string[] = [];
+  const seen = new Set<unknown>();
+  zips.forEach((z: unknown, i) => {
+    const at = `appZips[${i}]`;
+    if (!isPlainObject(z)) return void errors.push(`${at} must be an object`);
+    for (const k of Object.keys(z)) if (!(RELEASE_APP_ZIP_V1_KEYS as readonly string[]).includes(k)) errors.push(`${at}: unknown property "${k}"`);
+    for (const k of RELEASE_APP_ZIP_V1_KEYS) if (!(k in z)) errors.push(`${at}: missing property "${k}"`);
+    if ('arch' in z && !(APP_ZIP_ARCHES as readonly unknown[]).includes(z.arch)) errors.push(`${at}: arch must be one of ${APP_ZIP_ARCHES.join('|')}`);
+    if ('sha256' in z && (typeof z.sha256 !== 'string' || !SHA256_HEX_PATTERN.test(z.sha256))) errors.push(`${at}: sha256 must be 64 lowercase hex`);
+    if (seen.has(z.arch)) errors.push(`${at}: more than one app zip for ${String(z.arch)}`);
+    seen.add(z.arch);
+  });
+  return errors;
+}
+
+/** The compiled sha256 of `arch`'s published Gnomon.app.zip, or null when the manifest pins none. */
+export function releaseAppZipFor(m: ReleaseManifestV1, arch: string): string | null {
+  return m.appZips?.find((z) => z.arch === arch)?.sha256 ?? null;
 }
 
 export function isReleaseManifestV1(value: unknown): value is ReleaseManifestV1 {

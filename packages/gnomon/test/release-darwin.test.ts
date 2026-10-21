@@ -5,7 +5,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -143,6 +143,25 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(existsSync(b.helperExe) && existsSync(b.voiceIoApp) && existsSync(path.join(b.voicePackage, 'dist/cli.js')) && existsSync(b.node)).toBe(true);
     expect(rel.bundlePins(path.join(moved, 'Gnomon.app/Contents'))).toEqual(s.pins);
   }, 120_000);
+
+  it('--package-dir refuses an unsigned or dry-run build unless --allow-unsigned-for-tests (Aegis M3 high 1)', () => {
+    const pkgDir = path.join(rel.PACKAGES, `gnomon-darwin-${process.arch === 'x64' ? 'x64' : 'arm64'}`);
+    const refused = spawnSync(process.execPath, [SCRIPT, '--dry-run', '--unsigned', '--zip', '--out', tmp(), '--package-dir', pkgDir], { encoding: 'utf8', timeout: 60_000 });
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toMatch(/--package-dir takes only a signed, notarized, stapled release/);
+    // a signed build that is not notarized is not shippable either
+    const unnotarized = spawnSync(process.execPath, [SCRIPT, '--out', tmp(), '--package-dir', pkgDir, '--dry-run'], { encoding: 'utf8', timeout: 60_000 });
+    expect(unnotarized.status).toBe(1);
+    // the test-only flag copies into a scratch copy of the package, and the result is never `signed`
+    const scratch = tmp();
+    for (const f of ['package.json', 'index.js']) fs.copyFileSync(path.join(pkgDir, f), path.join(scratch, f));
+    const ok = spawnSync(process.execPath, [SCRIPT, '--dry-run', '--unsigned', '--zip', '--out', tmp(), '--package-dir', scratch, '--allow-unsigned-for-tests'], { encoding: 'utf8', timeout: 120_000 });
+    expect(ok.status, ok.stderr).toBe(0);
+    const s = JSON.parse(ok.stdout) as { signed: boolean; stapled: boolean; packaged: { zip: string } };
+    expect(s.signed).toBe(false);
+    expect(s.stapled).toBe(false);
+    expect(existsSync(s.packaged.zip)).toBe(true);
+  }, 180_000);
 
   it('refuses another arch than the host outside --dry-run, before building anything', () => {
     const other = process.arch === 'arm64' ? 'x64' : 'arm64';

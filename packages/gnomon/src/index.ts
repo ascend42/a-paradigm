@@ -21,3 +21,6 @@ export * as releasePins from './kernel/lifecycle/release-pins.js';
 export { releaseHelperSha256 } from './kernel/identity/helper.js';
 export { releaseVoiceIoSha256 } from './kernel/voice/voice-install.js';
 export { pinHelper } from './kernel/identity/helper.js';
+// T-2026-10-21-030 (#gnomon-npm-packaging, Aegis M3 high 2): the published Gnomon.app.zip is checked against the
+// sha256 compiled into this build (release-manifest:v1 appZips), never the .sha256 shipped beside it
+export * as appZip from './kernel/lifecycle/app-zip.js';

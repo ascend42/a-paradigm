@@ -67,7 +67,9 @@ import {
 } from './card.js';
 import { CLIENT_NONCE_PATTERN_SOURCE, CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
 import {
+  APP_ZIP_ARCHES,
   ARTIFACT_VERSION_PATTERN,
+  RELEASE_APP_ZIP_V1_KEYS,
   RELEASE_ARCHES,
   RELEASE_ARTIFACT_NAMES,
   RELEASE_ARTIFACT_V1_KEYS,
@@ -471,6 +473,7 @@ export const RELEASE_MANIFEST_V1_SCHEMA: Schema = deepFreeze({
         ),
         { minItems: 1, maxItems: RELEASE_ARTIFACTS_MAX },
       ),
+      appZips: arr(closedObj({ arch: enumOf(APP_ZIP_ARCHES), sha256: str(SHA256_HEX_PATTERN) }, RELEASE_APP_ZIP_V1_KEYS), { minItems: 1, maxItems: APP_ZIP_ARCHES.length }),
     },
     RELEASE_MANIFEST_V1_KEYS,
   ),

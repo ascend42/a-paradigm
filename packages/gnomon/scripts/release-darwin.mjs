@@ -6,7 +6,7 @@
  * Founder-run on the founder's Mac (secrets never in CI); `--unsigned` (ad-hoc) for CI and tests.
  *
  *   node packages/gnomon/scripts/release-darwin.mjs [--arch arm64|x64] [--out <dir>] [--unsigned] [--notarize]
- *        [--dry-run] [--node-cache <dir>] [--skip-native]
+ *        [--dry-run [--zip]] [--package-dir <dir>] [--node-cache <dir>] [--skip-native]
  *
  *   --arch        default: this Mac's arch. The Swift helpers, cargo and the sherpa platform package build for the
  *                 HOST arch only, so another arch is refused (build each arch on a Mac of that arch).
@@ -14,6 +14,13 @@
  *   --notarize    after signing: packages/gnomon-wrapper/scripts/notarize-darwin.mjs (keychain profile gnomon-notary).
  *   --dry-run     no swift, npm, cargo, network or codesign: placeholder binaries stand in for the wrapper, node,
  *                 helper and voice-io, and the REAL layout, staging and pin logic run into --out. Prints the plan.
+ *   --zip         with --dry-run: still run step 9 (ditto zip + .sha256) on the placeholder app (pack round-trip tests).
+ *   --package-dir copy the zip and its .sha256 into this npm platform package as Gnomon.app.zip(.sha256) (T-2026-10-21-030,
+ *                 8.0 M3). Default for a SHIPPABLE release (Developer ID signed, notarized AND stapled, not dry-run):
+ *                 packages/gnomon-darwin-<arch>. Any other build is refused --package-dir unless
+ *                 --allow-unsigned-for-tests is also given (tests only; Aegis M3 high 1), so an ad-hoc, unnotarized or
+ *                 placeholder app never lands in a package that gets published. scripts/gate-gnomon-publish.mjs
+ *                 re-verifies the packaged zips before any publish.
  *   --skip-native reuse the already-built helper and voice-io (packages/*\/bin/darwin) instead of rebuilding them.
  *
  * Steps (signed inside-out; every step that fails stops the release):
@@ -40,12 +47,13 @@
  *      signatures kept); the assembled node and kernel must re-hash to the stage's pins;
  *   8. sign the app (Entitlements.plist: none, hardened runtime, no --deep: nested code is already signed), verify
  *      --strict --deep and the wrapper requirement; optionally notarize + staple;
- *   9. `ditto -c -k --keepParent` → Gnomon-<version>-darwin-<arch>.zip and a .sha256 beside it.
+ *   9. `ditto -c -k --keepParent` → Gnomon-<version>-darwin-<arch>.zip and a .sha256 beside it;
+ *  10. copy both into the platform package (--package-dir; see above).
  * Output: one JSON summary on stdout (paths, pins, signed, notarized, zip, sha256).
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -272,6 +280,9 @@ function parseArgs(argv) {
     unsigned: argv.includes('--unsigned'),
     notarize: argv.includes('--notarize'),
     dryRun: argv.includes('--dry-run'),
+    zip: argv.includes('--zip'),
+    packageDir: v('--package-dir') ? path.resolve(v('--package-dir')) : undefined,
+    allowUnsignedForTests: argv.includes('--allow-unsigned-for-tests'),
     skipNative: argv.includes('--skip-native'),
   };
 }
@@ -287,14 +298,42 @@ function capture(cmd, args) {
   return spawnSync(cmd, args, { encoding: 'utf8', timeout: 180_000 });
 }
 
-/** A placeholder app tree for --dry-run (no cargo, no swift). */
-function placeholderApp(dir, name, exeRel) {
+/** The placeholder framework a --dry-run helper app carries: the real versioned-bundle symlink shape. */
+export const PLACEHOLDER_FRAMEWORK = 'Contents/Frameworks/GnomonPlaceholder.framework';
+
+/**
+ * A placeholder app tree for --dry-run (no cargo, no swift). With `framework`, it also carries a versioned
+ * framework whose `Versions/Current`, top-level binary and `Resources` are SYMLINKS, as a real embedded framework's
+ * are, so the pack round-trip (scripts/pack-roundtrip.mjs) proves the zip keeps symlinks through npm.
+ */
+function placeholderApp(dir, name, exeRel, { framework = false } = {}) {
   const app = path.join(dir, name);
   mkdirSync(path.dirname(path.join(app, exeRel)), { recursive: true });
   writeFileSync(path.join(app, exeRel), `placeholder ${name}\n`);
   chmodSync(path.join(app, exeRel), 0o755);
   writeFileSync(path.join(app, 'Contents', 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict/></plist>\n');
+  if (framework) {
+    const fw = path.join(app, PLACEHOLDER_FRAMEWORK);
+    mkdirSync(path.join(fw, 'Versions', 'A', 'Resources'), { recursive: true });
+    writeFileSync(path.join(fw, 'Versions', 'A', 'GnomonPlaceholder'), 'placeholder framework binary\n');
+    writeFileSync(path.join(fw, 'Versions', 'A', 'Resources', 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict/></plist>\n');
+    symlinkSync('A', path.join(fw, 'Versions', 'Current'));
+    symlinkSync('Versions/Current/GnomonPlaceholder', path.join(fw, 'GnomonPlaceholder'));
+    symlinkSync('Versions/Current/Resources', path.join(fw, 'Resources'));
+  }
   return app;
+}
+
+/** Copy a release zip and its sha256 into an npm platform package as Gnomon.app.zip(.sha256). Returns the two paths. */
+export function copyIntoPlatformPackage(zip, zipSha, packageDir, arch) {
+  const pj = path.join(packageDir, 'package.json');
+  const name = existsSync(pj) ? JSON.parse(readFileSync(pj, 'utf8')).name : undefined;
+  if (name !== `@a-company/gnomon-darwin-${arch}`) throw new Error(`${packageDir} is not the @a-company/gnomon-darwin-${arch} package (have ${name ?? 'no package.json'})`);
+  const dstZip = path.join(packageDir, 'Gnomon.app.zip');
+  copyFileSync(zip, dstZip);
+  if (sha256File(dstZip) !== zipSha) throw new Error(`${dstZip} does not hash to the release zip`);
+  writeFileSync(`${dstZip}.sha256`, `${zipSha}  Gnomon.app.zip\n`);
+  return { zip: dstZip, sha256: `${dstZip}.sha256` };
 }
 
 /** Codesign one path (identity sha1, or '-' for ad-hoc). */
@@ -310,6 +349,9 @@ export async function release(argv) {
   if (o.arch !== 'arm64' && o.arch !== 'x64') throw new Error(`--arch must be arm64 or x64 (have ${o.arch})`);
   if (o.arch !== process.arch && !o.dryRun) throw new Error(`--arch ${o.arch} on a ${process.arch} Mac: the helpers, the wrapper and sherpa build for the host arch only; build ${o.arch} on a ${o.arch} Mac`);
   if (o.notarize && o.unsigned) throw new Error('--notarize needs a signed build (drop --unsigned)');
+  // Aegis M3 high 1: only a Developer ID, notarized, stapled, real build may land in a platform package
+  const shippable = !o.unsigned && !o.dryRun && o.notarize;
+  if (o.packageDir && !shippable && !o.allowUnsignedForTests) throw new Error('--package-dir takes only a signed, notarized, stapled release (--notarize, no --unsigned or --dry-run); --allow-unsigned-for-tests is for tests');
   const version = JSON.parse(readFileSync(path.join(PKG, 'package.json'), 'utf8')).version;
   const lock = nodeLockFor(o.arch);
   const plan = [];
@@ -382,7 +424,7 @@ export async function release(argv) {
       run(existsSync(path.join(cargoBin, 'cargo')) ? path.join(cargoBin, 'cargo') : 'cargo', ['tauri', 'build', '--bundles', 'app', '--no-sign'], { cwd: WRAPPER, env: { GNOMON_WRAPPER_BUNDLE_STAGE: stage, GNOMON_WRAPPER_BUNDLE_SIGNING: signing, GNOMON_WRAPPER_DEV: '', PATH: `${cargoBin}:${process.env.PATH ?? ''}` } }),
     );
     const skeleton = o.dryRun ? placeholderApp(path.join(work, 'skeleton'), APP_NAME, path.join('Contents', 'MacOS', WRAPPER_EXE)) : path.join(WRAPPER, 'target', 'release', 'bundle', 'macos', APP_NAME);
-    const helperApp = o.dryRun ? placeholderApp(path.join(work, 'helpers'), 'GnomonHelper.app', 'Contents/MacOS/gnomon-helper') : path.join(PACKAGES, 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app');
+    const helperApp = o.dryRun ? placeholderApp(path.join(work, 'helpers'), 'GnomonHelper.app', 'Contents/MacOS/gnomon-helper', { framework: true }) : path.join(PACKAGES, 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app');
     const voiceIoApp = o.dryRun ? placeholderApp(path.join(work, 'helpers'), 'GnomonVoiceIO.app', 'Contents/MacOS/gnomon-voice-io') : path.join(PACKAGES, 'gnomon-voice', 'bin', 'darwin', 'GnomonVoiceIO.app');
     // Aegis M2 high 2: the BUILT wrapper must say it is a bundle build before anything is signed
     await step('gnomon-wrapper --build-mode = bundle', () => {
@@ -410,22 +452,44 @@ export async function release(argv) {
         if (r.status !== 0) throw new Error(`the app does not meet the wrapper requirement: ${String(r.stderr).slice(0, 400)}`);
       });
     }
+    let stapled = false;
     if (o.notarize) {
       await step('notarize + staple', () => run(process.execPath, [path.join(WRAPPER, 'scripts', 'notarize-darwin.mjs'), '--app', outApp], { timeout: 3_600_000 }));
       notarized = !o.dryRun;
+      await step('xcrun stapler validate', () => {
+        const sv = capture('/usr/bin/xcrun', ['stapler', 'validate', outApp]);
+        if (sv.status !== 0) throw new Error(`the notarization ticket is not stapled to ${APP_NAME}: ${String(sv.stdout).slice(0, 300)}${String(sv.stderr).slice(0, 300)}`);
+        stapled = true;
+      });
     }
     // 9. zip + sha256
     const zipName = `Gnomon-${version}-darwin-${o.arch}.zip`;
     const zip = path.join(o.out, zipName);
     let zipSha = null;
-    await step(`ditto -c -k --keepParent → ${zipName} (+ .sha256)`, () => {
+    const makeZip = () => {
       rmSync(zip, { force: true });
       const z = capture('/usr/bin/ditto', ['-c', '-k', '--keepParent', outApp, zip]);
       if (z.status !== 0) throw new Error(`ditto zip: ${z.stderr}`);
       zipSha = sha256File(zip);
       writeFileSync(`${zip}.sha256`, `${zipSha}  ${zipName}\n`);
-    });
-    return { app: outApp, arch: o.arch, version, node: { version: lock.version, tarballSha256: lock.sha256 }, pins, signed: !o.unsigned && !o.dryRun, notarized, zip: o.dryRun ? null : zip, zipSha256: zipSha, dryRun: o.dryRun, plan };
+    };
+    const zipStep = `ditto -c -k --keepParent → ${zipName} (+ .sha256)`;
+    // --dry-run --zip: the zip is local (ditto only), so it runs for real on the placeholder app
+    if (o.dryRun && o.zip) {
+      plan.push(zipStep);
+      makeZip();
+    } else await step(zipStep, makeZip);
+    const zipped = zipSha !== null;
+    // 10. the npm platform package (T-2026-10-21-030): a shippable release (signed + notarized + stapled) by default;
+    //     anything else only with --package-dir --allow-unsigned-for-tests (checked before the build started)
+    const signed = !o.unsigned && !o.dryRun && notarized && stapled;
+    const packageDir = o.packageDir ?? (signed ? path.join(PACKAGES, `gnomon-darwin-${o.arch}`) : undefined);
+    let packaged = null;
+    if (packageDir) {
+      plan.push(`copy ${zipName} (+ .sha256) → ${packageDir}/Gnomon.app.zip`);
+      if (zipped) packaged = copyIntoPlatformPackage(zip, zipSha, packageDir, o.arch);
+    }
+    return { app: outApp, arch: o.arch, version, node: { version: lock.version, tarballSha256: lock.sha256 }, pins, signed, notarized, stapled, zip: zipped ? zip : null, zipSha256: zipSha, packaged, dryRun: o.dryRun, plan };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

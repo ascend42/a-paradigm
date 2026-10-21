@@ -10,6 +10,7 @@ import {
   RELEASE_MANIFEST_V1_KEYS,
   RELEASE_MANIFEST_V1_SCHEMA,
   isReleaseManifestV1,
+  releaseAppZipFor,
   releaseArtifactFor,
   serializeSchema,
   validateReleaseManifestV1,
@@ -58,6 +59,10 @@ describe('release-manifest:v1 schema ↔ TS validator lockstep', () => {
       { ...good, artifacts: [{ ...good.artifacts[0], arch: 'x86_64' }] },
       { ...good, artifacts: [{ ...good.artifacts[0], version: '1.8' }] },
       { ...good, artifacts: [{ ...good.artifacts[0], requirement: '' }] },
+      { ...good, appZips: [] },
+      { ...good, appZips: [{ arch: 'universal', sha256: sha('d') }] },
+      { ...good, appZips: [{ arch: 'arm64', sha256: sha('d'), extra: 1 }] },
+      { ...good, appZips: [{ arch: 'arm64' }] },
     ];
     for (const b of bad) {
       expect(validateReleaseManifestV1(b).length).toBeGreaterThan(0);
@@ -86,5 +91,17 @@ describe('releaseArtifactFor', () => {
     expect(releaseArtifactFor(good, 'gnomon-helper', 'arm64')?.sha256).toBe(sha('a'));
     expect(releaseArtifactFor(good, 'gnomon-helper', 'x64')).toBeNull();
     expect(releaseArtifactFor(good, 'gnomon-voice-io', 'x64')?.sha256).toBe(sha('b'));
+  });
+});
+
+describe('appZips (T-2026-10-21-030, Aegis M3 high 2: the published zip sha256 compiled into @a-company/gnomon)', () => {
+  it('is optional and additive; one entry per arch; releaseAppZipFor reads it', () => {
+    const withZips = { ...good, appZips: [{ arch: 'arm64' as const, sha256: sha('e') }, { arch: 'x64' as const, sha256: sha('f') }] };
+    expect(validateReleaseManifestV1(withZips)).toEqual([]);
+    expect(jsonSchemaErrors(schema, withZips)).toEqual([]);
+    expect(schema.required).not.toContain('appZips');
+    expect(releaseAppZipFor(withZips, 'x64')).toBe(sha('f'));
+    expect(releaseAppZipFor(good, 'arm64')).toBeNull();
+    expect(validateReleaseManifestV1({ ...good, appZips: [{ arch: 'arm64', sha256: sha('e') }, { arch: 'arm64', sha256: sha('f') }] }).join()).toMatch(/more than one app zip/);
   });
 });

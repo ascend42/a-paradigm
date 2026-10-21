@@ -1,0 +1,29 @@
+version: "2.0"
+description: >-
+  @a-company/gnomon-darwin-arm64 — the npm platform package carrying the signed,
+  notarized, relocatable Gnomon.app for macOS on arm64 (TD-2026-10-21-758; 8.0 M3,
+  T-2026-10-21-030). Public; os darwin, cpu arm64; an optional dependency of
+  @a-company/gnomon at the exact same version (scripts/sync-gnomon-versions.mjs).
+  Outside the root workspaces (os/cpu would fail npm install on the other arch).
+
+components:
+  gnomon-darwin-arm64:
+    description: >-
+      files are ONLY index.js, Gnomon.app.zip and Gnomon.app.zip.sha256. The zip
+      is a ditto -c -k --keepParent archive (npm tarballs drop symlinks and
+      modes an app bundle needs) that packages/gnomon/scripts/release-darwin.mjs
+      copies in (default for a signed, notarized, stapled release; other
+      builds only with --package-dir --allow-unsigned-for-tests); both files
+      are gitignored. index.js exports platform,
+      arch, zipPath, sha256Path and verifyZip(expected), which checks the zip
+      against the sha256 compiled into @a-company/gnomon (appZips), never the
+      shipped .sha256. No scripts at all (G-SEC-01); publishing goes through scripts/gate-gnomon-publish.mjs. The pack round trip
+      (packages/gnomon/scripts/pack-roundtrip.mjs) proves the zip survives
+      npm pack with its layout and framework symlinks.
+    path: index.js
+    type: package
+    tags: [gnomon, distribution, release, darwin]
+    related: ["#gnomon-npm-packaging", "#release-darwin", "#gnomon-shim"]
+    tests:
+      - ../gnomon/test/version-lockstep.test.ts
+      - ../gnomon/test/pack-roundtrip.test.ts
