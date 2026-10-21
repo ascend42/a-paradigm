@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildSessionEnv, ENV_ALLOWLIST, IDENTITY_KEYS, resolveSessionIdentity, validTempDir, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
+import { buildSessionEnv, defaultSessionPath, ENV_ALLOWLIST, IDENTITY_KEYS, missingIdentity, resolveSessionIdentity, sessionPathFor, validTempDir, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
 
 /** capabilities, not platforms: POSIX uid + mode bits; darwin's per-user temp dir via getconf */
 const POSIX = typeof process.getuid === 'function';
@@ -35,24 +35,24 @@ const ownedDir = (mode = 0o700): string => {
 
 describe('buildSessionEnv: identity names come only from the OS identity', () => {
   it('a daemon env with no USER/LOGNAME/SHELL/TMPDIR still gives the session all four', () => {
-    const { env } = buildSessionEnv({ ...base, from: { HOME: '/h', PATH: '/usr/bin:/bin' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
+    const { env } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', PATH: '/usr/bin:/bin' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
     expect(env).toMatchObject({ USER: 'alice', LOGNAME: 'alice', SHELL: '/bin/zsh', TMPDIR: '/var/folders/x/T/' });
   });
   it('a WRONG inherited USER/LOGNAME/SHELL/TMPDIR is overridden', () => {
-    const { env } = buildSessionEnv({ ...base, from: { HOME: '/h', USER: 'nobody', LOGNAME: 'mallory', SHELL: '/tmp/evil', TMPDIR: '/tmp/elsewhere' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
+    const { env } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', USER: 'nobody', LOGNAME: 'mallory', SHELL: '/tmp/evil', TMPDIR: '/tmp/elsewhere' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
     expect(env).toMatchObject({ USER: 'alice', LOGNAME: 'alice', SHELL: '/bin/zsh', TMPDIR: '/var/folders/x/T/' });
   });
   it('a name the OS could not give is ABSENT, never back-filled from the daemon env', () => {
-    const { env, envKeys } = buildSessionEnv({ ...base, from: { HOME: '/h', USER: 'nobody', LOGNAME: 'nobody', SHELL: '/bin/sh', TMPDIR: '/tmp/x' }, identity: {} });
+    const { env, envKeys } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', USER: 'nobody', LOGNAME: 'nobody', SHELL: '/bin/sh', TMPDIR: '/tmp/x' }, identity: {} });
     for (const k of IDENTITY_KEYS) expect(env[k], k).toBeUndefined();
     expect(envKeys).toEqual(['GNOMON_HSID', 'GNOMON_SESSION_KEY', 'GNOMON_SOCK', 'HOME']);
   });
   it('identity null (win32) keeps the allowlist as it was; USERNAME/USERPROFILE stay WINDOWS_EXTRA data', () => {
-    const { env } = buildSessionEnv({ ...base, from: { USERPROFILE: 'C:\\Users\\a', USER: 'a' }, identity: null });
+    const { env } = buildSessionEnv({ ...base, path: null, from: { USERPROFILE: 'C:\\Users\\a', USER: 'a' }, identity: null });
     expect(env).toMatchObject({ USERPROFILE: 'C:\\Users\\a', USER: 'a' });
   });
   it('envKeys are names only: no identity value appears in them', () => {
-    const { envKeys } = buildSessionEnv({ ...base, from: { HOME: '/h', USER: 'gnomon-wrong-user-probe' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
+    const { envKeys } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', USER: 'gnomon-wrong-user-probe' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
     expect(envKeys).toEqual(['GNOMON_HSID', 'GNOMON_SESSION_KEY', 'GNOMON_SOCK', 'HOME', 'LOGNAME', 'SHELL', 'TMPDIR', 'USER']);
     expect(envKeys.every((k) => [...ENV_ALLOWLIST, ...WINDOWS_EXTRA].includes(k) || k.startsWith('GNOMON_'))).toBe(true);
     expect(JSON.stringify(envKeys)).not.toMatch(/alice|zsh|folders|gnomon-wrong-user-probe/);
@@ -105,5 +105,44 @@ describe('validTempDir: absolute, a directory, owned by the uid, not group/world
     expect(id?.tmpdir).toBeDefined();
     expect(path.isAbsolute(id!.tmpdir!)).toBe(true);
     expect(fs.statSync(fs.realpathSync.native(id!.tmpdir!)).uid).toBe(uid());
+  });
+});
+
+describe('TD-2026-10-21-077: the session PATH is config-or-default, never the daemon PATH', () => {
+  it('the daemon env PATH is ignored; the given PATH replaces it', () => {
+    const { env } = buildSessionEnv({ ...base, from: { HOME: '/h', PATH: '/evil/bin:/usr/bin' }, identity: {}, path: '/opt/tools/bin:/usr/bin' });
+    expect(env.PATH).toBe('/opt/tools/bin:/usr/bin');
+  });
+  it('path null (win32 only) keeps the allowlisted PATH', () => {
+    expect(buildSessionEnv({ ...base, from: { PATH: 'C:\\Windows' }, identity: null, path: null }).env.PATH).toBe('C:\\Windows');
+  });
+  it('the darwin default: node dir, ~/.local/bin from the OS home, then /opt/homebrew/bin … /sbin', () => {
+    expect(defaultSessionPath({ platform: 'darwin', nodeDir: '/opt/homebrew/bin', home: '/Users/a' })).toEqual(['/opt/homebrew/bin', '/Users/a/.local/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']);
+    expect(defaultSessionPath({ platform: 'darwin', nodeDir: '/n/bin', home: '/Users/a' })).toEqual(['/n/bin', '/Users/a/.local/bin', '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']);
+    expect(defaultSessionPath({ platform: 'darwin' })).toContain('/opt/homebrew/bin');
+  });
+  it('linux has no /opt/homebrew/bin; win32 has no default (null); a dir holding ":" or a relative home is skipped', () => {
+    expect(defaultSessionPath({ platform: 'linux', nodeDir: '/usr/bin', home: '/home/a' })).toEqual(['/usr/bin', '/home/a/.local/bin', '/usr/local/bin', '/bin', '/usr/sbin', '/sbin']);
+    expect(defaultSessionPath({ platform: 'win32', nodeDir: 'C:\\node' })).toBeNull();
+    expect(defaultSessionPath({ platform: 'darwin', nodeDir: '/a:b', home: 'rel' })).toEqual(['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']);
+  });
+  it('sessionPathFor: the configured list wins, joined by the platform separator', () => {
+    expect(sessionPathFor(['/x/bin', '/usr/bin'], { platform: 'darwin', nodeDir: '/n' })).toBe('/x/bin:/usr/bin');
+    expect(sessionPathFor(null, { platform: 'darwin', nodeDir: '/n', home: '/Users/a' })).toBe('/n:/Users/a/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin');
+    expect(sessionPathFor(['C:\\a', 'D:\\b'], { platform: 'win32' })).toBe('C:\\a;D:\\b');
+    expect(sessionPathFor(null, { platform: 'win32' })).toBeNull();
+  });
+});
+
+describe('Aegis L2 / ruling 3: the OS home and the missing-identity names', () => {
+  it('home comes from userInfo().homedir when absolute', () => {
+    expect(resolveSessionIdentity({ platform: 'linux', userInfo: () => ({ username: 'a', shell: '/bin/sh', homedir: '/home/a' }) })).toEqual({ user: 'a', shell: '/bin/sh', home: '/home/a' });
+    expect(resolveSessionIdentity({ platform: 'linux', userInfo: () => ({ username: 'a', shell: '/bin/sh', homedir: 'rel' }) })?.home).toBeUndefined();
+  });
+  it('missingIdentity names only what the OS did not give (names, never values); [] for win32', () => {
+    expect(missingIdentity({ user: 'a', shell: '/bin/zsh', tmpdir: '/t/', home: '/h' }, 'darwin')).toEqual([]);
+    expect(missingIdentity({}, 'darwin')).toEqual(['USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'HOME']);
+    expect(missingIdentity({ user: 'a', shell: '/bin/sh', home: '/h' }, 'linux')).toEqual([]);
+    expect(missingIdentity(null, 'win32')).toEqual([]);
   });
 });

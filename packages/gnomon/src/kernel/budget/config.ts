@@ -64,8 +64,10 @@ export interface LoadedFuseConfig {
    * signed config that cannot be applied after one was (rollback, missing,
    * unsigned) or an invalid `sessions` section ⇒ `none` (fail closed:
    * never wider than what the founder may have chosen), logged.
+   * TD-2026-10-21-077: `config.sessions.path` — the session PATH, absolute dirs in order; null = the built-in
+   * per-platform default (runner/env.ts defaultSessionPath). Every fallback ⇒ null (the default), logged.
    */
-  sessions: { hooks: SessionHooksMode };
+  sessions: { hooks: SessionHooksMode; path: string[] | null };
   /**
    * TD-2026-10-20-086 F3: `config.runModes.default` — the run mode a repo with no mode of its own takes (never a
    * home folder, an ancestor of it or `/`: run-mode.ts refuses those the default). null = none (the built-in `ask`).
@@ -84,14 +86,37 @@ export function parseRunModesSection(section: unknown): { default: RunMode | nul
   return typeof s.default === 'string' && (RUN_MODES as readonly string[]).includes(s.default) ? { default: s.default as RunMode } : null;
 }
 
+/** TD-2026-10-21-077: bounds of `config.sessions.path` (entries, and characters per entry). */
+export const SESSION_PATH_MAX_ENTRIES = 32;
+export const SESSION_PATH_MAX_ENTRY = 1024;
+
+/**
+ * TD-2026-10-21-077: parse `config.sessions.path` — a list of absolute directories, in order. undefined/null ⇒ null
+ * (the built-in per-platform default, runner/env.ts defaultSessionPath); anything malformed ⇒ undefined (invalid).
+ * Each entry: a string of 1..SESSION_PATH_MAX_ENTRY chars, no NUL/CR/LF, absolute for the platform, no PATH
+ * separator inside it (`:` on POSIX, `;` on win32). At most SESSION_PATH_MAX_ENTRIES entries, at least one.
+ */
+export function parseSessionPath(v: unknown, platform: NodeJS.Platform = process.platform): string[] | null | undefined {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v) || v.length === 0 || v.length > SESSION_PATH_MAX_ENTRIES) return undefined;
+  const win = platform === 'win32';
+  for (const e of v) {
+    if (typeof e !== 'string' || e.length === 0 || e.length > SESSION_PATH_MAX_ENTRY || /[\0\r\n]/.test(e)) return undefined;
+    if (win ? !path.win32.isAbsolute(e) || e.includes(';') : !path.posix.isAbsolute(e) || e.includes(':')) return undefined;
+  }
+  return [...(v as string[])];
+}
+
 /** Parse the root config's `sessions` section; null on any unknown key or value. */
-export function parseSessionsSection(section: unknown): { hooks: SessionHooksMode } | null {
-  if (section === undefined) return { hooks: DEFAULT_SESSION_HOOKS };
+export function parseSessionsSection(section: unknown, platform: NodeJS.Platform = process.platform): { hooks: SessionHooksMode; path: string[] | null } | null {
+  if (section === undefined) return { hooks: DEFAULT_SESSION_HOOKS, path: null };
   if (section === null || typeof section !== 'object' || Array.isArray(section)) return null;
   const s = section as Record<string, unknown>;
-  if (Object.keys(s).some((k) => k !== 'hooks')) return null;
-  if (s.hooks === undefined) return { hooks: DEFAULT_SESSION_HOOKS };
-  return typeof s.hooks === 'string' && (SESSION_HOOKS_MODES as readonly string[]).includes(s.hooks) ? { hooks: s.hooks as SessionHooksMode } : null;
+  if (Object.keys(s).some((k) => k !== 'hooks' && k !== 'path')) return null;
+  const p = parseSessionPath(s.path, platform);
+  if (p === undefined) return null;
+  if (s.hooks === undefined) return { hooks: DEFAULT_SESSION_HOOKS, path: p };
+  return typeof s.hooks === 'string' && (SESSION_HOOKS_MODES as readonly string[]).includes(s.hooks) ? { hooks: s.hooks as SessionHooksMode, path: p } : null;
 }
 
 const SCOPES: ScopeName[] = ['user', 'repo', 'loop', 'session'];
@@ -140,7 +165,7 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const chain = opts.chainHighWater ?? 0;
   const seen = Math.max(sidecar, chain);
   // a fallback AFTER a signed config was seen ⇒ sessions `none` (fail closed); first-run defaults ⇒ DEFAULT_SESSION_HOOKS
-  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash, sessions: { hooks: seen > 0 ? 'none' : DEFAULT_SESSION_HOOKS }, runModes: { default: null } });
+  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash, sessions: { hooks: seen > 0 ? 'none' : DEFAULT_SESSION_HOOKS, path: null }, runModes: { default: null } });
   const fallBack = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
     emit('config.loaded', { hash, signed: false, fallback: 'defaults', version: typeof version === 'number' ? version : null, highWater: seen, why, ...(opts.chainHighWater !== undefined && sidecar !== chain ? { sidecar, chain } : {}) });
     return defaults(false, hash);
@@ -150,7 +175,7 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
     raw = fs.readFileSync(file, 'utf8');
   } catch {
     if (seen > 0) return fallBack('missing', null, null);
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null, sessions: { hooks: DEFAULT_SESSION_HOOKS }, runModes: { default: null } };
+    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null, sessions: { hooks: DEFAULT_SESSION_HOOKS, path: null }, runModes: { default: null } };
   }
   let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown; sessions?: unknown; runModes?: unknown } }; signer?: unknown; sig?: unknown };
   try {
@@ -173,9 +198,9 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const sessions = parseSessionsSection(doc.row!.config?.sessions);
   const runModes = parseRunModesSection(doc.row!.config?.runModes);
   if (!merged || !sessions || !runModes) {
-    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', sessions: { hooks: 'none' } });
+    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', sessions: { hooks: 'none', path: 'default' } });
     // Aegis low: an invalid fuse OR sessions section ⇒ sessions `none` too (fail closed, never the default)
-    return { ...defaults(true, hash), sessions: { hooks: 'none' } };
+    return { ...defaults(true, hash), sessions: { hooks: 'none', path: null } };
   }
   // only a validated config advances the high-water mark; a failed sidecar write is logged, never thrown (the chain row still carries the version)
   if (version > sidecar) {

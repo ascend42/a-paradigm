@@ -110,7 +110,7 @@ describe('Q6 (Aegis): extra is an allow-list; every kernel-owned flag appears on
 describe('G-RUN-02 the child env is an allowlist plus the scrub', () => {
   it('envKeys ⊆ allowlist ∪ GNOMON session names; API-billing and steering names never pass', () => {
     const from = { HOME: '/h', PATH: '/usr/bin', ANTHROPIC_API_KEY: 'k', ANTHROPIC_BASE_URL: 'u', CLAUDE_CONFIG_DIR: '/c', NODE_OPTIONS: '--x', GNOMON_HOME: '/g', FOO_BASE_URL: 'u', CLAUDE_CODE_USE_BEDROCK: '1', RANDOM: 'r' };
-    const { env, envKeys } = buildSessionEnv({ from, hsid: 'hsid:v1:x', sock: '/s.sock', sessionKeyPath: '/k', identity: null });
+    const { env, envKeys } = buildSessionEnv({ from, hsid: 'hsid:v1:x', sock: '/s.sock', sessionKeyPath: '/k', identity: null, path: null });
     expect(envKeys).toEqual(['GNOMON_HSID', 'GNOMON_SESSION_KEY', 'GNOMON_SOCK', 'HOME', 'PATH']);
     expect(Object.keys(env).every((k) => ENV_ALLOWLIST.includes(k) || k.startsWith('GNOMON_'))).toBe(true);
   });

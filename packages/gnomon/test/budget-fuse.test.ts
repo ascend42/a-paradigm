@@ -20,6 +20,9 @@ import {
   scanApiBilling,
   writeSignedConfig,
   parseSessionsSection,
+  parseSessionPath,
+  SESSION_PATH_MAX_ENTRIES,
+  SESSION_PATH_MAX_ENTRY,
   type BillingScanSource,
   type FuseRow,
   type ReserveRequest,
@@ -204,32 +207,52 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
     const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
     const rows: Array<Record<string, unknown>> = [];
     const emit = (_k: string, p: Record<string, unknown>) => void rows.push(p);
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // no config ever: the founder's default (P8-D94)
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited', path: null }); // no config ever: the founder's default (P8-D94)
     fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', config: { sessions: { hooks: 'none' } } }, signer: 'x', sig: 'y' }));
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // unsigned on a first run: defaults, never applied
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited', path: null }); // unsigned on a first run: defaults, never applied
     writeSignedConfig(home, root, { sessions: { hooks: 'user-only' } }, 1);
-    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'user-only' });
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'user-only', path: null });
     expect(rows.at(-1)).toMatchObject({ signed: true, sessions: { hooks: 'user-only' } });
     writeSignedConfig(home, root, { sessions: { hooks: 'none' } }, 2);
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' });
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none', path: null });
     for (const bad of [{ hooks: 'project' }, { hooks: true }, { hooks: 'all', extra: 1 }, 'all', null]) {
       writeSignedConfig(home, root, { sessions: bad }, 3);
-      expect(loadFuseConfig(home, root, emit).sessions, JSON.stringify(bad)).toEqual({ hooks: 'none' });
+      expect(loadFuseConfig(home, root, emit).sessions, JSON.stringify(bad)).toEqual({ hooks: 'none', path: null });
       expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
     }
     // Aegis low: an invalid FUSE section beside a valid sessions section ⇒ none too
     writeSignedConfig(home, root, { fuse: { breakerMs: 1 }, sessions: { hooks: 'all' } }, 4);
-    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'none' });
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'none', path: null });
     expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
     writeSignedConfig(home, root, { sessions: { hooks: 'all' } }, 0); // older than the high-water mark
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' });
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none', path: null });
     fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' }); // missing after a signed one
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none', path: null }); // missing after a signed one
+  });
+  it('TD-2026-10-21-077: config.sessions.path — applied when signed and valid; invalid ⇒ the default (null) with a logged config.loaded{why:invalid}', () => {
+    const home = tmp();
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const rows: Array<Record<string, unknown>> = [];
+    const emit = (_k: string, p: Record<string, unknown>) => void rows.push(p);
+    writeSignedConfig(home, root, { sessions: { path: ['/opt/tools/bin', '/usr/bin'] } }, 1);
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'audited', path: ['/opt/tools/bin', '/usr/bin'] });
+    expect(rows.at(-1)).toMatchObject({ signed: true, sessions: { path: ['/opt/tools/bin', '/usr/bin'] } });
+    const long = `/${'a'.repeat(SESSION_PATH_MAX_ENTRY)}`;
+    const many = Array.from({ length: SESSION_PATH_MAX_ENTRIES + 1 }, (_, i) => `/d${i}`);
+    for (const bad of [[], ['relative/bin'], [''], ['/a:/b'], ['/a\n'], [long], many, '/usr/bin', [1]]) {
+      writeSignedConfig(home, root, { sessions: { path: bad } }, 2);
+      expect(loadFuseConfig(home, root, emit).sessions.path, JSON.stringify(bad).slice(0, 60)).toBeNull();
+      expect(rows.at(-1)).toMatchObject({ why: 'invalid', fallback: 'defaults' });
+    }
+    expect(parseSessionPath(['C:\\tools\\bin'], 'win32')).toEqual(['C:\\tools\\bin']);
+    expect(parseSessionPath(['C:\\a;D:\\b'], 'win32')).toBeUndefined();
+    expect(parseSessionPath(['/usr/bin'], 'linux')).toEqual(['/usr/bin']);
+    expect(parseSessionPath(null)).toBeNull();
   });
   it('T-2026-10-18-010 L4: parseSessionsSection + settingSourcesFor map the four modes', () => {
-    expect(parseSessionsSection(undefined)).toEqual({ hooks: 'audited' });
-    expect(parseSessionsSection({})).toEqual({ hooks: 'audited' });
-    expect(parseSessionsSection({ hooks: 'all' })).toEqual({ hooks: 'all' });
+    expect(parseSessionsSection(undefined)).toEqual({ hooks: 'audited', path: null });
+    expect(parseSessionsSection({})).toEqual({ hooks: 'audited', path: null });
+    expect(parseSessionsSection({ hooks: 'all' })).toEqual({ hooks: 'all', path: null });
     expect(settingSourcesFor('audited')).toEqual(['user']); // repo layers only through the kernel's audited extract
     expect(settingSourcesFor('all')).toEqual(['user', 'project', 'local']);
     expect(settingSourcesFor('user-only')).toEqual(['user']);
