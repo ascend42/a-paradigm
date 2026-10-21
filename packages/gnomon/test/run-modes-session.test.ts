@@ -18,7 +18,10 @@ import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
-import { anchorCommand } from '../src/kernel/supervisor/shell-readonly.js';
+import { anchorCommand, shellFlavour } from '../src/kernel/supervisor/shell-readonly.js';
+import { sessionIdentity } from '../src/kernel/runner/env.js';
+// the session's SHELL comes from the OS (runner/env.ts), so the anchor takes that shell's form
+const FLAVOUR = shellFlavour(sessionIdentity()?.shell);
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 import { ASK_GUI, controlRig, errOf, HUMAN, KP } from './run-mode-helpers.js';
@@ -114,7 +117,7 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', path: fs.realpathSync(w.cwd), inputHash: expect.stringMatching(/^sha256:/), modeRef: 'mode:auto-edits:read-only' }]);
     // K1: the allow carries the ANCHORED command (no SHELL in this env: the either-shell form); the inject row logs both hashes
     const ro1 = { command: `cd '${w.cwd}' && ls -la && git status 2>/dev/null | head -5`, description: 'look' };
-    const anchored = { ...ro1, command: anchorCommand(ro1.command, fs.realpathSync(w.cwd), 'unknown') };
+    const anchored = { ...ro1, command: anchorCommand(ro1.command, fs.realpathSync(w.cwd), FLAVOUR) };
     expect(r.answers().find((a) => a.id === 'ro-1')?.updatedInput).toEqual(anchored);
     const inj = r.rows.find((x) => x.kind === 'session.inject' && x.payload.requestId === 'ro-1')!.payload;
     expect(inj).toMatchObject({ inputHash: inputHash(ro1), anchoredInputHash: inputHash(anchored) });
@@ -129,7 +132,7 @@ describe.skipIf(!SANDBOX_OK)('run modes in a live session (fake claude, the real
     const r = sessionRig();
     const s = await r.open([r.req('ask-ro', 'Bash', { command: 'ls -la', description: 'look' }), r.req('ask-w', 'Bash', { command: 'ls > out.txt' }), r.req('ask-e', 'Write', { file_path: path.join(w.cwd, 'e.txt'), content: 'e' })]);
     expect(await waitFor(() => r.answers().some((a) => a.id === 'ask-ro') && r.pending().length >= 2, 10_000)).toBe(true);
-    expect(r.answers().find((a) => a.id === 'ask-ro')).toMatchObject({ behavior: 'allow', updatedInput: { command: anchorCommand('ls -la', fs.realpathSync(w.cwd), 'unknown'), description: 'look' } });
+    expect(r.answers().find((a) => a.id === 'ask-ro')).toMatchObject({ behavior: 'allow', updatedInput: { command: anchorCommand('ls -la', fs.realpathSync(w.cwd), FLAVOUR), description: 'look' } });
     expect(r.kinds('approval.auto')).toEqual([{ hsid: s.hsid, tool: 'Bash', path: fs.realpathSync(w.cwd), inputHash: inputHash({ command: 'ls -la', description: 'look' }), modeRef: 'mode:ask:read-only' }]);
     const carded = r.pending().map((c) => JSON.stringify(c.block));
     expect(carded.some((t) => t.includes('out.txt'))).toBe(true);
