@@ -1142,7 +1142,7 @@ export class SessionSupervisor {
       // F1 (TD-2026-10-20-086): in `ask` too (modeRef mode:ask:read-only); never in `manual`
       const roRef = mode === 'ask' ? READ_ONLY_ASK_MODE_REF : READ_ONLY_MODE_REF;
       // K1: anchored in the claude child's cwd (its realpath): the allow sends the anchored command, which runs there
-      const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#userHome(), { root: s.cwd, ...(s.env.SHELL !== undefined ? { shell: s.env.SHELL } : {}) });
+      const pass = autoBashReadOnly(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.home, this.#o.platform ?? process.platform, this.#userHome(), { root: s.cwd, ...(s.env.SHELL !== undefined ? { shell: s.env.SHELL } : {}), ...(s.env.PATH !== undefined ? { path: s.env.PATH } : {}) });
       if (pass.ok) {
         // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered).
         // inputHash is the REQUEST's (the card's, the rules'); path is where it runs (the anchored root)

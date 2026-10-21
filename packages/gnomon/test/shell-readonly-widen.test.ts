@@ -12,14 +12,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { autoBashReadOnly } from '../src/kernel/supervisor/auto-edits.js';
-import { anchorCommand, classifyReadOnly } from '../src/kernel/supervisor/shell-readonly.js';
+import { anchorCommand, classifyReadOnly, paradigmOnPath, resetParadigmVersionCacheForTests } from '../src/kernel/supervisor/shell-readonly.js';
 
 let base = '';
 let repo = '';
 let home = '';
 let outside = '';
 let real = '';
-const ctxOf = (cwd: string | null, gnomonHome = path.join(home, '.gnomon')) => ({ roots: [repo], home, gnomonHome, platform: process.platform, readRoots: [], ...(cwd !== null ? { cwd } : {}) });
+let binDir = '';
+const ctxOf = (cwd: string | null, gnomonHome = path.join(home, '.gnomon')) => ({ roots: [repo], home, gnomonHome, platform: process.platform, readRoots: [], searchPath: `${binDir}:/usr/bin:/bin`, ...(cwd !== null ? { cwd } : {}) });
 const ro = (c: string) => classifyReadOnly(c, ctxOf(real));
 const roUnanchored = (c: string) => classifyReadOnly(c, ctxOf(null));
 
@@ -43,7 +44,18 @@ beforeAll(() => {
   execFileSync('git', ['init', '-q'], { cwd: repo });
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: repo });
   real = fs.realpathSync.native(repo);
+  binDir = fakeParadigm(path.join(base, 'paradigm-7.15.2'), '7.15.2');
 });
+
+/** An npm-style install: <pkg>/package.json + <pkg>/dist/index.js, and <bin>/paradigm a symlink to it. Returns <bin>. */
+function fakeParadigm(prefix: string, version: string, name = '@a-company/paradigm'): string {
+  fs.mkdirSync(path.join(prefix, 'pkg', 'dist'), { recursive: true });
+  fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(prefix, 'pkg', 'package.json'), JSON.stringify({ name, version }));
+  fs.writeFileSync(path.join(prefix, 'pkg', 'dist', 'index.js'), '#!/usr/bin/env node\n', { mode: 0o755 });
+  fs.symlinkSync(path.join(prefix, 'pkg', 'dist', 'index.js'), path.join(prefix, 'bin', 'paradigm'));
+  return path.join(prefix, 'bin');
+}
 afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
 
 describe("#shell-readonly RW: the founder's three commands pass verbatim", () => {
@@ -52,7 +64,7 @@ describe("#shell-readonly RW: the founder's three commands pass verbatim", () =>
   });
   it('through autoBashReadOnly they pass ANCHORED (the run is the K1 anchored form)', () => {
     for (const c of [FOUNDER_GREP, FOUNDER_DESK, FOUNDER_PARADIGM]) {
-      const p = autoBashReadOnly('Bash', { command: c, description: 'd' }, [repo], ['x'], path.join(home, '.gnomon'), process.platform, home, { root: repo, shell: '/bin/zsh' });
+      const p = autoBashReadOnly('Bash', { command: c, description: 'd' }, [repo], ['x'], path.join(home, '.gnomon'), process.platform, home, { root: repo, shell: '/bin/zsh', path: `${binDir}:/usr/bin:/bin` });
       expect(p).toEqual({ ok: true, command: anchorCommand(c, real, 'zsh'), root: real });
     }
   });
@@ -382,6 +394,44 @@ describe("#shell-readonly RW (Aegis L3): fd's pattern and tree's -P/-I values ar
     const v = ro(c);
     expect(v.ok).toBe(false);
     expect((v as { why: string }).why).toMatch(why);
+  });
+});
+
+describe('#shell-readonly RW: the paradigm on the session PATH must be 7.15.2 or newer', () => {
+  const with_ = (searchPath: string | undefined) => {
+    const { searchPath: _drop, ...rest } = ctxOf(real);
+    return classifyReadOnly('paradigm status', searchPath !== undefined ? { ...rest, searchPath } : rest);
+  };
+  it('passes for 7.15.2 and newer, cards for older, prerelease, other packages, shims, unknown or relative PATH', () => {
+    resetParadigmVersionCacheForTests();
+    expect(paradigmOnPath(`${binDir}:/usr/bin`)).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-7.16.0'), '7.16.0'))).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-8.0.0'), '8.0.0'))).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-7.15.1'), '7.15.1'))).toMatch(/version 7.15.1 on PATH predates 7.15.2/);
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-rc'), '7.15.2-rc.1'))).toMatch(/predates/);
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-other'), '9.9.9', 'paradigm-impostor'))).toMatch(/not @a-company\/paradigm/);
+    const shim = path.join(base, 'shim-bin');
+    fs.mkdirSync(shim, { recursive: true });
+    fs.writeFileSync(path.join(shim, 'paradigm'), '#!/bin/sh\n', { mode: 0o755 });
+    expect(paradigmOnPath(shim)).toMatch(/shim/);
+    expect(paradigmOnPath(path.join(base, 'nowhere'))).toMatch(/not found/);
+    expect(paradigmOnPath(`.:${binDir}`)).toMatch(/relative or empty/);
+    expect(paradigmOnPath(`${binDir}::/usr/bin`)).toBeNull(); // first match wins before the empty entry
+    expect(paradigmOnPath(undefined)).toMatch(/PATH is unknown/);
+    // the first paradigm on PATH wins, as in the shell
+    expect(paradigmOnPath(`${path.join(base, 'p-7.15.1', 'bin')}:${binDir}`)).toMatch(/predates/);
+    expect(with_(undefined)).toMatchObject({ ok: false, why: 'paradigm: the session PATH is unknown' });
+    expect(with_(path.join(base, 'p-7.15.1', 'bin'))).toMatchObject({ ok: false });
+  });
+  it('re-reads package.json when its mtime changes (an upgrade or downgrade in place)', () => {
+    resetParadigmVersionCacheForTests();
+    const bin = fakeParadigm(path.join(base, 'p-inplace'), '7.15.2');
+    expect(paradigmOnPath(bin)).toBeNull();
+    const pkg = path.join(base, 'p-inplace', 'pkg', 'package.json');
+    fs.writeFileSync(pkg, JSON.stringify({ name: '@a-company/paradigm', version: '7.15.0' }));
+    const t = new Date(Date.now() + 5_000);
+    fs.utimesSync(pkg, t, t);
+    expect(paradigmOnPath(bin)).toMatch(/version 7.15.0/);
   });
 });
 

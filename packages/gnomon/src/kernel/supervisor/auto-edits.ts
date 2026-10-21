@@ -133,6 +133,8 @@ export type AutoBashPass = { ok: true; command: string; root: string | null } | 
 export interface BashAnchor {
   root: string;
   shell?: string;
+  /** The session env's PATH: the classifier resolves `paradigm` on it (paradigmOnPath). */
+  path?: string;
 }
 
 export function autoBashReadOnly(tool: string, input: Record<string, unknown>, roots: readonly string[], cardLines: readonly string[], gnomonHome: string, platform: string = process.platform, home: string = os.homedir(), anchor?: BashAnchor): AutoBashPass {
@@ -150,7 +152,7 @@ export function autoBashReadOnly(tool: string, input: Record<string, unknown>, r
     real = realOr(anchor.root);
     if (real === null || !roots.includes(anchor.root)) return { ok: false, why: 'no-root' };
   }
-  const v = classifyReadOnly(input.command, { roots, home, gnomonHome, platform, ...(real !== null ? { cwd: real } : {}) });
+  const v = classifyReadOnly(input.command, { roots, home, gnomonHome, platform, ...(real !== null ? { cwd: real } : {}), ...(anchor?.path !== undefined ? { searchPath: anchor.path } : {}) });
   if (!v.ok) return { ok: false, why: `not-read-only: ${v.why}` };
   return real !== null ? { ok: true, command: anchorCommand(input.command, real, shellFlavour(anchor!.shell)), root: real } : { ok: true, command: input.command, root: null };
 }

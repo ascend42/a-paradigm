@@ -132,8 +132,10 @@
  *   RESIDUAL (RW): the paradigm and gnomon binaries are found on $PATH (as git
  *   is) and read their own config and, for gnomon, the Gnomon home (the verbs
  *   print counts, names, hashes and state); the paradigm verbs are read-only
- *   from @a-company/paradigm 7.15.2 (an older CLI on $PATH writes its one-time
- *   notice marker under .paradigm/ and moves legacy lore entries on lore reads);
+ *   from @a-company/paradigm 7.15.2, so they pass only when the first
+ *   `paradigm` on the session PATH resolves to that package at 7.15.2 or newer
+ *   (paradigmOnPath: realpath + the package.json beside it, cached by mtime; a
+ *   shim, an unknown PATH or a relative PATH entry is a card);
  *   rg, fd and grep -r read every file below an in-root operand, the repo's
  *   `.git/**` and `.env` included.
  *   A glob is expanded at classification time: a file planted between the
@@ -645,6 +647,11 @@ export interface ReadOnlyContext {
    * unknown until an absolute `cd`.
    */
   cwd?: string;
+  /**
+   * The session's PATH (colon-separated, posix): where the shell will find `paradigm`. The paradigm read verbs pass
+   * only when the first `paradigm` on it is @a-company/paradigm >= MIN_PARADIGM_VERSION (paradigmOnPath).
+   */
+  searchPath?: string;
 }
 export type ReadOnlyVerdict = { ok: true } | { ok: false; why: string };
 
@@ -1790,6 +1797,83 @@ const treeRule: Rule = (args, env, name) => {
  * read-only commands (paradigm src/core/command-policy.ts READ_ONLY_COMMANDS), each proven byte-identical on the
  * project tree and HOME by paradigm src/__tests__/readonly-commands.test.ts (@a-company/paradigm >= 7.15.2).
  */
+/** The first @a-company/paradigm whose declared read-only commands write nothing (its readonly-commands harness). */
+export const MIN_PARADIGM_VERSION: readonly [number, number, number] = Object.freeze([7, 15, 2]) as readonly [number, number, number];
+/** package.json realpath → its mtime and parsed name/version (read once per path+mtime). */
+const paradigmPkgCache = new Map<string, { mtimeMs: number; name: unknown; version: unknown }>();
+
+/** Test hook. */
+export function resetParadigmVersionCacheForTests(): void {
+  paradigmPkgCache.clear();
+}
+
+/** `a >= b` for x.y.z; a prerelease (`7.15.2-rc.1`) of the minimum counts as older (semver). */
+function versionAtLeast(v: string, min: readonly [number, number, number]): boolean {
+  const m = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.exec(v);
+  if (!m) return false;
+  const got = [Number(m[1]), Number(m[2]), Number(m[3])];
+  for (let i = 0; i < 3; i++) {
+    if (got[i]! > min[i]!) return true;
+    if (got[i]! < min[i]!) return false;
+  }
+  return m[4] === undefined;
+}
+
+/**
+ * Why the `paradigm` the shell would run is not known to be read-only safe, or null when it is. Resolves like the
+ * shell: the first PATH entry holding an executable regular file named `paradigm` (an empty or relative entry, which
+ * depends on the cwd, refuses). Then its realpath, and the nearest package.json at most four directories up
+ * (an npm install or `npm link`: <pkg>/dist/index.js) must be `@a-company/paradigm` at MIN_PARADIGM_VERSION or newer.
+ * A shim (volta, asdf) or any other layout refuses. Reads only (stat, realpath, one small file, cached by mtime).
+ */
+export function paradigmOnPath(searchPath: string | undefined): string | null {
+  if (searchPath === undefined) return 'paradigm: the session PATH is unknown';
+  let bin: string | null = null;
+  for (const dir of searchPath.split(':')) {
+    if (dir === '' || !path.posix.isAbsolute(dir)) return 'paradigm: a relative or empty PATH entry';
+    const cand = path.posix.join(dir, 'paradigm');
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(cand);
+    } catch {
+      continue;
+    }
+    if (st.isFile() && (st.mode & 0o111) !== 0) {
+      bin = cand;
+      break;
+    }
+  }
+  if (bin === null) return 'paradigm: not found on the session PATH';
+  const real = realOr(bin);
+  if (real === null) return 'paradigm: its binary cannot be resolved';
+  let dir = path.posix.dirname(real);
+  for (let i = 0; i < 4; i++, dir = path.posix.dirname(dir)) {
+    const pkg = path.posix.join(dir, 'package.json');
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(pkg);
+    } catch {
+      continue;
+    }
+    if (!st.isFile() || st.size > 1_000_000) return 'paradigm: an unreadable package.json';
+    let info = paradigmPkgCache.get(pkg);
+    if (info === undefined || info.mtimeMs !== st.mtimeMs) {
+      try {
+        const j = JSON.parse(fs.readFileSync(pkg, 'utf8')) as { name?: unknown; version?: unknown };
+        info = { mtimeMs: st.mtimeMs, name: j.name, version: j.version };
+      } catch {
+        return 'paradigm: an unreadable package.json';
+      }
+      paradigmPkgCache.set(pkg, info);
+    }
+    if (info.name !== '@a-company/paradigm') return 'paradigm: the binary on PATH is not @a-company/paradigm';
+    if (typeof info.version !== 'string' || !versionAtLeast(info.version, MIN_PARADIGM_VERSION)) {
+      return `paradigm: version ${String(info.version)} on PATH predates ${MIN_PARADIGM_VERSION.join('.')} (its read verbs may write)`;
+    }
+    return null;
+  }
+  return 'paradigm: no package.json beside the binary on PATH (a shim)';
+}
 const LORE_ID = /^L-[A-Za-z0-9_-]{1,160}$/;
 const TASK_LS_STATUS = new Set(['active', 'open', 'done', 'shelved', 'all']);
 /** `NAME VALUE` pairs and bare flags of one verb; returns the operands. A value never starts with `-`. */
@@ -1820,6 +1904,8 @@ const paradigmRule: Rule = (args, env, name) => {
   needCwd(env, name);
   if (!rootForms(env).some((r) => env.fold(r) === env.fold(env.cwd!))) no('paradigm: only with the cwd at a session root');
   if (!env.native) no('paradigm: a foreign path flavour');
+  const old = paradigmOnPath(env.ctx.searchPath);
+  if (old !== null) no(old);
   const [sub, ...rest] = args.map((a) => a.lit!);
   if ((sub === 'status' || sub === 'st') && rest.length === 0) return;
   if (sub === 'doctor') {

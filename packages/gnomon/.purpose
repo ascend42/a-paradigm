@@ -2908,7 +2908,7 @@ components:
       [PATH], task ls [STATUS], task show REF (no path separator), lore
       list|ls [filters], lore show L-ID (cwd at a session root; they pass on
       their grammar alone: paradigm's declared READ_ONLY_COMMANDS, proven
-      byte-identical by its readonly-commands harness from paradigm 7.15.2;
+      byte-identical by its readonly-commands harness from paradigm 7.15.2, and only when paradigmOnPath finds @a-company/paradigm >= 7.15.2 first on the session PATH (realpath + package.json, cached by mtime; otherwise a card);
       never index, task ls --board/--project or a write verb); gnomon desk stats, daemon status, mod list, mod status
       [NAME], rules list, trace status, replay [--json] [--expect H] (default
       home only; never bare trace or a write verb).
