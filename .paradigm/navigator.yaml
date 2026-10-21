@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T06:12:52.588Z'
+generated: '2026-10-21T06:17:17.776Z'
 structure: {}
 key_files:
   config:
@@ -1421,6 +1421,7 @@ symbols:
   '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
+  '#purpose-ref-component-onExit': packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   $purpose-ref-flow-NAME: packages/gnomon/

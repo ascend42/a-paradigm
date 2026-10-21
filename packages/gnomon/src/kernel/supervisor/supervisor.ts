@@ -460,6 +460,59 @@ export function ensureSessionEnvDir(userClaudeDir: string, uuid: string): string
   return null;
 }
 
+/**
+ * Aegis M-B: empty THIS session's `session-env/<uuid>` when the session ends (exited, drained, killed, orphaned), so a
+ * leftover CLAUDE_ENV_FILE can never be sourced by a later process that reuses the id (a `--resume` outside Gnomon, or
+ * without the carve). Never follows a link: every entry is lstat'd; files and symlinks are unlinked (unlinking a link
+ * removes the link, never its target); a real sub-directory is emptied the same way and removed; nothing is traversed
+ * through a link. The `<uuid>` dir itself stays (it is literal-denied while a session runs; the next spawn reuses it).
+ * Refuses (does nothing) when `session-env` or `session-env/<uuid>` is a link or not a directory. Never throws.
+ */
+export function emptySessionEnvDir(userClaudeDir: string, uuid: string): { removed: number; refused?: string } {
+  if (!SESSION_UUID_RE.test(uuid)) return { removed: 0, refused: 'malformed session uuid' };
+  const root = path.join(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+  const dir = path.join(root, uuid);
+  for (const d of [root, dir]) {
+    try {
+      const st = fs.lstatSync(d);
+      if (st.isSymbolicLink() || !st.isDirectory()) return { removed: 0, refused: `${d} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}` };
+    } catch {
+      return { removed: 0 }; // nothing to empty
+    }
+  }
+  let removed = 0;
+  const empty = (d: string, depth: number): void => {
+    let names: string[];
+    try {
+      names = fs.readdirSync(d);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const p = path.join(d, name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(p);
+      } catch {
+        continue;
+      }
+      try {
+        if (st.isDirectory() && !st.isSymbolicLink()) {
+          if (depth < 8) empty(p, depth + 1);
+          fs.rmdirSync(p);
+        } else {
+          fs.unlinkSync(p);
+        }
+        removed++;
+      } catch {
+        // best effort: a file we cannot remove stays; the next spawn's policy still scopes the carve to the new run
+      }
+    }
+  };
+  empty(dir, 0);
+  return { removed };
+}
+
 function ensureClaudeDir(userClaudeDir: string, rel: string): void {
   const dir = path.join(userClaudeDir, rel);
   try {
@@ -558,6 +611,21 @@ export class SessionSupervisor {
   }
 
   /** Aegis L2: the user home is the OS one (passwd), never $HOME; the userHome seam still wins (tests, the daemon's own) */
+  /**
+   * Aegis M-B: empty a session's `session-env/<uuid>` (see emptySessionEnvDir). Public for the daemon's orphan sweep,
+   * which ends sessions a crashed kernel left behind. Logged; never throws.
+   */
+  async emptySessionEnvFor(hsid: string | null, uuid: string): Promise<void> {
+    await this.#emptySessionEnv(hsid, uuid);
+  }
+
+  async #emptySessionEnv(hsid: string | null, uuid: string): Promise<void> {
+    const row = claudeCodePlatform(this.#platform);
+    if (!row) return;
+    const r = emptySessionEnvDir(path.join(this.#userHome(), row.userClaudeDir), uuid);
+    if (r.removed > 0 || r.refused) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-emptied', uuid, removed: r.removed, ...(r.refused ? { refused: r.refused } : {}) }, hsid ? { session: hsid } : {}).catch(() => undefined);
+  }
+
   #userHome(): string {
     return this.#o.userHome ?? this.#identity?.home ?? os.homedir();
   }
@@ -976,6 +1044,8 @@ export class SessionSupervisor {
   async #onExit(s: Session): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    // Aegis M-B: every exit path (exited, drained, killed) empties this session's session-env/<uuid>, links never followed
+    await this.#emptySessionEnv(s.hsid, s.uuid);
     if (s.watch) clearInterval(s.watch);
     s.watch = null;
     await this.#expirePending(s, 'session-exited');

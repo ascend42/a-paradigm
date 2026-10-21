@@ -2609,7 +2609,13 @@ components:
       session.sandbox{phase:'session-env-withheld'}). A new live id (/clear)
       is logged session.sandbox{phase:'session-env-mismatch'}: hooks fail
       closed again. Probe p-session-env: hook -> CLAUDE_ENV_FILE -> Bash sees
-      it; --resume keeps the uuid. Tests: test/session-sandbox.test.ts.
+      it; --resume keeps the uuid; B2: a LEFTOVER env file is sourced by a
+      later resume even without the carve, so (Aegis M-B) emptySessionEnvDir
+      empties session-env/<uuid> at every session end (#onExit: exited,
+      drained, killed; daemon orphan sweep via sweepOrphans onOrphaned + the
+      session.open uuid), lstat-only, never through a link, logged
+      session.sandbox{phase:'session-env-emptied'}. Tests:
+      test/session-sandbox.test.ts, test/session-env-cleanup.test.ts.
       Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063):
       the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE
       #approval-broker gate-class card per new sha (on an open refused

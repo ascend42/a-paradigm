@@ -4,6 +4,10 @@
 //      same session see what it exported (i.e. Claude Code sources CLAUDE_ENV_FILE as shell before Bash commands)?
 //  (2) without the carve-back (the old profile shape), does the hook fail (EPERM) and the Bash command see nothing?
 //  (3) does `--resume <uuid>` keep the same live session id (so the uuid-scoped carve still covers it)?
+//  (4) Aegis M-B: a LEFTOVER CLAUDE_ENV_FILE in session-env/<uuid> (not emptied at session end) — is it sourced by a
+//      later `--resume <uuid>` that runs WITHOUT the carve (its own SessionStart hook cannot write)? Run B2.
+// Hook outcomes are INFERRED from what the Bash command prints (PROBE=1 / PROBE=unset): `-p --output-format json`
+// does not carry the hook_started/hook_response lines, so no run asserts on them directly.
 // Run: npx tsx packages/gnomon/probes/p-session-env/probe.mts   (writes probes/results/p-session-env.darwin.json)
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -13,7 +17,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSessionPolicy } from '../../src/kernel/manifest/policy.ts';
 import { sessionLaunchPlan } from '../../src/kernel/sandbox/session.ts';
-import { ensureSessionEnvDir, ensureTranscriptDir } from '../../src/kernel/supervisor/supervisor.ts';
+import { emptySessionEnvDir, ensureSessionEnvDir, ensureTranscriptDir } from '../../src/kernel/supervisor/supervisor.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const home = os.homedir();
@@ -42,7 +46,9 @@ function run(label: string, uuid: string, carve: boolean, resume: boolean): Reco
   const result = events.find((e) => e.type === 'result');
   const hooks = events.filter((e) => e.type === 'system' && typeof e.subtype === 'string' && (e.subtype as string).startsWith('hook')).map((e) => ({ subtype: e.subtype, hook_name: e.hook_name, outcome: e.outcome, exit_code: e.exit_code, output: String(e.output ?? '').slice(0, 200) }));
   const text = String(result?.result ?? '');
+  const envDir = path.join(claudeDir, 'session-env', uuid);
   return {
+    envDirAfter: fs.existsSync(envDir) ? fs.readdirSync(envDir) : null,
     label, carve, resume, uuid, prep, sessionEnvRefused: policy.sessionEnvRefused ?? null,
     allowWrite: policy.allowWrite.map((a) => a.path.replace(home, '~')),
     exit: r.status, initSessionId: init?.session_id ?? null, resultSessionId: result?.session_id ?? null,
@@ -57,15 +63,27 @@ const uuidB = randomUUID();
 const runs = [
   run('A carve-back on (profile v8): new session', uuidA, true, false),
   run('B carve-back on: --resume the same uuid', uuidA, true, true),
+  // B2 (Aegis M-B): the env file B's hook wrote is still in session-env/<uuidA> (this probe does not run the
+  // supervisor's end-of-session emptying); resume WITHOUT the carve so this run's own hook cannot write
+  run('B2 --resume the same uuid WITHOUT the carve, leftover env file present', uuidA, false, true),
   run('C control, no carve-back (old profile shape)', uuidB, false, false),
 ];
+// the probe ran against the real ~/.claude: empty what it left behind, the way the supervisor does at session end
+const cleaned = [uuidA, uuidB].map((u) => ({ uuid: u, ...emptySessionEnvDir(claudeDir, u) }));
 const out = {
   probe: 'p-session-env', platform: 'darwin', claudeCodeVersion: spawnSync(claudeBin, ['--version'], { encoding: 'utf8' }).stdout.trim(), at: new Date().toISOString(),
   answers: {
     q1HookWritesEnvFileAndBashSeesIt: runs[0].bashSaw === 'PROBE=1',
-    q2WithoutCarveHookFailsAndBashSeesNothing: runs[2].bashSaw !== 'PROBE=1',
+    q2WithoutCarveHookFailsAndBashSeesNothing: runs[3].bashSaw === 'PROBE=unset' && runs[3].exit === 0,
     q3ResumeKeepsSessionId: runs[1].initSessionId === uuidA,
+    q4LeftoverEnvFileSourcedOnResumeWithoutCarve: runs[2].bashSaw === 'PROBE=1',
+    leftoverBeforeB2: runs[1].envDirAfter,
   },
+  notes: [
+    'Hook outcomes are inferred from the Bash output (PROBE=1 / PROBE=unset); -p --output-format json carries no hook_response lines.',
+    'q4 true means a leftover CLAUDE_ENV_FILE is sourced by a later resume of the same id even when that run cannot write: hence the supervisor empties session-env/<uuid> at every session end (Aegis M-B).',
+  ],
+  cleaned,
   runs,
 };
 const dest = path.join(here, '..', 'results', 'p-session-env.darwin.json');

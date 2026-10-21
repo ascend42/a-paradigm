@@ -2,27 +2,48 @@
   "probe": "p-session-env",
   "platform": "darwin",
   "claudeCodeVersion": "2.1.306 (Claude Code)",
-  "at": "2026-10-21T06:01:54.125Z",
+  "at": "2026-10-21T06:16:31.272Z",
   "answers": {
     "q1HookWritesEnvFileAndBashSeesIt": true,
     "q2WithoutCarveHookFailsAndBashSeesNothing": true,
-    "q3ResumeKeepsSessionId": true
+    "q3ResumeKeepsSessionId": true,
+    "q4LeftoverEnvFileSourcedOnResumeWithoutCarve": true,
+    "leftoverBeforeB2": [
+      "sessionstart-hook-0.sh"
+    ]
   },
+  "notes": [
+    "Hook outcomes are inferred from the Bash output (PROBE=1 / PROBE=unset); -p --output-format json carries no hook_response lines.",
+    "q4 true means a leftover CLAUDE_ENV_FILE is sourced by a later resume of the same id even when that run cannot write: hence the supervisor empties session-env/<uuid> at every session end (Aegis M-B)."
+  ],
+  "cleaned": [
+    {
+      "uuid": "ed6e860d-c34d-419f-8783-b734f430a02b",
+      "removed": 1
+    },
+    {
+      "uuid": "402a07b7-c8a4-4761-b1db-4a94b12390ab",
+      "removed": 0
+    }
+  ],
   "runs": [
     {
+      "envDirAfter": [
+        "sessionstart-hook-0.sh"
+      ],
       "label": "A carve-back on (profile v8): new session",
       "carve": true,
       "resume": false,
-      "uuid": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
+      "uuid": "ed6e860d-c34d-419f-8783-b734f430a02b",
       "prep": null,
       "sessionEnvRefused": null,
       "allowWrite": [
         "~/.claude/projects",
-        "~/.claude/session-env/e76673a0-6591-48e3-9fd7-6ecb1e7f4476"
+        "~/.claude/session-env/ed6e860d-c34d-419f-8783-b734f430a02b"
       ],
       "exit": 0,
-      "initSessionId": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
-      "resultSessionId": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
+      "initSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
+      "resultSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
       "sameSessionId": true,
       "hooks": [],
       "bashSaw": "PROBE=1",
@@ -30,19 +51,22 @@
       "stderrTail": "SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: /bin/sh: node: command not found\n\n"
     },
     {
+      "envDirAfter": [
+        "sessionstart-hook-0.sh"
+      ],
       "label": "B carve-back on: --resume the same uuid",
       "carve": true,
       "resume": true,
-      "uuid": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
+      "uuid": "ed6e860d-c34d-419f-8783-b734f430a02b",
       "prep": null,
       "sessionEnvRefused": null,
       "allowWrite": [
         "~/.claude/projects",
-        "~/.claude/session-env/e76673a0-6591-48e3-9fd7-6ecb1e7f4476"
+        "~/.claude/session-env/ed6e860d-c34d-419f-8783-b734f430a02b"
       ],
       "exit": 0,
-      "initSessionId": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
-      "resultSessionId": "e76673a0-6591-48e3-9fd7-6ecb1e7f4476",
+      "initSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
+      "resultSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
       "sameSessionId": true,
       "hooks": [],
       "bashSaw": "PROBE=1",
@@ -50,18 +74,41 @@
       "stderrTail": "SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: /bin/sh: node: command not found\n\n"
     },
     {
-      "label": "C control, no carve-back (old profile shape)",
+      "envDirAfter": [
+        "sessionstart-hook-0.sh"
+      ],
+      "label": "B2 --resume the same uuid WITHOUT the carve, leftover env file present",
       "carve": false,
-      "resume": false,
-      "uuid": "5f66f875-12ba-4eb2-a8fc-923922e8b192",
+      "resume": true,
+      "uuid": "ed6e860d-c34d-419f-8783-b734f430a02b",
       "prep": null,
       "sessionEnvRefused": null,
       "allowWrite": [
         "~/.claude/projects"
       ],
       "exit": 0,
-      "initSessionId": "5f66f875-12ba-4eb2-a8fc-923922e8b192",
-      "resultSessionId": "5f66f875-12ba-4eb2-a8fc-923922e8b192",
+      "initSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
+      "resultSessionId": "ed6e860d-c34d-419f-8783-b734f430a02b",
+      "sameSessionId": true,
+      "hooks": [],
+      "bashSaw": "PROBE=1",
+      "resultText": "PROBE=1",
+      "stderrTail": "SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: /bin/sh: node: command not found\n\n"
+    },
+    {
+      "envDirAfter": null,
+      "label": "C control, no carve-back (old profile shape)",
+      "carve": false,
+      "resume": false,
+      "uuid": "402a07b7-c8a4-4761-b1db-4a94b12390ab",
+      "prep": null,
+      "sessionEnvRefused": null,
+      "allowWrite": [
+        "~/.claude/projects"
+      ],
+      "exit": 0,
+      "initSessionId": "402a07b7-c8a4-4761-b1db-4a94b12390ab",
+      "resultSessionId": "402a07b7-c8a4-4761-b1db-4a94b12390ab",
       "sameSessionId": true,
       "hooks": [],
       "bashSaw": "PROBE=unset",
