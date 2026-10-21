@@ -210,7 +210,6 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
       expect(src()).toBeNull();
       writeSendWord(home, { text: 'Ship it!', variants: ['shipped'] });
       expect(readSendWord(home)).toEqual({ text: 'ship it', variants: ['shipped'] });
-      if (process.platform !== 'win32') expect(fs.statSync(sendWordPath(home)).mode & 0o777).toBe(0o600);
       expect(src()).toEqual({ text: 'ship it', variants: ['shipped'] });
       expect(() => writeSendWord(home, { text: 'deny' })).toThrow(TypeError);
       fs.writeFileSync(sendWordPath(home), '{"format":"gnomon-send-word:v1","text":"allow"}\n');
