@@ -171,6 +171,12 @@ describe('TD-2026-10-21-162 / Aegis M: every user-writable dir on the session PA
     expect(p.dirs).toEqual(['/usr/bin']);
     expect(p.denies).toEqual([]);
   });
+  it.runIf(POSIX)('Aegis L2: an empty or non-absolute PATH entry is dropped (execvp would read it from the cwd)', () => {
+    const home = ownedDir();
+    const p = planSessionPath(['', '.', 'bin', './node_modules/.bin', '/usr/bin'], { home });
+    expect(p.dirs).toEqual(['/usr/bin']);
+    expect(p.denies).toEqual([]);
+  });
   it.runIf(POSIX)('the brew prefix comes from the realpath of the entry, never from env (HOMEBREW_PREFIX ignored)', () => {
     const root = ownedDir();
     fs.mkdirSync(path.join(root, 'real', 'bin'), { recursive: true });

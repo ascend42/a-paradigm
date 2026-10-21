@@ -163,7 +163,8 @@ const within = (child: string, parent: string): boolean => {
  *     the WHOLE prefix (bin entries are links into Cellar); for the Intel prefix /usr/local only
  *     /usr/local/{bin,sbin,Cellar} (not all of /usr/local);
  *   - any other entry this user can write (owner or W_OK, or its nearest existing ancestor) ⇒ deny the dir.
- * An entry that IS the home or an ancestor of it is DROPPED from the PATH (denying it would deny the whole home).
+ * An entry that IS the home or an ancestor of it is DROPPED from the PATH (denying it would deny the whole home), and so
+ * is an empty or non-absolute entry (Aegis L2: execvp reads it relative to the cwd).
  * Reads and exec stay allowed (file-write* only).
  */
 export function planSessionPath(dirs: readonly string[], o: { home?: string; uid?: number } = {}): { dirs: string[]; denies: string[] } {
@@ -172,6 +173,8 @@ export function planSessionPath(dirs: readonly string[], o: { home?: string; uid
   const kept: string[] = [];
   const denies = new Set<string>();
   for (const d of dirs) {
+    // Aegis L2: an empty or relative entry means "the cwd" to execvp (a repo-planted binary): dropped
+    if (d === '' || !path.isAbsolute(d)) continue;
     const real = realLoose(d);
     if (home && within(home, real)) continue; // the home itself, or `/`, `/Users`: never a PATH entry
     kept.push(d);
