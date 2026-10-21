@@ -35,8 +35,12 @@ export type CaptureKind = (typeof CAPTURE_KINDS)[number];
 export const SEND_POLICIES = Object.freeze(['key', 'countdown', 'word', 'pieces'] as const);
 export type SendPolicy = (typeof SEND_POLICIES)[number];
 
-/** How a turn was sent (the transcript label). `key` and `release` are hand; `word` and `piece` are voice. */
-export const SENT_BY = Object.freeze(['key', 'release', 'word', 'piece'] as const);
+/**
+ * How a turn was sent (the transcript label). `key` and `release` are hand; `word`, `piece` and `hotkey` are voice:
+ * `hotkey` is the voice app's send-now press (⌃⌥Return), reported by the voice principal and unverifiable by the
+ * kernel, so it is a voice-origin trigger (Aegis M-5).
+ */
+export const SENT_BY = Object.freeze(['key', 'release', 'word', 'piece', 'hotkey'] as const);
 export type SentBy = (typeof SENT_BY)[number];
 
 /** The kernel-stamped origin of every turn.sent. */
@@ -44,7 +48,7 @@ export const VOICE_ORIGINS = Object.freeze(['hand', 'voice'] as const);
 export type VoiceOrigin = (typeof VOICE_ORIGINS)[number];
 
 /** The sentBy values the kernel stamps on a voice-origin turn (request.voice.send.claim{by}). */
-export const VOICE_SENT_BY = Object.freeze(['word', 'piece'] as const);
+export const VOICE_SENT_BY = Object.freeze(['word', 'piece', 'hotkey'] as const);
 export type VoiceSentBy = (typeof VOICE_SENT_BY)[number];
 
 export const VOICE_PRESETS = Object.freeze({
@@ -78,7 +82,7 @@ export function validPair(capture: unknown, send: unknown): boolean {
 
 /** The origin a sentBy implies (unknown values are hand: the kernel stamps voice only from its own claim). */
 export function originOf(sentBy: unknown): VoiceOrigin {
-  return sentBy === 'word' || sentBy === 'piece' ? 'voice' : 'hand';
+  return sentBy === 'word' || sentBy === 'piece' || sentBy === 'hotkey' ? 'voice' : 'hand';
 }
 
 /** The preset a pair is, or null for a custom pair. */

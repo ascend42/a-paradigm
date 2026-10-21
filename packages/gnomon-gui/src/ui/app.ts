@@ -1473,7 +1473,8 @@ function syncDictationContext(): void {
   if (d.sendNows !== null) {
     const fresh = sendNowsSeen !== null && sendNowsSeen.epoch === d.epoch && d.sendNows > sendNowsSeen.n;
     sendNowsSeen = { n: d.sendNows, epoch: d.epoch };
-    if (fresh && hasDraft(dict) && dict.focusedHere) dispatchDictation({ type: 'sendNow', now });
+    // Aegis M-5: a voice-origin (clamped) send of an unedited draft; an edited one is held for Enter
+    if (fresh && hasDraft(dict) && dict.focusedHere) dispatchDictation({ type: 'sendNowKey', now });
   }
 }
 

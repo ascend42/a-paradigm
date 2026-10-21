@@ -1077,6 +1077,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     localDrops: () => voiceReports.takeLocalDrops(),
     voiceConnections: () => dispatcher.clients().filter((c) => c.principalKind === 'voice' && c.credential !== 'read-token').map((c) => c.connId),
     kernelPrincipal,
+    // Aegis M-5: the voice app's send-now presses are voice-origin triggers (the kernel cannot verify the key)
+    sendNowPress: () => voiceReports.sendNowPress(),
     // TD-2026-10-21-514: the held send word (GUI request and raw CLI share <home>/voice/send-word.json)
     sendWordSource: cachedSendWordSource(home),
     // pieces is refused at strictness L2 or above (the session's repo level; null while levels are unbuilt)

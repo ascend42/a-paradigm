@@ -11,7 +11,7 @@ describe('voice modes (TD-2026-10-21-514)', () => {
   it('the closed sets are frozen', () => {
     expect([...CAPTURE_KINDS]).toEqual(['ptt', 'open', 'toggle']);
     expect([...SEND_POLICIES]).toEqual(['key', 'countdown', 'word', 'pieces']);
-    expect([...SENT_BY]).toEqual(['key', 'release', 'word', 'piece']);
+    expect([...SENT_BY]).toEqual(['key', 'release', 'word', 'piece', 'hotkey']);
     expect([...VOICE_ORIGINS]).toEqual(['hand', 'voice']);
     for (const x of [CAPTURE_KINDS, SEND_POLICIES, SENT_BY, VOICE_ORIGINS, VOICE_PRESETS, VOICE_PRESETS.talk]) expect(Object.isFrozen(x)).toBe(true);
   });
@@ -35,6 +35,7 @@ describe('voice modes (TD-2026-10-21-514)', () => {
   it('origin is voice only for word and piece', () => {
     expect(originOf('word')).toBe('voice');
     expect(originOf('piece')).toBe('voice');
+    expect(originOf('hotkey')).toBe('voice'); // Aegis M-5: the voice app's send-now press
     for (const x of ['key', 'release', undefined, 'voice', 7]) expect(originOf(x)).toBe('hand');
   });
 

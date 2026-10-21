@@ -103,7 +103,9 @@ export interface DictationState {
   /** a near miss of the send word (the pill asks "Did you say '<word>'?") */
   nearMiss: string | null;
   /** the in-flight send's claim: the word turn (send word) or the piece's turns (pieces) */
-  claim: { by: 'word'; turnSeq: number } | { by: 'piece'; turnSeqs: number[] } | null;
+  claim: { by: 'word'; turnSeq: number } | { by: 'piece'; turnSeqs: number[] } | { by: 'hotkey' } | null;
+  /** Aegis M-5: the voice app's send key was pressed on an EDITED draft: held; only Enter sends it */
+  hotkeyHeld: boolean;
   /** $send-by-pieces: when the current piece's first part arrived (the cap runs from here) */
   pieceStartedAt: number | null;
 }
@@ -129,10 +131,12 @@ export type DictationEvent =
   | { type: 'setPolicy'; policy: SendPolicy; sendWord: SendWord | null; now: number }
   | { type: 'painted'; now: number }
   | { type: 'pageVisible'; visible: boolean; now: number }
-  | { type: 'graceCancel'; now: number };
+  | { type: 'graceCancel'; now: number }
+  /** Aegis M-5: the voice app's send-now press (⌃⌥Return): a voice-origin send of an UNEDITED draft only */
+  | { type: 'sendNowKey'; now: number };
 
 export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): DictationState {
-  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null };
+  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null, hotkeyHeld: false };
 }
 
 /**
@@ -293,7 +297,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
     case 'sendNow':
       return hasDraft(s) && !s.sending ? { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: null } : s;
     case 'sent':
-      return settle({ ...cleared(s), claim: null, visibleSince: null, nearMiss: null, pieceStartedAt: null }, e.now, true);
+      return settle({ ...cleared(s), claim: null, visibleSince: null, nearMiss: null, pieceStartedAt: null, hotkeyHeld: false }, e.now, true);
     case 'sendFailed':
       return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false, claim: null }, e.now, false); // never loop a refused send: wait for the human
     case 'setPolicy':
@@ -304,6 +308,11 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return { ...s, visibleSince: e.now };
     case 'pageVisible':
       return e.visible === s.pageVisible ? s : { ...s, pageVisible: e.visible, ...(e.visible ? {} : { visibleSince: null, grace: null }) };
+    case 'sendNowKey':
+      if (!hasDraft(s) || s.sending) return s;
+      // never send typed text on a key the voice app reports: an edited draft is held for Enter
+      if (s.edited) return { ...s, hold: true, holdBy: 'gui', hotkeyHeld: true, ringStartedAt: null };
+      return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: { by: 'hotkey' } };
     case 'graceCancel':
       return s.grace ? { ...s, grace: null, hold: true, holdBy: 'gui' } : s;
     case 'setDelay':
@@ -331,10 +340,13 @@ export interface SendRequest {
 }
 
 /** TD-2026-10-21-514: the claim the app appends (request.voice.send.claim) right before a send-word send. */
-export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSeq: number } | { hsid: string; by: 'piece'; turnSeqs: number[] } | null {
+export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSeq: number } | { hsid: string; by: 'piece'; turnSeqs: number[] } | { hsid: string; by: 'hotkey' } | null {
   if (!s.claim || !s.hsid) return null;
+  if (s.claim.by === 'hotkey') return { hsid: s.hsid, by: 'hotkey' };
   return s.claim.by === 'word' ? { hsid: s.hsid, by: 'word', turnSeq: s.claim.turnSeq } : { hsid: s.hsid, by: 'piece', turnSeqs: [...s.claim.turnSeqs] };
 }
+
+export const HOTKEY_EDITED_NOTE = 'Edited draft: press Enter to send';
 
 /** The `session.send` params the draft makes, or null (nothing, or no session). */
 export function sendRequest(s: DictationState): SendRequest | null {
@@ -399,6 +411,7 @@ export function dictationNote(s: DictationState): string | null {
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold && s.holdBy === 'detached') return 'draft held · voice detached';
   if (s.grace) return WORD_GRACE_LINE;
+  if (s.hotkeyHeld) return HOTKEY_EDITED_NOTE;
   if (s.nearMiss) return `Did you say '${s.nearMiss}'? Say it again or press Enter`;
   if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
   if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';

@@ -75,7 +75,7 @@ export function sendWordOf(status: unknown): SendWord | null {
 export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | null {
   const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : null;
   if (!o || (o.source !== 'voice' && o.origin !== 'voice')) return null;
-  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : 'spoken · sent by send word', asksFirst: true };
+  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by the voice app key' : 'spoken · sent by send word', asksFirst: true };
   return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you', asksFirst: false };
 }
 

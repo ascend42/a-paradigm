@@ -261,6 +261,8 @@ export interface VoiceControlOptions {
   presenceState?: (cardId: string) => string | undefined;
   /** V2a M2: the kernel's idle end row could not be written (daemon: diagnostics + a kernel log row) */
   onIdleEndFailed?: (err: unknown) => void;
+  /** Aegis M-5: the voice app's last send-now press (VoiceReports.sendNowPress; kernel clock ms) */
+  sendNowPress?: () => { n: number; at: number } | null;
   /** TD-2026-10-21-514: the held send word's source (daemon: <home>/voice/send-word.json via a stat-keyed cache) */
   sendWordSource?: () => SendWord | null;
   /** TD-2026-10-21-514: the strictness level of the session's repo (pieces is refused at L2 or above); absent ⇒ not built */
@@ -368,6 +370,8 @@ export class VoiceControl {
   readonly #piecesGranted = new Set<string>();
   /** turns cited by a live piece claim (a second claim citing one is stale) */
   readonly #claimed = new Set<string>();
+  /** Aegis M-5: the send-now press count already consumed by a send (each press stamps one send at most) */
+  #sendNowUsed = 0;
   /** the one live send claim per human connection */
   readonly #claims = new Map<string, { hsid: string; by: VoiceSentBy; expiresAt: number; turnIds: string[] }>();
 
@@ -859,12 +863,20 @@ export class VoiceControl {
     const { hsid, by } = payload;
     if (typeof hsid !== 'string') throw bad('hsid is required');
     const seqOk = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
+    if (by === 'hotkey') {
+      // Aegis M-5: the GUI announces a send-now send; it binds like any claim (the press itself is consumed at the send)
+      if (payload.turnSeq !== undefined || payload.turnSeqs !== undefined) throw bad("by 'hotkey' cites no turn");
+      if (!this.#pendingOf(asker.principal, hsid)) throw voiceRefusal('voice-target', 'voice is not attached to that session of yours');
+      const at = this.#now() + SEND_CLAIM_TTL_MS;
+      this.#claims.set(asker.connId, { hsid, by: 'hotkey', expiresAt: at, turnIds: [] });
+      return { claimed: true, by: 'hotkey', expiresAt: new Date(at).toISOString() };
+    }
     if (by === 'word') {
       if (!seqOk(payload.turnSeq) || payload.turnSeqs !== undefined) throw bad("by 'word' cites one turnSeq");
     } else if (by === 'piece') {
       const ts = payload.turnSeqs;
       if (!Array.isArray(ts) || ts.length === 0 || ts.length > PIECE_CLAIM_MAX_TURNS || !ts.every(seqOk) || new Set(ts).size !== ts.length || payload.turnSeq !== undefined) throw bad(`by 'piece' cites turnSeqs (1..${PIECE_CLAIM_MAX_TURNS} distinct seqs)`);
-    } else throw bad("by is 'word' or 'piece'");
+    } else throw bad("by is 'word', 'piece' or 'hotkey'");
     const got = this.#pendingOf(asker.principal, hsid);
     if (!got) throw voiceRefusal('voice-target', 'voice is not attached to that session of yours');
     const { a, pending } = got;
@@ -914,7 +926,15 @@ export class VoiceControl {
         // too (its word turn is already consumed), fail closed.
         this.#claims.delete(connId);
         if (c.by === 'piece' && c.hsid !== hsid) for (const id of c.turnIds) this.#claimed.delete(id);
+        if (c.by === 'hotkey') this.#sendNowUsed = Math.max(this.#sendNowUsed, this.#o.sendNowPress?.()?.n ?? 0);
         return { sentBy: c.by };
+      }
+      // Aegis M-5 backstop: an unconsumed send-now press of the voice app within the claim TTL stamps this send a
+      // hotkey (voice-origin) send, claim or not: the press is the voice principal's report, never verifiable here
+      const press = this.#o.sendNowPress?.() ?? null;
+      if (press && press.n > this.#sendNowUsed && Date.now() - press.at <= SEND_CLAIM_TTL_MS) {
+        this.#sendNowUsed = press.n;
+        return { sentBy: 'hotkey' };
       }
       const got = this.#pendingOf(human, hsid);
       const words = got ? got.pending.filter((t) => t.isWord) : [];

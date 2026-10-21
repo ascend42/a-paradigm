@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { canonicalSendWord } from '@a-company/gnomon-contracts';
-import { DRAFT_CONTROLS, WORD_GRACE_LINE, dictationNote, draftState, initialDictation, reduceDictation, sendClaim, sendRequest, wordReady, type DictationEvent, type DictationState } from '../src/core/dictation.js';
+import { DRAFT_CONTROLS, HOTKEY_EDITED_NOTE, WORD_GRACE_LINE, dictationNote, draftState, initialDictation, reduceDictation, sendClaim, sendRequest, wordReady, type DictationEvent, type DictationState } from '../src/core/dictation.js';
 
 const A = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 const WORD = canonicalSendWord({ text: 'over and out', variants: ['over an out'] })!;
@@ -72,5 +72,18 @@ describe('send word (#gui-dictation)', () => {
     const s = run(wordState(), turn(1, 'fix it', 100), { type: 'painted', now: 100 }, { type: 'tick', now: 60_000 });
     expect(s.sending).toBe(false);
     expect(dictationNote(s)).toBe("draft · say 'over and out' or press Enter");
+  });
+
+  it('Aegis M-5: the voice app send key sends an unedited draft as a hotkey (voice-origin) claim; an edited draft is held for Enter', () => {
+    let s = run(wordState(), turn(1, 'fix it', 100), { type: 'sendNowKey', now: 200 });
+    expect(s.sending).toBe(true);
+    expect(sendClaim(s)).toEqual({ hsid: A, by: 'hotkey' });
+    s = run(wordState(), turn(1, 'fix it', 100), { type: 'userEdit', text: 'fix it now', now: 150 }, { type: 'sendNowKey', now: 200 });
+    expect(s.sending).toBe(false);
+    expect(s.hotkeyHeld).toBe(true);
+    expect(dictationNote(s)).toBe(HOTKEY_EDITED_NOTE);
+    s = run(s, { type: 'sendNow', now: 300 });
+    expect(s.sending).toBe(true);
+    expect(sendClaim(s)).toBeNull(); // Enter is a hand send
   });
 });

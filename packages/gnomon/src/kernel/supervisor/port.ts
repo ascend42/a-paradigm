@@ -38,7 +38,7 @@ export interface VoiceAttributionPort {
    * TD-2026-10-21-514: the origin of this human voice send — the connection's live request.voice.send.claim, or the
    * fail-closed backstop (a pending send-word turn). null ⇒ hand. Never throws.
    */
-  originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null): { sentBy: 'word' | 'piece' } | null;
+  originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null): { sentBy: 'word' | 'piece' | 'hotkey' } | null;
 }
 
 export interface SessionCallContext {
@@ -121,7 +121,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
       gateResumed(sup, ctx, p.hsid, 'session.send');
       let attr: VoiceAttribution | null = null;
-      let origin: { sentBy: 'word' | 'piece' } | null = null;
+      let origin: { sentBy: 'word' | 'piece' | 'hotkey' } | null = null;
       if (p.source === 'voice' && voice) {
         try {
           attr = voice.attributeHumanSend(ctx.principal, p.hsid, texts as string[]);

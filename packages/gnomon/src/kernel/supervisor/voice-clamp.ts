@@ -28,7 +28,7 @@ export function clampAllows(modeRef: string): boolean {
 
 /** The kernel-composed card line of a clamped request. */
 export function voiceClampLine(sentBy: VoiceSentBy): string {
-  return `Asked during a voice-sent turn (${sentBy === 'piece' ? 'sent as a piece' : 'sent by send word'}). Check this was you.`;
+  return `Asked during a voice-sent turn (${sentBy === 'piece' ? 'sent as a piece' : sentBy === 'hotkey' ? 'sent by the voice app’s send key' : 'sent by send word'}). Check this was you.`;
 }
 
 /**

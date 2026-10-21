@@ -19,7 +19,7 @@ const VOICE = 'p:abcdefgh/voice';
 const SPK = 'spk:abcdefgh/founder';
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
 
-function rig(o: { level?: string | null } = {}) {
+function rig(o: { level?: string | null; press?: () => { n: number; at: number } | null } = {}) {
   const clock = { t: 100_000 };
   const rows: VoiceAppendRow[] = [];
   const presence: VoicePresenceRequest[] = [];
@@ -35,6 +35,7 @@ function rig(o: { level?: string | null } = {}) {
       return { cardId: `card:01HZZZZZZZZZZZZZZZZZZZZZ${presence.length}0` };
     },
     strictnessLevel: () => o.level ?? null,
+    ...(o.press ? { sendNowPress: o.press } : {}),
   });
   v.setSendWord({ text: 'over and out', variants: ['over an out'] });
   const supSends: Array<Record<string, unknown>> = [];
@@ -185,6 +186,30 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWord');
     expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWord');
     expect(() => r.v.setSendWord({ text: 'approve' })).toThrow(RefusedError);
+  });
+});
+
+describe('Aegis M-5: the voice app send-now press is a voice-origin trigger', () => {
+  it('a send right after a reported press is stamped hotkey (clamped), once per press; the GUI claim binds it too', async () => {
+    const { VoiceReports } = await import('../src/kernel/voice/voice-requests.js');
+    const vr = new VoiceReports();
+    vr.report({ dictation: { activity: 'idle', holdToggles: 0, sendNows: 0 } }, 'conn:V');
+    expect(vr.sendNowPress()).toBeNull(); // the first report is a baseline
+    vr.report({ dictation: { activity: 'idle', holdToggles: 0, sendNows: 1 } }, 'conn:V');
+    expect(vr.sendNowPress()).toMatchObject({ n: 1 });
+    const r = rig({ press: () => vr.sendNowPress() });
+    await r.attach('key');
+    const typed = (t: string) => r.port.send({ principal: HUMAN, principalClass: 'human', connId: 'conn:H1', credential: 'gui' }, { hsid: HSID, content: [{ text: t }] });
+    await typed('typed draft');
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'hotkey' } });
+    await typed('next, by hand');
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin'); // the press stamped one send only
+    vr.report({ dictation: { activity: 'idle', holdToggles: 0, sendNows: 2 } }, 'conn:V');
+    expect(r.claim({ by: 'hotkey' })).toMatchObject({ claimed: true, by: 'hotkey' });
+    await typed('by the claim');
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'hotkey' } });
+    await typed('and hand again');
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceOrigin');
   });
 });
 

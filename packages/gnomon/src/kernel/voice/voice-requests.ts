@@ -221,6 +221,11 @@ export class VoiceReports {
   #localDrops = new Map<string, number>();
   /** the voice connection whose holdToggles counter is the baseline (a new client starts its own count) */
   #dictationConn: string | undefined;
+  /** Aegis M-5: the last send-now press the voice app reported (kernel clock), and its count */
+  #sendNowPress: { n: number; at: number } | null = null;
+  sendNowPress(): { n: number; at: number } | null {
+    return this.#sendNowPress;
+  }
   readonly #now: () => number;
 
   constructor(now: () => number = Date.now) {
@@ -266,6 +271,8 @@ export class VoiceReports {
       if (this.#dictation && sameConn && d.holdToggles < this.#dictation.holdToggles) throw bad(`dictation.holdToggles is monotone (was ${this.#dictation.holdToggles})`);
       if (this.#dictation && sameConn && typeof d.sendNows === 'number' && d.sendNows < (this.#dictation.sendNows ?? 0)) throw bad(`dictation.sendNows is monotone (was ${this.#dictation.sendNows})`);
       dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, ...(typeof d.sendNows === 'number' ? { sendNows: d.sendNows } : {}), at };
+      // Aegis M-5: a raised count is a press (a new connection's first report is only its baseline)
+      if (typeof d.sendNows === 'number' && this.#dictation && sameConn && d.sendNows > (this.#dictation.sendNows ?? 0)) this.#sendNowPress = { n: d.sendNows, at: Date.now() };
     }
     let playback: PlaybackReport | undefined;
     if (o.playback !== undefined) {
