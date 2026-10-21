@@ -48,7 +48,7 @@
  * kernel stores no text for spk:unknown-N under V2a) and nothing is sent. No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
-import { isSendWord, SEND_WORD_SHORT_MS, type SendWord } from '@a-company/gnomon-contracts';
+import { isSendWord, SEND_WORD_SHORT_MS, trialTakeText, type SendWord } from '@a-company/gnomon-contracts';
 import { kernelSpeakable, sentences } from './speakable.js';
 import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
@@ -225,6 +225,8 @@ export interface VoiceClientOptions {
   capture?: 'ptt' | 'open' | 'toggle';
   /** TD-2026-10-21-514: the held send word (run.ts: <home>/voice/send-word.json); absent ⇒ no adjacency */
   sendWord?: () => SendWord | null;
+  /** the word being taught (run.ts: <home>/voice/send-word-trial.json while live): each segment's short text is a take */
+  sendWordTrial?: () => SendWord | null;
 }
 
 /** The one notice for a print from an older speaker front end (it is ignored until the speaker enrols again). */
@@ -1084,9 +1086,13 @@ export class VoiceClient {
     // TD-2026-10-21-514 short words by adjacency: a segment too short to verify (an unknown speaker, never one
     // attributed to someone else) that IS the send word goes to the draft speaker; the kernel re-checks all of it
     const word = this.#o.sendWord?.() ?? null;
-    const adjacent = who.name === undefined && this.#draftSpeaker !== null && seg.t1 - seg.t0 < SEND_WORD_SHORT_MS && isSendWord(text, word);
+    // the attended trial ("Teach your send word", spec §14.7 trial semantics): no adjacency, whoever spoke; a take's
+    // short text is sent so the kernel can count it (a take is never forwardable and never sends anything)
+    const trial = (this.#o.sendWordTrial?.() ?? null) !== null;
+    const adjacent = !trial && who.name === undefined && this.#draftSpeaker !== null && seg.t1 - seg.t0 < SEND_WORD_SHORT_MS && isSendWord(text, word);
     if (adjacent) text = word!.text;
     const enrolled = who.name !== undefined || adjacent;
+    const takeText = trial && !enrolled ? trialTakeText(text) : null;
     const speakerId = adjacent ? this.#draftSpeaker! : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
@@ -1100,7 +1106,7 @@ export class VoiceClient {
     // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
     const gatedMs = gatedSpeechMsOf(who.speechMs);
     const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : '', ...(enrolled ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : (takeText ?? ''), ...(enrolled || takeText !== null ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
     let verdict: AppendResult;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
@@ -1109,6 +1115,11 @@ export class VoiceClient {
       return end('dropped', 'refused', captureRefusalOf(toRefusal(err).reason));
     }
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode, ...calib });
+    // a take of the word being taught: the dialog shows it; nothing is sent and the draft speaker is unchanged
+    if (verdict?.trialTake === true) {
+      this.#flow.info('trial take counted', { turnId });
+      return end('captured');
+    }
     if (!enrolled) {
       this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');

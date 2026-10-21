@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { FakeAudioIO } from '../src/fake-audio-io.js';
 import { PRINT_SCHEMA, type VoicePrint } from '../src/speaker.js';
 import { VoiceClient } from '../src/voice-client.js';
-import { sendWordFileSource } from '../src/send-word.js';
+import { sendWordFileSource, trialWordFileSource } from '../src/send-word.js';
 import { FakeLink, stubEngines, toneWav } from './stubs.js';
 
 const MATT: VoicePrint = { schemaVersion: PRINT_SCHEMA, name: 'matt', model: 'stub', dim: 2, phrases: 3, embedding: [1, 0], createdAt: '2026-10-19T00:00:00Z' };
@@ -21,13 +21,14 @@ afterEach(async () => {
   clients = [];
 });
 
-async function setup(texts: string[], word: typeof WORD | null = WORD) {
+async function setup(texts: string[], word: typeof WORD | null = WORD, trial: { text: string; variants: string[] } | null = null) {
   const audio = new FakeAudioIO();
   const link = new FakeLink();
-  const client = new VoiceClient({ audio, engines: stubEngines(texts), link, ns: 'abcd1234', prints: () => [MATT], mode: 'ptt', delivery: 'composer', now: () => audio.clock, sendWord: () => word });
+  const notices: string[] = [];
+  const client = new VoiceClient({ audio, engines: stubEngines(texts), link, ns: 'abcd1234', prints: () => [MATT], mode: 'ptt', delivery: 'composer', now: () => audio.clock, sendWord: () => word, sendWordTrial: () => trial, notice: (n) => notices.push(n.text) });
   clients.push(client);
   await client.start();
-  return { audio, link, client };
+  return { audio, link, client, notices };
 }
 const ptt = (audio: FakeAudioIO, ms: number, amp: number): void => {
   audio.hotkey(true);
@@ -80,5 +81,39 @@ describe('short send word by adjacency (client)', () => {
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it('reads the trial file until its expiry; a broken or expired file is no trial', () => {
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gv-swt-')));
+    try {
+      let now = 1000;
+      const src = trialWordFileSource(home, () => now);
+      expect(src()).toBeNull();
+      fs.mkdirSync(path.join(home, 'voice'), { recursive: true });
+      fs.writeFileSync(path.join(home, 'voice', 'send-word-trial.json'), `${JSON.stringify({ format: 'gnomon-send-word:v1', text: 'send', variants: [], until: 5000 })}\n`);
+      expect(src()).toEqual({ text: 'send', variants: [] });
+      now = 6000;
+      expect(src()).toBeNull();
+      // the held source never reads the trial
+      expect(sendWordFileSource(home)()).toBeNull();
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('the attended send-word trial (client; spec §14.7 trial semantics)', () => {
+  it('an unknown short take sends its cleaned text with no adjacency and no "not enrolled" notice; a sentence stays withheld', async () => {
+    const { audio, link, client, notices } = await setup(['Send.', 'I am teaching my send word now'], null, { text: 'send', variants: [] });
+    link.turnVerdict = { trialTake: true };
+    ptt(audio, 400, 0.2); // 0.4 s, never speaker-verified, no draft speaker: still a take
+    ptt(audio, 900, 0.2);
+    await client.idle();
+    expect(link.appends[0]!.payload).toMatchObject({ speakerId: 'spk:unknown-1', speakerEnrolled: false, text: 'send', forwarded: false });
+    expect(link.appends[0]!.payload).not.toHaveProperty('speakerBasis');
+    expect(link.appends[0]!.payload).not.toHaveProperty('textWithheld');
+    expect(link.appends[1]!.payload).toMatchObject({ textWithheld: true, text: '' });
+    expect(notices.some((n) => /not enrolled/.test(n))).toBe(false);
+    expect(link.sends).toHaveLength(0);
   });
 });

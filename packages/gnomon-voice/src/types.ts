@@ -172,6 +172,8 @@ export interface AppendResult {
   forwardable?: boolean;
   refused?: string;
   refusedCause?: string;
+  /** the kernel counted this turn as a take of the word being taught (never forwardable) */
+  trialTake?: boolean;
 }
 
 export interface KernelLink {

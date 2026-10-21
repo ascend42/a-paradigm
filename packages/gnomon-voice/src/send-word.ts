@@ -5,17 +5,25 @@
  * at `<home>/voice/send-word.json` (0600; status.voice.sendWord reaches the human class only, so the client reads the
  * file, re-read only when it changes). Used ONLY for short words by adjacency: a segment too short to verify that IS
  * the send word (#send-word-matcher) is attributed to the draft speaker with speakerBasis 'adjacent'. The kernel
- * re-checks every condition; a broken file holds no word (fail closed).
+ * re-checks every condition; a broken file holds no word (fail closed). The word being TAUGHT is a separate source
+ * (trialWordFileSource): a trial take needs no adjacency.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalSendWord, type SendWord } from '@a-company/gnomon-contracts';
 
-/** The held word, else the word being taught (send-word-trial.json, until its expiry): adjacency only. */
-export function sendWordFileSource(home: string, now: () => number = Date.now): () => SendWord | null {
-  const held = fileSource(path.join(home, 'voice', 'send-word.json'), () => true);
-  const trial = fileSource(path.join(home, 'voice', 'send-word-trial.json'), (j) => typeof j.until === 'number' && now() <= j.until);
-  return () => held() ?? trial();
+/** The held word (adjacency only). */
+export function sendWordFileSource(home: string): () => SendWord | null {
+  return fileSource(path.join(home, 'voice', 'send-word.json'), () => true);
+}
+
+/**
+ * The word being taught (send-word-trial.json, until its expiry), or null: while it is live the client sends each
+ * segment's short text as a TAKE (no adjacency, whoever spoke; spec §14.7 trial semantics). The kernel decides; this
+ * only stops the client withholding a take's text. A broken or expired file is no trial.
+ */
+export function trialWordFileSource(home: string, now: () => number = Date.now): () => SendWord | null {
+  return fileSource(path.join(home, 'voice', 'send-word-trial.json'), (j) => typeof j.until === 'number' && now() <= j.until);
 }
 
 function fileSource(file: string, live: (j: { until?: unknown }) => boolean): () => SendWord | null {

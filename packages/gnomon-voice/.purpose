@@ -19,7 +19,12 @@ components:
       segment under 1500 ms from an unknown speaker that IS the send word is
       appended for the last verified, accepted (draft) speaker with
       speakerBasis 'adjacent' and the canonical word as text; the kernel
-      re-checks every condition (test/send-word-adjacency.test.ts).
+      re-checks every condition (test/send-word-adjacency.test.ts). While
+      the attended send-word trial is live (send-word-trial.json until its
+      expiry, trialWordFileSource) there is no adjacency: each segment's
+      cleaned text, when a send word's length, is sent whoever spoke, and a
+      turn the kernel counts as a take (trialTake) ends captured with no
+      notice and no draft speaker change.
       The voice client core in Node, @a-company/gnomon-voice (spec §14, slice
       V2c, TD-2026-10-19-298, T-2026-10-19-026). V2e: the kernel spawns it
       as `gnomon-voice run --fd 3 --home H --io P`; fd 3 is a socketpair
