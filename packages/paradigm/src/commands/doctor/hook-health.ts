@@ -40,6 +40,16 @@ export interface HookStats {
 
 const GRACE_MS = 5000;
 
+/**
+ * Aegis M-A: the only hook names the ring may contribute to any output. The ring is a plain project file anyone can
+ * append to; a record whose `hook` is not exactly one of these is dropped whole, and only numbers are read from the
+ * rest. Keep in sync with HOOK_ALLOW in scripts/claude-code-session-start.sh.
+ */
+export const HOOK_NAMES: readonly string[] = Object.freeze([
+  'SessionStart', 'Stop', 'PreToolUse-Bash', 'PreToolUse-Glob', 'PreToolUse-Write', 'UserPromptSubmit', 'PostToolUse-Write', 'PostToolUse-Skill',
+]);
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
 interface RingRow { ev?: string; hook?: string; id?: string; t?: number; ms?: number; outcome?: string; timeoutMs?: number; budgetMs?: number }
 
 export function readHookRing(file: string): RingRow[] {
@@ -48,7 +58,13 @@ export function readHookRing(file: string): RingRow[] {
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     try {
-      rows.push(JSON.parse(line) as RingRow);
+      const o = JSON.parse(line) as Record<string, unknown>;
+      if (typeof o.hook !== 'string' || !HOOK_NAMES.includes(o.hook) || typeof o.id !== 'string') continue;
+      if (o.ev !== 'start' && o.ev !== 'end') continue;
+      rows.push({
+        ev: o.ev, hook: o.hook, id: o.id, t: num(o.t), ms: num(o.ms), timeoutMs: num(o.timeoutMs), budgetMs: num(o.budgetMs),
+        outcome: o.outcome === 'killed' ? 'killed' : typeof o.outcome === 'string' ? 'other' : undefined,
+      });
     } catch {
       // a torn line (concurrent append, killed mid-write) is skipped
     }
