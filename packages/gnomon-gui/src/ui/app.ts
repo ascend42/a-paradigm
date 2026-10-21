@@ -17,7 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { ACK_TEXT, acked, attachSend, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
+import { ACK_TEXT, acked, attachSend, clampedFrom, CLAMP_CHIP, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -243,6 +243,8 @@ function paintChatHead(): void {
     meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
     meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}`));
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
+    // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
+    if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
     meta.appendChild(document.createTextNode(`${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
   }
   const t = s ? sessionTitle(s) : '';
@@ -331,8 +333,10 @@ function itemEl(it: FoldedItem): HTMLElement {
   }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
+  // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (+ "edits ask first")
+  const sentBy = it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];

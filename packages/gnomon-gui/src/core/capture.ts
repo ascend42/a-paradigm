@@ -29,7 +29,7 @@
 
 export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
 export type CaptureState = (typeof CAPTURE_STATES)[number];
-export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused', 'mic-off'] as const;
 export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
 
 export const CAPTURED_FLASH_MS = 1_200;
@@ -81,6 +81,8 @@ export const DROP_LABEL: Readonly<Record<CaptureDropReason, string>> = Object.fr
   'not-enrolled': 'Not sent: speaker not recognised',
   'not-attached': 'Not sent: voice is not attached to this session',
   refused: 'Not sent: the kernel refused it',
+  // TD-2026-10-21-514: the mic went off (key, screen lock, sleep): the audio in flight was discarded
+  'mic-off': 'Mic off · ⌃` to listen',
 });
 
 /**

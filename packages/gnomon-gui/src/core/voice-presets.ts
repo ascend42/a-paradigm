@@ -74,3 +74,18 @@ export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | n
 
 /** The session header chip while a voice-origin turn of that session is outstanding. */
 export const CLAMP_CHIP = 'Voice turn: edits ask first';
+
+/**
+ * Display only (the kernel's clamp is the boundary): is a voice-origin turn of this session still open — a
+ * turn.sent{origin:'voice'} after the session's last turn.result? Rows in log order.
+ */
+export function clampedFrom(rows: readonly { kind: string; session?: string | null; payload?: unknown }[], hsid: string): boolean {
+  let open = false;
+  for (const r of rows) {
+    if (r.session !== hsid) continue;
+    const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
+    if (r.kind === 'turn.sent' && p?.origin === 'voice') open = true;
+    else if (r.kind === 'turn.result' || r.kind === 'session.exited') open = false;
+  }
+  return open;
+}

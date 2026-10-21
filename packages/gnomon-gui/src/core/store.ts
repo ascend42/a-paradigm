@@ -26,6 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
+import { sentLabel } from './voice-presets.js';
 import { projectHue, sha256Tagged, validateKindPayload } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { rootRowsOf, rowsDigestCheck } from './render.js';
@@ -477,6 +478,9 @@ export interface ChatItem {
   speaker?: string;
   /** dictation: the kernel's attribution of a sent message (turn.sent source): 🎙 voice or 🎙✎ voice-edited */
   voice?: 'voice' | 'voice-edited';
+  /** TD-2026-10-21-514: how the kernel says the message was sent (turn.sent origin/sentBy), and whether edits ask first */
+  sentLabel?: string;
+  asksFirst?: boolean;
   /** table talk (TD-2026-10-20-294): an assistant reply's speak block, shown as the "said aloud" line (the body omits it) */
   said?: string;
   /** Aegis L3: 'kernel' = the words come from the kernel's speakable row (from:'block'); 'reply' = this GUI's own parse (no kernel row) */
@@ -977,9 +981,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     activeTurn = undefined;
     progress = undefined;
   };
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }, how: Place = 'turn'): ChatItem => {
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy']; sentLabel?: string; asksFirst?: boolean }, how: Place = 'turn'): ChatItem => {
     if (it.role === 'assistant') spoken = null; // a new reply closes the previous reply's 🔊 marker
-    const item: ChatItem = { key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}) };
+    const item: ChatItem = { key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}), ...(it.sentLabel !== undefined ? { sentLabel: it.sentLabel, asksFirst: it.asksFirst === true } : {}) };
     place(item, how);
     return item;
   };
@@ -990,6 +994,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   // Aegis M (V2d): "sent" is the kernel's word (turn.sent{source:'voice', voiceTurnSeq}), never the voice app's claim
   const sentSeqs = new Set<number>();
   const editedSeqs = new Set<number>();
+  // TD-2026-10-21-514: the sent label (from the kernel's turn.sent) on the LAST voice turn each message cites
+  const sentLabels = new Map<number, { label: string; asksFirst: boolean }>();
   // one 🔊 marker per spoken reply (founder bug 2026-10-20: pipelined TTS logs one playback row per sentence)
   let spoken: SpokenGroup | null = null;
   // Aegis L3: the kernel's speakable reply per source row (turnSeq): the said-aloud line is the kernel's words
@@ -1001,7 +1007,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       const it = p.items.map(objOf).find((x) => x?.kind === 'reply' && typeof x.text === 'string');
       if (it) kernelReply.set(p.turnSeq, { text: String(it.text), from: typeof it.from === 'string' ? it.from : '' });
     }
-    if (r.kind === 'turn.sent' && p?.source === 'voice') for (const n of citedSeqs(p)) sentSeqs.add(n);
+    if (r.kind === 'turn.sent' && p?.source === 'voice') {
+      const cs = citedSeqs(p);
+      for (const n of cs) sentSeqs.add(n);
+      const lab = sentLabel(p);
+      if (lab && cs.length) sentLabels.set(cs[cs.length - 1]!, lab);
+    }
     if (r.kind === 'turn.sent' && p?.source === 'voice-edited') for (const n of citedSeqs(p)) editedSeqs.add(n);
   }
   for (const r of rows) {
@@ -1145,7 +1156,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       hidden++;
       continue;
     }
-    const v = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs });
+    const v0 = voiceItem(r, p, { shownVoiceSeqs, sentSeqs, editedSeqs });
+    const lab = v0 && v0.role === 'user' ? (r.kind === 'turn.sent' ? sentLabel(p) : sentLabels.get(r.seq)) : undefined;
+    const v = v0 && lab ? { ...v0, sentLabel: lab.label, asksFirst: lab.asksFirst } : v0;
     if (v !== undefined) {
       if (v === null) hidden++;
       else {
