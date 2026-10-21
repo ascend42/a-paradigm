@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
-import { chooseRung, clientFactOf, dropFact, ladderEntries, ladderFoot, PIECES_TIMING, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type PillInput } from '../src/core/voice-ladder.js';
+import { chooseRung, clientFactOf, crashCauseOf, dropFact, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, PIECES_TIMING, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type PillInput } from '../src/core/voice-ladder.js';
 import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, lineCountLabel, parseTall, serializeTall } from '../src/core/composer.js';
 import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { enrolStart } from '../src/core/voice-client.js';
@@ -91,7 +91,17 @@ describe('the pill: rung name + ONE live fact (design-system gnomon.voice.pill)'
     expect(pill({ rung: 'dictate', attached: true, capture: { display: display('transcribing'), cap: null } }).fact).toBe('catching that…');
     expect(pill({ rung: 'dictate', attached: true, capture: { display: display('captured'), cap: null } }).fact).toBe('got it');
     expect(clientFactOf('Voice app not running', null)).toBe('voice app not running');
-    expect(clientFactOf(null, ' · voice crashed: boom')).toBe('voice crashed: boom');
+    // Luna #7: the crash fact is just "voice crashed"; the cause rides the title and the accessible name
+    expect(clientFactOf(null, ' · voice crashed: boom')).toBe('voice crashed');
+    expect(clientFactOf('Voice crashed', null)).toBe('voice crashed');
+    expect(crashCauseOf({ phase: 'crashed', lastError: 'boom\nmore' }, (e) => e.replace(/\s+/g, ' '))).toBe('boom more');
+    expect(crashCauseOf({ phase: 'running', lastError: 'boom' }, (e) => e)).toBeNull();
+    const crashed = pill({ rung: 'dictate', attached: true, clientFact: 'voice crashed', clientCause: 'the input device went away', clientTitle: 'The voice app stopped: the input device went away.' });
+    expect(crashed.fact).toBe('voice crashed');
+    expect(crashed.aria).toContain('voice crashed (the input device went away)');
+    expect(crashed.title).toContain('the input device went away');
+    // a fact that is not the client's carries no cause
+    expect(pill({ rung: 'dictate', attached: true, clamped: true, clientFact: 'voice crashed', clientCause: 'x' }).aria).not.toContain('(x)');
     expect(pill({ clientFact: 'voice app not running' })).toMatchObject({ name: 'Voice off', fact: 'voice app not running' });
     // a disconnected voice app never reads as an open mic
     expect(pill({ rung: 'dictate', attached: true, clientConnected: false }).live).toBe(false);
@@ -110,6 +120,22 @@ describe('the ladder replaces the pill menu (design-system gnomon.voice.model)',
     const ready = L({ acked: true, sendWord: { text: 'over', variants: [] } });
     expect(ready.find((x) => x.rung === 'word')).toMatchObject({ tag: '“over”', needs: null });
     expect(ready.find((x) => x.rung === 'pieces')).toMatchObject({ tag: 'Touch ID', tagKind: 'cost', needs: null });
+    // Luna #5: Pieces names its cost while not ready too
+    expect(e.find((x) => x.rung === 'pieces')).toMatchObject({ tag: 'set up · Touch ID', tagKind: 'setup', needs: 'risk' });
+  });
+  it('the rung target (Luna #6): focused ≠ attached reads "applies to <B> · voice is on <A>", in the ladder and its name', () => {
+    const name = (h: string) => h.slice(-4);
+    expect(ladderTargetLine('hs:BBBB', 'hs:AAAA', name)).toBe('applies to BBBB · voice is on AAAA');
+    expect(ladderTargetLine('hs:AAAA', 'hs:AAAA', name)).toBeNull();
+    expect(ladderTargetLine('hs:BBBB', null, name)).toBeNull();
+    expect(ladderTargetLine(null, 'hs:AAAA', name)).toBeNull();
+    expect(ladderAria('applies to BBBB · voice is on AAAA')).toBe('Voice: the trust ladder · applies to BBBB · voice is on AAAA');
+    expect(ladderAria(null)).toBe('Voice: the trust ladder');
+    const r = root(ladderEls(fdoc, L(), 'foot', 'applies to BBBB · voice is on AAAA'));
+    expect(r.all((e) => e.className.includes('ladder-target'))[0]!.text).toBe('applies to BBBB · voice is on AAAA');
+    expect(root(ladderEls(fdoc, L(), 'foot')).all((e) => e.className.includes('ladder-target'))).toHaveLength(0);
+    expect(APP).toContain("menu.setAttribute('aria-label', ladderAria(target));");
+    expect(APP).toContain('ladderEls(doc, entries, foot, target)');
   });
   it('rungs map onto the existing mode × preset machinery', () => {
     expect(['off', 'talk', 'dictate', 'word', 'pieces'].map((r) => [stateOfRung(r as never), presetOfRung(r as never), sendOfRung(r as never)])).toEqual([

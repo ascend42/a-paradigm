@@ -645,6 +645,8 @@ html, body {
 /* the ladder (the pill's popover, role menu): Off, Talk, Dictate, Send word, Pieces, one line each, a cost tag */
 .voice-ladder { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px; max-width: calc(100vw - 24px); padding: 8px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
 .voice-ladder[hidden] { display: none; }
+/* Luna #6: the rung applies to the focused session; when voice is on another, the ladder says so first */
+.ladder-target { margin: 0 0 4px; padding: 2px 6px 6px; border-bottom: 1px dashed var(--rule); font-size: 11.5px; }
 .rung { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: start; width: 100%; padding: 8px 6px; border: 0; border-bottom: 1px dashed var(--rule); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .rung:hover:not([disabled]) { background: color-mix(in srgb, var(--ink) 4%, transparent); }
 .rung:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }

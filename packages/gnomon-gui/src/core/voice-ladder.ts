@@ -120,10 +120,20 @@ export function ladderEntries(i: LadderInput): RungEntry[] {
     let tagKind: RungEntry['tagKind'] = null;
     if (r === 'talk') [tag, tagKind] = [i.hotkey, 'key'];
     else if (r === 'word') [tag, tagKind] = needs ? ['set up', 'setup'] : [`“${i.sendWord!.text}”`, 'word'];
-    else if (r === 'pieces') [tag, tagKind] = needs ? ['set up', 'setup'] : ['Touch ID', 'cost'];
+    else if (r === 'pieces') [tag, tagKind] = needs ? ['set up · Touch ID', 'setup'] : ['Touch ID', 'cost']; // Luna #5: the cost shows while not ready too
     return { rung: r, name: RUNG_NAME[r], line: RUNG_LINE[r], tag, tagKind, current: r === i.rung, needs, disabled: why !== null && !(r === 'off' && i.attachable), why: r === 'off' && i.attachable ? null : why };
   });
 }
+
+/**
+ * Luna #6: which session a rung applies to. A rung goes to the FOCUSED session; when voice is on another one the
+ * ladder says so ("applies to <B> · voice is on <A>"), and so does its accessible name. null when they agree.
+ */
+export function ladderTargetLine(focused: string | null, attached: string | null, name: (hsid: string) => string): string | null {
+  return focused && attached && focused !== attached ? `applies to ${name(focused)} · voice is on ${name(attached)}` : null;
+}
+export const LADDER_ARIA = 'Voice: the trust ladder';
+export const ladderAria = (target: string | null): string => (target ? `${LADDER_ARIA} · ${target}` : LADDER_ARIA);
 
 /** The ladder's foot line: the mic key and how the open-mic rungs listen. */
 export function ladderFoot(o: { micKeyBare: boolean; capture: 'open' | 'toggle' }): string {
@@ -145,6 +155,10 @@ export interface PillInput {
   clientConnected: boolean | null;
   /** the voice-app condition in words (core/voice-client.ts clientPillOf label or tail), or null */
   clientFact: string | null;
+  /** Luna #7: a crash's cause (the voice app's own words), for the title and the accessible name only; never the fact */
+  clientCause?: string | null;
+  /** the voice-app condition's longer title (clientPillOf .title), appended to the pill's title */
+  clientTitle?: string | null;
   /** the capture overlay (core/capture.ts captureDisplayOf) and the capture it shows, or null */
   capture: { display: CaptureDisplay; cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'> | null } | null;
   /** a voice-origin turn is open (the kernel clamps its edits) */
@@ -194,7 +208,7 @@ export function dropFact(cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'>)
  * The pill: rung name + one live fact, first match wins:
  *   speech not sent (a sticky drop)     vermilion "not sent · <reason>"   (a mic-off drop is just "mic off · ⌃`")
  *   a clamped voice-origin turn          amber edge, "edits ask first"
- *   the voice app's condition            "voice app not running", "voice crashed: …", "setting up voice…"
+ *   the voice app's condition            "voice app not running", "voice crashed" (its cause in the title and aria), "setting up voice…"
  *   capture                              "hearing you…", "catching that…", "got it", "heard, not confirmed"
  *   the mic key closed the mic           "mic off · ⌃`"
  *   a turn heard lately (not Send word)  "heard 4s ago"
@@ -206,7 +220,9 @@ export function voicePillOf(i: PillInput): PillView {
   const live = i.attached && i.clientConnected !== false && ((stateOfRung(i.rung) === 'ambient' && !i.micClosed) || i.capture?.display.state === 'hearing');
   const mk = (fact: string, tone: PillView['tone'] = 'plain'): PillView => {
     const mic = live ? 'mic open' : 'mic closed';
-    return { name, fact, tone, clamped: i.clamped, live, aria: `Voice: ${name}, ${mic}${fact ? `, ${fact}` : ''}`, title: `Voice: ${name}${i.target ? ` on ${i.target}` : ''} (${mic}). Kernel-owned: it shows what the kernel says. Click for the ladder.` };
+    const cause = fact === i.clientFact && i.clientCause ? i.clientCause : null;
+    const title = `Voice: ${name}${i.target ? ` on ${i.target}` : ''} (${mic}). Kernel-owned: it shows what the kernel says. Click for the ladder.`;
+    return { name, fact, tone, clamped: i.clamped, live, aria: `Voice: ${name}, ${mic}${fact ? `, ${fact}` : ''}${cause ? ` (${cause})` : ''}`, title: i.clientTitle ? `${title} ${i.clientTitle}` : title };
   };
   const d = i.capture?.display;
   if (d && d.state === 'dropped' && i.capture?.cap) {
@@ -228,11 +244,19 @@ export function voicePillOf(i: PillInput): PillView {
   return mk('listening');
 }
 
-/** clientPillOf's words as one lowercase fact ("Voice app not running" → "voice app not running"; " · x" → "x"). */
+/**
+ * clientPillOf's words as one lowercase fact ("Voice app not running" → "voice app not running"; " · x" → "x"). A
+ * crash is just "voice crashed" (Luna #7): its cause goes into the title and the accessible name (crashCauseOf).
+ */
 export function clientFactOf(label: string | null, tail: string | null): string | null {
   const s = label ?? (tail ? tail.replace(/^\s*·\s*/, '') : null);
   if (!s) return null;
-  return s.charAt(0).toLowerCase() + s.slice(1);
+  const f = s.charAt(0).toLowerCase() + s.slice(1);
+  return /^voice crashed\b/.test(f) ? 'voice crashed' : f;
+}
+/** A crashed voice app's cause in one line (the voice app's own sanitised words), or null. */
+export function crashCauseOf(c: { phase: string; lastError: string | null }, line: (s: string) => string): string | null {
+  return c.phase === 'crashed' && c.lastError ? line(c.lastError) : null;
 }
 
 /* ── the Voice settings sheet rows ─────────────────────────────────── */

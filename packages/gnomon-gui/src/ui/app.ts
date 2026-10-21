@@ -17,7 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { chooseRung, clientFactOf, ladderEntries, ladderFoot, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
+import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
 import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, sendWordOf } from '../core/voice-presets.js';
@@ -43,7 +43,7 @@ import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwi
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
-import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
@@ -1950,6 +1950,7 @@ function paintVoice(): void {
   const attached = v.state !== 'off';
   const cp = clientPillOf(c, attached, canAttach(status));
   const cap = paintCapture(v, cp.label === null);
+  const trouble = cp.label !== null || cp.tail !== null;
   const rung = rungOf(v, voicePreset);
   const clampHsid = v.hsid ?? focused;
   const bare = micKeyBareOf(status);
@@ -1961,6 +1962,8 @@ function paintVoice(): void {
     target: v.hsid ? sessionName(v.hsid) : '',
     clientConnected: v.clientConnected,
     clientFact: clientFactOf(cp.label, cp.tail),
+    clientCause: crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)),
+    clientTitle: trouble && cp.title ? cp.title : null,
     capture: cap,
     clamped: !!clampHsid && clampedFrom(store.transcript(clampHsid), clampHsid),
     micClosed: attached && v.micWanted === false,
@@ -1968,10 +1971,9 @@ function paintVoice(): void {
     heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
   });
   const btn = $('voice-pill');
-  const trouble = cp.label !== null || cp.tail !== null;
   btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${cap ? ` ${cap.display.className}` : ''}`;
   btn.dataset.state = cp.label !== null ? `client-${c.phase}` : rung;
-  btn.title = trouble && cp.title ? `${pv.title} ${cp.title}` : pv.title;
+  btn.title = pv.title;
   btn.setAttribute('aria-label', pv.aria);
   put($('voice-label'), pv.name);
   const fact = $('voice-fact');
@@ -2074,13 +2076,15 @@ function paintVoiceMenu(): void {
   const v = voiceStatusOf(status);
   const entries = ladderEntries({ ...readiness(), rung: rungOf(v, voicePreset), hotkey: v.hotkey, attachable: canAttach(status), target: voiceTargetFor('ptt'), ceiling: v.ceiling });
   const foot = ladderFoot({ micKeyBare: micKeyBareOf(status), capture: capturePref });
-  const key = JSON.stringify([entries, foot]);
+  const target = ladderTargetLine(focused, v.hsid, sessionName);
+  menu.setAttribute('aria-label', ladderAria(target));
+  const key = JSON.stringify([entries, foot, target]);
   if (key === ladderShown && menu.firstChild) return;
   ladderShown = key;
   const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-vs-open]') as HTMLElement | null;
   const fk = had ? (had.dataset.rung ?? 'settings') : null;
   clear(menu);
-  for (const el of ladderEls(doc, entries, foot)) menu.appendChild(el as unknown as Node);
+  for (const el of ladderEls(doc, entries, foot, target)) menu.appendChild(el as unknown as Node);
   if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
 }
 /** The ladder's focusable items, in order (arrow keys move among them). */

@@ -161,7 +161,7 @@ export interface ClientPill {
 const MB = (x: number): string => (x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
 /** The longest lastError shown in the pill label (the kernel's text carries up to 300 chars of the app's stderr). */
 export const PILL_ERROR_MAX = 60;
-const ERROR_TITLE_MAX = 400;
+export const ERROR_TITLE_MAX = 400;
 /**
  * Aegis L1 (862ef85a): lastError is the voice app's own stderr text, so it is sanitised (display.ts §4.5: controls,
  * bidi and hidden characters made visible or removed) BEFORE it is folded to one line and capped, and the cap counts

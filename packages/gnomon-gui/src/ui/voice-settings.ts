@@ -24,9 +24,11 @@ import { ACK_TEXT, riskSentence } from '../core/voice-presets.js';
 
 /* ── the ladder popover ─────────────────────────────────────────────── */
 
-/** The ladder's children: one button per rung, then the foot (mic key · listen, and the settings link). */
-export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: string): MiniEl[] {
+/** The ladder's children: the target line (when the rung applies elsewhere), one button per rung, then the foot (mic key · listen, and the settings link). */
+export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: string, target: string | null = null): MiniEl[] {
   const out: MiniEl[] = [];
+  // Luna #6: a rung applies to the focused session; when voice is on another, say so first
+  if (target) out.push(h(doc, 'p', { class: 'meta ladder-target', role: 'note' }, target));
   for (const e of entries) {
     const tag = e.tag ? h(doc, 'span', { class: `rung-tag${e.tagKind === 'cost' || e.tagKind === 'setup' ? ' tag' : ''}` }, e.tag) : h(doc, 'span', { class: 'rung-tag' });
     const b = h(
