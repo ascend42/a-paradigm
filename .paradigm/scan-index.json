@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-af92fbc6aa63cfd9e",
-    "generatedAt": "2026-10-21T06:02:43.756Z",
+    "generatedAt": "2026-10-21T06:04:11.424Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 107,
@@ -11,7 +11,7 @@
     },
     "componentTypes": {
       "command": 114,
-      "utility": 63,
+      "utility": 64,
       "config": 11,
       "manager": 6,
       "engine": 9,
@@ -9852,6 +9852,19 @@
         "!hook-installed"
       ],
       "componentType": "command"
+    },
+    "hook-monitor": {
+      "id": "hook-monitor",
+      "name": "Hook Monitor",
+      "symbol": "#hook-monitor",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-af92fbc6aa63cfd9e/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "7.15.2 hook self-monitoring (scripts/paradigm-hook-monitor.sh, sourced by\nevery Claude Code hook via _pm_begin <Hook> <timeoutMs> <budgetMs>).\nAppends a start record and, from an EXIT trap, an end record (wall ms,\nrc, outcome ok|blocked|error|killed; SIGTERM/HUP/INT -> killed) to the\nring .paradigm/events/hook-timings.jsonl. A SIGKILLed hook leaves a\nstart with no end; readers treat it as killed once older than its\ntimeout + 5 s. Cost: two date(1) calls and two shell appends, no CLI or\nnode spawn. Ring trimmed to PARADIGM_HOOK_RING_MAX (500) lines on ~1 in\n64 runs and deterministically at SessionStart. Fail open: no stdout,\nexit code preserved, every write best-effort; PARADIGM_HOOK_MONITOR_OFF=1\ndisables it. Ring + marker are in the #session-markers-gitignore block.\n",
+      "visualTags": [],
+      "related": [
+        "#session-markers-gitignore"
+      ],
+      "componentType": "utility"
     },
     "stop-hook-timing": {
       "id": "stop-hook-timing",
@@ -22115,6 +22128,10 @@
     "#paradigm-hooks": {
       "category": "components",
       "id": "paradigm-hooks"
+    },
+    "#hook-monitor": {
+      "category": "components",
+      "id": "hook-monitor"
     },
     "#stop-hook-timing": {
       "category": "components",

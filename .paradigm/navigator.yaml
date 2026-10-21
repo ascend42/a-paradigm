@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-21T06:02:43.774Z'
+generated: '2026-10-21T06:04:11.441Z'
 structure: {}
 key_files:
   config:
@@ -812,6 +812,7 @@ symbols:
   '#purpose-component-legacy-names-audit': packages/paradigm/src/commands/doctor/
   '#purpose-component-skill-used-hook': packages/paradigm/src/commands/hooks/
   '#purpose-component-paradigm-hooks': packages/paradigm/src/commands/hooks/
+  '#purpose-component-hook-monitor': packages/paradigm/src/commands/hooks/
   '#purpose-component-stop-hook-timing': packages/paradigm/src/commands/hooks/
   '#purpose-component-has-compliance-claimant': packages/paradigm/src/commands/hooks/
   '#purpose-component-team-invocation-gates': packages/paradigm/src/commands/hooks/

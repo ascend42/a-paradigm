@@ -29,6 +29,9 @@ export const SESSION_MARKERS: readonly string[] = Object.freeze([
   '.cid-session',
   '.graduation-failures/',
   '.memory-last-review',
+  // hook self-monitoring (#hook-monitor): the timing ring + the once-per-session warning marker
+  'events/hook-timings.jsonl',
+  '.hook-health-warned',
 ]);
 
 const BEGIN = '# >>> paradigm session markers (managed by paradigm init/sync) >>>';

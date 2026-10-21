@@ -9,6 +9,10 @@
 # Hook type: PostToolUse (matcher: Skill)
 # Contract: NEVER fails loudly — always exit 0, no stdout/stderr output.
 
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PostToolUse-Skill 10000 3000
+
 INPUT=$(cat)
 
 # Cheap pre-filter: only Paradigm projections pay for a CLI spawn.

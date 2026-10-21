@@ -15,4 +15,6 @@
 /.cid-session
 /.graduation-failures/
 /.memory-last-review
+/events/hook-timings.jsonl
+/.hook-health-warned
 # <<< paradigm session markers <<<

@@ -17,6 +17,7 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import {
   COMMON_HOOK,
+  HOOK_MONITOR,
   CLAUDE_CODE_STOP_HOOK,
   CLAUDE_CODE_POSTWRITE_HOOK,
   CLAUDE_CODE_PRECOMMIT_HOOK,
@@ -151,7 +152,7 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
   // Remove hook scripts
   const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
   if (fs.existsSync(claudeHooksDir)) {
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
       const hookPath = path.join(claudeHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         fs.unlinkSync(hookPath);
@@ -367,6 +368,7 @@ export async function hooksInstallCommand(options: {
       { name: 'post-commit', content: POST_COMMIT_HOOK },
       { name: 'pre-push', content: PRE_PUSH_HOOK },
       { name: 'paradigm-common', content: COMMON_HOOK },
+      { name: 'paradigm-hook-monitor', content: HOOK_MONITOR },
       { name: 'claude-code-stop', content: CLAUDE_CODE_STOP_HOOK },
       { name: 'claude-code-precommit', content: CLAUDE_CODE_PRECOMMIT_HOOK },
       { name: 'claude-code-postwrite', content: CLAUDE_CODE_POSTWRITE_HOOK },
@@ -535,6 +537,11 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   const commonPath = path.join(claudeHooksDir, 'paradigm-common.sh');
   fs.writeFileSync(commonPath, COMMON_HOOK, 'utf8');
   fs.chmodSync(commonPath, '755');
+
+  // Hook self-monitoring library (#hook-monitor), sourced by every hook script
+  const monitorPath = path.join(claudeHooksDir, 'paradigm-hook-monitor.sh');
+  fs.writeFileSync(monitorPath, HOOK_MONITOR, 'utf8');
+  fs.chmodSync(monitorPath, '755');
 
   const hookScripts = [
     { name: 'paradigm-stop.sh', content: CLAUDE_CODE_STOP_HOOK },
@@ -1026,7 +1033,7 @@ export async function hooksStatusCommand(): Promise<void> {
     // Warn about stale project hooks that shadow the plugin
     const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
     const staleHooks: string[] = [];
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
       if (fs.existsSync(path.join(claudeHooksDir, hookName))) {
         staleHooks.push(hookName);
       }
