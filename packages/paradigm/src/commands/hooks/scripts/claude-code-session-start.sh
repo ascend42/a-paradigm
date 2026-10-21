@@ -32,14 +32,22 @@ fi
 _pm_now 2>/dev/null || _pm_t=$(( $(date +%s) * 1000 ))
 NOW=$_pm_t
 
+# The ring is a plain file any process in the project can write, and this hook's
+# stdout goes into the NEXT session's context (possibly an unsandboxed one). So
+# (Aegis M-A) no ring text reaches stdout except numbers printed with %d and
+# hook names from this exact allowlist; a record with any other `hook` value
+# is dropped whole. Keep in sync with HOOK_NAMES in doctor/hook-health.ts.
+HOOK_ALLOW="SessionStart Stop PreToolUse-Bash PreToolUse-Glob PreToolUse-Write UserPromptSubmit PostToolUse-Write PostToolUse-Skill"
+
 # One awk pass: per hook, killed and over-budget counts after SINCE, earliest time, total lines.
-SUMMARY=$(awk -v now="$NOW" -v since="$SINCE" -v grace=5000 '
+SUMMARY=$(awk -v now="$NOW" -v since="$SINCE" -v grace=5000 -v allow="$HOOK_ALLOW" '
+  BEGIN { na = split(allow, al, " "); for (i = 1; i <= na; i++) OK[al[i]] = 1 }
   function f(k,   r, p) {
     p = "\"" k "\":"
     if (!match($0, p "\"?[^,\"}]*")) return ""
     r = substr($0, RSTART + length(p), RLENGTH - length(p)); sub(/^"/, "", r); return r
   }
-  { n++ ; ev = f("ev"); id = f("id"); h = f("hook"); t = f("t") + 0 }
+  { n++ ; ev = f("ev"); id = f("id"); h = f("hook"); t = f("t") + 0; if (!(h in OK)) next }
   ev == "start" { S[id] = t; H[id] = h; TO[id] = f("timeoutMs") + 0; B[id] = f("budgetMs") + 0 }
   ev == "end" {
     E[id] = 1
@@ -62,6 +70,9 @@ _fmt_date() { # epoch ms -> YYYY-MM-DD HH:MM (local)
 WARNED=false
 _TAB=$(printf '\t')
 while IFS="$_TAB" read -r kind hook count first budget; do
+  # belt and braces (M-A): only allowlisted names and plain digits are ever printed
+  case " $HOOK_ALLOW " in *" $hook "*) ;; *) [ "$kind" = lines ] || continue ;; esac
+  case "${count:-0}${first:-0}${budget:-0}" in *[!0-9]*) [ "$kind" = lines ] || continue ;; esac
   case "$kind" in
     killed)
       case "$hook" in
@@ -74,6 +85,7 @@ while IFS="$_TAB" read -r kind hook count first budget; do
       printf '%s\n' "Paradigm $hook hook exceeded its $(( budget / 1000 ))s budget $count time(s) since $(_fmt_date "$first"). Run \`paradigm doctor\`."
       WARNED=true ;;
     lines)
+      case "${hook:-0}" in *[!0-9]*) continue ;; esac
       [ "${hook:-0}" -gt "${PARADIGM_HOOK_RING_MAX:-500}" ] 2>/dev/null && { _PM_RING_SAVE=$_PM_RING; _PM_RING=$RING; _pm_trim; _PM_RING=$_PM_RING_SAVE; } ;;
   esac
 done <<EOF
