@@ -157,3 +157,23 @@ describe('Aegis C1f: replay checks the v2 root decision against the card the log
     expect(checkRootDecisions(edit((p) => void (p.rootKind = 'install')), r.root).map((d) => d.reason)).toEqual(['root-sig-bad']);
   });
 });
+
+describe('contentHash preimage: kernel, replay and GUI agree for a card with and without hsid', () => {
+  it('the same hash for a missing hsid (absent ≡ null) and a present one', async () => {
+    const { cardContentHash } = await import('../../gnomon-gui/src/core/render.js');
+    const { contentHashOf } = await import('../src/kernel/broker/card.js');
+    const detail = { rootRows: [], rootDecisions: ['allow'], action: 'mod.mcp.config' };
+    for (const hsid of [undefined, HSID]) {
+      const kernel = contentHashOf({ kind: 'grant', requestedBy: HUMAN, ...(hsid ? { hsid } : {}), detail, flags: ['bidi'] });
+      expect(cardContentHash({ kind: 'grant', requestedBy: HUMAN, ...(hsid ? { hsid } : {}), flags: ['bidi'] }, detail)).toBe(kernel);
+    }
+    // and replay, over a real broker-logged card without hsid (mod.mcp.config): no divergence means its rebuild matched
+    const r = rig();
+    await decide(r, mcpConfig(), 'allow');
+    const req = r.rows.find((x) => x.kind === 'approval.request')!.payload.card as Record<string, unknown>;
+    expect(req.hsid).toBeUndefined();
+    const node = (req.block as { children: Array<{ type?: string; detail?: unknown }> }).children.find((n) => n.type === 'root-rows')!;
+    expect(cardContentHash(req, node.detail)).toBe(req.contentHash);
+    expect(checkRootDecisions(r.rows.map((x, i) => ({ seq: i + 1, kind: x.kind, envelope: JSON.stringify({ payload: x.payload }) }) as never), r.root)).toEqual([]);
+  });
+});

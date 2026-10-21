@@ -499,6 +499,9 @@ export class ApprovalBroker {
     // contentHash); a card whose decision writes no row shows an empty list
     const rootCapable = Object.values((KIND_DECISIONS as Record<string, Record<string, string>>)[input.kind] ?? {}).includes('root') || (input.rootDecisions?.length ?? 0) > 0;
     if (rootCapable && !input.prepare && !Array.isArray(input.detail.rootRows)) input = { ...input, detail: { ...input.detail, rootRows: [] } };
+    // Aegis M1 (final review): the root decisions are INSIDE the hashed detail, so a node cannot claim fewer
+    const rootDecs = rootDecisionsOf(input.kind, input.rootDecisions).filter((d) => !(input.standingGrant && d === 'allow'));
+    if (rootCapable) input = { ...input, detail: { ...input.detail, rootDecisions: rootDecs } };
     const rendered = blockOf(input.lines);
     const flags = [...new Set<CardFlag>([...(input.flags ?? []), ...rendered.flags])].sort();
     const contentHash = input.contentHash ?? contentHashOf({ kind: input.kind, requestedBy: input.requestedBy, ...(input.hsid ? { hsid: input.hsid } : {}), detail: input.detail, flags });
@@ -512,7 +515,7 @@ export class ApprovalBroker {
       ...(input.hsid ? { hsid: input.hsid } : {}),
       attended: input.attended,
       approverPolicy: { kind: 'self' },
-      block: rootBlock(input.block ?? rendered.block, rootCapable ? input.detail : null, rootDecisionsOf(input.kind, input.rootDecisions).filter((d) => !(input.standingGrant && d === 'allow'))),
+      block: rootBlock(input.block ?? rendered.block, rootCapable ? input.detail : null, rootDecs),
       contentHash,
       ...(flags.length ? { flags } : {}),
       actions: signActions(this.#o.kernel, cardId, input.kind, contentHash, input.decisions),

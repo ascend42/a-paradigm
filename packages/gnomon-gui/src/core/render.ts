@@ -537,33 +537,52 @@ export function rowsDigestOf(rows: readonly unknown[]): string {
   return `sha256:${hex(sha256(canonicalJson(rows)))}`;
 }
 
+/** The root-rows nodes of a card block (any count: one is required, more is a refusal). */
+function rootNodesOf(block: unknown): Array<{ rootDecisions?: unknown; detail?: unknown }> {
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  return kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'root-rows') as Array<{ rootDecisions?: unknown; detail?: unknown }>;
+}
+
+/** Does the block carry ANY root-rows node (valid or not)? Then the card is root-capable: fail closed without rootRowsOf. */
+export function hasRootNode(block: unknown): boolean {
+  return rootNodesOf(block).length > 0;
+}
+
+/** The decisions that are never root class: the only keys a root-capable card shows when its rows cannot be verified. */
+export const NON_ROOT_DECISIONS: readonly string[] = Object.freeze(['deny', 'reject', 'withdraw']);
+
 /**
- * Aegis C1e: the card's {type:'root-rows', rootDecisions, detail} node, its detail verified against contentHash, every
- * row renderable. null = no such node, more than one, a hash mismatch, or a row this GUI cannot render.
+ * Aegis C1e + M1: the card's ONE {type:'root-rows', rootDecisions, detail} node; its detail verified against
+ * contentHash; its root decisions read from the HASHED detail.rootDecisions (the node's copy must equal it) and
+ * required to cover what the kind table makes root (a standing grant's allow excepted; a voice.enrol strictness card's
+ * allow added); every row renderable. null = anything else.
  */
 export function rootRowsOf(card: Record<string, unknown>): RootRowsView | null {
-  const block = card.block;
-  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
-  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'root-rows') as Array<{ rootDecisions?: unknown; detail?: unknown }>;
+  const nodes = rootNodesOf(card.block);
   if (nodes.length !== 1) return null;
-  const { detail, rootDecisions } = nodes[0]!;
+  const { detail, rootDecisions: nodeDecs } = nodes[0]!;
   if (!detail || typeof detail !== 'object' || Array.isArray(detail) || typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
-  const rows = (detail as { rootRows?: unknown }).rootRows;
+  const d = detail as Record<string, unknown>;
+  const rows = d.rootRows;
+  const decs = d.rootDecisions;
   if (!Array.isArray(rows) || !rows.every((r) => r && typeof r === 'object' && !Array.isArray(r))) return null;
-  if (!Array.isArray(rootDecisions) || !rootDecisions.every((d) => typeof d === 'string')) return null;
+  if (!Array.isArray(decs) || !decs.every((x) => typeof x === 'string')) return null;
+  if (nodeDecs !== undefined && canonicalJson(nodeDecs) !== canonicalJson(decs)) return null;
+  const kind = String(card.kind);
+  const must = [...(kind === 'grant' && d.op === 'standing' ? [] : (ROOT_CLASS_BY_KIND[kind] ?? [])), ...(kind === 'strictness' && d.op === 'voice.enrol' ? ['allow'] : [])];
+  if (must.some((m) => !(decs as string[]).includes(m))) return null;
   const lines: string[] = [];
   for (const r of rows as Record<string, unknown>[]) {
     const l = rootRowLine(r);
     if (l === null) return null;
     lines.push(l);
   }
-  return { rootDecisions: rootDecisions as string[], rows: rows as Record<string, unknown>[], lines, rowsDigest: rowsDigestOf(rows) };
+  return { rootDecisions: decs as string[], rows: rows as Record<string, unknown>[], lines, rowsDigest: rowsDigestOf(rows) };
 }
 
-/** The decision keys a card may show: a root-class decision only with a verified, renderable root-rows node (Aegis C1e). */
-export function rootSafeDecisions(kind: string, decisions: readonly string[], rr: RootRowsView | null): string[] {
-  const root = rr ? rr.rootDecisions : (ROOT_CLASS_BY_KIND[kind] ?? []);
-  return rr ? [...decisions] : decisions.filter((d) => !root.includes(d));
+/** The decision keys a card may show: with no verified rows, only the never-root decisions (Aegis C1e, M1). */
+export function rootSafeDecisions(_kind: string, decisions: readonly string[], rr: RootRowsView | null): string[] {
+  return rr ? [...decisions] : decisions.filter((d) => NON_ROOT_DECISIONS.includes(d));
 }
 
 /** Aegis C1e: after a root decision, the logged v2 decision row's rowsDigest against the rows the card showed. */
@@ -708,7 +727,8 @@ function argEl(doc: MiniDoc, arg: string): MiniEl {
  */
 export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
   const { doc } = ctx;
-  const rootGated = v.rootRows !== undefined && (v.rootRows !== null || (ROOT_CLASS_BY_KIND[v.kind] ?? []).some((d) => v.decisions.includes(d)));
+  // Aegis M1: root-capable = verified rows, ANY root-rows node (even a bad one), or a kind the table makes root
+  const rootGated = v.rootRows !== undefined && (v.rootRows !== null || hasRootNode(block) || (ROOT_CLASS_BY_KIND[v.kind] ?? []).some((d) => v.decisions.includes(d)));
   const keys = v.decidable && v.decisions.length ? (rootGated ? rootSafeDecisions(v.kind, v.decisions, v.rootRows ?? null) : v.decisions) : [];
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny

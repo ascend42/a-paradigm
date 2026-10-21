@@ -45,13 +45,15 @@ const ROWS = [
   { schemaVersion: 'grantRow:v2', kind: 'grant.install', name: 'acme.board', manifestHash: MH, packageHash: PK, cardId: C, source: 'git:gitlab.com/acme/board@' + 'b'.repeat(40) },
 ];
 
-function card(rows: unknown[] | null, o: { tamper?: boolean; kind?: string; rootDecisions?: string[] } = {}) {
+function card(rows: unknown[] | null, o: { tamper?: boolean; kind?: string; rootDecisions?: string[]; detail?: Record<string, unknown>; nodes?: number; nodeDecisions?: string[] } = {}) {
   const kind = o.kind ?? 'install';
-  const detail = { name: 'acme.board', ...(rows ? { rootRows: rows } : {}) };
+  const decs = o.rootDecisions ?? (kind === 'install' ? ['install'] : kind === 'api-token' ? ['use-api-token'] : ['allow']);
+  const detail = { name: 'acme.board', ...(o.detail ?? {}), ...(rows ? { rootRows: rows, rootDecisions: decs } : {}) };
   const base = { cardId: C, kind, requestedBy: 'p:abcdefgh/matt', flags: [] as string[] };
   const contentHash = cardContentHash(base, detail);
   const shown = o.tamper ? { ...detail, name: 'acme.other' } : detail;
-  const children: unknown[] = [{ type: 'Text', text: 'Install acme.board' }, ...(rows ? [{ type: 'root-rows', rootDecisions: o.rootDecisions ?? ['install'], detail: shown }] : [])];
+  const node = { type: 'root-rows', rootDecisions: o.nodeDecisions ?? decs, detail: shown };
+  const children: unknown[] = [{ type: 'Text', text: 'a card' }, ...(rows ? Array.from({ length: o.nodes ?? 1 }, () => node) : [])];
   return { ...base, state: 'pending', contentHash, block: { schemaVersion: 'display-block:v1', type: 'Box', children } } as Record<string, unknown>;
 }
 const view = (c: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ cardId: C, kind: String(c.kind), requestedBy: 'p:abcdefgh/matt', hsid: null, repo: null, state: 'pending', contentHash: String(c.contentHash), flags: [], decisions: String(c.kind) === 'install' ? ['install', 'deny'] : ['allow', 'deny'], decidable: true, rootRows: rootRowsOf(c), ...extra });
@@ -102,6 +104,46 @@ describe('Aegis C1e: "This decision signs"', () => {
     const c = card(ROWS);
     const el = renderCard({ doc: fdoc }, view(c, { batchUnavailable: true }), c.block) as FEl;
     expect(el.text).toContain('older than 1.8.0');
+  });
+});
+
+describe('Aegis M1: a card made root by the kernel fails closed (voice enrol, uninstall, mod.mcp.config)', () => {
+  const ENROL = [{ schemaVersion: 'voiceEnrolRow:v1', op: 'enrol', speakerId: 'spk:abcdefgh/ana', consentHash: MH, cardId: C }];
+  const UNINST = [{ schemaVersion: 'grantRow:v2', kind: 'grant.uninstall', name: 'acme.board', packageHash: PK, cardId: C }];
+  const families: Array<[string, (o: Parameters<typeof card>[1]) => Record<string, unknown>]> = [
+    ['voice enrol', (o) => card(ENROL, { kind: 'strictness', detail: { op: 'voice.enrol' }, ...o })],
+    ['uninstall', (o) => card(UNINST, { kind: 'grant', detail: { action: 'mod.uninstall' }, ...o })],
+    ['mod.mcp.config', (o) => card([], { kind: 'grant', detail: { action: 'mod.mcp.config' }, ...o })],
+  ];
+  for (const [what, mk] of families) {
+    it(`${what}: a verified node keeps Allow and shows the section`, () => {
+      const c = mk({});
+      const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+      expect(keysOf(el)).toEqual(['allow', 'deny']);
+      expect(el.text).toContain('This decision signs');
+    });
+    for (const [bad, o] of [
+      ['a bad-hash node', { tamper: true }],
+      ['a duplicate node', { nodes: 2 }],
+      ['a node claiming no root decisions (rootDecisions: [] in the hashed detail)', { rootDecisions: [] }],
+      ['a node whose rootDecisions differ from the hashed detail', { nodeDecisions: [] }],
+    ] as const) {
+      it(`${what}: ${bad} → only deny`, () => {
+        const c = mk(o);
+        expect(rootRowsOf(c)).toBeNull();
+        const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+        expect(keysOf(el)).toEqual(['deny']);
+      });
+    }
+  }
+  it('uninstall / mcp.config with the node missing: grant kind is root by table → only deny', () => {
+    const c = card(null, { kind: 'grant', detail: { action: 'mod.uninstall' } });
+    const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+    expect(keysOf(el)).toEqual(['deny']);
+  });
+  it('a standing grant (op standing, rootDecisions []) keeps Allow', () => {
+    const c = card([], { kind: 'grant', rootDecisions: [], detail: { op: 'standing' } });
+    expect(keysOf(renderCard({ doc: fdoc }, view(c), c.block) as FEl)).toEqual(['allow', 'deny']);
   });
 });
 

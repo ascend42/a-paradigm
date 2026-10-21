@@ -465,9 +465,9 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
     // TD-2026-10-20-514 (Aegis C1a): the card's detail also carries rootRows, the rows its decision signs
     const rootRows = installRootRows(home, 'acme.diff-lens', st.cardId, { authority: auth });
     expect(rootRows.map((x) => x.kind)).toEqual(['grant.trust', 'grant.install']);
-    expect(card.contentHash).toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows }, flags: [] }));
-    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows, hooks: detail.hooks.slice(1) }, flags: [] }));
-    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows: rootRows.slice(1) }, flags: [] }));
+    expect(card.contentHash).toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows, rootDecisions: ['install'] }, flags: [] }));
+    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows, rootDecisions: ['install'], hooks: detail.hooks.slice(1) }, flags: [] }));
+    expect(card.contentHash).not.toBe(contentHashOf({ kind: 'install', requestedBy: AGENT, detail: { ...detail, rootRows: rootRows.slice(1), rootDecisions: ['install'] }, flags: [] }));
     // the sanitizer's flags survive pre-sanitized lines (blockFor returns them; the broker merges them into the card and its hash)
     expect(blockFor({ ...detail, tools: ['lens\u202Ediff'] }).flags).toEqual(['bidi']);
   });
