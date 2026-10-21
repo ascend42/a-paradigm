@@ -564,6 +564,34 @@ const learningStoresConsolidation: MigrationStep = {
   },
 };
 
+// ─── 7.15.2 lore legacy entries ────────────────────────────────────
+// Read paths (`paradigm lore list/show`) used to move legacy root-level lore
+// entries into dated directories as a side effect. They are read-only now, so
+// the move happens here (and on any lore write).
+
+const loreLegacyEntries: MigrationStep = {
+  id: 'lore-legacy-entries',
+  introducedIn: '7.15.2',
+  description: 'Move legacy root-level lore entries into dated v2 files',
+  category: 'format',
+  auto: true,
+  async check(rootDir) {
+    const { countLegacyEntries } = await import('../../core/lore/storage.js');
+    const n = countLegacyEntries(rootDir);
+    return n > 0
+      ? { needed: true, reason: `${n} legacy root-level lore entr${n === 1 ? 'y' : 'ies'} found` }
+      : { needed: false, reason: 'No legacy root-level lore entries' };
+  },
+  async apply(rootDir, opts) {
+    const { countLegacyEntries, migrateLegacyEntries } = await import('../../core/lore/storage.js');
+    if (opts.dryRun) {
+      return { status: 'skipped', message: `Would move ${countLegacyEntries(rootDir)} legacy lore entries` };
+    }
+    const moved = migrateLegacyEntries(rootDir);
+    return { status: 'applied', message: `Moved ${moved} legacy lore entries into dated directories` };
+  },
+};
+
 // ─── Migration registry (ordered) ──────────────────────────────────
 
 export const migrations: MigrationStep[] = [
@@ -594,6 +622,9 @@ export const migrations: MigrationStep[] = [
 
   // 7.12.0
   learningStoresConsolidation,
+
+  // 7.15.2
+  loreLegacyEntries,
 
   // Evergreen
   syncTemplates,

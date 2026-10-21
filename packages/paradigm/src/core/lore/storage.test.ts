@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { createTempProject } from '../../test-utils.js';
-import { recordLore, loadLoreEntries, loadLoreEntry, loadLoreTimeline, addReview, rebuildTimeline } from './storage.js';
+import { recordLore, loadLoreEntries, loadLoreEntry, loadLoreTimeline, addReview, rebuildTimeline, migrateLegacyEntries, countLegacyEntries } from './storage.js';
 import type { LoreEntry } from './types.js';
 
 let cleanup: (() => void) | undefined;
@@ -357,5 +357,75 @@ describe('loadLoreTimeline', () => {
     expect(timeline).not.toBeNull();
     expect(timeline!.version).toBe('1.0');
     expect(timeline!.entries).toBeGreaterThan(0);
+  });
+});
+
+describe('legacy root-level entries (read paths never migrate)', () => {
+  function writeLegacy(rootDir: string): string {
+    const entriesDir = path.join(rootDir, '.paradigm', 'lore', 'entries');
+    fs.mkdirSync(entriesDir, { recursive: true });
+    const a = path.join(entriesDir, 'old-a.yaml');
+    const b = path.join(entriesDir, 'old-b.yaml');
+    fs.writeFileSync(a, 'title: Old A\nsummary: first\ndate: "2026-02-21"\ntype: decision\n');
+    fs.writeFileSync(b, 'title: Old B\nsummary: second\ndate: "2026-02-21"\ntype: milestone\n');
+    return entriesDir;
+  }
+  function tree(dir: string): string[] {
+    const out: string[] = [];
+    (function walk(d: string) {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        out.push(path.relative(dir, p) + (e.isDirectory() ? '/' : ':' + fs.readFileSync(p, 'utf8')));
+        if (e.isDirectory()) walk(p);
+      }
+    })(dir);
+    return out.sort();
+  }
+
+  it('loadLoreEntries shows legacy entries without moving a file', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    const entriesDir = writeLegacy(rootDir);
+    const before = tree(rootDir);
+
+    const entries = await loadLoreEntries(rootDir);
+    expect(entries.map(e => e.title).sort()).toEqual(['Old A', 'Old B']);
+    expect(new Set(entries.map(e => e.id)).size).toBe(2);
+    expect(entries.find(e => e.title === 'Old A')!.type).toBe('insight');
+    expect(tree(rootDir)).toEqual(before);
+    expect(fs.existsSync(path.join(entriesDir, 'old-a.yaml'))).toBe(true);
+    expect(countLegacyEntries(rootDir)).toBe(2);
+  });
+
+  it('loadLoreEntry finds a legacy entry by its planned id, read-only', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    writeLegacy(rootDir);
+    const before = tree(rootDir);
+    const [first] = await loadLoreEntries(rootDir);
+    const loaded = await loadLoreEntry(rootDir, first.id);
+    expect(loaded?.title).toBe(first.title);
+    expect(tree(rootDir)).toEqual(before);
+  });
+
+  it('migration produces exactly the entries the read path showed', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    const entriesDir = writeLegacy(rootDir);
+    const shown = await loadLoreEntries(rootDir);
+
+    expect(migrateLegacyEntries(rootDir)).toBe(2);
+    expect(fs.existsSync(path.join(entriesDir, 'old-a.yaml'))).toBe(false);
+    expect(countLegacyEntries(rootDir)).toBe(0);
+    expect(await loadLoreEntries(rootDir)).toEqual(shown);
+  });
+
+  it('write paths migrate first (recordLore)', async () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    const entriesDir = writeLegacy(rootDir);
+    await recordLore(rootDir, makeLoreEntry());
+    expect(fs.existsSync(path.join(entriesDir, 'old-a.yaml'))).toBe(false);
+    expect((await loadLoreEntries(rootDir)).length).toBe(3);
   });
 });
