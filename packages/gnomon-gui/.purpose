@@ -251,9 +251,9 @@ components:
       store flags `voice` (voice.session.start / .end / .mode, daemon.start),
       plus the voice-app lifecycle poll (voice-app-lifecycle); voice.turn.* rows
       only kick the meter. The kernel's
-      idle auto-off (voice.session.end with reason idle) leaves a quiet
-      "Ambient turned off after N min idle" note (store.voiceNote) until the
-      next attachment. Transcript: a voice turn is the user message
+      idle auto-off (voice.session.end with reason idle) is a quiet 6 s
+      toast (store.voiceToast idle, "Dictate turned off after N min idle" in
+      ladder words, board header-5b); a new attachment drops one unshown. Transcript: a voice turn is the user message
       (one line, tagged with a mic and the speaker, capped at 32 chars) only
       when the kernel's turn.sent{source: voice, voiceTurnSeq} cites it;
       claude's replay of it shows once; until then the app's refusal /
@@ -384,9 +384,10 @@ components:
       feed is a palette view (view.kernel-feed), the default centre is a
       quiet "No session open" sheet with + New session; the chat header is
       the session name plus ■ project · backend · started · elapsed; pinned
-      cards carry "Pending in this session"; the header is wordmark, palette
-      field (Search, run, jump… ⌘K), risk, spacer, conn, voice, ⊞ Layout
-      (presets + pane toggles; kernel-owned chrome is never listed); #inbox
+      cards carry "Pending in this session"; the header (board header-5b,
+      #gui-wordmark-menu) is the wordmark menu, the palette field, spacer,
+      the link dot + risk chip, the voice pill (Layout presets and pane
+      toggles live in the Gnomon menu; kernel-owned chrome is never listed); #inbox
       sits in the stack head; the composer placeholder is "Reply to <name>…"
       with the long hint in title=, and send is the filled primary key.
       Tests: test/desk.test.ts.
@@ -802,7 +803,7 @@ components:
       modsViewOf(status, stack cards) gives installed / available / pending;
       request builders for request.mod.install|link|pause|start|uninstall|
       config; folderPathError; configRequest (only manifest-declared fields,
-      secrets refused). ui/mods-panel.ts: header Mods key + sheet (created in
+      secrets refused). ui/mods-panel.ts: the sheet (no header key since board header-5b: Gnomon menu, ⌘K, Workshop; created in
       code, no index.html change), palette mods.open, Esc closes, trusted
       presses only, every key busy then a result in words (refusals as
       alerts), "decide in the stack" focuses the card. Install Workshop
@@ -918,6 +919,34 @@ components:
     tags: [gnomon, gui, voice, table-talk]
     tests:
       - test/table-talk.test.ts
+  gui-wordmark-menu:
+    description: >-
+      #gui-wordmark-menu (board header-5b, Atelier 2026-10-21-gnomon-voice
+      refs/header-5b.html option C; design-system gnomon.voice.header) - the
+      header row is four things: the wordmark menu "Gnomon ▾", the ⌘K palette
+      field, quiet kernel status (#conn link dot, word only when not
+      connected; #risk outlined amber chip, "browser" below 1040px, full text
+      in title and sr-only) and the kernel-owned voice pill. Every control
+      28px, nowrap; the row never wraps (palette words, then the pill fact,
+      truncate). PURE core/header.ts: HEADER_ITEMS, appMenuModel (Layout
+      presets, "Panes and Workshop…" opening pane toggles + Workshop
+      placement in place, Day/Night/Auto radios, Mods…, Voice settings…,
+      Settings… ⌘,, who line), APP_MENU_RUNS (existing GUI commands only),
+      triggerKey / menuKey (Enter/Space are the click, ↓/↑ open on first /
+      last, arrows/Home/End move, Esc closes and focus returns, Tab closes),
+      linkView, whoLine. The theme switch, ⚙, Mods and ⊞ Layout header keys,
+      the separate Start voice key and the loose voice note are gone: while
+      the voice app can't run the pill IS the action (voice-client.ts
+      pillActionOf: "Start voice · app not running", aria-label says what a
+      click does); attached, the action is the ladder's first row; a draft
+      waiting elsewhere is the pill's fact; the idle auto-off is the 6 s
+      toast in ladder words. Palette: menu.gnomon "Gnomon menu: …" (not
+      block-safe). Preview fixture app-menu.
+    path: src/core/header.ts
+    type: module
+    tags: [gnomon, gui, header]
+    tests:
+      - test/header.test.ts
   gui-voice-ladder:
     description: >-
       #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html;

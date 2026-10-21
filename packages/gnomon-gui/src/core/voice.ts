@@ -185,13 +185,28 @@ export const VOICE_ACTIVITY_KINDS: ReadonlySet<string> = new Set(['voice.turn.us
 
 const IDLE_REASONS: ReadonlySet<string> = new Set(['idle', 'idle-timeout', 'idle-auto-off', 'ambient-idle']);
 
-/** The quiet note for a voice.session.end the kernel's idle auto-off wrote, or null for any other end. */
-export function idleNoteOf(kind: string, payload: unknown, defaultIdleMs: number | null = null): string | null {
+/**
+ * The ladder rung a voice.session.start names, in the ladder's words (#gui-voice-ladder RUNG_NAME): ptt is Talk; an
+ * open mic is Send word / Pieces by its `send`, else Dictate. Null for a payload that is not a start.
+ */
+export function startRungName(payload: unknown): string | null {
+  const p = obj(payload);
+  if (!p || typeof p.mode !== 'string') return null;
+  if (p.mode === 'ptt') return 'Talk';
+  return p.send === 'word' ? 'Send word' : p.send === 'pieces' ? 'Pieces' : 'Dictate';
+}
+
+/**
+ * The quiet toast for a voice.session.end the kernel's idle auto-off wrote, or null for any other end. Board
+ * header-5b: in the ladder's words ("Dictate turned off after 10 min idle"; the retired "Ambient" never shows), the
+ * rung being the one this page saw start (`rung`), else plain "Voice".
+ */
+export function idleNoteOf(kind: string, payload: unknown, defaultIdleMs: number | null = null, rung: string | null = null): string | null {
   if (kind !== 'voice.session.end') return null;
   const p = obj(payload);
   if (!p || typeof p.reason !== 'string' || !IDLE_REASONS.has(p.reason)) return null;
   const mins = typeof p.idleMinutes === 'number' ? p.idleMinutes : typeof p.idleMs === 'number' ? Math.round(p.idleMs / 60_000) : defaultIdleMs !== null ? Math.round(defaultIdleMs / 60_000) : DEFAULT_IDLE_MINUTES;
-  return `Ambient turned off after ${Math.max(1, mins)} min idle`;
+  return `${rung ?? 'Voice'} turned off after ${Math.max(1, mins)} min idle`;
 }
 
 /** `spk:<ns>/<name>` → name; `spk:unknown-3` → `unknown speaker 3`. */

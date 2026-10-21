@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
-import { canAttach, cardNoticeStep, idleNoteOf, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
+import { TOAST_MS } from '../src/core/voice-client.js';
+import { canAttach, cardNoticeStep, idleNoteOf, startRungName, isVoiceWidenCard, pillOf, planVoice, speakerName, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_ACTIVITY_KINDS } from '../src/core/voice.js';
 import { ladderEntries } from '../src/core/voice-ladder.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -124,27 +125,44 @@ describe('voice: a voice connection is never offered attach controls', () => {
 });
 
 describe('voice: the kernel idle auto-off', () => {
-  it('a voice.session.end{reason: idle} reads "Ambient turned off after 10 min idle" (its own minutes when it gives them)', () => {
-    expect(idleNoteOf('voice.session.end', { voiceSessionId: VS, reason: 'idle' })).toBe('Ambient turned off after 10 min idle');
-    expect(idleNoteOf('voice.session.end', { reason: 'idle-timeout', idleMs: 300_000 })).toBe('Ambient turned off after 5 min idle');
+  const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+  it('a voice.session.end{reason: idle} reads "Dictate turned off after 10 min idle" in the ladder\'s words (its own minutes when it gives them; never "Ambient")', () => {
+    expect(idleNoteOf('voice.session.end', { voiceSessionId: VS, reason: 'idle' })).toBe('Voice turned off after 10 min idle');
+    expect(idleNoteOf('voice.session.end', { voiceSessionId: VS, reason: 'idle' }, null, 'Dictate')).toBe('Dictate turned off after 10 min idle');
+    expect(idleNoteOf('voice.session.end', { reason: 'idle-timeout', idleMs: 300_000 }, null, 'Send word')).toBe('Send word turned off after 5 min idle');
     expect(idleNoteOf('voice.session.end', { voiceSessionId: VS })).toBeNull(); // a human Off is not an idle note
     expect(idleNoteOf('voice.session.start', { reason: 'idle' })).toBeNull();
   });
   it('the note names the kernel\'s own ambientIdleMs when the end row does not', () => {
-    expect(idleNoteOf('voice.session.end', { reason: 'idle' }, 15 * 60_000)).toBe('Ambient turned off after 15 min idle');
+    expect(idleNoteOf('voice.session.end', { reason: 'idle' }, 15 * 60_000)).toBe('Voice turned off after 15 min idle');
     const s = new GuiStore();
     s.voiceIdleMs = 20 * 60_000;
     s.apply([{ seq: 1, view: 'full', event: { kind: 'voice.session.end', session: A, payload: { voiceSessionId: VS, reason: 'idle' } } }]);
-    expect(s.voiceNote).toBe('Ambient turned off after 20 min idle');
+    expect(s.voiceToast).toMatchObject({ text: 'Voice turned off after 20 min idle', idle: true });
   });
-  it('the store holds the note (and re-reads status) until the next attachment; the transcript shows it as a system line', () => {
+  it('board header-5b: the idle auto-off is a quiet toast (it clears itself) in the rung the page saw start; the transcript shows it as a system line', () => {
+    expect(startRungName({ mode: 'ptt' })).toBe('Talk');
+    expect(startRungName({ mode: 'conversation' })).toBe('Dictate');
+    expect(startRungName({ mode: 'conversation', send: 'word' })).toBe('Send word');
+    expect(startRungName({ mode: 'conversation', send: 'pieces' })).toBe('Pieces');
+    expect(startRungName(null)).toBeNull();
     const s = new GuiStore();
-    const end = { seq: 3, view: 'full', event: { kind: 'voice.session.end', session: A, payload: { voiceSessionId: VS, reason: 'idle', turns: 4 } } };
-    expect(s.apply([end]).has('voice')).toBe(true);
-    expect(s.voiceNote).toBe('Ambient turned off after 10 min idle');
-    expect(chatItems(s.transcript(A)).items.map((i) => i.text)).toContain('Ambient turned off after 10 min idle');
+    s.apply([{ seq: 2, view: 'full', event: { kind: 'voice.session.start', session: A, at: '2026-10-21T10:00:00.000Z', payload: { voiceSessionId: VS, hsid: A, mode: 'conversation' } } }]);
+    const end = { seq: 3, view: 'full', event: { kind: 'voice.session.end', session: A, at: '2026-10-21T10:10:00.000Z', payload: { voiceSessionId: VS, reason: 'idle', turns: 4 } } };
+    const what = s.apply([end]);
+    expect(what.has('voice')).toBe(true);
+    expect(what.has('voice-toast')).toBe(true); // the page shows it as the 6 s toast (TOAST_MS), then it is gone
+    expect(s.voiceToast).toEqual({ text: 'Dictate turned off after 10 min idle', at: '2026-10-21T10:10:00.000Z', idle: true });
+    expect(s.voiceToast!.text).not.toMatch(/ambient/i);
+    expect(chatItems(s.transcript(A)).items.map((i) => i.text)).toContain('Voice turned off after 10 min idle');
+    // a new attachment before the page showed it drops it (it is about the past)
     s.apply([{ seq: 4, view: 'full', event: { kind: 'voice.session.start', session: A, payload: { voiceSessionId: 'vs:2', hsid: A, mode: 'ptt' } } }]);
-    expect(s.voiceNote).toBeNull();
+    expect(s.voiceToast).toBeNull();
+    // the page: a 'voice-toast' change shows it through the one toast, which hides itself after TOAST_MS
+    expect(app).toContain("if (w.has('voice-toast')) showToast();");
+    expect(app).toMatch(/toastTimer = setTimeout\(\(\) => \(el\.hidden = true\), TOAST_MS\);/);
+    expect(app).not.toMatch(/voiceNote|voice-note/);
+    expect(TOAST_MS).toBe(6000);
     // and the pill after it: status says not attached ⇒ Mic off
     expect(pillOf(voiceStatusOf(off())).label).toBe('Mic off');
   });
@@ -266,7 +284,7 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(rules.find((l) => l.startsWith('.voice-pill.live .voice-dot'))).toMatch(/background: var\(--live\); border-color: var\(--live\); box-shadow: 0 0 0 3px/);
     for (const l of rules) {
       expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring|slate/);
-      if (/--warn-/.test(l)) expect(l, l).toMatch(/clamp/);
+      if (/--warn-/.test(l)) expect(l, l).toMatch(/clamp|^\.voice-fact\.note \{/); // board header-5b: or a draft waiting elsewhere
       if (/--fail/.test(l)) expect(l, l).toMatch(/^\.voice-fact\.fail \{/);
     }
     expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--live\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level

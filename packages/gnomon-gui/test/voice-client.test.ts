@@ -178,13 +178,16 @@ describe('attached: the live state stands and the real voice-app condition is ap
     expect(APP).toMatch(/function syncClientPoll\(\)[\s\S]{0,200}clientPollWanted\([\s\S]{0,300}capturePollMs\([\s\S]{0,200}\?\? CLIENT_POLL_MS\) : null;[\s\S]{0,120}clearInterval\(clientPoll\)[\s\S]{0,200}setInterval\(\(\) => void pollStatusOnce\(\), ms\)/);
   });
   it('the page appends the tail to the live pill and shows the tail\'s action', () => {
-    // #gui-voice-ladder: the live rung stands; the voice app's condition is the pill's ONE fact (dashed edge = its trouble)
+    // #gui-voice-ladder: the live rung stands; the voice app's condition is the pill's ONE fact (board header-5b: the
+    // words carry it, one edge style in the row: no dashed edge)
     const css = readFileSync(path.join(ROOT, 'static/styles.css'), 'utf8');
-    expect(css).toMatch(/\.voice-pill\.voice-trouble \{ border-style: dashed; \}/);
+    expect(css).not.toMatch(/\.voice-pill\.voice-trouble \{ border-style: dashed; \}/);
     const fn = APP.slice(APP.indexOf('function paintVoice('), APP.indexOf('function paintCapture('));
     expect(fn).toContain('clientFact: clientFactOf(cp.label, cp.tail),');
     expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('voicePillOf('));
-    expect(fn).toContain('act.hidden = cp.action === null;');
+    // board header-5b: no separate action key; attached, the action is the ladder's first row
+    expect(APP).not.toContain("$('voice-action')");
+    expect(APP).toContain("const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: clientFactOf(cp.label, cp.tail) ?? '' } : null;");
   });
 });
 
@@ -221,7 +224,8 @@ describe('start / stop / auto-start send the right appends', () => {
     expect(fn).toContain("client.call('log.append', op === 'start' ? clientRequest('start', currentCapture()) : clientRequest(op))"); // TD-2026-10-21-514: the start carries the capture kind
     // the ladder holds rungs only (#gui-voice-ladder): Start / Stop are the pill's own action, Settings and the palette
     expect(APP).toContain("else if (id === 'voice.client.start') void voiceClientOp('start', trusted);");
-    expect(APP).toContain("if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted)");
+    expect(APP).toContain("if (a === 'start' || a === 'restart') void voiceClientOp('start', trusted);");
+    expect(APP).toMatch(/const a = \$\('voice-pill'\)\.dataset\.action;\s*if \(a\) return voiceAct\(a, e\.isTrusted\);/);
   });
   it('palette: voice.client.start / stop / enrol exist and are never block-safe', () => {
     const ids = paletteEntries(null).map((c) => c.id);

@@ -23,7 +23,7 @@ import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from 
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
-import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { rootRowsOf, approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
@@ -43,7 +43,8 @@ import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwi
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
-import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
+import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
+import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
@@ -112,16 +113,8 @@ const motionQ = matchMedia('(prefers-reduced-motion: reduce)');
 function applyLook(): void {
   document.documentElement.dataset.theme = resolveTheme(theme, darkQ.matches);
   document.documentElement.dataset.motion = resolveMotion(motion, motionQ.matches);
-  // #gui-settings: the header switch shows the choice (auto names what it resolves to now)
-  const sw = document.getElementById('theme-switch');
-  if (sw)
-    for (const e of themeSwitchEntries(theme, darkQ.matches)) {
-      const b = sw.querySelector(`[data-run="${e.run}"]`) as HTMLElement | null;
-      if (!b) continue;
-      b.setAttribute('aria-checked', String(e.current));
-      b.classList.toggle('current', e.current);
-      b.title = e.title;
-    }
+  // #gui-wordmark-menu: the theme row in the open Gnomon menu shows the choice (auto names what it resolves to now)
+  if (document.getElementById('wordmark-menu')?.hidden === false) paintAppMenu();
 }
 /** #gui-settings: a presentation preference kept per browser (a private window may refuse storage: it still applies). */
 function keep(key: string, value: string): void {
@@ -828,8 +821,7 @@ function paintUpdateBanner(): void {
 
 /** The socket closed after this page accepted the upgrade: wait for the successor, then load its bundle. */
 async function awaitRestart(): Promise<void> {
-  put($('conn'), 'restarting…');
-  $('conn').title = 'kernel connection: restarting';
+  setLink('restarting');
   notice('Gnomon is restarting with the new version…');
   if (!(await waitForOrigin((u) => fetch(u, { cache: 'no-store' }), location.origin))) {
     clearRestarting(sessionStorage);
@@ -939,6 +931,7 @@ function schedule(what: Set<string>): void {
     }
     if (w.has('modes') || w.has('voice')) void refreshStatus();
     if (w.has('voice-activity')) watchSpeech();
+    if (w.has('voice-toast')) showToast(); // board header-5b: the idle auto-off, a 6 s toast in the ladder's words
     paintShuttle();
   });
 }
@@ -1066,10 +1059,9 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   staleStop = true;
   staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
   $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
-  // fidelity 2: the readout is a small quiet chip (connected / not connected / restarting…); who and which connection
-  // are in its title= and in Settings → About (Kernel connection)
-  put($('conn'), 'connected');
-  $('conn').title = `kernel connection: ${out.session.principal} · ${out.session.connId.slice(-8)} (Settings → About)`;
+  // board header-5b: the link is quiet when well (a filled dot; its word only for screen readers); who and which
+  // connection are in its title=, the Gnomon menu's who line and Settings → About (Kernel connection)
+  setLink('connected', { principal: out.session.principal, connId: out.session.connId });
   c.onNotification((method, params) => {
     if (method === 'gui.resume') return void noteResume(sessionStorage, params);
     if (method !== 'event') return;
@@ -1151,8 +1143,7 @@ async function goStale(): Promise<void> {
 }
 
 function showReconnect(why: string): void {
-  put($('conn'), 'not connected');
-  $('conn').title = 'kernel connection: not connected';
+  setLink('none');
   put($('reconnect-why'), why);
   $('reconnect').hidden = false;
 }
@@ -1687,17 +1678,14 @@ function paintDictation(): void {
   hold.setAttribute('aria-pressed', String(controls.hold === 'resume'));
   bar.classList.toggle('held', controls.hold === 'resume');
   ($('composer-send') as HTMLButtonElement).disabled = dict.sending;
-  const note = on ? dictationNote(dict) : null;
-  const vn = $('voice-note');
-  const wasWaiting = vn.classList.contains('dictation-waiting');
-  vn.classList.toggle('dictation-waiting', note === 'draft waiting');
-  if (note === 'draft waiting' && dict.hsid) {
-    vn.hidden = false;
-    put(vn, `draft waiting · ${sessionName(dict.hsid)}`);
-  } else if (wasWaiting) {
-    vn.hidden = !store.voiceNote || voiceStatusOf(status).state !== 'off';
-    put(vn, store.voiceNote ?? '');
-  }
+  // board header-5b: a draft waiting on another session is the pill's fact (never a loose header note)
+  if (draftWaitingOf() !== draftWaitingShown) paintVoice();
+}
+let draftWaitingShown: string | null = null;
+/** The session a dictated draft waits on (core/dictation.ts dictationNote 'draft waiting'), by its short name, or null. */
+function draftWaitingOf(): string | null {
+  const on = dictationOn() && dict.parts.length > 0;
+  return on && dict.hsid && dictationNote(dict) === 'draft waiting' ? sessionName(dict.hsid) : null;
 }
 
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
@@ -1971,16 +1959,31 @@ function paintVoice(): void {
     micClosed: attached && v.micWanted === false,
     micKeyBare: bare,
     heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
+    draftWaiting: (draftWaitingShown = draftWaitingOf()),
   });
+  // board header-5b: when the voice app can't run (nothing attached), the pill IS the action ("Start voice · app not
+  // running"); its accessible name says what a click does, and it opens no menu then
+  const pa = pillActionOf(cp, attached, crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)));
   const btn = $('voice-pill');
-  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${cap ? ` ${cap.display.className}` : ''}`;
+  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${pa ? ' as-action' : ''}${cap ? ` ${cap.display.className}` : ''}`;
   btn.dataset.state = cp.label !== null ? `client-${c.phase}` : rung;
-  btn.title = pv.title;
-  btn.setAttribute('aria-label', pv.aria);
-  put($('voice-label'), pv.name);
+  if (pa) {
+    btn.dataset.action = pa.action;
+    btn.removeAttribute('aria-haspopup');
+    btn.removeAttribute('aria-expanded');
+    if (!$('voice-menu').hidden) closeVoiceMenu(false);
+  } else {
+    delete btn.dataset.action;
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', String(!$('voice-menu').hidden));
+  }
+  btn.title = pa ? pa.title : pv.title;
+  btn.setAttribute('aria-label', pa ? pa.aria : pv.aria);
+  put($('voice-label'), pa ? pa.name : pv.name);
   const fact = $('voice-fact');
-  put(fact, pv.fact ? `· ${pv.fact}` : '');
-  fact.className = `voice-fact${pv.tone === 'fail' ? ' fail' : pv.tone === 'clamp' ? ' clamp' : ''}`;
+  const factText = pa ? pa.fact : pv.fact;
+  put(fact, factText ? `· ${factText}` : '');
+  fact.className = `voice-fact${pa ? '' : pv.tone === 'fail' ? ' fail' : pv.tone === 'clamp' ? ' clamp' : pv.tone === 'note' ? ' note' : ''}`;
   // "heard Ns ago" counts up once a second until it is gone (a timeout, never an interval; nothing idles)
   if (heardTimer) clearTimeout(heardTimer);
   heardTimer = pv.fact.startsWith('heard ') && pv.fact.endsWith('s ago') ? setTimeout(() => ((heardTimer = null), paintVoice()), 1000) : null;
@@ -1991,16 +1994,9 @@ function paintVoice(): void {
     bar.setAttribute('aria-valuenow', String(Math.round(cp.progress * 100)));
   }
   $('voice-stop').hidden = !stopSpeakingShown(status);
-  const act = $('voice-action');
-  act.hidden = cp.action === null;
-  act.dataset.action = cp.action ?? '';
-  put(act, cp.actionLabel);
   const dev = devBannerOf(c);
   $('voice-dev').hidden = dev === null;
   put($('voice-dev'), dev ? `Warning: ${dev}` : '');
-  const note = store.voiceNote;
-  $('voice-note').hidden = !note || v.state !== 'off';
-  put($('voice-note'), note ?? '');
   if (!$('voice-menu').hidden) paintVoiceMenu();
   if (voiceSheet.isOpen()) {
     voiceSheet.repaint();
@@ -2080,17 +2076,22 @@ function paintVoiceMenu(): void {
   const foot = ladderFoot({ micKeyBare: micKeyBareOf(status), capture: capturePref });
   const target = ladderTargetLine(focused, v.hsid, sessionName);
   menu.setAttribute('aria-label', ladderAria(target));
-  const key = JSON.stringify([entries, foot, target]);
+  // board header-5b: attached, the live rung stands on the pill; the voice app's action (Restart, Start voice, Teach)
+  // is the ladder's first row instead of a separate header key
+  const cp = clientPillOf(clientOf(status), v.state !== 'off', canAttach(status));
+  const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: clientFactOf(cp.label, cp.tail) ?? '' } : null;
+  const key = JSON.stringify([entries, foot, target, act]);
   if (key === ladderShown && menu.firstChild) return;
   ladderShown = key;
   const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-vs-open]') as HTMLElement | null;
   const fk = had ? (had.dataset.rung ?? 'settings') : null;
   clear(menu);
+  if (act) menu.appendChild(h(doc, 'div', { class: 'ladder-start' }, h(doc, 'span', { class: 'meta' }, act.fact), h(doc, 'button', { class: 'key', type: 'button', role: 'menuitem', 'data-voice-act': act.action }, act.label)) as unknown as Node);
   for (const el of ladderEls(doc, entries, foot, target)) menu.appendChild(el as unknown as Node);
   if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
 }
 /** The ladder's focusable items, in order (arrow keys move among them). */
-const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-rung]:not([disabled]), [data-vs-open]')];
+const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-voice-act], [data-rung]:not([disabled]), [data-vs-open]')];
 function openVoiceMenu(): void {
   // voice drops fix: opening the ladder is the human's dismiss of a sticky drop on the pill (core/capture.ts)
   captureTrack = captureDismiss(captureTrack, Date.now());
@@ -2172,6 +2173,11 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean, s
 
 /* ── voice app lifecycle, enrolment, notices (V2e; core/voice-client.ts) ─ */
 /** Start / Stop the voice app: one log.append request.voice.client{op} on a trusted gesture (human connections only). */
+/** The voice app's fix (board header-5b: the pill's own action, or the ladder's first row while attached). */
+function voiceAct(a: string, trusted: boolean): void {
+  if (a === 'enrol') return openEnrol(trusted);
+  if (a === 'start' || a === 'restart') void voiceClientOp('start', trusted);
+}
 async function voiceClientOp(op: 'start' | 'stop', trusted: boolean): Promise<void> {
   if (!trusted) return;
   closeVoiceMenu();
@@ -2278,7 +2284,10 @@ async function forgetVoice(name: string, trusted: boolean): Promise<void> {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
-/** A voice-app notice ("open Gnomon to turn on ambient") as a quiet toast; never a decision, never a backlog replay. */
+/**
+ * A quiet toast (6 s, then it clears itself): a voice-app notice, or the kernel's idle auto-off in the ladder's words
+ * (board header-5b: never a note left in the header); never a decision, never a backlog replay.
+ */
 function showToast(): void {
   const t = store.voiceToast;
   store.voiceToast = null;
@@ -2291,27 +2300,69 @@ function showToast(): void {
 }
 
 /* ── palette ────────────────────────────────────────────────────── */
-/* ── S2.8 ⊞ Layout: the presets and the pane toggles (kernel-owned chrome is never a toggle) ── */
-function openLayoutMenu(): void {
-  const m = $('layout-menu');
-  clear(m);
-  const item = (cmd: string, name: string, note: string, on = false) => h(doc, 'button', { class: `mode-item${on ? ' current' : ''}`, type: 'button', role: 'menuitem', 'data-run': cmd }, h(doc, 'span', { class: 'mode-name' }, name), h(doc, 'span', { class: 'mode-note' }, note));
-  for (const name of Object.keys(PRESETS)) m.appendChild(item(`layout.${name}`, `Layout: ${name}`, name === 'desk' ? 'sessions · chat · stack' : name === 'focus' ? 'the chat only' : 'the stack wide', layout.name === name) as unknown as Node);
-  m.appendChild(item('pane.sessions.toggle', `${layout.visible.sessions ? 'Hide' : 'Show'} sessions`, 'pane') as unknown as Node);
-  m.appendChild(item('pane.stack.toggle', `${layout.visible.stack ? 'Hide' : 'Show'} the stack`, 'pane') as unknown as Node);
-  m.appendChild(item('pane.workshop.toggle', `${layout.visible.workshop ? 'Hide' : 'Show'} the Workshop`, 'pane') as unknown as Node);
-  for (const p of WORKSHOP_PLACES) m.appendChild(item(`workshop.${p}`, `Workshop: ${p}`, p === 'footer' ? 'a strip under the desk' : `a column on the ${p}`, layout.visible.workshop && layout.workshop === p) as unknown as Node);
-  m.hidden = false;
-  $('layout-btn').setAttribute('aria-expanded', 'true');
+/* ── #gui-wordmark-menu (board header-5b): "Gnomon ▾" holds the rare tools: Layout presets (panes and Workshop in
+   place), Day / Night / Auto, Mods…, Voice settings…, Settings… ⌘, and who is connected (kernel-owned chrome is never
+   a row) ── */
+let appPanesOpen = false;
+let link: { state: LinkState; who: { principal: string; connId: string } | null } = { state: 'connecting', who: null };
+/** The quiet kernel link (core/header.ts linkView): a dot, with its word shown only when not connected. */
+function setLink(state: LinkState, who: { principal: string; connId: string } | null = null): void {
+  link = { state, who: state === 'connected' ? who : null };
+  const lv = linkView(state, link.who);
+  const el = $('conn');
+  el.classList.toggle('ok', lv.ok);
+  el.title = lv.title;
+  const w = $('conn-word');
+  put(w, lv.word);
+  w.className = lv.wordShown ? 'link-word' : 'link-word sr-only';
+  if (!$('wordmark-menu').hidden) paintAppMenu();
 }
-function closeLayoutMenu(): void {
-  $('layout-menu').hidden = true;
-  $('layout-btn').setAttribute('aria-expanded', 'false');
+/** The Gnomon menu's focusable rows, in order (arrow keys move among them). */
+const appMenuItems = (): HTMLElement[] => [...$('wordmark-menu').querySelectorAll<HTMLElement>('[data-run]')];
+function appMenuRowEl(r: AppMenuRow): Node {
+  if (r.kind === 'head') return h(doc, 'div', { class: 'menu-h', role: 'presentation' }, r.label) as unknown as Node;
+  if (r.kind === 'rule') return h(doc, 'div', { class: 'menu-rule', role: 'separator' }) as unknown as Node;
+  if (r.kind === 'who') {
+    const el = h(doc, 'div', { class: 'menu-who' }, r.text) as unknown as HTMLElement;
+    el.id = 'wordmark-who'; // the menu's description (aria-describedby): who is connected
+    return el;
+  }
+  if (r.kind === 'theme')
+    return h(doc, 'div', { class: 'menu-theme', role: 'group', 'aria-label': 'Theme' }, ...r.options.map((o) => h(doc, 'button', { class: `key quiet seg-key${o.checked ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(o.checked), 'data-run': o.run, title: o.title }, o.label))) as unknown as Node;
+  const attrs: Record<string, string> = { class: `mode-item app-item${r.checked ? ' current' : ''}`, type: 'button', role: r.radio ? 'menuitemradio' : 'menuitem', 'data-run': r.run };
+  if (r.radio) attrs['aria-checked'] = String(!!r.checked);
+  if (r.expands) attrs['aria-expanded'] = String(!!r.expanded);
+  return h(doc, 'button', attrs, h(doc, 'span', { class: 'mode-name' }, r.name), r.note ? h(doc, 'span', { class: 'mode-note' }, r.note) : null, r.kbd ? h(doc, 'kbd', { class: 'mode-kbd' }, r.kbd) : null) as unknown as Node;
+}
+function paintAppMenu(): void {
+  const m = $('wordmark-menu');
+  const had = (document.activeElement as HTMLElement | null)?.closest?.('#wordmark-menu [data-run]') as HTMLElement | null;
+  const fk = had?.dataset.run ?? null;
+  clear(m);
+  for (const r of appMenuModel({ layout, panesOpen: appPanesOpen, theme: themeSwitchEntries(theme, darkQ.matches), who: whoLine(link.state, link.who, store.head) })) m.appendChild(appMenuRowEl(r));
+  m.setAttribute('aria-describedby', 'wordmark-who');
+  if (fk) (m.querySelector(`[data-run="${fk}"]`) as HTMLElement | null)?.focus();
+}
+function openAppMenu(focusAt: 'first' | 'last' | null): void {
+  closeVoiceMenu(false);
+  appPanesOpen = false;
+  $('wordmark-menu').hidden = false;
+  $('wordmark-btn').setAttribute('aria-expanded', 'true');
+  paintAppMenu();
+  const items = appMenuItems();
+  if (focusAt) items[focusAt === 'first' ? 0 : items.length - 1]?.focus();
+}
+function closeAppMenu(focusTrigger = false): void {
+  if ($('wordmark-menu').hidden) return;
+  $('wordmark-menu').hidden = true;
+  $('wordmark-btn').setAttribute('aria-expanded', 'false');
+  if (focusTrigger) $('wordmark-btn').focus();
 }
 
 let palSel = 0;
 let palItems: Command[] = [];
 function openPalette(prefix = ''): void {
+  closeAppMenu();
   $('palette').hidden = false;
   const i = $<HTMLInputElement>('palette-input');
   i.value = prefix;
@@ -2339,6 +2390,7 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
   else if (id === 'mods.open') modsPanel.open();
+  else if (id === 'menu.gnomon') openAppMenu('first');
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
   else if (id === 'pane.sessions.toggle') layout = togglePane(layout, 'sessions');
   else if (id === 'pane.stack.toggle') layout = togglePane(layout, 'stack');
@@ -2474,12 +2526,46 @@ function wire(): void {
     }
   });
   $('empty-new').addEventListener('click', (e) => run('session.new', e.isTrusted));
-  $('layout-btn').addEventListener('click', () => ($('layout-menu').hidden ? openLayoutMenu() : closeLayoutMenu()));
-  $('layout-menu').addEventListener('click', (e) => {
+  // #gui-wordmark-menu: Enter / Space are the button's own click (the first row takes focus from a key press, which
+  // has no pointer: detail 0); ↓ / ↑ open on the first / last row; inside, ↑/↓/Home/End move, Esc closes back to it
+  $('wordmark-btn').addEventListener('click', (e) => ($('wordmark-menu').hidden ? openAppMenu(e.detail === 0 ? 'first' : null) : closeAppMenu(true)));
+  $('wordmark-btn').addEventListener('keydown', (e) => {
+    const at = $('wordmark-menu').hidden ? triggerKey(e.key) : null;
+    if (!at) return;
+    e.preventDefault();
+    openAppMenu(at);
+  });
+  $('wordmark-menu').addEventListener('keydown', (e) => {
+    const items = appMenuItems();
+    const step = menuKey(e.key, items.indexOf(document.activeElement as HTMLElement), items.length);
+    if (!step) return;
+    if (step.kind === 'move') {
+      e.preventDefault();
+      items[step.to]?.focus();
+    } else {
+      if (step.focusTrigger) e.preventDefault();
+      e.stopPropagation(); // Esc closes this menu only (not a sheet or the speech under it)
+      closeAppMenu(step.focusTrigger);
+    }
+  });
+  $('wordmark-menu').addEventListener('click', (e) => {
+    if (!e.isTrusted) return; // Aegis L2: the human's own press (a key press on a row is a trusted click too)
     const b = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
-    if (!b) return;
-    closeLayoutMenu();
-    run(b.dataset.run!, e.isTrusted);
+    const id = b?.dataset.run;
+    if (!id || !APP_MENU_RUNS.has(id)) return;
+    if (id === PANES_RUN) {
+      appPanesOpen = !appPanesOpen; // the panes and Workshop rows open in place; focus stays on the row
+      return paintAppMenu();
+    }
+    if (id.startsWith('theme.') || id.startsWith('layout.') || id.startsWith('pane.') || id.startsWith('workshop.')) {
+      run(id, e.isTrusted); // presentation only: the menu stays open on its choice (applyLook / applyLayout repaint it)
+      return paintAppMenu();
+    }
+    closeAppMenu(true); // a sheet returns focus to the wordmark when it closes
+    run(id, e.isTrusted);
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('wordmark-menu').hidden && !(e.target as HTMLElement).closest('.wm-wrap')) closeAppMenu();
   });
   $('raw-toggle').addEventListener('click', () => {
     if (width) widths.save(transcriptId(), width, heights);
@@ -2581,10 +2667,16 @@ function wire(): void {
     }
     void setMode(b.dataset.mode as RunMode, defaultScope(currentMode()), e.isTrusted);
   });
-  $('voice-pill').addEventListener('click', () => ($('voice-menu').hidden ? openVoiceMenu() : closeVoiceMenu(true)));
+  // board header-5b: while the voice app can't run the pill IS its action (data-action); otherwise it opens the ladder
+  $('voice-pill').addEventListener('click', (e) => {
+    const a = $('voice-pill').dataset.action;
+    if (a) return voiceAct(a, e.isTrusted);
+    if ($('voice-menu').hidden) openVoiceMenu();
+    else closeVoiceMenu(true);
+  });
   // #gui-voice-ladder: ↓ on the pill opens the ladder; inside it ↑/↓/Home/End move, Esc closes back to the pill
   $('voice-pill').addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && $('voice-menu').hidden) {
+    if (e.key === 'ArrowDown' && $('voice-menu').hidden && !$('voice-pill').dataset.action) {
       e.preventDefault();
       openVoiceMenu();
     }
@@ -2605,6 +2697,11 @@ function wire(): void {
   $('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));
   $('voice-menu').addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
+    const act = t.closest('[data-voice-act]') as HTMLElement | null;
+    if (act) {
+      closeVoiceMenu(true);
+      return voiceAct(act.dataset.voiceAct!, e.isTrusted);
+    }
     if (t.closest('[data-vs-open]')) {
       closeVoiceMenu(false);
       return openVoiceSettings();
@@ -2612,12 +2709,6 @@ function wire(): void {
     const b = t.closest('[data-rung]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
     void chooseRungUi(b.dataset.rung as Rung, e.isTrusted);
-  });
-  // V2e: the pill's own action ([Start voice] · [Restart] · [Teach])
-  $('voice-action').addEventListener('click', (e) => {
-    const a = $('voice-action').dataset.action;
-    if (a === 'enrol') return openEnrol(e.isTrusted);
-    if (a === 'start' || a === 'restart') void voiceClientOp('start', e.isTrusted);
   });
   document.addEventListener('click', (e) => {
     if (!$('voice-menu').hidden && !(e.target as HTMLElement).closest('.voice-wrap')) closeVoiceMenu();
@@ -2648,12 +2739,6 @@ function wire(): void {
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
   $('palette-btn').addEventListener('click', () => openPalette());
-  // #gui-settings: the header switch and the ⚙ key (presentation only: no request leaves the page)
-  $('theme-switch').addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
-    if (b && e.isTrusted && b.dataset.run!.startsWith('theme.')) run(b.dataset.run!, true); // Aegis L2: the human's own press
-  });
-  $('settings-btn').addEventListener('click', () => (settings.isOpen() ? settings.close() : settings.open()));
   $('repin-ack').addEventListener('click', (e) => {
     if (e.isTrusted) $('repin').hidden = true; // only a user click clears the re-pin notice
   });
@@ -2689,6 +2774,8 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
+    } else if (e.key === 'Escape' && !$('wordmark-menu').hidden) {
+      closeAppMenu(true); // #gui-wordmark-menu: back to the wordmark (a pointer opened it, so focus was not inside)
     } else if (e.key === 'Escape' && !$('voice-menu').hidden) {
       closeVoiceMenu(true); // #gui-voice-ladder: back to the pill
     } else if (e.key === 'Escape' && voiceSheet.isOpen()) {

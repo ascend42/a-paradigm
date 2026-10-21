@@ -50,7 +50,9 @@ async function boot(): Promise<void> {
   if (fx.focus) (document.querySelector(`#session-list [data-hsid="${fx.focus}"]`) as HTMLElement | null)?.click();
   // S3: ?fan=1 shows the stack pile fanned (what :hover / :focus-within does), for the screenshot
   if (new URLSearchParams(location.search).get('fan') === '1') document.getElementById('stack')?.classList.add('fan');
-  if (fx.open === 'settings') document.getElementById('settings-btn')?.click(); // opening needs no trust; its controls do
+  // opening needs no trust; its controls do (board header-5b: Settings… lives in the Gnomon menu and ⌘,)
+  if (fx.open === 'settings') document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }));
+  if (fx.open === 'app-menu') document.getElementById('wordmark-btn')?.click();
   // #gui-voice-ladder / #gui-voice-settings: opening the ladder or the sheet needs no trust; a rung or a sheet press does
   if (fx.open === 'voice-ladder') document.getElementById('voice-pill')?.click();
   if (fx.open === 'voice-settings') {

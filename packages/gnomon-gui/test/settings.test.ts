@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { appMenuModel } from '../src/core/header.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, resolveTheme } from '../src/core/commands.js';
 import { MOTION_KEY, parseMotion, parseTheme, SETTINGS_RUNS, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf, type SettingRow, type SettingsInput } from '../src/core/settings.js';
 import type { SessionModeView } from '../src/core/modes.js';
@@ -65,11 +66,12 @@ describe('#gui-settings theme switch: persistence and application', () => {
     expect(app).toMatch(/theme = parseTheme\(stored\(THEME_KEY\)\)/);
     expect([THEME_KEY, MOTION_KEY]).toEqual(['gnomon.gui.theme', 'gnomon.gui.motion']);
   });
-  it('the header carries the Day / Night / Auto switch and the ⚙ key, outside every pane', () => {
-    for (const r of ['theme.day', 'theme.night', 'theme.auto']) expect(html).toContain(`data-run="${r}"`);
-    expect(html).toMatch(/id="theme-switch"[^>]*role="radiogroup"/);
-    expect(html.indexOf('id="settings-btn"')).toBeLessThan(html.indexOf('<main'));
-    expect(html.indexOf('id="theme-switch"')).toBeLessThan(html.indexOf('<main'));
+  it('board header-5b: Day / Night / Auto and Settings… live in the Gnomon menu (and ⌘K, the sheet), never as header keys', () => {
+    expect(html).not.toMatch(/id="theme-switch"|id="settings-btn"/);
+    const rows = appMenuModel({ layout: applyPreset('desk'), panesOpen: false, theme: themeSwitchEntries('auto', false), who: 'kernel connected' });
+    const theme = rows.find((r) => r.kind === 'theme');
+    expect(theme && theme.kind === 'theme' ? theme.options.map((o) => o.run) : []).toEqual(['theme.day', 'theme.night', 'theme.auto']);
+    expect(rows.some((r) => r.kind === 'item' && r.run === 'settings.open' && r.kbd === '⌘,')).toBe(true);
   });
 });
 
@@ -167,7 +169,7 @@ describe('#gui-settings unlock fold (kernel rows only)', () => {
 describe('#gui-settings opens from ⚙, ⌘, and the palette', () => {
   it('app.ts routes settings.open, the ⚙ key and ⌘, to the sheet; Esc closes it', () => {
     expect(app).toMatch(/else if \(id === 'settings\.open'\) settings\.open\(\);/);
-    expect(app).toMatch(/\$\('settings-btn'\)\.addEventListener\('click'/);
+    expect(app).not.toContain("$('settings-btn')"); // board header-5b: no ⚙ key; the Gnomon menu runs settings.open
     expect(app).toMatch(/\(e\.metaKey \|\| e\.ctrlKey\) && !e\.altKey && !e\.shiftKey && e\.key === ','\) \{[\s\S]{0,160}settings\.open\(\);/);
     expect(app).toMatch(/e\.key === 'Escape' && settings\.isOpen\(\)\) \{\s*settings\.close\(\);/);
     expect(html).toMatch(/id="settings" class="overlay" hidden/);
@@ -199,7 +201,8 @@ describe('#gui-settings Aegis fixes (M1, M2, L1, L2/L3)', () => {
     expect(app).toMatch(/kernelPrincipal: \(\) => kernelPrincipalOf\(session\?\.principal\)/);
   });
   it('L2/L3: the theme switch checks isTrusted and run() takes the gesture trust (never hard-coded true for palette paths)', () => {
-    expect(app).toMatch(/if \(b && e\.isTrusted && b\.dataset\.run!\.startsWith\('theme\.'\)\)/);
+    // board header-5b: the theme row lives in the Gnomon menu, whose click handler takes only the human's own press
+    expect(app).toMatch(/\$\('wordmark-menu'\)\.addEventListener\('click', \(e\) => \{\s*if \(!e\.isTrusted\) return;/);
     expect(app).toMatch(/function run\(id: string, trusted: boolean\)/);
     expect(app).toMatch(/return run\(palItems\[palSel\]!\.id, e\.isTrusted\)/);
     expect(app).toMatch(/if \(r\) run\(r\.dataset\.id!, e\.isTrusted\)/);

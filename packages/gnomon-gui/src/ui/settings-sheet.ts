@@ -75,7 +75,6 @@ export function paintSettings(doc: MiniDoc, body: { firstChild: unknown; removeC
 export function mountSettings(document: Document, d: SettingsDeps): SettingsSheet {
   const overlay = document.getElementById('settings')!;
   const body = document.getElementById('settings-body')!;
-  const btn = document.getElementById('settings-btn');
   let back: HTMLElement | null = null;
   const repaint = (): void => {
     if (!overlay.hidden) paintSettings(document as unknown as MiniDoc, body, d.model());
@@ -83,14 +82,12 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
   const close = (): void => {
     if (overlay.hidden) return;
     overlay.hidden = true;
-    btn?.setAttribute('aria-expanded', 'false');
     back?.focus();
     back = null;
   };
   const open = (): void => {
     back = document.activeElement as HTMLElement | null;
     overlay.hidden = false;
-    btn?.setAttribute('aria-expanded', 'true');
     repaint();
     document.getElementById('settings-close')?.focus();
   };

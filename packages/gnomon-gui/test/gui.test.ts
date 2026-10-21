@@ -471,11 +471,11 @@ describe('chrome: palette, presets, themes (G-GUI-08, §11.3)', () => {
     for (const c of GUI_COMMANDS) expect(filterCommands(all, c.id)[0]!.id).toBe(c.id);
     expect(all.find((c) => c.id === 'verb.approve')).toMatchObject({ available: false, why: 'lands M1.3' });
   });
-  it('presets round-trip and cannot hide the transcript; the extension-risk badge is not a pane', () => {
+  it('presets round-trip and cannot hide the transcript; the extension-risk chip is not a pane', () => {
     for (const n of Object.keys(PRESETS)) expect(parseLayout(serializeLayout(applyPreset(n)))).toEqual(applyPreset(n));
     expect(togglePane(applyPreset('desk'), 'transcript').visible.transcript).toBe(true);
     const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
-    expect(html).toMatch(/id="risk" class="badge risk kernel-owned"/);
+    expect(html).toMatch(/id="risk" class="risk-chip kernel-owned"/); // board header-5b: an outlined amber chip at key height
     expect(html.indexOf('id="risk"')).toBeLessThan(html.indexOf('<main')); // header chrome, outside every pane
   });
   it('theme auto follows the OS; reduced motion from the OS or in-app', () => {

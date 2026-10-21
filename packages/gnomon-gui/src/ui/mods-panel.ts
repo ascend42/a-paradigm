@@ -177,21 +177,7 @@ export function splitArgs(s: string): string[] {
 }
 
 export function mountMods(document: Document, d: ModsDeps): ModsPanel {
-  // the header key, before ⚙ Settings (created here, so index.html is unchanged)
-  const settingsBtn = document.getElementById('settings-btn');
-  let btn = document.getElementById('mods-btn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'mods-btn';
-    btn.className = 'key quiet mods-btn';
-    btn.setAttribute('type', 'button');
-    btn.setAttribute('aria-haspopup', 'dialog');
-    btn.setAttribute('aria-controls', 'mods');
-    btn.setAttribute('aria-expanded', 'false');
-    btn.title = 'Mods: which are on, add others (⌘K → Mods)';
-    btn.textContent = 'Mods';
-    settingsBtn?.parentNode?.insertBefore(btn, settingsBtn);
-  }
+  // board header-5b: no header key; the sheet opens from the Gnomon menu, ⌘K → Mods… and the Workshop's Mods key
   const overlay = document.createElement('div');
   overlay.id = 'mods';
   overlay.className = 'overlay';
@@ -241,14 +227,12 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
   const close = (): void => {
     if (overlay.hidden) return;
     overlay.hidden = true;
-    btn!.setAttribute('aria-expanded', 'false');
     back?.focus();
     back = null;
   };
   const open = (): void => {
     back = document.activeElement as HTMLElement | null;
     overlay.hidden = false;
-    btn!.setAttribute('aria-expanded', 'true');
     repaint();
     closeBtn.focus();
     void d.refreshStatus().then(repaint, () => undefined);
@@ -328,7 +312,6 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     }
   });
   closeBtn.addEventListener('click', close);
-  btn.addEventListener('click', () => (overlay.hidden ? open() : close()));
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close(); // a press on the scrim closes it
   });

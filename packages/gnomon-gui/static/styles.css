@@ -593,8 +593,7 @@ html, body {
 /* narrow widths (< 900px): one column; sessions and decisions slide in as drawers from the header toggles */
 .pane-toggle, .scrim { display: none; }
 @media (max-width: 900px) {
-  .pane-toggle { display: inline-block; }
-  .chrome { flex-wrap: wrap; row-gap: 4px; }
+  .pane-toggle { display: inline-flex; }
   .desk, .desk.no-sessions, .desk.no-stack, .desk.no-sessions.no-stack, .desk.stack-wide, .desk.stack-wide.no-sessions { grid-template-columns: minmax(0, 1fr); }
   .desk > .transcript { grid-column: 1; grid-row: 1; border-right: 0; }
   .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow); }
@@ -623,19 +622,21 @@ html, body {
    --warn-ink, speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
    only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.voice-pill { display: inline-flex; align-items: center; gap: 8px; padding: 3px 11px; font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--ink); cursor: pointer; }
+.voice-pill { box-sizing: border-box; height: 28px; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; border-radius: 999px; border: 1px solid var(--key-edge); background: var(--sheet); color: var(--ink); cursor: pointer; }
 [data-theme="night"] .voice-pill { border-radius: 0; }
 .voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
 .voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--sec); background: transparent; flex: none; }
 .voice-pill.live .voice-dot { background: var(--live); border-color: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
-.voice-fact { color: var(--sec); font-weight: 400; }
+.voice-fact { color: var(--sec); font-weight: 400; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .voice-fact:empty { display: none; }
 .voice-fact.fail { color: var(--fail); }
-.voice-pill.clamp { border: 2px solid var(--warn-edge); padding: 2px 10px; }
+.voice-pill.clamp { border: 2px solid var(--warn-edge); padding: 0 11px; }
 .voice-fact.clamp { color: var(--warn-ink); }
-/* the voice app's trouble (not running, crashed, setting up): a dashed edge, the words in the fact */
-.voice-pill.voice-trouble { border-style: dashed; }
-.voice-pill.clamp.voice-trouble { border-style: solid; }
+/* the voice app's trouble (not running, crashed, setting up): the words carry it, in the fact (board header-5b: one
+   edge style in the row, so no dashed edge); while the app can't run the pill is the action itself, "Start voice ·
+   app not running" (.as-action: the key's pressed offset, the same paper pill) */
+.voice-pill:hover { background: var(--fold); }
+.voice-fact.note { color: var(--warn-ink); }
 /* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level), shown ONLY while
    the capture state is `hearing` (Luna #9: hidden otherwise, never a still meter); no decorative animation */
 .voice-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 10px; --level: 0; }
@@ -669,7 +670,6 @@ html, body {
 .composer-ghost .ghost-committed { font-style: normal; color: var(--ink); }
 .composer-ghost .ghost-tail { opacity: 0.55; transition: opacity 0.12s linear; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.voice-note { font-style: italic; }
 /* the transcript's voice turns */
 .trow.voice .who { color: var(--slate); }
 .trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: 11px; padding-left: 28px; }
@@ -680,7 +680,6 @@ html, body {
 .voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--rule); overflow: hidden; --progress: 0; }
 .voice-progress[hidden] { display: none; }
 .voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
-.voice-action { font-size: 11.5px; padding: 1px 8px; }
 .voice-stop { color: var(--fail); border-color: var(--fail-edge); }
 .voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: 13px; text-align: center; }
 .voice-toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); z-index: 30; padding: 6px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--sec); font-size: 12px; box-shadow: var(--shadow); }
@@ -733,7 +732,6 @@ html, body {
 .dictation-live { min-width: 7ch; }
 .dictation.held .dictation-live { color: var(--warn-ink); }
 #dictation-hold[aria-pressed="true"] { color: var(--warn-ink); }
-.voice-note.dictation-waiting { color: var(--warn-ink); }
 .trow .who .voice-mark { color: var(--sec); }
 [data-motion="reduced"] .dictation-ring svg { display: none; }
 [data-motion="reduced"] .dictation-ring .ring-secs { display: inline; }
@@ -768,13 +766,55 @@ html, body {
 .snote.tone-fail { color: var(--fail); font-weight: 500; }
 .session-row.state-failed { border-left: 0; }
 
-/* header: the palette field and ⊞ Layout */
-.palfield { display: inline-flex; align-items: center; gap: 8px; min-width: 240px; padding: 3px 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; text-align: left; }
-.palfield kbd { margin-left: auto; font: inherit; font-size: 11px; color: var(--sec); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
+/* ── header (board header-5b, design-system gnomon.voice.header; refs/header-5b.html option C): four things, the
+   wordmark menu · the ⌘K palette · quiet kernel status · the voice pill. ONE control height (28px), nothing wraps
+   inside a control (nowrap), the row itself never wraps (it truncates: the palette's words, then the pill's fact). */
+.chrome { flex-wrap: nowrap; min-width: 0; }
+.chrome .key { box-sizing: border-box; height: 28px; min-height: 28px; padding: 0 10px; display: inline-flex; align-items: center; white-space: nowrap; flex: none; }
+.chrome .pane-toggle { display: none; }
+@media (max-width: 900px) { .chrome .pane-toggle { display: inline-flex; } }
+.wm-wrap { position: relative; display: inline-flex; flex: none; }
+.wordmark-btn { box-sizing: border-box; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; margin-left: -8px; font: inherit; color: var(--ink); background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; white-space: nowrap; }
+.wordmark-btn:hover { border-color: var(--rule); background: var(--sheet); }
+.wordmark-btn[aria-expanded="true"] { border-color: var(--key-edge); background: var(--sheet); }
+.wordmark-btn:active { transform: translate(1px, 1px); }
+.wordmark-btn:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.wm-caret { font-family: var(--mono); font-size: 10px; color: var(--sec); margin-top: 2px; }
+.wordmark-btn:hover .wm-caret, .wordmark-btn[aria-expanded="true"] .wm-caret { color: var(--ink); }
+/* the menu: the .mode-menu / .mode-item idiom (the run-mode and the old Layout menu), from the wordmark's left edge */
+.wordmark-menu { left: -8px; right: auto; width: 320px; border-color: var(--key-edge); }
+.menu-h { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); padding: 6px 8px 2px; }
+.menu-rule { border-top: 1px dashed var(--rule); margin: 4px 0; }
+.menu-who { font-size: 11px; color: var(--sec); padding: 4px 8px 2px; overflow-wrap: anywhere; }
+.app-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; width: 100%; }
+.app-item .mode-name, .app-item .mode-note { grid-column: 1; }
+.app-item .mode-kbd { grid-column: 2; grid-row: 1; font: inherit; font-size: 11px; color: var(--sec); }
+.app-item:focus-visible { box-shadow: inset 0 0 0 2px var(--key-edge); }
+.app-item[aria-expanded="true"] .mode-name::after { content: " ▴"; color: var(--sec); }
+.app-item[aria-expanded="false"] .mode-name::after { content: " ▾"; color: var(--sec); }
+.menu-theme { display: flex; flex-wrap: nowrap; gap: 4px; padding: 2px 8px 6px; }
+.menu-theme .seg-key { flex: 1; box-sizing: border-box; height: 28px; min-height: 28px; padding: 0 8px; white-space: nowrap; font-size: 11.5px; }
+.menu-theme .seg-key:hover:not(.current) { background: var(--fold); }
+.menu-theme .seg-key:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* the palette field: the most-used control, so it grows (to 460px) and only its words truncate */
+.palfield { box-sizing: border-box; height: 28px; flex: 0 1 460px; min-width: 150px; display: inline-flex; align-items: center; gap: 10px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--sec); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; }
+.palfield:hover { border-color: var(--sec); }
+.palfield .pal-ph { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.palfield kbd { margin-left: auto; flex: none; font: inherit; font-size: 11px; color: var(--sec); border: 1px solid var(--rule); border-radius: 2px; padding: 0 4px; }
 .palfield:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
-.layout-wrap { position: relative; display: inline-flex; }
-.layout-menu { right: 0; left: auto; }
-#conn { font-size: 11px; }
+/* quiet kernel status: the link is a dot (a word only when not connected); the browser risk an OUTLINED amber chip */
+.kstat { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.link-dot { height: 28px; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink2); white-space: nowrap; flex: none; }
+.link-dot .ld { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--sec); flex: none; }
+.link-dot.ok .ld { background: var(--live); border-color: var(--live); }
+.risk-chip { box-sizing: border-box; height: 28px; display: inline-flex; align-items: center; padding: 0 9px; font-size: 11.5px; color: var(--warn-ink); background: transparent; border: 1px solid var(--warn-edge); border-radius: var(--radius); white-space: nowrap; flex: none; }
+.risk-chip[hidden] { display: none; }
+.voice-wrap { flex: 0 1 auto; }
+/* attached, the voice app's fix (Restart, Start voice, Teach) is the ladder's first row, never a header key */
+.ladder-start { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 4px; padding: 2px 6px 8px; border-bottom: 1px dashed var(--rule); font-size: 11.5px; }
+.ladder-start .key { white-space: nowrap; flex: none; } /* never below the pill's rung: the palette's words give way first */
+@media (max-width: 1040px) { .risk-long, .pal-ph2 { display: none; } .voice-fact { max-width: 20ch; } }
+@media (max-width: 760px) { .palfield { min-width: 0; flex-basis: 90px; } .voice-fact { max-width: 10ch; } }
 
 /* chat header and the quiet empty centre */
 .pane-head.chead { padding: 10px 20px 8px; align-items: baseline; }
@@ -878,10 +918,6 @@ html, body {
 [data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); }
 [data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key.current::after { color: var(--ink); }
 .seg-key[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); }
-.theme-switch { gap: 2px; }
-.theme-key { white-space: nowrap; }
-@media (max-width: 1200px) { .theme-word { display: none; } }
-.settings-btn { font-size: 14px; }
 .settings-card { width: min(720px, calc(100vw - 32px)); max-width: 720px; max-height: 78vh; padding: 0; gap: 0; }
 .settings-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
 .settings-head .title { margin: 0; font-size: 17px; }
@@ -909,15 +945,9 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .standing-toast { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--key-edge); color: var(--ink); }
 .standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }
 
-/* ── fidelity 2 (comp direction.html): the header is wordmark · search · (kernel chips) · voice · ⊞ Layout · ☀/☾ · ⚙.
-   The connection readout and the browser risk badge stay VISIBLE (kernel-owned) as small quiet chips; who is connected
-   lives in the readout's title= and in Settings → About. The theme switch is glyphs only (☀ ☾ ◐, words in title=). */
+/* ── fidelity 2 (comp direction.html), superseded for the header by board header-5b (above): the row's gap */
 .chrome { gap: 10px; }
-.chip, #conn.chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font-size: 10.5px; line-height: 18px; color: var(--sec); border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; }
-#conn.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--sec); }
-.badge.risk { font-size: 10.5px; line-height: 18px; padding: 0 6px; }
-.theme-word { display: none; }
-.theme-switch .seg-key { min-width: 26px; padding: 1px 6px; text-align: center; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font-size: 10.5px; line-height: 18px; color: var(--sec); border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; }
 /* night: the comp's keys carry no [ ] caps (only + New session does); a model-text choice is marked by its dashed
    edge AND its filled choice-k pill (Aegis L3) */
 [data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
@@ -984,7 +1014,6 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .card.pe-h5:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sea-grey-ink); }
 /* #gui-mods-panel (ui/mods-panel.ts): the Mods sheet reuses the Settings sheet (.settings-card/-head/-body/-sec);
    rows are plain sheets with quiet rules, state words in ink (never colour alone), failures in --fail */
-.mods-btn { font-size: 12px; }
 .mod-row { border-top: 1px solid var(--rule); padding: 8px 0 6px; display: flex; flex-direction: column; gap: 2px; }
 .mods-sec > .mod-row:first-of-type { border-top: 0; }
 .mod-row p { margin: 0; }

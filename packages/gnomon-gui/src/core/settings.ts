@@ -1,7 +1,7 @@
 /**
  * @symbol #gui-settings
  *
- * #gui-settings: the header theme switch and the Settings sheet (⚙ key, ⌘, and the palette's "Settings…"). PURE.
+ * #gui-settings: the theme choice and the Settings sheet (the Gnomon menu, ⌘, and the palette's "Settings…"). PURE.
  * The founder's UI-first rule: every setting the GUI already has gets a guided control here; nothing is new to the
  * kernel. The sheet only gathers what exists.
  *
@@ -46,7 +46,7 @@ export interface ThemeSwitchEntry {
   title: string;
 }
 
-/** The header's Day / Night / Auto segmented switch: which is chosen, and what auto resolves to right now. */
+/** The Day / Night / Auto choice (the Gnomon menu's theme row, the sheet): which is chosen, and what auto resolves to now. */
 export function themeSwitchEntries(choice: ThemeChoice, prefersDark: boolean): ThemeSwitchEntry[] {
   const now = resolveTheme('auto', prefersDark);
   return [

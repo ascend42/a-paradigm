@@ -32,19 +32,19 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'session.new', title: 'New session', keys: '⌘N / Ctrl+N' },
   { id: 'session.rename', title: 'Rename session', keys: 'double-click the title / F2 in the list' },
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
-  // #gui-settings: the sheet that gathers every setting (also the header ⚙ key)
+  // #gui-settings: the sheet that gathers every setting (also in the Gnomon menu)
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
-  // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also the header Mods key)
+  // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also in the Gnomon menu and the Workshop)
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
-  { id: 'theme.day', title: 'Theme: day (papercraft)' },
-  { id: 'theme.night', title: 'Theme: night (phosphor)' },
-  { id: 'theme.auto', title: 'Theme: auto (follow the OS)' },
+  { id: 'theme.day', title: 'Theme: Day (papercraft)' },
+  { id: 'theme.night', title: 'Theme: Night (phosphor)' },
+  { id: 'theme.auto', title: "Theme: Auto (follow the Mac's appearance)" },
   { id: 'motion.reduce', title: 'Motion: reduce (in-app)' },
   { id: 'motion.system', title: 'Motion: follow the OS' },
-  { id: 'layout.desk', title: 'Layout: desk (sessions · transcript · stack)' },
-  { id: 'layout.focus', title: 'Layout: focus (transcript only)' },
-  { id: 'layout.decide', title: 'Layout: decide (stack wide)' },
+  { id: 'layout.desk', title: 'Layout: Desk (sessions · chat · stack)' },
+  { id: 'layout.focus', title: 'Layout: Focus (the chat only)' },
+  { id: 'layout.decide', title: 'Layout: Decide (the stack wide)' },
   { id: 'pane.sessions.toggle', title: 'Pane: show/hide sessions' },
   { id: 'pane.stack.toggle', title: 'Pane: show/hide decision stack' },
   { id: 'pane.workshop.toggle', title: 'Pane: show/hide the Workshop (needs you / working caps)' },
@@ -86,6 +86,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'voice.delay.15000', title: 'Dictation: auto-send push-to-talk after 15 s of silence' },
   { id: 'voice.delay.off', title: 'Dictation: never auto-send push-to-talk (Send or Enter only)' },
   { id: 'voice.dictation.hold', title: 'Dictation: hold / resume the auto-send', keys: '⌃⌥H (voice app)' },
+  // board header-5b (#gui-wordmark-menu): the rare tools live in the "Gnomon ▾" menu and here, never as header keys
+  { id: 'menu.gnomon', title: 'Gnomon menu: layout, theme, mods, voice settings, settings' },
   { id: 'gui.reconnect', title: 'Reconnect' },
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
 ]);
@@ -101,7 +103,8 @@ export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
   // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer); nor mods.*
   // #gui-session-rename: nor session.rename (it opens an edit that writes request.session.rename on blur)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.')),
+  // #gui-wordmark-menu: nor menu.* (the Gnomon menu holds Settings… and the pane toggles)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';

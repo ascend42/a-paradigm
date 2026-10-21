@@ -30,7 +30,7 @@ import { sentLabel } from './voice-presets.js';
 import { projectHue, sha256Tagged, validateKindPayload } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { rootRowsOf, rowsDigestCheck } from './render.js';
-import { idleNoteOf, speakerName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
+import { idleNoteOf, speakerName, startRungName, VOICE_ACTIVITY_KINDS, VOICE_ROW_KINDS } from './voice.js';
 import { isClientRow, type EnrolState } from './voice-client.js';
 import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
@@ -162,14 +162,18 @@ export class GuiStore {
   boot = 0;
   /** The log these rows came from (a page's / subscription's `logId`); null before the first read. */
   logId: string | null = null;
-  /** V2d: "Ambient turned off after N min idle" from the kernel's idle auto-off, until the next voice.session.start. */
-  voiceNote: string | null = null;
   /** V2d: the kernel's ambient idle auto-off (status.voice.ambientIdleMs), set by the page; names the note's minutes */
   voiceIdleMs: number | null = null;
   /** V2e: the "Teach Gnomon your voice" flow while its dialog is open (the page opens it; status.voice.enrolment folds into it). */
   enrol: EnrolState | null = null;
-  /** V2e: the latest quiet notice from the voice app (A5: status.voice.notice, set by the page), until it is shown. */
-  voiceToast: { text: string; at: string | null } | null = null;
+  /**
+   * The next quiet toast (core/voice-client.ts TOAST_MS, 6 s; it clears itself), until the page shows it: the voice
+   * app's notice (A5: status.voice.notice, set by the page) or, board header-5b, the kernel's idle auto-off ("Dictate
+   * turned off after 10 min idle", `idle`; a voice.session.start drops one not yet shown).
+   */
+  voiceToast: { text: string; at: string | null; idle?: true } | null = null;
+  /** The rung the latest voice.session.start named (startRungName), for the idle toast's words. */
+  #voiceRung: string | null = null;
   /** The highest seq read or scanned (a page's `next` can pass the last visible row). */
   position = 0;
   readonly #listeners = new Set<(what: Set<string>) => void>();
@@ -221,8 +225,8 @@ export class GuiStore {
     this.boot = 0;
     this.position = 0;
     this.logId = null;
-    this.voiceNote = null;
     this.voiceToast = null;
+    this.#voiceRung = null;
     this.#emit(new Set(['reset', 'sessions', 'cards', 'feed']));
   }
 
@@ -294,12 +298,21 @@ export class GuiStore {
     if (MODE_ROW_KINDS.has(r.kind)) what.add('modes');
     // #gui-offer-slip: an offer row (shown / decided / kept) changes that conversation's slips
     if (hsid && OFFER_ROW_KINDS.has(r.kind)) what.add(`offers:${hsid}`);
-    // V2d: an attachment row changes status.voice (the pill re-reads it); a turn row kicks the level meter; the
-    // kernel's idle auto-off leaves a quiet note until the next attachment
+    // V2d: an attachment row changes status.voice (the pill re-reads it); a turn row kicks the level meter. Board
+    // header-5b: the kernel's idle auto-off is a quiet toast in the ladder's words (6 s, then it is gone), never a
+    // note left in the header
     if (VOICE_ROW_KINDS.has(r.kind)) {
       what.add('voice');
-      if (r.kind === 'voice.session.start') this.voiceNote = null;
-      else if (r.kind === 'voice.session.end') this.voiceNote = idleNoteOf(r.kind, r.payload, this.voiceIdleMs);
+      if (r.kind === 'voice.session.start') {
+        this.#voiceRung = startRungName(r.payload) ?? this.#voiceRung;
+        if (this.voiceToast?.idle) this.voiceToast = null;
+      } else if (r.kind === 'voice.session.end') {
+        const text = idleNoteOf(r.kind, r.payload, this.voiceIdleMs, this.#voiceRung);
+        if (text) {
+          this.voiceToast = { text, at: r.at ?? null, idle: true };
+          what.add('voice-toast');
+        }
+      }
     }
     if (VOICE_ACTIVITY_KINDS.has(r.kind)) what.add('voice-activity');
     // V2e: the voice app's lifecycle, the enrolled list, enrolment progress and the app's notices are all
@@ -778,7 +791,7 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
       return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
     }
     case 'voice.session.start':
-      return { role: 'system', text: `voice attached · ${p.mode === 'ptt' ? 'push-to-talk' : 'ambient'}` };
+      return { role: 'system', text: `voice attached · ${startRungName(p) ?? 'Talk'}` };
     case 'voice.session.end': {
       const note = idleNoteOf(r.kind, p);
       return { role: 'system', text: note ?? 'voice detached' };

@@ -168,14 +168,19 @@ export interface PillInput {
   micKeyBare: boolean;
   /** seconds since the last heard turn on this page, or null */
   heardAgoS: number | null;
+  /**
+   * Board header-5b: a dictated draft waits on another session (core/dictation.ts dictationNote 'draft waiting'):
+   * that session's short name, shown as the pill's fact ("draft waiting · billing"), never a loose header note
+   */
+  draftWaiting?: string | null;
 }
 
 export interface PillView {
   name: string;
   /** the one live fact ('' for none) */
   fact: string;
-  /** the fact's colour: plain (secondary ink), clamp (warning ink), fail (vermilion: speech was not sent) */
-  tone: 'plain' | 'clamp' | 'fail';
+  /** the fact's colour: plain (secondary ink), clamp or note (warning ink: a draft waits elsewhere), fail (vermilion: speech was not sent) */
+  tone: 'plain' | 'clamp' | 'note' | 'fail';
   /** the 2px amber edge: a voice-origin turn is clamped */
   clamped: boolean;
   /** the mic is open: the dot is filled with its soft ring */
@@ -209,6 +214,7 @@ export function dropFact(cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'>)
  *   speech not sent (a sticky drop)     vermilion "not sent · <reason>"   (a mic-off drop is just "mic off · ⌃`")
  *   a clamped voice-origin turn          amber edge, "edits ask first"
  *   the voice app's condition            "voice app not running", "voice crashed" (its cause in the title and aria), "setting up voice…"
+ *   a draft waits on another session     warning ink "draft waiting · <session>"
  *   capture                              "hearing you…", "catching that…", "got it", "heard, not confirmed"
  *   the mic key closed the mic           "mic off · ⌃`"
  *   a turn heard lately (not Send word)  "heard 4s ago"
@@ -231,6 +237,7 @@ export function voicePillOf(i: PillInput): PillView {
   }
   if (i.clamped) return mk('edits ask first', 'clamp');
   if (i.clientFact) return mk(i.clientFact);
+  if (i.draftWaiting) return mk(`draft waiting · ${i.draftWaiting}`, 'note');
   if (d && d.label !== null) {
     if (d.state === 'hearing') return mk('hearing you…');
     if (d.state === 'transcribing') return mk('catching that…');

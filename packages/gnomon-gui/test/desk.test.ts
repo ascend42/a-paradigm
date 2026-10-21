@@ -142,19 +142,20 @@ describe('S2 page wiring (source read; the preview shots show the DOM)', () => {
     expect(app).toMatch(/if \(!focused && !feedView\) return \{ items: \[\], hidden: 0 \};/);
     expect(html).toMatch(/<div id="empty" class="empty">[\s\S]*No session open[\s\S]*id="empty-new" class="key pri"/);
   });
-  it('the header: wordmark, palette field, risk, spacer, conn, voice, ⊞ Layout; the inbox sits in the stack head', () => {
+  it('the header (board header-5b): wordmark menu, palette field, spacer, conn, risk, voice; the inbox sits in the stack head', () => {
     const head = html.slice(html.indexOf('<header class="chrome">'), html.indexOf('</header>'));
-    const order = ['class="wordmark"', 'id="palette-btn" class="palfield"', 'id="risk"', 'class="spacer"', 'id="conn"', 'id="voice-pill"', 'id="layout-btn"'].map((x) => head.indexOf(x));
+    const order = ['id="wordmark-btn"', 'id="palette-btn" class="palfield"', 'class="spacer"', 'id="conn"', 'id="risk"', 'id="voice-pill"'].map((x) => head.indexOf(x));
     expect(order.every((x) => x >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(head).toContain('Search, run, jump… <kbd>⌘K</kbd>');
+    expect(head).toContain('<span class="pal-ph">Search, run, jump<span class="pal-ph2">, or open anything</span>…</span><kbd>⌘K</kbd>');
     expect(head).not.toContain('id="inbox"');
     expect(html).toMatch(/<aside id="pane-stack"[\s\S]*id="inbox"/);
   });
-  it('the layout menu lists presets and panes, never kernel-owned chrome', () => {
-    const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
-    expect(menu).toMatch(/PRESETS/);
-    expect(menu).not.toMatch(/conn|risk|voice|mode-btn|repin|dictation/);
+  it('the Gnomon menu (#gui-wordmark-menu) lists presets and panes, never kernel-owned chrome', async () => {
+    const hdr = readFileSync(path.join(ROOT, 'src', 'core', 'header.ts'), 'utf8');
+    const model = hdr.slice(hdr.indexOf('export function appMenuModel('), hdr.indexOf('export const APP_MENU_RUNS'));
+    expect(model).toMatch(/PRESETS/);
+    expect(model).not.toMatch(/conn|risk|voice\.(off|ptt|ambient|preset)|mode-btn|repin|dictation/);
   });
   it('pinned cards carry "Pending in this session"; the composer names the session and keeps the ⇧Tab hint in title=', () => {
     expect(app).toMatch(/if \(mine\.length\) pinned\.appendChild\(h\(doc, 'span', \{ class: 'lbl' \}, 'Pending in this session'\)/);
@@ -431,9 +432,14 @@ describe('Aegis S2/S3 review fixes', () => {
       expect(css).toContain(`.pink.h${i} {`);
     }
   });
-  it('the Layout menu runs only presets, the three pane toggles and the Workshop placements (never a kernel-owned region)', () => {
-    const menu = app.slice(app.indexOf('function openLayoutMenu('), app.indexOf('function closeLayoutMenu('));
-    const runs = [...menu.matchAll(/item\('([^']+)'|item\(`([^`]+)`/g)].map((m) => m[1] ?? m[2]);
-    expect(runs).toEqual(['layout.${name}', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.${p}']);
+  it('the Gnomon menu runs only presets, the pane toggles, the Workshop placements, theme, Mods, Voice settings and Settings (never a kernel-owned region)', async () => {
+    const { appMenuModel, APP_MENU_RUNS } = await import('../src/core/header.js');
+    const { applyPreset } = await import('../src/core/commands.js');
+    const { themeSwitchEntries } = await import('../src/core/settings.js');
+    const rows = appMenuModel({ layout: applyPreset('desk'), panesOpen: true, theme: themeSwitchEntries('auto', false), who: '' });
+    const runs = rows.flatMap((r) => (r.kind === 'item' ? [r.run] : r.kind === 'theme' ? r.options.map((o) => o.run) : []));
+    expect(runs).toEqual(['layout.desk', 'layout.focus', 'layout.decide', 'menu.panes', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.footer', 'workshop.right', 'workshop.left', 'theme.day', 'theme.night', 'theme.auto', 'mods.open', 'voice.settings.open', 'settings.open']);
+    expect([...APP_MENU_RUNS].sort()).toEqual([...runs].sort());
+    expect(app).toMatch(/if \(!id \|\| !APP_MENU_RUNS\.has\(id\)\) return;/);
   });
 });

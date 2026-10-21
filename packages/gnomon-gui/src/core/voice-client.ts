@@ -212,6 +212,39 @@ export function clientPillOf(c: ClientView, attached: boolean, attachable: boole
   }
 }
 
+/** The pill as its own action (board header-5b): the label is a verb only while the voice app can't run. */
+export interface PillActionView {
+  action: Exclude<PillAction, null>;
+  /** the rung slot's words: the verb ("Start voice") */
+  name: string;
+  /** the one fact: why the verb is offered ("app not running") */
+  fact: string;
+  /** the accessible name says what a click does */
+  aria: string;
+  title: string;
+}
+
+/**
+ * Board header-5b (design-system gnomon.voice.header): when nothing is attached and the voice app can't run (or
+ * hears no enrolled voice), the pill IS the action, "○ Start voice · app not running", and there is no separate
+ * Start key. Attached, the live rung stands (Aegis M V2d: never under-report) and the action sits at the top of the
+ * ladder instead: null here. A connection that may not act (cp.action null) keeps the plain pill.
+ */
+export function pillActionOf(cp: ClientPill, attached: boolean, cause: string | null = null): PillActionView | null {
+  if (attached || cp.action === null) return null;
+  const why = cause ? ` (${cause})` : '';
+  switch (cp.action) {
+    case 'start':
+      return { action: 'start', name: 'Start voice', fact: 'app not running', aria: 'Start voice: starts the voice app. Voice is off; the voice app is not running.', title: `${cp.title} Click: start the voice app.` };
+    case 'restart':
+      return { action: 'restart', name: 'Restart voice', fact: 'voice crashed', aria: `Restart voice: restarts the voice app. Voice is off; the voice app crashed${why}.`, title: `${cp.title} Click: restart the voice app.` };
+    case 'enrol':
+      return cp.actionLabel === 'Re-teach'
+        ? { action: 'enrol', name: 'Re-teach voice', fact: 'voice check upgraded', aria: 'Re-teach voice: opens teaching Gnomon your voice again, about a minute. Voice is off.', title: `${cp.title} Click: teach it your voice again.` }
+        : { action: 'enrol', name: 'Teach voice', fact: 'no voice enrolled', aria: 'Teach voice: opens teaching Gnomon your voice, about a minute. Voice is off.', title: `${cp.title} Click: teach it your voice.` };
+  }
+}
+
 /** The attached overlay (see clientPillOf): the live state stands, the condition is appended. */
 function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none: ClientPill): ClientPill {
   const t = (tail: string, className: string, title: string, action: PillAction = null, actionLabel = '', progress: number | null = null): ClientPill => ({ label: null, tail: ` · ${tail}`, className, title, action, actionLabel: action ? actionLabel : '', progress });
