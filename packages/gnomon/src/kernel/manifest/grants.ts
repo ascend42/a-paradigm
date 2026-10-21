@@ -41,6 +41,8 @@ import { checkEgressHost } from './egress.js';
 import { LEGACY_ALIASES } from './mod-kind.js';
 import { capabilityForm, TRUST_TIER_PATTERN, type TrustTier } from './manifest.js';
 import { ManifestRefusal } from './refusal.js';
+import { canonicalJson } from '@a-company/gnomon-contracts';
+import { appendLinesDurably, withHomeFileLock } from './grant-lock.js';
 
 export const GRANTS_FILE = 'grants.jsonl';
 export const GRANT_ROW_SCHEMA = 'grantRow:v1' as const;
@@ -92,6 +94,8 @@ export interface GrantPublisherRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA_V2;
   kind: 'grant.publisher';
   createdAt: string;
+  /** TD-2026-10-20-514 (Aegis Q1): the card whose decision wrote it; REQUIRED on rows written through decision.sign */
+  cardId?: string;
   publisher: string;
   host: string;
   namespace: string;
@@ -100,6 +104,8 @@ export interface GrantCapabilityRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA;
   kind: 'grant.capability';
   createdAt: string;
+  /** TD-2026-10-20-514 (Aegis Q1): the card whose decision wrote it; REQUIRED on rows written through decision.sign */
+  cardId?: string;
   manifestHash?: string;
   deviceId?: string;
   capabilities: string[];
@@ -109,6 +115,8 @@ export interface GrantTrustRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA;
   kind: 'grant.trust';
   createdAt: string;
+  /** TD-2026-10-20-514 (Aegis Q1): the card whose decision wrote it; REQUIRED on rows written through decision.sign */
+  cardId?: string;
   manifestHash: string;
   tier: TrustTier;
   maxKnowledgeTier?: string;
@@ -117,6 +125,8 @@ export interface GrantEgressRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA;
   kind: 'grant.egress';
   createdAt: string;
+  /** TD-2026-10-20-514 (Aegis Q1): the card whose decision wrote it; REQUIRED on rows written through decision.sign */
+  cardId?: string;
   manifestHash: string;
   hosts: string[];
 }
@@ -124,6 +134,8 @@ export interface GrantBindRow {
   schemaVersion: typeof GRANT_ROW_SCHEMA;
   kind: 'grant.bind';
   createdAt: string;
+  /** TD-2026-10-20-514 (Aegis Q1): the card whose decision wrote it; REQUIRED on rows written through decision.sign */
+  cardId?: string;
   principal: string;
   manifestHash: string;
   kinds: string[];
@@ -172,6 +184,8 @@ export function checkGrantRow(row: unknown): string | null {
   // S0b: v2 only for the id-carrying kinds; grant.publisher only as v2
   if (v2 !== V2_KINDS.includes(row.kind) && !(row.schemaVersion === GRANT_ROW_SCHEMA && (row.kind === 'grant.install' || row.kind === 'grant.uninstall'))) return 'schema';
   if (typeof row.createdAt !== 'string') return 'createdAt';
+  // TD-2026-10-20-514 (Aegis Q1): a cardId, when present, is a card id (pin rows require it below)
+  if (row.cardId !== undefined && (typeof row.cardId !== 'string' || !CARD_ID.test(row.cardId))) return 'cardId';
   const nameOk = (n: unknown) => typeof n === 'string' && (v2 ? isModId(n) : LEGACY_NAME.test(n));
   switch (row.kind as GrantRowKind) {
     case 'grant.install': {
@@ -252,7 +266,24 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     newestPin.set(r.name, t);
     return false;
   };
-  text.split('\n').forEach((raw, i) => {
+  // Aegis C5b (TD-2026-10-20-514): a supporting row carrying a cardId takes effect only when its batch's anchor (a
+  // verified grant.install / grant.uninstall naming the same cardId) is present LATER in the file: a batch cut short
+  // (crash, torn write, deleted tail) grants nothing. Pre-pass: the last line of each cardId's verified pin row.
+  const anchorLine = new Map<string, number>();
+  const lines = text.split('\n');
+  lines.forEach((raw, i) => {
+    if (raw.trim() === '' || trust.rootKeyId === null) return;
+    try {
+      const rec = JSON.parse(raw) as { row?: Record<string, unknown>; signer?: unknown; sig?: unknown };
+      const row = rec?.row;
+      if (!row || (row.kind !== 'grant.install' && row.kind !== 'grant.uninstall') || typeof row.cardId !== 'string') return;
+      if (typeof rec.signer !== 'string' || typeof rec.sig !== 'string' || !trust.verifyRow(rec.signer, row, rec.sig) || checkGrantRow(row)) return;
+      anchorLine.set(row.cardId, i + 1);
+    } catch {
+      /* rejected in the main pass */
+    }
+  });
+  lines.forEach((raw, i) => {
     const line = i + 1;
     if (raw.trim() === '') return;
     let rec: unknown;
@@ -270,6 +301,10 @@ export function readGrants(home: string, trust: RowVerifier): ResolvedGrants {
     const bad = checkGrantRow(rec.row);
     if (bad) return void out.rejected.push({ line, reason: bad });
     const row = rec.row as unknown as GrantRow | { kind: GrantRowKind };
+    const cid = (rec.row as { cardId?: unknown }).cardId;
+    if (row.kind !== 'grant.install' && row.kind !== 'grant.uninstall' && typeof cid === 'string' && !((anchorLine.get(cid) ?? 0) > line)) {
+      return void out.rejected.push({ line, reason: 'unanchored' });
+    }
     switch (row.kind) {
       case 'grant.install':
       case 'grant.uninstall':
@@ -359,21 +394,28 @@ export function newestPinMs(grants: ResolvedGrants, name: string): number | unde
 
 const isPin = (r: GrantRow): r is GrantInstallRow | GrantUninstallRow => r.kind === 'grant.install' || r.kind === 'grant.uninstall';
 
-export function appendGrantRow(home: string, authority: RootAuthority, input: GrantRowInput, now: Date = new Date()): GrantRow {
+/**
+ * TD-2026-10-20-514: build ONE grant row (schemaVersion, createdAt, the replay-safe createdAt bumps and the
+ * knowledge+egress clash) against the table AND the rows already pending in the same batch. Pure: no signing, no
+ * write. A row built here, signed, then rebuilt under the lock must come out identical, or the table moved.
+ */
+export function buildGrantRow(home: string, authority: RowVerifier, input: GrantRowInput, now: Date = new Date(), pending: readonly GrantRow[] = [], table?: ResolvedGrants): GrantRow {
+  const g = table ?? readGrants(home, authority);
   // S0b: id-carrying kinds are v2 rows with the full mod id; never write a resolved row's legacyName
-  const { legacyName: _legacy, ...rest } = input as GrantRowInput & { legacyName?: string };
+  const { legacyName: _legacy, schemaVersion: _sv, ...rest } = input as GrantRowInput & { legacyName?: string; schemaVersion?: string };
   const row = { schemaVersion: V2_KINDS.includes(input.kind) ? GRANT_ROW_SCHEMA_V2 : GRANT_ROW_SCHEMA, ...rest, createdAt: input.createdAt ?? now.toISOString() } as GrantRow;
   if (isPin(row)) {
-    // Aegis round 3: the reader rejects a pin row not newer than the last one for that mod (replay, C1). A clock step
-    // back or two rows in one millisecond must never turn a legitimate pin into a "replay": createdAt is
-    // max(now, newest + 1 ms) by the reader's exact rule, and the result is read back below.
-    const newest = newestPinMs(readGrants(home, authority), row.name);
+    // Aegis round 3: the reader rejects a pin row not newer than the last one for that mod (replay, C1): createdAt is
+    // max(now, newest + 1 ms) by the reader's exact rule, over the table and this batch
+    let newest = newestPinMs(g, row.name);
+    for (const p of pending) if (isPin(p) && p.name === row.name) newest = Math.max(newest ?? -Infinity, Date.parse(p.createdAt));
     const t = Date.parse(row.createdAt);
     if (newest !== undefined && !(Number.isFinite(t) && t > newest)) row.createdAt = new Date(newest + 1).toISOString();
   }
   if (row.kind === 'grant.publisher') {
     // Aegis S0b M6: the reader keeps only a strictly newer binding per publisher; never sign one it would reject
-    const prev = readGrants(home, authority).publishers.get(row.publisher)?.createdAt;
+    let prev = g.publishers.get(row.publisher)?.createdAt;
+    for (const p of pending) if (p.kind === 'grant.publisher' && p.publisher === row.publisher && (prev === undefined || Date.parse(p.createdAt) > Date.parse(prev))) prev = p.createdAt;
     const t = Date.parse(row.createdAt);
     if (prev !== undefined && !(Number.isFinite(t) && t > Date.parse(prev))) row.createdAt = new Date(Date.parse(prev) + 1).toISOString();
   }
@@ -383,26 +425,70 @@ export function appendGrantRow(home: string, authority: RootAuthority, input: Gr
   }
   if (row.kind === 'grant.egress' || (row.kind === 'grant.capability' && row.manifestHash && row.capabilities.includes('knowledge:provide'))) {
     const mh = row.manifestHash!;
+    const knowledge = g.capabilities.get(mh)?.capabilities.has('knowledge:provide') || pending.some((p) => p.kind === 'grant.capability' && p.manifestHash === mh && p.capabilities.includes('knowledge:provide'));
+    const egress = g.egress.has(mh) || pending.some((p) => p.kind === 'grant.egress' && p.manifestHash === mh);
+    if (row.kind === 'grant.egress' ? knowledge : egress) throw new ManifestRefusal('EGRESS', 'egress is never granted together with knowledge:provide (§15.4)', { manifestHash: mh });
+  }
+  return row;
+}
+
+/** Build every row of one batch in order (each sees the ones before it). */
+export function buildGrantRows(home: string, authority: RowVerifier, inputs: readonly GrantRowInput[], now: Date = new Date()): GrantRow[] {
+  const g = readGrants(home, authority);
+  const out: GrantRow[] = [];
+  for (const i of inputs) out.push(buildGrantRow(home, authority, i, now, out, g));
+  return out;
+}
+
+/**
+ * TD-2026-10-20-514 / Aegis C5: append rows that are ALREADY root-signed. Every signature is verified; then, under the
+ * cross-process file lock, every row is rebuilt against the table as it is NOW and must come out byte-identical (a
+ * row whose createdAt went stale, a concurrent pin or binding, a new knowledge/egress clash: refused, nothing is
+ * written and nothing is silently re-signed). ONE write + fsync, grant.install LAST, then the pin read-back.
+ */
+export function appendSignedGrantRows(home: string, authority: RowVerifier, rows: readonly GrantRow[], sigs: ReadonlyArray<{ signer: string; sig: string }>): void {
+  if (rows.length === 0) return;
+  if (rows.length !== sigs.length) throw new ManifestRefusal('GRANT', 'every grant row needs exactly one signature', {});
+  rows.forEach((row, i) => {
+    if (!authority.verifyRow(sigs[i]!.signer, row, sigs[i]!.sig)) throw new ManifestRefusal('GRANT', `the ${String(row.kind)} row's root signature does not verify`, { kind: row.kind });
+  });
+  const at = rows.findIndex((r) => r.kind === 'grant.install');
+  if (at >= 0 && at !== rows.length - 1) throw new ManifestRefusal('GRANT', 'grant.install is written LAST', {});
+  withHomeFileLock(home, 'grants', () => {
     const g = readGrants(home, authority);
-    const clash = row.kind === 'grant.egress' ? g.capabilities.get(mh)?.capabilities.has('knowledge:provide') : g.egress.has(mh);
-    if (clash) throw new ManifestRefusal('EGRESS', 'egress is never granted together with knowledge:provide (§15.4)', { manifestHash: mh });
-  }
-  const signed = authority.signRow(row); // RootUnavailableError (UNSUPPORTED, M1.3) in production
-  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  const fd = fs.openSync(grantsPath(home), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND, 0o600);
-  try {
-    fs.writeSync(fd, `${JSON.stringify({ row, ...signed })}\n`);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  if (isPin(row)) {
-    // the pin must be the effective one now, or the caller must not act as if it were
-    const last = readGrants(home, authority).pins.filter((r) => r.name === row.name).at(-1);
-    if (!last || last.kind !== row.kind || last.createdAt !== row.createdAt || last.cardId !== row.cardId || last.packageHash !== row.packageHash) {
-      throw new ManifestRefusal('GRANT', `the ${row.kind} row for ${row.name} did not take effect (the grant reader did not resolve it as the effective pin)`, { name: row.name });
+    const pending: GrantRow[] = [];
+    for (const row of rows) {
+      let again: GrantRow;
+      try {
+        again = buildGrantRow(home, authority, row as unknown as GrantRowInput, new Date(row.createdAt), pending, g);
+      } catch (e) {
+        throw e instanceof ManifestRefusal ? new ManifestRefusal(e.manifestCode, `the grant table moved since this decision was signed: ${e.message}; nothing was written, decide again`, { stale: true }) : e;
+      }
+      if (canonicalJson(again) !== canonicalJson(row)) throw new ManifestRefusal('GRANT', `the grant table moved since this decision was signed (the ${String(row.kind)} row is stale); nothing was written, decide again`, { stale: true, kind: row.kind });
+      pending.push(row);
     }
-  }
+    appendLinesDurably(grantsPath(home), rows.map((row, i) => JSON.stringify({ row, ...sigs[i] })));
+    const after = readGrants(home, authority);
+    for (const row of rows) {
+      if (!isPin(row)) continue;
+      // the pin must be the effective one now, or the caller must not act as if it were
+      const last = after.pins.filter((r) => r.name === row.name).at(-1);
+      if (!last || last.kind !== row.kind || last.createdAt !== row.createdAt || last.cardId !== row.cardId || last.packageHash !== row.packageHash) {
+        throw new ManifestRefusal('GRANT', `the ${row.kind} row for ${row.name} did not take effect (the grant reader did not resolve it as the effective pin)`, { name: row.name });
+      }
+    }
+  });
+}
+
+/**
+ * Append one root-signed grant row (the CLI path; the daemon's card decisions go through buildGrantRows +
+ * decision.sign + appendSignedGrantRows). Built, signed by the authority (RootUnavailableError without a root),
+ * then re-checked and written under the same lock as the batch path.
+ */
+export function appendGrantRow(home: string, authority: RootAuthority, input: GrantRowInput, now: Date = new Date()): GrantRow {
+  const row = buildGrantRow(home, authority, input, now);
+  const signed = authority.signRow(row); // RootUnavailableError (UNSUPPORTED, M1.3) in production
+  appendSignedGrantRows(home, authority, [row], [signed]);
   return row;
 }
 
