@@ -52,7 +52,7 @@ describe('Stop speaking: the pure core', () => {
 
 describe('Stop speaking: the page wiring', () => {
   it('a hidden ⏹ button sits beside the mic pill, painted from status', () => {
-    expect(HTML).toMatch(/<button id="voice-stop"[^>]*aria-label="Stop speaking"[^>]*hidden>⏹ Stop speaking<\/button>/);
+    expect(HTML).toMatch(/<button id="voice-stop"[^>]*aria-label="Stop speaking"[^>]*hidden>Stop speaking<\/button>/);
     expect(APP).toContain("$('voice-stop').hidden = !stopSpeakingShown(status);");
     expect(APP).toContain("$('voice-stop').addEventListener('click', (e) => void stopSpeaking(e.isTrusted));");
   });

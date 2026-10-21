@@ -402,7 +402,7 @@ describe('labels: spoken · sent by …, edits ask first, the chip and the card 
     expect(sentLabel({ origin: 'voice', sentBy: 'word' })).toEqual({ label: 'spoken · sent by send word', asksFirst: true });
     expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece', asksFirst: true });
     expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now', asksFirst: true });
-    expect(APP).toContain("`${it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`");
+    expect(APP).toContain("`${spoken ? spoken.sent : it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`");
   });
   it('the session header chip while clamped, and the card asked during a voice-sent turn', () => {
     expect(CLAMP_CHIP).toBe('voice turn · edits ask first');

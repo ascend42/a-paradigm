@@ -20,7 +20,7 @@ import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachStat
 import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
 import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
-import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, sendWordOf } from '../core/voice-presets.js';
+import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane, WORKSHOP_PLACES, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
@@ -335,12 +335,14 @@ function itemEl(it: FoldedItem): HTMLElement {
     // a11y: one status ("Claude is working"); the ticking clock is not announced every second (aria-live off)
     return h(doc, 'div', { class: 'trow role-working', role: 'status', 'aria-label': 'Claude is working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock', 'aria-live': 'off' }, liveText(it, Date.now()))) as unknown as HTMLElement;
   }
-  const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
+  // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
+  const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
+  const label = spoken ? spoken.who : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (+ "edits ask first")
-  const sentBy = it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
+  const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${spoken ? spoken.sent : it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, it.saidBy === 'kernel' ? '🔊 said aloud' : '🗣 spoken part'), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, saidTag(it.saidBy === 'kernel' ? 'kernel' : 'reply')), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
@@ -569,7 +571,7 @@ function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][numb
   const knot = [...store.cards.values()].some((c) => c.hsid === s.hsid && /knot/.test(c.kind));
   const note = sessionNote({ ...s, knot });
   const vv = voiceStatusOf(status);
-  const mic = vv.state !== 'off' && vv.hsid === s.hsid ? (vv.state === 'ambient' ? '🎙 ' : '🎙 ptt ') : '';
+  const mic = vv.state !== 'off' && vv.hsid === s.hsid ? (vv.state === 'ambient' ? 'voice · ' : 'voice · talk · ') : '';
   return h(
     doc,
     'button',
@@ -1995,7 +1997,7 @@ function paintVoice(): void {
   put(act, cp.actionLabel);
   const dev = devBannerOf(c);
   $('voice-dev').hidden = dev === null;
-  put($('voice-dev'), dev ? `⚠ ${dev}` : '');
+  put($('voice-dev'), dev ? `Warning: ${dev}` : '');
   const note = store.voiceNote;
   $('voice-note').hidden = !note || v.state !== 'off';
   put($('voice-note'), note ?? '');

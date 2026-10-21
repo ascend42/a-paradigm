@@ -1,6 +1,9 @@
 /** #gui voice presets (TD-2026-10-21-514): preset parse, liability ack per user, send ceiling, labels. Pure. */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, saidTag, voiceWho, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
 import { chatItems } from '../src/core/store.js';
 import { captureOf, parseCapturePref } from '../src/core/voice-presets.js';
 import { clientRequest } from '../src/core/voice-client.js';
@@ -70,5 +73,19 @@ describe('voice presets', () => {
     expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now', asksFirst: true });
     expect(sentLabel({ origin: 'hand', sentBy: 'release', source: 'voice' })).toEqual({ label: 'spoken · sent on release', asksFirst: false });
     expect(CLAMP_CHIP).toBe('voice turn · edits ask first');
+  });
+});
+
+describe('voice-sent labels in words (Luna #10)', () => {
+  it('"you · spoken · sent by <how>", "said aloud", "spoken part"; no glyph in the page sites', () => {
+    expect(voiceWho({ speaker: 'you', edited: false, sent: 'spoken · sent by send word' })).toEqual({ who: 'you', sent: '· spoken · sent by send word' });
+    expect(voiceWho({ speaker: 'matt', edited: false, sent: null })).toEqual({ who: 'matt', sent: '· spoken' });
+    expect(voiceWho({ speaker: 'you', edited: true, sent: 'spoken · sent by you' }).sent).toBe('· spoken · sent by you · edited');
+    expect([saidTag('kernel'), saidTag('reply')]).toEqual(['said aloud', 'spoken part']);
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const app = readFileSync(path.join(root, 'src', 'ui', 'app.ts'), 'utf8');
+    const html = readFileSync(path.join(root, 'static', 'index.html'), 'utf8');
+    for (const glyph of ['`🎙', "'🎙", '🔊 said aloud', '🗣 spoken part', '`⚠ ${dev}`']) expect(app, glyph).not.toContain(glyph);
+    expect(html).not.toMatch(/⏹ Stop speaking/);
   });
 });

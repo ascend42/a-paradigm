@@ -110,6 +110,16 @@ export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | n
   return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you', asksFirst: false };
 }
 
+/**
+ * Luna #10: a voice-sent turn's "who" line in words, never a glyph: "you · spoken · sent by <how>" (the speaker, then
+ * the sent label, or plain "spoken" when the kernel signed no turn.sent label), "· edited" when the human edited it.
+ */
+export function voiceWho(o: { speaker: string; edited: boolean; sent: string | null }): { who: string; sent: string } {
+  return { who: o.speaker, sent: `· ${o.sent ?? 'spoken'}${o.edited ? ' · edited' : ''}` };
+}
+/** Luna #10: the tag before a reply's spoken part, in words. */
+export const saidTag = (by: 'kernel' | 'reply'): string => (by === 'kernel' ? 'said aloud' : 'spoken part');
+
 /** The session header chip while a voice-origin turn of that session is outstanding (Atelier 2026-10-21 direction). */
 export const CLAMP_CHIP = 'voice turn · edits ask first';
 /** The line a card raised during a voice-origin turn carries (card.detail.origin 'voice'; the kernel's own line stays in its body). */
