@@ -874,6 +874,10 @@ voice.bargein       { turnId, atMs, heardText }
 voice.session.end   { voiceSessionId, turns, compactedTo: "l:L-…" }
 voice.share         { loreId, audience: team, redactions:[…], consent:[speakerId…] }
 voice.enrol         { speakerId, consent, printRef }        — root-signed row (CLI `gnomon voice enrol`)
+                    { speakerId, consentHash, cardId }      — root-signed row of a GUI enrol card (TD-2026-10-20-514; still voiceEnrolRow:v1,
+                                                              Aegis-accepted): it signs sha256:<utf8 consent>, never the text. No reader treats
+                                                              a missing `consent` as unconsented; a reader that needs the text reads
+                                                              voice/consents/<hex>.txt and checks it against consentHash
 voice.forget        { speakerId }                           — root-signed row (CLI `gnomon voice forget`)
 ```
 `textSpoken` is the truth after a barge-in; `textPlanned` is what the model intended (20). Every `turn.sent` that originated from speech carries `source: voice`. The namespace `voice.*` is a **userland grant** to `p:<ns>/voice` (A23-2); the kernel validates shape only (speakerId known or `unknown-N`, turn ids monotone, text ≤ 16 KiB) — except for the `voice.turn.user`, `voice.turn.agent` and `voice.deck` events a voice intent references (§14.7), whose text, timing and speaker the broker validates against the decision grammar and the echo cross-check.

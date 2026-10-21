@@ -1165,6 +1165,9 @@ components:
 
   manifest-loader:
     description: >-
+      Aegis final review: the grants lock is taken by linking a temp file
+      holding pid:nonce (O_EXCL fallback where links are unsupported, L1); a
+      deny over an install whose rows are written is refused (M3).
       TD-2026-10-20-514: prepareInstall (every check, rows BUILT with cardId,
       checked against the card's detail.rootRows) / commitInstall (token consumed,
       appendSignedGrantRows); buildGrantRow(s) and appendSignedGrantRows re-check
@@ -1746,6 +1749,7 @@ components:
       - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      Aegis M1: a root-capable card's detail carries rootDecisions (hashed).
       TD-2026-10-20-514 follow-up: a client decisionSig takes the root-only
       decision.sign form (Aegis F6, 1 prompt); a root-capable card's block
       carries {type:'root-rows', rootDecisions, detail} for the GUI (C1e);
@@ -2021,6 +2025,10 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes
+      through appendSignedEnrolRow (sig verified, seq recomputed under the
+      lock, moved seq refused loudly, durable append). A missing `consent` is
+      never "unconsented"; the text lives in voice/consents/<hex>.txt.
       TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and
       hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId,
       consentHash; seq under the enrolments lock), commitEnrol re-checks seq

@@ -52,7 +52,8 @@ components:
       TD-2026-10-20-514 (Aegis C1e, G-ID-11): rootRowsOf verifies the card's root-rows node against contentHash;
       renderCard shows "This decision signs" in full and NO root-class key without it; GuiStore.rootMismatches
       flags a logged rowsDigest that is not the shown rows' digest; a notice when status.helper.batch is
-      unavailable (helper < 1.8.0).
+      unavailable (helper < 1.8.0). Aegis M1: rootDecisions come from the HASHED detail and must cover the kind
+      table; any root-rows node, or a root kind, without verified rows shows only deny/reject/withdraw.
     fidelity-2: >-
       Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
       Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, a title
