@@ -226,6 +226,20 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r2.v.status().sendWordTrial).toMatchObject({ takes: 3, variants: [], last: { verdict: 'unlike' } });
   });
 
+  it('Aegis M-1: the voice principal\'s direct send of a take is refused (voice-grammar, cause trial-take)', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'ship it' }, 120_000);
+    // a push-to-talk take from the enrolled speaker: the one shape the direct path would otherwise forward
+    r.clock.t += 5_000; // the take starts after the attachment (the direct path's order check passes)
+    const take = await r.turn('ship it', { mode: 'ptt', t0: r.clock.t - 1_000, t1: r.clock.t });
+    expect(take).toMatchObject({ trialTake: true, forwardable: false });
+    const vc = { connId: 'conn:V', principal: VOICE };
+    expect(await refusal(r.v.send(vc, { hsid: HSID, content: [{ text: 'ship it' }] }))).toMatchObject({ code: 'FORBIDDEN', reason: 'voice-grammar', cause: 'trial-take' });
+    expect(r.supSends).toHaveLength(0);
+  });
+
   it('the trial is time-boxed; after it a short unverified word is refused again', async () => {
     const r = rig();
     r.v.setSendWord(null);

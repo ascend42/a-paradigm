@@ -3590,7 +3590,9 @@ flows:
       trial semantics; 2 min, send-word-trial.json 0600): every turn of the
       attached human's voice principal is a take with no speaker check and
       no adjacency, stamped trialTake, forwardable:false, isWord false, never
-      a dictation turn or adjacency anchor, its text kept only at a send
+      a dictation turn or adjacency anchor, and never sent (Aegis M-1: the
+      voice principal's direct session.send of a take is refused
+      voice-grammar, cause trial-take), its text kept only at a send
       word's length; the kernel is the ONE take counter
       (status.voice.sendWordTrial, human class only: word, state, take,
       takes, maxTakes 4, correct, variants, last, until) and

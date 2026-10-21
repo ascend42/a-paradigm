@@ -85,7 +85,7 @@
  *     (request.voice.sendword{op:'start', trial:true}, at most SEND_WORD_TRIAL_MS), EVERY voice.turn.user of the
  *     attached human's voice principal (not intercepted, not inside the echo guard) is a TAKE: no speaker check and no
  *     adjacency (a take can send nothing), stamped trialTake:true, forwardable:false, isWord false, never a dictation
- *     turn, never an adjacency anchor. The row keeps only the take's cleaned text when it is a send word's length
+ *     turn, never an adjacency anchor, and refused on the direct send path (voice-grammar, cause trial-take). The row keeps only the take's cleaned text when it is a send word's length
  *     (trialTakeText), else no text. The kernel is the ONE take counter (#send-word-matcher recordTrialTake; at most
  *     SEND_WORD_TRIAL_MAX_TAKES), shown as status.voice.sendWordTrial (human class only); {op:'save'} commits the word
  *     and its collected variants only after a take heard as the word itself.
@@ -762,9 +762,9 @@ export class VoiceControl {
             if (this.#trial === trial) trial.state = next; // the ONE take counter (a trial replaced meanwhile is not touched)
           });
         } else {
-          // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send)
-          // Aegis L-3: a take of the word being taught is shown to the dialog (trialTake) but never forwardable
-          stamped = { ...stamped, forwardable: !turn.intercepted && !turn.trialTake, ...(turn.trialTake ? { trialTake: true } : {}) };
+          // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send); a
+          // take never reaches here (the trial branch above stamps it forwardable:false)
+          stamped = { ...stamped, forwardable: !turn.intercepted };
         }
         commit.push((seq) => {
           turn.seq = seq;
@@ -1094,6 +1094,8 @@ export class VoiceControl {
     if (turn.receivedAt < a.startedAt || turn.t0 < a.startedAt) throw voiceRefusal('voice-stale-utterance', 'the turn precedes the attachment', { turnId: turn.turnId });
     // V2a: a turn refused at receipt was stored without its text, so it is never forwarded
     if (turn.refused) throw turn.refused;
+    // Aegis M-1: a take of the word being taught is never sent (it skipped the speaker check and adjacency)
+    if (turn.trialTake) throw voiceRefusal('voice-grammar', 'a take of the send word being taught never reaches a model', { turnId: turn.turnId, cause: 'trial-take' });
     const g = this.#guards(turn, a);
     if (g) throw g;
     // TD-2026-10-20-125 (founder ruling): ambient speech NEVER sends itself. Only a push-to-talk claim (the human held
