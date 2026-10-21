@@ -357,6 +357,25 @@ func sha256Tag(_ d: Data) -> String {
 ///   - sha256(intent) == rowsDigest, and each later row with its volatile fields dropped deep-equals intent[i]
 ///     (same count, same order): what the card showed (detail.rootRows, inside contentHash) is what gets signed.
 ///   - every later row carries the anchor's cardId; every manifestHash is the same one; the cardKind's row table holds.
+/// Aegis F2: JSON equality with the TS mirror's canonicalJson semantics. NSDictionary.isEqual says true == 1 and
+/// 1.0 == 1; here a boolean never equals a number, numbers compare by value (JS: 1 and 1.0 are one number), and
+/// strings, null, arrays and objects compare strictly and recursively.
+func jsonStrictEqual(_ a: Any, _ b: Any) -> Bool {
+    func isBool(_ x: Any) -> Bool { (x as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } ?? false }
+    if a is NSNull || b is NSNull { return a is NSNull && b is NSNull }
+    if let x = a as? String { return (b as? String) == x }
+    if b is String { return false }
+    if let x = a as? NSNumber, let y = b as? NSNumber {
+        if isBool(x) || isBool(y) { return isBool(x) && isBool(y) && x.boolValue == y.boolValue }
+        return x.doubleValue == y.doubleValue
+    }
+    if let x = a as? [Any], let y = b as? [Any] { return x.count == y.count && zip(x, y).allSatisfy { jsonStrictEqual($0, $1) } }
+    if let x = a as? [String: Any], let y = b as? [String: Any] {
+        return x.count == y.count && x.allSatisfy { k, v in y[k].map { jsonStrictEqual(v, $0) } ?? false }
+    }
+    return false
+}
+
 /// Tighten here AND in the TS mirror (one function each side) — the shared vectors keep them equal.
 func bindDecisionBatch(approve: ApproveFields?, rows: [Json], intent: Data) throws -> (anchor: ApproveFields, cardKind: String) {
     guard let d = rows.first, d["schemaVersion"] as? String == rootDecisionSchemaV2 else { throw BatchRefusal(why: "the first root row is not a gnomon-root-decision:v2 row") }
@@ -376,7 +395,7 @@ func bindDecisionBatch(approve: ApproveFields?, rows: [Json], intent: Data) thro
     for (i, r) in later.enumerated() {
         var bare = r
         for f in volatileFields(r) { bare.removeValue(forKey: f) }
-        guard let want = shown[i] as? Json, NSDictionary(dictionary: bare).isEqual(to: want) else { throw BatchRefusal(why: "root row \(i + 1) is not the row the card showed") }
+        guard let want = shown[i] as? Json, jsonStrictEqual(bare, want) else { throw BatchRefusal(why: "root row \(i + 1) is not the row the card showed") }
         guard r["cardId"] as? String == c else { throw BatchRefusal(why: "a root row does not name the decided card") }
         if let v = r["manifestHash"] {
             guard let s = v as? String else { throw BatchRefusal(why: "a manifestHash is not a string") }
@@ -447,9 +466,10 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
         return "trust \(t)"
     case "grant.capability":
         guard let caps = r["capabilities"] as? [String], !caps.isEmpty else { return nil }
-        let reads = (r["read"] as? [String])?.count ?? 0
-        let tail = reads > 0 ? " (reads \(reads) paths)" : ""
-        return compactCaps ? "\(caps.count) capabilities sha:\(digest12(Data(caps.joined(separator: ",").utf8)))\(tail)" : "capabilities \(caps.joined(separator: ","))\(tail)"
+        // Aegis ruling: the full line lists every read path; the compacted line shows only their count
+        let reads = (r["read"] as? [String]) ?? []
+        if compactCaps { return "\(caps.count) capabilities sha:\(digest12(Data(caps.joined(separator: ",").utf8)))\(reads.isEmpty ? "" : " (reads \(reads.count) paths)")" }
+        return "capabilities \(caps.joined(separator: ","))\(reads.isEmpty ? "" : " (reads \(reads.joined(separator: " ")))")"
     case "grant.egress":
         guard let hosts = r["hosts"] as? [String], !hosts.isEmpty else { return nil }
         return "egress \(hosts.joined(separator: " "))"

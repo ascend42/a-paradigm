@@ -84,6 +84,16 @@ add('no intent', A, { root: batch('install', 'install', [inst()]).root, intent: 
 add('a voice decision among the approvals', ['gnomon:approve-voice:v1\nx', presence], batch('install', 'install', [inst()]));
 add('a row-sig message among the approvals', ['gnomon:row-sig:v1\n{}', presence], batch('install', 'install', [inst()]));
 add('an approve message among the root rows', A, { root: ['gnomon:approve:v1\nx'], intent: '[]' });
+// Aegis F2: JSON types compare strictly (a boolean is never a number), numbers by value
+const typed = (x: unknown) => trust({ x });
+const intentWith = (x: unknown) => canonicalJson([intentOf(strip(typed(x))), intentOf(strip(inst()))]);
+add('F2: a boolean row field against a number in the intent is refused', A, batch('install', 'install', [typed(true), inst()], { intentText: intentWith(1) }));
+add('F2: a number row field against a boolean in the intent is refused', A, batch('install', 'install', [typed(0), inst()], { intentText: intentWith(false) }));
+add('F2: equal booleans sign', A, batch('install', 'install', [typed(true), inst()]));
+add('F2: equal floats sign', A, batch('install', 'install', [typed(1.5), inst()]));
+add('F2: an integer against a different float is refused', A, batch('install', 'install', [typed(2), inst()], { intentText: intentWith(2.5) }));
+add('read paths are listed in full on the uncompacted line', A, batch('install', 'install', [trust(), cap({ read: ['/Users/x/notes', '/Users/x/docs'] }), inst()]));
+add('read paths are only counted on a compacted line', A, batch('install', 'install', [trust(), cap({ capabilities: many, read: ['/Users/x/notes', '/Users/x/docs'] }), inst()]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
   note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',

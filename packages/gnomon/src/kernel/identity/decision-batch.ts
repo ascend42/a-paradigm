@@ -186,9 +186,10 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
     case 'grant.capability': {
       const caps = strs('capabilities');
       if (!caps || caps.length === 0) return null;
-      const reads = strs('read')?.length ?? 0;
-      const tail = reads > 0 ? ` (reads ${reads} paths)` : '';
-      return compactCaps ? `${caps.length} capabilities sha:${digest12(Buffer.from(caps.join(','), 'utf8'))}${tail}` : `capabilities ${caps.join(',')}${tail}`;
+      // Aegis ruling: the full line lists every read path; the compacted line shows only their count
+      const reads = strs('read') ?? [];
+      if (compactCaps) return `${caps.length} capabilities sha:${digest12(Buffer.from(caps.join(','), 'utf8'))}${reads.length ? ` (reads ${reads.length} paths)` : ''}`;
+      return `capabilities ${caps.join(',')}${reads.length ? ` (reads ${reads.join(' ')})` : ''}`;
     }
     case 'grant.egress': {
       const hosts = strs('hosts');
