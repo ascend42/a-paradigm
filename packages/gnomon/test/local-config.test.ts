@@ -63,7 +63,7 @@ function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['
   const sessionCfgs: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:01HZZZZZZZZZZZZZZZZZZZZZZ${cards.length}` }) };
   const children = { intend: intend ?? (async () => { throw new Error('intend reached (test stop)'); }), track: async () => undefined, stop: async () => false };
-  const l = new LocalLane({
+  const l = new LocalLane({ sessionPath: null, pathDenies: [],
     log, children: children as never, fuse, broker: broker as never, home, userHome: path.join(home, '..', 'userhome'), kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(home, 'k.sock'),
     // the test-rig launch seam: never a real sandbox here, and the run stops at intend
     launchPlan: (i) => {

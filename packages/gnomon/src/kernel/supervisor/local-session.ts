@@ -58,11 +58,11 @@ import { hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, 
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { buildSessionPolicy, policyHash, type SessionPolicy } from '../manifest/policy.js';
+import { buildSessionPolicy, policyHash, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { defaultClaudeJson } from '../manifest/layers.js';
 import { sessionLaunchPlan, type SessionLaunchInput, type SessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, sessionPathFor, type SessionIdentity } from '../runner/env.js';
+import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, type SessionIdentity } from '../runner/env.js';
 import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -104,8 +104,10 @@ export interface LocalLaneOptions {
   env?: () => Readonly<Record<string, string | undefined>>;
   /** the OS identity for USER/LOGNAME/SHELL/TMPDIR (runner/env.ts); default sessionIdentity() */
   identity?: SessionIdentity | null;
-  /** TD-2026-10-21-077: the joined session PATH the supervisor resolved (a value; default: the built-in per-platform PATH) */
-  sessionPath?: string | null;
+  /** TD-2026-10-21-077: the joined session PATH the supervisor resolved (REQUIRED, Aegis L; null = the allowlisted PATH, win32) */
+  sessionPath: string | null;
+  /** Aegis M: write denies for the PATH dirs a session must not plant into (the in-home node dir); required with sessionPath */
+  pathDenies: readonly PolicyPath[];
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
@@ -191,7 +193,7 @@ export class LocalLane {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
     this.#identity = o.identity !== undefined ? o.identity : sessionIdentity();
-    this.#sessionPath = o.sessionPath !== undefined ? o.sessionPath : sessionPathFor(null, { nodeDir: path.dirname(process.execPath), ...(this.#identity?.home ? { home: this.#identity.home } : {}) });
+    this.#sessionPath = o.sessionPath;
   }
 
   /** Aegis L2: the OS home (passwd), never $HOME; the userHome seam still wins */
@@ -388,7 +390,7 @@ export class LocalLane {
         managedSettingsPaths: row ? managedFiles(row) : [],
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
-        extraDenyWrite: [],
+        extraDenyWrite: [...this.#o.pathDenies],
         localRunner: { node: pin.node, dir: pin.dir },
         // T-2026-10-18-010: the home is read-denied; only this session's dir (local.yaml) and the staged runner copy are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: runner.copy, match: 'subpath' }],

@@ -47,7 +47,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
@@ -91,7 +91,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
@@ -138,7 +138,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
       },
     };
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse: fuse as never, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
@@ -176,7 +176,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(rt, 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
@@ -206,7 +206,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     };
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
@@ -240,7 +240,7 @@ describe('Aegis L1 / L2 + TD-2026-10-21-077 (LocalLane env and profile extras)',
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
     let seen: { tmpdir: string; home: string } | null = null;
-    const lane = new LocalLane({
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, ...(withUserHome ? { userHome: root } : {}), kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       env: () => ({ HOME: '/daemon-home-probe', PATH: '/daemon/path/probe', TMPDIR: '/daemon-tmp-probe/' }),
       identity, sessionPath: '/cfg/bin:/usr/bin:/bin',

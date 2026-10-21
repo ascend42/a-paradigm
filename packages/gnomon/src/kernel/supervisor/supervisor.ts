@@ -112,7 +112,7 @@ import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, sessionIdentity, sessionPathFor, type SessionIdentity } from '../runner/env.js';
+import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
@@ -240,6 +240,8 @@ export interface SupervisorOptions {
   identity?: () => SessionIdentity | null;
   /** TD-2026-10-21-077: the root-signed `config.sessions.path` (null/absent ⇒ runner/env.ts defaultSessionPath); never the daemon's PATH */
   sessionPath?: readonly string[] | null;
+  /** test seam: the node whose dir heads the default session PATH (default process.execPath) */
+  nodeExecPath?: string;
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
@@ -452,6 +454,8 @@ export class SessionSupervisor {
   readonly #platform: string;
   readonly #identity: SessionIdentity | null;
   readonly #sessionPath: string | null;
+  /** Aegis M: the in-home node dir on the session PATH is write-denied in every session profile */
+  readonly #pathDenies: PolicyPath[];
   readonly #local: LocalLane;
   /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
   #drain: Promise<DrainReport> | null = null;
@@ -484,12 +488,23 @@ export class SessionSupervisor {
     // the session identity is resolved ONCE, at daemon start, from the OS (runner/env.ts), never from the daemon's env
     this.#identity = (o.identity ?? sessionIdentity)();
     // TD-2026-10-21-077: the session PATH, once: config, else the per-platform default (the running node's dir, an OS fact)
-    this.#sessionPath = sessionPathFor(o.sessionPath, { nodeDir: path.dirname(process.execPath), ...(this.#identity?.home ? { home: this.#identity.home } : {}) });
+    // TD-2026-10-21-077/-162: the session PATH (config, else the default headed by the node dir's realpath), then every
+    // user-writable dir on it is write-denied in every session profile (planSessionPath); win32 keeps the allowlist
+    const nodeDir = sessionNodeDir(o.nodeExecPath ?? process.execPath);
+    const joined = sessionPathFor(o.sessionPath, { ...(nodeDir ? { nodeDir } : {}), home: this.#userHome() });
+    if (joined === null || process.platform === 'win32') {
+      this.#sessionPath = joined;
+      this.#pathDenies = [];
+    } else {
+      const plan = planSessionPath(joined.split(':'), { home: this.#userHome() });
+      this.#sessionPath = plan.dirs.join(':');
+      this.#pathDenies = plan.denies.map((p) => ({ path: realpathLoose(p), match: 'subpath', class: 'persistence' }));
+    }
     // Aegis ruling 3: one row at daemon start when the OS identity is incomplete (names only, no error text)
     const missing = missingIdentity(this.#identity);
     if (missing.length) void Promise.resolve().then(() => o.log('session.sandbox', { phase: 'identity', missing })).catch(() => undefined);
     this.#local = new LocalLane({
-      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath,
+      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
@@ -643,7 +658,7 @@ export class SessionSupervisor {
         managedSettingsPaths: managed,
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
-        extraDenyWrite: binaryDenies(row, userHome, bin.real, this.#o.claudePath),
+        extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies],
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
         ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable

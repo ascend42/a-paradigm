@@ -38,7 +38,7 @@ function lane(config: ConstructorParameters<typeof LocalLane>[0]['config']) {
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:01HZZZZZZZZZZZZZZZZZZZZZZ${cards.length}` }) };
   const children = { intend: async () => { throw new Error('no spawn expected'); }, track: async () => undefined, stop: async () => false };
-  const l = new LocalLane({ log, children: children as never, fuse, broker: broker as never, home: '/nonexistent-gnomon-home', kernelPrincipal: 'p:abcdefgh/kernel', sock: '/tmp/x.sock', ...(config ? { config } : {}) });
+  const l = new LocalLane({ sessionPath: null, pathDenies: [], log, children: children as never, fuse, broker: broker as never, home: '/nonexistent-gnomon-home', kernelPrincipal: 'p:abcdefgh/kernel', sock: '/tmp/x.sock', ...(config ? { config } : {}) });
   return { l, rows, cards, fuse };
 }
 const req = (model: string) => ({ principal: HUMAN, principalClass: 'human', attended: true, cwd: process.cwd(), model });

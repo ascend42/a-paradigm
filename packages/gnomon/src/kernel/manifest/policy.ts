@@ -257,6 +257,9 @@ export const PERSISTENCE_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }>
   { rel: '.gitconfig', match: 'literal' },
   { rel: '.config/git', match: 'subpath' },
   { rel: '.ssh', match: 'subpath' },
+  // Aegis M (TD-2026-10-21-077): ~/.local/bin is on every session's PATH ahead of /usr/bin — a planted `ls`/`git`
+  // there would run in a later session's auto-passed read-only command with no card
+  { rel: '.local/bin', match: 'subpath' },
 ]);
 
 /** Realpath the longest existing prefix of `p` and append the rest. */

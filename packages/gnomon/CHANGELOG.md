@@ -36,4 +36,6 @@ Gnomon changes on `feat/gnomon` before they reach a Paradigm release. Format: [K
 
 ### Security
 
+- **Every user-writable directory on the session PATH is write-denied** (TD-2026-10-21-162, Aegis M, `#session-runner`, `#supervisor`, `#manifest-loader`). With `~/.local/bin` and the node directory ahead of `/usr/bin`, a session could plant an `ls` or `git` that a later session's auto-passed read-only command would run with no card. The `session` profile now denies writes (never reads or exec) to `~/.local/bin` (also a persistence path), the node directory (by realpath) when it is user-writable, a Homebrew prefix as a whole (`/opt/homebrew`; on `/usr/local` only `bin`, `sbin` and `Cellar`; found by realpath, never `HOMEBREW_PREFIX`), and any other user-writable PATH entry. A PATH entry that is the home or above it is dropped. Sessions can no longer `brew install` or `npm i -g` into those prefixes: Edit/Write is refused by Claude Code's permission rule and the shell gets `Operation not permitted`. The daemon's law-7 user-settings scan and claude source lookup use the OS home (`os.userInfo().homedir`), not `$HOME`.
+
 - No web port is remembered across a restart (Aegis H1). Each plain start binds an OS-chosen port, and any `web-port.json` left over from the withdrawn build is deleted without being read.

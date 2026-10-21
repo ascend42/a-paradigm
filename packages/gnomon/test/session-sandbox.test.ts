@@ -20,7 +20,8 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { binaryDenies, ensureTranscriptDir } from '../src/kernel/supervisor/supervisor.js';
-import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
+import { buildSessionPolicy, realpathLoose } from '../src/kernel/manifest/policy.js';
+import { planSessionPath } from '../src/kernel/runner/env.js';
 import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin/session-sbpl.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
@@ -46,6 +47,7 @@ let server: http.Server;
 let port = 0;
 let hits = 0;
 let out: Record<string, string> = {};
+let pathPlan: { dirs: string[]; denies: string[] } = { dirs: [], denies: [] };
 let sock: net.Server | null = null;
 let homeSock: net.Server | null = null;
 let createdScreenDir = false;
@@ -92,6 +94,14 @@ beforeAll(async () => {
   await new Promise<void>((r) => homeSock!.listen(path.join(w.home, 'gnomon.sock'), () => r()));
   const own = path.join(w.home, 'sessions', 'own');
   const bd = binaryDenies({ knownBinaries: ['~/.local/bin/claude'], managedSettings: [], managedSettingsDirs: [], managedUnscannable: [], userClaudeDir: '.claude' }, w.userHome, path.join(versions, '2.1.302'));
+  // TD-2026-10-21-162: a user-writable Homebrew-shaped prefix and ~/.local/bin on the session PATH are write-denied
+  const brew = path.join(w.root, 'brew');
+  fs.mkdirSync(path.join(brew, 'Cellar', 'tool', '1', 'bin'), { recursive: true });
+  fs.mkdirSync(path.join(brew, 'bin'));
+  fs.writeFileSync(path.join(brew, 'Cellar', 'tool', '1', 'bin', 'tool'), '#!/bin/sh\necho tool_ran\n', { mode: 0o755 });
+  fs.symlinkSync(path.join(brew, 'Cellar', 'tool', '1', 'bin', 'tool'), path.join(brew, 'bin', 'tool'));
+  pathPlan = planSessionPath([path.join(w.userHome, '.local', 'bin'), path.join(brew, 'bin'), '/usr/bin'], { home: w.userHome });
+  bd.push(...pathPlan.denies.map((p) => ({ path: realpathLoose(p), match: 'subpath' as const, class: 'persistence' as const })));
   const script = path.join(w.root, 'check.sh');
   fs.writeFileSync(
     script,
@@ -121,6 +131,11 @@ mkdir -p "${w.userHome}/.claude/projects/-enc-dir" 2>/dev/null && echo '{"a":1}'
 (echo x > "${w.userHome}/.ssh/authorized_keys") 2>/dev/null && echo "write_ssh=allowed" || echo "write_ssh=blocked"
 (echo x > "${w.userHome}/Library/LaunchAgents/x.plist") 2>/dev/null && echo "write_launchagent=allowed" || echo "write_launchagent=blocked"
 (echo x > "${w.userHome}/.gitconfig") 2>/dev/null && echo "write_gitconfig=allowed" || echo "write_gitconfig=blocked"
+(echo x > "${w.userHome}/.local/bin/ls") 2>/dev/null && echo "write_local_bin=allowed" || echo "write_local_bin=blocked"
+(/usr/bin/readlink "${w.userHome}/.local/bin/claude") >/dev/null 2>&1 && echo "read_local_bin=ok" || echo "read_local_bin=fail"
+(echo x > "${brew}/bin/git") 2>/dev/null && echo "write_brew_bin=allowed" || echo "write_brew_bin=blocked"
+(echo x > "${brew}/Cellar/tool/1/bin/tool") 2>/dev/null && echo "write_brew_cellar=allowed" || echo "write_brew_cellar=blocked"
+"${brew}/bin/tool" 2>/dev/null | /usr/bin/grep -q tool_ran && echo "exec_brew=ok" || echo "exec_brew=fail"
 /bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" submit -l "${LABEL}" -- /usr/bin/touch "${MARKER}" >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
 ${copiedOsascript(w.root)}
 /bin/cp /usr/bin/open "${w.root}/op" 2>/dev/null; "${w.root}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
@@ -200,6 +215,10 @@ describe.runIf(MACOS_OK)('copied-osascript record under the generated profile (m
 describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darwin, macOS 15+, SIP enabled)', () => {
   it('Aegis H1: the claude binary, its versions dir and its known-location link cannot be replaced', () => {
     expect(out).toMatchObject({ write_binary: 'blocked', write_versions: 'blocked', unlink_link: 'blocked' });
+  });
+  it('TD-2026-10-21-162: ~/.local/bin and a user-writable Homebrew prefix on the session PATH are unwritable; read and exec still work', () => {
+    expect(pathPlan.denies).toEqual(expect.arrayContaining([fs.realpathSync.native(path.join(w.root, 'brew'))]));
+    expect(out).toMatchObject({ write_local_bin: 'blocked', read_local_bin: 'ok', write_brew_bin: 'blocked', write_brew_cellar: 'blocked', exec_brew: 'ok' });
   });
   it('Aegis M2: shell rc, ~/.ssh, LaunchAgents and ~/.gitconfig are unwritable', () => {
     expect(out).toMatchObject({ write_zshrc: 'blocked', write_ssh: 'blocked', write_launchagent: 'blocked', write_gitconfig: 'blocked' });
