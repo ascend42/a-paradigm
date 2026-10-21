@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Read-only commands are read-only** (`#command-policy`). On every command, read-only ones included, the CLI's preAction hook wrote `.paradigm/.v6-0-4-migration-acknowledged` the first time it ran in a cohort-C project, and `paradigm lore list/show` moved legacy root-level lore entries into dated directories. A read verb could therefore change the project.
 
+### Added
+- **Mika's design process ships with her** (`#designer-agent`, TD-2026-10-21-306). The bundled `designer.agent` template gains three behaviours, so every project gets them without Atelier or Luna:
+  - `review-checklist`: the accessibility and token checklist.
+  - `ui-build-protocol`: on every UI change, an inventory of what changed and where, plus checks for consistency with sibling elements, the right zone, duplicate entry points, all states, copy, narrow widths, and the design record. The output is a verdict and `file:line` proposals for the builder.
+  - `design-options-protocol`: audit first, options that each name a distinct structural axis (styling-only variants are cut), the real "Now" shown beside every option, and decisions recorded in the project's design system.
+
 ### Fixed
 - **A declared read-only command set** (`src/core/command-policy.ts`, `READ_ONLY_COMMANDS`): `status`, `doctor`, `ripple`, `integrity`, `purpose validate`, `portal validate`, `task ls`, `task show`, `lore list`, `lore show` and `notices`. These commands make no filesystem writes (project or HOME) and no network calls, global hooks included. Any other command is a write command.
 - **The migration notice on a read-only command prints but never writes** (`#migration-notices`). Notices now go to stderr, so `--json` stdout stays clean, and print at most once per process. On a write command the notice prints and is acknowledged, as before.
