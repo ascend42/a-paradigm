@@ -9,7 +9,7 @@
  *     runs through its one `run()` path, or the standing-grant Revoke (core/standing.ts revokeRequest). The
  *     closed list is SETTINGS_RUNS; test/settings.test.ts proves every control is in it. No new kernel verb.
  *   - Kernel-owned values (the mode ceiling, the cached unlock and its bounds, the connection, the bundle pin, the
- *     hotkeys the voice app owns) render READ-ONLY with a `how` line: how to change it, never a terminal-only path.
+ *     rung in force) render READ-ONLY with a `how` line: how to change it, never a terminal-only path.
  *   - The Layout rows are the presets and the pane toggles only: a kernel-owned region (the voice pill, the
  *     extension-risk badge, the connection readout, the mode control, the status line) is never a row here.
  *   - Theme and in-app motion persist per browser (localStorage THEME_KEY / MOTION_KEY, a presentation
@@ -17,13 +17,13 @@
  *   - The cached unlock has no status field today, so its state is folded from the kernel-signed rows the page
  *     already reads (`approval.unlock`, `approval.unlock.dropped`, `daemon.start`), read-only.
  */
-import { CLIENT_API_ID } from '@a-company/gnomon-contracts';
+import { CLIENT_API_ID, type VoicePreset } from '@a-company/gnomon-contracts';
 import { GUI_COMMANDS, PRESETS, WORKSHOP_PLACES, resolveMotion, resolveTheme, type Layout, type ThemeChoice } from './commands.js';
-import { DELAY_CHOICES, delayLabel, serializeDelay } from './dictation.js';
 import { defaultScope, MODE_HELP, planFor, RUN_MODES, type SessionModeView } from './modes.js';
 import { isKernelPrincipal, standingStatusOf, STANDING_TUPLE_TEXT } from './standing.js';
 import { clientBusy, clientOf } from './voice-client.js';
-import { canAttach, voiceStatusOf, VOICE_TITLE } from './voice.js';
+import { canAttach, voiceStatusOf } from './voice.js';
+import { rungOf, RUNG_NAME } from './voice-ladder.js';
 
 export const THEME_KEY = 'gnomon.gui.theme';
 export const MOTION_KEY = 'gnomon.gui.motion';
@@ -93,9 +93,7 @@ export const SETTINGS_RUNS: ReadonlySet<string> = new Set(
       id.startsWith('mode.repo.') ||
       id === 'voice.client.start' ||
       id === 'voice.client.stop' ||
-      id === 'voice.enrol' ||
-      id === 'voice.settings.open' ||
-      id.startsWith('voice.delay.'),
+      id === 'voice.settings.open',
   ),
 );
 
@@ -139,7 +137,8 @@ export interface SettingsInput {
   status: Record<string, unknown> | null;
   /** the focused session's run mode (status.runModes), or null */
   mode: SessionModeView | null;
-  dictationDelayMs: number | null;
+  /** the page's voice preset (core/voice-presets.ts), for the rung readout on an older kernel; absent = dictate */
+  voicePreset?: VoicePreset;
   /** #gui-model-picker: the focused session's model text (core/model-picker.ts sessionModelText); absent = no row */
   sessionModel?: string;
   /** this page's connection, or null when not connected */
@@ -216,19 +215,14 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
           ? { kind: 'readonly', id: 'voice-app', label: 'Voice app', value: phase, how: 'The voice app cannot run on this Mac as installed; the mic pill says why.' }
           : { kind: 'action', id: 'voice-app', label: `Voice app · ${phase}`, run: 'voice.client.start', note: c.phase === 'crashed' ? 'Restart voice' : 'Start voice' },
     );
-    voice.push({ kind: 'action', id: 'voice-enrol', label: `Enrolled voices · ${c.enrolled === null ? 'not listed by this kernel' : c.enrolled.length ? c.enrolled.join(', ') : 'none yet (no speech is forwarded until one is)'}`, run: 'voice.enrol', note: 'Teach Gnomon your voice…' });
-    // Atelier 2026-10-21 (#gui-voice-settings): everything voice configures lives in ONE Voice settings sheet
+    // Atelier 2026-10-21 (#gui-voice-settings, Luna #2): everything voice configures lives in ONE Voice settings sheet;
+    // General Settings only starts/stops the voice app, links the sheet and reads out the rung in force
     voice.push({ kind: 'action', id: 'voice-settings', label: 'Your voice, send word, keys, listening, timing, risk', run: 'voice.settings.open', note: 'Voice settings…' });
   }
-  voice.push({ kind: 'readonly', id: 'voice-mode', label: 'Listening mode', value: v.state === 'off' ? 'off: no session has the mic' : `${VOICE_TITLE[v.state]} on ${v.hsid ? v.hsid.slice(-10) : 'a session'}`, how: 'Chosen live, not here: open the voice pill in the header and pick a rung (Off, Talk, Dictate, Send word, Pieces). An open mic asks for Touch ID once per login.' });
-  voice.push({ kind: 'readonly', id: 'voice-hotkey', label: 'Talk hotkey', value: `hold ${v.hotkey}; ⌃⌥H holds the dictation`, how: 'The voice app owns its global hotkeys; they are shown here as they are.' });
-  voice.push({
-    kind: 'choice',
-    id: 'dictation-delay',
-    label: 'Dictation auto-send',
-    options: DELAY_CHOICES.map((d) => ({ run: `voice.delay.${serializeDelay(d)}`, label: d === null ? 'Never' : `after ${delayLabel(d)}`, current: d === i.dictationDelayMs })),
-    note: 'after this much silence a dictated draft sends itself · kept on this Mac',
-  });
+  if (s && human) {
+    const rung = rungOf(v, i.voicePreset ?? 'dictate');
+    voice.push({ kind: 'readonly', id: 'voice-rung', label: 'Voice', value: rung === 'off' ? `${RUNG_NAME.off}: no session has the mic` : `${RUNG_NAME[rung]} on ${v.hsid ? v.hsid.slice(-10) : 'a session'}`, how: 'Chosen live from the voice pill in the header (Off, Talk, Dictate, Send word, Pieces).' });
+  }
 
   const permissions: SettingRow[] = [];
   const m = i.mode;

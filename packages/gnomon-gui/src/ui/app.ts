@@ -966,7 +966,7 @@ const settings = mountSettings(document, {
       layout,
       status,
       mode: currentMode(),
-      dictationDelayMs: dict.delayMs,
+      voicePreset,
       sessionModel: sessionModelText(focused ? sessionModelOf(store.transcript(focused)) : null),
       connection: session && client ? { principal: session.principal, connId: session.connId, surface: SURFACE, clientApiDrift: session.clientApiDrift } : null,
       gui: GUI_CLIENT,

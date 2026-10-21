@@ -35,7 +35,6 @@ const input = (o: Partial<SettingsInput> = {}): SettingsInput => ({
   layout: applyPreset('desk'),
   status: STATUS,
   mode: MODE,
-  dictationDelayMs: 5000,
   connection: { principal: 'p:7k2m9q4x/matt', connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZB', surface: 'wrapper', clientApiDrift: true },
   gui: { name: 'gnomon-gui', version: '8.0.0-test' },
   unlock: { state: 'open', at: '2026-10-20T14:00:00.000Z', reason: null },
@@ -88,6 +87,21 @@ describe('#gui-settings sheet: only allowed controls', () => {
       if (id.startsWith('pane.')) expect(['pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle']).toContain(id);
     }
   });
+  it('the Voice section only starts/stops the voice app, links the Voice settings sheet and reads out the rung (Luna #2)', () => {
+    const voice = (i: SettingsInput): SettingRow[] => settingsModel(i).find((x) => x.id === 'voice')!.rows;
+    expect(voice(input()).map((r) => r.id)).toEqual(['voice-app', 'voice-settings', 'voice-rung']);
+    expect(voice(input()).find((r) => r.id === 'voice-rung')).toMatchObject({ kind: 'readonly', value: 'Off: no session has the mic' });
+    const attachedWord = { ...STATUS, voice: { ...STATUS.voice, attached: true, state: 'ambient', send: 'word', hsid: 'hsid:v1:billing01' } };
+    expect(voice(input({ status: attachedWord })).find((r) => r.id === 'voice-rung')).toMatchObject({ value: expect.stringMatching(/^Send word on /) });
+    const all = SETTINGS_RUNS;
+    for (const gone of ['voice.enrol', 'voice.delay.5000', 'voice.delay.off']) expect(all.has(gone), gone).toBe(false);
+    for (const i of [input(), input({ status: attachedWord })])
+      for (const r of voice(i)) {
+        const text = JSON.stringify(r);
+        expect(text).not.toMatch(/Ambient|Push-to-talk|auto-send|hotkey|⌃⌥H|Teach Gnomon/);
+      }
+    expect(voice(input({ status: null })).map((r) => r.id)).toEqual(['voice-app']);
+  });
   it('the five sections in order', () => {
     expect(settingsModel(input()).map((s) => s.id)).toEqual(['appearance', 'layout', 'voice', 'permissions', 'about']);
   });
@@ -106,9 +120,9 @@ describe('#gui-settings sheet: only allowed controls', () => {
 });
 
 describe('#gui-settings sheet: kernel-owned items are read-only', () => {
-  it('ceiling, unlock, connection, build, clientApiId, listening mode, hotkeys and the always-shown regions are read-only, each with a how line', () => {
+  it('ceiling, unlock, connection, build, clientApiId, the voice rung and the always-shown regions are read-only, each with a how line', () => {
     const by = new Map(rows().map((r) => [r.id, r]));
-    for (const id of ['mode-ceiling', 'unlock', 'connection', 'build', 'client-api', 'voice-mode', 'voice-hotkey', 'kernel-regions']) {
+    for (const id of ['mode-ceiling', 'unlock', 'connection', 'build', 'client-api', 'voice-rung', 'kernel-regions']) {
       const r = by.get(id);
       expect(r?.kind, id).toBe('readonly');
       if (r?.kind === 'readonly') expect(r.how.length, id).toBeGreaterThan(10);
