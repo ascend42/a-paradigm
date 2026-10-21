@@ -1309,6 +1309,10 @@ components:
 
   kernel-log:
     description: >-
+      TD-2026-10-20-514 (Aegis C1f, G-ID-12): replay's checkRootDecisions
+      checks every v2 root decision's rowsDigest against the logged card's
+      root-rows detail and, with the pinned root verifier, its rootSig
+      (root-rows-missing | root-rows-digest | root-sig-bad).
       #kernel-log (spec §3.2, M1.2; research 29 §4 PR-4) — the one
       hash-chained, append-only, segmented kernel log. node:sqlite; active
       segment <home>/kernel.db, sealed segments <home>/log/segments/NNNNNN.db
@@ -1742,6 +1746,11 @@ components:
       - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      TD-2026-10-20-514 follow-up: a client decisionSig takes the root-only
+      decision.sign form (Aegis F6, 1 prompt); a root-capable card's block
+      carries {type:'root-rows', rootDecisions, detail} for the GUI (C1e);
+      helperBatch()/refreshHelperBatch() = status.helper.batch (Q2);
+      RaiseInput.rootDecisions raises voice.enrol allow to root (Q3).
       TD-2026-10-20-514: every root-class card carries detail.rootRows; #approve
       prepares the rows (RaiseInput.prepare), builds the gnomon-root-decision:v2
       row (rowsDigest) and makes ONE fresh prompt with signDecisionBatch on a
@@ -2012,6 +2021,11 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and
+      hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId,
+      consentHash; seq under the enrolments lock), commitEnrol re-checks seq
+      and writes the consent text to voice/consents/<hex>.txt; the consent
+      never enters the card or the log. ONE presence.
       Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a
       kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human
       session.send{source:'voice'} is hash-matched against the attachment's
@@ -3148,6 +3162,9 @@ components:
 
   mod-host:
     description: >-
+      TD-2026-10-20-514: the uninstall card shows its grant.uninstall row in
+      detail.rootRows, prepares it (pin still effective) and commits it via
+      appendSignedGrantRows: ONE presence; a dropped request expires the card.
       S0b (Aegis L1): status.mods.publishers maps each RUNNING mod id to its
       publisher display {host, verified} (publisherDisplayOf(publisher, source)
       from the install row's source), so GUI panel headers and offer chips render

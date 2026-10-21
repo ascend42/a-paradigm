@@ -48,6 +48,11 @@ components:
       fixture `model-switch` (preview/fixtures.ts).
     tags: [gui, model]
   gui:
+    root-rows: >-
+      TD-2026-10-20-514 (Aegis C1e, G-ID-11): rootRowsOf verifies the card's root-rows node against contentHash;
+      renderCard shows "This decision signs" in full and NO root-class key without it; GuiStore.rootMismatches
+      flags a logged rowsDigest that is not the shown rows' digest; a notice when status.helper.batch is
+      unavailable (helper < 1.8.0).
     fidelity-2: >-
       Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
       Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, a title
