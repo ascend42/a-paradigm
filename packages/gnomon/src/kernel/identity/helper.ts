@@ -125,6 +125,8 @@ export interface HelperTransport {
   readonly running?: boolean;
   /** T-2026-10-18-028 M3: end the current helper process (its unlocks die with it) without closing for good. Default: close(). */
   recycle?(): Promise<void>;
+  /** TD-2026-10-20-514: the version the running helper's `info` handshake reported (undefined before one ran). */
+  readonly version?: string;
 }
 
 /** Synchronous one-shot (`gnomon-helper once`): root signatures from synchronous callers (the CLI). */
@@ -287,10 +289,11 @@ export function versionAtLeast(v: unknown, min: string): boolean {
   return true;
 }
 
-/** Check an `info` reply (H1 c): protocol, version floor, signing identity as the helper reports it. */
-export function checkHelperInfo(info: HelperReply): void {
+/** Check an `info` reply (H1 c): protocol, version floor, signing identity as the helper reports it. Returns the version. */
+export function checkHelperInfo(info: HelperReply): string {
   if (info.protocol !== HELPER_PROTOCOL) throw new HelperUnavailableError('version', `the helper speaks ${String(info.protocol)}, not ${HELPER_PROTOCOL}`);
   if (!versionAtLeast(info.version, MIN_HELPER_VERSION)) throw new HelperUnavailableError('version', `helper ${String(info.version)} is older than the minimum ${MIN_HELPER_VERSION}`);
+  return info.version as string;
 }
 
 /* ── the long-lived helper child (`serve`) ─────────────────────────────── */
@@ -317,8 +320,14 @@ export class HelperProcess implements HelperTransport {
   #buf = Buffer.alloc(0);
   #alive = true;
   #ready = false;
+  #version: string | undefined;
   readonly #exitCbs: Array<() => void> = [];
   readonly #pushCbs: Array<(p: HelperPush) => void> = [];
+
+  /** TD-2026-10-20-514: the version this process's handshake reported (the kernel picks decision.sign from it). */
+  get version(): string | undefined {
+    return this.#version;
+  }
 
   private constructor(child: ChildProcess) {
     this.#child = child;
@@ -348,7 +357,7 @@ export class HelperProcess implements HelperTransport {
       timeoutMs: HELPER_OP_TIMEOUT_MS,
       resolve: (info) => {
         try {
-          checkHelperInfo(info);
+          p.#version = checkHelperInfo(info);
           p.#ready = true;
         } catch (e) {
           p.#gone(e as Error);
@@ -520,6 +529,11 @@ export class SupervisedHelper implements HelperTransport {
 
   get alive(): boolean {
     return !this.#closed; // starts on demand; a failed start rejects the request
+  }
+
+  /** The current process's handshake version (undefined when none runs yet). */
+  get version(): string | undefined {
+    return this.#cur?.alive ? this.#cur.version : undefined;
   }
 
   /** A helper process is up now (an unlock can exist only in a running process). */

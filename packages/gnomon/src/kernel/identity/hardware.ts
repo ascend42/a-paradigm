@@ -32,7 +32,8 @@ import { canonicalJson, nsFromRootPublicKey } from '@a-company/gnomon-contracts'
 import { KeyRing, p256KeyId, signaturePreimage, type SignatureDomain } from '../log/signer.js';
 import { beginHardwarePresence, completeHardwarePresence, PresenceToken, type PresenceBinding, type PresencePurpose } from './presence.js';
 import { RootUnavailableError, RootVerifier, rowMessage, type RootAuthority } from './root-authority.js';
-import { HELPER_SIGN_TIMEOUT_MS, HelperRefusal, HelperUnavailableError, type HelperOnceSync, type HelperPush, type HelperReply, type HelperTransport } from './helper.js';
+import { HELPER_OP_TIMEOUT_MS, HELPER_SIGN_TIMEOUT_MS, HelperRefusal, HelperUnavailableError, versionAtLeast, type HelperOnceSync, type HelperPush, type HelperReply, type HelperTransport } from './helper.js';
+import { BatchRefusal, checkDecisionBatch, DECISION_HELPER_VERSION, intentBytes } from './decision-batch.js';
 
 /** The helper's prompt text is bounded (the helper refuses > 512 chars). */
 export const HELPER_REASON_MAX = 500;
@@ -80,9 +81,9 @@ export function derToP1363(der: Uint8Array): Buffer {
   return Buffer.concat([r, s]);
 }
 
-/** The helper's `sigs[]`, converted and length-checked. */
-function sigsOf(reply: HelperReply, n: number): Buffer[] {
-  const sigs = reply.sigs;
+/** The helper's `sigs[]` (or another array field), converted and length-checked. */
+function sigsOf(reply: HelperReply, n: number, field = 'sigs'): Buffer[] {
+  const sigs = reply[field];
   if (!Array.isArray(sigs) || sigs.length !== n || !sigs.every((s) => typeof s === 'string')) throw new HelperUnavailableError('protocol', 'the helper returned the wrong number of signatures');
   try {
     return (sigs as string[]).map((s) => derToP1363(Buffer.from(s, 'base64')));
@@ -255,6 +256,36 @@ export interface DecisionSignResult {
   bounds?: unknown;
 }
 
+/**
+ * TD-2026-10-20-514: ONE helper request (`decision.sign`, helper >= 1.8.0) for a whole card decision: the approvals
+ * messages (decisionSig + the presence challenge) and every root row, under one fresh presence.
+ */
+export interface DecisionBatchRequest {
+  connId: string;
+  approver: string;
+  /** decisionMessage(...); absent = the root-only form (a client-supplied decisionSig) */
+  message?: string;
+  /** the kernel-composed prompt text (the helper caps it, AFTER its own line) */
+  prompt: string;
+  /** the presence token to mint in the same touch */
+  presence?: { purpose: PresencePurpose; binding: PresenceBinding };
+  /** [the gnomon-root-decision:v2 row, ...the rows the commit writes] */
+  rows: readonly Record<string, unknown>[];
+  /** the card's detail.rootRows: what rowsDigest commits to (sent as `intent`) */
+  intent: readonly unknown[];
+  /** the PINNED root key: every root signature is verified against it before it is returned */
+  root: { readonly rootKeyId: string | null; verifyRow(signer: string, row: unknown, sigB64: string): boolean };
+}
+
+export interface DecisionBatchResult {
+  decisionSig: string | null;
+  token: PresenceToken | null;
+  /** one per request row, in order (rootSigs[0] is the decision row's) */
+  rootSigs: Array<{ signer: string; sig: string }>;
+  /** the helper's own dialog line, byte-equal to the kernel's rebuild */
+  shown: string;
+}
+
 /** Thrown by signDecision when the human declined (FORBIDDEN presence). */
 export class HardwarePresenceDenied extends Error {
   constructor(readonly why: string) {
@@ -334,6 +365,83 @@ export class HelperApprovalsKey {
       token = t;
     }
     return { decisionSig, token, kept: reply.kept === true, ...(reply.kept === true && reply.bounds !== undefined ? { bounds: reply.bounds } : {}) };
+  }
+
+  /** TD-2026-10-20-514: the running helper's version (its handshake; else one `info`). null = unknown. */
+  async helperVersion(): Promise<string | null> {
+    if (typeof this.#helper.version === 'string') return this.#helper.version;
+    try {
+      const r = await this.#helper.request({ op: 'info' }, HELPER_OP_TIMEOUT_MS);
+      return typeof r.version === 'string' ? r.version : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Does the helper take `decision.sign` (>= 1.8.0)? The path is chosen from info.version ONLY (Aegis C6). */
+  async decisionBatchAvailable(): Promise<boolean> {
+    return versionAtLeast(await this.helperVersion(), DECISION_HELPER_VERSION);
+  }
+
+  /**
+   * TD-2026-10-20-514: ONE fresh presence signs the whole decision (helper `decision.sign`). The batch is checked here
+   * first by the same rules the helper enforces (decision-batch.ts), so a bad batch never prompts; then EVERY
+   * signature is verified against the pinned keys and `shown` is compared byte-exact with the kernel's rebuild of the
+   * helper's line (Aegis C2). Any mismatch burns the presence challenge and throws: nothing is returned half-checked.
+   */
+  async signDecisionBatch(req: DecisionBatchRequest): Promise<DecisionBatchResult> {
+    if (req.approver !== this.principalId) throw new HardwarePresenceDenied('the approver is not the human this approvals key belongs to');
+    if (req.root.rootKeyId === null) throw new RootUnavailableError('a decision batch (no root key)');
+    const challenge = req.presence ? beginHardwarePresence(req.presence.purpose, req.presence.binding, req.connId) : null;
+    const burn = (): void => {
+      if (challenge) completeHardwarePresence(challenge.challengeId, this.keyId, new Uint8Array(0), this.#ring);
+    };
+    const approvals = [...(req.message !== undefined ? [b64('approve', req.message)] : []), ...(challenge ? [b64('presence', challenge.message)] : [])];
+    const root = req.rows.map((r) => b64('row', rowMessage(r)));
+    const intent = intentBytes(req.intent);
+    let expected: string;
+    try {
+      expected = checkDecisionBatch(approvals.map((m) => Buffer.from(m, 'base64')), root.map((m) => Buffer.from(m, 'base64')), intent).line;
+    } catch (e) {
+      burn();
+      throw e instanceof BatchRefusal ? new HardwarePresenceDenied(`the decision batch is refused before any prompt (${e.why})`) : e;
+    }
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request(
+        { op: 'decision.sign', gen: this.gen, connId: req.connId, reason: clampReason(req.prompt), approvals, root, intent: intent.toString('base64') },
+        HELPER_SIGN_TIMEOUT_MS,
+      );
+    } catch (e) {
+      burn();
+      if (e instanceof HelperRefusal && e.code === 'presence-denied') throw new HardwarePresenceDenied('declined at the prompt');
+      throw e;
+    }
+    try {
+      const aSigs = sigsOf(reply, approvals.length, 'approvalSigs');
+      const rSigs = sigsOf(reply, root.length, 'rootSigs');
+      if (reply.shown !== expected) throw new HardwarePresenceDenied('the helper showed another line than the one this decision signs');
+      let decisionSig: string | null = null;
+      if (req.message !== undefined) {
+        decisionSig = aSigs[0]!.toString('base64');
+        if (this.verify(req.approver, req.message, decisionSig) !== 'ok') throw new HardwarePresenceDenied('the helper returned a decisionSig that does not verify');
+      }
+      const rootSigs = req.rows.map((row, i) => {
+        const out = { signer: req.root.rootKeyId!, sig: rSigs[i]!.toString('base64') };
+        if (!req.root.verifyRow(out.signer, row, out.sig)) throw new HardwarePresenceDenied('the helper returned a root signature that does not verify');
+        return out;
+      });
+      let token: PresenceToken | null = null;
+      if (challenge) {
+        const t = completeHardwarePresence(challenge.challengeId, this.keyId, aSigs[approvals.length - 1]!, this.#ring);
+        if (!PresenceToken.is(t)) throw new HardwarePresenceDenied(`presence attestation ${t}`);
+        token = t;
+      }
+      return { decisionSig, token, rootSigs, shown: expected };
+    } catch (e) {
+      burn(); // no-op once completed
+      throw e instanceof HelperUnavailableError ? new HardwarePresenceDenied(e.message) : e;
+    }
   }
 
   /**

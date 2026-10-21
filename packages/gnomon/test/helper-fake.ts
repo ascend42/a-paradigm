@@ -9,7 +9,8 @@
  * the gen, the helper's own prompt line).
  */
 import { createHash, generateKeyPairSync, sign as cryptoSign, verify as cryptoVerify, type KeyObject } from 'node:crypto';
-import { HelperRefusal, HelperUnavailableError, type HelperPush, type HelperReply, type HelperSessionCause, type HelperTransport } from '../src/kernel/identity/helper.js';
+import { HelperRefusal, HelperUnavailableError, versionAtLeast, type HelperPush, type HelperReply, type HelperSessionCause, type HelperTransport } from '../src/kernel/identity/helper.js';
+import { BatchRefusal, checkDecisionBatch } from '../src/kernel/identity/decision-batch.js';
 
 const DOMAINS: Record<string, string[]> = { root: ['gnomon:row-sig:v1\n'], approvals: ['gnomon:approve:v1\n', 'gnomon:presence:v1\n'] };
 const CACHED_DOMAINS = ['gnomon:approve:v1\n'];
@@ -65,6 +66,10 @@ export interface FakeHelperOptions {
   shown?: string | null;
   /** F4: helper 1.7.0 reports its unlock bounds on a kept fresh sign; undefined = a 1.6.0 helper (none) */
   bounds?: { idleSeconds: number; absoluteSeconds: number; maxSignatures: number };
+  /** TD-2026-10-20-514: the helper version `info` reports; >= 1.8.0 takes decision.sign. Default 1.7.0 (the legacy path). */
+  version?: string;
+  /** called while a decision.sign prompt is "on screen" (tests: hold it, advance a clock) */
+  duringPrompt?: () => void;
 }
 
 export class FakeHelper implements HelperTransport {
@@ -108,6 +113,15 @@ export class FakeHelper implements HelperTransport {
 
   get alive(): boolean {
     return this.#alive;
+  }
+
+  get version(): string {
+    return this.opts.version ?? '1.7.0';
+  }
+
+  /** TD-2026-10-20-514: every FRESH presence evaluation this fake ran (sign fresh, decision.sign, arm.open, key.delete). */
+  get evaluations(): number {
+    return this.prompts.length;
   }
 
   onExit(cb: () => void): void {
@@ -166,6 +180,34 @@ export class FakeHelper implements HelperTransport {
     }
     const k = this.keys.get(`${String(req.gen)}.${String(req.key)}`);
     switch (req.op) {
+      case 'info':
+        return { ok: true, version: this.version, protocol: 'gnomon-helper:v2', pid: 1, unlocks: this.unlocks.size, arms: this.arms.size };
+      case 'decision.sign': {
+        if (!versionAtLeast(this.version, '1.8.0')) throw new HelperRefusal('bad-request', 'unknown op');
+        if (req.keep !== undefined || req.mode !== undefined) throw new HelperRefusal('bad-request', 'decision.sign never keeps an unlock');
+        const ak = this.keys.get(`${String(req.gen)}.approvals`);
+        const rk = this.keys.get(`${String(req.gen)}.root`);
+        if (!ak || !rk) throw new HelperRefusal('not-found', 'no key');
+        const dec = (v: unknown): Buffer[] => (Array.isArray(v) ? v.map((m) => Buffer.from(String(m), 'base64')) : []);
+        const approvals = dec(req.approvals);
+        const root = dec(req.root);
+        let line: string;
+        try {
+          if (typeof req.intent !== 'string') throw new BatchRefusal('bad-request', 'intent');
+          line = checkDecisionBatch(approvals, root, Buffer.from(req.intent, 'base64')).line; // the helper's own rules (shared vectors)
+        } catch (e) {
+          if (e instanceof BatchRefusal) throw new HelperRefusal(e.code, e.why);
+          throw e;
+        }
+        this.prompts.push(String(req.reason));
+        this.shown.push(`${line}\n${String(req.reason)}`);
+        this.opts.duringPrompt?.();
+        if (!this.#touch()) throw new HelperRefusal('presence-denied', 'cancelled');
+        this.signs.push({ key: 'decision', mode: 'fresh', n: approvals.length + root.length });
+        const signWith = (key: KeyObject, msgs: Buffer[], offset: number): string[] =>
+          msgs.map((m, i) => cryptoSign('sha256', i + offset === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: this.opts.wrongKey ? this.#other.privateKey : key, dsaEncoding: 'der' }).toString('base64'));
+        return { ok: true, approvalSigs: signWith(ak.priv, approvals, 0), rootSigs: signWith(rk.priv, root, approvals.length), kept: false, ...(this.opts.shown === undefined ? { shown: line } : this.opts.shown === null ? {} : { shown: this.opts.shown }) };
+      }
       case 'presence.available':
         return { available: this.opts.touchId !== false, biometrics: this.opts.touchId !== false };
       case 'key.list':
@@ -278,5 +320,15 @@ export class FakeHelper implements HelperTransport {
     }
     if (!st.subarray(0, prefix.length).equals(Buffer.from(prefix)) || obj.schemaVersion !== 'gnomon-root-rotate:v1' || obj.fromGen !== r.fromGen || obj.toGen !== toGen) throw new HelperRefusal('rotate-refused', 'statement');
     if (!root || !cryptoVerify('sha256', st, { key: root.pub, dsaEncoding: 'der' }, Buffer.from(String(r.sig), 'base64'))) throw new HelperRefusal('rotate-refused', 'signature');
+  }
+}
+
+/**
+ * TD-2026-10-20-514: a helper 1.8.0 fake that counts FRESH presence evaluations (`evaluations`). Software P-256 plays
+ * both keys; decision.sign runs the helper's binding rules through the shared vectors' TS mirror.
+ */
+export class CountingFakeHelper extends FakeHelper {
+  constructor(gen: string | null = 'test0001', opts: FakeHelperOptions = {}) {
+    super(gen, { version: '1.8.0', ...opts });
   }
 }
