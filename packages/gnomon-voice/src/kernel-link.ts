@@ -265,13 +265,20 @@ export class GnomonKernelLink implements KernelLink {
     return this.client.call('status', {});
   }
   #stopSpeakingSeq: number | null = null;
+  #micWanted: boolean | null = null;
   async attachment(): Promise<VoiceAttachment | null> {
     const st = await this.status();
     this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
+    const mw = (st as { voice?: { micWanted?: unknown } } | undefined)?.voice?.micWanted;
+    this.#micWanted = typeof mw === 'boolean' ? mw : null;
     return attachmentFromStatus(st);
   }
   stopSpeakingSeq(): number | null {
     return this.#stopSpeakingSeq;
+  }
+  /** TD-2026-10-21-514: status.voice.micWanted (the kernel-held mic state), or null when never reported. */
+  micWanted(): boolean | null {
+    return this.#micWanted;
   }
   async append(kind: string, payload: Record<string, unknown>): Promise<AppendResult> {
     const r = (await this.client.call('log.append', { kind, payload })) as Record<string, unknown> | null;

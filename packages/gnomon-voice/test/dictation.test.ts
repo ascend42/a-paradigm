@@ -76,6 +76,20 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
     expect(link.sends).toEqual([]);
   });
 
+  it('TD-2026-10-21-514: send-now (⌃⌥Return) is counted and reported; a system event turns the mic off and reports micWanted', async () => {
+    const { audio, link, client } = await setup();
+    audio.control('send-now');
+    await client.idle();
+    expect(link.dictation.at(-1)).toMatchObject({ sendNows: 1, micWanted: true });
+    audio.control('mic-off');
+    await client.idle();
+    expect(audio.micOn).toBe(false);
+    expect(link.dictation.at(-1)).toMatchObject({ micWanted: false });
+    audio.control('mic-toggle');
+    await client.idle();
+    expect(audio.micOn).toBe(true);
+  });
+
   it('the hold-toggle hotkey increments holdToggles and reports it (monotone)', async () => {
     const { audio, link, client } = await setup();
     audio.control('hold-toggle');
@@ -83,8 +97,8 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
     await client.idle();
     expect(client.holdToggles).toBe(2);
     expect(link.dictation).toEqual([
-      { activity: 'idle', holdToggles: 1 },
-      { activity: 'idle', holdToggles: 2 },
+      { activity: 'idle', holdToggles: 1, sendNows: 0, micWanted: true },
+      { activity: 'idle', holdToggles: 2, sendNows: 0, micWanted: true },
     ]);
     ptt(audio, 600, 0.5);
     await client.idle();

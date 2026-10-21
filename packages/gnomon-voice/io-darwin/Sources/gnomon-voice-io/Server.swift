@@ -25,6 +25,7 @@ final class Server {
         }
         hotkeys.onHotkey = { action, phase in Output.shared.event("hotkey", ["action": action.rawValue, "phase": phase]) }
         let errs = hotkeys.apply(HotkeyConfig.defaults)
+        watchSystem()
         routeWatch = RouteWatch { [weak self] in self?.reportRoute(force: false) }
         lastRoute = OutputRoute.current()
         var ready = infoFields()
@@ -34,6 +35,18 @@ final class Server {
         let t = Thread { Server.readLoop() }
         t.name = "gnomon-voice-io.stdin"
         t.start()
+    }
+
+    /// TD-2026-10-21-514: screen lock, sleep and user switch turn the mic off (the controller stops capture on the
+    /// `system` event; the binary only reports, as for hotkeys).
+    private var systemObservers: [NSObjectProtocol] = []
+    private func watchSystem() {
+        let ws = NSWorkspace.shared.notificationCenter
+        let report: (String) -> (Notification) -> Void = { what in { _ in Output.shared.event("system", ["what": what]) } }
+        systemObservers.append(ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: report("system-sleep")))
+        systemObservers.append(ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main, using: report("display-sleep")))
+        systemObservers.append(ws.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main, using: report("user-switch")))
+        systemObservers.append(DistributedNotificationCenter.default().addObserver(forName: NSNotification.Name("com.apple.screenIsLocked"), object: nil, queue: .main, using: report("screen-lock")))
     }
 
     private static func readLoop() {
@@ -141,9 +154,9 @@ final class Server {
         case .playEnd:
             audio.endUtterance()
             reply([:])
-        case .hotkeysSet(let update):
+        case .hotkeysSet(let update, let allowBare):
             let next: HotkeyConfig
-            do { next = try hotkeys.config.applying(update) } catch let e as HotkeyError {
+            do { next = try hotkeys.config.applying(update, allowBare: allowBare) } catch let e as HotkeyError {
                 return fail("bad-request", e.description)
             } catch { return fail("bad-request", "\(error)") }
             let errs = hotkeys.apply(next)

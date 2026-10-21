@@ -4,10 +4,13 @@
 //
 //   spec    = mod ("+" mod)* "+" key | "none"
 //   mod     = ctrl|control  alt|opt|option  cmd|command  shift
-//   key     = a-z | 0-9 | space | return | tab | escape | period (".") | f1..f12
+//   key     = a-z | 0-9 | space | return | tab | escape | period (".") | grave ("`") | f1..f12
 //
 // At least one of ctrl/alt/cmd is required (F-keys excepted), so a binding can
-// never swallow plain typing. Actions: talk (hold: press and release), mic-toggle,
+// never swallow plain typing. TD-2026-10-21-514: a BARE grave is allowed only by
+// explicit opt-in (hotkeys.set{allowBare:true}) and only for mic-toggle ("While
+// Gnomon voice runs, ` will not type in any app."). send-now (Carbon id 6,
+// default ctrl+alt+return) sends the composer draft: a hand origin. Actions: talk (hold: press and release), mic-toggle,
 // mode-toggle (ambient vs push-to-talk), hold-toggle (dictation: hold the composer's
 // countdown; TD-2026-10-20-262), stop-speaking (cut the reply being read aloud;
 // T-2026-10-19-026). The binary only REPORTS hotkeys; the
@@ -21,6 +24,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
     case modeToggle = "mode-toggle"
     case holdToggle = "hold-toggle"
     case stopSpeaking = "stop-speaking"
+    case sendNow = "send-now"
 
     /// Carbon EventHotKeyID.id (1-based, stable).
     public var carbonId: UInt32 {
@@ -30,6 +34,7 @@ public enum HotkeyAction: String, CaseIterable, Sendable {
         case .modeToggle: return 3
         case .holdToggle: return 4
         case .stopSpeaking: return 5
+        case .sendNow: return 6
         }
     }
 
@@ -63,6 +68,7 @@ public struct HotkeySpec: Equatable, Hashable, Sendable {
             "7": 0x1A, "8": 0x1C, "0": 0x1D, "o": 0x1F, "u": 0x20, "i": 0x22, "p": 0x23, "l": 0x25,
             "j": 0x26, "k": 0x28, "n": 0x2D, "m": 0x2E,
             "space": 0x31, "return": 0x24, "tab": 0x30, "escape": 0x35, ".": 0x2F, // kVK_ANSI_Period ("period" parses to ".")
+            "`": 0x32, // kVK_ANSI_Grave ("grave" / "backtick" parse to "`")
         ]
         let f: [UInt32] = [0x7A, 0x78, 0x63, 0x76, 0x60, 0x61, 0x62, 0x64, 0x65, 0x6D, 0x67, 0x6F]
         for (i, code) in f.enumerated() { m["f\(i + 1)"] = code }
@@ -76,13 +82,14 @@ public struct HotkeySpec: Equatable, Hashable, Sendable {
         "shift": shiftKey,
     ]
 
-    /// Parses "ctrl+alt+space". Returns nil for "none" (binding disabled).
-    public static func parse(_ raw: String) throws -> HotkeySpec? {
+    /// Parses "ctrl+alt+space". Returns nil for "none" (binding disabled). allowBare admits a bare grave (opt-in).
+    public static func parse(_ raw: String, allowBare: Bool = false) throws -> HotkeySpec? {
         let s = raw.trimmingCharacters(in: .whitespaces).lowercased()
         if s == "none" { return nil }
         let parts = s.split(separator: "+", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
         guard parts.count >= 1, parts.allSatisfy({ !$0.isEmpty }), var keyName = parts.last else { throw HotkeyError.badSpec(raw) }
         if keyName == "period" { keyName = "." }
+        if keyName == "grave" || keyName == "backtick" { keyName = "`" }
         guard let code = keyCodes[keyName] else { throw HotkeyError.unknownKey(keyName) }
         var mods: UInt32 = 0
         for m in parts.dropLast() {
@@ -91,7 +98,8 @@ public struct HotkeySpec: Equatable, Hashable, Sendable {
             mods |= bit
         }
         let isFKey = keyName.hasPrefix("f") && keyName.count > 1
-        if !isFKey && mods & (controlKey | optionKey | cmdKey) == 0 { throw HotkeyError.needsModifier(raw) }
+        let bareOk = isFKey || (allowBare && keyName == "`" && mods == 0)
+        if !bareOk && mods & (controlKey | optionKey | cmdKey) == 0 { throw HotkeyError.needsModifier(raw) }
         return HotkeySpec(keyCode: code, modifiers: mods, key: keyName)
     }
 
@@ -134,10 +142,11 @@ public struct HotkeyConfig: Equatable, Sendable {
         // force-unwrapped literals: covered by the defaults test
         var b: [HotkeyAction: HotkeySpec] = [:]
         b[.talk] = try! HotkeySpec.parse("ctrl+alt+space")!
-        b[.micToggle] = try! HotkeySpec.parse("ctrl+alt+m")!
+        b[.micToggle] = try! HotkeySpec.parse("ctrl+`")! // TD-2026-10-21-514: ⌃` global
         b[.modeToggle] = try! HotkeySpec.parse("ctrl+alt+a")!
         b[.holdToggle] = try! HotkeySpec.parse("ctrl+alt+h")!
         b[.stopSpeaking] = try! HotkeySpec.parse("ctrl+alt+.")!
+        b[.sendNow] = try! HotkeySpec.parse("ctrl+alt+return")!
         return HotkeyConfig(bindings: b)
     }()
 
@@ -146,12 +155,13 @@ public struct HotkeyConfig: Equatable, Sendable {
     }
 
     /// A partial update: each named action takes its new spec ("none" unbinds);
-    /// unnamed actions keep theirs. The result must not bind one chord twice.
-    public func applying(_ update: [String: String]) throws -> HotkeyConfig {
+    /// unnamed actions keep theirs. The result must not bind one chord twice. allowBare (opt-in) admits a bare
+    /// grave for mic-toggle only; every other action keeps the modifier rule.
+    public func applying(_ update: [String: String], allowBare: Bool = false) throws -> HotkeyConfig {
         var b = bindings
         for (name, raw) in update {
             guard let action = HotkeyAction(rawValue: name) else { throw HotkeyError.unknownAction(name) }
-            b[action] = try HotkeySpec.parse(raw)
+            b[action] = try HotkeySpec.parse(raw, allowBare: allowBare && action == .micToggle)
         }
         var seen: [HotkeySpec: HotkeyAction] = [:]
         for action in HotkeyAction.allCases {

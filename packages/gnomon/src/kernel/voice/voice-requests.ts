@@ -59,6 +59,8 @@ export interface DictationReport {
   activity: DictationActivity;
   /** the hold-toggle hotkey presses this client made (monotone; the GUI holds or releases its send countdown on a change) */
   holdToggles: number;
+  /** TD-2026-10-21-514: send-now hotkey presses (monotone per voice connection; the GUI sends on a change) */
+  sendNows?: number;
   at: string;
 }
 
@@ -71,7 +73,7 @@ export interface PlaybackReport {
 /** T-2026-10-20-005 A1: the client's per-segment capture states and drop reasons (closed; mirrors gnomon-voice). */
 export const CAPTURE_STATES = ['idle', 'hearing', 'transcribing', 'captured', 'dropped'] as const;
 export type CaptureState = (typeof CAPTURE_STATES)[number];
-export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused'] as const;
+export const CAPTURE_DROP_REASONS = ['too-short', 'echo', 'not-attached', 'no-words', 'not-enrolled', 'barge-in', 'refused', 'mic-off'] as const;
 export type CaptureDropReason = (typeof CAPTURE_DROP_REASONS)[number];
 export interface CaptureReport {
   state: CaptureState;
@@ -202,6 +204,8 @@ export class VoiceReports {
   #enrolment: EnrolmentReport | null = null;
   #notice: { text: string; code?: string; at: string } | null = null;
   #dictation: DictationReport | null = null;
+  /** TD-2026-10-21-514: the mic state the human wants (null = never reported; the client restores it at start) */
+  #micWanted: boolean | null = null;
   #playback: PlaybackReport | null = null;
   #capture: CaptureReport | null = null;
   #prints: PrintsReport | null = null;
@@ -251,12 +255,17 @@ export class VoiceReports {
     let dictation: DictationReport | undefined;
     if (o.dictation !== undefined) {
       const d = o.dictation as Record<string, unknown> | null;
-      if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => k !== 'activity' && k !== 'holdToggles')) throw bad('dictation is {activity, holdToggles}');
+      if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => k !== 'activity' && k !== 'holdToggles' && k !== 'sendNows' && k !== 'micWanted')) throw bad('dictation is {activity, holdToggles, sendNows?, micWanted?}');
+      if (d.sendNows !== undefined && (typeof d.sendNows !== 'number' || !Number.isSafeInteger(d.sendNows) || d.sendNows < 0)) throw bad('dictation.sendNows is a non-negative integer');
+      if (d.micWanted !== undefined && typeof d.micWanted !== 'boolean') throw bad('dictation.micWanted is a boolean');
+      // TD-2026-10-21-514: the kernel holds micWanted across client restarts (no TTL: a state, not an edge)
+      if (typeof d.micWanted === 'boolean') this.#micWanted = d.micWanted;
       if (!(DICTATION_ACTIVITY as readonly unknown[]).includes(d.activity)) throw bad(`dictation.activity is ${DICTATION_ACTIVITY.join(' | ')}`);
       if (typeof d.holdToggles !== 'number' || !Number.isSafeInteger(d.holdToggles) || d.holdToggles < 0) throw bad('dictation.holdToggles is a non-negative integer');
       const sameConn = this.#dictationConn === connId;
       if (this.#dictation && sameConn && d.holdToggles < this.#dictation.holdToggles) throw bad(`dictation.holdToggles is monotone (was ${this.#dictation.holdToggles})`);
-      dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, at };
+      if (this.#dictation && sameConn && typeof d.sendNows === 'number' && d.sendNows < (this.#dictation.sendNows ?? 0)) throw bad(`dictation.sendNows is monotone (was ${this.#dictation.sendNows})`);
+      dictation = { activity: d.activity as DictationActivity, holdToggles: d.holdToggles, ...(typeof d.sendNows === 'number' ? { sendNows: d.sendNows } : {}), at };
     }
     let playback: PlaybackReport | undefined;
     if (o.playback !== undefined) {
@@ -381,9 +390,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number; micWanted: boolean | null } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted };
   }
 }
 

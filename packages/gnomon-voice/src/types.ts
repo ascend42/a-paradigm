@@ -44,7 +44,7 @@ export interface PlaybackResult {
 }
 
 /** The local control hotkeys the controller acts on (key down only). */
-export type ControlAction = 'mic-toggle' | 'mode-toggle' | 'hold-toggle' | 'stop-speaking';
+export type ControlAction = 'mic-toggle' | 'mode-toggle' | 'hold-toggle' | 'stop-speaking' | 'send-now' | 'mic-off';
 
 export interface AudioIOEvents {
   frame(f: PcmFrame): void;
@@ -180,6 +180,8 @@ export interface KernelLink {
    * playback when it changes). null when the kernel does not report it. Optional for stubs.
    */
   stopSpeakingSeq?(): number | null;
+  /** TD-2026-10-21-514: status.voice.micWanted (null = never reported) */
+  micWanted?(): boolean | null;
   append(kind: string, payload: Record<string, unknown>): Promise<AppendResult>;
   send(hsid: string, text: string): Promise<unknown>;
   /** session.stop{interrupt: true} — the only stop voice may make */
