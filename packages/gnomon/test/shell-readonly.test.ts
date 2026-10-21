@@ -329,7 +329,7 @@ const REFUSE: Array<[string, RegExp]> = [
   [`${C}true || cat README.md`, /a relative path with an unknown cwd/],
   [`${C}ls; cat README.md`, /a relative path with an unknown cwd/],
   // Aegis M3: no remote URLs, no credential-bearing config keys
-  [`${C}git remote -v`, /git remote: only bare, or -v in an anchored run/],
+  [`${C}git remote -v`, /git remote: only bare, or -v \/ get-url NAME in an anchored run/],
   [`${C}git config --get remote.origin.url`, /git config/],
   [`${C}git config --get-all http.https://x.extraheader`, /git config/],
   [`${C}git config --get credential.helper`, /git config/],

@@ -1446,10 +1446,16 @@ const gitRule: Rule = (args, env, name) => {
   }
   if (sub === 'remote') {
     if (rest.length === 0) return;
-    // RW (read-only widening): `remote -v` in an anchored run. M3's reason (URLs may hold a credential) does not hold
-    // a boundary: the same URLs are in `.git/config`, which `cat` reads in any run
-    if (rest.length === 1 && (rest[0]!.lit === '-v' || rest[0]!.lit === '--verbose') && env.ctx.cwd !== undefined && env.pp === path.posix) return;
-    no('git remote: only bare, or -v in an anchored run');
+    // RW (read-only widening): `remote -v` / `remote get-url NAME` in an anchored run. Aegis M1: git may print a URL
+    // that `cat .git/config` cannot show — rewritten by a global/system url.<base>.insteadOf / pushInsteadOf, or
+    // carrying userinfo — so either form is a card when any config scope git reads names such a key or such a URL
+    const verbose = rest.length === 1 && (rest[0]!.lit === '-v' || rest[0]!.lit === '--verbose');
+    const getUrl = rest.length === 2 && rest[0]!.lit === 'get-url' && /^[A-Za-z0-9._-]+$/.test(rest[1]!.lit!) && !rest[1]!.lit!.startsWith('-');
+    if (!(verbose || getUrl) || env.ctx.cwd === undefined || env.pp !== path.posix) no('git remote: only bare, or -v / get-url NAME in an anchored run');
+    if (!env.native) no('git remote: a foreign path flavour');
+    const risk = gitRemoteUrlRisk(env.cwd!, env.ctx.home);
+    if (risk !== null) no(`git remote: a URL may hold a credential (${risk})`);
+    return;
   }
   if (sub === 'config') {
     if (rest.length === 2 && ['--get', '--get-all'].includes(rest[0]!.lit!) && !rest[1]!.lit!.startsWith('-') && !GIT_SECRET_KEY.test(rest[1]!.lit!)) return;
@@ -1502,7 +1508,8 @@ function configValue(v: string): string {
  * Scan one git config file (and every include / includeIf path, conditions ignored: a superset) for an exec-class
  * key. Returns the key, null when none, or a reason string when the file cannot be read as git config (fail closed).
  */
-function scanGitConfig(file: string, home: string, depth: number, seen: Set<string>): string | null {
+type ConfigHit = (section: string, sub: string | null, key: string, value: string) => boolean;
+function scanGitConfig(file: string, home: string, depth: number, seen: Set<string>, hit: ConfigHit = execKey): string | null {
   if (depth > 10) return 'include depth';
   let text: string;
   try {
@@ -1535,10 +1542,10 @@ function scanGitConfig(file: string, home: string, depth: number, seen: Set<stri
     if (!k) return 'unparsed config line';
     const key = k[1]!.toLowerCase();
     const value = configValue(k[2] ?? '');
-    if (execKey(section, sub, key, value)) return `${section}${sub !== null ? `.${sub}` : ''}.${key}`;
+    if (hit(section, sub, key, value)) return `${section}${sub !== null ? `.${sub}` : ''}.${key}`;
     if ((section === 'include' || section === 'includeif') && key === 'path' && value !== '') {
       const inc = value.startsWith('~/') ? path.join(home, value.slice(2)) : path.isAbsolute(value) ? value : path.join(path.dirname(file), value);
-      const r = scanGitConfig(inc, home, depth + 1, seen);
+      const r = scanGitConfig(inc, home, depth + 1, seen, hit);
       if (r !== null) return r;
     }
   }
@@ -1550,7 +1557,7 @@ function scanGitConfig(file: string, home: string, depth: number, seen: Set<stri
  * config.worktree, the common dir's config, and their includes), or null. The repo is found as git finds it: the
  * nearest `.git` dir or `gitdir:` file at or above cwd. The user's global and system config are trusted.
  */
-export function repoGitExecKey(cwd: string, home: string): string | null {
+export function repoGitExecKey(cwd: string, home: string, hit: ConfigHit = execKey): string | null {
   let dir = cwd;
   for (let i = 0; i < 4096; i++) {
     const dotgit = path.join(dir, '.git');
@@ -1576,7 +1583,7 @@ export function repoGitExecKey(cwd: string, home: string): string | null {
       }
       const seen = new Set<string>();
       for (const f of files) {
-        const r = scanGitConfig(f, home, 0, seen);
+        const r = scanGitConfig(f, home, 0, seen, hit);
         if (r !== null) return r;
       }
       return null;
@@ -1584,6 +1591,42 @@ export function repoGitExecKey(cwd: string, home: string): string | null {
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Aegis M1: a key or value under which `git remote -v` / `get-url` may print a credential: any
+ * url.<base>.insteadOf / pushInsteadOf (a rewrite can add userinfo), or any value holding a URL with userinfo
+ * (`scheme://user[:pass]@…`).
+ */
+const credUrlHit: ConfigHit = (_section, _sub, key, value) => key === 'insteadof' || key === 'pushinsteadof' || /:\/\/[^/\s]*@/.test(value);
+
+/**
+ * Aegis M1: the first credential-risk key (credUrlHit) in any config scope git may read from `cwd` — the repo's (as
+ * repoGitExecKey finds it), the global (GIT_CONFIG_GLOBAL as well as ~/.gitconfig and $XDG_CONFIG_HOME/git/config)
+ * and the system (GIT_CONFIG_SYSTEM as well as /etc/gitconfig and the Homebrew prefixes), every include followed. A
+ * SUPERSET of what git reads (the env named is the kernel's; the defaults are scanned too). A file that exists but
+ * cannot be read or parsed is a risk (fail closed). Null when none.
+ */
+export function gitRemoteUrlRisk(cwd: string, home: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  const r = repoGitExecKey(cwd, home, credUrlHit);
+  if (r !== null) return r;
+  const xdg = env.XDG_CONFIG_HOME ? env.XDG_CONFIG_HOME : path.join(home, '.config');
+  const files = [
+    ...(env.GIT_CONFIG_GLOBAL ? [env.GIT_CONFIG_GLOBAL] : []),
+    path.join(home, '.gitconfig'),
+    path.join(xdg, 'git', 'config'),
+    path.join(home, '.config', 'git', 'config'),
+    ...(env.GIT_CONFIG_SYSTEM ? [env.GIT_CONFIG_SYSTEM] : []),
+    '/etc/gitconfig',
+    '/opt/homebrew/etc/gitconfig',
+    '/usr/local/etc/gitconfig',
+  ];
+  const seen = new Set<string>();
+  for (const f of files) {
+    const hit = scanGitConfig(f, home, 0, seen, credUrlHit);
+    if (hit !== null) return hit;
   }
   return null;
 }

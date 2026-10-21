@@ -2855,7 +2855,7 @@ components:
       cwd checked); rg (no -L --follow -z --search-zip --pre --pre-glob
       --hostname-bin; the anchor also unsets RIPGREP_CONFIG_PATH); fd (no -x
       --exec -X --exec-batch -l --list-details -L --follow); tree (no -o -R -l
-      --fromfile --fromtabfile --output); git remote -v; paradigm status|st,
+      --fromfile --fromtabfile --output; fd's pattern and tree -P/-I values are patterns); git remote -v / get-url NAME (Aegis M1: a card when any repo/global/system config scope has an insteadOf/pushInsteadOf key or a userinfo URL; gitRemoteUrlRisk); paradigm status|st,
       doctor [--context] [--explain], ripple SYMBOL [PATH], purpose validate
       [PATH], task ls [STATUS], task show REF (cwd at a session root; a card
       while .paradigm/ lacks the preAction notice marker; never lore, index or

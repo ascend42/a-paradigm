@@ -283,6 +283,65 @@ describe('#shell-readonly RW: every refusal pattern raises the card (anchored)',
   });
 });
 
+describe('#shell-readonly RW (Aegis M1): git remote -v / get-url is a card when a URL may hold a credential', () => {
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'XDG_CONFIG_HOME'] as const;
+  const git = (...a: string[]) => execFileSync('git', a, { cwd: repo });
+  beforeAll(() => {
+    for (const k of KEYS) saved[k] = process.env[k];
+    process.env.XDG_CONFIG_HOME = path.join(home, '.config');
+    process.env.GIT_CONFIG_SYSTEM = path.join(base, 'no-system-config');
+    delete process.env.GIT_CONFIG_GLOBAL;
+    git('remote', 'add', 'origin', 'https://example.com/r.git');
+  });
+  afterAll(() => {
+    git('remote', 'remove', 'origin');
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+  it('a plain URL passes: remote -v, remote --verbose, remote get-url NAME, bare remote', () => {
+    for (const c of ['git remote -v', 'git remote --verbose', 'git remote get-url origin', 'git remote']) expect(ro(c)).toEqual({ ok: true });
+  });
+  it('a userinfo URL in the repo config is a card', () => {
+    git('remote', 'set-url', 'origin', 'https://tok@example.com/r.git');
+    try {
+      expect(ro('git remote -v')).toMatchObject({ ok: false, why: expect.stringMatching(/git remote: a URL may hold a credential/) });
+      expect(ro('git remote get-url origin')).toMatchObject({ ok: false });
+      expect(ro('git remote')).toEqual({ ok: true }); // names only
+    } finally {
+      git('remote', 'set-url', 'origin', 'https://example.com/r.git');
+    }
+  });
+  it('an insteadOf key in the global config (GIT_CONFIG_GLOBAL) is a card, pushInsteadOf too', () => {
+    const g = path.join(base, 'global-gitconfig');
+    process.env.GIT_CONFIG_GLOBAL = g;
+    try {
+      fs.writeFileSync(g, '[url "https://user:secret@example.com/"]\n\tinsteadOf = https://example.com/\n');
+      expect(ro('git remote -v')).toMatchObject({ ok: false, why: expect.stringMatching(/insteadof/) });
+      fs.writeFileSync(g, '[url "https://example.com/"]\n\tpushInsteadOf = https://example.com/\n');
+      expect(ro('git remote get-url origin')).toMatchObject({ ok: false, why: expect.stringMatching(/pushinsteadof/) });
+      fs.writeFileSync(g, '[user]\n\tname = t\n');
+      expect(ro('git remote -v')).toEqual({ ok: true });
+    } finally {
+      delete process.env.GIT_CONFIG_GLOBAL;
+    }
+  });
+  it('an insteadOf key in the user home config is a card', () => {
+    const g = path.join(home, '.gitconfig');
+    fs.writeFileSync(g, '[url "git@example.com:"]\n\tinsteadOf = https://example.com/\n');
+    try {
+      expect(ro('git remote -v')).toMatchObject({ ok: false });
+    } finally {
+      fs.rmSync(g);
+    }
+  });
+  it.each(['git remote show origin', 'git remote get-url', 'git remote get-url --push origin', 'git remote -v -v'])('refuses %j', (c) => {
+    expect(ro(c)).toMatchObject({ ok: false, why: expect.stringMatching(/git remote/) });
+  });
+});
+
 describe("#shell-readonly RW (Aegis L3): fd's pattern and tree's -P/-I values are patterns, not paths", () => {
   const nowhere = '/nowhere-gnomon-x';
   it.each([
