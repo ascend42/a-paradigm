@@ -27,7 +27,9 @@ if (args[0] === 'auth') {
   process.exit(0);
 }
 if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' })); // first: before any startup work
-trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), pid: process.pid });
+// identity values (never secrets) so the session-env tests can check they came from the OS, not the daemon
+const ident = Object.fromEntries(['USER', 'LOGNAME', 'SHELL', 'TMPDIR'].filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
+trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), ident, pid: process.pid });
 // P8-D94: emulate Claude's SessionStart command hooks — from --settings, and from the repo's project/local
 // layers ONLY when --setting-sources names them (the semantics the audited mode relies on)
 {

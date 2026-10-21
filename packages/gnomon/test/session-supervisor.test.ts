@@ -50,7 +50,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null; hooksMode?: SessionHooksMode; keepWorld?: boolean } = {}) {
+function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null; hooksMode?: SessionHooksMode; keepWorld?: boolean; env?: Record<string, string> } = {}) {
   if (!o.keepWorld) w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
@@ -63,7 +63,7 @@ function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['lo
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}), ...(o.hooksMode ? { hooksMode: o.hooksMode } : {}), repoHookDecisions: (repoKey, setHash) => {
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => o.env ?? { HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }, platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}), ...(o.hooksMode ? { hooksMode: o.hooksMode } : {}), repoHookDecisions: (repoKey, setHash) => {
     // test stand-in for the daemon's chain read (kernel-signed gate-class.decided rows): the rig's own rows
     const m = new Map<string, 'allow' | 'deny'>();
     for (const x of rows.filter((y) => y.kind === 'gate-class.decided').map((y) => y.payload)) if (x.repoKey === repoKey && x.setHash === setHash) m.set(String(x.hookId), x.decision === 'allow' ? 'allow' : 'deny');
@@ -382,6 +382,38 @@ describe.skipIf(!SANDBOX_OK)('G-SUB-08 P8-D97 repo context loads, repo hooks sta
       expect(JSON.parse(fs.readFileSync(as[as.indexOf('--settings') + 1]!, 'utf8')).disableSkillShellExecution, mode).toBeUndefined();
     }
   }, 60_000);
+});
+
+describe.skipIf(!SANDBOX_OK)('session env identity from the OS (the re-exec\'d daemon has no USER)', () => {
+  const argvOf = async () => {
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    return trace(w).find((t) => t.t === 'argv')!;
+  };
+  it('a daemon env with no USER/LOGNAME/SHELL/TMPDIR: the session gets them from os.userInfo + getconf', async () => {
+    const r = rig({ env: { HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8' } });
+    expect((await open(r.sup)).state).toBe('running');
+    const a = await argvOf();
+    const ident = a.ident as Record<string, string>;
+    expect(ident.USER).toBe(os.userInfo().username);
+    expect(ident.LOGNAME).toBe(os.userInfo().username);
+    const shell = os.userInfo().shell;
+    if (shell && path.isAbsolute(shell)) expect(ident.SHELL).toBe(shell);
+    expect(ident.TMPDIR).toBeDefined();
+    expect(fs.statSync(fs.realpathSync.native(ident.TMPDIR!)).uid).toBe(process.getuid!());
+  });
+  it('a WRONG daemon USER is overridden, and no row logs a value (envKeys are names only)', async () => {
+    const r = rig({ env: { HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', USER: 'gnomon-wrong-user-probe', LOGNAME: 'gnomon-wrong-user-probe', TMPDIR: '/gnomon-wrong-tmp-probe/' } });
+    expect((await open(r.sup)).state).toBe('running');
+    const a = await argvOf();
+    expect((a.ident as Record<string, string>).USER).toBe(os.userInfo().username);
+    expect((a.ident as Record<string, string>).TMPDIR).not.toBe('/gnomon-wrong-tmp-probe/');
+    const sb = r.kinds('session.sandbox').find((x) => x.payload.envKeys)!.payload;
+    expect(sb.envKeys).toEqual(expect.arrayContaining(['USER', 'LOGNAME', 'TMPDIR']));
+    expect((sb.envKeys as string[]).every((k) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k))).toBe(true);
+    const all = JSON.stringify(r.rows);
+    expect(all).not.toContain('gnomon-wrong-user-probe');
+    expect(all).not.toContain('gnomon-wrong-tmp-probe');
+  });
 });
 
 describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, real process group)', () => {

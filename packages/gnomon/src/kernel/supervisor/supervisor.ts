@@ -112,7 +112,7 @@ import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv } from '../runner/env.js';
+import { buildSessionEnv, sessionIdentity, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
@@ -234,8 +234,10 @@ export interface SupervisorOptions {
   sock: string;
   /** the root-signed config's claude path; else the platform's known locations (never PATH) */
   claudePath?: string;
-  /** the env the child's allowlist is read from (default process.env) */
+  /** the env the child's allowlist is read from (default process.env); never the source of USER/LOGNAME/SHELL/TMPDIR on POSIX */
   env?: () => Readonly<Record<string, string | undefined>>;
+  /** the OS identity the child's USER/LOGNAME/SHELL/TMPDIR come from (default sessionIdentity(), resolved once in the constructor) */
+  identity?: () => SessionIdentity | null;
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
@@ -446,6 +448,7 @@ export class SessionSupervisor {
   /** P8-D94: raised, undecided repo-hook cards by repoKey|setHash|hookId (bounded: MAX_PENDING_HOOK_CARDS) */
   readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
+  readonly #identity: SessionIdentity | null;
   readonly #local: LocalLane;
   /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
   #drain: Promise<DrainReport> | null = null;
@@ -475,8 +478,10 @@ export class SessionSupervisor {
   constructor(o: SupervisorOptions) {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
+    // the session identity is resolved ONCE, at daemon start, from the OS (runner/env.ts), never from the daemon's env
+    this.#identity = (o.identity ?? sessionIdentity)();
     this.#local = new LocalLane({
-      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}),
+      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity,
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
@@ -585,7 +590,7 @@ export class SessionSupervisor {
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     // reviewer 9: the child's HOME IS the user home whose layers were scanned
-    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
@@ -659,7 +664,8 @@ export class SessionSupervisor {
       const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
       const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: env.TMPDIR ?? os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
