@@ -139,15 +139,42 @@ if [ "$PARADIGM_AVAILABLE" = "true" ]; then
   [ -z "$_REMEDIATIONS_JSON" ] && _REMEDIATIONS_JSON="[]"
 fi
 
-# --- Cache .purpose file paths (avoid repeated find scans) ---
-PURPOSE_CACHE=".paradigm/.purpose-paths"
-if [ -f "$PURPOSE_CACHE" ]; then
-  PURPOSE_PATHS=$(cat "$PURPOSE_CACHE")
-else
-  PURPOSE_PATHS=$(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null)
-  if [ -n "$PURPOSE_PATHS" ]; then
-    echo "$PURPOSE_PATHS" > "$PURPOSE_CACHE"
-  fi
+# --- Helpers that avoid a fork per call (hot loops below) ---
+# Every $(dirname ...) / $(echo | grep) costs a subshell plus a process. On a
+# repo with many modified files those forks alone eat seconds of the Stop
+# hook's 30 s budget, so the hot loops use these builtin-only helpers.
+_NL='
+'
+# _parent <path> — sets _PD to dirname(<path>) without forking.
+_parent() {
+  case "$1" in
+    */*) _PD=\${1%/*}; [ -z "$_PD" ] && _PD=/ ;;
+    *) _PD=. ;;
+  esac
+}
+# _is_modified <path> — true iff <path> is a whole line of $MODIFIED.
+_is_modified() {
+  case "$_NL$MODIFIED$_NL" in
+    *"$_NL$1$_NL"*) return 0 ;;
+  esac
+  return 1
+}
+
+# --- Discover .purpose files (fresh every run, never a persisted cache) ---
+# Ask git, not find: \`git ls-files\` lists tracked + untracked-not-ignored files
+# in milliseconds and does NOT descend into nested repositories — in particular
+# Claude Code agent worktrees under .claude/worktrees/, each a full copy of the
+# repo. The old \`find . -not -path "*/node_modules/*"\` walked every one of them
+# (and every node_modules, since -not -path filters but does not prune), which
+# on a repo with 16 agent worktrees found 2,195 .purpose files in 6 s and made
+# Check 4 below take 30 s — the whole Stop hook timeout, so Claude Code killed
+# the hook on every turn. The old .paradigm/.purpose-paths cache is no longer
+# read: it was only cleared on a passing run, so a killed or blocked run left a
+# stale list behind forever. Outside git (not reachable from the Stop hook,
+# which needs \`git diff\`), fall back to a find that PRUNES those trees.
+PURPOSE_PATHS=$(git ls-files -co --exclude-standard 2>/dev/null | grep -E '(^|/)\\.purpose$' | sed 's|^|./|')
+if [ -z "$PURPOSE_PATHS" ] && ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PURPOSE_PATHS=$(find . \\( -name node_modules -o -name .git -o -path ./.claude/worktrees \\) -prune -o -name ".purpose" -type f -print 2>/dev/null)
 fi
 
 # --- Check 1: Source files modified without .purpose updates ---
@@ -167,15 +194,15 @@ for file in $MODIFIED; do
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
-      src_dir=$(dirname "$file")
+      _parent "$file"; src_dir=$_PD
       covering=""
       walk_dir="$src_dir"
-      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ]; do
+      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ] && [ "$walk_dir" != "/" ]; do
         if [ -f "$walk_dir/.purpose" ]; then
           covering="$walk_dir/.purpose"
           break
         fi
-        walk_dir=$(dirname "$walk_dir")
+        _parent "$walk_dir"; walk_dir=$_PD
       done
       if [ -z "$covering" ] && [ -f ".purpose" ]; then
         covering=".purpose"
@@ -233,16 +260,16 @@ for file in $MODIFIED; do
     .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
 
-  dir=$(dirname "$file")
+  _parent "$file"; dir=$_PD
   # Walk up to find a .purpose file
   found_purpose=false
   check_dir="$dir"
-  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
     if [ -f "$check_dir/.purpose" ]; then
       found_purpose=true
       break
     fi
-    check_dir=$(dirname "$check_dir")
+    _parent "$check_dir"; check_dir=$_PD
   done
   # Also check root
   if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
@@ -343,38 +370,44 @@ fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
 _SEV=$(_check_severity "aspect-anchors" "block")
-if [ "$_SEV" != "off" ]; then
-  for purpose_file in $PURPOSE_PATHS; do
-    if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
-      purpose_dir=$(dirname "$purpose_file")
-      in_anchors=false
-      while IFS= read -r line; do
-        case "$line" in
-          *"anchors:"*) in_anchors=true; continue ;;
-          *"- "*)
-            if [ "$in_anchors" = true ]; then
-              anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
-              if [ -n "$anchor_path" ]; then
-                # Try relative to .purpose dir first, then project root
-                if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
-                  if [ "$_SEV" = "block" ]; then
-                    VIOLATIONS="$VIOLATIONS
+if [ "$_SEV" != "off" ] && [ -n "$PURPOSE_PATHS" ]; then
+  # ONE awk pass extracts every (purpose file, anchor) pair; the shell then only
+  # runs builtin \`[ -f ]\` tests. The old loop forked echo|sed|sed|tr for every
+  # anchor line — 10,817 lines x 4 processes = 30 s on a large repo.
+  # Extraction rules are unchanged: a line containing "anchors:" opens an
+  # anchor list; a line containing "- " inside it is an anchor (text after the
+  # LAST "- ", cut at the first ":", spaces removed); any other line closes it.
+  _ANCHOR_PAIRS=$(awk '
+    FNR == 1 { in_a = 0 }
+    index($0, "anchors:") { in_a = 1; next }
+    index($0, "- ") {
+      if (in_a) {
+        a = $0; sub(/.*- /, "", a); sub(/:.*/, "", a); gsub(/ /, "", a)
+        if (a != "") print FILENAME "\\t" a
+      }
+      next
+    }
+    { in_a = 0 }
+  ' $PURPOSE_PATHS 2>/dev/null)
+  _TAB=$(printf '\\t')
+  while IFS="$_TAB" read -r purpose_file anchor_path; do
+    [ -n "$anchor_path" ] || continue
+    _parent "$purpose_file"; purpose_dir=$_PD
+    # Try relative to .purpose dir first, then project root
+    if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
-                    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-                  else
-                    ADVISORY="$ADVISORY
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
   - (warn) Aspect anchor '$anchor_path' in $purpose_file does not exist."
-                  fi
-                fi
-              fi
-            fi
-            ;;
-          *) in_anchors=false ;;
-        esac
-      done < "$purpose_file"
+      fi
     fi
-  done
+  done <<ANCHOREOF
+$_ANCHOR_PAIRS
+ANCHOREOF
 fi
 
 # --- Check 5: Per-directory .purpose freshness ---
@@ -397,21 +430,21 @@ if [ -f "$PENDING_FILE" ]; then
   while IFS= read -r tracked_file; do
     [ -z "$tracked_file" ] && continue
     # Find covering .purpose for this tracked file
-    check_dir=$(dirname "$tracked_file")
+    _parent "$tracked_file"; check_dir=$_PD
     covering_purpose=""
-    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
       if [ -f "$check_dir/.purpose" ]; then
         covering_purpose="$check_dir/.purpose"
         break
       fi
-      check_dir=$(dirname "$check_dir")
+      _parent "$check_dir"; check_dir=$_PD
     done
     if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
       covering_purpose=".purpose"
     fi
     # Check if covering .purpose was also modified
     if [ -n "$covering_purpose" ]; then
-      if ! echo "$MODIFIED" | grep -qxF "$covering_purpose"; then
+      if ! _is_modified "$covering_purpose"; then
         _record_stale_purpose "$covering_purpose"
       fi
     fi
@@ -428,14 +461,14 @@ for file in $MODIFIED; do
   [ -f "$file" ] || continue
 
   # Find covering .purpose
-  check_dir=$(dirname "$file")
+  _parent "$file"; check_dir=$_PD
   covering_purpose=""
-  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
     if [ -f "$check_dir/.purpose" ]; then
       covering_purpose="$check_dir/.purpose"
       break
     fi
-    check_dir=$(dirname "$check_dir")
+    _parent "$check_dir"; check_dir=$_PD
   done
   if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
     covering_purpose=".purpose"
@@ -443,7 +476,7 @@ for file in $MODIFIED; do
   [ -n "$covering_purpose" ] || continue
 
   # Skip if .purpose was in the modified list (already updated this session)
-  echo "$MODIFIED" | grep -qxF "$covering_purpose" && continue
+  _is_modified "$covering_purpose" && continue
 
   # Compare modification times: if source file is newer than .purpose, it's stale
   if [ -f "$covering_purpose" ]; then
@@ -1166,8 +1199,12 @@ fi
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
+  # FULLY detached: a background child that inherits the hook's stdout/stderr
+  # keeps Claude Code's pipe open, and Claude Code waits for EOF on that pipe —
+  # not for this script's exit — until the hook timeout. Never background a
+  # command in a hook without </dev/null >/dev/null 2>&1.
   if [ "$PARADIGM_AVAILABLE" = "true" ]; then
-    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" </dev/null >/dev/null 2>&1 &
   fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
@@ -1226,10 +1263,11 @@ rm -f ".paradigm/.orchestrated"
 # would erase solo declarations mid-session and re-nag every turn. They expire
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
-# Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
-if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -f ".paradigm/events/verdicts.jsonl" ]; then
-  $PARADIGM_BIN ambient postflight 2>/dev/null &
-fi
+# Postflight learning already ran above: paradigm-common.sh calls
+# \`compliance-check --learn\`, which runs the same runPostflightLearning pass in
+# the foreground. The old second \`ambient postflight &\` here was a duplicate
+# pass, and as a background child holding the hook's stdout open it made
+# Claude Code wait for EOF until the hook timeout.
 
 exit 0
 `;
@@ -1273,7 +1311,9 @@ fi
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm index --quiet 2>/dev/null || true
+  # --no-install: never let npx fetch the unrelated public "paradigm" package
+  # (a network round-trip inside a 15 s hook, and the wrong binary).
+  npx --no-install paradigm index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
@@ -1873,7 +1913,9 @@ fi
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm index --quiet 2>/dev/null || true
+  # --no-install: never let npx fetch the unrelated public "paradigm" package
+  # (a network round-trip inside a 15 s hook, and the wrong binary).
+  npx --no-install paradigm index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
