@@ -266,11 +266,21 @@ export class GnomonKernelLink implements KernelLink {
   }
   #stopSpeakingSeq: number | null = null;
   #micWanted: boolean | null = null;
+  #micToggleSeq: number | null = null;
+  #micKeyBare: boolean | null = null;
+  micToggleSeq(): number | null {
+    return this.#micToggleSeq;
+  }
+  micKeyBare(): boolean | null {
+    return this.#micKeyBare;
+  }
   async attachment(): Promise<VoiceAttachment | null> {
     const st = await this.status();
     this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
-    const mw = (st as { voice?: { micWanted?: unknown } } | undefined)?.voice?.micWanted;
-    this.#micWanted = typeof mw === 'boolean' ? mw : null;
+    const vv = (st as { voice?: { micWanted?: unknown; micToggleSeq?: unknown; micKeyBare?: unknown } } | undefined)?.voice;
+    this.#micWanted = typeof vv?.micWanted === 'boolean' ? vv.micWanted : null;
+    this.#micToggleSeq = typeof vv?.micToggleSeq === 'number' ? vv.micToggleSeq : null;
+    this.#micKeyBare = typeof vv?.micKeyBare === 'boolean' ? vv.micKeyBare : null;
     return attachmentFromStatus(st);
   }
   stopSpeakingSeq(): number | null {

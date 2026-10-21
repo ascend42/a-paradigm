@@ -78,6 +78,8 @@ export interface AudioIO {
   /** Turn capture on/off locally (gnomon-voice-io mic.on / mic.off). */
   setMic(on: boolean): Promise<void>;
   readonly micOn: boolean;
+  /** TD-2026-10-21-514: re-bind hotkeys (gnomon-voice-io hotkeys.set{bindings, allowBare}); absent ⇒ unsupported */
+  setHotkeys?(bindings: Record<string, string>, allowBare: boolean): Promise<void>;
 }
 
 export interface VadSegment {
@@ -182,6 +184,9 @@ export interface KernelLink {
   stopSpeakingSeq?(): number | null;
   /** TD-2026-10-21-514: status.voice.micWanted (null = never reported) */
   micWanted?(): boolean | null;
+  /** status.voice.micToggleSeq (the GUI's in-app `) and status.voice.micKeyBare (the Mic key switch) */
+  micToggleSeq?(): number | null;
+  micKeyBare?(): boolean | null;
   append(kind: string, payload: Record<string, unknown>): Promise<AppendResult>;
   send(hsid: string, text: string): Promise<unknown>;
   /** session.stop{interrupt: true} — the only stop voice may make */

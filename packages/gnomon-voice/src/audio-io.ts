@@ -230,6 +230,11 @@ export class SpawnedAudioIO implements AudioIO {
   }
 
   /** One command → its one reply; rejects with AudioIOError on ok:false (e.g. mic-denied, hotkey-taken). */
+  /** TD-2026-10-21-514: the Mic key switch re-binds mic-toggle (bare ` only with allowBare). */
+  async setHotkeys(bindings: Record<string, string>, allowBare: boolean): Promise<void> {
+    await this.command('hotkeys.set', { bindings, allowBare });
+  }
+
   command(op: string, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     const id = `c${this.#nextId++}`;
     return new Promise((resolve, reject) => {

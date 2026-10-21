@@ -1218,6 +1218,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       forget: (p: { name: string }) => voiceEnrol.forget(p),
       report: (p: unknown, connId?: string) => voiceReports.report(p, connId),
       stopSpeaking: () => voiceReports.stopSpeaking(),
+      micToggle: () => voiceReports.micToggle(),
+      micKey: (bare: boolean) => voiceReports.micKey(bare),
       // TD-2026-10-21-514: the human sets or clears the held send word (persisted 0600; the kernel reads it back)
       sendWord: async (p: unknown) => {
         const r = parseSendWordRequest(p);

@@ -250,6 +250,17 @@ describe('G-VOX-21 pieces', () => {
   });
 });
 
+describe('TD-2026-10-21-514 relayed mic controls (VoiceReports, never rows)', () => {
+  it('the in-app mic key bumps micToggleSeq; the Mic key switch sets micKeyBare; both ride status', async () => {
+    const { VoiceReports } = await import('../src/kernel/voice/voice-requests.js');
+    const vr = new VoiceReports();
+    expect(vr.status()).toMatchObject({ micToggleSeq: 0, micKeyBare: false, micWanted: null });
+    expect(vr.micToggle()).toEqual({ micToggleSeq: 1 });
+    expect(vr.micKey(true)).toEqual({ micKeyBare: true });
+    expect(vr.status()).toMatchObject({ micToggleSeq: 1, micKeyBare: true });
+  });
+});
+
 describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
   it('writes canonically with mode 0600, reads back, clears; a broken file holds no word', () => {
     const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-sw-')));

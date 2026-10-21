@@ -90,6 +90,26 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
     expect(audio.micOn).toBe(true);
   });
 
+  it('TD-2026-10-21-514: the GUI in-app key toggles the mic (a changed micToggleSeq); the Mic key switch re-binds; micWanted:false is restored', async () => {
+    const { audio, link, client } = await setup();
+    link.micSeq = 3;
+    await client.refresh(); // the baseline
+    expect(audio.micOn).toBe(true);
+    link.micSeq = 4;
+    await client.refresh();
+    await client.idle();
+    expect(audio.micOn).toBe(false);
+    link.micBare = true;
+    await client.refresh();
+    await client.idle();
+    expect(audio.hotkeyOps.at(-1)).toEqual({ bindings: { 'mic-toggle': '\`' }, allowBare: true });
+    const b = await setup();
+    b.link.micWant = false;
+    await b.client.refresh();
+    await b.client.idle();
+    expect(b.audio.micOn).toBe(false);
+  });
+
   it('the hold-toggle hotkey increments holdToggles and reports it (monotone)', async () => {
     const { audio, link, client } = await setup();
     audio.control('hold-toggle');

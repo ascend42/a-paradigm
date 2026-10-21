@@ -125,6 +125,19 @@ export class FakeLink implements KernelLink {
   stopSpeakingSeq(): number | null {
     return this.stopSeq;
   }
+  /** TD-2026-10-21-514: status.voice.micToggleSeq / micKeyBare / micWanted (null ⇒ not reported) */
+  micSeq: number | null = null;
+  micBare: boolean | null = null;
+  micWant: boolean | null = null;
+  micToggleSeq(): number | null {
+    return this.micSeq;
+  }
+  micKeyBare(): boolean | null {
+    return this.micBare;
+  }
+  micWanted(): boolean | null {
+    return this.micWant;
+  }
   /** request.voice.report{playback} edges */
   readonly playback: boolean[] = [];
   /** request.voice.report{dictation} edges (TD-2026-10-20-262), kept apart from the log rows */

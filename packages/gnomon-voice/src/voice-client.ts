@@ -673,6 +673,8 @@ export class VoiceClient {
     if (!readFailed) {
       this.#checkStopSeq();
       this.#restoreMic();
+      this.#checkMicSeq();
+      void this.#applyMicKey();
     }
     // a detach (a SUCCESSFUL read with no or another attachment) stops speech; a failed read never does
     if (changed && prev && !readFailed) this.stopSpeaking('detach');
@@ -711,6 +713,31 @@ export class VoiceClient {
       this.#refused(err, 'log.read');
     } finally {
       this.#following = false;
+    }
+  }
+
+  /** TD-2026-10-21-514: the GUI's in-app ` shows up as a changed status count: toggle the mic. */
+  #micSeq: number | null = null;
+  #checkMicSeq(): void {
+    const seq = this.#o.link.micToggleSeq?.() ?? null;
+    if (seq === null) return;
+    const before = this.#micSeq;
+    this.#micSeq = seq;
+    if (before !== null && seq !== before) void this.toggleMic();
+  }
+
+  /** The Mic key switch: bare ` (opt-in) or ⌃` for mic-toggle, re-bound on gnomon-voice-io when it changes. */
+  #micKeyApplied: boolean | null = null;
+  async #applyMicKey(): Promise<void> {
+    const bare = this.#o.link.micKeyBare?.() ?? null;
+    if (bare === null || bare === this.#micKeyApplied || !this.#o.audio.setHotkeys) return;
+    this.#micKeyApplied = bare;
+    try {
+      await this.#o.audio.setHotkeys({ 'mic-toggle': bare ? '`' : 'ctrl+`' }, bare);
+      if (bare) this.#notice('info', 'While Gnomon voice runs, ` will not type in any app.');
+    } catch (err) {
+      this.#micKeyApplied = null;
+      this.#notice('warn', `The mic key was not changed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

@@ -379,6 +379,19 @@ export class VoiceReports {
   }
 
   /** request.voice.client{op:'stop-speaking'} (human only): one more stop for the client to act on. */
+  /** TD-2026-10-21-514: the GUI's in-app ` (mic on/off) bumps a count the voice client watches, like ⏹. */
+  #micToggleSeq = 0;
+  micToggle(): { micToggleSeq: number } {
+    this.#micToggleSeq++;
+    return { micToggleSeq: this.#micToggleSeq };
+  }
+  /** TD-2026-10-21-514: the Mic key switch: bare ` global (opt-in) or ⌃` (default); the client re-binds on a change */
+  #micKeyBare = false;
+  micKey(bare: boolean): { micKeyBare: boolean } {
+    this.#micKeyBare = bare;
+    return { micKeyBare: bare };
+  }
+
   stopSpeaking(): { stopSpeakingSeq: number } {
     this.#stopSpeakingSeq++;
     return { stopSpeakingSeq: this.#stopSpeakingSeq };
@@ -390,9 +403,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number; micWanted: boolean | null } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare };
   }
 }
 

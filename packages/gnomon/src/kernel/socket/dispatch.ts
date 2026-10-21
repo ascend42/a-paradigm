@@ -338,6 +338,9 @@ export interface VoiceClientPort {
   forget?(payload: { name: string }): Promise<unknown>;
   /** T-2026-10-19-026: request.voice.client{op:'stop-speaking'} — the human's ⏹ (bumps status.voice.stopSpeakingSeq). */
   stopSpeaking?(): unknown;
+  /** TD-2026-10-21-514: request.voice.client{op:'mic-toggle'} (the GUI's in-app `) and {op:'mic-key', bare} (the Mic key switch) */
+  micToggle?(): unknown;
+  micKey?(bare: boolean): unknown;
   /**
    * TD-2026-10-21-514: request.voice.sendword{op:'start', word, variants?} | {op:'clear'} (human only, never a row): the
    * daemon validates, persists ~/.gnomon/voice/send-word.json (0600) and hands the word to #gnomon-voice to hold.
@@ -878,7 +881,11 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         const op = (pa.payload as { op?: unknown } | null | undefined)?.op;
         const stopSpeaking = o.voiceClient.stopSpeaking;
-        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'}}`);
+        const vcp = (pa.payload ?? {}) as Record<string, unknown>;
+        // TD-2026-10-21-514: the in-app mic key and the Mic key switch (the human's own gestures; no card: a bare key is a local binding)
+        if (op === 'mic-toggle' && o.voiceClient.micToggle && Object.keys(vcp).length === 1 && !extra.length) return { voiceClient: o.voiceClient.micToggle() };
+        if (op === 'mic-key' && o.voiceClient.micKey && Object.keys(vcp).length === 2 && typeof vcp.bare === 'boolean' && !extra.length) return { voiceClient: o.voiceClient.micKey(vcp.bare) };
+        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'|'mic-toggle'} | {op:'mic-key', bare}}`);
         // T-2026-10-19-026: ⏹ Stop speaking narrows (silences the voice app) ⇒ no card, no presence
         if (op === 'stop-speaking') return { voiceClient: stopSpeaking!.call(o.voiceClient) };
         return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };

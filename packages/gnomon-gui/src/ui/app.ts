@@ -1233,6 +1233,36 @@ function focus(hsid: string | null): void {
 let dict = initialDictation(parseDelay(localStorage.getItem(DELAY_KEY)));
 /** TD-2026-10-21-514: the voice preset (per machine) and a pending double-rAF visibility stamp */
 let voicePreset = parsePreset(localStorage.getItem(PRESET_KEY));
+/** the last ⌃⌥Return count seen (a baseline first: presses before this page never send) */
+let sendNowsSeen: { n: number; epoch: string | null } | null = null;
+
+/** TD-2026-10-21-514: the mic on/off from the GUI (palette, in-app `): the voice app toggles on a changed count. */
+async function micToggle(trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  try {
+    await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-toggle' } });
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic was not toggled', true);
+  }
+}
+
+/** The Mic key switch: ⌃` (default, global) or a bare ` everywhere (opt-in, with its warning). */
+async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  try {
+    await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-key', bare } });
+    notice(bare ? 'Mic key: ` everywhere. While Gnomon voice runs, ` will not type in any app.' : 'Mic key: ⌃` (and ` inside Gnomon)');
+    await refreshStatus();
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic key was not changed', true);
+  }
+}
+const micKeyBareOf = (st: unknown): boolean => (st as { voice?: { micKeyBare?: unknown } } | null)?.voice?.micKeyBare === true;
+/** a bare ` in-app: only while this window is focused and focus is not in an editable field */
+function editableFocus(): boolean {
+  const a = document.activeElement as HTMLElement | null;
+  return !!a && (a.isContentEditable || a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+}
 let paintStamp = false;
 let dictTimer: ReturnType<typeof setInterval> | null = null;
 let dictTicks = 0;
@@ -1430,6 +1460,12 @@ function syncDictationContext(): void {
   const d = dictationStatusOf(status);
   if (d.activity !== dict.activity) dispatchDictation({ type: 'activity', activity: d.activity, now });
   if (d.holdToggles !== null && (d.holdToggles !== dict.holdToggles || d.epoch !== dict.holdEpoch)) dispatchDictation({ type: 'holdToggle', count: d.holdToggles, epoch: d.epoch, now });
+  // TD-2026-10-21-514: ⌃⌥Return in the voice app sends the draft through the one send path (a hand origin)
+  if (d.sendNows !== null) {
+    const fresh = sendNowsSeen !== null && sendNowsSeen.epoch === d.epoch && d.sendNows > sendNowsSeen.n;
+    sendNowsSeen = { n: d.sendNows, epoch: d.epoch };
+    if (fresh && hasDraft(dict) && dict.focusedHere) dispatchDictation({ type: 'sendNow', now });
+  }
 }
 
 function setDictationDelay(d: number | null): void {
@@ -1891,6 +1927,9 @@ function paintVoiceMenu(): void {
     for (const p of VOICE_PRESET_IDS)
       seg.appendChild(h(doc, 'button', { class: `key quiet${p === voicePreset ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(p === voicePreset), 'data-voice-preset': p, title: PRESET_NOTES[p] }, PRESET_LABELS[p]) as unknown as Node);
     menu.appendChild(seg);
+    // the Mic key switch (TD-2026-10-21-514): ⌃` by default; a bare ` everywhere only by opt-in, with the warning
+    const bare = micKeyBareOf(status);
+    menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitemcheckbox', 'aria-checked': String(bare), 'data-mic-key': bare ? 'ctrl' : 'bare' }, h(doc, 'span', { class: 'mode-name' }, `Mic key: ${bare ? '` everywhere' : '⌃` (` inside Gnomon)'}`), h(doc, 'span', { class: 'mode-note' }, bare ? 'switch back to ⌃`' : 'use a bare ` everywhere: while Gnomon voice runs, ` will not type in any app')) as unknown as Node);
     const sw = sendWordOf(status);
     menu.appendChild(h(doc, 'button', { class: 'mode-item voice-item scope', type: 'button', role: 'menuitem', 'data-voice-sendword': '1' }, h(doc, 'span', { class: 'mode-name' }, sw ? 'Change your send word' : 'Teach Gnomon your send word'), h(doc, 'span', { class: 'mode-note' }, sw ? `now “${sw.text}”` : 'a guided step: say it a few times')) as unknown as Node);
   }
@@ -2145,6 +2184,9 @@ function run(id: string, trusted: boolean): void {
   $('palette').hidden = true;
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
+  else if (id.startsWith('voice.preset.')) void chooseVoicePreset(parsePreset(id.slice('voice.preset.'.length)), trusted);
+  else if (id === 'voice.sendword.teach') openTeach(null);
+  else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
   else if (id === 'mods.open') modsPanel.open();
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
@@ -2413,6 +2455,8 @@ function wire(): void {
     const vp = (e.target as HTMLElement).closest('[data-voice-preset]') as HTMLElement | null;
     if (vp) return void chooseVoicePreset(parsePreset(vp.dataset.voicePreset!), e.isTrusted);
     if ((e.target as HTMLElement).closest('[data-voice-sendword]') && e.isTrusted) return openTeach(null);
+    const mk = (e.target as HTMLElement).closest('[data-mic-key]') as HTMLElement | null;
+    if (mk) return void setMicKey(mk.dataset.micKey === 'bare', e.isTrusted);
     const vc = (e.target as HTMLElement).closest('[data-voice-client]') as HTMLElement | null;
     if (vc) {
       const id = vc.dataset.voiceClient!;
@@ -2503,6 +2547,11 @@ function wire(): void {
   // TD-2026-10-21-514: a hidden page never counts toward the send word's visibility
   document.addEventListener('visibilitychange', () => dispatchDictation({ type: 'pageVisible', visible: document.visibilityState === 'visible', now: Date.now() }));
   document.addEventListener('keydown', (e) => {
+    // TD-2026-10-21-514: a bare ` toggles the mic inside Gnomon (window focused, not typing in a field)
+    if (e.key === '`' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && document.hasFocus() && !editableFocus() && canAttach(status)) {
+      e.preventDefault();
+      return void micToggle(e.isTrusted);
+    }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       openPalette();

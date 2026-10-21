@@ -404,6 +404,8 @@ export const delayLabel = (d: number | null): string => (d === null ? 'off' : `$
 export interface DictationStatus {
   activity: Activity;
   holdToggles: number | null;
+  /** TD-2026-10-21-514: the voice app's ⌃⌥Return count (a change sends the draft: a hand origin) */
+  sendNows: number | null;
   /** the voice connection the counter belongs to (Aegis L5): status.voice.dictation.connEpoch, else the client restart count */
   epoch: string | null;
 }
@@ -414,5 +416,5 @@ export function dictationStatusOf(status: unknown): DictationStatus {
   const ce = d?.connEpoch;
   const restarts = obj(obj(obj(status)?.voice)?.client)?.restarts;
   const epoch = typeof ce === 'string' || typeof ce === 'number' ? `c:${ce}` : typeof restarts === 'number' ? `r:${restarts}` : null;
-  return { activity: a === 'speaking' || a === 'transcribing' ? a : 'idle', holdToggles: typeof d?.holdToggles === 'number' && Number.isSafeInteger(d.holdToggles) ? d.holdToggles : null, epoch };
+  return { activity: a === 'speaking' || a === 'transcribing' ? a : 'idle', holdToggles: typeof d?.holdToggles === 'number' && Number.isSafeInteger(d.holdToggles) ? d.holdToggles : null, sendNows: typeof d?.sendNows === 'number' && Number.isSafeInteger(d.sendNows) ? d.sendNows : null, epoch };
 }
