@@ -44,44 +44,74 @@ body {
 
 .sidebar__nav {
   flex: 1;
+  /* Scroll the section list on short viewports instead of overflowing onto the theme button. */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .sidebar__bottom {
-  padding: 0 6px;
+  padding: 0 4px;
   border-top: 1px solid var(--p-border);
   padding-top: 8px;
 }
 
 .sidebar__item {
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 8px 4px;
+  padding: 8px 2px;
   border-radius: var(--p-radius);
   cursor: pointer;
-  color: var(--p-text-muted);
+  color: var(--p-text-secondary);
   text-decoration: none;
   transition: background var(--p-transition), color var(--p-transition);
   border: none;
   background: none;
-  font-size: 10px;
+  font-size: var(--p-sidebar-label-size);
   font-family: inherit;
   width: 100%;
 }
 
+/* Hover stays visibly weaker than the active item. */
 .sidebar__item:hover {
-  background: var(--p-bg-hover);
-  color: var(--p-text-secondary);
+  background: color-mix(in srgb, var(--p-bg-tertiary) 55%, transparent);
+  color: var(--p-text-primary);
 }
 
-.sidebar__item--active {
+.sidebar__item:focus-visible {
+  outline: 2px solid var(--p-border-active);
+  outline-offset: -2px;
+}
+
+/* Active: filled background, an edge bar (a shape cue, not only colour), primary-weight label, accent icon. */
+.sidebar__item--active,
+.sidebar__item--active:hover {
   background: var(--p-bg-tertiary);
+  color: var(--p-text-primary);
+}
+
+.sidebar__item--active::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--p-accent-blue);
+}
+
+.sidebar__item--active .sidebar__item-icon {
   color: var(--p-accent-blue);
 }
 
@@ -91,9 +121,60 @@ body {
 }
 
 .sidebar__item-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: var(--p-sidebar-label-size);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phone: the rail becomes a bottom bar that scrolls sideways, so content gets the full width. */
+@media (max-width: 600px) {
+  .shell {
+    flex-direction: column-reverse;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--p-border);
+  }
+
+  .sidebar__nav {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 6px;
+  }
+
+  .sidebar__bottom {
+    border-top: none;
+    border-left: 1px solid var(--p-border);
+    padding: 4px 6px;
+  }
+
+  .sidebar__item {
+    width: var(--p-sidebar-width);
+    min-height: 44px;
+  }
+
+  .sidebar__item--active::before {
+    left: 6px;
+    right: 6px;
+    top: auto;
+    bottom: -4px;
+    width: auto;
+    height: 3px;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .main {
+    min-height: 0;
+  }
 }
 
 /* === Main Area === */

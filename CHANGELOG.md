@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@a-company/paradigm` 7.15.2
 - plugin 7.15.2
 - `@a-company/paradigm-mcp` 7.15.2
+## [7.15.1] — 2026-10-20
+
+### Changed
+- **Agent turn limits raised to 100** for every core agent: builder (was 50), architect and tester (were 30), reviewer and security (were 20). Large slices kept hitting the old caps before they could report. Plugin-only change; the npm packages are unchanged.
 
 ## [7.15.0] — 2026-10-14
 

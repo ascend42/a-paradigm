@@ -4,27 +4,32 @@
  * Ported from sentinel/ui/src/views/IncidentsView.tsx with useSentinelIncidentsStore.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSentinelIncidentsStore } from '../store/sentinelIncidentsStore';
+import {
+  STATUS_LABELS,
+  canResolve,
+  describeLoadError,
+  emptyStateCopy,
+  isActiveStatus,
+  patternMatchLabel,
+} from '../incidentCopy';
 
 const STATUS_COLORS: Record<string, string> = {
   open: 'var(--p-accent-red)',
-  investigating: 'var(--p-accent-amber)',
+  investigating: 'var(--p-accent-orange)',
   resolved: 'var(--p-accent-green)',
   'wont-fix': 'var(--p-text-muted)',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Open',
-  investigating: 'Investigating',
-  resolved: 'Resolved',
-  'wont-fix': "Won't Fix",
-};
+type ResolveState = 'idle' | 'confirming' | 'pending' | 'failed';
 
 export function IncidentsTab() {
   const {
+    incidents: allIncidents,
     isLoading,
     error,
+    errorStatus,
     statusFilter,
     selectedIncidentId,
     loadIncidents,
@@ -38,42 +43,39 @@ export function IncidentsTab() {
 
   const incidents = getFilteredIncidents();
   const selectedIncident = getSelectedIncident();
+  const [resolveState, setResolveState] = useState<ResolveState>('idle');
 
   useEffect(() => {
     loadIncidents();
     loadPatterns();
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="incidents-view s-loading-state">
-        <div className="s-loading-content">
-          <div className="s-loading-spinner" />
-          <p>Loading incidents...</p>
-        </div>
-      </div>
-    );
-  }
+  // A new selection starts with a fresh resolve control.
+  useEffect(() => {
+    setResolveState('idle');
+  }, [selectedIncidentId]);
 
-  if (error) {
-    return (
-      <div className="incidents-view s-error-state">
-        <div className="s-error-content">
-          <h2>Failed to load incidents</h2>
-          <p>{error}</p>
-          <button onClick={() => loadIncidents()}>Retry</button>
-        </div>
-      </div>
-    );
-  }
+  const handleResolve = async (id: string) => {
+    setResolveState('pending');
+    try {
+      await resolveIncident(id);
+      setResolveState('idle');
+    } catch {
+      setResolveState('failed');
+    }
+  };
+
+  const loadError = error ? describeLoadError(errorStatus) : null;
+  const empty = emptyStateCopy(statusFilter, allIncidents.length);
 
   return (
     <div className="incidents-view">
       {/* Filters Bar */}
       <div className="incidents-filters">
         <div className="filter-group">
-          <label>Status:</label>
+          <label htmlFor="incidents-status-filter">Status:</label>
           <select
+            id="incidents-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           >
@@ -89,27 +91,43 @@ export function IncidentsTab() {
         </div>
       </div>
 
-      <div className="incidents-content">
+      <div className={`incidents-content ${selectedIncident ? 'incidents-content--detail-open' : ''}`}>
         {/* Incidents List */}
         <div className="incidents-list">
-          {incidents.length === 0 ? (
+          {loadError ? (
+            <div className="s-error-content incidents-load-error" role="alert">
+              <h2>{loadError.title}</h2>
+              <p>{loadError.detail}</p>
+              <p><code className="incidents-command">{loadError.command}</code></p>
+              <p className="hint">{error}</p>
+              <button onClick={() => loadIncidents()}>Retry</button>
+            </div>
+          ) : isLoading && allIncidents.length === 0 ? (
+            <div className="s-loading-content incidents-loading">
+              <div className="s-loading-spinner" />
+              <p>Loading incidents...</p>
+            </div>
+          ) : incidents.length === 0 ? (
             <div className="incidents-empty">
-              <p>No incidents found.</p>
-              <p className="hint">
-                Incidents are recorded when errors occur in your application.
-              </p>
+              <p>{empty.title}</p>
+              <p className="hint">{empty.hint}</p>
+              {empty.canClearFilter && (
+                <button className="action-btn cancel" onClick={() => setStatusFilter('all')}>
+                  Show all incidents
+                </button>
+              )}
             </div>
           ) : (
             incidents.map((incident) => (
               <div
                 key={incident.id}
-                className={`incident-card ${selectedIncidentId === incident.id ? 'selected' : ''}`}
+                className={`incident-card ${selectedIncidentId === incident.id ? 'selected' : ''} ${isActiveStatus(incident.status) ? '' : 'incident-card--closed'}`}
                 onClick={() => selectIncident(incident.id)}
               >
                 <div className="incident-header">
                   <span className="incident-id">{incident.id}</span>
                   <span
-                    className="incident-status"
+                    className={`incident-status incident-status--${incident.status}`}
                     style={{ color: STATUS_COLORS[incident.status] }}
                   >
                     {STATUS_LABELS[incident.status]}
@@ -141,8 +159,10 @@ export function IncidentsTab() {
                 {incident.patternMatches && incident.patternMatches.length > 0 && (
                   <div className="incident-patterns">
                     <span className="pattern-match">
-                      Matched: {incident.patternMatches[0].patternName}
-                      ({Math.round(incident.patternMatches[0].confidence)}%)
+                      {patternMatchLabel(
+                        incident.patternMatches[0].patternName,
+                        incident.patternMatches[0].confidence,
+                      )}
                     </span>
                   </div>
                 )}
@@ -159,8 +179,10 @@ export function IncidentsTab() {
               <button
                 className="detail-close"
                 onClick={() => selectIncident(null)}
+                aria-label="Close incident details"
+                title="Close"
               >
-                &times;
+                <span aria-hidden="true">&times;</span>
               </button>
             </div>
 
@@ -179,7 +201,7 @@ export function IncidentsTab() {
                   <label>Status</label>
                   <span
                     className="status-badge"
-                    style={{ backgroundColor: STATUS_COLORS[selectedIncident.status] }}
+                    style={{ color: STATUS_COLORS[selectedIncident.status] }}
                   >
                     {STATUS_LABELS[selectedIncident.status]}
                   </span>
@@ -226,14 +248,42 @@ export function IncidentsTab() {
                 </section>
               )}
 
-              {selectedIncident.status === 'open' && (
+              {canResolve(selectedIncident.status) && (
                 <section className="detail-actions">
-                  <button
-                    className="action-btn resolve"
-                    onClick={() => resolveIncident(selectedIncident.id)}
-                  >
-                    Mark Resolved
-                  </button>
+                  {resolveState === 'confirming' ? (
+                    <>
+                      <p className="action-confirm-text">
+                        Resolve {selectedIncident.id}? This can't be undone from here.
+                      </p>
+                      <div className="action-row">
+                        <button
+                          className="action-btn resolve"
+                          onClick={() => handleResolve(selectedIncident.id)}
+                        >
+                          Yes, resolve
+                        </button>
+                        <button
+                          className="action-btn cancel"
+                          onClick={() => setResolveState('idle')}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      className="action-btn resolve"
+                      disabled={resolveState === 'pending'}
+                      onClick={() => setResolveState('confirming')}
+                    >
+                      {resolveState === 'pending' ? 'Resolving...' : 'Mark Resolved'}
+                    </button>
+                  )}
+                  {resolveState === 'failed' && (
+                    <p className="action-error" role="alert">
+                      Couldn't resolve this incident. Check that <code>paradigm serve</code> is running, then try again.
+                    </p>
+                  )}
                 </section>
               )}
             </div>

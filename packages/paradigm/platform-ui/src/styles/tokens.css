@@ -11,7 +11,7 @@
   /* Text */
   --p-text-primary: #e6edf3;
   --p-text-secondary: #8b949e;
-  --p-text-muted: #484f58;
+  --p-text-muted: #7d8590; /* 4.6:1 on bg-secondary, 5.1:1 on bg-primary (WCAG AA) */
 
   /* Borders */
   --p-border: #30363d;
@@ -64,7 +64,8 @@
   --p-spine-width: 2px;
 
   /* Layout */
-  --p-sidebar-width: 56px;
+  --p-sidebar-width: 64px;
+  --p-sidebar-label-size: 10px;
   --p-header-height: 44px;
   --p-radius: 6px;
   --p-transition: 150ms ease;
@@ -77,7 +78,7 @@
   --p-bg-hover: #d0d7de;
   --p-text-primary: #1f2328;
   --p-text-secondary: #656d76;
-  --p-text-muted: #8b949e;
+  --p-text-muted: #6a737d; /* 4.5:1 on bg-secondary, 4.8:1 on bg-primary (WCAG AA) */
   --p-border: #d0d7de;
   --p-border-active: #0969da;
   --p-accent-blue: #0969da;
@@ -85,6 +86,13 @@
   --p-accent-red: #cf222e;
   --p-accent-orange: #9a6700;
   --p-accent-purple: #8250df;
+
+  /* Symbols (light): the dark-theme hues are ~2.4:1 on light surfaces */
+  --p-symbol-component: #0969da;
+  --p-symbol-flow: #1a7f37;
+  --p-symbol-gate: #cf222e;
+  --p-symbol-signal: #9a6700;
+  --p-symbol-aspect: #8250df;
 
   /* Extended accent palette */
   --p-accent-cyan: #0891b2;

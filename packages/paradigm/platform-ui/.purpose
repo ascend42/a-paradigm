@@ -6,7 +6,7 @@ components:
     type: view
     tags: [feature, ui]
   SidebarNav:
-    description: Section navigation sidebar with icons and labels
+    description: Section navigation sidebar with icons and labels; the section list scrolls on short viewports, the active item carries an edge bar, and below 600px it becomes a bottom bar. The theme toggle names the current theme.
     type: view
   PlatformHeader:
     description: Top header bar with project name and section indicator
@@ -71,7 +71,7 @@ components:
     parent: '#SentinelSection'
     tags: [feature, sentinel]
   IncidentsTab:
-    description: Incident list with status filtering and detail panel
+    description: Incident list with status filtering and detail panel. Open and investigating incidents can be resolved after an inline confirm (with pending and failure states); load errors explain the cause in plain words without dropping the filter bar; a filtered-empty list offers to clear the filter; below 768px the detail view replaces the list.
     type: view
     parent: '#SentinelSection'
     tags: [feature, sentinel]
