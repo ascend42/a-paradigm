@@ -475,7 +475,7 @@ describe('chrome: palette, presets, themes (G-GUI-08, §11.3)', () => {
     for (const n of Object.keys(PRESETS)) expect(parseLayout(serializeLayout(applyPreset(n)))).toEqual(applyPreset(n));
     expect(togglePane(applyPreset('desk'), 'transcript').visible.transcript).toBe(true);
     const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
-    expect(html).toMatch(/id="risk" class="risk-chip kernel-owned"/); // board header-5b: an outlined amber chip at key height
+    expect(html).toMatch(/id="risk" class="risk-chip kernel-owned"(?![^>]*\shidden)/); // board header-5b: an outlined amber chip at key height, shown before attach (Aegis)
     expect(html.indexOf('id="risk"')).toBeLessThan(html.indexOf('<main')); // header chrome, outside every pane
   });
   it('theme auto follows the OS; reduced motion from the OS or in-app', () => {

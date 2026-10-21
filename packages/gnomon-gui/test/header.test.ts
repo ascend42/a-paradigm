@@ -36,7 +36,7 @@ describe('the header row is four things (board header-5b)', () => {
     expect(items).toHaveLength(4);
     expect(items[0]).toMatch(/^<span class="wm-wrap"><button id="wordmark-btn" class="wordmark-btn"/);
     expect(items[1]).toMatch(/^<button id="palette-btn" class="palfield"/);
-    expect(items[2]).toMatch(/^<span class="kstat kernel-owned"><span id="conn" class="link-dot kernel-owned"[\s\S]*<span id="risk" class="risk-chip kernel-owned" hidden/);
+    expect(items[2]).toMatch(/^<span class="kstat kernel-owned"><span id="conn" class="link-dot kernel-owned"[\s\S]*<span id="risk" class="risk-chip kernel-owned"(?![^>]*\shidden)[^>]*>/);
     expect(items[3]).toMatch(/^<span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off"/);
     // the pane toggles stay, at the two ends (shown below 900px only)
     expect(children[0]).toMatch(/id="toggle-sessions" class="key pane-toggle"/);
@@ -68,13 +68,25 @@ describe('every header control is 28px and never wraps', () => {
     // one edge style for the pill: the app's trouble is in its words, never a dashed edge
     expect(CSS).not.toMatch(/\.voice-pill\.voice-trouble \{ border-style: dashed/);
   });
-  it('narrow widths truncate, never squeeze: below 1040px the risk chip reads "browser" and the pill fact caps at 20ch', () => {
+  it('narrow widths truncate, never squeeze: below 1040px the risk chip reads "browser · risk" and the pill fact caps at 20ch', () => {
     expect(CSS).toMatch(/@media \(max-width: 1040px\) \{ \.risk-long, \.pal-ph2 \{ display: none; \} \.voice-fact \{ max-width: 20ch; \} \}/);
     expect(rule('.voice-fact')).toMatch(/overflow: hidden; text-overflow: ellipsis; min-width: 0/);
     expect(rule('.palfield .pal-ph')).toMatch(/text-overflow: ellipsis/);
     // the risk chip keeps its full text for assistive tech and in title= whatever the width
-    expect(HEAD).toMatch(/<span id="risk"[^>]*title="A browser extension with all-sites access[^"]*">browser<span class="risk-long" aria-hidden="true">&nbsp;· extension risk<\/span><span class="sr-only"> · extension risk: a browser extension/);
+    expect(HEAD).toMatch(/<span id="risk"[^>]*title="A browser extension with all-sites access[^"]*">browser&nbsp;·&nbsp;<span class="risk-long" aria-hidden="true">extension&nbsp;<\/span>risk<span class="sr-only">: a browser extension/);
     expect(rule('.risk-chip')).toMatch(/color: var\(--warn-ink\); background: transparent; border: 1px solid var\(--warn-edge\)/); // outlined, never filled
+  });
+  it('Aegis: the narrow chip still says "risk": the chip\'s visible text outside .risk-long (and .sr-only) contains it', () => {
+    const chip = /<span id="risk"[^>]*>([\s\S]*?)<\/span><\/span>/.exec(HEAD)![1]!;
+    const narrow = chip.replace(/<span class="risk-long"[^>]*>[\s\S]*?<\/span>/, '').replace(/<span class="sr-only">[\s\S]*$/, '').replace(/&nbsp;/g, ' ');
+    expect(narrow).toBe('browser · risk');
+    expect(narrow).toContain('risk');
+    expect(chip.replace(/<span class="sr-only">[\s\S]*$/, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')).toBe('browser · extension risk'); // wide
+  });
+  it('Aegis: the risk chip shows from boot on the browser surface, before attach; only the wrapper hides it', () => {
+    expect(APP).toMatch(/const SURFACE = hostSurface\(\);[\s\S]{0,300}\n\$\('risk'\)\.hidden = SURFACE === 'wrapper';/);
+    const attach = APP.slice(APP.indexOf('async function attach('), APP.indexOf('\n}\n', APP.indexOf('async function attach(')));
+    expect(attach).not.toContain("$('risk')");
   });
 });
 

@@ -1011,6 +1011,9 @@ function subscribe(c: GnomonClient): Promise<void> {
 
 /** Read once at load: the wrapper's frozen marker, else the browser (T-2026-10-18-018 N1). */
 const SURFACE = hostSurface();
+// the extension-risk chip is the browser's (S25-L1): shown from boot, before any attach (Aegis), hidden only in the
+// wrapper, which has no extensions
+$('risk').hidden = SURFACE === 'wrapper';
 
 async function attach(auth: { launchToken: string } | { reconnect: true } | { resumeToken: string }, fragmentKey: string | null, hint: CwdHint | null = null): Promise<void> {
   const pin = decidePin(fragmentKey, localStorage.getItem(PIN_KEY));
@@ -1058,7 +1061,6 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   $('reconnect').hidden = true;
   staleStop = true;
   staleChannel()?.postMessage({ t: 'attached' }); // #gui-relaunch: a stale same-origin tab may step aside (no secrets)
-  $('risk').hidden = SURFACE === 'wrapper'; // the extension-risk badge is the browser's: the wrapper has no extensions (S25-L1)
   // board header-5b: the link is quiet when well (a filled dot; its word only for screen readers); who and which
   // connection are in its title=, the Gnomon menu's who line and Settings → About (Kernel connection)
   setLink('connected', { principal: out.session.principal, connId: out.session.connId });

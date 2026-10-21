@@ -925,8 +925,11 @@ components:
       refs/header-5b.html option C; design-system gnomon.voice.header) - the
       header row is four things: the wordmark menu "Gnomon ▾", the ⌘K palette
       field, quiet kernel status (#conn link dot, word only when not
-      connected; #risk outlined amber chip, "browser" below 1040px, full text
-      in title and sr-only) and the kernel-owned voice pill. Every control
+      connected; #risk outlined amber chip, "browser · extension risk" wide
+      and "browser · risk" below 1040px (Aegis: the narrow chip still says
+      risk), full text in title and sr-only, shown from boot on the browser
+      surface before any attach and hidden only in the wrapper) and the
+      kernel-owned voice pill. Every control
       28px, nowrap; the row never wraps (palette words, then the pill fact,
       truncate). PURE core/header.ts: HEADER_ITEMS, appMenuModel (Layout
       presets, "Panes and Workshop…" opening pane toggles + Workshop
