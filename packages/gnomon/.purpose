@@ -2228,7 +2228,8 @@ components:
       Stop-hook continuation) or a blocking Stop hook_response retires the
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
-      one settles without a row. Pause
+      one settles without a row. Review C2: gnomon desk stats folds only
+      kernel-principal offer.shown / offer.suppressed rows. Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by

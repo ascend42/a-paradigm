@@ -62,4 +62,10 @@ describe('gnomon desk stats: offer.suppressed', () => {
     expect(seen.filter((r) => r.kind === 'offer.suppressed')).toHaveLength(6);
     expect(foldDeskStats(seen)[MOD]!.suppressed).toBe(3);
   });
+  it('review C2: only the kernel principal\'s offer.shown / offer.suppressed rows count', () => {
+    const rows = [...ROWS.map((r) => ({ ...r, principal: KERNEL })), { ...ROWS[0]!, payload: { ...ROWS[0]!.payload, offerId: 'offer:01J00000000000000000000002' }, principal: 'p:agent/claude' }, { ...ROWS[1]!, principal: 'p:agent/claude' }, { ...ROWS[4]!, principal: 'p:agent/claude' }];
+    expect(foldDeskStats(rows, { kernelPrincipal: KERNEL })[MOD]).toMatchObject({ shown: 1, suppressed: 3 });
+    expect(foldDeskUnnamed(rows, { kernelPrincipal: KERNEL }).byReason).toEqual({ 'no-block': 2, malformed: 1 });
+  });
+
 });

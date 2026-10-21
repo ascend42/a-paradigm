@@ -61,11 +61,20 @@ export interface DeskUnnamedStats {
 
 const bump = (m: Record<string, number>, k: string): void => void (m[k] = (m[k] ?? 0) + 1);
 
+/** A verified offer.* row: its kind, payload and the principal that wrote it (the envelope's). */
+export interface DeskRow {
+  kind: string;
+  payload: unknown;
+  principal?: string;
+}
+/** review C2: with a kernel principal, only the kernel's offer.shown / offer.suppressed rows count. */
+const foreign = (r: DeskRow, kernel: string | undefined): boolean => kernel !== undefined && (r.kind === 'offer.shown' || r.kind === 'offer.suppressed') && r.principal !== kernel;
+
 /** offer.suppressed rows (in log order) that name no mod, folded per reason and per session. */
-export function foldDeskUnnamed(rows: Iterable<{ kind: string; payload: unknown }>): DeskUnnamedStats {
+export function foldDeskUnnamed(rows: Iterable<DeskRow>, opts: { kernelPrincipal?: string } = {}): DeskUnnamedStats {
   const out: DeskUnnamedStats = { byReason: {}, bySession: {} };
   for (const r of rows) {
-    if (r.kind !== 'offer.suppressed') continue;
+    if (r.kind !== 'offer.suppressed' || foreign(r, opts.kernelPrincipal)) continue;
     const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
     if (typeof p.name === 'string' || typeof p.why !== 'string' || typeof p.hsid !== 'string') continue;
     bump(out.byReason, p.why);
@@ -75,11 +84,12 @@ export function foldDeskUnnamed(rows: Iterable<{ kind: string; payload: unknown 
 }
 
 /** Fold offer rows (in log order) into per-mod counts. Decisions and kept rows count once per offer. */
-export function foldDeskStats(rows: Iterable<{ kind: string; payload: unknown }>): Record<string, DeskModStats> {
+export function foldDeskStats(rows: Iterable<DeskRow>, opts: { kernelPrincipal?: string } = {}): Record<string, DeskModStats> {
   const byOffer = new Map<string, { mod: string; decided: boolean; kept: boolean }>();
   const out: Record<string, DeskModStats> = {};
   const of = (mod: string): DeskModStats => (out[mod] ??= { shown: 0, open: 0, notNow: 0, stopHere: 0, kept: 0, suppressed: 0, suppressedBy: {} });
   for (const r of rows) {
+    if (foreign(r, opts.kernelPrincipal)) continue;
     const p = r.payload !== null && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : {};
     if (r.kind === 'offer.suppressed') {
       // one row per evaluated turn (the router evaluates each turn once); the unnamed ones fold in foldDeskUnnamed
@@ -145,17 +155,19 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
   const pubs = readKernelPubs(home);
   const ring = new KeyRing();
   for (const k of pubs) ring.addEd25519(k.publicKeyPem);
-  const rows: Array<{ kind: string; payload: unknown }> = [];
+  const rows: DeskRow[] = [];
+  const kernelPrincipal = kernelPrincipalOf();
   let report: ReturnType<typeof verifyLog>;
   try {
     report = verifyLog(home, {
       keyRing: ring,
-      kernelPrincipal: kernelPrincipalOf(),
+      kernelPrincipal,
       kernelKeyIds: pubs.map((k) => k.keyId),
       onRow: (r) => {
         if (!r.kind.startsWith('offer.')) return;
         try {
-          rows.push({ kind: r.kind, payload: (JSON.parse(r.envelope) as { payload?: unknown }).payload });
+          const env = JSON.parse(r.envelope) as { payload?: unknown; principal?: unknown };
+          rows.push({ kind: r.kind, payload: env.payload, ...(typeof env.principal === 'string' ? { principal: env.principal } : {}) });
         } catch {
           /* an envelope verify accepted always parses */
         }
@@ -169,8 +181,8 @@ export async function runDeskCommand(argv: readonly string[], io: { stdout: Out;
     refused(io.stderr, 'INTEGRITY_BROKEN', 'verify-failed', `${report.failures.length} verify failure(s); an unverified log is never counted`);
     return DESK_EXIT_REFUSED;
   }
-  const stats = foldDeskStats(rows);
-  const unnamed = foldDeskUnnamed(rows);
+  const stats = foldDeskStats(rows, { kernelPrincipal });
+  const unnamed = foldDeskUnnamed(rows, { kernelPrincipal });
   const mods = Object.keys(stats).sort();
   const sessions = Object.keys(unnamed.bySession).sort();
   if (json) {
