@@ -173,4 +173,7 @@ gnomon:
         - "The risk check (exact text plus an 'I understand' box) sits right before save for Send word, and before turning on Pieces"
         - "Never ask the user to say the product name. Spoken phrases are plain sentences"
         - "Takes and phrases never appear in the transcript or the composer"
+        - "A collected mishearing counts as the send word only if the user ticks it at save (unticked by default, with the line 'Saying “x” on its own will also send')"
+      overrides:
+        - { rule: "a mishearing ... is kept as an accepted variant", reason: "Aegis R-1: a real word like 'sent' said alone would send; founder kept the opt-in", by: creator, from: { session: 2026-10-21-gnomon-voice, board: teach, finish_review: true } }
       from: { session: 2026-10-21-gnomon-voice, board: teach, ref: refs/teach.html, note: "also you are making the user say \"Gnomon\" which there is NO reference to how it supposed to be said in the first place." }
