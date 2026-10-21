@@ -43,6 +43,16 @@
  *     `~/.claude` and `~/.claude.json` stay denied, any other deny inside the
  *     carve-back is re-denied after it (`denyWriteAlways`), and the allow is
  *     withheld (`allowWriteRefused`) if the dir links elsewhere;
+ *   - session-env (write ALLOW, same pattern, Aegis H1/M1): ONLY this
+ *     session's `<userClaudeDir>/session-env/<uuid>/**` (`claudeSessionEnv` =
+ *     the backend session uuid, strict format). Claude Code mkdirs
+ *     `session-env/<session-id>` before running any command hook; denied,
+ *     every SessionStart/Stop/... hook failed with EPERM. Never the whole
+ *     `session-env`: another session's CLAUDE_ENV_FILE there is sourced as
+ *     shell by that session (the user's unsandboxed Claude Code included).
+ *     `session-env` and `session-env/<uuid>` are literal re-denied (neither can
+ *     be removed or swapped for a link); siblings stay under the `~/.claude`
+ *     deny; withheld (`sessionEnvRefused`) if either links elsewhere;
  *   - git (write, Aegis F9; a spec amendment to §15.5): `.git/hooks/**`,
  *     `.git/config`, `.git/info/**` of the cwd and worktree (and the common
  *     git dir of a linked worktree) — the gitHash inputs;
@@ -88,7 +98,7 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'session-env';
 }
 
 export interface SessionPolicy {
@@ -110,7 +120,9 @@ export interface SessionPolicy {
   /**
    * TD-2026-10-19-814 item 1 (probe p-resume, darwin): writes carved back out of denyWrite, rendered AFTER it (last
    * match wins). Only ever `<userClaudeDir>/projects` (subpath) — Claude Code's transcripts, so `--resume` works —
-   * and only for a Claude session (`claudeTranscripts`). Never an input path: no manifest or caller can name one.
+   * and `<userClaudeDir>/session-env/<uuid>` (subpath) — THIS session's dir Claude Code creates before any command
+   * hook runs (never the whole session-env, Aegis H1) — and only for a Claude session (`claudeTranscripts` / `claudeSessionEnv`). Never an input path: no
+   * manifest or caller can name one.
    */
   allowWrite: PolicyPath[];
   /**
@@ -121,6 +133,8 @@ export interface SessionPolicy {
   denyWriteAlways: PolicyPath[];
   /** why the transcript carve-back was withheld (fail closed: no allow), when `claudeTranscripts` asked for it */
   allowWriteRefused?: string;
+  /** why the session-env carve-back was withheld (fail closed: no allow), when `claudeSessionEnv` asked for it */
+  sessionEnvRefused?: string;
   /** outbound loopback connects refused to these ports (the web endpoint) */
   denyLoopbackPorts: number[];
   /** process-info on every process but self (process-info*, sysctl process lists, the sysmond lookup on macOS) */
@@ -194,10 +208,26 @@ export interface SessionPolicyInput {
    * exactly `realpath(userClaudeDir)/projects` or another write deny covers it.
    */
   claudeTranscripts?: boolean;
+  /**
+   * T-2026-10-21 (hooks fix; Aegis H1/M1 rework): the backend session uuid (`--session-id` / `--resume`) of a Claude
+   * Code session — carve ONLY `<userClaudeDir>/session-env/<uuid>` back out of the `~/.claude` write deny. Claude Code
+   * creates `session-env/<session-id>/` before it runs ANY command hook; with it denied, every hook fails with
+   * `EPERM mkdir`. Not a path: a uuid, checked against a strict lowercase RFC 4122 shape, so it can never name
+   * `..`, a separator or a sibling. Writing another session's dir would let this session plant that session's
+   * CLAUDE_ENV_FILE, which Claude Code sources as shell before its Bash commands (the user's unsandboxed Claude Code
+   * included) — so siblings stay denied. `session-env` and `session-env/<uuid>` are both literal re-denied (neither
+   * can be removed, renamed or swapped for a link). Withheld (sessionEnvRefused) on a malformed uuid, when the dir's
+   * realpath is not exactly `realpath(userClaudeDir)/session-env/<uuid>`, or another write deny covers it.
+   */
+  claudeSessionEnv?: string;
 }
 
 /** The one write carve-back (TD-2026-10-19-814): Claude Code's transcript dir, relative to the user Claude dir. */
 export const CLAUDE_TRANSCRIPTS_REL = 'projects';
+/** The second write carve-back: Claude Code's per-session hook environment dir, relative to the user Claude dir. */
+export const CLAUDE_SESSION_ENV_REL = 'session-env';
+/** The only session id shape the session-env carve-back accepts (lowercase RFC 4122, as `randomUUID()` mints). */
+export const SESSION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Does deny `d` cover path `p` (equal, or an ancestor for subpath / a string prefix for prefix)? Regex matches are judged by the caller. */
 function covers(d: PolicyPath, p: string): boolean {
@@ -400,16 +430,26 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
   // `.claude` dirs anywhere) covers it — the allow must reopen exactly ~/.claude/projects and nothing else.
   const allowWrite: PolicyPath[] = [];
-  let allowWriteRefused: string | undefined;
-  if (inp.claudeTranscripts) {
-    const claudeReal = realpathLoose(inp.userClaudeDir);
-    const want = path.join(claudeReal, CLAUDE_TRANSCRIPTS_REL);
-    const real = realpathLoose(path.join(inp.userClaudeDir, CLAUDE_TRANSCRIPTS_REL));
+  const claudeReal = realpathLoose(inp.userClaudeDir);
+  /** One `~/.claude/<rel>` carve-back: the allowed path, or why it is withheld (fail closed). */
+  const carve = (rel: string, cls: PolicyPath['class'], what: string): string | undefined => {
+    const want = path.join(claudeReal, rel);
+    const real = realpathLoose(path.join(inp.userClaudeDir, rel));
     const other = denyWrite.filter((d) => d.match !== 'steering' && d.match !== 'dep-steering' && !(d.match === 'subpath' && d.path === claudeReal) && covers(d, real));
-    if (real !== want) allowWriteRefused = `transcript dir resolves outside the user Claude dir (${real})`;
-    else if (other.length) allowWriteRefused = `transcript dir is covered by another write deny (${other.map((d) => `${d.class}:${d.match}:${d.path}`).join(', ')})`;
-    else allowWrite.push({ path: real, match: 'subpath', class: 'transcripts' });
-  }
+    if (real !== want) return `${what} dir resolves outside the user Claude dir (${real})`;
+    if (other.length) return `${what} dir is covered by another write deny (${other.map((d) => `${d.class}:${d.match}:${d.path}`).join(', ')})`;
+    allowWrite.push({ path: real, match: 'subpath', class: cls });
+    return undefined;
+  };
+  const allowWriteRefused = inp.claudeTranscripts ? carve(CLAUDE_TRANSCRIPTS_REL, 'transcripts', 'transcript') : undefined;
+  // the session-env carve-back follows the transcript one (same fail-closed rules, same literal re-deny of the allowed
+  // dir below) but is scoped to THIS session's uuid (Aegis H1): never session-env itself, never a sibling
+  const sessionEnvUuid = inp.claudeSessionEnv;
+  const sessionEnvRefused =
+    sessionEnvUuid === undefined ? undefined
+    : !SESSION_UUID_RE.test(sessionEnvUuid) ? `session-env uuid is not a lowercase RFC 4122 uuid (${JSON.stringify(sessionEnvUuid).slice(0, 60)})`
+    : realpathLoose(path.join(inp.userClaudeDir, CLAUDE_SESSION_ENV_REL)) !== path.join(claudeReal, CLAUDE_SESSION_ENV_REL) ? 'session-env dir resolves outside the user Claude dir'
+    : carve(path.join(CLAUDE_SESSION_ENV_REL, sessionEnvUuid), 'session-env', 'session-env');
   // Aegis M1: the carve-back root itself is re-denied (literal): its children match on their own paths, so transcripts
   // are still written, but `projects` cannot be removed, renamed or swapped for a link (a link there would redirect
   // the user's own unsandboxed Claude Code). Aegis L3: a steering regex whose root holds the carve-back is re-rooted
@@ -420,6 +460,8 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   );
   const denyWriteAlways = uniq([
     ...allowWrite.map((a): PolicyPath => ({ path: a.path, match: 'literal', class: a.class })),
+    // Aegis M1: the session-env dir itself stays a literal deny too (it cannot be removed, renamed or swapped)
+    ...(allowWrite.some((a) => a.class === 'session-env') ? [{ path: path.join(claudeReal, CLAUDE_SESSION_ENV_REL), match: 'literal' as const, class: 'session-env' as const }] : []),
     ...denyWrite.filter((d) => d.match !== 'steering' && allowWrite.some((a) => d.path !== a.path && within(d.path, a.path))),
     ...steeringAgain,
   ]);
@@ -437,6 +479,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     allowWrite,
     denyWriteAlways,
     ...(allowWriteRefused ? { allowWriteRefused } : {}),
+    ...(sessionEnvRefused ? { sessionEnvRefused } : {}),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',
     launchers: 'deny',

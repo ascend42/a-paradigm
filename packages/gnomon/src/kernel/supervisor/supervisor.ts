@@ -106,7 +106,7 @@ import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MO
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_TRANSCRIPTS_REL, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
@@ -441,7 +441,96 @@ export function turnContentHash(text: string): string {
  * existing entry — a dir, or a link the policy then refuses to carve back — is left exactly as found.
  */
 export function ensureTranscriptDir(userClaudeDir: string): void {
-  const dir = path.join(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
+  ensureClaudeDir(userClaudeDir, CLAUDE_TRANSCRIPTS_REL);
+}
+
+/**
+ * Aegis H1/M1: pre-create THIS session's `session-env/<uuid>` (0700) before the spawn, so both literal re-denies name
+ * real dirs and the session never has to create (or can remove/swap) them. lstat first: a link, or a non-directory, at
+ * `session-env` or `session-env/<uuid>` is refused and left alone (the policy then withholds the carve-back, fail
+ * closed). Returns the refusal reason, or null.
+ */
+export function ensureSessionEnvDir(userClaudeDir: string, uuid: string): string | null {
+  if (!SESSION_UUID_RE.test(uuid)) return 'malformed session uuid';
+  const root = path.join(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+  for (const dir of [root, path.join(root, uuid)]) {
+    let st: fs.Stats | null = null;
+    try {
+      st = fs.lstatSync(dir);
+    } catch {
+      st = null;
+    }
+    if (st && (st.isSymbolicLink() || !st.isDirectory())) return `${dir} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}`;
+    // Aegis L-2: an existing dir must be ours and not group/world-writable, else another user could plant an env file
+    const uid = process.getuid?.();
+    if (st && uid !== undefined && st.uid !== uid) return `${dir} is owned by uid ${st.uid}, not ${uid}`;
+    if (st && (st.mode & 0o022) !== 0) return `${dir} is group- or world-writable (mode ${(st.mode & 0o777).toString(8)})`;
+    if (!st) {
+      try {
+        fs.mkdirSync(dir, { mode: 0o700 });
+      } catch (e) {
+        return `cannot create ${dir}: ${(e as NodeJS.ErrnoException).code ?? 'error'}`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Aegis M-B: empty THIS session's `session-env/<uuid>` when the session ends (exited, drained, killed, orphaned), so a
+ * leftover CLAUDE_ENV_FILE can never be sourced by a later process that reuses the id (a `--resume` outside Gnomon, or
+ * without the carve). Never follows a link: every entry is lstat'd; files and symlinks are unlinked (unlinking a link
+ * removes the link, never its target); a real sub-directory is emptied the same way and removed; nothing is traversed
+ * through a link. The `<uuid>` dir itself stays (it is literal-denied while a session runs; the next spawn reuses it).
+ * Refuses (does nothing) when `session-env` or `session-env/<uuid>` is a link or not a directory. Never throws.
+ */
+export function emptySessionEnvDir(userClaudeDir: string, uuid: string): { removed: number; refused?: string } {
+  if (!SESSION_UUID_RE.test(uuid)) return { removed: 0, refused: 'malformed session uuid' };
+  const root = path.join(userClaudeDir, CLAUDE_SESSION_ENV_REL);
+  const dir = path.join(root, uuid);
+  for (const d of [root, dir]) {
+    try {
+      const st = fs.lstatSync(d);
+      if (st.isSymbolicLink() || !st.isDirectory()) return { removed: 0, refused: `${d} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}` };
+    } catch {
+      return { removed: 0 }; // nothing to empty
+    }
+  }
+  let removed = 0;
+  const empty = (d: string, depth: number): void => {
+    let names: string[];
+    try {
+      names = fs.readdirSync(d);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const p = path.join(d, name);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(p);
+      } catch {
+        continue;
+      }
+      try {
+        if (st.isDirectory() && !st.isSymbolicLink()) {
+          if (depth < 8) empty(p, depth + 1);
+          fs.rmdirSync(p);
+        } else {
+          fs.unlinkSync(p);
+        }
+        removed++;
+      } catch {
+        // best effort: a file we cannot remove stays; the next spawn's policy still scopes the carve to the new run
+      }
+    }
+  };
+  empty(dir, 0);
+  return { removed };
+}
+
+function ensureClaudeDir(userClaudeDir: string, rel: string): void {
+  const dir = path.join(userClaudeDir, rel);
   try {
     fs.lstatSync(dir);
     return;
@@ -538,6 +627,21 @@ export class SessionSupervisor {
   }
 
   /** Aegis L2: the user home is the OS one (passwd), never $HOME; the userHome seam still wins (tests, the daemon's own) */
+  /**
+   * Aegis M-B: empty a session's `session-env/<uuid>` (see emptySessionEnvDir). Public for the daemon's orphan sweep,
+   * which ends sessions a crashed kernel left behind. Logged; never throws.
+   */
+  async emptySessionEnvFor(hsid: string | null, uuid: string): Promise<void> {
+    await this.#emptySessionEnv(hsid, uuid);
+  }
+
+  async #emptySessionEnv(hsid: string | null, uuid: string): Promise<void> {
+    const row = claudeCodePlatform(this.#platform);
+    if (!row) return;
+    const r = emptySessionEnvDir(path.join(this.#userHome(), row.userClaudeDir), uuid);
+    if (r.removed > 0 || r.refused) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-emptied', uuid, removed: r.removed, ...(r.refused ? { refused: r.refused } : {}) }, hsid ? { session: hsid } : {}).catch(() => undefined);
+  }
+
   #userHome(): string {
     return this.#o.userHome ?? this.#identity?.home ?? os.homedir();
   }
@@ -674,6 +778,7 @@ export class SessionSupervisor {
       // names a real dir (the session can then neither remove, rename nor replace it). Never over an existing entry:
       // a link there is the policy's fail-closed case, not ours to repair.
       ensureTranscriptDir(userClaudeDir);
+      const sessionEnvPrep = ensureSessionEnvDir(userClaudeDir, uuid);
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,
@@ -692,9 +797,12 @@ export class SessionSupervisor {
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
         claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
+        claudeSessionEnv: uuid, // Aegis H1: only THIS session's ~/.claude/session-env/<uuid> (Claude Code mkdirs it before any command hook)
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
+      // fail closed, reported: no session-env carve-back means Claude Code's command hooks cannot run in this session
+      if (policy.sessionEnvRefused || sessionEnvPrep) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-withheld', reason: policy.sessionEnvRefused ?? sessionEnvPrep }, { session: hsid });
       if (r && policy.allowWriteRefused) throw new PreflightRefusal('spawn_failed', 'a resume needs its transcript dir writable', { resume: 'transcripts-withheld' });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
@@ -952,6 +1060,8 @@ export class SessionSupervisor {
   async #onExit(s: Session): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    // Aegis M-B: every exit path (exited, drained, killed) empties this session's session-env/<uuid>, links never followed
+    await this.#emptySessionEnv(s.hsid, s.uuid);
     if (s.watch) clearInterval(s.watch);
     s.watch = null;
     await this.#expirePending(s, 'session-exited');
@@ -991,6 +1101,9 @@ export class SessionSupervisor {
     switch (ev.kind) {
       case 'init':
         s.replayLive = true; // re-review L-2
+        // L1: the session-env carve-back covers only the uuid it was spawned with. A different live id (/clear mints one;
+        // a forking resume would too) means Claude Code's command hooks are back on fail-closed EPERM — say so.
+        if (ev.sessionId !== null && ev.sessionId !== s.uuid) await this.#o.log('session.sandbox', { hsid: s.hsid, phase: 'session-env-mismatch', uuid: s.uuid, sessionId: ev.sessionId, hooks: 'fail-closed' }, { session: s.hsid });
         if (ev.model !== null) s.seenModel = ev.model;
         if (ev.apiKeySource !== null && ev.apiKeySource !== 'none') {
           await this.#o.log('billing.api.refused', { hsid: s.hsid, where: ['init.apiKeySource'], keys: [ev.apiKeySource] }, { session: s.hsid });

@@ -70,6 +70,29 @@ ENFORCEMENT_MAP=""
 if [ "$PARADIGM_AVAILABLE" = "true" ]; then
   ENFORCEMENT_MAP=$($PARADIGM_BIN enforcement resolve --json 2>/dev/null) || true
 fi
+# Normalise to compact JSON ONCE: drop every whitespace character that sits
+# outside a string literal (escapes inside strings respected). The CLI prints
+# pretty JSON (\`"id": "value"\`); the lookups below match the compact
+# \`"id":"value"\` form, so without this every configured severity was silently
+# ignored and each check ran at its hard-coded default.
+if [ -n "$ENFORCEMENT_MAP" ]; then
+  ENFORCEMENT_MAP=$(printf '%s\\n' "$ENFORCEMENT_MAP" | awk '
+    BEGIN { ins = 0; esc = 0; out = "" }
+    {
+      line = $0
+      for (i = 1; i <= length(line); i++) {
+        c = substr(line, i, 1)
+        if (ins) {
+          out = out c
+          if (esc) esc = 0
+          else if (c == "\\\\") esc = 1
+          else if (c == "\\"") ins = 0
+        } else if (c == "\\"") { ins = 1; out = out c }
+        else if (c != " " && c != "\\t" && c != "\\r") out = out c
+      }
+    }
+    END { print out }')
+fi
 
 # Helper: get severity for a check ID
 _check_severity() {
@@ -139,15 +162,42 @@ if [ "$PARADIGM_AVAILABLE" = "true" ]; then
   [ -z "$_REMEDIATIONS_JSON" ] && _REMEDIATIONS_JSON="[]"
 fi
 
-# --- Cache .purpose file paths (avoid repeated find scans) ---
-PURPOSE_CACHE=".paradigm/.purpose-paths"
-if [ -f "$PURPOSE_CACHE" ]; then
-  PURPOSE_PATHS=$(cat "$PURPOSE_CACHE")
-else
-  PURPOSE_PATHS=$(find . -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null)
-  if [ -n "$PURPOSE_PATHS" ]; then
-    echo "$PURPOSE_PATHS" > "$PURPOSE_CACHE"
-  fi
+# --- Helpers that avoid a fork per call (hot loops below) ---
+# Every $(dirname ...) / $(echo | grep) costs a subshell plus a process. On a
+# repo with many modified files those forks alone eat seconds of the Stop
+# hook's 30 s budget, so the hot loops use these builtin-only helpers.
+_NL='
+'
+# _parent <path> — sets _PD to dirname(<path>) without forking.
+_parent() {
+  case "$1" in
+    */*) _PD=\${1%/*}; [ -z "$_PD" ] && _PD=/ ;;
+    *) _PD=. ;;
+  esac
+}
+# _is_modified <path> — true iff <path> is a whole line of $MODIFIED.
+_is_modified() {
+  case "$_NL$MODIFIED$_NL" in
+    *"$_NL$1$_NL"*) return 0 ;;
+  esac
+  return 1
+}
+
+# --- Discover .purpose files (fresh every run, never a persisted cache) ---
+# Ask git, not find: \`git ls-files\` lists tracked + untracked-not-ignored files
+# in milliseconds and does NOT descend into nested repositories — in particular
+# Claude Code agent worktrees under .claude/worktrees/, each a full copy of the
+# repo. The old \`find . -not -path "*/node_modules/*"\` walked every one of them
+# (and every node_modules, since -not -path filters but does not prune), which
+# on a repo with 16 agent worktrees found 2,195 .purpose files in 6 s and made
+# Check 4 below take 30 s — the whole Stop hook timeout, so Claude Code killed
+# the hook on every turn. The old .paradigm/.purpose-paths cache is no longer
+# read: it was only cleared on a passing run, so a killed or blocked run left a
+# stale list behind forever. Outside git (not reachable from the Stop hook,
+# which needs \`git diff\`), fall back to a find that PRUNES those trees.
+PURPOSE_PATHS=$(git ls-files -co --exclude-standard 2>/dev/null | grep -E '(^|/)\\.purpose$' | sed 's|^|./|')
+if [ -z "$PURPOSE_PATHS" ] && ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PURPOSE_PATHS=$(find . \\( -name node_modules -o -name .git -o -path ./.claude/worktrees \\) -prune -o -name ".purpose" -type f -print 2>/dev/null)
 fi
 
 # --- Check 1: Source files modified without .purpose updates ---
@@ -167,15 +217,15 @@ for file in $MODIFIED; do
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
-      src_dir=$(dirname "$file")
+      _parent "$file"; src_dir=$_PD
       covering=""
       walk_dir="$src_dir"
-      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ]; do
+      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ] && [ "$walk_dir" != "/" ]; do
         if [ -f "$walk_dir/.purpose" ]; then
           covering="$walk_dir/.purpose"
           break
         fi
-        walk_dir=$(dirname "$walk_dir")
+        _parent "$walk_dir"; walk_dir=$_PD
       done
       if [ -z "$covering" ] && [ -f ".purpose" ]; then
         covering=".purpose"
@@ -233,16 +283,16 @@ for file in $MODIFIED; do
     .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
 
-  dir=$(dirname "$file")
+  _parent "$file"; dir=$_PD
   # Walk up to find a .purpose file
   found_purpose=false
   check_dir="$dir"
-  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
     if [ -f "$check_dir/.purpose" ]; then
       found_purpose=true
       break
     fi
-    check_dir=$(dirname "$check_dir")
+    _parent "$check_dir"; check_dir=$_PD
   done
   # Also check root
   if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
@@ -343,38 +393,44 @@ fi
 
 # --- Check 4: Aspect anchor files that no longer exist ---
 _SEV=$(_check_severity "aspect-anchors" "block")
-if [ "$_SEV" != "off" ]; then
-  for purpose_file in $PURPOSE_PATHS; do
-    if grep -q "anchors:" "$purpose_file" 2>/dev/null; then
-      purpose_dir=$(dirname "$purpose_file")
-      in_anchors=false
-      while IFS= read -r line; do
-        case "$line" in
-          *"anchors:"*) in_anchors=true; continue ;;
-          *"- "*)
-            if [ "$in_anchors" = true ]; then
-              anchor_path=$(echo "$line" | sed 's/.*- //' | sed 's/:.*//' | tr -d ' ')
-              if [ -n "$anchor_path" ]; then
-                # Try relative to .purpose dir first, then project root
-                if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
-                  if [ "$_SEV" = "block" ]; then
-                    VIOLATIONS="$VIOLATIONS
+if [ "$_SEV" != "off" ] && [ -n "$PURPOSE_PATHS" ]; then
+  # ONE awk pass extracts every (purpose file, anchor) pair; the shell then only
+  # runs builtin \`[ -f ]\` tests. The old loop forked echo|sed|sed|tr for every
+  # anchor line — 10,817 lines x 4 processes = 30 s on a large repo.
+  # Extraction rules are unchanged: a line containing "anchors:" opens an
+  # anchor list; a line containing "- " inside it is an anchor (text after the
+  # LAST "- ", cut at the first ":", spaces removed); any other line closes it.
+  _ANCHOR_PAIRS=$(awk '
+    FNR == 1 { in_a = 0 }
+    index($0, "anchors:") { in_a = 1; next }
+    index($0, "- ") {
+      if (in_a) {
+        a = $0; sub(/.*- /, "", a); sub(/:.*/, "", a); gsub(/ /, "", a)
+        if (a != "") print FILENAME "\\t" a
+      }
+      next
+    }
+    { in_a = 0 }
+  ' $PURPOSE_PATHS 2>/dev/null)
+  _TAB=$(printf '\\t')
+  while IFS="$_TAB" read -r purpose_file anchor_path; do
+    [ -n "$anchor_path" ] || continue
+    _parent "$purpose_file"; purpose_dir=$_PD
+    # Try relative to .purpose dir first, then project root
+    if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
+      if [ "$_SEV" = "block" ]; then
+        VIOLATIONS="$VIOLATIONS
   - Aspect anchor '$anchor_path' in $purpose_file does not exist.
     Update the anchor or remove the stale aspect."
-                    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
-                  else
-                    ADVISORY="$ADVISORY
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      else
+        ADVISORY="$ADVISORY
   - (warn) Aspect anchor '$anchor_path' in $purpose_file does not exist."
-                  fi
-                fi
-              fi
-            fi
-            ;;
-          *) in_anchors=false ;;
-        esac
-      done < "$purpose_file"
+      fi
     fi
-  done
+  done <<ANCHOREOF
+$_ANCHOR_PAIRS
+ANCHOREOF
 fi
 
 # --- Check 5: Per-directory .purpose freshness ---
@@ -397,21 +453,21 @@ if [ -f "$PENDING_FILE" ]; then
   while IFS= read -r tracked_file; do
     [ -z "$tracked_file" ] && continue
     # Find covering .purpose for this tracked file
-    check_dir=$(dirname "$tracked_file")
+    _parent "$tracked_file"; check_dir=$_PD
     covering_purpose=""
-    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+    while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
       if [ -f "$check_dir/.purpose" ]; then
         covering_purpose="$check_dir/.purpose"
         break
       fi
-      check_dir=$(dirname "$check_dir")
+      _parent "$check_dir"; check_dir=$_PD
     done
     if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
       covering_purpose=".purpose"
     fi
     # Check if covering .purpose was also modified
     if [ -n "$covering_purpose" ]; then
-      if ! echo "$MODIFIED" | grep -qxF "$covering_purpose"; then
+      if ! _is_modified "$covering_purpose"; then
         _record_stale_purpose "$covering_purpose"
       fi
     fi
@@ -428,14 +484,14 @@ for file in $MODIFIED; do
   [ -f "$file" ] || continue
 
   # Find covering .purpose
-  check_dir=$(dirname "$file")
+  _parent "$file"; check_dir=$_PD
   covering_purpose=""
-  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ]; do
+  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
     if [ -f "$check_dir/.purpose" ]; then
       covering_purpose="$check_dir/.purpose"
       break
     fi
-    check_dir=$(dirname "$check_dir")
+    _parent "$check_dir"; check_dir=$_PD
   done
   if [ -z "$covering_purpose" ] && [ -f ".purpose" ]; then
     covering_purpose=".purpose"
@@ -443,7 +499,7 @@ for file in $MODIFIED; do
   [ -n "$covering_purpose" ] || continue
 
   # Skip if .purpose was in the modified list (already updated this session)
-  echo "$MODIFIED" | grep -qxF "$covering_purpose" && continue
+  _is_modified "$covering_purpose" && continue
 
   # Compare modification times: if source file is newer than .purpose, it's stale
   if [ -f "$covering_purpose" ]; then
@@ -1122,6 +1178,10 @@ export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 # Checks 1–13 are defined in paradigm-common.sh (shared with Cursor hook).
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin Stop 30000 10000
+
 INPUT=$(cat)
 
 # Extract cwd from input (try jq first, fallback to grep)
@@ -1166,8 +1226,12 @@ fi
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
+  # FULLY detached: a background child that inherits the hook's stdout/stderr
+  # keeps Claude Code's pipe open, and Claude Code waits for EOF on that pipe —
+  # not for this script's exit — until the hook timeout. Never background a
+  # command in a hook without </dev/null >/dev/null 2>&1.
   if [ "$PARADIGM_AVAILABLE" = "true" ]; then
-    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" </dev/null >/dev/null 2>&1 &
   fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
@@ -1226,10 +1290,11 @@ rm -f ".paradigm/.orchestrated"
 # would erase solo declarations mid-session and re-nag every turn. They expire
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
-# Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
-if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -f ".paradigm/events/verdicts.jsonl" ]; then
-  $PARADIGM_BIN ambient postflight 2>/dev/null &
-fi
+# Postflight learning already ran above: paradigm-common.sh calls
+# \`compliance-check --learn\`, which runs the same runPostflightLearning pass in
+# the foreground. The old second \`ambient postflight &\` here was a duplicate
+# pass, and as a background child holding the hook's stdout open it made
+# Claude Code wait for EOF until the hook timeout.
 
 exit 0
 `;
@@ -1237,6 +1302,10 @@ exit 0
 export const CLAUDE_CODE_POSTWRITE_HOOK = `#!/bin/sh
 # Legacy afterFileEdit hook — replaced by paradigm-posttooluse.sh (postToolUse)
 # Kept as a no-op because Claude Code expects the file to exist.
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PostToolUse-Write 10000 2000
+
 exit 0
 `;
 
@@ -1249,6 +1318,10 @@ export const CLAUDE_CODE_PRECOMMIT_HOOK = `#!/bin/sh
 # Exit 0 = allow (never blocks), just ensures index is fresh
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PreToolUse-Bash 15000 5000
+
 INPUT=$(cat)
 
 # Extract the command from tool_input
@@ -1273,7 +1346,9 @@ fi
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm index --quiet 2>/dev/null || true
+  # --no-install: never let npx fetch the unrelated public "paradigm" package
+  # (a network round-trip inside a 15 s hook, and the wrong binary).
+  npx --no-install paradigm index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
@@ -1303,6 +1378,10 @@ export const CLAUDE_CODE_NAVIGATE_REMIND_HOOK = `#!/bin/sh
 # Uses a session marker (.paradigm/.nav-reminded) to fire at most once.
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PreToolUse-Glob 5000 2000
+
 INPUT=$(cat)
 
 # Extract cwd from input
@@ -1389,6 +1468,10 @@ export const CLAUDE_CODE_PROMPT_GATE_HOOK = `#!/bin/sh
 # declares a legible solo session; orchestrating clears the gate naturally.
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin UserPromptSubmit 5000 2000
+
 INPUT=$(cat)
 
 # Kill switch
@@ -1488,6 +1571,10 @@ export const CLAUDE_CODE_TEAM_GATE_HOOK = `#!/bin/sh
 # Escape hatch: PARADIGM_TEAM_GATE=off
 
 # Read JSON from stdin (hook input)
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PreToolUse-Write 5000 2000
+
 INPUT=$(cat)
 
 # Kill switch
@@ -1577,6 +1664,10 @@ export const CLAUDE_CODE_SKILL_USED_HOOK = `#!/bin/sh
 # Hook type: PostToolUse (matcher: Skill)
 # Contract: NEVER fails loudly — always exit 0, no stdout/stderr output.
 
+# Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PostToolUse-Skill 10000 3000
+
 INPUT=$(cat)
 
 # Cheap pre-filter: only Paradigm projections pay for a CLI spawn.
@@ -1591,6 +1682,172 @@ command -v paradigm >/dev/null 2>&1 || exit 0
 printf '%s' "$INPUT" | paradigm skill record-usage >/dev/null 2>&1 || true
 
 exit 0
+`;
+
+export const CLAUDE_CODE_SESSION_START_HOOK = `#!/bin/sh
+# Paradigm Claude Code SessionStart hook — hook-health surfacing (#hook-health-warning)
+# Reads the hook timing ring (.paradigm/events/hook-timings.jsonl, written by
+# paradigm-hook-monitor.sh) and, when a Paradigm hook was killed (start with no
+# end older than its timeout, or a recorded SIGTERM) or ran over its budget
+# since the last warning, prints ONE line per hook to stdout — SessionStart
+# stdout is added to the agent's context. Rate-limited to once per session
+# (.paradigm/.hook-health-warned). Also trims the ring to its cap.
+#
+# Hook type: SessionStart. Contract: always exit 0; fail open.
+
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+[ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin SessionStart 10000 3000
+
+INPUT=$(cat)
+
+ROOT="\${CLAUDE_PROJECT_DIR:-$PWD}"
+[ -d "$ROOT/.paradigm" ] || exit 0
+RING="$ROOT/.paradigm/events/hook-timings.jsonl"
+[ -f "$RING" ] || exit 0
+MARK="$ROOT/.paradigm/.hook-health-warned"
+
+SID=$(printf '%s' "$INPUT" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/')
+SINCE=0
+if [ -f "$MARK" ]; then
+  read -r _m_sid _m_ts < "$MARK" 2>/dev/null
+  # once per session
+  [ -n "$SID" ] && [ "$_m_sid" = "$SID" ] && exit 0
+  case "$_m_ts" in ''|*[!0-9]*) ;; *) SINCE=$_m_ts ;; esac
+fi
+
+_pm_now 2>/dev/null || _pm_t=$(( $(date +%s) * 1000 ))
+NOW=$_pm_t
+
+# The ring is a plain file any process in the project can write, and this hook's
+# stdout goes into the NEXT session's context (possibly an unsandboxed one). So
+# (Aegis M-A) no ring text reaches stdout except numbers printed with %d and
+# hook names from this exact allowlist; a record with any other \`hook\` value
+# is dropped whole. Keep in sync with HOOK_NAMES in doctor/hook-health.ts.
+HOOK_ALLOW="SessionStart Stop PreToolUse-Bash PreToolUse-Glob PreToolUse-Write UserPromptSubmit PostToolUse-Write PostToolUse-Skill"
+
+# One awk pass: per hook, killed and over-budget counts after SINCE, earliest time, total lines.
+SUMMARY=$(awk -v now="$NOW" -v since="$SINCE" -v grace=5000 -v allow="$HOOK_ALLOW" '
+  BEGIN { na = split(allow, al, " "); for (i = 1; i <= na; i++) OK[al[i]] = 1 }
+  function f(k,   r, p) {
+    p = "\\"" k "\\":"
+    if (!match($0, p "\\"?[^,\\"}]*")) return ""
+    r = substr($0, RSTART + length(p), RLENGTH - length(p)); sub(/^"/, "", r); return r
+  }
+  { n++ ; ev = f("ev"); id = f("id"); h = f("hook"); t = f("t") + 0; if (!(h in OK)) next }
+  ev == "start" { S[id] = t; H[id] = h; TO[id] = f("timeoutMs") + 0; B[id] = f("budgetMs") + 0 }
+  ev == "end" {
+    E[id] = 1
+    if (t <= since) next
+    if (f("outcome") == "killed") { K[h]++; if (!(h in FK) || t < FK[h]) FK[h] = t }
+    else if ((id in B) && B[id] > 0 && f("ms") + 0 > B[id]) { SL[h]++; BU[h] = B[id]; if (!(h in FSL) || t < FSL[h]) FSL[h] = t }
+  }
+  END {
+    for (id in S) if (!(id in E) && S[id] > since && now - S[id] > TO[id] + grace) { h = H[id]; K[h]++; if (!(h in FK) || S[id] < FK[h]) FK[h] = S[id] }
+    for (h in K) printf "killed\\t%s\\t%d\\t%d\\n", h, K[h], FK[h]
+    for (h in SL) printf "slow\\t%s\\t%d\\t%d\\t%d\\n", h, SL[h], FSL[h], BU[h]
+    printf "lines\\t%d\\n", n
+  }' "$RING" 2>/dev/null)
+
+_fmt_date() { # epoch ms -> YYYY-MM-DD HH:MM (local)
+  _s=$(( $1 / 1000 ))
+  date -r "$_s" '+%Y-%m-%d %H:%M' 2>/dev/null || date -d "@$_s" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_s"
+}
+
+WARNED=false
+_TAB=$(printf '\\t')
+while IFS="$_TAB" read -r kind hook count first budget; do
+  # belt and braces (M-A): only allowlisted names and plain digits are ever printed
+  case " $HOOK_ALLOW " in *" $hook "*) ;; *) [ "$kind" = lines ] || continue ;; esac
+  case "\${count:-0}\${first:-0}\${budget:-0}" in *[!0-9]*) [ "$kind" = lines ] || continue ;; esac
+  case "$kind" in
+    killed)
+      case "$hook" in
+        Stop) consequence="enforcement did not run" ;;
+        *) consequence="its checks did not run" ;;
+      esac
+      printf '%s\\n' "Paradigm $hook hook timed out $count time(s) since $(_fmt_date "$first"); $consequence. Run \\\`paradigm doctor\\\`."
+      WARNED=true ;;
+    slow)
+      printf '%s\\n' "Paradigm $hook hook exceeded its $(( budget / 1000 ))s budget $count time(s) since $(_fmt_date "$first"). Run \\\`paradigm doctor\\\`."
+      WARNED=true ;;
+    lines)
+      case "\${hook:-0}" in *[!0-9]*) continue ;; esac
+      [ "\${hook:-0}" -gt "\${PARADIGM_HOOK_RING_MAX:-500}" ] 2>/dev/null && { _PM_RING_SAVE=$_PM_RING; _PM_RING=$RING; _pm_trim; _PM_RING=$_PM_RING_SAVE; } ;;
+  esac
+done <<EOF
+$SUMMARY
+EOF
+
+if [ "$WARNED" = true ]; then
+  { printf '%s %s\\n' "\${SID:-unknown}" "$NOW" > "$MARK"; } 2>/dev/null
+fi
+exit 0
+`;
+
+export const HOOK_MONITOR = `#!/bin/sh
+# Paradigm hook self-monitoring (#hook-monitor) — sourced by every plugin hook.
+#
+#   case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+#   [ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin <Hook> <timeoutMs> <budgetMs>
+#
+# Appends a "start" record when the hook begins and an "end" record (wall ms
+# + outcome ok|blocked|error|killed) when it exits, to the bounded ring
+# .paradigm/events/hook-timings.jsonl. A hook killed with SIGKILL cannot write
+# its end record; the next SessionStart (paradigm-session-start.sh) and
+# \`paradigm doctor\` treat a start with no end, older than its timeout, as
+# killed. Cost per run: two \`date\` calls and two appended lines through shell
+# redirection — no CLI or node spawn. FAIL OPEN: nothing here may print to
+# stdout, change the hook's exit code, or stop the hook; every write is
+# best-effort (a read-only tree or sandbox just records nothing).
+
+_pm_now() {
+  _pm_t=$(date +%s%N 2>/dev/null)
+  case "$_pm_t" in
+    ''|*[!0-9]*) _pm_t=$(date +%s 2>/dev/null); _pm_t=$(( \${_pm_t:-0} * 1000 )) ;;
+    *) _pm_t=\${_pm_t%??????} ;;
+  esac
+}
+
+_pm_trim() {
+  _pm_max=\${PARADIGM_HOOK_RING_MAX:-500}
+  { tail -n "$_pm_max" "$_PM_RING" > "$_PM_RING.tmp.$$" && mv -f "$_PM_RING.tmp.$$" "$_PM_RING"; } 2>/dev/null || rm -f "$_PM_RING.tmp.$$" 2>/dev/null
+}
+
+_pm_end() {
+  _pm_rc=$1
+  [ -n "$_PM_RING" ] || return 0
+  _pm_now
+  _pm_ms=$(( _pm_t - _PM_T0 ))
+  case "$_PM_OUTCOME:$_pm_rc" in
+    killed:*) _pm_out=killed ;;
+    *:0) _pm_out=ok ;;
+    *:2) _pm_out=blocked ;;
+    *) _pm_out=error ;;
+  esac
+  { printf '{"ev":"end","hook":"%s","id":"%s","t":%s,"ms":%s,"rc":%s,"outcome":"%s"}\\n' "$_PM_HOOK" "$_PM_ID" "$_pm_t" "$_pm_ms" "$_pm_rc" "$_pm_out" >> "$_PM_RING"; } 2>/dev/null
+  # Bounded ring: trim on ~1 in 64 runs (one tail+mv), deterministically in
+  # SessionStart. PARADIGM_HOOK_RING_TRIM_EVERY=1 trims every run (tests).
+  _pm_every=\${PARADIGM_HOOK_RING_TRIM_EVERY:-64}
+  [ "$_pm_every" -gt 0 ] 2>/dev/null || _pm_every=64
+  [ $(( $$ % _pm_every )) -eq 0 ] && _pm_trim
+  _PM_RING=
+  return 0
+}
+
+_pm_begin() {
+  _PM_HOOK=$1
+  _PM_RING="\${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm/events/hook-timings.jsonl"
+  [ -n "$PARADIGM_HOOK_MONITOR_OFF" ] && { _PM_RING=; return 0; }
+  [ -d "\${_PM_RING%/*}" ] || { _PM_RING=; return 0; }
+  _PM_OUTCOME=
+  _pm_now
+  _PM_T0=$_pm_t
+  _PM_ID="$$-$_pm_t"
+  { printf '{"ev":"start","hook":"%s","id":"%s","t":%s,"timeoutMs":%s,"budgetMs":%s}\\n' "$_PM_HOOK" "$_PM_ID" "$_pm_t" "\${2:-30000}" "\${3:-2000}" >> "$_PM_RING"; } 2>/dev/null || { _PM_RING=; return 0; }
+  trap '_pm_end $?' EXIT
+  trap '_PM_OUTCOME=killed; exit 143' TERM HUP INT
+  return 0
+}
 `;
 
 export const CURSOR_SESSION_START_HOOK = `#!/bin/sh
@@ -1873,7 +2130,9 @@ fi
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm index --quiet 2>/dev/null || true
+  # --no-install: never let npx fetch the unrelated public "paradigm" package
+  # (a network round-trip inside a 15 s hook, and the wrong binary).
+  npx --no-install paradigm index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist

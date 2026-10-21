@@ -19,7 +19,7 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
-import { binaryDenies, ensureTranscriptDir } from '../src/kernel/supervisor/supervisor.js';
+import { binaryDenies, ensureSessionEnvDir, ensureTranscriptDir } from '../src/kernel/supervisor/supervisor.js';
 import { buildSessionPolicy, realpathLoose } from '../src/kernel/manifest/policy.js';
 import { planSessionPath } from '../src/kernel/runner/env.js';
 import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin/session-sbpl.js';
@@ -412,5 +412,103 @@ echo pwned >> .claude/projects/x/j 2>/dev/null; echo "done=1"`);
 (echo pwned > .claude/projects/../settings.json) 2>/dev/null && echo "dotdot=allowed" || echo "dotdot=blocked"`);
     expect(res).toMatchObject({ mklink: 'ok', via_link: 'blocked', dotdot: 'blocked' });
     expect(fs.readFileSync(settings, 'utf8')).toBe('{"orig":true}\n');
+  });
+});
+
+/**
+ * The ~/.claude/session-env carve-back (hooks fix 2026-10-21; Aegis H1/M1 rework, profile v8). Claude Code mkdirs
+ * `session-env/<session-id>/` before running ANY command hook; under the ~/.claude write deny every SessionStart/Stop
+ * hook failed with `EPERM ... mkdir '~/.claude/session-env/<id>'`. The carve is scoped to THIS session's uuid: another
+ * session's dir holds its CLAUDE_ENV_FILE, which Claude Code sources as shell before that session's Bash commands (the
+ * user's unsandboxed Claude Code included), so siblings stay denied, and both `session-env` and `session-env/<uuid>`
+ * are literal re-denied so neither can be removed or swapped for a link.
+ */
+describe.skipIf(!SANDBOX_OK)('session-env carve-back: only this session\'s session-env/<uuid> is writable (darwin, macOS 15+, SIP enabled; throwaway user home)', () => {
+  const OWN = '0bac96b2-a05d-4b48-9f5f-d9bab166a40c';
+  const OTHER = '4f9ede20-dd65-4cfc-a97b-b8cdb4773bc7';
+  let t: SessionWorld | null = null;
+  afterEach(() => {
+    t?.cleanup();
+    t = null;
+  });
+  const run = (x: SessionWorld, body: string): Record<string, string> => {
+    const claudeDir = path.join(x.userHome, '.claude');
+    const policy = buildSessionPolicy({ home: x.home, cwd: x.cwd, userClaudeDir: claudeDir, userHome: x.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, memorySubtree: x.userHome, claudeTranscripts: true, claudeSessionEnv: OWN });
+    expect(policy.sessionEnvRefused).toBeUndefined();
+    expect(policy.allowWrite.map((a) => a.path).sort()).toEqual([path.join(claudeDir, 'projects'), path.join(claudeDir, 'session-env', OWN)].sort());
+    expect(policy.denyWriteAlways).toContainEqual({ path: path.join(claudeDir, 'session-env', OWN), match: 'literal', class: 'session-env' });
+    expect(policy.denyWriteAlways).toContainEqual({ path: path.join(claudeDir, 'session-env'), match: 'literal', class: 'session-env' });
+    const script = path.join(x.root, 'session-env.sh');
+    fs.writeFileSync(script, `#!/bin/bash\ncd "${x.userHome}"\n${body}\n`, { mode: 0o755 });
+    const plan = sessionLaunchPlan({ policy, binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin');
+    const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: x.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 30_000 });
+    return Object.fromEntries(r.stdout.split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+  };
+  const seed = (x: SessionWorld): { claudeDir: string; settings: string; other: string } => {
+    const claudeDir = path.join(x.userHome, '.claude');
+    const settings = path.join(claudeDir, 'settings.json');
+    fs.writeFileSync(settings, '{"orig":true}\n');
+    fs.writeFileSync(path.join(x.userHome, '.claude.json'), '{"orig":true}\n');
+    expect(ensureSessionEnvDir(claudeDir, OWN)).toBeNull(); // as the supervisor does before the spawn
+    const other = path.join(claudeDir, 'session-env', OTHER);
+    fs.mkdirSync(other, { mode: 0o700 }); // a live sibling session (e.g. the user's own unsandboxed Claude Code)
+    fs.writeFileSync(path.join(other, 'sessionstart-hook-0.sh'), 'export SAFE=1\n');
+    return { claudeDir, settings, other };
+  };
+
+  it('ensureSessionEnvDir pre-creates session-env/<uuid> at 0700 and refuses a link or a malformed uuid', () => {
+    t = sessionWorld();
+    const claudeDir = path.join(t.userHome, '.claude');
+    expect(ensureSessionEnvDir(claudeDir, 'not-a-uuid')).toBe('malformed session uuid');
+    expect(ensureSessionEnvDir(claudeDir, OWN)).toBeNull();
+    expect(fs.statSync(path.join(claudeDir, 'session-env', OWN)).mode & 0o777).toBe(0o700);
+    fs.symlinkSync(t.userHome, path.join(claudeDir, 'session-env', OTHER));
+    expect(ensureSessionEnvDir(claudeDir, OTHER)).toMatch(/symlink/);
+    const bad = buildSessionPolicy({ home: t.home, cwd: t.cwd, userClaudeDir: claudeDir, userHome: t.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, claudeSessionEnv: OTHER });
+    expect(bad.sessionEnvRefused).toMatch(/resolves outside/);
+    expect(bad.allowWrite).toEqual([]);
+    const malformed = buildSessionPolicy({ home: t.home, cwd: t.cwd, userClaudeDir: claudeDir, userHome: t.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, claudeSessionEnv: '../projects' });
+    expect(malformed.sessionEnvRefused).toMatch(/not a lowercase RFC 4122 uuid/);
+    expect(malformed.allowWrite).toEqual([]);
+  });
+
+  it('its own session-env/<uuid> takes files; settings.json, ~/.claude.json, session-env/ itself and ../ stay unwritable', () => {
+    t = sessionWorld();
+    const { claudeDir, settings } = seed(t);
+    const res = run(t, `mkdir -p .claude/session-env/${OWN} 2>/dev/null && echo "export X=1" > .claude/session-env/${OWN}/sessionstart-hook-0.sh 2>/dev/null && echo "own=ok" || echo "own=fail"
+(echo pwned > .claude/settings.json) 2>/dev/null && echo "settings=allowed" || echo "settings=blocked"
+(echo pwned > .claude.json) 2>/dev/null && echo "claude_json=allowed" || echo "claude_json=blocked"
+(echo pwned > .claude/session-env/x) 2>/dev/null && echo "root_file=allowed" || echo "root_file=blocked"
+(echo pwned > .claude/session-env/${OWN}/../../settings.json) 2>/dev/null && echo "dotdot=allowed" || echo "dotdot=blocked"`);
+    expect(res).toMatchObject({ own: 'ok', settings: 'blocked', claude_json: 'blocked', root_file: 'blocked', dotdot: 'blocked' });
+    expect(fs.readFileSync(path.join(claudeDir, 'session-env', OWN, 'sessionstart-hook-0.sh'), 'utf8')).toBe('export X=1\n');
+    expect(fs.readFileSync(settings, 'utf8')).toBe('{"orig":true}\n');
+  });
+
+  it('H1: another session\'s session-env/<other-uuid> cannot be written, created into, removed or swapped for a link', () => {
+    t = sessionWorld();
+    const { other } = seed(t);
+    const res = run(t, `(echo "export PWNED=1" >> .claude/session-env/${OTHER}/sessionstart-hook-0.sh) 2>/dev/null && echo "append=allowed" || echo "append=blocked"
+(echo x > .claude/session-env/${OTHER}/x) 2>/dev/null && echo "create=allowed" || echo "create=blocked"
+(mkdir .claude/session-env/11111111-2222-4333-8444-555555555555) 2>/dev/null && echo "mkdir_new=allowed" || echo "mkdir_new=blocked"
+rm -rf .claude/session-env/${OTHER} 2>/dev/null; [ -d .claude/session-env/${OTHER} ] && echo "rm=blocked" || echo "rm=allowed"
+(ln -s "${t.userHome}" .claude/session-env/${OTHER}/link) 2>/dev/null && echo "ln_inside=allowed" || echo "ln_inside=blocked"
+(mv .claude/session-env/${OTHER} .claude/session-env/moved) 2>/dev/null && echo "mv=allowed" || echo "mv=blocked"`);
+    expect(res).toMatchObject({ append: 'blocked', create: 'blocked', mkdir_new: 'blocked', rm: 'blocked', ln_inside: 'blocked', mv: 'blocked' });
+    expect(fs.readFileSync(path.join(other, 'sessionstart-hook-0.sh'), 'utf8')).toBe('export SAFE=1\n');
+    expect(fs.lstatSync(other).isDirectory()).toBe(true);
+  });
+
+  it('M1: its own session-env/<uuid> and session-env/ itself cannot be removed, renamed or swapped for a symlink', () => {
+    t = sessionWorld();
+    const { claudeDir } = seed(t);
+    const own = path.join(claudeDir, 'session-env', OWN);
+    const res = run(t, `rmdir .claude/session-env/${OWN} 2>/dev/null && echo "rmdir_own=allowed" || echo "rmdir_own=blocked"
+mv .claude/session-env/${OWN} .claude/session-env/${OWN}.old 2>/dev/null && echo "mv_own=allowed" || echo "mv_own=blocked"
+(rm -rf .claude/session-env/${OWN}; ln -s "${t.userHome}" .claude/session-env/${OWN}) 2>/dev/null; [ -L .claude/session-env/${OWN} ] && echo "swap_own=yes" || echo "swap_own=no"
+mv .claude/session-env .claude/se.old 2>/dev/null && echo "mv_root=allowed" || echo "mv_root=blocked"
+(rm -rf .claude/session-env; ln -s "${t.userHome}" .claude/session-env) 2>/dev/null; [ -L .claude/session-env ] && echo "swap_root=yes" || echo "swap_root=no"`);
+    expect(res).toMatchObject({ rmdir_own: 'blocked', mv_own: 'blocked', swap_own: 'no', mv_root: 'blocked', swap_root: 'no' });
+    expect(fs.lstatSync(own).isDirectory()).toBe(true);
   });
 });

@@ -195,6 +195,23 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
     expect(r).toEqual({ orphans: 1, stopped: 1 });
   });
 
+  it('Aegis M-B: onOrphaned runs once per orphan, after its session.orphaned row and any stop (stopped or not)', async () => {
+    const control = fakeControl({ 501: 'alive', 502: 'gone' }, { 501: 't:501', 502: 't:502' });
+    const order: string[] = [];
+    const r = await sweepOrphans({
+      rows: [spawned('m1', 501), spawned('m2', 502)], kernelPrincipals: [UNPROV, K], boot: BOOT, control, pollMs: 1,
+      append: async (_k, payload) => void order.push(`row:${String(payload.hsid)}`),
+      onOrphaned: async (hsid) => {
+        order.push(`clean:${String(hsid)}`);
+        if (hsid === 'm2') throw new Error('cleanup failure is swallowed');
+      },
+    });
+    expect(r).toEqual({ orphans: 2, stopped: 1 });
+    expect(order.filter((o) => o.startsWith('clean:')).sort()).toEqual(['clean:m1', 'clean:m2']);
+    expect(order.indexOf('row:m1')).toBeLessThan(order.indexOf('clean:m1'));
+    expect(order.indexOf('row:m2')).toBeLessThan(order.indexOf('clean:m2'));
+  });
+
   it('an unknown boot session never signals', async () => {
     const control = fakeControl({ 201: 'alive' }, { 201: 't:201' });
     const r = await sweepOrphans({ rows: [spawned('k', 201, { boot: 'unknown' })], kernelPrincipals: [UNPROV, K], boot: 'unknown', control, append: async () => undefined });

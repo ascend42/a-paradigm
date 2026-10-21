@@ -1,6 +1,0 @@
-{
-  "timestamp": "2026-09-01T02:11:58.766Z",
-  "taskDescription": "Framework friction hotfix batch, reproduced live in a-paradigm. ARCHITECT STAGE (root-cause + design brief, read-only): (1) paradigm_search MCP tool returns 0 for ANY multi-word/descriptive query but ",
-  "depth": "standard",
-  "coverageScore": 0.5
-}

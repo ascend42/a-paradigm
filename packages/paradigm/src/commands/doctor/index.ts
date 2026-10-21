@@ -1183,6 +1183,21 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   }
 
   // ──────────────────────────────────────────────────────────────────────
+  // Hook health (7.15.2, #doctor-hook-health): per-hook timings + kills from
+  // the #hook-monitor ring, repo traits that slow hooks, plugin cache staleness.
+  // Advisory: never throws into the doctor run.
+  // ──────────────────────────────────────────────────────────────────────
+  if (!contextOnly && fs.existsSync(path.join(cwd, '.paradigm'))) {
+    try {
+      const { hookHealthChecks } = await import('./hook-health.js');
+      const os = await import('os');
+      results.push(...hookHealthChecks({ rootDir: cwd, homeDir: os.homedir() }));
+    } catch {
+      // hook health is advisory
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
   // Display core results
   // ──────────────────────────────────────────────────────────────────────
 

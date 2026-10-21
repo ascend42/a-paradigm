@@ -1,0 +1,20 @@
+# >>> paradigm session markers (managed by paradigm init/sync) >>>
+/.purpose-paths
+/.orchestrated
+/.pending-review
+/.habits-blocking
+/.session-started
+/.solo-declared
+/.stop-hook-active
+/.team-prompted
+/.team-reminded
+/.team-bypass-recorded
+/.nav-called
+/.nav-reminded
+/.cid-briefed
+/.cid-session
+/.graduation-failures/
+/.memory-last-review
+/events/hook-timings.jsonl
+/.hook-health-warned
+# <<< paradigm session markers <<<

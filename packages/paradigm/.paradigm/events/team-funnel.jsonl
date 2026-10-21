@@ -9,3 +9,7 @@
 {"timestamp":"2026-09-20T23:56:53Z","type":"edit-advisory","source":"team-gate","file":"local-guard.ts"}
 {"timestamp":"2026-09-21T00:00:44Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
 {"timestamp":"2026-10-18T02:28:02Z","type":"edit-advisory","source":"team-gate","file":"portal-compliance.ts"}
+{"timestamp":"2026-10-21T06:08:52Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
+{"timestamp":"2026-10-21T06:09:06Z","type":"bypass","source":"stop-hook","magnitude":3,"reasons":"3 source files","severity":"warn"}
+{"timestamp":"2026-10-21T06:11:18Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
+{"timestamp":"2026-10-21T06:19:13Z","type":"eligible","source":"prompt-gate","matched":"Build "}

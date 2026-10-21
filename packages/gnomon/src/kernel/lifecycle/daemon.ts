@@ -1308,6 +1308,14 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       control,
       ...(opts.childGraceMs !== undefined ? { graceMs: opts.childGraceMs } : {}),
       resuming: new Set(resumePlan.resume.map((c) => c.hsid)),
+      // Aegis M-B: an orphaned Claude session's session-env/<uuid> is emptied too (uuid from its own session.open row)
+      onOrphaned: async (hsid) => {
+        if (!hsid) return;
+        for (const r of fullRows(['session.open'])) {
+          const p = (r.payload ?? {}) as Record<string, unknown>;
+          if (p.hsid === hsid && typeof p.uuid === 'string') await supervisor.emptySessionEnvFor(hsid, p.uuid);
+        }
+      },
     });
     server = await listenSocket({
       socketPath: choice.path,

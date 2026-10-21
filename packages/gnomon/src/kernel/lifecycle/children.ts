@@ -371,6 +371,8 @@ export async function sweepOrphans(opts: {
    * with no exit is not in it: its open spawn is swept like any crash orphan, and it is never resumed.
    */
   resuming?: ReadonlySet<string>;
+  /** Aegis M-B: called once per orphan after its `session.orphaned` row and any stop (e.g. to empty its session-env) */
+  onOrphaned?: (hsid: string | null) => Promise<void> | void;
 }): Promise<SweepResult> {
   const open = new Map<string, OpenSpawn>();
   const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -423,11 +425,19 @@ export async function sweepOrphans(opts: {
         fidelity: opts.control.fidelity,
         ...(detail ? { detail } : {}),
       });
-      if (action !== 'stop' || o.pgid === null) return false;
+      const after = async (stopped: boolean): Promise<boolean> => {
+        try {
+          await opts.onOrphaned?.(o.hsid);
+        } catch {
+          // cleanup is best-effort; the sweep result stands
+        }
+        return stopped;
+      };
+      if (action !== 'stop' || o.pgid === null) return after(false);
       opts.control.signalGroup(o.pgid, 'SIGTERM');
-      if (await groupGone(opts.control, o.pgid, grace, opts.pollMs)) return true;
+      if (await groupGone(opts.control, o.pgid, grace, opts.pollMs)) return after(true);
       opts.control.signalGroup(o.pgid, 'SIGKILL');
-      return groupGone(opts.control, o.pgid, grace, opts.pollMs);
+      return after(await groupGone(opts.control, o.pgid, grace, opts.pollMs));
     }),
   );
   return { orphans: open.size, stopped: results.filter(Boolean).length };
