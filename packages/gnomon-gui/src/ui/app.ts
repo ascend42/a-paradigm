@@ -30,6 +30,7 @@ import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { chatItems, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
+import { hasLive, LiveTicker, liveText } from '../core/live-turn.js';
 import { mountStandingFeed } from './standing-feed.js';
 import { mountSettings } from './settings-sheet.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
@@ -183,12 +184,14 @@ function currentItems(): { items: ChatItem[]; hidden: number } {
   if (!focused && !feedView) return { items: [], hidden: 0 };
   const base = focused ? store.transcript(focused) : store.kernelFeed;
   const mine = local.filter((r) => (r.session ?? null) === focused);
-  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}`;
+  // T-2026-10-21-007: a running turn shows its working row only while the session is live (a kernel restart ends it)
+  const live = !!focused && isLiveState(store.sessions.get(focused)?.state ?? 'seen');
+  const key = `${transcriptId()}\u0000${base.length}\u0000${mine.length}\u0000${store.logId ?? ''}\u0000${[...expandedActs].join(',')}\u0000${live}`;
   if (memo?.key === key) return memo.out;
   const rows = mine.length ? [...base, ...mine].sort((a, b) => a.seq - b.seq) : base;
   // the kernel feed has no conversation: it stays the raw row list
   const raw = rawMode || !focused;
-  const base2 = chatItems(rows, { raw });
+  const base2 = chatItems(rows, { raw, live });
   // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
   const out = raw ? base2 : { items: foldActivity(base2.items, expandedActs), hidden: base2.hidden };
   memo = { key, out };
@@ -311,7 +314,12 @@ function onChoice(e: Event, b: HTMLElement): void {
 function itemEl(it: FoldedItem): HTMLElement {
   if (it.role === 'activity') {
     const open = expandedActs.has(it.key);
-    return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`) as unknown as HTMLElement;
+    // T-2026-10-21-007: the running turn's activity line counts live (the ticker rewrites only its .live-clock span)
+    const clock = it.live ? h(doc, 'span', { class: 'live-clock' }, liveText(it, Date.now())) : null;
+    return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}${it.live ? ' live' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`, clock) as unknown as HTMLElement;
+  }
+  if (it.role === 'working') {
+    return h(doc, 'div', { class: 'trow role-working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock' }, liveText(it, Date.now()))) as unknown as HTMLElement;
   }
   const label = it.role === 'user' && it.voice === 'voice-edited' ? `🎙✎ ${it.speaker ?? 'you'}` : it.speaker !== undefined && it.role === 'user' ? `🎙 ${it.speaker}` : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
@@ -405,11 +413,24 @@ function offerVoiceRow(r: Row): void {
   }
 }
 
-const sameKeys = (a: readonly ChatItem[], b: readonly ChatItem[]): boolean => {
-  if (b.length < a.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i]!.key !== b[i]!.key) return false;
-  return true;
+/** How many leading items keep their key (T-2026-10-21-007: a result or working row placed above a waiting message changes only the tail). */
+const commonPrefix = (a: readonly ChatItem[], b: readonly ChatItem[]): number => {
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a[i]!.key === b[i]!.key) i++;
+  return i;
 };
+
+/** T-2026-10-21-007: one interval while the focused transcript has a running turn; each tick rewrites the mounted clocks only. */
+const liveTicker = new LiveTicker(() => {
+  const now = Date.now();
+  for (const [i, el] of mounted) {
+    const it = items[i];
+    if (!it?.live) continue;
+    const c = el.querySelector('.live-clock') as HTMLElement | null;
+    if (c) put(c, liveText(it, now));
+  }
+});
 
 /**
  * Paint the visible items. Stuck ⇒ end at the bottom; scrolled up ⇒ the item at the top of the view stays exactly
@@ -430,9 +451,21 @@ function paintTranscript(remeasure = false): void {
   const anchorDelta = items.length ? vp.scrollTop - heights.offsetOf(anchor) : 0;
   const { items: next, hidden } = currentItems();
   let appended = 0;
-  if (remeasure || !sameKeys(items, next)) {
+  const lcp = remeasure ? 0 : commonPrefix(items, next);
+  if (remeasure || (lcp === 0 && items.length > 0)) {
     unmountAll();
     heights = widths.restore(transcriptId(), width, next.length);
+  } else if (lcp < items.length) {
+    // the tail changed (a turn's result anchored under its turn, the working row moving down): keep the prefix
+    // mounted and measured, rebuild only from the first changed item
+    for (const [i, el] of mounted)
+      if (i >= lcp) {
+        el.remove();
+        mounted.delete(i);
+      }
+    heights.truncate(lcp);
+    heights.push(next.length - lcp);
+    appended = Math.max(0, next.length - items.length);
   } else {
     appended = next.length - items.length;
     if (appended > 0) heights.push(appended);
@@ -452,6 +485,7 @@ function paintTranscript(remeasure = false): void {
     remountItem(live);
   }
   syncSlips(items);
+  liveTicker.sync(hasLive(items));
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
     $('spacer').style.height = `${heights.total()}px`;

@@ -769,6 +769,16 @@ html, body {
 .trow.role-user, .trow.role-assistant { padding: 7px 20px; }
 .trow.role-activity { padding: 3px 20px 3px 22px; margin-left: 20px; font-size: 11.5px; color: var(--sec); border-left: 2px solid var(--rule); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(80ch + 22px); }
 .trow.role-activity:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+/* T-2026-10-21-007: the running turn. Its activity line counts live (ink, not secondary, while it runs) and a
+   "working… · Ns" row with a small spinner sits under the turn's output until its result; reduced motion stills the
+   spinner (the ticking seconds still say it is running). */
+.trow.role-activity.live { color: var(--ink2); border-left-color: var(--key-edge); }
+.trow.role-activity .live-clock, .trow.role-working .live-clock { font-variant-numeric: tabular-nums; }
+.trow.role-working { display: flex; align-items: center; gap: 8px; padding: 3px 20px 6px 22px; margin-left: 20px; font-size: 11.5px; color: var(--ink2); }
+.trow.role-working .spin { width: 9px; height: 9px; flex: none; border: 1.5px solid var(--rule); border-top-color: var(--key-edge); border-radius: 50%; animation: turn-spin 0.9s linear infinite; }
+@keyframes turn-spin { to { transform: rotate(360deg); } }
+[data-motion="reduced"] .trow.role-working .spin { animation: none; }
+@media (prefers-reduced-motion: reduce) { .trow.role-working .spin { animation: none; } }
 .trow .who .took { color: var(--sec); }
 .trow .body.md { white-space: normal; }
 .md-p { margin: 0 0 6px; white-space: pre-wrap; }

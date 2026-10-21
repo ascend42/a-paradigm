@@ -444,7 +444,17 @@ export function turnEventSummary(line: string, type: string | null): string {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-heard' | 'voice-refused' | 'spoken';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working';
+
+/**
+ * T-2026-10-21-007: the clock of a turn still running. `since` is when the turn (or, on an activity line, its first
+ * step) began; `progress` is the latest tool_progress heartbeat (or task_started, secs 0) of the step running now.
+ * The page derives the ticking text from it (core/live-turn.ts); the item text itself never changes per tick.
+ */
+export interface LiveClock {
+  since: string;
+  progress?: { at: string; secs: number; tool?: string };
+}
 
 export interface ChatItem {
   /** Stable per row (and part): `seq` or `seq.part`. */
@@ -462,6 +472,8 @@ export interface ChatItem {
   said?: string;
   /** Aegis L3: 'kernel' = the words come from the kernel's speakable row (from:'block'); 'reply' = this GUI's own parse (no kernel row) */
   saidBy?: 'kernel' | 'reply';
+  /** T-2026-10-21-007: on the `working` row of the running turn and its live activity line only */
+  live?: LiveClock;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -832,6 +844,32 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
   }
 }
 
+/** T-2026-10-21-007: a message sent while an earlier turn runs: its item indices, and whether its turn.sent arrived. */
+interface WaitingTurn {
+  idx: number[];
+  sent: boolean;
+}
+/** Where chatItems puts an item: 'turn' the running turn's output; 'message' / 'voice-message' a user message (it
+ * waits while a turn runs); 'tail' appended as is. */
+type Place = 'turn' | 'message' | 'voice-message' | 'tail';
+
+/** The running step's clock from a tool_progress line (`elapsed_time_seconds`, `tool_name`), or a task start (0 s). */
+function progressOf(line: unknown, at: string | undefined, started: boolean): LiveClock['progress'] | undefined {
+  if (!at) return undefined;
+  if (started) return { at, secs: 0 };
+  if (typeof line !== 'string') return undefined;
+  let m: Record<string, unknown> | null = null;
+  try {
+    m = objOf(JSON.parse(line));
+  } catch {
+    return undefined;
+  }
+  const secs = m?.elapsed_time_seconds;
+  if (typeof secs !== 'number' || !Number.isFinite(secs) || secs < 0) return undefined;
+  const tool = typeof m?.tool_name === 'string' && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(m.tool_name) ? m.tool_name : undefined;
+  return { at, secs, ...(tool ? { tool } : {}) };
+}
+
 /**
  * The focused session's rows as a chat: the user's messages (this page's composer echo, else claude's replay), the
  * assistant's text, one compact line per tool call, cards, the turn result (cost and tokens) and lifecycle notes.
@@ -840,13 +878,67 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
  * row as its one-line summary instead. A composer echo (`connId: 'local'`) hides the replay of the same text that
  * follows it, so a sent message shows once and the list only ever grows at the end.
  */
-export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): { items: ChatItem[]; hidden: number } {
+export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: boolean } = {}): { items: ChatItem[]; hidden: number } {
   const items: ChatItem[] = [];
   let hidden = 0;
   const echoes: string[] = []; // composer texts not yet matched by claude's replay
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }): void => {
+  /*
+   * T-2026-10-21-007 turn anchoring. The backend answers turns in the order they were sent (turn.sent carries the
+   * turn id; turn.result carries none, so the pairing is that FIFO order). A message sent while an earlier turn is
+   * still running waits in `waiting` (its item indices) and starts when the earlier turn's result lands; everything
+   * the RUNNING turn says (its reply, tools, cards, its result) is placed before the first waiting message, so a
+   * result shows under its own turn, never under the next turn's message. With nothing waiting this is a plain
+   * append (the list only grows at the end).
+   */
+  const echoTurn: Array<WaitingTurn | null> = []; // parallel to `echoes`: the waiting message each echo opened
+  const waiting: WaitingTurn[] = [];
+  let open = 0; // turn.sent rows with no turn.result yet
+  let activeUnsent = false; // the running turn's message is shown but its turn.sent has not arrived yet
+  let turnSince: string | undefined;
+  let turnKey = '';
+  let progress: LiveClock['progress'] | undefined;
+  const insertAt = (): number => (waiting.length ? waiting[0]!.idx[0]! : items.length);
+  const place = (item: ChatItem, how: Place): void => {
+    if (opts.raw || how === 'tail' || (how === 'turn' && !waiting.length)) {
+      items.push(item);
+      return;
+    }
+    if (how === 'turn') {
+      const at = insertAt();
+      items.splice(at, 0, item);
+      for (const w of waiting) for (let i = 0; i < w.idx.length; i++) if (w.idx[i]! >= at) w.idx[i] = w.idx[i]! + 1;
+      return;
+    }
+    const last = waiting[waiting.length - 1];
+    items.push(item);
+    // a multi-part voice message is ONE turn (one turn.sent cites every part)
+    if (how === 'voice-message' && last && !last.sent) last.idx.push(items.length - 1);
+    else if (how === 'voice-message' && activeUnsent && !waiting.length) return;
+    else if (open > 0 || waiting.length || activeUnsent) waiting.push({ idx: [items.length - 1], sent: false });
+    else activeUnsent = true;
+  };
+  /** The waiting message the item just pushed belongs to (null: it is the running turn's). */
+  const lastWaiting = (): WaitingTurn | null => {
+    const w = waiting[waiting.length - 1];
+    return w && w.idx.includes(items.length - 1) ? w : null;
+  };
+  /** The oldest waiting message's turn starts (the turn before it ended). */
+  const startNext = (): void => {
+    const w = waiting.shift();
+    if (w) activeUnsent = !w.sent;
+  };
+  /** A session boundary (exit, drain, orphan, open / resume): no turn runs and nothing waits any more. */
+  const settle = (): void => {
+    waiting.length = 0;
+    open = 0;
+    activeUnsent = false;
+    progress = undefined;
+  };
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy'] }, how: Place = 'turn'): ChatItem => {
     if (it.role === 'assistant') spoken = null; // a new reply closes the previous reply's 🔊 marker
-    items.push({ key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}) });
+    const item: ChatItem = { key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}) };
+    place(item, how);
+    return item;
   };
   // dictation: claude replays a multi-part voice message as its parts joined; the shown turns' echoes are folded into one
   const voiceEcho = new Map<number, string>();
@@ -874,9 +966,15 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       if (r.kind === 'composer') {
         const t = String(r.payload ?? '');
         echoes.push(oneLine(t));
-        push(r, 0, { role: 'user', text: t, ...(r.mark === 'voice-edited' ? { voice: 'voice-edited' as const } : {}) });
+        push(r, 0, { role: 'user', text: t, ...(r.mark === 'voice-edited' ? { voice: 'voice-edited' as const } : {}) }, 'message');
+        echoTurn.push(lastWaiting());
         if (r.mark === 'voice-edited' && editedReplays > 0) editedReplays--;
-      } else push(r, 0, { role: 'error', text: String(r.payload ?? '') });
+      } else {
+        // a refused send stays with the message it refused
+        const last = waiting[waiting.length - 1];
+        push(r, 0, { role: 'error', text: String(r.payload ?? '') }, 'tail');
+        if (last && last.idx[last.idx.length - 1] === items.length - 2) last.idx.push(items.length - 1);
+      }
       continue;
     }
     if (opts.raw) {
@@ -884,13 +982,56 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
       continue;
     }
     const p = objOf(r.payload);
-    if (r.kind === 'turn.sent') turnGuidance = typeof p?.guidanceHash === 'string' ? p.guidanceHash : null;
+    if (r.kind === 'turn.sent') {
+      turnGuidance = typeof p?.guidanceHash === 'string' ? p.guidanceHash : null;
+      open++;
+      if (activeUnsent) activeUnsent = false;
+      else {
+        const w = waiting.find((x) => !x.sent);
+        if (w) w.sent = true;
+      }
+      if (open === 1 && waiting.length === 0) {
+        turnSince = r.at;
+        turnKey = String(r.seq);
+        progress = undefined;
+      }
+    }
+    if (r.kind === 'session.exited' || r.kind === 'session.orphaned' || r.kind === 'session.drained' || r.kind === 'session.open') settle();
+    if (r.kind === 'turn.result') {
+      // the OLDEST running turn's result (FIFO): under that turn's output, then the next waiting message starts
+      open = Math.max(0, open - 1);
+      progress = undefined;
+      const it = kernelItem(r);
+      if (it) push(r, 0, it);
+      else hidden++;
+      startNext();
+      if (open > 0) {
+        turnSince = r.at;
+        turnKey = String(r.seq);
+      }
+      continue;
+    }
+    if (r.kind === 'turn.event' && r.view === 'full' && p) {
+      // the running step's clock: a tool_progress heartbeat (its elapsed seconds) or a task start; a new message ends it
+      if (p.type === 'tool_progress' || p.type === 'system.task_started') progress = progressOf(p.line, r.at, p.type === 'system.task_started') ?? progress;
+      else if (p.type === 'assistant' || p.type === 'user') progress = undefined;
+    }
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
       const its = lineItems(p.line, turnGuidance).map((it) => (it.role === 'assistant' ? withKernelSaid(it, kernelReply.get(r.seq)) : it)).filter((it) => {
         if (it.role !== 'user') return true;
         const i = echoes.indexOf(oneLine(it.text));
         if (i < 0) return true;
+        // claude replays a message when its turn STARTS: that message (and any before it) no longer waits
+        const w = echoTurn[i];
         echoes.splice(i, 1);
+        echoTurn.splice(i, 1);
+        if (w) {
+          const at = waiting.indexOf(w);
+          if (at >= 0) {
+            activeUnsent = !w.sent;
+            waiting.splice(0, at + 1);
+          }
+        }
         if (editedReplays > 0) editedReplays--;
         return false;
       });
@@ -907,19 +1048,24 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
     if (r.kind === 'turn.sent' && p?.source === 'voice') {
       const cited = citedSeqs(p).filter((n) => voiceEcho.has(n));
       if (cited.length > 1) {
+        let w: WaitingTurn | null = null;
         for (const n of cited) {
           const i = echoes.indexOf(voiceEcho.get(n)!);
-          if (i >= 0) echoes.splice(i, 1);
+          if (i >= 0) {
+            w ??= echoTurn[i] ?? null;
+            echoes.splice(i, 1);
+            echoTurn.splice(i, 1);
+          }
         }
         echoes.push(oneLine(cited.map((n) => voiceEcho.get(n)!).join(' ')));
+        echoTurn.push(w);
       }
     }
     if ((r.kind === 'voice.turn.agent' || r.kind === 'voice.bargein') && !isPartial(r, p)) {
       const f = spokenFold(r, p, spoken);
       if (f === 'folded' || f === null) hidden++;
       else {
-        push(r, 0, { role: 'spoken', text: spokenText(f) });
-        f.item = items[items.length - 1]!;
+        f.item = push(r, 0, { role: 'spoken', text: spokenText(f) });
         spoken = f.solo ? null : f;
       }
       if (spoken) spoken.item.text = spokenText(spoken);
@@ -939,14 +1085,27 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean } = {}): {
           echoes.push(oneLine(v.text)); // claude's replay of the same words shows once
           voiceEcho.set(r.seq, oneLine(v.text));
           shownVoiceSeqs.add(r.seq);
-        }
-        push(r, v.part ?? 0, v);
+          // the turn.sent fallback line IS its own turn's message (that turn.sent is already counted in `open`)
+          const own = r.kind === 'turn.sent';
+          if (own) open--;
+          push(r, v.part ?? 0, v, 'voice-message');
+          if (own) open++;
+          const w = lastWaiting();
+          if (own && w) w.sent = true;
+          else if (own) activeUnsent = false;
+          echoTurn.push(w);
+        } else push(r, v.part ?? 0, v, 'tail');
       }
       continue;
     }
     const it = kernelItem(r);
     if (it) push(r, 0, it);
     else hidden++;
+  }
+  // T-2026-10-21-007: the running turn shows a `working` row under its output until its turn.result (live sessions only)
+  if (opts.live && !opts.raw && open > 0 && turnSince) {
+    const last = rows[rows.length - 1];
+    place({ key: `work:${turnKey}`, seq: last ? last.seq : 0, role: 'working', text: 'working…', at: turnSince, live: { since: turnSince, ...(progress ? { progress } : {}) } }, 'turn');
   }
   // #gui-offer-slip: a reply's ```offer block is hidden only under a kernel offer.shown row for that reply
   return { items: opts.raw ? items : stripOfferBlocks(items, rows), hidden };
@@ -1050,11 +1209,23 @@ export function foldActivity(items: readonly ChatItem[], expanded: ReadonlySet<s
   const out: FoldedItem[] = [];
   let lastUserAt: string | undefined;
   let run: ChatItem[] = [];
+  // T-2026-10-21-007: the latest activity line since the last message / reply / result, and where its clock starts
+  let seg: { i: number; from: string | undefined } | null = null;
+  /** A reply or a result closes the turn's segment: its latest activity line reads the work up to that moment (a card
+   * between the tools and the reply no longer freezes it at the last tool row). */
+  const close = (endAt: string | undefined): void => {
+    const s0 = seg as { i: number; from: string | undefined } | null;
+    const act = s0 ? out[s0.i] : undefined;
+    if (s0 && act && endAt) out[s0.i] = { ...act, text: activitySummary(act.children ?? [], s0.from, endAt) };
+    seg = null;
+  };
   const flush = (nextAt?: string): void => {
     if (!run.length) return;
     const first = run[0]!;
     const key = `act:${first.key}`;
-    out.push({ key, seq: first.seq, role: 'activity', text: activitySummary(run, lastUserAt ?? first.at, nextAt ?? run[run.length - 1]!.at), ...(first.at ? { at: first.at } : {}), children: run });
+    const from = lastUserAt ?? first.at;
+    seg = { i: out.length, from };
+    out.push({ key, seq: first.seq, role: 'activity', text: activitySummary(run, from, nextAt ?? run[run.length - 1]!.at), ...(first.at ? { at: first.at } : {}), children: run });
     if (expanded.has(key)) out.push(...run);
     run = [];
   };
@@ -1065,12 +1236,28 @@ export function foldActivity(items: readonly ChatItem[], expanded: ReadonlySet<s
     }
     if (it.role === 'assistant') {
       flush(it.at);
+      close(it.at);
       const took = lastUserAt !== undefined ? secsBetween(lastUserAt, it.at) : null;
       out.push(took !== null ? { ...it, took } : it);
       lastUserAt = undefined;
       continue;
     }
-    flush();
+    if (it.role === 'working') {
+      // the running turn: its latest activity line counts live (no "of work" yet; the page ticks the clock)
+      flush();
+      const s0 = seg as { i: number; from: string | undefined } | null;
+      const act = s0 ? out[s0.i] : undefined;
+      if (s0 && act && it.live) {
+        const since = s0.from ?? act.at ?? it.live.since;
+        out[s0.i] = { ...act, text: activitySummary(act.children ?? [], since), live: { since, ...(it.live.progress ? { progress: it.live.progress } : {}) } };
+      }
+      out.push(it);
+      continue;
+    }
+    // a turn's result freezes a trailing activity line at the turn's real end
+    flush(it.role === 'result' ? it.at : undefined);
+    if (it.role === 'result') close(it.at);
+    else if (it.role === 'user') seg = null;
     if (it.role === 'user') lastUserAt = it.at;
     out.push(it);
   }
