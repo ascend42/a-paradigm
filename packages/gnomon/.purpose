@@ -2032,6 +2032,28 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      Dictate, the G-VOX-06 exception (founder bug 2026-10-21): under a
+      conversation ceiling with send ceiling key, an unverified speaker's
+      ambient, non-intercepted turn of the attached human's voice principal is
+      not refused voice-speaker at receipt; the other guards run and an
+      accepted one is stamped forwardable, draftOnly:true and
+      speakerVerified:false (client claims of either are BAD_REQUEST). Aegis
+      privacy: its row is HASH-ONLY; its words stay in kernel memory
+      (UNVERIFIED_TEXT_TTL_MS, UNVERIFIED_TEXT_CAP) and reach only a human on
+      the gui credential, for sessions that human owns now:
+      VoiceControl.unverifiedFor(principal), added per viewer by the
+      dispatcher as status.voice.unverified (status() never carries them;
+      voiceStatusFor strips them for any other class or credential). It fills the draft only: the direct send is refused, and a
+      word, piece or send-now claim on that session is refused
+      voice-speaker{cause draft-only} while ANY attachment's unverified turn
+      there is unsent (a preset switch re-attaches); it is never the send
+      word nor an adjacency anchor; only a human session.send (Enter) carries
+      it, and originFor stamps that send sentBy 'unverified' (turn.sent
+      origin voice-unverified, clamped by ^voice-origin-clamp) when its
+      attribution matched one or a source:'voice' send happens while one is
+      outstanding (consumed; releaseOrigin hands them back on a failed send). A refused unverified turn under
+      VOICE_MIN_VERIFY_SPEECH_MS (contracts) of gated speech carries cause
+      too-short.
       Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain
       end_turn message_stop (supervisor turnBusy), re-armed by message_start;
       the append result carries refused/refusedCause; capture reports carry
@@ -3919,7 +3941,9 @@ gates:
     description: >-
       ^voice-origin-clamp (TD-2026-10-21-514, spec §14.7 "Voice submodes";
       src/kernel/supervisor/voice-clamp.ts): every turn.sent carries a
-      kernel-stamped origin (hand | voice, sentBy word | piece). While a
+      kernel-stamped origin (hand | voice | voice-unverified, sentBy word |
+      piece | hotkey | unverified; voice-unverified is a Dictate Enter send
+      holding an unverified voice's words, clamped the same way). While a
       voice-origin turn is outstanding (turn.sent to the turn.result that
       closes it; never closed ⇒ until the session ends) #supervisor skips the
       auto-edits pass and every always rule (exact and prefix); only the

@@ -222,7 +222,9 @@ describe('#gnomon-voice V2a privacy', () => {
     const r = rig();
     await r.widen();
     r.clock.t += 2000;
-    const out = (await r.userTurn({ speakerId: 'spk:unknown-1', speakerEnrolled: false, text: 'my bank pin is 1234', note: 'smuggled' })) as Record<string, unknown>;
+    // a push-to-talk claim: the speaker gate holds (the Dictate draft exception, an AMBIENT turn under a key send
+    // ceiling, keeps the text for the draft: voice-dictate-unverified.test.ts)
+    const out = (await r.userTurn({ speakerId: 'spk:unknown-1', speakerEnrolled: false, text: 'my bank pin is 1234', note: 'smuggled', mode: 'ptt' })) as Record<string, unknown>;
     expect(out).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
     const p = r.rows.at(-1)!.payload;
     expect(JSON.stringify(p)).not.toContain('1234');

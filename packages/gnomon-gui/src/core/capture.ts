@@ -97,7 +97,8 @@ export function refusalPhrase(reason: string, cause?: string | null): string {
     case 'voice-echo':
       return 'it overlapped my spoken reply';
     case 'voice-speaker':
-      return 'speaker not recognised';
+      // a turn with too little gated speech was never checked (kernel cause 'too-short'); Dictate's draft-only turns wait for Enter
+      return cause === 'too-short' ? "too short to check it's you · say a few more words, or type it" : cause === 'draft-only' ? 'unverified voice: Enter sends it' : 'speaker not recognised';
     case 'voice-target':
       return 'voice is not attached to this session';
     case 'voice-conn':

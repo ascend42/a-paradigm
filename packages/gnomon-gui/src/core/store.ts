@@ -771,6 +771,10 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
         const secs = voiceSecondsOf(p);
         return { role: 'voice-refused', text: `voice not sent · ${refusalPhrase(k.reason, k.cause)}${secs ? ` · ${secs}` : ''}` };
       }
+      // Dictate (Aegis 2026-10-21 privacy): an unverified voice's row is hash-only; its words live in the draft only. Sent,
+      // claude's replay shows the message; unsent, the line says it waits, without the words
+      // Mika: no speaker label (the founder's own short phrases read "unknown speaker 1"); one wording in both rows
+      if (p.draftOnly === true && !text.trim()) return ctx.sentSeqs.has(r.seq) ? null : { role: 'voice-heard', text: 'voice · in composer · unverified voice', speaker: 'voice', part: 1 };
       if (!text.trim()) return null;
       // sent: the kernel's turn.sent cites this row ⇒ the user's message (one line: spoken text has no layout)
       if (ctx.sentSeqs.has(r.seq)) return { role: 'user', text: cap(oneLine(text), CHAT_TEXT_MAX), speaker, voice: 'voice' };
@@ -784,11 +788,14 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
         : p.intercepted === 'decision' || p.intercepted === 'control'
           ? `voice app says: handled as a ${p.intercepted}`
           : p.forwardable === true
-            ? 'in composer' // dictation: the kernel stamped it forwardable; it waits in the composer until sent
+            ? p.draftOnly === true
+              ? 'in composer · unverified voice' // Dictate (G-VOX-06 exception): the kernel let an unverified voice into the draft only
+              : 'in composer' // dictation: the kernel stamped it forwardable; it waits in the composer until sent
             : p.forwarded === false
               ? 'voice app says: not sent'
               : 'not sent to the session';
-      return { role: 'voice-heard', text: `${speaker}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker, part: 1 };
+      const who = p.draftOnly === true ? 'voice' : speaker; // Mika: an unverified voice carries no speaker label
+      return { role: 'voice-heard', text: `${who}: “${cap(oneLine(text), TOOL_SUMMARY_MAX)}” · ${claim}`, speaker: who, part: 1 };
     }
     case 'voice.session.start':
       return { role: 'system', text: `voice attached · ${startRungName(p) ?? 'Talk'}` };

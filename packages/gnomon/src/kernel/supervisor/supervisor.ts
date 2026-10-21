@@ -1691,7 +1691,7 @@ export class SessionSupervisor {
     const book = (s.voiceClamp ??= new VoiceClampBook());
     const base = this.#turnGuidance(s.hsid);
     const guidance = sentBy === 'piece' ? [base, pieceGuidance(book.nextPiece())].filter((x): x is string => x !== null).join('\n\n') : base;
-    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), origin: sentBy !== null ? 'voice' : 'hand', ...(sentBy !== null ? { sentBy } : {}), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), origin: sentBy === 'unverified' ? 'voice-unverified' : sentBy !== null ? 'voice' : 'hand', ...(sentBy !== null ? { sentBy } : {}), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
     book.sent(turnId(s.hsid, n), sentBy);
     this.#stdin(s, userMessageLine(p.text, guidance));
     return { turn: turnId(s.hsid, n) };

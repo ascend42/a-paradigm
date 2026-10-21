@@ -149,7 +149,7 @@ export class FakeLink implements KernelLink {
   /** while set, every capture report waits on it (a slow kernel) */
   captureGate: Promise<void> | undefined;
   /** the kernel's verdict on the next voice.turn.user rows (voice drops fix): refused at receipt, hash-only */
-  turnVerdict: { refused?: string; refusedCause?: string; trialTake?: boolean } | undefined;
+  turnVerdict: { refused?: string; refusedCause?: string; trialTake?: boolean; draftOnly?: boolean } | undefined;
   async append(kind: string, payload: Record<string, unknown>): Promise<AppendResult> {
     if (this.appendError) throw this.appendError;
     if (kind === 'request.voice.report' && payload.playback) {
@@ -170,7 +170,7 @@ export class FakeLink implements KernelLink {
       return { seq: 0 };
     }
     this.appends.push({ kind, payload });
-    if (kind === 'voice.turn.user' && this.turnVerdict) return { seq: ++this.#seq, forwardable: false, ...this.turnVerdict };
+    if (kind === 'voice.turn.user' && this.turnVerdict) return { seq: ++this.#seq, forwardable: this.turnVerdict.draftOnly === true, ...this.turnVerdict };
     return { seq: ++this.#seq, ...(kind === 'voice.turn.user' ? { forwardable: true } : {}) };
   }
   async send(hsid: string, text: string): Promise<unknown> {

@@ -131,8 +131,14 @@ components:
       frontEnd; prints from another front end are never compared and are
       reported as request.voice.report{prints:{stale}} (status.voice.prints;
       the GUI nudges "Re-teach Gnomon your voice") with ONE notice per run.
+      Dictate (G-VOX-06 exception, 2026-10-21): an ambient turn under an
+      ambient ceiling with status.voice.send 'key' carries its text even when
+      the speaker is unverified (VoiceAttachment.send); a draftOnly verdict
+      ends the capture captured (never the draft speaker, never sent from the
+      client); a voice-speaker refusal with cause too-short ends dropped as
+      refused{voice-speaker, too-short}.
       Fail closed: VERIFY_THRESHOLD 0.65 and no verify under
-      MIN_VERIFY_SPEECH_MS of gated speech (MIN_PROVISIONAL_SPEECH_MS for
+      MIN_VERIFY_SPEECH_MS (= contracts VOICE_MIN_VERIFY_SPEECH_MS) of gated speech (MIN_PROVISIONAL_SPEECH_MS for
       live words, MIN_ENROL_SPEECH_MS per enrolment phrase). SherpaStt
       decode priority: a partial not started while a final waits returns []
       undecoded. SherpaVad.reset() restarts its sample counter (t0 skew

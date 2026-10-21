@@ -237,7 +237,7 @@ export function attachmentFromStatus(status: unknown): VoiceAttachment | null {
   const v = (status as { voice?: Record<string, unknown> })?.voice;
   if (v && typeof v.attached === 'boolean') {
     if (!v.attached || typeof v.hsid !== 'string' || typeof v.voiceSessionId !== 'string' || typeof v.ceiling !== 'string') return null;
-    return { hsid: v.hsid, voiceSessionId: v.voiceSessionId, mode: v.ceiling };
+    return { hsid: v.hsid, voiceSessionId: v.voiceSessionId, mode: v.ceiling, ...(typeof v.send === 'string' ? { send: v.send } : {}) };
   }
   const a = v?.attached as Partial<VoiceAttachment> | null | undefined;
   if (!a || typeof a.hsid !== 'string' || typeof a.voiceSessionId !== 'string' || typeof a.mode !== 'string') return null;
@@ -298,6 +298,8 @@ export class GnomonKernelLink implements KernelLink {
       ...(typeof r?.forwardable === 'boolean' ? { forwardable: r.forwardable } : {}),
       ...(typeof r?.refused === 'string' ? { refused: r.refused } : {}),
       ...(typeof r?.refusedCause === 'string' ? { refusedCause: r.refusedCause } : {}),
+      ...(r?.draftOnly === true ? { draftOnly: true } : {}),
+      ...(r?.trialTake === true ? { trialTake: true } : {}),
     };
   }
   send(hsid: string, text: string): Promise<unknown> {

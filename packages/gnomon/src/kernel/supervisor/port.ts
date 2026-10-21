@@ -25,7 +25,7 @@
  * payload:{hsid, model}}` (the dispatcher routes it from a first-party gui/device connection only). The payload is
  * closed to {hsid, model}; the supervisor refuses every non-human class again and does the switch.
  */
-import { refuse, RefusedError } from '@a-company/gnomon-contracts';
+import { refuse, RefusedError, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { SessionSupervisor } from './supervisor.js';
 import type { RunModeControl } from '../broker/run-mode.js';
 import type { VoiceAttribution } from '../voice/voice-control.js';
@@ -38,7 +38,9 @@ export interface VoiceAttributionPort {
    * TD-2026-10-21-514: the origin of this human voice send — the connection's live request.voice.send.claim, or the
    * fail-closed backstop (a pending send-word turn). null ⇒ hand. Never throws.
    */
-  originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null): { sentBy: 'word' | 'piece' | 'hotkey' } | null;
+  originFor?(connId: string | undefined, human: string, hsid: string, attr?: VoiceAttribution | null, voiceHint?: boolean): { sentBy: VoiceSentBy } | null;
+  /** Dictate: the human send failed: the unverified draft turns its origin check consumed are pending again */
+  releaseOrigin?(connId: string | undefined): void;
   /** Aegis L-4: a non-claiming match of the parts against pending voice turns (the origin check of a hint-less send) */
   peekAttribution?(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
 }
@@ -123,7 +125,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
       gateResumed(sup, ctx, p.hsid, 'session.send');
       let attr: VoiceAttribution | null = null;
-      let origin: { sentBy: 'word' | 'piece' | 'hotkey' } | null = null;
+      let origin: { sentBy: VoiceSentBy } | null = null;
       if (p.source === 'voice' && voice) {
         try {
           attr = voice.attributeHumanSend(ctx.principal, p.hsid, texts as string[]);
@@ -137,7 +139,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
         try {
           // Aegis L-4: with no source hint the parts are still matched (without claiming) so the ambient backstop applies
           const forOrigin = attr ?? (p.source !== 'voice' && voice.peekAttribution ? voice.peekAttribution(ctx.principal, p.hsid, texts as string[]) : null);
-          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, forOrigin);
+          origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, forOrigin, p.source === 'voice');
         } catch {
           origin = { sentBy: 'word' }; // fail closed: an origin check that throws clamps the turn
         }
@@ -147,6 +149,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
         return await sup.send(ctx.principal, { hsid: p.hsid, text, ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}), ...(attr ? { voiceAttribution: attr } : {}), ...(origin ? { voiceOrigin: origin } : {}) });
       } catch (err) {
         if (attr) voice?.releaseAttribution(attr);
+        voice?.releaseOrigin?.(ctx.connId);
         throw err;
       }
     },

@@ -48,7 +48,7 @@ import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMod
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
 import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
-import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
+import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -1631,9 +1631,27 @@ function dictationRow(r: Row): void {
   const now = Date.now();
   if (r.kind === 'voice.turn.user') {
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
-    dispatchDictation({ type: 'turnRow', seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, now });
+    // Aegis 2026-10-21 privacy: a draftOnly row is hash-only; its words come from status.voice.unverified (releaseTurnRows)
+    voiceRowQueue.push({ seq: r.seq, hsid: r.session ?? (typeof p?.hsid === 'string' ? p.hsid : null), payload: r.payload, at: now });
+    flushVoiceRows();
   }
   if (dict.hsid && r.session === dict.hsid) dispatchDictation({ type: 'busy', busy: store.sessions.get(dict.hsid)?.state === 'streaming', now });
+}
+
+/** Live voice.turn.user rows waiting for an unverified voice's words (status.voice.unverified), released in order. */
+let voiceRowQueue: QueuedTurnRow[] = [];
+let voiceRowTimer: ReturnType<typeof setTimeout> | null = null;
+function flushVoiceRows(): void {
+  const now = Date.now();
+  const { ready, rest } = releaseTurnRows(voiceRowQueue, unverifiedTextsOf(status), now);
+  voiceRowQueue = rest;
+  for (const q of ready) dispatchDictation({ type: 'turnRow', seq: q.seq, hsid: q.hsid, payload: q.payload, now });
+  // a row still waits for its words: re-read status soon (the kernel holds them in memory, human class only)
+  if (rest.length && !voiceRowTimer)
+    voiceRowTimer = setTimeout(() => {
+      voiceRowTimer = null;
+      void refreshStatus().then(flushVoiceRows);
+    }, 200);
 }
 
 /** status.voice: the attached session, the voice app's activity and the ⌃⌥H count; the GUI's focused session. */
@@ -1724,6 +1742,10 @@ function paintDictation(): void {
   put($('dictation-secs'), rem === null ? '' : `${Math.ceil(rem / 1000)} s`);
   const line = on ? liveLine(dict, now) : '';
   if (line !== dictLive) put($('dictation-live'), (dictLive = line)); // a changed line only: the live region speaks once a second at most
+  // Mika: a mixed draft's note quotes the unverified words (truncated); the full words are the title
+  const uq = on ? unverifiedQuote(dict) : null;
+  if (uq) $('dictation-live').title = `unverified voice: ${uq.full}`;
+  else $('dictation-live').removeAttribute('title');
   // one send control (the composer's send); [Hold] / [Resume] only beside a push-to-talk countdown (DRAFT_CONTROLS)
   const hold = $('dictation-hold');
   hold.hidden = controls.hold === null;

@@ -232,7 +232,7 @@ describe('#gnomon-voice capture: VoiceReports', () => {
 type Who = { kind: 'human' | 'agent' | 'session' | 'mod' | 'voice' | 'peer'; credential?: 'device' | 'gui' } | { kind: 'readToken' };
 
 /** A dispatcher whose request.voice.report port and status.voice are a real VoiceReports. */
-function crig() {
+function crig(o: { voice?: Record<string, unknown> } = {}) {
   const logged: Array<{ kind: string; payload: unknown }> = [];
   let t = 1_000_000;
   const reports = new VoiceReports(() => t);
@@ -254,7 +254,7 @@ function crig() {
     } as never,
     status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: 'k', custody: 'partial', source: 'test' }), root: () => ({ state: 'dev-test', rootKeyId: null }) },
     log: async (kind, payload) => void logged.push({ kind, payload }),
-    voice: { status: () => ({ attached: null, ...reports.status() }), connectionClosed: () => undefined, attachedHsid: () => null } as never,
+    voice: { status: () => ({ attached: null, ...reports.status() }), connectionClosed: () => undefined, attachedHsid: () => null, ...o.voice } as never,
     voiceClient: {
       start: async () => ({ phase: 'running' }),
       stop: async () => ({ phase: 'stopped' }),
@@ -410,5 +410,26 @@ describe('#gnomon-voice B1 live words: status.voice.capture.text', () => {
       const st = await (await r.connect(who))('status').catch((e: unknown) => (e instanceof RpcRefusal ? { refused: true } : Promise.reject(e)));
       expect(JSON.stringify(st), JSON.stringify(who)).not.toContain('secret');
     }
+  });
+
+  it("Dictate (Aegis re-check): status.voice.unverified reaches a human on the gui credential only, for that human's own sessions", async () => {
+    const asked: Array<string | undefined> = [];
+    const r = crig({
+      voice: {
+        // a status() that (wrongly) carried words is never passed through to anyone but the per-viewer gui projection
+        status: () => ({ attached: null, unverified: [{ seq: 9, hsid: 'hs:other', text: 'leaked words' }] }),
+        unverifiedFor: (principal: string | undefined) => (asked.push(principal), principal === 'p:abcdefgh/x' ? [{ seq: 1, hsid: 'hs:mine', text: 'secret draft' }] : []),
+      },
+    });
+    const gui = (await (await r.connect({ kind: 'human', credential: 'gui' }))('status')).voice as Record<string, unknown>;
+    expect(gui.unverified).toEqual([{ seq: 1, hsid: 'hs:mine', text: 'secret draft' }]);
+    expect(asked).toEqual(['p:abcdefgh/x']); // asked for THIS connection's principal
+    for (const who of [{ kind: 'human' }, { kind: 'human', credential: 'device' }, { kind: 'voice' }, { kind: 'mod' }, { kind: 'agent' }, { kind: 'session' }, { kind: 'readToken' }] as Who[]) {
+      const st = await (await r.connect(who))('status').catch((e: unknown) => (e instanceof RpcRefusal ? { refused: true } : Promise.reject(e)));
+      expect(JSON.stringify(st), JSON.stringify(who)).not.toContain('secret draft');
+      expect(JSON.stringify(st), JSON.stringify(who)).not.toContain('leaked');
+      expect((st as { voice?: Record<string, unknown> }).voice ?? {}, JSON.stringify(who)).not.toHaveProperty('unverified');
+    }
+    expect(asked).toHaveLength(1); // only the gui human was ever asked
   });
 });

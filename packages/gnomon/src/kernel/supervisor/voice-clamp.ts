@@ -11,6 +11,9 @@
  * Default deny: clampAllows() admits ONLY the read-only modeRefs, so a modeRef added later is clamped unless it is
  * added here deliberately (G-VOX-18 enumerates every modeRef the supervisor writes).
  *
+ * Dictate (Aegis 2026-10-21): a human's Enter that sent an unverified voice's words (sentBy 'unverified', turn.sent
+ * origin 'voice-unverified') is clamped the same way, fail closed.
+ *
  * Every other tool call raises a card carrying detail.origin 'voice', detail.sentBy and the kernel-composed line
  * VOICE_CLAMP_LINE(sentBy); the answer's session.inject row carries clamp:'voice' (!voice-clamp-applied).
  */
@@ -28,6 +31,7 @@ export function clampAllows(modeRef: string): boolean {
 
 /** The kernel-composed card line of a clamped request. */
 export function voiceClampLine(sentBy: VoiceSentBy): string {
+  if (sentBy === 'unverified') return 'Asked during a turn holding words from a voice Gnomon did not verify as yours. Check this was you.';
   return `Asked during a voice-sent turn (${sentBy === 'piece' ? 'sent as a piece' : sentBy === 'hotkey' ? 'sent by the voice app’s send key' : 'sent by send word'}). Check this was you.`;
 }
 

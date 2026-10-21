@@ -643,6 +643,24 @@ components:
     signals: []
   gui-dictation:
     description: >-
+      UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug
+      2026-10-21): a row the kernel stamped draftOnly fills the draft as a
+      part marked unverified; the pill note reads "draft · unverified voice ·
+      read it, then Enter sends" and the transcript row "in composer ·
+      unverified voice"; the send-now key holds such a draft for Enter
+      (HOTKEY_UNVERIFIED_NOTE); the word (wordReady and the grace), the piece
+      ring (pieceDue) and the countdown (armed) never send it, and a preset
+      switch holds it. Aegis privacy: the row is hash-only; app.ts queues live
+      voice rows and releaseTurnRows joins the words from
+      status.voice.unverified in seq order (a row waits at most
+      UNVERIFIED_WAIT_MS, then goes on wordless and never becomes a part).
+      sentLabel and clampedFrom treat turn.sent origin voice-unverified as
+      clamped ("spoken · unverified voice · sent by you", asks first). Mika:
+      a mixed draft's note quotes the unverified words (unverifiedQuote,
+      cut at UNVERIFIED_QUOTE_MAX with …, full words in the title); an
+      unverified row carries no speaker label ("voice · in composer ·
+      unverified voice"). A short refused turn (voice-speaker, cause
+      too-short) reads "too short to check it's you · say a few more words, or type it" (capture refusalPhrase).
       VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk /
       Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented
       control in the pill menu; Send word and Pieces need the one-time
@@ -1142,8 +1160,9 @@ components:
       when the card arrives; "restarting" is held until reload), showToast (voice idle auto-off and
       voice-app notices, warn), paintUpdateBanner (update available,
       persistent, Restart now focuses the upgrade card; closing hides it for
-      that card) and ui/standing-feed.ts. A 120 ms fade that reduced motion
-      drops.
+      that card) and ui/standing-feed.ts. A short CSS fade-in (styles.css
+      .toast animation toast-in, set only under data-motion="full"), so
+      reduced motion drops it.
     path: src/ui/toasts.ts
     type: module
     tags: [gnomon, gui, design-system, toast, notice]

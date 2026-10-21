@@ -321,7 +321,7 @@ export interface DispatcherOptions {
 }
 
 /** What the dispatcher needs of #gnomon-voice (voice/voice-control.ts VoiceControl). */
-export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'> & Partial<Pick<VoiceControl, 'claimSend'>>;
+export type VoicePort = Pick<VoiceControl, 'humanAppend' | 'voiceAppend' | 'send' | 'stop' | 'attachedHsid' | 'connectionClosed' | 'status'> & Partial<Pick<VoiceControl, 'claimSend' | 'unverifiedFor'>>;
 
 /** The served `request.*` kinds (P8-D86/D87): the asker is stamped from THIS connection, never from params. */
 /** V2e: the kernel-spawned voice client, started and stopped only by the human (request.voice.client{op}). */
@@ -535,7 +535,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
       // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
       // capture.text, reach a human-class connection on the gui credential only)
-      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor(o.voice.status(), s.credential, cls), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
+      // Dictate (Aegis re-check): status.voice.unverified, the words of THIS human's own sessions' unverified draft turns, on gui only
+      ...(o.voice && (cls === 'human' || cls === 'voice') ? { voice: { ...voiceStatusFor({ ...o.voice.status(), ...(cls === 'human' && s.credential === 'gui' && o.voice.unverifiedFor ? { unverified: o.voice.unverifiedFor(s.principal) } : {}) }, s.credential, cls), ...(cls === 'voice' ? { principal: s.principal ?? null } : {}) } } : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,

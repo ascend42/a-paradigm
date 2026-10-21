@@ -6,6 +6,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { HOTKEY_UNVERIFIED_NOTE, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
+import { clampedFrom, sentLabel } from '../src/core/voice-presets.js';
+import { refusalPhrase, dropLabelOf } from '../src/core/capture.js';
+import { dropFact } from '../src/core/voice-ladder.js';
 import { AMBIENT_DRAFT_NOTE, ambientDraft, armed, DRAFT_CONTROLS, dictationNote, draftControls, draftState, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
 import { chatItems, type Row } from '../src/core/store.js';
 import { canAttach } from '../src/core/voice.js';
@@ -405,5 +409,127 @@ describe('composer: one container, not a box inside a box (founder report 2026-1
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       if (/(composer-text|\.composer[^,]*textarea)/.test(m[1]!)) expect(m[2]!).not.toMatch(/border(-\w+)?:\s*(?!0)[1-9]/);
     }
+  });
+});
+
+describe('Dictate, the G-VOX-06 exception (founder bug 2026-10-21): an unverified voice fills the draft, marked', () => {
+  // the kernel's row for the founder's short turn: unverified, draft-only, ambient
+  const unv = { mode: 'conversation', speakerId: 'spk:unknown-1', speakerEnrolled: false, draftOnly: true, speakerVerified: false };
+  const dictate = (): DictationState => run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 });
+  it('a draftOnly row fills the draft, marked unverified; the pill says so; it never auto-sends; Enter sends it', () => {
+    let s = run(dictate(), turn(11, 'fix the flaky test', 0, unv));
+    expect(s.text).toBe('fix the flaky test');
+    expect(s.parts[0]).toMatchObject({ unverified: true, ambient: true });
+    expect(unverifiedDraft(s)).toBe(true);
+    expect(dictationNote(s)).toBe(UNVERIFIED_DRAFT_NOTE);
+    expect(liveLine(s, 1)).toBe(UNVERIFIED_DRAFT_NOTE);
+    expect(run(s, { type: 'tick', now: 60_000 }).sending).toBe(false);
+    s = run(s, { type: 'sendNow', now: 60_001 }); // Enter / [send]
+    expect(s.sending).toBe(true);
+    expect(sendClaim(s)).toBeNull(); // a hand send
+    expect(sendRequest(s)).toEqual({ hsid: A, content: [{ text: 'fix the flaky test' }], source: 'voice' });
+    // a verified turn is unmarked
+    expect(run(dictate(), turn(11, 'hello', 0, { mode: 'conversation' })).parts[0]).not.toHaveProperty('unverified');
+  });
+  it('the send-now key never sends an unverified draft: it is held for Enter', () => {
+    const s = run(dictate(), turn(11, 'delete the branch', 0, unv), { type: 'sendNowKey', now: 100 });
+    expect(s.sending).toBe(false);
+    expect(s.hotkeyHeld).toBe(true);
+    expect(dictationNote(s)).toBe(HOTKEY_UNVERIFIED_NOTE);
+  });
+  it('the transcript row reads "in composer · unverified voice"', () => {
+    const { items } = chatItems([{ seq: 1, kind: 'voice.turn.user', view: 'full', session: A, payload: fwd('fix it', unv) }]);
+    expect(items[0]!.text).toContain('in composer · unverified voice');
+    expect(items[0]!.text).toMatch(/^voice: “fix it”/); // Mika: no "unknown speaker 1" label
+    expect(items[0]!.text).not.toContain('unknown');
+  });
+  it("a short refused turn says \"too short to check it's you\", never \"speaker not recognised\"", () => {
+    expect(refusalPhrase('voice-speaker', 'too-short')).toBe("too short to check it's you · say a few more words, or type it");
+    expect(dropLabelOf({ reason: 'refused', refusal: 'voice-speaker', cause: 'too-short' })).toBe("Not sent: too short to check it's you · say a few more words, or type it");
+    expect(dropFact({ reason: 'refused', refusal: 'voice-speaker', cause: 'too-short' })).toBe("not sent · too short to check it's you · say a few more words, or type it");
+    const { items } = chatItems([{ seq: 1, kind: 'voice.turn.user', view: 'full', session: A, payload: { turnId: 't1', speakerId: 'spk:unknown-1', speakerEnrolled: false, forwarded: false, refusedReason: 'voice-speaker', refusedCause: 'too-short', durationMs: 1200, textHash: 'hmac-sha256:00' } }]);
+    expect(items[0]).toMatchObject({ role: 'voice-refused' });
+    expect(items[0]!.text).toContain("too short to check it's you");
+    expect(refusalPhrase('voice-speaker')).toBe('speaker not recognised');
+  });
+});
+
+describe('Dictate, Aegis review 2026-10-21: an unverified voice never leaves by word, piece or countdown; its words never come from the log', () => {
+  const unv = { mode: 'conversation', speakerId: 'spk:unknown-1', speakerEnrolled: false, draftOnly: true, speakerVerified: false };
+  const WORD = { text: 'over and out', variants: [] };
+  it('[high] Dictate → Send word: the switch holds the draft, the word is not ready, saying it sends nothing', () => {
+    let s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'drop the database', 0, unv));
+    s = run(s, { type: 'setPolicy', policy: 'word', sendWord: WORD, now: 10 });
+    expect(s.hold).toBe(true);
+    s = run(s, { type: 'painted', now: 20 }, turn(12, 'and the tests', 30, { mode: 'conversation' }), { type: 'painted', now: 40 });
+    expect(wordReady(s, 5_000)).toBe(false);
+    s = run(s, turn(13, 'over and out', 5_000, { mode: 'conversation' }), { type: 'tick', now: 7_000 });
+    expect(s.grace).toBeNull();
+    expect(s.sending).toBe(false);
+    expect(sendClaim(s)).toBeNull();
+    expect(dictationNote(s)).toBe('draft · unverified voice: “drop the database” · read it, then Enter sends'); // mixed: named
+  });
+  it('[high] Pieces never sends an unverified part; [low] the countdown never arms over one, even a push-to-talk one', () => {
+    let s = run(ready(5000), { type: 'setPolicy', policy: 'pieces', sendWord: null, now: 0 }, turn(11, 'drop it', 0, unv));
+    expect(pieceDue(s, 60_000)).toBe(false);
+    expect(run(s, { type: 'tick', now: 60_000 }).sending).toBe(false);
+    s = run(ready(3000), turn(11, 'drop it', 0, { ...unv, mode: 'ptt' }));
+    expect(ambientDraft(s)).toBe(false);
+    expect(armed(s)).toBe(false);
+    expect(run(s, { type: 'tick', now: 60_000 }).sending).toBe(false);
+  });
+  it('privacy: a hash-only draftOnly row waits for its words from status.voice.unverified, in order; wordless after the wait', () => {
+    const q = [
+      { seq: 11, hsid: A, payload: { mode: 'conversation', forwardable: true, draftOnly: true, textHash: 'hmac-sha256:00' }, at: 0 },
+      { seq: 12, hsid: A, payload: fwd('and the tests', { mode: 'conversation' }), at: 10 },
+    ];
+    const none = releaseTurnRows(q, new Map(), 100);
+    expect(none.ready).toEqual([]); // the verified row behind it waits too: the draft keeps the order
+    expect(none.rest).toHaveLength(2);
+    const texts = unverifiedTextsOf({ voice: { unverified: [{ seq: 11, hsid: A, text: 'drop the database' }, { seq: 'x', text: 'junk' }] } });
+    expect([...texts]).toEqual([[11, 'drop the database']]);
+    const got = releaseTurnRows(q, texts, 200);
+    expect(got.rest).toEqual([]);
+    const s = got.ready.reduce((st, r) => reduceDictation(st, { type: 'turnRow', seq: r.seq, hsid: r.hsid, payload: r.payload, now: 300 }), ready());
+    expect(s.text).toBe('drop the database and the tests');
+    expect(s.parts.map((p) => !!p.unverified)).toEqual([true, false]);
+    // never delivered: after the wait it goes on wordless and never becomes a draft part
+    const late = releaseTurnRows(q, new Map(), UNVERIFIED_WAIT_MS);
+    const s2 = late.ready.reduce((st, r) => reduceDictation(st, { type: 'turnRow', seq: r.seq, hsid: r.hsid, payload: r.payload, now: 300 }), ready());
+    expect(s2.text).toBe('and the tests');
+    expect(unverifiedDraft(s2)).toBe(false);
+  });
+  it('the transcript: a hash-only unverified row reads "voice · in composer · unverified voice" (no words, no speaker); sent, it hides', () => {
+    const row: Row = { seq: 1, kind: 'voice.turn.user', view: 'full', session: A, payload: { turnId: 't1', speakerId: 'spk:unknown-1', speakerEnrolled: false, forwardable: true, draftOnly: true, mode: 'conversation', textHash: 'hmac-sha256:00' } };
+    expect(chatItems([row]).items[0]!.text).toBe('voice · in composer · unverified voice');
+    const sent: Row = { seq: 2, kind: 'turn.sent', view: 'full', session: A, payload: { source: 'voice', voiceTurnSeqs: [1], origin: 'voice-unverified', sentBy: 'unverified' } };
+    expect(chatItems([row, sent]).items.some((i) => i.text.includes('in composer'))).toBe(false);
+  });
+  it('clamp display: a voice-unverified turn.sent asks first and lights the clamp chip until its result', () => {
+    expect(sentLabel({ source: 'voice', origin: 'voice-unverified', sentBy: 'unverified' })).toEqual({ label: 'spoken · unverified voice · sent by you', asksFirst: true });
+    expect(sentLabel({ origin: 'voice-unverified', sentBy: 'unverified' })).toMatchObject({ asksFirst: true });
+    const rows = [{ kind: 'turn.sent', session: A, payload: { origin: 'voice-unverified' } }];
+    expect(clampedFrom(rows, A)).toBe(true);
+    expect(clampedFrom([...rows, { kind: 'turn.result', session: A, payload: {} }], A)).toBe(false);
+  });
+});
+
+describe('Mika 2026-10-21: a mixed draft names its unverified words', () => {
+  const unv = { mode: 'conversation', speakerId: 'spk:unknown-1', speakerEnrolled: false, draftOnly: true };
+  const dictate = (): DictationState => run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 });
+  it('quotes the unverified words in a mixed draft; an all-unverified draft keeps the plain note', () => {
+    const mixed = run(dictate(), turn(11, 'open the ledger', 0, { mode: 'conversation' }), turn(12, 'and run the billing tests', 10, unv));
+    expect(dictationNote(mixed)).toBe('draft · unverified voice: “and run the billing tests” · read it, then Enter sends');
+    expect(unverifiedQuote(mixed)).toEqual({ short: 'and run the billing tests', full: 'and run the billing tests' });
+    expect(dictationNote(run(dictate(), turn(11, 'only me', 0, unv)))).toBe(UNVERIFIED_DRAFT_NOTE);
+  });
+  it('a long quote is cut with …; the full words stay for the title', () => {
+    const long = 'please run every single billing and invoicing test in the repository now';
+    const s = run(dictate(), turn(11, 'ok', 0, { mode: 'conversation' }), turn(12, long, 10, unv));
+    const q = unverifiedQuote(s)!;
+    expect(q.full).toBe(long);
+    expect(q.short.endsWith('…')).toBe(true);
+    expect([...q.short].length).toBeLessThanOrEqual(UNVERIFIED_QUOTE_MAX);
+    expect(dictationNote(s)).toBe(`draft · unverified voice: “${q.short}” · read it, then Enter sends`);
   });
 });

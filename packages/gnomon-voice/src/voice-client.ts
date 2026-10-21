@@ -45,7 +45,11 @@
  *
  * Modes: OFF / PTT / AMBIENT. The human's attachment mode (status.voice.attached.mode) is the CEILING; the client
  * may narrow locally (setMode), never widen. Unknown speakers: the row carries no text (textWithheld: true; the
- * kernel stores no text for spk:unknown-N under V2a) and nothing is sent. No audio is ever written to disk
+ * kernel stores no text for spk:unknown-N under V2a) and nothing is sent — except Dictate (G-VOX-06 exception, spec
+ * §14.7): an AMBIENT turn under an ambient ceiling whose send ceiling is 'key' (status.voice.send) carries its text,
+ * and when the kernel answers draftOnly it ends captured (the GUI shows it in the draft marked "unverified voice"; only
+ * the human's Enter sends it; it never becomes the draft speaker). A refused unverified turn the kernel marks
+ * cause 'too-short' ends dropped as refused{voice-speaker, too-short} ("too short to check it's you"). No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
 import { isSendWord, SEND_WORD_SHORT_MS, trialTakeText, type SendWord } from '@a-company/gnomon-contracts';
@@ -1093,6 +1097,9 @@ export class VoiceClient {
     if (adjacent) text = word!.text;
     const enrolled = who.name !== undefined || adjacent;
     const takeText = trial && !enrolled ? trialTakeText(text) : null;
+    // Dictate (G-VOX-06 exception, spec §14.7): an ambient turn under an ambient ceiling with send ceiling 'key' may fill
+    // the draft unverified (a human's Enter sends it), so its words go to the kernel, which decides (draftOnly)
+    const draftable = !enrolled && !trial && mode === 'ambient' && a.send === 'key' && a.mode !== 'ptt';
     const speakerId = adjacent ? this.#draftSpeaker! : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
@@ -1106,7 +1113,7 @@ export class VoiceClient {
     // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
     const gatedMs = gatedSpeechMsOf(who.speechMs);
     const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled ? text : (takeText ?? ''), ...(enrolled || takeText !== null ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled || draftable ? text : (takeText ?? ''), ...(enrolled || draftable || takeText !== null ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
     let verdict: AppendResult;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
@@ -1120,7 +1127,17 @@ export class VoiceClient {
       this.#flow.info('trial take counted', { turnId });
       return end('captured');
     }
+    if (!enrolled && verdict?.draftOnly === true && verdict.refused === undefined) {
+      // Dictate: in the draft, marked unverified; never the draft speaker (no adjacency anchor), never sent from here
+      this.#flow.info('turn dictated unverified (composer)', { turnId });
+      return end('captured');
+    }
     if (!enrolled) {
+      // too little gated speech to check the speaker: say so, never "not recognised" (the kernel's cause 'too-short')
+      if (verdict?.refused === 'voice-speaker' && verdict.refusedCause === 'too-short') {
+        this.#notice('info', "Too short to check it's you; nothing was sent.");
+        return end('dropped', 'refused', captureRefusalOf(verdict.refused, verdict.refusedCause));
+      }
       this.#notice('info', stale.length ? STALE_DROP_NOTICE : 'I heard someone who is not enrolled; nothing was sent.');
       return end('dropped', 'not-enrolled');
     }

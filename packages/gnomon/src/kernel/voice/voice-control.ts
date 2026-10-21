@@ -54,6 +54,16 @@
  * part, which normally matches no pending turn, so it carries no voice tag at all. Matched turns join #forwarded (a
  * later direct send of the same turn is refused). Attribution never refuses a human send. The 30 s freshness and latest-turn rules bind only the direct (voice principal) path.
  *
+ * Dictate, the G-VOX-06 exception (founder ruling 2026-10-21; spec §14.7): the human's Enter is the authorization. An
+ * UNVERIFIED speaker's turn (not enrolled now, or too short to verify) of the attached human's own voice principal,
+ * ambient (mode conversation) under a conversation ceiling whose send ceiling is 'key', not intercepted, is NOT refused
+ * voice-speaker at receipt: the other guards run, and an accepted one keeps its text and is stamped forwardable:true,
+ * draftOnly:true, speakerVerified:false (both kernel-stamped; a client claim is BAD_REQUEST). It fills the draft only:
+ * the voice principal's direct send, a piece claim and a send-now (hotkey) claim over it are refused voice-speaker
+ * {cause:'draft-only'}, it is never the send word nor an adjacency anchor; only a human session.send (the Enter)
+ * carries it. Talk (ptt), Send word and Pieces keep the speaker gate. A refused unverified turn whose gatedSpeechMs is
+ * under VOICE_MIN_VERIFY_SPEECH_MS carries cause 'too-short' ("too short to check it's you").
+ *
  * Attachment (§14.7 "voice is attached to a session only by a human gesture"): a HUMAN on a first-party connection
  * (GUI launch token or this home's human device) appends `voice.session.start{hsid, mode?}` / `voice.session.end`;
  * the kernel checks the session is the human's own, mints the voiceSessionId and writes the row. The voice child
@@ -94,7 +104,7 @@
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
-import { canonicalSendWord, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, VOICE_MIN_VERIFY_SPEECH_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -125,6 +135,9 @@ export type VoiceSendCeiling = (typeof VOICE_SEND_CEILINGS)[number];
 const sendRank = (c: VoiceSendCeiling): number => VOICE_SEND_CEILINGS.indexOf(c);
 /** an attended send-word trial lasts this long on the kernel clock (the dialog renews it; takes are counted here) */
 export const SEND_WORD_TRIAL_MS = 2 * 60_000;
+/** Dictate: an unverified draft turn's words stay in kernel memory (status.voice.unverified) this long at most */
+export const UNVERIFIED_TEXT_TTL_MS = 5 * 60_000;
+export const UNVERIFIED_TEXT_CAP = 32;
 /** at most this many turns per piece claim */
 export const PIECE_CLAIM_MAX_TURNS = 64;
 export type VoiceMode = (typeof VOICE_MODES_V1)[number];
@@ -306,6 +319,8 @@ interface UserTurn {
   /** keyed hash of the text (the kernel never keeps a turn's plaintext in memory) */
   textHash: string;
   attachment: string;
+  /** the attached session when the turn was received ('' when none): an unverified draft turn is tracked per session */
+  hsid: string;
   /** V2a: the ambient echo-cancellation claim */
   aec: string | undefined;
   /** V2a: refused at receipt (stored without text): never forwardable */
@@ -314,6 +329,11 @@ interface UserTurn {
   isWord: boolean;
   /** Aegis L-3: a take of the word being taught: never forwardable, never a draft, never an adjacency anchor */
   trialTake?: boolean;
+  /**
+   * Dictate (founder ruling 2026-10-21, G-VOX-06 exception): an UNVERIFIED speaker's ambient turn under a key send
+   * ceiling: it fills the draft only. Never a direct send, never a word or piece claim, never an adjacency anchor.
+   */
+  draftOnly?: boolean;
 }
 interface Attachment {
   voiceSessionId: string;
@@ -390,6 +410,14 @@ export class VoiceControl {
   readonly #piecesGranted = new Set<string>();
   /** turns cited by a live piece claim (a second claim citing one is stale) */
   readonly #claimed = new Set<string>();
+  /**
+   * Dictate (Aegis 2026-10-21 privacy): an unverified draft turn's words live ONLY here, in kernel memory, never in the
+   * log (its row is hash-only). status.voice.unverified hands them to the human class (the GUI's draft) until the turn
+   * is forwarded or UNVERIFIED_TEXT_TTL_MS passes; at most UNVERIFIED_TEXT_CAP entries.
+   */
+  readonly #unverifiedText = new Map<string, { seq: number; hsid: string; text: string; at: number }>();
+  /** the unverified draft turns a human send's origin check consumed, per connection (handed back if that send fails) */
+  readonly #originConsumed = new Map<string, string[]>();
   /** Aegis M-5: the send-now press count already consumed by a send (each press stamps one send at most) */
   #sendNowUsed = 0;
   /** the one live send claim per human connection */
@@ -415,6 +443,38 @@ export class VoiceControl {
     return ambientIdleMsOf(this.#o.ambientIdleMs);
   }
 
+  /** Dictate: an accepted unverified draft turn not yet sent (any attachment): it blocks word, piece and send-now claims */
+  #outstandingDraft(t: UserTurn): boolean {
+    return t.draftOnly === true && !t.refused && t.seq > 0 && !this.#forwarded.has(t.turnId);
+  }
+  /** the human's outstanding unverified draft turns on hsid, from ANY attachment (a preset switch re-attaches) */
+  #outstandingUnverified(human: string, hsid: string): UserTurn[] {
+    const vp = voicePrincipalOf(human);
+    if (!vp) return [];
+    return [...this.#userTurns.values()].filter((t) => t.principal === vp && t.hsid === hsid && this.#outstandingDraft(t));
+  }
+  /**
+   * status.voice.unverified for ONE viewer (Aegis re-check 2026-10-21): the words of outstanding unverified draft turns on
+   * sessions this principal owns NOW (ownerOf), never anyone else's. The dispatcher asks only for a human-class
+   * connection on the gui credential; status() never carries them.
+   */
+  unverifiedFor(principal: string | undefined): Array<{ seq: number; hsid: string; text: string }> {
+    if (!principal) return [];
+    return this.#unverifiedView().filter((u) => this.#o.sessions.ownerOf(u.hsid) === principal);
+  }
+  #unverifiedView(): Array<{ seq: number; hsid: string; text: string }> {
+    const now = this.#now();
+    const out: Array<{ seq: number; hsid: string; text: string }> = [];
+    for (const [id, u] of this.#unverifiedText) {
+      if (now - u.at > UNVERIFIED_TEXT_TTL_MS || this.#forwarded.has(id) || !this.#userTurns.has(id)) {
+        this.#unverifiedText.delete(id);
+        continue;
+      }
+      out.push({ seq: u.seq, hsid: u.hsid, text: u.text });
+    }
+    return out;
+  }
+
   /** a turn the human may still send from the composer (dictation): accepted, unforwarded, of the live attachment */
   #pendingDictation(t: UserTurn): boolean {
     return !t.refused && !t.intercepted && !t.trialTake && !this.#forwarded.has(t.turnId) && this.#attachment !== null && t.attachment === this.#attachment.voiceSessionId;
@@ -428,8 +488,9 @@ export class VoiceControl {
   #prune(): void {
     const horizon = this.#now() - 2 * this.maxTurnAgeMs;
     for (const [id, t] of this.#userTurns) {
-      if (this.#userTurns.size <= VOICE_WINDOW_CAP && (t.receivedAt >= horizon || this.#pendingDictation(t))) continue;
+      if (this.#userTurns.size <= VOICE_WINDOW_CAP && (t.receivedAt >= horizon || this.#pendingDictation(t) || this.#outstandingDraft(t))) continue;
       this.#userTurns.delete(id);
+      this.#unverifiedText.delete(id);
       this.#forwarded.delete(id);
       this.#claimed.delete(id);
     }
@@ -700,6 +761,8 @@ export class VoiceControl {
     if (Object.hasOwn(p, 'forwardable')) throw bad('forwardable is stamped by the kernel');
     // calibration: the local-drop tally is the kernel's (from capture reports), never a client claim
     if (Object.hasOwn(p, 'localDrops')) throw bad('localDrops is stamped by the kernel');
+    // Dictate: whether an unverified turn may only fill the draft is the kernel's verdict, never a client claim
+    if (Object.hasOwn(p, 'draftOnly') || Object.hasOwn(p, 'speakerVerified')) throw bad('draftOnly and speakerVerified are stamped by the kernel');
     const receivedAt = this.#now();
     let stamped: Record<string, unknown> = kind === 'voice.turn.user' || kind === 'voice.turn.agent' ? { ...p, receivedAt } : { ...p };
     let refusedAtReceipt: RefusedError | undefined;
@@ -727,6 +790,12 @@ export class VoiceControl {
         // only while the trial is LISTENING (Aegis M-2: once ready or exhausted, take capture stops)
         const live = p.intercepted === undefined && a !== null && voicePrincipalOf(a.owner) === c.principal ? this.#liveTrial() : null;
         const trial = live && live.state.state === 'listening' && (live.hsid === null || live.hsid === a!.hsid) ? live : null;
+        // Dictate (founder ruling 2026-10-21; spec §14.7 G-VOX-06 exception): the human's Enter is the authorization, so
+        // an UNVERIFIED speaker's turn may fill the draft when nothing can send it without a human key: the attached
+        // human's own voice principal, an AMBIENT turn (ambient never sends itself, TD-2026-10-20-125) under a
+        // conversation ceiling whose send ceiling is 'key' (no send word, no pieces). Not intercepted (a decision or
+        // control phrase from an unverified speaker is still refused). Every other guard still runs at receipt.
+        const draftOnly = !trial && !enrolledNow && p.intercepted === undefined && a !== null && a.send === 'key' && a.mode === 'conversation' && p.mode === 'conversation' && voicePrincipalOf(a.owner) === c.principal;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
@@ -749,17 +818,22 @@ export class VoiceControl {
           seq: 0,
           textHash: this.#hash(p.text),
           attachment: a?.voiceSessionId ?? '',
+          hsid: a?.hsid ?? '',
           aec: p.aec as string | undefined,
           refused: undefined,
-          isWord: trial === null && isSendWord(p.text, this.#word()),
+          isWord: trial === null && !draftOnly && isSendWord(p.text, this.#word()),
           ...(trial ? { trialTake: true } : {}),
+          ...(draftOnly ? { draftOnly: true } : {}),
         };
         // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
         // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
         if (trial) refusedAtReceipt = this.#echoGuard(turn); // a take inside our playback is echo, never a take
-        else if (!enrolledNow) refusedAtReceipt = voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
-        else if (!turn.intercepted) {
-          refusedAtReceipt = a ? this.#guards(turn, a) : voiceRefusal('voice-target', 'voice is not attached (attach is a human gesture)', { turnId: turn.turnId });
+        else if (!enrolledNow && !draftOnly) {
+          // a turn with too little gated speech was never checked: say so ("too short to check it's you"), not "not recognised"
+          const short = typeof p.gatedSpeechMs === 'number' && p.gatedSpeechMs < VOICE_MIN_VERIFY_SPEECH_MS;
+          refusedAtReceipt = voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId, ...(short ? { cause: 'too-short' } : {}) });
+        } else if (!turn.intercepted) {
+          refusedAtReceipt = a ? this.#guards(turn, a, draftOnly) : voiceRefusal('voice-target', 'voice is not attached (attach is a human gesture)', { turnId: turn.turnId });
         }
         const drops = this.#o.localDrops?.();
         if (drops) stamped = { ...stamped, localDrops: drops };
@@ -785,6 +859,18 @@ export class VoiceControl {
           // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send); a
           // take never reaches here (the trial branch above stamps it forwardable:false)
           stamped = { ...stamped, forwardable: !turn.intercepted };
+        }
+        if (draftOnly && !refusedAtReceipt) {
+          // Aegis 2026-10-21 privacy: an unverified voice's words never enter the permanent log. The row is hash-only plus
+          // the verdict; the words wait in kernel memory for the human's draft (status.voice.unverified, human class only)
+          const kept: Record<string, unknown> = {};
+          for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
+          stamped = { ...kept, speakerEnrolled: false, forwarded: false, forwardable: true, draftOnly: true, speakerVerified: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, ...(drops ? { localDrops: drops } : {}) };
+          const words = p.text;
+          commit.push((seq) => {
+            this.#unverifiedText.set(t.turnId, { seq, hsid: a!.hsid, text: words, at: receivedAt });
+            while (this.#unverifiedText.size > UNVERIFIED_TEXT_CAP) this.#unverifiedText.delete(this.#unverifiedText.keys().next().value!);
+          });
         }
         commit.push((seq) => {
           turn.seq = seq;
@@ -824,7 +910,7 @@ export class VoiceControl {
       const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
       return { ...r, forwardable: false, refused: d.reason, ...(typeof d.cause === 'string' ? { refusedCause: d.cause } : {}) };
     }
-    if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true, ...(stamped.trialTake === true ? { trialTake: true } : {}) };
+    if (kind === 'voice.turn.user') return { ...r, forwardable: stamped.forwardable === true, ...(stamped.trialTake === true ? { trialTake: true } : {}), ...(stamped.draftOnly === true ? { draftOnly: true } : {}) };
     return r;
   }
 
@@ -840,7 +926,7 @@ export class VoiceControl {
     if (typeof p.text !== 'string' || !isSendWord(p.text, this.#word())) return false;
     const start = receivedAt - (p.t1 - p.t0);
     for (const t of this.#userTurns.values()) {
-      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.attachment !== a.voiceSessionId || t.isWord) continue;
+      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.draftOnly || t.attachment !== a.voiceSessionId || t.isWord) continue;
       if (this.#pendingDictation(t) || Math.abs(start - t.receivedAt) <= SEND_WORD_ADJACENT_MS) return true;
     }
     return false;
@@ -969,7 +1055,10 @@ export class VoiceControl {
     if (by === 'hotkey') {
       // Aegis M-5: the GUI announces a send-now send; it binds like any claim (the press itself is consumed at the send)
       if (payload.turnSeq !== undefined || payload.turnSeqs !== undefined) throw bad("by 'hotkey' cites no turn");
-      if (!this.#pendingOf(asker.principal, hsid)) throw voiceRefusal('voice-target', 'voice is not attached to that session of yours');
+      const got = this.#pendingOf(asker.principal, hsid);
+      if (!got) throw voiceRefusal('voice-target', 'voice is not attached to that session of yours');
+      // Dictate: the send-now press is the voice app's report, not the human's Enter: a draft with an unverified turn waits for Enter
+      if (this.#outstandingUnverified(asker.principal, hsid).length) throw voiceRefusal('voice-speaker', 'an unverified turn only fills the draft: Enter sends it (G-VOX-06)', { by, cause: 'draft-only' });
       const at = this.#now() + SEND_CLAIM_TTL_MS;
       this.#claims.set(asker.connId, { hsid, by: 'hotkey', expiresAt: at, turnIds: [] });
       return { claimed: true, by: 'hotkey', expiresAt: new Date(at).toISOString() };
@@ -988,6 +1077,8 @@ export class VoiceControl {
     let turnIds: string[];
     if (by === 'word') {
       if (sendRank(a.send) < sendRank('word')) throw voiceRefusal('voice-off', "the attachment's send ceiling does not allow a send word", { send: a.send, cause: 'send-ceiling' });
+      // Aegis 2026-10-21 (high): a preset switch re-attaches, so an unverified draft turn of ANY attachment on this session blocks the word
+      if (this.#outstandingUnverified(asker.principal, hsid).length) throw voiceRefusal('voice-speaker', 'the draft holds an unverified voice: only Enter sends it (G-VOX-06)', { by, cause: 'draft-only' });
       const t = pending.find((x) => x.seq === payload.turnSeq);
       if (!t) throw stale('the cited turn is not a pending turn of this attachment (already consumed by another send?)', { turnSeq: payload.turnSeq });
       if (!t.isWord) throw stale('the cited turn is not the send word', { turnSeq: t.seq, cause: 'not-send-word' });
@@ -998,10 +1089,13 @@ export class VoiceControl {
       turnIds = [t.turnId];
     } else {
       if (sendRank(a.send) < sendRank('pieces')) throw voiceRefusal('voice-off', "the attachment's send ceiling does not allow pieces", { send: a.send, cause: 'send-ceiling' });
+      if (this.#outstandingUnverified(asker.principal, hsid).length) throw voiceRefusal('voice-speaker', 'the draft holds an unverified voice: only Enter sends it (G-VOX-06)', { by, cause: 'draft-only' });
       this.#refusePiecesByLevel(hsid);
       const seqs = payload.turnSeqs as number[];
       const ts = seqs.map((q) => pending.find((x) => x.seq === q));
       if (ts.some((x) => x === undefined || x.isWord)) throw stale('every cited turn must be a pending draft turn of this attachment');
+      // Dictate: an unverified turn fills the draft only; a human's Enter sends it, never a piece
+      if (ts.some((x) => x!.draftOnly)) throw voiceRefusal('voice-speaker', 'an unverified turn only fills the draft: Enter sends it (G-VOX-06)', { by, cause: 'draft-only' });
       turnIds = (ts as UserTurn[]).map((x) => x.turnId);
       for (const id of turnIds) this.#claimed.add(id);
     }
@@ -1020,7 +1114,36 @@ export class VoiceControl {
    * claim (consumed here; an expired one is dropped), else the fail-closed backstop — an unclaimed pending turn of the
    * attachment that is the send word stamps 'word' (and is consumed). null ⇒ hand. NEVER throws.
    */
-  originFor(connId: string | undefined, human: string, hsid: string, attr: VoiceAttribution | null = null): { sentBy: VoiceSentBy } | null {
+  originFor(connId: string | undefined, human: string, hsid: string, attr: VoiceAttribution | null = null, voiceHint = false): { sentBy: VoiceSentBy } | null {
+    const base = this.#originBase(connId, human, hsid, attr);
+    try {
+      // Dictate (Aegis 2026-10-21, fail closed): a send whose attribution matched an unverified draft turn, or a voice-hinted
+      // send while one is outstanding on this session (any attachment: an edited draft matches nothing), is
+      // 'unverified' (turn.sent origin 'voice-unverified', clamped). Its outstanding turns are consumed (releaseOrigin
+      // hands them back if the send fails).
+      const matched = attr?.turnIds.some((id) => this.#userTurns.get(id)?.draftOnly === true) === true;
+      const outstanding = this.#outstandingUnverified(human, hsid);
+      if (matched || (voiceHint && outstanding.length > 0)) {
+        const ids = outstanding.map((t) => t.turnId);
+        for (const id of ids) this.#forwarded.add(id);
+        if (connId !== undefined) this.#originConsumed.set(connId, ids);
+        return { sentBy: 'unverified' };
+      }
+      if (connId !== undefined) this.#originConsumed.delete(connId);
+      return base;
+    } catch {
+      return { sentBy: 'unverified' }; // fail closed
+    }
+  }
+
+  /** Dictate: a human send failed: the unverified draft turns its origin check consumed are outstanding again. */
+  releaseOrigin(connId: string | undefined): void {
+    if (connId === undefined) return;
+    for (const id of this.#originConsumed.get(connId) ?? []) this.#forwarded.delete(id);
+    this.#originConsumed.delete(connId);
+  }
+
+  #originBase(connId: string | undefined, human: string, hsid: string, attr: VoiceAttribution | null): { sentBy: VoiceSentBy } | null {
     try {
       const c = connId !== undefined ? this.#claims.get(connId) : undefined;
       if (c && connId !== undefined) {
@@ -1069,11 +1192,12 @@ export class VoiceControl {
    * The content guards, run at receipt and again at send: speaker, ceiling, the ambient guards (aec, kernel busy)
    * and echo. Returns the refusal, or undefined when the turn may go.
    */
-  #guards(turn: UserTurn, a: Attachment): RefusedError | undefined {
+  #guards(turn: UserTurn, a: Attachment, draftOnly = false): RefusedError | undefined {
     // Aegis V2a M2: idle fails closed — past idleAt nothing is forwarded, even before the kernel's end row lands
     const idleAt = this.#idleAt(a);
     if (idleAt !== null && this.#now() >= idleAt) return voiceRefusal('voice-off', 'the ambient attachment is idle (ended by the kernel)', { turnId: turn.turnId, ceiling: a.mode, cause: 'idle' });
-    if (!turn.speakerEnrolled || !this.#o.enrolled().has(turn.speakerId)) return voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
+    // Dictate: a draft-only turn skips ONLY the speaker check, and only at receipt (it may fill the draft); at a send it is refused
+    if (!draftOnly && (!turn.speakerEnrolled || !this.#o.enrolled().has(turn.speakerId))) return voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
     // V2a: the attachment mode is a CEILING — ptt under any, conversation only under conversation
     if (turn.mode !== 'ptt' && turn.mode !== a.mode) return voiceRefusal('voice-off', "the turn's mode is above the attachment's ceiling", { turnId: turn.turnId, mode: turn.mode, ceiling: a.mode, cause: 'ceiling' });
     const tail = this.echoTailMs;
@@ -1143,6 +1267,8 @@ export class VoiceControl {
     if (turn.refused) throw turn.refused;
     // Aegis M-1: a take of the word being taught is never sent (it skipped the speaker check and adjacency)
     if (turn.trialTake) throw voiceRefusal('voice-grammar', 'a take of the send word being taught never reaches a model', { turnId: turn.turnId, cause: 'trial-take' });
+    // Dictate: an unverified turn only fills the draft; only the human's key press sends it (G-VOX-06 exception)
+    if (turn.draftOnly) throw voiceRefusal('voice-speaker', 'an unverified turn only fills the draft: a human sends it (G-VOX-06)', { turnId: turn.turnId, cause: 'draft-only' });
     const g = this.#guards(turn, a);
     if (g) throw g;
     // TD-2026-10-20-125 (founder ruling): ambient speech NEVER sends itself. Only a push-to-talk claim (the human held
@@ -1238,6 +1364,7 @@ export class VoiceControl {
     this.#claims.delete(connId);
     this.#liveConn.delete(connId);
     this.#pendingWiden.delete(connId);
+    this.#originConsumed.delete(connId);
   }
 
   /** Daemon shutdown: the idle timer goes. */

@@ -29,6 +29,12 @@
  *     (`mode` other than exactly 'ptt', missing included: fail closed) marks the draft AMBIENT. An ambient draft never
  *     arms the ring and shows no hold control; only the composer's send (Enter / ⌘Enter / [send], a human key press) sends it. A misidentified voice can only fill
  *     the box, never act. PTT drafts keep the ring (the key hold was the human's gesture).
+ *   - Unverified voice (Dictate, the G-VOX-06 exception; founder bug 2026-10-21): a row the kernel stamped
+ *     `draftOnly: true` (an unverified speaker under a key send ceiling) fills the draft like any other, marked
+ *     `unverified`; the pill says so (UNVERIFIED_DRAFT_NOTE) and its transcript row reads "in composer · unverified
+ *     voice". Only the composer's send (Enter) sends it: the send-now key holds such a draft (HOTKEY_UNVERIFIED_NOTE),
+ *     the word, the piece ring and the countdown never send it, and a preset switch holds it (Aegis 2026-10-21). The
+ *     row is hash-only: its words come from status.voice.unverified (human class only), joined in by releaseTurnRows.
  *   - Never send words not shown (Aegis M3): an edit made while a send is in flight keeps hold and the edited text,
  *     and turns heard in flight append to it.
  *   - Send word (TD-2026-10-21-514, $send-by-word; the 'word' send policy): a turn whose WHOLE cleaned text is the held
@@ -56,6 +62,8 @@ export interface DraftPart {
   text: string;
   /** TD-2026-10-20-125: the turn was not a push-to-talk claim (ambient): the draft never auto-sends */
   ambient?: true;
+  /** Dictate (G-VOX-06 exception): the kernel stamped the turn draftOnly (an unverified voice): only Enter sends it */
+  unverified?: true;
 }
 
 export interface DictationState {
@@ -145,7 +153,8 @@ export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): Dic
  * speech (the voice app idle) or the piece reached PIECE_CAP_MS (it never grows past the cap).
  */
 export function pieceDue(s: DictationState, now: number): boolean {
-  if (s.policy !== 'pieces' || !s.parts.length || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
+  // Aegis 2026-10-21 (high): an unverified voice's words are never sent as a piece; only Enter sends them
+  if (s.policy !== 'pieces' || !s.parts.length || unverifiedDraft(s) || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
   const gap = s.activity === 'idle' && now - s.lastActivityAt >= PIECE_GAP_MS;
   const cap = s.pieceStartedAt !== null && now - s.pieceStartedAt >= PIECE_CAP_MS;
   return gap || cap;
@@ -159,7 +168,8 @@ export function pieceFraction(s: DictationState, now: number): number | null {
 
 /** The draft may be sent by the word now: a draft, visible ≥ SEND_WORD_VISIBLE_MS, page visible, focused, attached, idle. */
 export function wordReady(s: DictationState, now: number): boolean {
-  return hasDraft(s) && s.policy === 'word' && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
+  // Aegis 2026-10-21 (high): a draft holding an unverified voice's words is never sent by the word (a preset switch keeps the draft)
+  return hasDraft(s) && s.policy === 'word' && !unverifiedDraft(s) && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -169,12 +179,60 @@ export const hasDraft = (s: DictationState): boolean => s.text.trim().length > 0
 /** TD-2026-10-20-125: the draft holds ambient speech (never auto-sent; a key press sends it). */
 export const ambientDraft = (s: DictationState): boolean => s.parts.some((p) => p.ambient === true);
 
+/** Dictate: the kernel let an unverified voice into the draft only (voice.turn.user{draftOnly: true}). */
+export const draftOnlyTurn = (payload: unknown): boolean => obj(payload)?.draftOnly === true;
+/** The draft holds an unverified voice's words (only Enter sends it). */
+export const unverifiedDraft = (s: DictationState): boolean => s.parts.some((p) => p.unverified === true);
+
+/**
+ * Aegis 2026-10-21 privacy: a draftOnly row is HASH-ONLY in the log; its words reach the human class only through
+ * status.voice.unverified [{seq, hsid, text}] (kernel memory, never the log). seq → words.
+ */
+export function unverifiedTextsOf(status: unknown): Map<number, string> {
+  const list = obj(obj(status)?.voice)?.unverified;
+  const out = new Map<number, string>();
+  if (!Array.isArray(list)) return out;
+  for (const u of list.map(obj)) if (u && typeof u.seq === 'number' && Number.isSafeInteger(u.seq) && typeof u.text === 'string') out.set(u.seq, u.text);
+  return out;
+}
+/** a draftOnly row waits this long for its words (status.voice.unverified); then it goes on wordless: never a draft part */
+export const UNVERIFIED_WAIT_MS = 3_000;
+export interface QueuedTurnRow {
+  seq: number;
+  hsid: string | null;
+  payload: unknown;
+  /** when the row arrived (the wait runs from here) */
+  at: number;
+}
+/**
+ * The live voice.turn.user rows in arrival order, released to the reducer in that order: a draftOnly row without words
+ * waits (at most UNVERIFIED_WAIT_MS) for status.voice.unverified to carry them, and the rows behind it wait too, so the
+ * draft keeps the turns in order (the kernel hash-matches the parts in order). Every other row is released as it is.
+ */
+export function releaseTurnRows(queue: readonly QueuedTurnRow[], texts: ReadonlyMap<number, string>, now: number): { ready: QueuedTurnRow[]; rest: QueuedTurnRow[] } {
+  const ready: QueuedTurnRow[] = [];
+  let i = 0;
+  for (; i < queue.length; i++) {
+    const q = queue[i]!;
+    const p = obj(q.payload);
+    if (!p || p.draftOnly !== true || (typeof p.text === 'string' && p.text.trim())) {
+      ready.push(q);
+      continue;
+    }
+    const words = texts.get(q.seq);
+    if (words !== undefined) ready.push({ ...q, payload: { ...p, text: words } });
+    else if (now - q.at >= UNVERIFIED_WAIT_MS) ready.push(q); // wordless: turnText drops it (fail closed: never sent)
+    else break;
+  }
+  return { ready, rest: queue.slice(i) };
+}
+
 /** A voice.turn.user payload is a push-to-talk claim (exactly 'ptt'); anything else is ambient (fail closed). */
 export const pttTurn = (payload: unknown): boolean => obj(payload)?.mode === 'ptt';
 
 /** The ring may run now (a PTT-only draft, no hold, a delay, idle, not streaming, focused here, not sending). */
 export function armed(s: DictationState): boolean {
-  return hasDraft(s) && s.parts.length > 0 && s.policy === 'countdown' && !ambientDraft(s) && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
+  return hasDraft(s) && s.parts.length > 0 && s.policy === 'countdown' && !ambientDraft(s) && !unverifiedDraft(s) && !s.hold && s.attached !== null && s.attached === s.hsid && s.delayMs !== null && s.activity === 'idle' && !s.busy && s.focusedHere && !s.sending;
 }
 
 /** Re-derive the ring after an event: `reset` restarts it at the full delay when armed. */
@@ -255,7 +313,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
         if (m === 'near') return { ...n0, nearMiss: s.sendWord.text };
       }
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }), ...(draftOnlyTurn(e.payload) ? { unverified: true as const } : {}) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -291,7 +349,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       if (pieceDue(s, e.now)) return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'piece', turnSeqs: s.parts.map((p) => p.seq) } };
       // the send word's grace ran out: send with the claim (still ready: visible, focused, attached)
       if (s.grace && e.now - s.grace.startedAt >= SEND_WORD_GRACE_MS) {
-        if (!wordReady(s, e.now)) return { ...s, grace: null };
+        if (!wordReady(s, e.now) || unverifiedDraft(s)) return { ...s, grace: null };
         return { ...s, grace: null, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'word', turnSeq: s.grace.seq } };
       }
       if (!armed(s) || s.ringStartedAt === null || s.delayMs === null) return s;
@@ -303,7 +361,8 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
     case 'sendFailed':
       return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false, claim: null }, e.now, false); // never loop a refused send: wait for the human
     case 'setPolicy':
-      return settle({ ...s, policy: e.policy, sendWord: e.sendWord, grace: null, nearMiss: null, ...(e.policy === 'countdown' ? {} : { ringStartedAt: null }) }, e.now, true);
+      // Aegis 2026-10-21 (high): switching presets with an unverified voice in the draft holds it: only Enter sends it
+      return settle({ ...s, policy: e.policy, sendWord: e.sendWord, grace: null, nearMiss: null, ...(e.policy === 'countdown' ? {} : { ringStartedAt: null }), ...(unverifiedDraft(s) && e.policy !== s.policy ? { hold: true, holdBy: 'gui' as const } : {}) }, e.now, true);
     case 'painted':
       // stamped after paint (double rAF) only while visible + focused + attached; the first paint of this text wins
       if (!hasDraft(s) || s.visibleSince !== null || !s.pageVisible || !s.focusedHere || s.attached === null || s.attached !== s.hsid) return s;
@@ -312,8 +371,9 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return e.visible === s.pageVisible ? s : { ...s, pageVisible: e.visible, ...(e.visible ? {} : { visibleSince: null, grace: null }) };
     case 'sendNowKey':
       if (!hasDraft(s) || s.sending) return s;
-      // never send typed text on a key the voice app reports: an edited draft is held for Enter
-      if (s.edited) return { ...s, hold: true, holdBy: 'gui', hotkeyHeld: true, ringStartedAt: null };
+      // never send typed text on a key the voice app reports: an edited draft is held for Enter, and so is an unverified
+      // voice's draft (Dictate: the human's Enter is the authorization; the kernel refuses the claim too)
+      if (s.edited || unverifiedDraft(s)) return { ...s, hold: true, holdBy: 'gui', hotkeyHeld: true, ringStartedAt: null };
       return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), grace: null, claim: { by: 'hotkey' } };
     case 'graceCancel':
       return s.grace ? { ...s, grace: null, hold: true, holdBy: 'gui' } : s;
@@ -349,6 +409,9 @@ export function sendClaim(s: DictationState): { hsid: string; by: 'word'; turnSe
 }
 
 export const HOTKEY_EDITED_NOTE = 'Edited draft: press Enter to send';
+export const HOTKEY_UNVERIFIED_NOTE = 'Unverified voice in the draft: press Enter to send';
+/** Dictate: the draft holds words from a voice Gnomon did not verify as yours (read it before Enter). */
+export const UNVERIFIED_DRAFT_NOTE = 'draft · unverified voice · read it, then Enter sends';
 
 /** The `session.send` params the draft makes, or null (nothing, or no session). */
 export function sendRequest(s: DictationState): SendRequest | null {
@@ -407,14 +470,33 @@ export function draftState(s: DictationState): DraftState {
 
 export const draftControls = (s: DictationState): DraftControls => DRAFT_CONTROLS[draftState(s)];
 
+/** the longest quote of unverified words the note shows (a longer one ends in …; the full words go in the title) */
+export const UNVERIFIED_QUOTE_MAX = 48;
+/**
+ * Mika 2026-10-21: in a MIXED draft (verified and unverified parts, unedited) the unverified parts' words, joined in
+ * order: `short` (at most UNVERIFIED_QUOTE_MAX characters, … when cut) for the note, `full` for its title. null when the
+ * draft is all unverified (the plain note says it all), has none, or was edited (the parts no longer map to the text).
+ */
+export function unverifiedQuote(s: DictationState): { short: string; full: string } | null {
+  if (s.edited || !unverifiedDraft(s) || s.parts.every((p) => p.unverified === true)) return null;
+  const full = s.parts.filter((p) => p.unverified === true).map((p) => p.text).join(' ');
+  const chars = [...full];
+  return { short: chars.length > UNVERIFIED_QUOTE_MAX ? `${chars.slice(0, UNVERIFIED_QUOTE_MAX - 1).join('').trimEnd()}…` : full, full };
+}
+
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
   if (!s.focusedHere) return 'draft waiting';
   if (s.hold && s.holdBy === 'detached') return 'draft held · voice detached';
   if (s.grace) return WORD_GRACE_LINE;
-  if (s.hotkeyHeld) return HOTKEY_EDITED_NOTE;
+  if (s.hotkeyHeld) return !s.edited && unverifiedDraft(s) ? HOTKEY_UNVERIFIED_NOTE : HOTKEY_EDITED_NOTE;
   if (s.nearMiss) return `Did you say '${s.nearMiss}'? Say it again or press Enter`;
+  if (unverifiedDraft(s)) {
+    // the quiet marker (every policy). Mika: a MIXED draft names which words are unverified (quoted, truncated; full in title)
+    const q = unverifiedQuote(s);
+    return q ? `draft · unverified voice: “${q.short}” · read it, then Enter sends` : UNVERIFIED_DRAFT_NOTE;
+  }
   if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
   if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';
   if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE; // nothing counts down, so a hold means nothing here

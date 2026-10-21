@@ -23,9 +23,22 @@ describe('GnomonKernelLink (structural client)', () => {
       ['log.append', { kind: 'voice.turn.user', payload: { a: 1 } }],
     ]);
   });
+  it("the kernel's voice.turn.user verdict passes through: trialTake and draftOnly kept (only when exactly true)", async () => {
+    let reply: Record<string, unknown> = {};
+    const client: GnomonClientLike = { call: async () => reply, subscribe: async () => ({}), close: async () => undefined };
+    const link = new GnomonKernelLink(client);
+    reply = { seq: 3, forwardable: false, trialTake: true };
+    expect(await link.append('voice.turn.user', {})).toEqual({ seq: 3, forwardable: false, trialTake: true });
+    reply = { seq: 4, forwardable: true, draftOnly: true };
+    expect(await link.append('voice.turn.user', {})).toEqual({ seq: 4, forwardable: true, draftOnly: true });
+    reply = { seq: 5, forwardable: true, trialTake: 'yes', draftOnly: 1 };
+    expect(await link.append('voice.turn.user', {})).toEqual({ seq: 5, forwardable: true });
+  });
   it('no attachment ⇒ null; ns comes from p:<ns>/voice only', () => {
     expect(attachmentFromStatus({ voice: { attached: null } })).toBeNull();
     expect(attachmentFromStatus({})).toBeNull();
+    // Dictate: the V2a shape carries the send ceiling (status.voice.send) so the client knows when a turn may be draft-only
+    expect(attachmentFromStatus({ voice: { attached: true, hsid: 'hs:1', voiceSessionId: 'vs:1', ceiling: 'conversation', send: 'key' } })).toEqual({ hsid: 'hs:1', voiceSessionId: 'vs:1', mode: 'conversation', send: 'key' });
     expect(nsOf('p:abcd1234/voice')).toBe('abcd1234');
     expect(() => nsOf('p:abcd1234/human')).toThrow();
   });

@@ -10,6 +10,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { VOICE_MIN_VERIFY_SPEECH_MS } from '@a-company/gnomon-contracts';
 import type { SpeakerEngine } from './types.js';
 
 export const PRINT_SCHEMA = 'voicePrint:v1' as const;
@@ -61,8 +62,9 @@ export const GATE_FLOOR_DBFS = -55;
 export const GATE_PAUSE_MS = 200;
 /** frames kept at each side of a cut pause (the word's own decay and onset) */
 export const GATE_KEEP_FRAMES = 1;
-/** below this much gated speech an utterance is not verified (fail closed: unknown; calibration 2026-10-20) */
-export const MIN_VERIFY_SPEECH_MS = 1500;
+/** below this much gated speech an utterance is not verified (fail closed: unknown; calibration 2026-10-20). The
+ * kernel shares it (contracts VOICE_MIN_VERIFY_SPEECH_MS) to word a short turn's refusal "too short to check it's you". */
+export const MIN_VERIFY_SPEECH_MS = VOICE_MIN_VERIFY_SPEECH_MS;
 /** the live-words provisional match (display only, never forwarding) needs this much gated speech */
 export const MIN_PROVISIONAL_SPEECH_MS = 750;
 /** an enrolment phrase with less gated speech than this is not used (the recorder keeps listening) */

@@ -105,7 +105,9 @@ export function sendWordOf(status: unknown): SendWord | null {
 /** The transcript label of a sent turn, from its kernel-signed turn.sent payload (origin, sentBy, source). */
 export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | null {
   const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : null;
-  if (!o || (o.source !== 'voice' && o.origin !== 'voice')) return null;
+  if (!o || (o.source !== 'voice' && o.origin !== 'voice' && o.origin !== 'voice-unverified')) return null;
+  // Dictate (Aegis 2026-10-21): Enter sent words from a voice Gnomon did not verify: clamped like a voice-origin turn
+  if (o.origin === 'voice-unverified') return { label: 'spoken · unverified voice · sent by you', asksFirst: true };
   if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by send-now' : 'spoken · sent by send word', asksFirst: true };
   return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you', asksFirst: false };
 }
@@ -140,7 +142,7 @@ export function clampedFrom(rows: readonly { kind: string; session?: string | nu
   for (const r of rows) {
     if (r.session !== hsid) continue;
     const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
-    if (r.kind === 'turn.sent' && p?.origin === 'voice') open = true;
+    if (r.kind === 'turn.sent' && (p?.origin === 'voice' || p?.origin === 'voice-unverified')) open = true;
     else if (r.kind === 'turn.result' || r.kind === 'session.exited') open = false;
   }
   return open;

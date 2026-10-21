@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RefusedError } from '@a-company/gnomon-contracts';
+import { originOf, RefusedError } from '@a-company/gnomon-contracts';
 import { RunModeControl } from '../src/kernel/broker/index.js';
 import { voiceOriginConfirmRefusal } from '../src/kernel/broker/broker.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
@@ -133,6 +133,24 @@ describe.skipIf(!SANDBOX_OK)('G-VOX-17 the voice-origin clamp in a live session 
   }, 40_000);
 });
 
+describe.skipIf(!SANDBOX_OK)('G-VOX-17 Dictate: an Enter send holding an unverified voice is clamped (origin voice-unverified)', () => {
+  it('the in-root Edit cards with the unverified line; read-only Bash passes; turn.sent says voice-unverified', async () => {
+    const r = clampRig();
+    await r.control.request(ASK_GUI, { repo: r.repo, to: 'auto-edits' }).then((o) => r.approve((o as { cardId: string }).cardId, 'allow'));
+    const req = (id: string, tool: string, input: Record<string, unknown>) => ({ request: { id, tool, input } });
+    setMode(w, { permissionAsk: { steps: [req('e1', 'Write', { file_path: path.join(w.cwd, 'u.txt'), content: 'u' }), req('ro', 'Bash', { command: 'ls -la', description: 'look' })], hold: false } });
+    const s = (await r.port.open({ principal: HUMAN, principalClass: 'human', connId: 'conn:gui', credential: 'gui' }, { cwd: w.cwd, attended: true })) as { hsid: string };
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'make the change', voiceOrigin: { sentBy: 'unverified' } });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'ro') && r.pending().length >= 1, 10_000)).toBe(true);
+    expect(r.kinds('turn.sent').at(-1)).toMatchObject({ origin: 'voice-unverified', sentBy: 'unverified' });
+    expect(r.answers().find((a) => a.id === 'ro')).toMatchObject({ behavior: 'allow' });
+    const cards = r.pending();
+    expect(cards).toHaveLength(1);
+    expect(JSON.stringify(cards[0]!.block)).toContain('Asked during a turn holding words from a voice Gnomon did not verify as yours. Check this was you.');
+    for (const c of cards) await r.approve(c.cardId, 'deny');
+  }, 40_000);
+});
+
 describe.skipIf(!SANDBOX_OK)('Aegis M-3 live fold (fake claude foldPairs): a voice turn folded behind a hand turn', () => {
   it('is clamped while it runs inside the hand turn, and closes only with the shared result after its replay', async () => {
     const r = clampRig();
@@ -195,6 +213,17 @@ describe('G-VOX-17 (pure): the clamp book', () => {
     expect(voiceClampLine('word')).toBe('Asked during a voice-sent turn (sent by send word). Check this was you.');
     expect(plan.lines).toEqual(['Edit a.ts']); // the plan itself is not mutated
   });
+  it("Dictate: an 'unverified' Enter send opens the clamp like a voice-origin one, with its own card line", () => {
+    const b = new VoiceClampBook();
+    b.sent('u1', 'unverified');
+    expect(b.active()).toBe('unverified');
+    b.replayed('u1');
+    b.closed(['u1']);
+    expect(b.active()).toBeNull();
+    const shown = withVoiceOrigin({ detail: { tool: 'Edit' }, lines: ['Edit a.ts'], block: {} }, 'unverified');
+    expect(shown.detail).toEqual({ tool: 'Edit', origin: 'voice', sentBy: 'unverified' }); // origin voice: the G-VOX-19 readback rule applies
+    expect(voiceClampLine('unverified')).toBe('Asked during a turn holding words from a voice Gnomon did not verify as yours. Check this was you.');
+  });
   it('pieces are numbered from the last non-piece turn', () => {
     const b = new VoiceClampBook();
     expect(b.nextPiece()).toBe(1);
@@ -218,6 +247,11 @@ describe('G-VOX-18: every approval.auto modeRef is enumerated and clamped unless
     expect(new Set(named)).toEqual(new Set(['roRef']));
     const all = ['mode:auto-edits', 'rule:card:01HZZZZZZZZZZZZZZZZZZZZZZZZ', READ_ONLY_MODE_REF, READ_ONLY_ASK_MODE_REF];
     for (const ref of all) expect(clampAllows(ref)).toBe(ref.endsWith(':read-only'));
+  });
+  it("the turn.sent origin is stamped from sentBy: 'unverified' is voice-unverified (clamped), never hand", () => {
+    expect(src).toContain("origin: sentBy === 'unverified' ? 'voice-unverified' : sentBy !== null ? 'voice' : 'hand'");
+    expect(originOf('unverified')).toBe('voice-unverified');
+    for (const ref of ['mode:auto-edits', 'rule:card:x']) expect(clampAllows(ref)).toBe(false); // the clamp is the same whatever the sentBy
   });
   it('a modeRef added later is clamped by default', () => {
     for (const ref of ['mode:future', 'standing:x', 'rule:', '', 'mode:auto-edits:read-only-ish', 'mode:read-only']) expect(clampAllows(ref)).toBe(false);

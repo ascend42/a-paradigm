@@ -151,6 +151,11 @@ export interface VoiceAttachment {
   hsid: string;
   /** the human's ceiling, as the kernel names it ('ptt' | 'conversation' in V1; V2a may add 'ambient') */
   mode: string;
+  /**
+   * TD-2026-10-21-514: the attachment's send ceiling (status.voice.send: 'key' | 'word' | 'pieces'), when reported.
+   * Dictate is an ambient ceiling with send 'key': an unverified turn's text may go to the kernel for the draft.
+   */
+  send?: string;
 }
 
 export interface KernelRow {
@@ -174,6 +179,8 @@ export interface AppendResult {
   refusedCause?: string;
   /** the kernel counted this turn as a take of the word being taught (never forwardable) */
   trialTake?: boolean;
+  /** Dictate: the kernel accepted an UNVERIFIED speaker's turn into the draft only (a human's Enter sends it) */
+  draftOnly?: boolean;
 }
 
 export interface KernelLink {

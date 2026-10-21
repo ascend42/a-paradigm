@@ -95,7 +95,8 @@ describe('#gnomon-voice V1 forwarding guards (§14.7)', () => {
     expect(await refusal(r.userTurn({ receivedAt: 1 }))).toMatchObject({ code: 'BAD_REQUEST' });
     expect(await refusal(r.send('run the tests', { permitId: 'pm:x' }))).toMatchObject({ code: 'BAD_REQUEST' });
   });
-  it('G-VOX-06: an unenrolled turn is logged but refused voice-speaker', async () => {
+  // G-VOX-06 has one exception, Dictate (conversation × key: the draft only, Enter sends): voice-dictate-unverified.test.ts
+  it('G-VOX-06: an unenrolled turn is logged but refused voice-speaker (outside the Dictate draft exception)', async () => {
     const r = rig();
     await r.attach();
     await r.userTurn({ speakerId: 'spk:unknown-2', speakerEnrolled: false });

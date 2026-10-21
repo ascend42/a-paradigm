@@ -521,12 +521,16 @@ components:
       Voice capture x send policy (TD-2026-10-21-514, spec §14.7 "Voice
       submodes"), pure and frozen, NOT a clientApiId input: CAPTURE_KINDS
       ptt|open|toggle, SEND_POLICIES key|countdown|word|pieces, SENT_BY
-      key|release|word|piece, VOICE_ORIGINS hand|voice, VOICE_PRESETS (Talk
+      key|release|word|piece, VOICE_ORIGINS hand|voice|voice-unverified
+      (VOICE_SENT_BY adds 'unverified': a Dictate Enter send holding an
+      unverified voice's words, clamped), VOICE_PRESETS (Talk
       ptt x countdown, Dictate, Send word, Pieces), validPair (a countdown is
       never valid with ambient capture; word and pieces need ambient
       capture), originOf, presetOf, the liability-ack text and the timing
       constants (visible 1 s, grace 1 s, claim TTL 5 s, word age 30 s, short
-      word 1500 ms, adjacency 2 s, piece gap 1500 / cap 8000 ms).
+      word 1500 ms, adjacency 2 s, piece gap 1500 / cap 8000 ms), and
+      VOICE_MIN_VERIFY_SPEECH_MS (the speaker check's gated-speech floor,
+      shared by the voice app and the kernel's too-short refusal cause).
     path: src/voice-modes.ts
     type: module
     tags: [gnomon, contracts, voice, paradigm-8]

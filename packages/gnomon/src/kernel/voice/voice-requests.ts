@@ -142,6 +142,12 @@ export function voiceStatusFor(voice: Record<string, unknown>, credential: strin
     const { sendWord: _hidden, sendWordTrial: _trial, ...rest } = voice;
     voice = rest;
   }
+  // Dictate (Aegis re-check 2026-10-21): an unverified voice's draft words reach a human on the gui credential only
+  // (never device, CLI, read token or another class); the dispatcher adds them per viewer (VoiceControl.unverifiedFor)
+  if ('unverified' in voice && !(cls === 'human' && credential === 'gui')) {
+    const { unverified: _unverified, ...rest } = voice;
+    voice = rest;
+  }
   const c = voice.capture as Record<string, unknown> | null | undefined;
   if (!c || typeof c !== 'object') return voice;
   const allowed = cls === 'human' && credential === 'gui' ? CAPTURE_GUI_KEYS : CAPTURE_STATUS_KEYS;

@@ -44,12 +44,18 @@ export type SendPolicy = (typeof SEND_POLICIES)[number];
 export const SENT_BY = Object.freeze(['key', 'release', 'word', 'piece', 'hotkey'] as const);
 export type SentBy = (typeof SENT_BY)[number];
 
-/** The kernel-stamped origin of every turn.sent. */
-export const VOICE_ORIGINS = Object.freeze(['hand', 'voice'] as const);
+/**
+ * The kernel-stamped origin of every turn.sent. `voice-unverified` (Dictate, the G-VOX-06 exception; Aegis 2026-10-21):
+ * a human's Enter sent words from a voice the kernel did not verify (a draftOnly turn): clamped like `voice`.
+ */
+export const VOICE_ORIGINS = Object.freeze(['hand', 'voice', 'voice-unverified'] as const);
 export type VoiceOrigin = (typeof VOICE_ORIGINS)[number];
 
-/** The sentBy values the kernel stamps on a voice-origin turn (request.voice.send.claim{by}). */
-export const VOICE_SENT_BY = Object.freeze(['word', 'piece', 'hotkey'] as const);
+/**
+ * The sentBy values the kernel stamps on a voice-origin turn (request.voice.send.claim{by}), plus `unverified`: the
+ * human's Enter sent a draft holding an unverified voice's words (origin `voice-unverified`; the clamp applies).
+ */
+export const VOICE_SENT_BY = Object.freeze(['word', 'piece', 'hotkey', 'unverified'] as const);
 export type VoiceSentBy = (typeof VOICE_SENT_BY)[number];
 
 export const VOICE_PRESETS = Object.freeze({
@@ -83,7 +89,7 @@ export function validPair(capture: unknown, send: unknown): boolean {
 
 /** The origin a sentBy implies (unknown values are hand: the kernel stamps voice only from its own claim). */
 export function originOf(sentBy: unknown): VoiceOrigin {
-  return sentBy === 'word' || sentBy === 'piece' || sentBy === 'hotkey' ? 'voice' : 'hand';
+  return sentBy === 'word' || sentBy === 'piece' || sentBy === 'hotkey' ? 'voice' : sentBy === 'unverified' ? 'voice-unverified' : 'hand';
 }
 
 /** The preset a pair is, or null for a custom pair. */
@@ -111,6 +117,12 @@ export const SEND_WORD_CLAIM_MAX_AGE_MS = 30_000;
 export const SEND_CLAIM_TTL_MS = 5_000;
 /** short words by adjacency: below this a segment is not speaker-verified; the word must start within ADJ of the speaker */
 export const SEND_WORD_SHORT_MS = 1500;
+/**
+ * Below this much GATED speech (voice.turn.user{gatedSpeechMs}) the voice app's speaker check refuses to verify
+ * (fail closed: unknown; calibration 2026-10-20). The voice app's MIN_VERIFY_SPEECH_MS is this value; the kernel uses it
+ * to say "too short to check it's you" (refusedCause 'too-short') rather than "speaker not recognised".
+ */
+export const VOICE_MIN_VERIFY_SPEECH_MS = 1500;
 export const SEND_WORD_ADJACENT_MS = 2000;
 /** pieces: a gap this long closes a piece; a piece never grows past the cap */
 export const PIECE_GAP_MS = 1500;

@@ -19,11 +19,12 @@ afterEach(async () => {
   clients = [];
 });
 
-async function setup(o: { mode?: ClientMode; attachMode?: string; texts?: string[]; delivery?: Delivery } = {}) {
+async function setup(o: { mode?: ClientMode; attachMode?: string; send?: string; texts?: string[]; delivery?: Delivery } = {}) {
   const audio = new FakeAudioIO();
   const engines = stubEngines(o.texts ?? []);
   const link = new FakeLink();
   if (o.attachMode) link.att = { ...link.att!, mode: o.attachMode };
+  if (o.send) link.att = { ...link.att!, send: o.send };
   const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], ...(o.mode ? { mode: o.mode } : {}), ...(o.delivery ? { delivery: o.delivery } : {}), now: () => audio.clock });
   clients.push(client);
   await client.start();
@@ -160,5 +161,41 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
       expect(turns.map((t) => t.payload), delivery).toEqual([expect.objectContaining({ mode: 'conversation', speakerEnrolled: true, forwarded: false, text: 'delete the branch' })]);
       expect(link.sends, delivery).toEqual([]); // (a PTT turn under direct still sends: the test above)
     }
+  });
+});
+
+describe('Dictate, the G-VOX-06 exception (founder bug 2026-10-21): an unverified voice fills the draft', () => {
+  const unknown = (audio: FakeAudioIO): void => {
+    audio.captureWav(toneWav(700, 0.2)); // the stub speaker: a quiet tone is nobody enrolled
+    audio.silence(400);
+  };
+  it('under Dictate (ambient × key) an unverified turn carries its text; a draftOnly verdict ends captured, never sent', async () => {
+    const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', send: 'key', texts: ['fix the flaky test'] });
+    link.turnVerdict = { draftOnly: true };
+    unknown(audio);
+    await client.idle();
+    const turns = link.appends.filter((a) => a.kind === 'voice.turn.user');
+    expect(turns.map((t) => t.payload)).toEqual([expect.objectContaining({ speakerId: 'spk:unknown-1', speakerEnrolled: false, forwarded: false, text: 'fix the flaky test', mode: 'conversation' })]);
+    expect(turns[0]!.payload).not.toHaveProperty('textWithheld');
+    expect(link.capture.filter((c) => c.state === 'captured' || c.state === 'dropped').map((c) => c.state)).toEqual(['captured']);
+    expect(link.sends).toEqual([]);
+  });
+  it('under Send word or Pieces (or no reported send ceiling) an unverified turn stays withheld and dropped', async () => {
+    for (const send of ['word', 'pieces', undefined]) {
+      const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', ...(send ? { send } : {}), texts: ['secret words'] });
+      unknown(audio);
+      await client.idle();
+      expect(link.appends[0]!.payload, String(send)).toMatchObject({ speakerEnrolled: false, text: '', textWithheld: true });
+      expect(JSON.stringify(link.appends)).not.toContain('secret words');
+      expect(link.capture.at(-1), String(send)).toMatchObject({ state: 'dropped', reason: 'not-enrolled' });
+    }
+  });
+  it("a refusal with cause too-short ends dropped as refused{voice-speaker, too-short} (\"too short to check it's you\")", async () => {
+    const { audio, link, client } = await setup({ texts: ['hi'] });
+    link.turnVerdict = { refused: 'voice-speaker', refusedCause: 'too-short' };
+    ptt(audio, 800, 0.2);
+    await client.idle();
+    expect(link.capture.at(-1)).toMatchObject({ state: 'dropped', reason: 'refused', refusal: 'voice-speaker', cause: 'too-short' });
+    expect(link.sends).toEqual([]);
   });
 });
