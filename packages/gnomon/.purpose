@@ -2222,7 +2222,13 @@ components:
       once; a reply's end is attributed to the oldest outstanding turn not
       yet evaluated (an interleaved stream no longer loses the next turn's
       offer); "others" counts only outstanding turns still streaming (not yet
-      evaluated); turn.result keeps the text of a newer turn's message. Pause
+      evaluated); turn.result keeps the text of a newer turn's message.
+      Review R2: a message_delta end_turn is evaluated at its message_stop; a
+      new main-chain message in an evaluated turn before its turn.result (a
+      Stop-hook continuation) or a blocking Stop hook_response retires the
+      shown offer and re-opens the turn; replay lines (isReplay) mark turns
+      started, so the stream's turn is exact and a turn folded into a later
+      one settles without a row. Pause
       and mute stop offers at once; removing the server applies to new
       sessions. CLI
       `gnomon desk stats` (src/cli/desk-cli.ts) folds shown/suppressed (by

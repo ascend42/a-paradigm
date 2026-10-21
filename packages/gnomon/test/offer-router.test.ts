@@ -461,7 +461,9 @@ describe('#offer-router: offer.suppressed is a kernel log row (T-2026-10-21-006,
     const t = rig({ pending: true });
     t.r.observe({ kind: 'turn.sent', principal: KERNEL, session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1` } });
     t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: assistantLineOf(offerReply('a', BLOCK)) } });
-    const rows = t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: messageDeltaLine('end_turn') } });
+    // review R2: the message_delta end_turn defers the evaluation to its message_stop
+    expect(t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: messageDeltaLine('end_turn') } })).toEqual([]);
+    const rows = t.r.observe({ kind: 'turn.event', principal: KERNEL, session: HSID, payload: { line: messageStopLine() } });
     expect(rows).toEqual([{ kind: 'offer.suppressed', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1`, why: 'pending-card', name: BLOCK.mod, offerKind: BLOCK.kind } }]);
     expect(validateKindPayload('offer.suppressed', rows[0]!.payload)).toEqual([]);
     // the committed row folds into nothing (it is not a router input)
@@ -583,5 +585,65 @@ describe('#offer-router: an interleaved stream (review R1)', () => {
     t.commit(sent(3)); // still streaming when turn 2 ends: that one does suppress
     reply(t, 'msg_2', offerReply('Here.', BLOCK));
     expect(t.suppressed.at(-1)).toEqual({ hsid: HSID, turn: `turn:${HSID}/2`, why: 'turn-streaming', name: BLOCK.mod, offerKind: BLOCK.kind });
+  });
+});
+
+describe('#offer-router: a Stop-hook continuation replaces the evaluation (review R2)', () => {
+  const ev = (line: string): CommittedRow => ({ kind: 'turn.event', session: HSID, payload: { hsid: HSID, line } });
+  const sent = (k: number): CommittedRow => ({ kind: 'turn.sent', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}` } });
+  const resultOf = (k: number): CommittedRow => ({ kind: 'turn.result', session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/${k}`, subtype: 'success', isError: false } });
+  const replayOf = (text: string): string => JSON.stringify({ type: 'user', isReplay: true, parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'text', text }] } });
+  const reply = (t: ReturnType<typeof rig>, id: string, text: string): RouterRow[] => [
+    ...t.commit(ev(messageStartLine(id))),
+    ...t.commit(ev(assistantLineOf(text, { id }))),
+    ...t.commit(ev(messageDeltaLine('end_turn'))),
+    ...t.commit(ev(messageStopLine())),
+  ];
+  it('the end_turn evaluation runs at message_stop, not at message_delta', () => {
+    const t = rig();
+    t.commit(sent(1));
+    t.commit(ev(messageStartLine('msg_1')));
+    t.commit(ev(assistantLineOf(offerReply('a', BLOCK), { id: 'msg_1' })));
+    expect(t.commit(ev(messageDeltaLine('end_turn')))).toEqual([]);
+    expect(t.commit(ev(messageStopLine())).map((r) => r.kind)).toEqual(['offer.shown']);
+  });
+  for (const withReplays of [true, false]) {
+    it(`a continuation message before turn.result retires the shown offer and its own end is evaluated (${withReplays ? 'replay lines' : 'no replay lines'})`, async () => {
+      const t = rig();
+      t.commit(sent(1));
+      if (withReplays) t.commit(ev(replayOf('hi')));
+      const first = reply(t, 'msg_1', offerReply('a', BLOCK));
+      expect(first.map((r) => r.kind)).toEqual(['offer.shown']);
+      const stale = first[0]!.payload.offerId as string;
+      // the Stop hook blocked: Claude continues in the same turn
+      const second = reply(t, 'msg_2', 'Fixed the purpose file.');
+      expect(second).toEqual([]);
+      expect(t.suppressed).toEqual([{ hsid: HSID, turn: `turn:${HSID}/1`, why: 'no-block' }]);
+      expect(t.commit(resultOf(1))).toEqual([]);
+      await expect(t.r.decide(GUI, { offerId: stale, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'superseded' } } });
+    });
+  }
+  it('a Stop hook block line retires the offer at once', async () => {
+    const t = rig();
+    t.commit(sent(1));
+    const first = reply(t, 'msg_1', offerReply('a', BLOCK));
+    t.commit(ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', exit_code: 2, outcome: 'error' })));
+    await expect(t.r.decide(GUI, { offerId: first[0]!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'superseded' } } });
+  });
+  it('with replay lines, a queued message folded mid-turn settles the earlier turn without a row; the reply is evaluated for the folded-in turn', () => {
+    const t = rig();
+    t.commit(sent(3));
+    t.commit(ev(replayOf('check')));
+    t.commit(ev(messageStartLine('msg_a')));
+    t.commit(ev(assistantLineOf('Running it.', { id: 'msg_a' })));
+    t.commit(ev(messageDeltaLine('tool_use')));
+    t.commit(ev(messageStopLine()));
+    t.commit(sent(4));
+    t.commit(ev(replayOf('so what happened?'))); // folded into turn 3
+    const rows = reply(t, 'msg_b', offerReply('Here is what happened.', BLOCK));
+    expect(rows.map((r) => r.kind)).toEqual(['offer.shown']);
+    expect(rows[0]!.payload.replyTurnId).toBe(`turn:${HSID}/4`);
+    expect(t.commit(resultOf(4))).toEqual([]);
+    expect(t.suppressed).toEqual([]);
   });
 });

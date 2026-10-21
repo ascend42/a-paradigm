@@ -11,7 +11,13 @@
  *      or an assistant line carrying stop_reason; parent_tool_use_id null). T-2026-10-21-006: this is the moment, not
  *      turn.result, which Claude Code can emit ~30 s later, after the human already sent the next turn. A tool_use
  *      stop never evaluates; a sub-agent's message (parent_tool_use_id set) is never the reply. turn.result is the
- *      fallback only for a turn whose end was not seen (no partial messages, max_tokens). The text of the FINAL
+ *      fallback only for a turn whose end was not seen (no partial messages, max_tokens). Review R2: a message_delta
+ *      end_turn is evaluated at that message's message_stop (an assistant line carrying end_turn, with no partial
+ *      stream, at once); a new main-chain message in the same turn before its turn.result (a Stop-hook continuation),
+ *      or a Stop hook_response that blocked, retires the turn's shown offer and the continuation's own end is
+ *      evaluated instead. Review R1: the end belongs to the turn the stream is in (with replay lines, the newest turn
+ *      Claude Code consumed; else the oldest outstanding turn not yet evaluated); a turn folded into a later one
+ *      (its replay came first) settles without a row. turn.result{turn} closes every turn up to it. The text of the FINAL
  *      assistant message of the turn (its text blocks, joined by a blank line) is parsed with offerBlockOf (S0, the
  *      one parser shared with the GUI). No block, two blocks, or a malformed block ⇒ nothing (the reply is plain text).
  *   2. BUDGET: at most one per reply (each turn is evaluated exactly once: at its end, or at turn.result if its end
@@ -136,6 +142,10 @@ interface OfferState {
 interface TurnRec {
   id: string;
   evaluated: boolean;
+  /** review R2: Claude Code consumed it (its message came back as a replay line) */
+  started: boolean;
+  /** review R2: the offer shown for it (a Stop-hook continuation retires it and the turn is evaluated again) */
+  offer: string | null;
 }
 
 interface SessionState {
@@ -149,6 +159,10 @@ interface SessionState {
   msgId: string | null;
   /** review R1: the turn the current message belongs to (turn.result keeps the text of a newer turn's message) */
   msgTurn: string | null;
+  /** review R2: the current message stopped with end_turn (message_delta); evaluated at its message_stop */
+  ended: boolean;
+  /** review R2: a replay line was seen in this session (started marks are trustworthy) */
+  replays: boolean;
   muted: Set<string>;
   stopped: boolean;
   latest: string | null;
@@ -171,6 +185,14 @@ interface ChainLine {
   text: string | null;
   /** the message's stop_reason, when this line carries it (message_delta, or an assistant line) */
   stop: string | null;
+  /** review R2: where the stop came from: an assistant line (no message_stop follows) or the stream's message_delta */
+  stopFrom?: 'assistant' | 'delta';
+  /** review R2: message_stop (the deferred end_turn evaluation runs here) */
+  messageStop?: boolean;
+  /** review R2: a replayed human message (isReplay): Claude Code consumed the next outstanding turn */
+  replay?: boolean;
+  /** review R2: a Stop hook blocked the stop (the turn continues) */
+  hookBlock?: boolean;
 }
 
 function chainLine(line: string): ChainLine | null {
@@ -181,11 +203,22 @@ function chainLine(line: string): ChainLine | null {
     return null;
   }
   if (!isObj(o) || (o.parent_tool_use_id !== undefined && o.parent_tool_use_id !== null)) return null;
+  if (o.type === 'user') {
+    if (o.isReplay !== true) return null;
+    const m = isObj(o.message) ? o.message : {};
+    const c = m.content;
+    const text = typeof c === 'string' ? c.trim().length > 0 : Array.isArray(c) && c.some((b) => isObj(b) && b.type === 'text') && !c.some((b) => isObj(b) && b.type === 'tool_result');
+    return text ? { msgId: null, start: false, text: null, stop: null, replay: true } : null;
+  }
+  if (o.type === 'system' && o.subtype === 'hook_response' && o.hook_event === 'Stop') {
+    const blocked = o.exit_code === 2 || o.decision === 'block' || (typeof o.outcome === 'string' && /block/i.test(o.outcome));
+    return blocked ? { msgId: null, start: false, text: null, stop: null, hookBlock: true } : null;
+  }
   if (o.type === 'assistant') {
     const m = isObj(o.message) ? o.message : {};
     const content = Array.isArray(m.content) ? (m.content as unknown[]) : [];
     const t = content.filter((b) => isObj(b) && b.type === 'text' && typeof b.text === 'string').map((b) => (b as { text: string }).text);
-    return { msgId: typeof m.id === 'string' ? m.id : null, start: false, text: t.length ? t.join('\n\n') : null, stop: typeof m.stop_reason === 'string' ? m.stop_reason : null };
+    return { msgId: typeof m.id === 'string' ? m.id : null, start: false, text: t.length ? t.join('\n\n') : null, stop: typeof m.stop_reason === 'string' ? m.stop_reason : null, stopFrom: 'assistant' };
   }
   if (o.type !== 'stream_event' || !isObj(o.event)) return null;
   const ev = o.event;
@@ -194,8 +227,9 @@ function chainLine(line: string): ChainLine | null {
     return { msgId: typeof m.id === 'string' ? m.id : null, start: true, text: null, stop: null };
   }
   if (ev.type === 'message_delta' && isObj(ev.delta) && typeof ev.delta.stop_reason === 'string') {
-    return { msgId: null, start: false, text: null, stop: ev.delta.stop_reason };
+    return { msgId: null, start: false, text: null, stop: ev.delta.stop_reason, stopFrom: 'delta' };
   }
+  if (ev.type === 'message_stop') return { msgId: null, start: false, text: null, stop: null, messageStop: true };
   return null;
 }
 
@@ -225,7 +259,7 @@ export class OfferRouter {
     let s = this.#sessions.get(hsid);
     if (!s) {
       if (this.#sessions.size >= MAX_SESSIONS) this.#sessions.delete(this.#sessions.keys().next().value!);
-      s = { exited: false, turns: [], texts: [], msgId: null, msgTurn: null, muted: new Set(), stopped: false, latest: null, calls: new Map() };
+      s = { exited: false, turns: [], texts: [], msgId: null, msgTurn: null, ended: false, replays: false, muted: new Set(), stopped: false, latest: null, calls: new Map() };
       this.#sessions.set(hsid, s);
     } else {
       // LRU: a touched session moves to the back of the eviction order
@@ -330,13 +364,15 @@ export class OfferRouter {
         s.texts = [];
         s.msgId = null;
         s.msgTurn = null;
+        s.ended = false;
+        s.replays = false;
         return [];
       }
     }
     if (!hsid) return [];
     const s = this.#s(hsid);
     if (e.kind === 'turn.sent') {
-      if (typeof p.turn === 'string') s.turns.push({ id: p.turn, evaluated: false });
+      if (typeof p.turn === 'string') s.turns.push({ id: p.turn, evaluated: false, started: false, offer: null });
       s.latest = null; // L1: a new turn retires the shown offer (the kernel is as strict as the GUI)
       return [];
     }
@@ -345,15 +381,42 @@ export class OfferRouter {
       const out = this.#kept(hsid, s, p.line);
       const c = chainLine(p.line);
       if (!c) return out;
+      if (c.replay) {
+        // review R2: Claude Code consumed the next outstanding turn; an earlier started turn whose reply has not ended
+        // was FOLDED into this one (one reply answers both): it is settled without a row
+        s.replays = true;
+        const next = s.turns.find((t) => !t.started);
+        if (next) {
+          for (const t of s.turns) {
+            if (t === next) break;
+            if (t.started && !t.evaluated) t.evaluated = true;
+          }
+          next.started = true;
+        }
+        return out;
+      }
+      if (c.hookBlock) {
+        // review R2: a Stop hook blocked the stop: the turn continues, its offer (if one was shown) is retired
+        this.#reopen(s, s.turns.find((t) => t.id === s.msgTurn));
+        return out;
+      }
       if (c.start || (c.msgId !== null && c.msgId !== s.msgId)) {
         // a new main-chain message: only the FINAL message of the turn is the reply
         s.texts = [];
         s.msgId = c.msgId;
-        s.msgTurn = this.#streamTurn(s)?.id ?? null;
+        s.ended = false;
+        const rec = this.#streamTurn(s);
+        s.msgTurn = rec?.id ?? null;
+        // review R2: a new message in a turn already evaluated (a Stop-hook continuation, before its turn.result)
+        // replaces that evaluation: its offer is retired and the continuation's own end is evaluated
+        this.#reopen(s, rec);
       }
       if (c.text !== null && s.texts.reduce((n, t) => n + t.length, 0) + c.text.length <= MAX_TURN_TEXT) s.texts.push(c.text);
-      // T-2026-10-21-006: the reply ended (end_turn, not tool_use) ⇒ evaluate now, once, for the turn it belongs to
-      if (c.stop === 'end_turn') {
+      // T-2026-10-21-006 + review R2: the reply ended (end_turn, not tool_use). An assistant line carrying it (no partial
+      // stream) evaluates now; the stream's message_delta defers to its message_stop. Once per turn.
+      if (c.stop === 'end_turn' && c.stopFrom === 'delta') s.ended = true;
+      if ((c.stop === 'end_turn' && c.stopFrom === 'assistant') || (c.messageStop && s.ended)) {
+        s.ended = false;
         const row = this.#evaluate(hsid, s, s.msgTurn ?? this.#streamTurn(s)?.id ?? null);
         if (row) out.push(row);
       }
@@ -372,6 +435,7 @@ export class OfferRouter {
       s.texts = [];
       s.msgId = null;
       s.msgTurn = null;
+      s.ended = false;
     }
     if (!last || closed.some((t) => t.evaluated)) return [];
     // review R4: an errored or interrupted turn (isError, or a subtype other than success) offers nothing, writes no row
@@ -382,11 +446,24 @@ export class OfferRouter {
     return row ? [row] : [];
   }
 
+  /** review R2: re-open an evaluated turn (a Stop-hook continuation): retire its offer so it is no longer decidable. */
+  #reopen(s: SessionState, rec: TurnRec | undefined): void {
+    if (!rec || !rec.evaluated) return;
+    if (rec.offer !== null && s.latest === rec.offer) s.latest = null;
+    rec.offer = null;
+    rec.evaluated = false;
+  }
+
   /**
    * review R1: the turn the stream is in: the oldest outstanding turn not yet evaluated (an interleaved stream can end
    * the next turn's reply before the previous turn's turn.result), else the oldest outstanding.
    */
   #streamTurn(s: SessionState): TurnRec | undefined {
+    // review R2: with replay lines, the stream is in the newest turn Claude Code consumed (exact)
+    if (s.replays) {
+      const started = s.turns.filter((t) => t.started);
+      if (started.length) return started[started.length - 1];
+    }
     return s.turns.find((t) => !t.evaluated) ?? s.turns[0];
   }
 
@@ -400,7 +477,9 @@ export class OfferRouter {
     const rec = turn === null ? undefined : s.turns.find((t) => t.id === turn);
     if (!rec || rec.evaluated) return null;
     rec.evaluated = true;
-    return this.#offerFor(hsid, s.texts.join('\n\n'), rec.id, this.#streaming(s, rec));
+    const row = this.#offerFor(hsid, s.texts.join('\n\n'), rec.id, this.#streaming(s, rec));
+    if (row?.kind === 'offer.shown') rec.offer = row.payload.offerId as string;
+    return row;
   }
 
   /** The handoff tool's full names on the mod's OWN servers added to THIS session (serverNameOf; H1b). */
