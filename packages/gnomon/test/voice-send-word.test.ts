@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RefusedError } from '@a-company/gnomon-contracts';
+import { RefusedError, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { VoiceControl, type VoiceAppendRow, type VoicePresenceRequest } from '../src/kernel/voice/voice-control.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
 import { cachedSendWordSource, parseSendWordRequest, readSendWord, sendWordPath, writeSendWord } from '../src/kernel/voice/send-word-store.js';
@@ -42,7 +42,7 @@ function rig(o: { level?: string | null } = {}) {
   const port = createSessionPort(sup as never, undefined, v);
   const human = (connId = 'conn:H1') => ({ connId, principal: HUMAN, principalClass: 'human', credential: 'gui' });
   const vc = { connId: 'conn:V', principal: VOICE };
-  const attach = (send: 'key' | 'word' | 'pieces' = 'word', connId = 'conn:H1') => v.humanAppend(human(connId), 'voice.session.start', { hsid: HSID, mode: 'conversation', send });
+  const attach = (send: 'key' | 'word' | 'pieces' = 'word', connId = 'conn:H1') => v.humanAppend(human(connId), 'voice.session.start', { hsid: HSID, mode: 'conversation', send, ...(send !== 'key' ? { liabilityAck: VOICE_LIABILITY_ACK_HASH } : {}) });
   let n = 0;
   const turn = async (text: string, p: Record<string, unknown> = {}) => {
     const r = (await v.voiceAppend(vc, { kind: 'voice.turn.user', payload: { turnId: String(++n), speakerId: SPK, speakerEnrolled: true, forwarded: false, t0: clock.t - 2000, t1: clock.t, text, mode: 'conversation', aec: 'vpio', ...p } })) as Record<string, unknown>;
@@ -224,6 +224,18 @@ describe('G-VOX-21 pieces', () => {
     const r1 = rig({ level: 'L1' });
     await r1.attach('pieces');
     expect(r1.v.status().send).toBe('pieces');
+  });
+
+  it('Aegis M-4: send word and pieces need the liability acknowledgement, recorded in the kernel-written start row', async () => {
+    const r = rig();
+    const h = { connId: 'conn:H1', principal: HUMAN, principalClass: 'human', credential: 'gui' };
+    for (const send of ['word', 'pieces']) {
+      expect(await refusal(r.v.humanAppend(h, 'voice.session.start', { hsid: HSID, mode: 'conversation', send }))).toMatchObject({ reason: 'voice-off', cause: 'liability-ack' });
+      expect(await refusal(r.v.humanAppend(h, 'voice.session.start', { hsid: HSID, mode: 'conversation', send, liabilityAck: 'sha256:' + '0'.repeat(64) }))).toMatchObject({ cause: 'liability-ack' });
+    }
+    await r.attach('word');
+    expect(r.rows.find((x) => x.kind === 'voice.session.start')!.payload).toMatchObject({ send: 'word', liabilityAck: { principal: HUMAN, ackHash: VOICE_LIABILITY_ACK_HASH } });
+    expect(await refusal(r.v.humanAppend(h, 'voice.session.start', { hsid: HSID, mode: 'conversation', liabilityAck: VOICE_LIABILITY_ACK_HASH }))).toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('send word and pieces need ambient capture', async () => {

@@ -71,6 +71,7 @@
  * first relay and never hold idle; every exit (idle included) stops them
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
+import { VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT } from '@a-company/gnomon-contracts';
 import { generateKeyPairSync } from 'node:crypto';
 import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
 import type { HelperPush, HelperTransport } from '../identity/helper.js';
@@ -1092,9 +1093,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         requestedBy: asker.principal!,
         hsid,
         attended: true,
-        detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId, ...(send ? { send } : {}) },
+        detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId, ...(send ? { send, liabilityAck: VOICE_LIABILITY_ACK_HASH } : {}) },
         lines: send === 'pieces'
-          ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; edits and commands still ask first', 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
+          ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
           : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
         decisions: ['allow', 'deny'],
         timeoutMs: LOOSEN_TIMEOUT_MS,

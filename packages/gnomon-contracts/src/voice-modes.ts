@@ -27,6 +27,8 @@
  *   none      anything else (a sentence that merely contains the word is none: the word is a standalone utterance)
  */
 
+import { sha256Tagged } from './internal.js';
+
 export const CAPTURE_KINDS = Object.freeze(['ptt', 'open', 'toggle'] as const);
 export type CaptureKind = (typeof CAPTURE_KINDS)[number];
 
@@ -57,6 +59,11 @@ export const VOICE_PRESET_IDS = Object.freeze(Object.keys(VOICE_PRESETS) as Voic
 /** The liability modes: turned on only through the explicit one-time acknowledgement (TD-2026-10-21-514). */
 export const LIABILITY_SEND_POLICIES = Object.freeze(['word', 'pieces'] as const);
 export const VOICE_LIABILITY_ACK_TEXT = 'I understand a misheard or other voice can send for me; edits will still ask.';
+/**
+ * Aegis M-4: the hash a voice.session.start{send:'word'|'pieces'} must carry as `liabilityAck` (the human's own
+ * attach, after the acknowledgement dialog); the kernel writes {principal, ackHash} into the start row it signs.
+ */
+export const VOICE_LIABILITY_ACK_HASH: string = sha256Tagged(VOICE_LIABILITY_ACK_TEXT);
 
 const isCapture = (c: unknown): c is CaptureKind => (CAPTURE_KINDS as readonly unknown[]).includes(c);
 const isSend = (s: unknown): s is SendPolicy => (SEND_POLICIES as readonly unknown[]).includes(s);

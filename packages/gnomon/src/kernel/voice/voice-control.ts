@@ -84,7 +84,7 @@
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
-import { canonicalSendWord, isSendWord, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, isSendWord, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -483,8 +483,8 @@ export class VoiceControl {
       return this.#end(a, asker.connId, asker.principal);
     }
     if (kind !== 'voice.session.start') throw new RefusedError(refuse({ code: 'FORBIDDEN', data: { reason: 'ungranted' } }), `#gnomon-voice: ${kind} is the voice principal's (§4.10)`);
-    const extra = Object.keys(p).filter((k) => k !== 'hsid' && k !== 'mode' && k !== 'continues' && k !== 'send');
-    if (extra.length) throw bad(`voice.session.start takes {hsid, mode?, continues?, send?} from the human (unknown: ${extra.slice(0, 4).join(', ')})`);
+    const extra = Object.keys(p).filter((k) => k !== 'hsid' && k !== 'mode' && k !== 'continues' && k !== 'send' && k !== 'liabilityAck');
+    if (extra.length) throw bad(`voice.session.start takes {hsid, mode?, continues?, send?, liabilityAck?} from the human (unknown: ${extra.slice(0, 4).join(', ')})`);
     if (typeof p.hsid !== 'string') throw bad('voice.session.start needs hsid');
     const mode = (p.mode ?? 'ptt') as VoiceMode;
     if (!VOICE_MODES_V1.includes(mode)) throw bad('mode is ptt or conversation');
@@ -493,6 +493,10 @@ export class VoiceControl {
     if (!VOICE_SEND_CEILINGS.includes(send)) throw bad('send is key, word or pieces');
     if (send !== 'key' && mode !== 'conversation') throw bad('send word and pieces need mode conversation (ambient capture)');
     if (send === 'pieces') this.#refusePiecesByLevel(p.hsid);
+    // Aegis M-4: Send word and Pieces are liability modes: the human's attach carries the acknowledgement's hash
+    // (shown in the GUI's dialog; for Pieces also on the presence card), and the kernel records it in the start row
+    if (send !== 'key' && p.liabilityAck !== VOICE_LIABILITY_ACK_HASH) throw voiceRefusal('voice-off', `send ${send} needs the liability acknowledgement ("${VOICE_LIABILITY_ACK_TEXT}")`, { send, cause: 'liability-ack', ackHash: VOICE_LIABILITY_ACK_HASH });
+    if (send === 'key' && p.liabilityAck !== undefined) throw bad('liabilityAck rides only a send word or pieces attach');
     if (p.continues !== undefined && typeof p.continues !== 'string') throw bad('continues names a prior voiceSessionId');
     const owner = this.#o.sessions.ownerOf(p.hsid);
     if (owner === undefined || owner !== asker.principal) throw new RefusedError(refuse({ code: 'NOT_FOUND', data: { reason: 'not-found' } }), '#gnomon-voice: no such live session for this principal');
@@ -569,7 +573,7 @@ export class VoiceControl {
     const r = await this.#o.append({
       kind: 'voice.session.start',
       principal: owner,
-      payload: { voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, ...(send !== 'key' ? { send } : {}), ...(continues ? { continues } : {}), engines: null, device: null, audioRetention: 'none' },
+      payload: { voiceSessionId: a.voiceSessionId, hsid: a.hsid, mode, ...(send !== 'key' ? { send, liabilityAck: { principal: asker.principal, ackHash: VOICE_LIABILITY_ACK_HASH } } : {}), ...(continues ? { continues } : {}), engines: null, device: null, audioRetention: 'none' },
       connId: asker.connId,
       session: a.hsid,
     });

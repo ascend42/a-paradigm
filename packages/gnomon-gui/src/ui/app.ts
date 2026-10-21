@@ -15,7 +15,7 @@
  * the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable, sanitizeDisplayText, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
+import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH, VOICE_PRESET_IDS } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, TAKES_NEEDED, teachCommit, teachLine, TEACH_SUGGESTIONS, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
 import { ACK_TEXT, acked, attachSend, choosePreset, parsePreset, policyOf, PRESET_KEY, PRESET_LABELS, PRESET_NOTES, recordAck, sendWordOf } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
@@ -1922,7 +1922,9 @@ async function setVoice(to: VoiceState, hsid: string | null, trusted: boolean): 
   const req0 = voiceRequest(v, to, hsid);
   // TD-2026-10-21-514: an ambient attach asks for the preset's send ceiling (word | pieces; pieces takes a presence card)
   const ceil = attachSend(voicePreset);
-  const req = req0 && req0.kind === 'voice.session.start' && req0.payload.mode === 'conversation' && ceil ? { ...req0, payload: { ...req0.payload, send: ceil } } : req0;
+  // Aegis M-4: the liability acknowledgement (recorded by the dialog) rides the attach; the kernel writes it into the start row
+  const ackOk = acked(localStorage, myPrincipal());
+  const req = req0 && req0.kind === 'voice.session.start' && req0.payload.mode === 'conversation' && ceil && ackOk ? { ...req0, payload: { ...req0.payload, send: ceil, liabilityAck: VOICE_LIABILITY_ACK_HASH } } : req0;
   if (!req) return;
   if (voiceBusy) return;
   voiceBusy = true;
