@@ -14,7 +14,7 @@
  *      fallback only for a turn whose end was not seen (no partial messages, max_tokens). Review R2: a message_delta
  *      end_turn is evaluated at that message's message_stop (an assistant line carrying end_turn, with no partial
  *      stream, at once); a new main-chain message in the same turn before its turn.result (a Stop-hook continuation),
- *      or a Stop hook_response that blocked, retires the turn's shown offer and the continuation's own end is
+ *      or a Stop hook_response that blocked (speculative: emitted only under --include-hook-events, re-review M-4), retires the turn's shown offer and the continuation's own end is
  *      evaluated instead. Review R1: the end belongs to the turn the stream is in (with replay lines, the newest turn
  *      Claude Code consumed; else the oldest outstanding turn not yet evaluated); a turn folded into a later one
  *      (its replay came first) settles without a row. turn.result{turn} closes every turn up to it. The text of the FINAL
@@ -213,7 +213,12 @@ function chainLine(line: string): ChainLine | null {
     return text ? { msgId: null, start: false, text: null, stop: null, replay: true } : null;
   }
   if (o.type === 'system' && o.subtype === 'hook_response' && o.hook_event === 'Stop') {
-    const blocked = o.exit_code === 2 || o.decision === 'block' || (typeof o.outcome === 'string' && /block/i.test(o.outcome));
+    // re-review M-4: SPECULATIVE with today's argv. Probe p-replay-order (claude 2.1.305): Claude Code writes
+    // hook_response lines only under --include-hook-events, which buildClaudeArgv does not pass; a blocking Stop hook
+    // shows as a non-replay user line (the hook's feedback) and a new main-chain message_start, which the new-message
+    // path below retires. Under the flag a block is {exit_code: 2, outcome: 'error'}. The match is exact: a loose
+    // /block/i matched 'non-blocking'.
+    const blocked = o.outcome === 'blocked' || o.decision === 'block' || o.exit_code === 2;
     return blocked ? { msgId: null, start: false, text: null, stop: null, hookBlock: true } : null;
   }
   if (o.type === 'assistant') {

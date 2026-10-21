@@ -2232,7 +2232,9 @@ components:
       evaluated); turn.result keeps the text of a newer turn's message.
       Review R2: a message_delta end_turn is evaluated at its message_stop; a
       new main-chain message in an evaluated turn before its turn.result (a
-      Stop-hook continuation) or a blocking Stop hook_response retires the
+      Stop-hook continuation) or a blocking Stop hook_response (re-review
+      M-4: exact match outcome blocked | decision block | exit_code 2;
+      speculative, hook_response needs --include-hook-events) retires the
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
       one settles without a row. Re-review M-2: a retired offer that was

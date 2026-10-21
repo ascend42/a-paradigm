@@ -632,6 +632,23 @@ describe('#offer-router: a Stop-hook continuation replaces the evaluation (revie
     expect(rows.map((r) => r.kind)).toEqual(['offer.retired']);
     await expect(t.r.decide(GUI, { offerId: first[0]!.payload.offerId, decision: 'open' })).rejects.toMatchObject({ refusal: { data: { reason: 'retired' } } });
   });
+  it('re-review M-4: the Stop hook block match is exact (outcome blocked, decision block or exit_code 2)', () => {
+    const hook = (o: Record<string, unknown>) => ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', ...o }));
+    for (const [o, retires] of [
+      [{ outcome: 'blocked' }, true],
+      [{ decision: 'block' }, true],
+      [{ exit_code: 2, outcome: 'error' }, true],
+      [{ outcome: 'non-blocking' }, false],
+      [{ outcome: 'Blocked by policy' }, false],
+      [{ exit_code: 0, outcome: 'success' }, false],
+      [{ exit_code: 1, outcome: 'error' }, false],
+    ] as const) {
+      const t = rig();
+      t.commit(sent(1));
+      reply(t, 'msg_1', offerReply('a', BLOCK));
+      expect(t.commit(hook(o)).map((r) => r.kind)).toEqual(retires ? ['offer.retired'] : []);
+    }
+  });
   it('re-review M-2: a decided offer is not retired by a continuation; seed() replays offer.retired after a restart', async () => {
     const t = rig();
     t.commit(sent(1));
