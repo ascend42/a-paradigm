@@ -218,6 +218,11 @@ export interface VoiceClientOptions {
   delivery?: Delivery;
   /** B1 live words (default on when the STT engine has transcribeWords) */
   partials?: boolean;
+  /**
+   * TD-2026-10-21-514 capture kind: 'toggle' = the mic key turns ambient capture on and off, and the mic STARTS OFF
+   * unless the kernel holds micWanted:true (unknown ⇒ off). 'ptt' / 'open' (default) keep the mic on at start.
+   */
+  capture?: 'ptt' | 'open' | 'toggle';
   /** TD-2026-10-21-514: the held send word (run.ts: <home>/voice/send-word.json); absent ⇒ no adjacency */
   sendWord?: () => SendWord | null;
 }
@@ -642,6 +647,11 @@ export class VoiceClient {
       a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'mic-off' ? this.setMicWanted(false) : action === 'send-now' ? this.sendNow() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
+    // toggle capture starts off (no report: the kernel's micWanted, read below, may turn it back on)
+    if (this.#o.capture === 'toggle' && a.micOn) {
+      this.#micEpoch++;
+      await a.setMic(false).catch(() => undefined);
+    }
     await this.#reportPrints();
     // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
     const tts = this.#o.engines.tts;
@@ -746,9 +756,13 @@ export class VoiceClient {
   #restoreMic(): void {
     if (this.#micRestored) return;
     const w = this.#o.link.micWanted?.() ?? null;
-    if (w === null) return;
+    if (w === null) {
+      if (this.#o.capture === 'toggle') this.#micRestored = true; // unknown ⇒ toggle capture stays off
+      return;
+    }
     this.#micRestored = true;
     if (w === false && this.#o.audio.micOn) void this.setMicWanted(false);
+    if (w === true && !this.#o.audio.micOn && this.#o.capture === 'toggle') void this.setMicWanted(true);
   }
 
   /** The human's ⏹ (GUI button / Esc → request.voice.client{op:'stop-speaking'}) shows up as a changed status count. */

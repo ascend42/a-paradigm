@@ -110,6 +110,22 @@ describe('$voice-turn dictation (TD-2026-10-20-262): composer delivery', () => {
     expect(b.audio.micOn).toBe(false);
   });
 
+  it('TD-2026-10-21-514: toggle capture starts with the mic off unless the kernel holds micWanted:true', async () => {
+    const audio = new FakeAudioIO();
+    const link = new FakeLink();
+    const c = new VoiceClient({ audio, engines: stubEngines([]), link, ns: 'abcd1234', prints: () => [], mode: 'ambient', capture: 'toggle', now: () => audio.clock });
+    await c.start();
+    expect(audio.micOn).toBe(false); // unknown ⇒ off
+    link.micWant = true;
+    const audio2 = new FakeAudioIO();
+    const d = new VoiceClient({ audio: audio2, engines: stubEngines([]), link, ns: 'abcd1234', prints: () => [], mode: 'ambient', capture: 'toggle', now: () => 0 });
+    await d.start();
+    await d.idle();
+    expect(audio2.micOn).toBe(true); // the kernel held micWanted:true ⇒ back on
+    await c.close();
+    await d.close();
+  });
+
   it('the hold-toggle hotkey increments holdToggles and reports it (monotone)', async () => {
     const { audio, link, client } = await setup();
     audio.control('hold-toggle');
