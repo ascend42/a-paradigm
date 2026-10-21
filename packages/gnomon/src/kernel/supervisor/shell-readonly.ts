@@ -1669,17 +1669,72 @@ const rgRule: Rule = (args, env, name) => {
 
 /** RW: fd (recursive; no symlink unless -L). Refused: -x --exec, -X --exec-batch (run a command), -l --list-details (runs ls), -L --follow. */
 const fdReader = reader('xXlL', ['--exec', '--exec-batch', '--list-details', '--follow']);
+/**
+ * Aegis L3: fd's FIRST positional is its PATTERN, not a path; every later positional is a search path. Only flags
+ * that certainly take a separate value are modelled as consuming one (a value flag missed here only makes the real
+ * pattern look like a path: a stricter check, never a looser one). Path-valued flags (--base-directory,
+ * --search-path, --ignore-file) keep their value path-checked.
+ */
+const FD_VALUE_SHORT = 'dEetcjSo';
+const FD_VALUE_LONG: readonly string[] = ['--max-depth', '--min-depth', '--exact-depth', '--exclude', '--extension', '--type', '--color', '--threads', '--size', '--changed-within', '--changed-before', '--owner', '--max-results', '--path-separator', '--format', '--batch-size'];
+const FD_PATH_LONG: readonly string[] = ['--base-directory', '--search-path', '--ignore-file'];
 const fdRule: Rule = (args, env, name) => {
   anchoredOnly(env, name);
-  fdReader(args, env, name);
+  staticOnly(args, name);
+  const checked: Arg[] = [];
+  let pattern = false;
+  let endOpts = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    const s = a.lit!;
+    if (!endOpts && s === '--') {
+      endOpts = true;
+      continue;
+    }
+    if (!endOpts && isFlag(a)) {
+      checked.push(a);
+      if (s.startsWith('--')) {
+        if (!s.includes('=') && (FD_VALUE_LONG.includes(s) || FD_PATH_LONG.includes(s)) && args[i + 1] !== undefined) {
+          i++;
+          if (FD_PATH_LONG.includes(s)) checked.push(args[i]!);
+        }
+      } else {
+        const j = [...s.slice(1)].findIndex((ch) => FD_VALUE_SHORT.includes(ch));
+        if (j === s.length - 2 && args[i + 1] !== undefined) i++; // the value letter ends the cluster: the next word is its value
+      }
+      continue;
+    }
+    if (!pattern) {
+      pattern = true; // the pattern: a regex or glob, never read as a path
+      continue;
+    }
+    checked.push(endOpts && isFlag(a) ? { ...a, lit: `./${s}` } : a);
+  }
+  fdReader(checked, env, name);
   walksCwd(env, name);
 };
 
-/** RW: tree (names only). Refused: -o (writes its output to a file), -R (re-runs, writing 00Tree.html), -l (follows symlinks), --fromfile/--fromtabfile, --output. */
+/**
+ * RW: tree (names only). Refused: -o (writes its output to a file), -R (re-runs, writing 00Tree.html), -l (follows
+ * symlinks), --fromfile/--fromtabfile, --output. Aegis L3: tree reads a short cluster letter by letter and each of
+ * P I (a pattern) and L H T (a value) takes the NEXT word; a -P/-I pattern is not a path, the other values stay checked.
+ */
 const treeReader = reader('olR', ['--fromfile', '--fromtabfile', '--output'], true);
 const treeRule: Rule = (args, env, name) => {
   anchoredOnly(env, name);
-  treeReader(args, env, name);
+  staticOnly(args, name);
+  const checked: Arg[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    checked.push(a);
+    if (!isFlag(a) || a.lit!.startsWith('--')) continue;
+    for (const ch of a.lit!.slice(1)) {
+      if (!'PILHT'.includes(ch) || args[i + 1] === undefined) continue;
+      i++;
+      if (!'PI'.includes(ch)) checked.push(args[i]!);
+    }
+  }
+  treeReader(checked, env, name);
   walksCwd(env, name);
 };
 

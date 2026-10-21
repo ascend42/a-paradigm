@@ -283,6 +283,38 @@ describe('#shell-readonly RW: every refusal pattern raises the card (anchored)',
   });
 });
 
+describe("#shell-readonly RW (Aegis L3): fd's pattern and tree's -P/-I values are patterns, not paths", () => {
+  const nowhere = '/nowhere-gnomon-x';
+  it.each([
+    `fd ${nowhere}`,
+    `fd '^${nowhere}/.*'`,
+    `fd -e ts ${nowhere}`,
+    `fd -H -t f ${nowhere} src`,
+    `fd --extension ts ${nowhere}`,
+    `tree -P '${nowhere}/*'`,
+    `tree -I ${nowhere}`,
+    `tree -L 2 -P '*.ts' src`,
+    `tree -LP 2 ${nowhere} src`,
+  ])('passes %j', (c) => {
+    expect(ro(c)).toEqual({ ok: true });
+  });
+  it.each([
+    [`fd x ${nowhere}`, /outside the readable roots/],
+    [`fd -e ts x ${nowhere}`, /outside the readable roots/],
+    [`fd --base-directory ${nowhere} x`, /outside the readable roots/],
+    [`fd --search-path=${nowhere} x`, /outside the readable roots/],
+    [`fd -- x ${nowhere}`, /outside the readable roots/],
+    [`fd x link`, /outside the readable roots/],
+    [`tree -I node_modules ${nowhere}`, /outside the readable roots/],
+    [`tree -L 2 -P x ${nowhere}`, /outside the readable roots/],
+    ['tree -P x -o out.txt', /tree: flag -o/],
+  ])('refuses %j', (c, why) => {
+    const v = ro(c);
+    expect(v.ok).toBe(false);
+    expect((v as { why: string }).why).toMatch(why);
+  });
+});
+
 describe("#shell-readonly RW: paradigm's one-time notice marker", () => {
   it('a card while .paradigm/ exists without the marker; a pass once it exists', () => {
     const dir = path.join(repo, '.paradigm');
