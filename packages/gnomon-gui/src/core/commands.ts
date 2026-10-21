@@ -66,9 +66,9 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'voice.mic.toggle', title: 'Voice: mic on / off', keys: '⌃` · ` in Gnomon' },
   // §11.4 run-mode commands (P8-D87): the focused session's folder (mode.repo.*, the default scope, F2 of
   // TD-2026-10-20-086), or this session only (mode.*); a looser mode asks for presence
-  { id: 'mode.repo.manual', title: 'Mode: manual (this folder) — writes and commands wait on a plan' },
-  { id: 'mode.repo.ask', title: 'Mode: ask (this folder) — every write and command asks' },
-  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this folder) — edits in this folder pass', keys: '⇧Tab cycles' },
+  { id: 'mode.repo.manual', title: 'Mode: manual (this folder) · writes and commands wait on a plan' },
+  { id: 'mode.repo.ask', title: 'Mode: ask (this folder) · every write and command asks' },
+  { id: 'mode.repo.auto-edits', title: 'Mode: auto-edits (this folder) · edits in this folder pass', keys: '⇧Tab cycles' },
   { id: 'mode.manual', title: 'Mode: manual (this session only)' },
   { id: 'mode.ask', title: 'Mode: ask (this session only)' },
   { id: 'mode.auto-edits', title: 'Mode: auto-edits (this session only)' },

@@ -422,7 +422,7 @@ export function enrolLine(s: EnrolState): string {
     case 'waiting':
       return 'Waiting for the voice app to start listening…';
     case 'phrase':
-      return `Recording ${s.name ?? 'this voice'} — only ${s.name ?? 'that person'} should speak. Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
+      return `Recording ${s.name ?? 'this voice'}: only ${s.name ?? 'that person'} should speak. Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
     case 'confirm':
       return 'Confirm with Touch ID, then read three short phrases aloud.';
     case 'done':

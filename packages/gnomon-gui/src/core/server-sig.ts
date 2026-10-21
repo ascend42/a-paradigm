@@ -6,7 +6,7 @@
  * signature over `gnomon-contracts` `authServerPreimage(nonce, clientNonce,
  * endpointPath, {clientApi, features})` against the pinned / fragment SPKI key
  * BEFORE it sends `auth`; a mismatch sends nothing and shows "kernel key
- * changed — run `gnomon open`".
+ * changed: run `gnomon open`".
  *
  * CLIENT NONCE (T-2026-10-18-016): `clientNonce` is the value THIS page sent
  * in hello. The echo must equal it (`client-nonce-mismatch`) and the
@@ -70,7 +70,7 @@ const ab = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer;
 
 /** Verify a hello result. `subtle` is injected (crypto.subtle in the page; node:crypto webcrypto in tests). */
 export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64Url: string, hello: HelloResult, endpointPath: string, clientNonce: string): Promise<SigVerdict> {
-  if (hello.clientNonce !== clientNonce) return { ok: false, reason: 'client-nonce-mismatch', message: 'the kernel answered another connection\'s hello — run `gnomon open`' };
+  if (hello.clientNonce !== clientNonce) return { ok: false, reason: 'client-nonce-mismatch', message: 'the kernel answered another connection\'s hello: run `gnomon open`' };
   if (!subtle) return { ok: false, reason: 'webcrypto-ed25519-unavailable', message: 'this engine has no WebCrypto; the fallback verifier arrives in M1.10 slice 2' };
   let der: Uint8Array;
   try {
@@ -78,7 +78,7 @@ export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64U
   } catch {
     return { ok: false, reason: 'bad-key', message: 'the kernel public key is not base64url' };
   }
-  if (keyIdOfSpki(der) !== hello.serverKeyId) return { ok: false, reason: 'key-id-mismatch', message: 'kernel key changed — run `gnomon open`' };
+  if (keyIdOfSpki(der) !== hello.serverKeyId) return { ok: false, reason: 'key-id-mismatch', message: 'kernel key changed: run `gnomon open`' };
   let key: CryptoKey;
   try {
     key = await subtle.importKey('spki', ab(der), { name: 'Ed25519' }, false, ['verify']);
@@ -91,11 +91,11 @@ export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64U
   try {
     sig = base64ToBytes(hello.serverSig);
   } catch {
-    return { ok: false, reason: 'bad-server-sig', message: 'kernel key changed — run `gnomon open`' };
+    return { ok: false, reason: 'bad-server-sig', message: 'kernel key changed: run `gnomon open`' };
   }
   const msg = utf8(authServerPreimage(hello.nonce, clientNonce, endpointPath, { clientApi: hello.clientApi, features: hello.features }));
   const ok = await subtle.verify({ name: 'Ed25519' }, key, ab(sig), ab(msg));
-  return ok ? { ok: true } : { ok: false, reason: 'bad-server-sig', message: 'kernel key changed — run `gnomon open`' };
+  return ok ? { ok: true } : { ok: false, reason: 'bad-server-sig', message: 'kernel key changed: run `gnomon open`' };
 }
 
 /**

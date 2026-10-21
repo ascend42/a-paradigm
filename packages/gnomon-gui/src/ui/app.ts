@@ -901,10 +901,10 @@ function paintShuttle(): void {
   const live = store.liveCount();
   // fidelity 2: one quiet line (the detail is in its title=); a clientApiId drift still shows in the line itself
   const waiting = Object.values(by).reduce((n, x) => n + x, 0);
-  const parts = [`${live} live`, waiting ? `${waiting} waiting` : 'inbox clear', `log ${store.head}`];
+  const parts = [`${live} live`, waiting ? `${waiting} waiting` : 'stack clear', `log ${store.head}`];
   if (session) parts.push(`${session.hello.clientApi}${session.clientApiDrift ? ' · clientApiId drift' : ''}`);
   s.appendChild(h(doc, 'span', null, parts.join(' · ')) as unknown as Node);
-  s.title = `sessions ${live} live · ${store.sessions.size} seen\ninbox ${Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear'}\nlog head ${store.head} · ${store.rowsSeen} rows${session ? `\napi ${session.hello.clientApi}` : ''}\n(click: the kernel feed)`;
+  s.title = `sessions ${live} live · ${store.sessions.size} seen\nstack ${Object.keys(by).length ? Object.entries(by).map(([k, n]) => `${k} ×${n}`).join(' · ') : 'clear'}\nlog head ${store.head} · ${store.rowsSeen} rows${session ? `\napi ${session.hello.clientApi}` : ''}\n(click: the kernel feed)`;
 }
 
 let paintQueued = false;
@@ -1222,7 +1222,7 @@ async function openSession(cwd: string, model: string): Promise<void> {
 function focusCard(cardId: string | null): void {
   const pile = $('stack');
   const el = (cardId ? pile.querySelector(`[data-card-id="${CSS.escape(cardId)}"].card`) : null) ?? pile.querySelector('.card.kind-gate-class');
-  if (!el) return notice('the re-pin card has not arrived yet; it shows in the inbox when it does', true);
+  if (!el) return notice('the re-pin card has not arrived yet; it shows in the stack when it does', true);
   el.scrollIntoView({ block: 'nearest' });
   ((el.querySelector('[data-default]') ?? el.querySelector('[data-decision]') ?? el) as HTMLElement).focus();
 }

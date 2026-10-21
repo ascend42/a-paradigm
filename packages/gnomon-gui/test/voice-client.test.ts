@@ -277,7 +277,7 @@ describe('"Teach Gnomon your voice"', () => {
     expect(s.phrases).toBe(ENROL_PHRASES);
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recording', phrase: 0, of: 3, at: at(2) }));
     expect(s).toMatchObject({ step: 'phrase', index: 0, recording: true });
-    expect(enrolLine(s)).toBe('Recording matt — only matt should speak. Phrase 1 of 3: recording, read it aloud');
+    expect(enrolLine(s)).toBe('Recording matt: only matt should speak. Phrase 1 of 3: recording, read it aloud');
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 0, of: 3, at: at(3) }));
     expect(s).toMatchObject({ step: 'phrase', index: 1, recorded: 1, recording: false });
     s = reduceEnrolStatus(s, en({ name: 'matt', phase: 'recorded', phrase: 1, of: 3, at: at(4) }));

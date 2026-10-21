@@ -56,11 +56,11 @@ describe('run modes: the ⇧Tab cycle and what a choice does', () => {
     expect(modeLabel(view())).toBe('mode: ask ▾');
     expect(modeLabel(view({ chosen: 'auto-edits', effective: 'ask', ceiling: 'ask' }))).toBe('mode: auto-edits → ask (ceiling) ▾');
     expect(modeLabel(view({ pendingCardId: 'card:x' }))).toBe('mode: ask · Touch ID pending ▾');
-    expect(modeLabel(null)).toBe('mode: —');
+    expect(modeLabel(null)).toBe('mode: not set');
     // fidelity 2: the header chip drops only the prefix (a clamp or a pending Touch ID still shows)
     expect(modeChip(view())).toBe('ask ▾');
     expect(modeChip(view({ chosen: 'auto-edits', effective: 'ask', ceiling: 'ask' }))).toBe('auto-edits → ask (ceiling) ▾');
-    expect(modeChip(null)).toBe('mode: —');
+    expect(modeChip(null)).toBe('mode');
     // F3 (TD-2026-10-20-086): the folder runs the root-signed default
     expect(modeLabel(view({ chosen: 'auto-edits', effective: 'auto-edits', source: 'config' }))).toBe('mode: auto-edits (default) ▾');
   });

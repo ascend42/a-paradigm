@@ -309,9 +309,9 @@ describe('S3 the card sheet and the stack pile', () => {
     expect(face(el)).toContain('command: pnpm test');
     expect(kids.find((k) => k.tag === 'details')!.text).not.toContain('command: pnpm test');
   });
-  it('the voice tag is the kernel handle: reversible · label, gate + the handle word, else hand-only', () => {
+  it('the voice tag is the kernel handle: reversible · label, gate + the handle word, else hand only', () => {
     expect(voiceTagOf({ eligible: 'gate', label: 'LANTERN' })).toEqual({ text: 'voice · gate', handle: 'LANTERN' });
-    expect(voiceTagOf({ eligible: 'none', label: 'KNOT' })).toEqual({ text: 'hand-only', handle: null });
+    expect(voiceTagOf({ eligible: 'none', label: 'KNOT' })).toEqual({ text: 'hand only', handle: null });
     expect(voiceTagOf(null)).toBeNull();
     expect(raisedLine('2026-10-20T14:06:00Z', Date.parse('2026-10-20T14:06:20Z'))).toBe('raised 14:06 · waiting just now');
   });

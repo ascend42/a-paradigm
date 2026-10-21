@@ -396,7 +396,7 @@ components:
       anatomy (data only from kernel fields): header ■ <repo basename> in
       the project ink (the ONE hue, groupHue) · kind · the voice tag from
       the kernel's card.voice (🎙 reversible · <label>, 🎙 gate + the
-      .handle word, else hand-only), requestedBy and the session in title=;
+      .handle word, else hand only), requestedBy and the session in title=;
       the title (the block's first Text line, splitCardBlock; a
       claim-mismatch card keeps its block whole and is titled by its kind);
       the body (kernel-owned); "raised HH:MM · waiting Nm" (raisedLine, from
@@ -1044,7 +1044,9 @@ components:
       parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout),
       themeSwitchEntries, unlockSeenOf (the cached unlock folded from
       kernel-principal approval.unlock / .dropped rows; daemon.start clears)
-      and settingsModel (Appearance, Layout, Voice, Permissions, About). Every
+      and settingsModel (Appearance, Layout, Voice, Permissions, About). The
+      sheet's theme row reads Day / Night / Auto without glyphs; the always-shown
+      regions name "the browser risk chip" (never "badge" in copy). Every
       control names an existing GUI command in SETTINGS_RUNS (theme, motion,
       layout presets, pane toggles, workshop placement, mode.repo.*, voice app
       start/stop, voice.settings.open) or the standing Revoke

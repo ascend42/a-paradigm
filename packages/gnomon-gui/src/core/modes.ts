@@ -92,7 +92,7 @@ export function planChange(v: Pick<SessionModeView, 'chosen' | 'ceiling' | 'leve
 
 /** The header control's label: `mode: ask ▾`, with the effective mode when the ceiling clamps the chosen one. */
 export function modeLabel(v: SessionModeView | null): string {
-  if (!v) return 'mode: —';
+  if (!v) return 'mode: not set';
   const clamp = v.effective !== v.chosen ? ` → ${v.effective} (ceiling)` : '';
   // F3 (TD-2026-10-20-086): the folder runs the root-signed default because no mode was chosen for it
   const dflt = v.source === 'config' ? ' (default)' : '';
@@ -104,7 +104,7 @@ export function modeLabel(v: SessionModeView | null): string {
  * clamp, a config default or a pending Touch ID still shows (kernel-owned: never shortened past what is true).
  */
 export function modeChip(v: SessionModeView | null): string {
-  return v ? modeLabel(v).replace(/^mode: /, '') : 'mode: —';
+  return v ? modeLabel(v).replace(/^mode: /, '') : 'mode';
 }
 
 /** One line per mode for the menu: what it does, and why it is disabled when it is. */

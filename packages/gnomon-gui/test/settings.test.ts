@@ -119,6 +119,14 @@ describe('#gui-settings sheet: only allowed controls', () => {
     expect(filterCommands(paletteEntries(null), 'settings')[0]!.id).toBe('settings.open');
     expect(BLOCK_SAFE_COMMANDS.has('settings.open')).toBe(false);
   });
+
+  it('design-system batch copy: the theme row says Day / Night / Auto (no glyphs) and the risk label is a chip', () => {
+    const theme = rows().find((r) => r.id === 'theme')!;
+    expect(theme.kind === 'choice' && theme.options.map((o) => o.label)).toEqual(['Day', 'Night', 'Auto']);
+    const regions = rows().find((r) => r.id === 'kernel-regions')!;
+    expect(regions.kind === 'readonly' && regions.value).toContain('the browser risk chip');
+    expect(JSON.stringify(rows())).not.toMatch(/badge|[☀☾◐]/);
+  });
 });
 
 describe('#gui-settings sheet: kernel-owned items are read-only', () => {

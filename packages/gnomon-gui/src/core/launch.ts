@@ -95,7 +95,7 @@ export interface CwdHintTarget {
  */
 export function applyCwdHint(t: CwdHintTarget, hint: CwdHint): void {
   t.note.textContent = hint.prefill !== null
-    ? `Suggested by \`gnomon\` in a terminal (not verified): ${hint.display} — check it, then open.`
+    ? `Suggested by \`gnomon\` in a terminal (not verified): ${hint.display}: check it, then open.`
     : `A terminal suggested a folder that is not prefilled (${hint.why}): ${hint.display}`;
   t.note.hidden = false;
   if (hint.prefill !== null) t.input.value = hint.prefill;

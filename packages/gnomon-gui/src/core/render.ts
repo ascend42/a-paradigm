@@ -348,12 +348,12 @@ export function permissionTitleOf(card: Record<string, unknown>, tool: unknown, 
   return { verb: `Allow ${tool}`, arg, truncated };
 }
 
-/** S3: the card's voice tag from the kernel's handle, in words: `voice · reversible · card 3`, `voice · gate` + the handle word, or `hand-only`. */
+/** S3: the card's voice tag from the kernel's handle, in words: `voice · reversible · card 3`, `voice · gate` + the handle word, or `hand only`. */
 export function voiceTagOf(v: CardView['voice']): { text: string; handle: string | null } | null {
   if (!v) return null;
   if (v.eligible === 'reversible') return { text: `voice · reversible${v.label ? ` · ${v.label}` : ''}`, handle: null };
   if (v.eligible === 'gate') return { text: 'voice · gate', handle: v.label || null };
-  return { text: 'hand-only', handle: null };
+  return { text: 'hand only', handle: null };
 }
 
 /** S3: the card's voice handle from the kernel card (card.voice), or null. */
@@ -786,7 +786,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       doc,
       'div',
       { class: 'card-keys' },
-      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi — shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
+      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
       ...keys.flatMap((d) =>
         d === 'always' && v.prefixOptions?.length
           ? [
