@@ -286,12 +286,12 @@ describe('review M1: a refused or failed send is no turn; a stamped echo pairs w
   it('a network error does the same (the echo is marked unsent and its reason shows under it)', () => {
     const rows: Row[] = [
       unsent(10.5, '10:00:00', 'lost'),
-      refused(10.6, 'not sent: the connection to the kernel failed'),
+      refused(10.6, 'may not have been sent: the connection to the kernel failed'),
       stamped(11.5, '10:00:05', 'again', 1),
       row(12, 'turn.sent', '10:00:05.2', { turn: `turn:${H}/1` }),
     ];
     const f = view(rows);
-    expect(roles(f)).toEqual(['user: lost', 'error: not sent: the connection to the kernel failed', 'user: again', 'working: working…']);
+    expect(roles(f)).toEqual(['user: lost', 'error: may not have been sent: the connection to the kernel failed', 'user: again', 'working: working…']);
     expect(f[3]!.live?.since).toBe(at('10:00:05.2'));
   });
   it('the stamp is exact: a turn.sent another client caused does not start this page\'s waiting message', () => {

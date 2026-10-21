@@ -1106,7 +1106,7 @@ function stampEcho(echo: Row, r: { turn?: unknown } | null | undefined): void {
 function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = echo?.session): void {
   if (echo) echo.unsent = true;
   localRev++;
-  const why = err instanceof RpcError ? refusalText(err.refusal) : 'not sent: the connection to the kernel failed';
+  const why = err instanceof RpcError ? refusalText(err.refusal) : 'may not have been sent: the connection to the kernel failed';
   if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why });
   schedule(new Set([`transcript:${hsid}`]));
 }
