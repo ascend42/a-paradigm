@@ -171,25 +171,62 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
   });
 
-  it('a word being taught (trial) is accepted by adjacency but is never a send word, and expires', async () => {
+  it('an attended trial take needs no speaker check or adjacency, is never forwardable, and the kernel counts it', async () => {
     const r = rig();
     r.v.setSendWord(null);
     await r.attach('word');
-    await r.turn('I am teaching my send word now');
-    r.v.setTrialWord({ text: 'ship it' }, 10_000);
-    const take = await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t });
-    // Aegis L-3: the take is accepted (shown to the dialog) but never forwardable, never a draft
+    r.v.setTrialWord({ text: 'ship it' }, 120_000);
+    expect(r.v.status().sendWordTrial).toMatchObject({ word: 'ship it', state: 'listening', take: 1, takes: 0, maxTakes: 4 });
+    // an UNVERIFIED short take (no lead-in, no draft speaker): still a take for the dialog
+    const take = await r.turn('ship hit', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 400, t1: r.clock.t });
     expect(take).toMatchObject({ forwardable: false, trialTake: true });
-    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, text: 'ship it' });
+    expect(take).not.toHaveProperty('refused');
+    expect(r.rows.at(-1)!.payload).toMatchObject({ forwardable: false, trialTake: true, text: 'ship hit', trialVerdict: 'variant' });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('refusedReason');
+    expect(r.v.status().sendWordTrial).toMatchObject({ take: 2, takes: 1, correct: 0, variants: ['ship hit'], last: { heard: 'ship hit', verdict: 'variant' } });
+    // never claimable, never a pending dictation turn: a send of its words is attributed to nothing
     expect(await refusal(() => r.claim({ by: 'word', turnSeq: (take as { seq: number }).seq }))).toMatchObject({ reason: 'voice-stale-utterance' });
-    // a take never anchors adjacency: with only takes nearby (the lead-in consumed), another short take is refused
+    // a sentence during the trial is a take too (never a draft) and its text is never kept
+    await r.turn('I am teaching my send word now');
+    expect(r.rows.at(-1)!.payload).toMatchObject({ trialTake: true, forwardable: false, textWithheld: true, trialVerdict: 'unclear' });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    // the save rule: no correct take yet
+    expect(await refusal(() => r.v.saveTrial())).toMatchObject({ code: 'BAD_REQUEST', reason: 'sendword-no-correct-take' });
+    // renewing the same word keeps the count (the ONE counter)
+    r.v.setTrialWord({ text: 'ship it' });
+    expect(r.v.status().sendWordTrial).toMatchObject({ takes: 2, take: 3 });
+    await r.turn('Ship it.', { t0: r.clock.t - 500, t1: r.clock.t });
+    expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', take: null, takes: 3, correct: 1 });
+    await r.send(['ship it']);
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
+    expect(r.v.saveTrial()).toEqual({ text: 'ship it', variants: ['ship hit'] });
+    expect(r.v.status().sendWordTrial).toBeNull();
+  });
+
+  it('the trial is time-boxed; after it a short unverified word is refused again', async () => {
+    const r = rig();
+    r.v.setSendWord(null);
+    await r.attach('word');
+    r.v.setTrialWord({ text: 'ship it' }, 10_000);
+    r.clock.t += 11_000;
+    expect(r.v.status().sendWordTrial).toBeNull();
+    expect(await r.turn('ship it', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    expect(await refusal(() => r.v.saveTrial())).toMatchObject({ reason: 'sendword-no-trial' });
+    // a take never anchors adjacency for the held word either
     const r2 = rig();
-    r2.v.setSendWord(null);
     await r2.attach('word');
     r2.v.setTrialWord({ text: 'ship it' }, 60_000);
-    expect(await r2.turn('ship it', { speakerBasis: 'adjacent', t0: r2.clock.t - 700, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
-    r.clock.t += 11_000;
-    expect(await r.turn('ship it', { speakerBasis: 'adjacent', t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    await r2.turn('ship it');
+    r2.v.setTrialWord(null);
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+  });
+
+  it('the trial status reaches the human class only', () => {
+    const r = rig();
+    r.v.setTrialWord({ text: 'over' });
+    const st = r.v.status();
+    expect(voiceStatusFor(st, 'gui', 'human')).toHaveProperty('sendWordTrial');
+    expect(voiceStatusFor(st, undefined, 'voice')).not.toHaveProperty('sendWordTrial');
   });
 
   it('the held word is shown to the human class only', async () => {
@@ -339,6 +376,7 @@ describe('the held send word file (<home>/voice/send-word.json, 0600)', () => {
     expect(parseSendWordRequest({ op: 'clear', trial: true })).toEqual({ op: 'clear', trial: true }); // Aegis L-2
     expect(parseSendWordRequest({ op: 'start', word: 'over' })).toEqual({ op: 'start', text: 'over', variants: [], trial: false });
     expect(parseSendWordRequest({ op: 'start', word: 'over', trial: true })).toMatchObject({ trial: true });
-    for (const bad of [null, { op: 'set' }, { op: 'clear', word: 'x' }, { op: 'clear', trial: 'yes' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
+    expect(parseSendWordRequest({ op: 'save' })).toEqual({ op: 'save' });
+    for (const bad of [null, { op: 'set' }, { op: 'save', word: 'x' }, { op: 'clear', word: 'x' }, { op: 'clear', trial: 'yes' }, { op: 'start' }, { op: 'start', word: 'x', extra: 1 }]) expect(() => parseSendWordRequest(bad)).toThrow(TypeError);
   });
 });

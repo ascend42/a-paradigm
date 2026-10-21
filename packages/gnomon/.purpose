@@ -3586,8 +3586,16 @@ flows:
       replay and a later result; a short word passes adjacency with or
       without speakerBasis; a word or pieces attach carries liabilityAck
       (sha256 of the ack text), recorded in the kernel-written start row.
-      The guided dialog teaches the word as a TRIAL (adjacency only, 2 min,
-      send-word-trial.json 0600). request.voice.client mic-toggle /
+      The guided dialog teaches the word as an ATTENDED TRIAL (spec §14.7
+      trial semantics; 2 min, send-word-trial.json 0600): every turn of the
+      attached human's voice principal is a take with no speaker check and
+      no adjacency, stamped trialTake, forwardable:false, isWord false, never
+      a dictation turn or adjacency anchor, its text kept only at a send
+      word's length; the kernel is the ONE take counter
+      (status.voice.sendWordTrial, human class only: word, state, take,
+      takes, maxTakes 4, correct, variants, last, until) and
+      request.voice.sendword{op:'save'} commits the word and the variants
+      its mishearings collected only after a correct take. request.voice.client mic-toggle /
       mic-key / start{capture} drive the mic, the Mic key and the capture
       kind of the kernel-spawned client (--capture ptt|open|toggle).
     steps: ["#gui-dictation", "#gnomon-voice", "#send-word-matcher", "#supervisor"]

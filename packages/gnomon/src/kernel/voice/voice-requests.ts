@@ -137,9 +137,9 @@ const CAPTURE_GUI_KEYS = [...CAPTURE_STATUS_KEYS, 'text'];
  * voice, read token) gets the capture without them. Every other unknown field is dropped too (an allow-list).
  */
 export function voiceStatusFor(voice: Record<string, unknown>, credential: string | undefined, cls?: string): Record<string, unknown> {
-  // TD-2026-10-21-514: the held send word reaches the human class only
-  if (cls !== 'human' && 'sendWord' in voice) {
-    const { sendWord: _hidden, ...rest } = voice;
+  // TD-2026-10-21-514: the held send word and the attended trial (its takes' text) reach the human class only
+  if (cls !== 'human' && ('sendWord' in voice || 'sendWordTrial' in voice)) {
+    const { sendWord: _hidden, sendWordTrial: _trial, ...rest } = voice;
     voice = rest;
   }
   const c = voice.capture as Record<string, unknown> | null | undefined;

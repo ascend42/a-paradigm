@@ -1227,10 +1227,17 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       sendWord: async (p: unknown) => {
         const r = parseSendWordRequest(p);
         if (r.op === 'start' && r.trial) {
-          // the guided dialog's takes: held for adjacency only (memory + a 0600 file the voice client reads)
+          // the attended trial: the kernel counts its takes (status.voice.sendWordTrial); a 0600 file tells the voice client
           const t = voice.setTrialWord({ text: r.text, variants: [] });
           writeTrialWord(home, { text: r.text }, Date.now() + SEND_WORD_TRIAL_MS);
-          return { trial: t ? { text: t.text } : null };
+          return { trial: t ? voice.trialStatus() : null };
+        }
+        if (r.op === 'save') {
+          // the save rule (a correct take) is the kernel's; a refusal leaves the trial running
+          const saved = voice.saveTrial();
+          writeTrialWord(home, null);
+          const w = writeSendWord(home, saved);
+          return { trial: null, sendWord: w ? { text: w.text, variants: [...w.variants] } : null };
         }
         voice.setTrialWord(null);
         writeTrialWord(home, null);

@@ -81,10 +81,18 @@
  *   - the attachment's SEND CEILING (voice.session.start{send?}): key (default) < word < pieces; word and pieces need a
  *     conversation ceiling; pieces takes one fresh presence per GUI login (the voice.widen strictness card with
  *     send:'pieces') and is refused voice-strictness at strictness L2 or above.
+ *   - the ATTENDED TRIAL ("Teach your send word"; spec §14.7 trial semantics): while a human GUI request holds a trial
+ *     (request.voice.sendword{op:'start', trial:true}, at most SEND_WORD_TRIAL_MS), EVERY voice.turn.user of the
+ *     attached human's voice principal (not intercepted, not inside the echo guard) is a TAKE: no speaker check and no
+ *     adjacency (a take can send nothing), stamped trialTake:true, forwardable:false, isWord false, never a dictation
+ *     turn, never an adjacency anchor. The row keeps only the take's cleaned text when it is a send word's length
+ *     (trialTakeText), else no text. The kernel is the ONE take counter (#send-word-matcher recordTrialTake; at most
+ *     SEND_WORD_TRIAL_MAX_TAKES), shown as status.voice.sendWordTrial (human class only); {op:'save'} commits the word
+ *     and its collected variants only after a take heard as the word itself.
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
-import { canonicalSendWord, isSendWord, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, classifyTrialTake, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, trialTakeText, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -113,7 +121,7 @@ export const VOICE_MODES_V1 = ['ptt', 'conversation'] as const;
 export const VOICE_SEND_CEILINGS = ['key', 'word', 'pieces'] as const;
 export type VoiceSendCeiling = (typeof VOICE_SEND_CEILINGS)[number];
 const sendRank = (c: VoiceSendCeiling): number => VOICE_SEND_CEILINGS.indexOf(c);
-/** a send word being taught is held for adjacency this long (the guided dialog renews it per take) */
+/** an attended send-word trial lasts this long on the kernel clock (the dialog renews it; takes are counted here) */
 export const SEND_WORD_TRIAL_MS = 2 * 60_000;
 /** at most this many turns per piece claim */
 export const PIECE_CLAIM_MAX_TURNS = 64;
@@ -464,6 +472,8 @@ export class VoiceControl {
       // TD-2026-10-21-514: the send ceiling and the held send word (voiceStatusFor shows sendWord to the human class only)
       send: a?.send ?? null,
       sendWord: ((w) => (w ? { text: w.text, variants: [...w.variants] } : null))(this.#word()),
+      // the attended trial's ONE take counter (voiceStatusFor shows it to the human class only)
+      sendWordTrial: this.trialStatus(),
       // V2e: an explicit boolean (never absent) plus the supervised child's phase for the GUI pill
       clientConnected: this.#o.clientStatus?.().clientConnected === true,
       ...(this.#o.clientStatus ? { client: this.#o.clientStatus() } : {}),
@@ -696,6 +706,8 @@ export class VoiceControl {
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
+        // the attended trial: a turn of the attached human's voice principal is a take (no speaker check, no adjacency)
+        const trial = p.intercepted === undefined && a !== null && voicePrincipalOf(a.owner) === c.principal ? this.#liveTrial() : null;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
@@ -720,12 +732,13 @@ export class VoiceControl {
           attachment: a?.voiceSessionId ?? '',
           aec: p.aec as string | undefined,
           refused: undefined,
-          isWord: typeof p.text === 'string' && isSendWord(p.text, this.#word()),
-          ...(typeof p.text === 'string' && !isSendWord(p.text, this.#word()) && isSendWord(p.text, this.#trialWord()) ? { trialTake: true } : {}),
+          isWord: trial === null && isSendWord(p.text, this.#word()),
+          ...(trial ? { trialTake: true } : {}),
         };
         // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
         // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
-        if (!enrolledNow) refusedAtReceipt = voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
+        if (trial) refusedAtReceipt = this.#echoGuard(turn); // a take inside our playback is echo, never a take
+        else if (!enrolledNow) refusedAtReceipt = voiceRefusal('voice-speaker', 'only enrolled speakers are forwarded (G-VOX-06)', { turnId: turn.turnId });
         else if (!turn.intercepted) {
           refusedAtReceipt = a ? this.#guards(turn, a) : voiceRefusal('voice-target', 'voice is not attached (attach is a human gesture)', { turnId: turn.turnId });
         }
@@ -737,6 +750,17 @@ export class VoiceControl {
           for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
           const d = (refusedAtReceipt.refusal.data ?? {}) as Record<string, unknown>;
           stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, refusedReason: d.reason, ...(d.cause ? { refusedCause: d.cause } : {}), ...(drops ? { localDrops: drops } : {}) };
+        } else if (trial) {
+          // a take: hash-only fields plus the cleaned take text when it is a send word's length (never a sentence)
+          const kept: Record<string, unknown> = {};
+          for (const k of HASH_ONLY_KEEP) if (p[k] !== undefined) kept[k] = p[k];
+          const heard = trialTakeText(p.text);
+          const verdict = classifyTrialTake(p.text, trial.state.word).verdict;
+          const next = recordTrialTake(trial.state, p.text);
+          stamped = { ...kept, speakerEnrolled: enrolledNow, forwarded: false, forwardable: false, trialTake: true, trialVerdict: verdict, receivedAt, textHash: turn.textHash, durationMs: t.t1 - t.t0, ...(heard !== null ? { text: heard } : { textWithheld: true }), ...(drops ? { localDrops: drops } : {}) };
+          commit.push(() => {
+            if (this.#trial === trial) trial.state = next; // the ONE take counter (a trial replaced meanwhile is not touched)
+          });
         } else {
           // TD-2026-10-20-262: the kernel's verdict — an accepted turn may go to the composer (or a direct send)
           // Aegis L-3: a take of the word being taught is shown to the dialog (trialTake) but never forwardable
@@ -747,7 +771,7 @@ export class VoiceControl {
           this.#userTurns.set(t.turnId, turn);
           this.#latestByConn.set(c.connId, t.turnId);
           if (a) a.turns++;
-          if (!turn.refused && !turn.intercepted) this.#o.onAccepted?.(c.connId, 'turn');
+          if (!turn.refused && !turn.intercepted && !turn.trialTake) this.#o.onAccepted?.(c.connId, 'turn');
         });
         break;
       }
@@ -792,8 +816,8 @@ export class VoiceControl {
   #adjacentOk(p: Record<string, unknown>, receivedAt: number): boolean {
     const a = this.#attachment;
     if (!a || !num(p.t0) || !num(p.t1) || p.t1 < p.t0 || p.t1 - p.t0 >= SEND_WORD_SHORT_MS) return false;
-    // the held word, or the word being taught ("Teach Gnomon your send word": its takes are short words too)
-    if (typeof p.text !== 'string' || !(isSendWord(p.text, this.#word()) || isSendWord(p.text, this.#trialWord()))) return false;
+    // the held word only: a take of the word being taught needs no adjacency (the attended trial, never a send)
+    if (typeof p.text !== 'string' || !isSendWord(p.text, this.#word())) return false;
     const start = receivedAt - (p.t1 - p.t0);
     for (const t of this.#userTurns.values()) {
       if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.attachment !== a.voiceSessionId || t.isWord) continue;
@@ -818,21 +842,47 @@ export class VoiceControl {
     return this.#word();
   }
 
-  /** TD-2026-10-21-514: the word being taught (adjacency only, never isWord, never a send), with its kernel-clock expiry */
-  #trial: { word: SendWord; until: number } | null = null;
+  /**
+   * The attended trial (spec §14.7 trial semantics): the word being taught, its take count (the ONE counter) and its
+   * kernel-clock expiry. Never the held word, never isWord, never a send.
+   */
+  #trial: { state: SendWordTrialState; until: number } | null = null;
+  /** Start a trial of `w`; the same word while live renews the expiry and KEEPS its takes (null ends the trial). */
   setTrialWord(w: unknown, ttlMs = SEND_WORD_TRIAL_MS): SendWord | null {
     if (w === null) {
       this.#trial = null;
       return null;
     }
     const c = canonicalSendWord(w);
-    if (!c) throw bad('the send word is 1-3 words, never an approval or command phrase (validateSendWord)');
-    this.#trial = { word: c, until: this.#now() + ttlMs };
-    return c;
+    const st = c ? startSendWordTrial(c.text) : null;
+    if (!c || !st) throw bad('the send word is 1-3 words, never an approval or command phrase (validateSendWord)');
+    const live = this.#liveTrial();
+    if (live && live.state.word === st.word) live.until = this.#now() + ttlMs;
+    else this.#trial = { state: st, until: this.#now() + ttlMs };
+    return { text: c.text, variants: [] };
   }
-  #trialWord(): SendWord | null {
+  #liveTrial(): { state: SendWordTrialState; until: number } | null {
     if (this.#trial && this.#now() > this.#trial.until) this.#trial = null;
-    return this.#trial?.word ?? null;
+    return this.#trial;
+  }
+  /** status.voice.sendWordTrial: the live trial (human class only), or null. `take` is the take being asked for. */
+  trialStatus(): Record<string, unknown> | null {
+    const t = this.#liveTrial();
+    if (!t) return null;
+    const s = t.state;
+    return { word: s.word, state: s.state, take: trialTakeNumber(s), takes: s.takes, maxTakes: s.maxTakes, correct: s.correct, variants: [...s.variants], last: s.last ? { ...s.last } : null, until: new Date(t.until).toISOString() };
+  }
+  /**
+   * {op:'save'}: the save rule — the word and the variants its takes collected, only after a take heard as the word
+   * itself (#send-word-matcher trialSaveable). Ends the trial; the daemon persists the result. BAD_REQUEST otherwise.
+   */
+  saveTrial(): SendWord {
+    const t = this.#liveTrial();
+    if (!t) throw bad('no send word is being taught (the trial ended or expired)', 'sendword-no-trial');
+    const w = trialSaveable(t.state);
+    if (!w) throw bad('no take was heard as the word itself yet', 'sendword-no-correct-take');
+    this.#trial = null;
+    return w;
   }
 
   /** the held word: the daemon's file source when wired (the CLI and the GUI land in one file), else setSendWord's */
@@ -990,6 +1040,13 @@ export class VoiceControl {
         return voiceRefusal('voice-playback', "the attached session's model turn is streaming (or inside its echo tail) by the kernel's clock", { turnId: turn.turnId, clock: 'kernel', streaming: b.streaming, echoTailMs: tail });
       }
     }
+    return this.#echoGuard(turn);
+  }
+
+  /** The echo guards alone (client playback times and kernel receipt times): also the one guard on a trial take. */
+  #echoGuard(turn: UserTurn): RefusedError | undefined {
+    const tail = this.echoTailMs;
+    const userStart = turn.receivedAt - (turn.t1 - turn.t0);
     // echo on the client's playback times ...
     if (this.#playback.some((w) => turn.t0 >= w.t0 && turn.t0 <= w.t1 + tail)) return voiceRefusal('voice-echo', 'the utterance starts inside our playback or its echo tail', { turnId: turn.turnId, echoTailMs: tail });
     // ... and on the kernel's receipt times (Aegis M1): an agent row arrives at its playback's start or end, so its
