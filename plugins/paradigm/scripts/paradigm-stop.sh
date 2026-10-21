@@ -53,8 +53,12 @@ fi
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
+  # FULLY detached: a background child that inherits the hook's stdout/stderr
+  # keeps Claude Code's pipe open, and Claude Code waits for EOF on that pipe —
+  # not for this script's exit — until the hook timeout. Never background a
+  # command in a hook without </dev/null >/dev/null 2>&1.
   if [ "$PARADIGM_AVAILABLE" = "true" ]; then
-    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" </dev/null >/dev/null 2>&1 &
   fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
@@ -113,9 +117,10 @@ rm -f ".paradigm/.orchestrated"
 # would erase solo declarations mid-session and re-nag every turn. They expire
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
-# Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
-if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -f ".paradigm/events/verdicts.jsonl" ]; then
-  $PARADIGM_BIN ambient postflight 2>/dev/null &
-fi
+# Postflight learning already ran above: paradigm-common.sh calls
+# `compliance-check --learn`, which runs the same runPostflightLearning pass in
+# the foreground. The old second `ambient postflight &` here was a duplicate
+# pass, and as a background child holding the hook's stdout open it made
+# Claude Code wait for EOF until the hook timeout.
 
 exit 0

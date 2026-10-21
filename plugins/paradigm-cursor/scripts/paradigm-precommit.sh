@@ -31,7 +31,9 @@ fi
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
-  npx paradigm index --quiet 2>/dev/null || true
+  # --no-install: never let npx fetch the unrelated public "paradigm" package
+  # (a network round-trip inside a 15 s hook, and the wrong binary).
+  npx --no-install paradigm index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
