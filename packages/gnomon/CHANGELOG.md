@@ -25,6 +25,7 @@ Gnomon changes on `feat/gnomon` before they reach a Paradigm release. Format: [K
 
 ### Fixed
 
+- **`offer.retired` and `session.anomaly`, one deliberate `clientApiId` move** (T-2026-10-21-008, re-review M-1/M-2, `#gnomon-contracts`, `#kernel-log`, reservation tag `8.0:T-2026-10-21-008`). Two kernel-owned, `normal` kinds with closed payloads, checked at append: `offer.retired{offerId, hsid, why:'continued'}` (descriptor `desk.retire`) and `session.anomaly{hsid, why:'result-without-turn'}` (descriptor `sessionAnomaly`). `clientApiId` `sha256:4c2b9371…af2c` → `sha256:454cd632007a77540a4526bebb55384d40e7935ad677e5dd9bf185595c77e4de`; the event schema, the ids pin and `gnomon-client-api.md` are regenerated and the pins updated.
 - **The working row is announced once, not every second** (review a11y, `#gui`). It is now `role="status"` with the label "Claude is working", and its ticking clock span is `aria-live="off"`.
 - **`gnomon desk stats` counts only the kernel's offer rows** (review C2, `#offer-router`). The fold counted any `offer.shown` / `offer.suppressed` row in the verified log; it now counts only rows whose envelope principal is the kernel principal.
 - **`offer.suppressed` names a turn of its own session** (review C1, `#gnomon-contracts`, no `clientApiId` move). The closed check now refuses a `turn` whose id does not embed the payload's `hsid`.

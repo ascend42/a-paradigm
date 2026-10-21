@@ -66,6 +66,13 @@ components:
       Test: test/turn-result.test.ts.
       Review C1 (no id move): offer.suppressed's turn must embed the payload's
       hsid (turn:<hsid>/<n>), checked in validateKindPayload.
+      8.0:T-2026-10-21-008 (re-review M-1/M-2, one deliberate clientApiId move,
+      sha256:4c2b9371...af2c ->
+      sha256:454cd632007a77540a4526bebb55384d40e7935ad677e5dd9bf185595c77e4de):
+      kernel-owned, normal offer.retired{offerId, hsid, why} (OFFER_RETIRE_REASONS:
+      continued; descriptor desk.retire) and session.anomaly{hsid, why}
+      (SESSION_ANOMALY_REASONS: result-without-turn; descriptor sessionAnomaly). Closed,
+      ids and reasons only; checked at append by #kernel-log.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

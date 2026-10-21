@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -81,6 +81,8 @@ const MODEL_SWITCH = '8.0:model-switch' as const;
 const DESK = '8.0:TD-2026-10-20-812' as const;
 /** T-2026-10-21-006 (founder ruling: the Desk's suppressions go on the signed log, a deliberate clientApiId move). */
 const OFFER_SUPPRESS = '8.0:T-2026-10-21-006' as const;
+/** T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly, one deliberate clientApiId move). */
+const REREVIEW = '8.0:T-2026-10-21-008' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -156,6 +158,12 @@ const TABLE: Row[] = [
   // evaluated showed no offer, and why (OFFER_SUPPRESS_REASONS). Ids and names only, never message text; at most one per
   // completed turn (no-block only while the session has an offerable mod).
   ['offer', 'kernel', 'suppressed', OFFER_SUPPRESS],
+  // T-2026-10-21-008 (re-review M-2): offer.retired{offerId, hsid, why} — a shown, undecided offer stopped standing (why
+  // in OFFER_RETIRE_REASONS: 'continued' = the reply it answered continued, a Stop-hook continuation). Ids only.
+  ['offer', 'kernel', 'retired', REREVIEW],
+  // T-2026-10-21-008 (re-review M-1): session.anomaly{hsid, why} — the supervisor saw a stream shape it does not expect
+  // (why in SESSION_ANOMALY_REASONS: 'result-without-turn' = a result with no outstanding turn). Names only, never text.
+  ['session', 'kernel', 'anomaly', REREVIEW],
   ['request', 'kernel', 'offer.decide offer.mute mod.install', DESK],
   // the context meter (TD-2026-10-20-812): session.context.threshold{hsid, usedTokens, windowTokens, ratio} — a Paradigm
   // session crossed the meter's threshold (Claude checkpoints, then the human is ASKED); request.session.restart{hsid,
@@ -407,6 +415,9 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'offer.muted': Object.freeze(['mod', 'repo', 'muted', 'hsid']),
   // T-2026-10-21-006: names only (name = the block's mod id, offerKind = its kind; both absent for no-block / malformed)
   'offer.suppressed': Object.freeze(['hsid', 'turn', 'why', 'name', 'offerKind']),
+  // T-2026-10-21-008: ids and closed reasons only
+  'offer.retired': Object.freeze(['offerId', 'hsid', 'why']),
+  'session.anomaly': Object.freeze(['hsid', 'why']),
   // source 'git' carries url (https only) and optionally commit (40 hex), 'folder' carries path (absolute); the other keys are refused
   'request.mod.install': Object.freeze(['source', 'url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['hsid', 'checkpointRef']),
@@ -426,6 +437,13 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
  * running turn (its replay arrived before that turn's result) is closed by the same result. A row written before
  * this field (no `turn`) pairs in send order (FIFO), the oldest open turn first.
  */
+/** offer.retired{why} (CLOSED, T-2026-10-21-008): 'continued' = the reply the offer answered continued (a Stop hook). */
+export const OFFER_RETIRE_REASONS = ['continued'] as const;
+export type OfferRetireReason = (typeof OFFER_RETIRE_REASONS)[number];
+/** session.anomaly{why} (CLOSED, T-2026-10-21-008): 'result-without-turn' = a result arrived with no outstanding turn. */
+export const SESSION_ANOMALY_REASONS = ['result-without-turn'] as const;
+export type SessionAnomalyReason = (typeof SESSION_ANOMALY_REASONS)[number];
+
 export const TURN_RESULT_PAIRING = Object.freeze({ key: 'turn', pattern: TURN_ID_PATTERN.source, closesThrough: true, absent: 'fifo' } as const);
 
 /** request.offer.mute{scope} (CLOSED): a mod is muted per repo (A3: Neurons on everywhere, mute per repo). */
@@ -646,6 +664,15 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('mod' in v) modId(c, v.mod);
       if ('tool' in v) c.str('tool', v.tool, OFFER_TOOL_PATTERN, 'an MCP tool name');
+      break;
+    case 'offer.retired':
+      if ('offerId' in v) c.str('offerId', v.offerId, OFFER_ID_PATTERN, 'offer:<ULID>');
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('why' in v) c.closedEnum('why', v.why, OFFER_RETIRE_REASONS);
+      break;
+    case 'session.anomaly':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('why' in v) c.closedEnum('why', v.why, SESSION_ANOMALY_REASONS);
       break;
     case 'offer.suppressed': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

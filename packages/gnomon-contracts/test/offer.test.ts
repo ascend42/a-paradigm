@@ -344,3 +344,32 @@ describe('8.0:T-2026-10-21-006 offer.suppressed (founder ruling: suppressions on
     bad({ hsid, why: 'no-block' });
   });
 });
+
+describe('8.0:T-2026-10-21-008 offer.retired + session.anomaly (re-review M-1/M-2)', () => {
+  const hsid = mintHsid();
+  const offerId = mintId('offer');
+  it('both are kernel-owned, normal, under their tag, and their reasons ride the descriptor', () => {
+    expect(RESERVATION_TAGS).toContain('8.0:T-2026-10-21-008');
+    for (const k of ['offer.retired', 'session.anomaly']) {
+      expect(EVENT_KINDS[k]).toMatchObject({ owner: 'kernel', sensitivity: 'normal', reserved: '8.0:T-2026-10-21-008' });
+    }
+    expect(KIND_PAYLOADS['offer.retired']).toEqual(['offerId', 'hsid', 'why']);
+    expect(KIND_PAYLOADS['session.anomaly']).toEqual(['hsid', 'why']);
+    const d = CLIENT_API_DESCRIPTOR as unknown as { desk: { retire: { reasons: string[] } }; sessionAnomaly: { reasons: string[] } };
+    expect(d.desk.retire.reasons).toEqual(['continued']);
+    expect(d.sessionAnomaly.reasons).toEqual(['result-without-turn']);
+  });
+  it('offer.retired is closed: an offer id, an hsid and a closed reason', () => {
+    expect(validateKindPayload('offer.retired', { offerId, hsid, why: 'continued' })).toEqual([]);
+    expect(validateKindPayload('offer.retired', { offerId, hsid, why: 'bored' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('offer.retired', { offerId, hsid }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('offer.retired', { offerId: 'offer:x', hsid, why: 'continued' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('offer.retired', { offerId, hsid, why: 'continued', text: 'hi' }).length).toBeGreaterThan(0);
+  });
+  it('session.anomaly is closed: an hsid and a closed reason, never text', () => {
+    expect(validateKindPayload('session.anomaly', { hsid, why: 'result-without-turn' })).toEqual([]);
+    expect(validateKindPayload('session.anomaly', { hsid, why: 'other' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.anomaly', { hsid, why: 'result-without-turn', line: '{}' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.anomaly', { why: 'result-without-turn' }).length).toBeGreaterThan(0);
+  });
+});

@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { CLIENT_API_DESCRIPTOR, CLIENT_API_ID, computeClientApiId, KIT_ID, STATUS_RESERVED_FIELDS, VOICE_ALLOWLIST, VOICE_CLOSED_VALUES, VOICE_DISARM_REASONS } from '../src/index.js';
 
-const GOLDEN_CLIENT_API_ID = 'sha256:4c2b93711b219bff751f985286ba489bbc7015ad94627e954253186d3eeeaf2c';
+const GOLDEN_CLIENT_API_ID = 'sha256:454cd632007a77540a4526bebb55384d40e7935ad677e5dd9bf185595c77e4de';
 
 describe('voice golden: clientApiId is unchanged by every voice slice', () => {
   it('CLIENT_API_ID equals the pre-voice literal and recomputes to it', () => {

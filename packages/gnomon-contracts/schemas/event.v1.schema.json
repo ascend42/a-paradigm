@@ -151,6 +151,7 @@
     "offer.decided",
     "offer.kept",
     "offer.muted",
+    "offer.retired",
     "offer.shown",
     "offer.suppressed",
     "oracle.result",
@@ -185,6 +186,7 @@
     "schedule.tend.start",
     "session.alias",
     "session.alias.rejected",
+    "session.anomaly",
     "session.compacted",
     "session.context.threshold",
     "session.drained",
@@ -310,6 +312,7 @@
     "offer.decided": "8.0:TD-2026-10-20-812",
     "offer.kept": "8.0:TD-2026-10-20-812",
     "offer.muted": "8.0:TD-2026-10-20-812",
+    "offer.retired": "8.0:T-2026-10-21-008",
     "offer.shown": "8.0:TD-2026-10-20-812",
     "offer.suppressed": "8.0:T-2026-10-21-006",
     "permit.reattributed": "8.0:P8-D98",
@@ -329,6 +332,7 @@
     "request.strictness.set": "M1.1:P8-D86-D88",
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
+    "session.anomaly": "8.0:T-2026-10-21-008",
     "session.context.threshold": "8.0:TD-2026-10-20-812",
     "session.drained": "8.0:P8-D98",
     "session.model": "8.0:model-switch",
@@ -634,6 +638,15 @@
       "why",
       "name",
       "offerKind"
+    ],
+    "offer.retired": [
+      "offerId",
+      "hsid",
+      "why"
+    ],
+    "session.anomaly": [
+      "hsid",
+      "why"
     ],
     "request.mod.install": [
       "source",

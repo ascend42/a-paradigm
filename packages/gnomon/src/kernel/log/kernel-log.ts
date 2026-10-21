@@ -2121,10 +2121,11 @@ function checkPayload(kind: string, payload: unknown): void {
     const errors = validateKindPayload(kind, payload);
     if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-payload', `session.drained payload: ${errors.slice(0, 4).join('; ')}`, { kind });
   }
-  // T-2026-10-21-006: offer.suppressed is closed (names only, never message text) and checked at append
-  if (kind === 'offer.suppressed') {
+  // T-2026-10-21-006: offer.suppressed is closed (names only, never message text) and checked at append;
+  // T-2026-10-21-008: offer.retired and session.anomaly likewise (ids and closed reasons only)
+  if (kind === 'offer.suppressed' || kind === 'offer.retired' || kind === 'session.anomaly') {
     const errors = validateKindPayload(kind, payload);
-    if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-payload', `offer.suppressed payload: ${errors.slice(0, 4).join('; ')}`, { kind });
+    if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-payload', `${kind} payload: ${errors.slice(0, 4).join('; ')}`, { kind });
   }
   // T-2026-10-18-016 (P8-D93): the typed compaction row is closed and checked at append
   if (kind === 'session.compacted') {
