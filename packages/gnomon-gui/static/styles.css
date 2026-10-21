@@ -931,3 +931,26 @@ body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([h
 .card.pe-h3:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-ochre-ink); }
 .card.pe-h4:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-rose-clay-ink); }
 .card.pe-h5:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sea-grey-ink); }
+/* #gui-mods-panel (ui/mods-panel.ts): the Mods sheet reuses the Settings sheet (.settings-card/-head/-body/-sec);
+   rows are plain sheets with quiet rules, state words in ink (never colour alone), failures in --fail */
+.mods-btn { font-size: 12px; }
+.mod-row { border-top: 1px solid var(--rule); padding: 8px 0 6px; display: flex; flex-direction: column; gap: 2px; }
+.mods-sec > .mod-row:first-of-type { border-top: 0; }
+.mod-row p { margin: 0; }
+.mod-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--ink); }
+.mod-name { font-weight: 600; }
+.mod-run { margin-left: auto; font-size: 11.5px; color: var(--ink2); }
+.mod-state-paused .mod-run, .mod-state-stopped .mod-run { color: var(--sec); }
+.mod-state-error .mod-run { color: var(--fail); }
+.mod-facts code { font-size: 11px; }
+.mod-keys { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.mod-pending { display: flex; align-items: center; gap: 6px; }
+.mod-result { padding-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mod-result.fail, .workshop-install-result.fail { color: var(--fail); }
+.mod-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; }
+.mod-field { display: flex; flex-direction: column; gap: 2px; }
+.mod-folder { display: flex; gap: 6px; align-items: center; }
+.mod-folder .field { flex: 1; min-width: 0; }
+.field[aria-invalid="true"] { border-color: var(--fail-edge); }
+.workshop-install-result { margin-left: 8px; }
+.key[aria-busy="true"] { cursor: progress; }

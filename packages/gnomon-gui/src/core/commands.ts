@@ -33,6 +33,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
   // #gui-settings: the sheet that gathers every setting (also the header ⚙ key)
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
+  // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also the header Mods key)
+  { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: day (papercraft)' },
   { id: 'theme.night', title: 'Theme: night (phosphor)' },
@@ -87,8 +89,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
  */
 export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // Aegis S5 L4: no pane.* / workshop.* either: a mod button could otherwise hide the Workshop or the status line
-  // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.')),
+  // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer); nor mods.*
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';

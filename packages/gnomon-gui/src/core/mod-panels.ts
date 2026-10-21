@@ -115,16 +115,21 @@ export function workshopAbsence(status: unknown, views: readonly ModPanelView[])
 export const WORKSHOP_NOT_INSTALLED = 'workshop not installed · gnomon mod install packages/gnomon-mods/workshop';
 
 /**
- * fidelity 2 (UI-first): the footer's "Install Workshop" key. Install has NO wire request today: `gnomon mod install`
- * stages the card on disk and the kernel's StagedCardPickup raises it (packages/gnomon/src/kernel/modhost/control.ts:
- * "§5 names no wire verb for install … adding one moves clientApiId"). So the key is shown DISABLED with the command in
- * its tooltip; when a request kind exists it becomes the one-click path to the normal install card. Never a verb here.
+ * fidelity 2 (UI-first): the footer's "Install Workshop" key. It sends request.mod.install{source:'folder', path} for
+ * the Workshop entry of status.mods.available (#mods-admin: the first-party mods shipped beside the kernel); the
+ * kernel stages it exactly as `gnomon mod install` does and raises the normal install card in the stack.
+ *
+ * Founder dogfood 2026-10-21 ("Install Workshop does nothing"): the key USED to be a constant shown `disabled`, with
+ * the terminal command only in its title=, because the kernel served no install request. A disabled key takes no
+ * click and its tooltip rarely shows, so a press looked dead. Now: a known source ⇒ the key is enabled and its press
+ * always ends in words (the card is raised, or the refusal); no source ⇒ the key still takes the press and opens
+ * the Mods panel, which says why (no catalog, an older kernel) and offers Add from folder. Never a silent key.
  */
-export const WORKSHOP_INSTALL_KEY = Object.freeze({
-  label: 'Install Workshop',
-  enabled: false,
-  title: 'Not a one-click action yet: install has no GUI request kind. In a terminal run `gnomon mod install packages/gnomon-mods/workshop`; the kernel then raises the install card in the stack.',
-});
+export function workshopInstallKey(path: string | null): { label: string; action: 'install' | 'open-mods'; title: string } {
+  return path
+    ? { label: 'Install Workshop', action: 'install', title: 'Install the first-party Workshop: the kernel raises its install card in the stack, and you allow it there with Touch ID' }
+    : { label: 'Install Workshop', action: 'open-mods', title: 'This kernel lists no shipped Workshop: open Mods to see why and to add a mod from a folder' };
+}
 
 /** The views of one region, in status order. */
 export function panelsIn(views: readonly ModPanelView[], region: ModRegion): ModPanelView[] {

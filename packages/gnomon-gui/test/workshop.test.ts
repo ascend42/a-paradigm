@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyPreset, BLOCK_SAFE_COMMANDS, parseLayout, placeWorkshop, serializeLayout, togglePane, WORKSHOP_PLACES } from '../src/core/commands.js';
-import { modPanelsOf, PANEL_BUTTON_REFUSAL, renderModFence, WORKSHOP_INSTALL_KEY, WORKSHOP_VIEW, workshopAbsence } from '../src/core/mod-panels.js';
+import { modPanelsOf, PANEL_BUTTON_REFUSAL, renderModFence, workshopInstallKey, WORKSHOP_VIEW, workshopAbsence } from '../src/core/mod-panels.js';
 import { CAP_PATHS, renderBlock, TONES, type MiniDoc, type MiniEl } from '../src/core/render.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -135,9 +135,10 @@ describe('S5 Workshop region and placement', () => {
     expect(workshopAbsence({}, [])).toBe('workshop not installed · gnomon mod install packages/gnomon-mods/workshop');
     expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user' }] } }, [])).toBe('workshop paused (user) · gnomon mod start gnomon.workshop');
     expect(workshopAbsence({ mods: { views: [], paused: [{ name: 'gnomon.workshop', why: '<b>x' }] } }, [])).toBe('workshop paused · gnomon mod start gnomon.workshop');
-    // fidelity 2: install has no GUI request kind (modhost/control.ts): the key is shown, disabled, the command in title=
-    expect(WORKSHOP_INSTALL_KEY.enabled).toBe(false);
-    expect(WORKSHOP_INSTALL_KEY.title).toContain('gnomon mod install packages/gnomon-mods/workshop');
+    // #gui-mods-panel (founder dogfood 2026-10-21): the key is never a dead, disabled one; it installs from the
+    // kernel's shipped source, or (no source) opens the Mods panel, which says why (test/mods.test.ts)
+    expect(workshopInstallKey('/x/gnomon-mods/workshop')).toMatchObject({ label: 'Install Workshop', action: 'install' });
+    expect(workshopInstallKey(null)).toMatchObject({ label: 'Install Workshop', action: 'open-mods' });
   });
   it('the fence keeps its mod:workshop label and shows the zone titles; card bodies never show a Box title', () => {
     const v = modPanelsOf({ mods: { views: [W] } })[0]!;

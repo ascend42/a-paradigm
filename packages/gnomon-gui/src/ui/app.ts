@@ -39,7 +39,8 @@ import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMod
 import { captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, type CaptureTrack, type GhostText } from '../core/capture.js';
 import { CLIENT_POLL_MS, clientMenuEntries, clientOf, clientPillOf, clientPollWanted, clientRequest, consentText, stopSpeakingRequest, devBannerOf, enrolLine, enrolAllowed, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, forgetRequest, isEnrolCard, needsStart, normalizeVoiceName, noticeOf, reduceEnrolStatus, toastFresh, TOAST_MS } from '../core/voice-client.js';
 import { DELAY_CHOICES, DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, hasDraft, initialDictation, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent } from '../core/dictation.js';
-import { modPanelsFocus, mountModPanels } from './mod-panels-mount.js';
+import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
+import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, pillOf, planVoice, sessionName, voiceMenuEntries, voiceRefusalNote, voiceRequest, voiceStatusOf, VOICE_STATES, VOICE_TITLE, type VoiceState } from '../core/voice.js';
@@ -902,6 +903,9 @@ const settings = mountSettings(document, {
 store.onChange((w) => {
   if (w.has('feed') || w.has('modes') || w.has('voice')) settings.repaint();
 });
+// #gui-mods-panel: the Mods sheet (header Mods key, ⌘K "Mods…", the Workshop footer's key); requests only, never a decision
+const modsPanel = mountMods(document, { client: () => client, status: () => status, cards: () => store.cards.values(), refreshStatus: () => refreshStatus(), focusCard: (cardId) => focusCard(cardId) });
+store.onChange(() => modsPanel.repaint());
 /** Settings → Revoke: the standing feed's own request (request.grant.standing.revoke, a tighten, no presence). */
 async function revokeGrant(grantId: string): Promise<void> {
   if (!client) return notice('not connected: the grant was not revoked', true);
@@ -1005,7 +1009,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   } catch {
     status = null;
   }
-  modPanelRow = mountModPanels({ client: c, status, focused: () => focused }); // K0 mod panels (ui/mod-panels-mount.ts)
+  modPanelRow = mountModPanels({ client: c, status, focused: () => focused, workshop: { openMods: () => modsPanel.open(), refreshStatus: () => refreshStatus() } }); // K0 mod panels (ui/mod-panels-mount.ts)
   voicePresenceDone = false; // ambient's Touch ID is once per GUI login (V2d)
   paintMode();
   paintVoice();
@@ -1296,6 +1300,8 @@ async function refreshStatus(): Promise<void> {
   paintSessions();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
+  modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
+  modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow
   syncDictationContext();
   foldVoiceReports();
   syncSpeakPoll();
@@ -1889,6 +1895,7 @@ function run(id: string, trusted: boolean): void {
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
   else if (id === 'settings.open') settings.open();
+  else if (id === 'mods.open') modsPanel.open();
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
   else if (id === 'pane.sessions.toggle') layout = togglePane(layout, 'sessions');
   else if (id === 'pane.stack.toggle') layout = togglePane(layout, 'stack');
@@ -2214,6 +2221,8 @@ function wire(): void {
       settings.open();
     } else if (e.key === 'Escape' && settings.isOpen()) {
       settings.close();
+    } else if (e.key === 'Escape' && modsPanel.isOpen()) {
+      modsPanel.close();
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
     } else if (e.key === 'Escape' && !$('voice-menu').hidden) {

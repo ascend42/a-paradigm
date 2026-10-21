@@ -42,6 +42,10 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     }
     row.appendChild(seg);
     note(r.note);
+    // a disabled choice says why in words, not only in a tooltip (a disabled key takes no press and its title rarely
+    // shows: the Install Workshop lesson, #gui-mods-panel)
+    const why = r.options.filter((o) => o.disabled && o.note).map((o) => `${o.label}: ${o.note}`);
+    if (why.length) note(why.join(' · '));
   } else if (r.kind === 'toggle') {
     row.appendChild(h(doc, 'button', { class: `key quiet seg-key${r.on ? ' current' : ''}`, type: 'button', 'aria-pressed': String(r.on), 'data-settings-run': r.run }, r.on ? 'Shown' : 'Hidden'));
     note(r.note);
