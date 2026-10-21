@@ -2269,6 +2269,41 @@ components:
       - test/desk-stats.test.ts
     oracles: [G-DSK-02, G-DSK-03, G-DSK-04]
 
+  mods-admin:
+    description: >-
+      #mods-admin (the GUI Mods panel's kernel half; founder dogfood
+      2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges
+      installed / available / catalog into the human class's status.mods
+      (pin, tier, source, version, run state, MCP server, offers, Desk counts,
+      a shipped first-party tree that is not the pin = update; available =
+      packages/gnomon-mods beside the kernel, findFirstPartyRoot, tier by
+      hash). request() serves request.mod.install{source:'folder', path}
+      (the A8 contracts kind, written as a row) and the dispatcher-only
+      request.mod.link|pause|start|uninstall|config, each exactly its
+      `gnomon mod` verb (stageInstall, writePause, requestStart,
+      requestUninstall, requestMcpConfig), human on a gui/device connection
+      only; then StagedCardPickup / McpConfigCards scan at once so the card
+      is in the stack before the answer. Signs nothing. A URL source is
+      refused UNSUPPORTED (slice S4).
+    tags: [mods, gui]
+    signals: []
+    tests:
+      - test/mods-admin.test.ts
+      - test/socket-abi.test.ts
+
+  desk-stats:
+    description: >-
+      #desk-stats. src/kernel/desk/desk-stats.ts: the pure foldDeskStats /
+      foldDeskUnnamed `gnomon desk stats` prints (moved from cli/desk-cli.ts,
+      which re-exports them) and DeskTally, the kernel's live tally (seeded
+      from the log once, fed by onCommit, bounded) behind
+      status.mods.installed[].desk.
+    tags: [desk]
+    signals: []
+    tests:
+      - test/mods-admin.test.ts
+      - test/desk-stats.test.ts
+
   mcp-passthrough:
     description: >-
       #mcp-passthrough (TD-2026-10-20-812 A2, slice S1; spec §12.9).

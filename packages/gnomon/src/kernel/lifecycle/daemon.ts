@@ -146,6 +146,8 @@ import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
+import { ModsAdmin, type ModAsker } from '../modhost/mods-admin.js';
+import { DeskTally } from '../desk/desk-stats.js';
 import { spawn as spawnChild } from 'node:child_process';
 
 /**
@@ -1158,6 +1160,20 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
   let mcpCardsTimer: NodeJS.Timeout | null = null;
   const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home) });
+  // #mods-admin (the GUI Mods panel): the `gnomon mod` verbs as human requests + status.mods.installed/available,
+  // with the Desk counts of `gnomon desk stats` kept live by #desk-stats' DeskTally
+  const deskTally = new DeskTally({ log, kernelPrincipal });
+  const modsAdmin = new ModsAdmin({
+    home,
+    trust: authority,
+    host: mods,
+    scan: () => modPickup.scan(),
+    scanConfig: () => mcpCards.scan(),
+    raised: () => modPickup.raised(),
+    desk: deskTally,
+    logRequest: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload, connId: ids.connId }).then(() => undefined),
+    ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
+  });
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1180,6 +1196,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       status: () => runModes.status(),
       standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
+      mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
