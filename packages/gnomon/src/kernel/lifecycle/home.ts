@@ -11,6 +11,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { noReadUpDir, ownerOnlyDir } from '../../platform/owner-only.js';
 import { LifecycleRefusal } from './refusal.js';
 
 export const GNOMON_HOME_ENV = 'GNOMON_HOME';
@@ -56,6 +57,17 @@ export function ensureGnomonHome(home: string): string {
   const uid = currentUid();
   if (uid !== null && st.uid !== uid) {
     throw new LifecycleRefusal('unsafe-home', `home ${home} is owned by uid ${st.uid}, not ${uid}`, { home });
+  }
+  if (process.platform === 'win32') {
+    // G-WIN-02: a protected owner-only DACL applied by the helper and accepted only from its read-back (the owner
+    // SID is checked there too); everything the kernel creates below inherits it (platform/owner-only.ts)
+    try {
+      ownerOnlyDir(home);
+      noReadUpDir(home); // W5: nothing Low (a session, the GUI transport) reads the home; carve-backs are relabelled readable
+    } catch (e) {
+      throw new LifecycleRefusal('unsafe-home', `home ${home}: ${e instanceof Error ? e.message : String(e)}`, { home });
+    }
+    return home;
   }
   if ((st.mode & 0o777) !== OWNER_ONLY_DIR_MODE) {
     fs.chmodSync(home, OWNER_ONLY_DIR_MODE);

@@ -5,8 +5,9 @@
  * The `session` sandbox profile's platform registry (spec §15.5 row
  * `session`, §16 "Session denies"; G-WIN-05: no platform branch in kernel
  * code). darwin = `sandbox-exec -p <generated SBPL> <claude real> <argv…>`
- * (platform/darwin/session-sbpl.ts). win32 = restricted token + ACEs + the
- * S29-08 WFP mechanism, Windows parity phase (P8-D78) — not built. linux has
+ * (platform/darwin/session-sbpl.ts). win32 = Low integrity + restricted token
+ * + session-SID ACEs + a private desktop (platform/win32/session-sandbox.ts,
+ * W5), always `partial` (no WFP loopback filter yet, probe P10w). linux has
  * no session mechanism yet (every class `none`, platform/session-denies.ts).
  * A platform with no backend REFUSES `sandbox-unavailable`: a session never
  * spawns unsandboxed and never silently degraded (§15.5 rule). The §15.5
@@ -25,6 +26,7 @@ import type { SessionPolicy } from '../manifest/policy.js';
 import { SESSION_DENY_REALISATION, type DenyPlatform } from '../../platform/session-denies.js';
 import { SbplError, sessionProfileSbpl, SESSION_SANDBOX_MIN_MACOS, type DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { darwinMacosMajor, darwinSipEnabled, type MacosProbe, type SipProbe } from '../../platform/darwin/macos.js';
+import { sessionSidFor, win32SessionPlan } from '../../platform/win32/session-sandbox.js';
 
 export interface SessionLaunchInput {
   policy: SessionPolicy;
@@ -32,6 +34,8 @@ export interface SessionLaunchInput {
   binaryReal: string;
   argv: string[];
   extras: DarwinSessionExtras;
+  /** the session's hsid (win32: its own restricting SID, sessionSidFor) */
+  hsid?: string;
 }
 
 export interface SessionLaunchPlan {
@@ -40,6 +44,8 @@ export interface SessionLaunchPlan {
   sandbox: 'full' | 'partial';
   profile: string;
   profileHash: string;
+  /** what this launch could not deny (Aegis M1, PR #52): logged on the session.sandbox row, never dropped */
+  partial?: readonly string[];
 }
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
@@ -91,10 +97,17 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe
   };
 }
 
+/** win32 (W5): Low integrity + a restricted token + session-SID ACEs + a private desktop (platform/win32/session-sandbox.ts). */
+function win32Session(i: SessionLaunchInput): SessionLaunchPlan {
+  if (!i.hsid) throw new LifecycleRefusal('sandbox-unavailable', 'a win32 session launch needs its hsid (its own SID)', { profile: 'session' });
+  const p = win32SessionPlan({ policy: i.policy, roots: i.extras.roots, tempDir: i.extras.tmpdir, sessionSid: sessionSidFor(i.hsid), binaryReal: i.binaryReal, argv: i.argv });
+  return { command: p.command, args: p.args, sandbox: p.sandbox, profile: p.profile, profileHash: p.profileHash, partial: p.partial };
+}
+
 /** Platform registry of session sandbox backends (G-WIN-05). */
 export const SESSION_SANDBOX_BACKENDS: Readonly<Partial<Record<string, (i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe) => SessionLaunchPlan>>> = Object.freeze({
   darwin: darwinSession,
-  // win32: restricted token + ACEs + WFP (S29-08), Windows parity phase (P8-D78) — not built.
+  win32: win32Session,
 });
 
 /** `probe` reads the OS version and `sip` System Integrity Protection (platform code); tests pass fixed ones to exercise the floor refusals. */

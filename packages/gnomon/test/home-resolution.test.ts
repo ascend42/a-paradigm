@@ -10,6 +10,7 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LifecycleRefusal, resolveGnomonHome, selectSocketPath } from '../src/kernel/lifecycle/index.js';
+import { windowsPipePath } from '../src/kernel/lifecycle/endpoint.js';
 
 describe('home resolution', () => {
   it('honours an absolute GNOMON_HOME (test seam) and defaults to ~/.gnomon', () => {
@@ -30,7 +31,13 @@ describe('home resolution', () => {
 });
 
 describe('G-DMN-02 endpoint selection (pure)', () => {
-  it('Windows refuses here: the named pipe is the parity phase (P8-D78)', () => {
-    expect(selectSocketPath({ home: 'C:\\Users\\x\\.gnomon', platform: 'win32', env: {} })).toMatchObject({ ok: false });
+  it('Windows: the named pipe \\\\.\\pipe\\gnomon-<32 hex>, one name per home, case-folded (W3)', () => {
+    const a = selectSocketPath({ home: 'C:\\Users\\x\\.gnomon', platform: 'win32', env: {} });
+    expect(a).toMatchObject({ ok: true, via: 'pipe' });
+    expect(a.ok && a.path).toMatch(/^\\\\\.\\pipe\\gnomon-[0-9a-f]{32}$/);
+    expect(selectSocketPath({ home: 'C:\\USERS\\X\\.GNOMON', platform: 'win32', env: {} })).toEqual(a);
+    expect(selectSocketPath({ home: 'C:\\Users\\y\\.gnomon', platform: 'win32', env: {} })).not.toEqual(a);
+    // Aegis M2: the per-home salt (owner-only <home>/pipe.salt) is in the hash, so another user cannot compute the name
+    expect(windowsPipePath('C:\\Users\\x\\.gnomon', 'a'.repeat(32))).not.toBe(windowsPipePath('C:\\Users\\x\\.gnomon', 'b'.repeat(32)));
   });
 });

@@ -7,13 +7,13 @@
  * `$XDG_RUNTIME_DIR` (a per-user 0700 directory); macOS has no such fallback.
  * Gnomon deliberately DEPARTS from Warpline's `os.tmpdir()` fallback
  * (warpline lifecycle.ts:44-50): never `/tmp`; if nothing fits, refuse to
- * start. Windows (named pipe via the signed helper) is the parity phase
- * (P8-D78) and refuses here.
+ * start. Windows: the named pipe `\\.\pipe\gnomon-<sha>` (windowsPipePath),
+ * made owner-only by the helper before it serves (W3, probe P03).
  *
  * Lifted (copied, never imported) from packages/warpline/src/daemon/lifecycle.ts.
  */
 import * as net from 'node:net';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -39,7 +39,46 @@ export const SUN_PATH_SAFE = 100;
 /** Shared temp roots a kernel socket may never live under (§2.4). */
 export const FORBIDDEN_SOCKET_ROOTS: readonly string[] = Object.freeze(['/tmp', '/private/tmp', '/var/tmp']);
 
-export type EndpointVia = 'home' | 'xdg-runtime';
+export type EndpointVia = 'home' | 'xdg-runtime' | 'pipe';
+
+export const PIPE_SALT_FILE = 'pipe.salt';
+
+/**
+ * The home's pipe salt (Aegis M2): 32 random hex in `<home>/pipe.salt`, created on first use. The home is owner-only,
+ * so another local user cannot compute the pipe name and squat it before the kernel binds (a squat fails the
+ * kernel's listen closed: a cross-user denial of service without the salt). null when the home does not exist yet.
+ */
+function pipeSalt(home: string): string | null {
+  const file = path.join(home, PIPE_SALT_FILE);
+  const read = (): string | null => {
+    try {
+      const s = fs.readFileSync(file, 'utf8').trim();
+      return /^[0-9a-f]{32}$/.test(s) ? s : null;
+    } catch {
+      return null;
+    }
+  };
+  const have = read();
+  if (have) return have;
+  try {
+    fs.writeFileSync(file, `${randomBytes(16).toString('hex')}\n`, { flag: 'wx', mode: 0o600 });
+  } catch {
+    /* no home yet, or a concurrent creator won: read whatever is there */
+  }
+  return read();
+}
+
+/** The kernel pipe for a home on Windows: `\\.\pipe\gnomon-<32 hex>` (sha256 of the home's salt and its case-folded realpath). */
+export function windowsPipePath(home: string, salt: string | null = pipeSalt(home)): string {
+  const key = createHash('sha256').update(`${salt ?? ''}\n${realOrResolved(home).toLowerCase()}`).digest('hex').slice(0, 32);
+  return `\\\\.\\pipe\\gnomon-${key}`;
+}
+
+/** The pipe name (no `\\.\pipe\` prefix) of a pipe path, or null for a socket path. */
+export function pipeNameOf(socketPath: string): string | null {
+  const m = /^\\\\[.?]\\pipe\\(.+)$/.exec(socketPath);
+  return m ? m[1]! : null;
+}
 
 export type EndpointChoice =
   | { ok: true; path: string; via: EndpointVia }
@@ -112,7 +151,12 @@ export function selectSocketPath(opts: EndpointOptions): EndpointChoice {
   const candidates: string[] = [];
 
   if (platform === 'win32') {
-    return { ok: false, reason: 'windows named pipe is the parity phase (P8-D78)', candidates };
+    // spec §16: `\\.\pipe\gnomon-<sha>`, keyed by the home's realpath (case-folded: NTFS is case-insensitive) so
+    // every client derives the same name. The kernel binds it first (libuv FIRST_PIPE_INSTANCE: a squatter fails the
+    // listen closed) and the helper makes its DACL owner-only before any connection is served (P03, server.ts).
+    const pipe = windowsPipePath(opts.home);
+    candidates.push(pipe);
+    return { ok: true, path: pipe, via: 'pipe' };
   }
 
   const preferred = path.join(opts.home, SOCKET_NAME);

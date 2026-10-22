@@ -10,6 +10,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { law7Layers, law7Scan, PreflightRefusal, resolveClaudeBinary, compareVersions } from '../src/kernel/runner/preflight.js';
+import { spawnSync } from 'node:child_process';
+import { registryLayers } from '../src/platform/win32/registry.js';
 import { CLAUDE_CODE_PLATFORMS, claudeCodePlatform, type ClaudeCodePlatformRow } from '../src/platform/claude-code.js';
 
 const tmps: string[] = [];
@@ -115,9 +117,20 @@ describe('G-SUB-01 law 7 per spawn: every key in every layer ⇒ api_billing_ref
     const w = world();
     expect(law7Scan({ [k]: v }, law7Layers(w.input)).map((h) => h.where)).toEqual(['env']);
   });
-  it('a managed source the kernel cannot read on this OS (Windows policy keys) is a hit', () => {
+  it('a managed source the kernel cannot read on this OS is a hit', () => {
     const w = world();
-    expect(law7Scan({}, law7Layers({ ...w.input, row: { ...w.row, managedUnscannable: ['HKLM\\SOFTWARE\\Policies\\ClaudeCode'] } })).map((h) => h.key)).toEqual(['(unreadable)']);
+    expect(law7Scan({}, law7Layers({ ...w.input, row: { ...w.row, managedUnscannable: ['some-unreadable-managed-source'] } })).map((h) => h.key)).toEqual(['(unreadable)']);
+  });
+  it('W3: a Windows policy key is read with reg.exe — absent ⇒ no layer, JSON ⇒ scanned, anything else ⇒ unreadable', () => {
+    const fake = (status: number, stdout: string, stderr = '') => (() => ({ status, stdout, stderr, error: undefined })) as unknown as typeof spawnSync;
+    const K = 'HKLM\\SOFTWARE\\Policies\\ClaudeCode';
+    expect(registryLayers(K, fake(1, '', 'ERROR: The system was unable to find the specified registry key or value.'))).toEqual([]);
+    const listing = `\r\n${K}\r\n    Settings    REG_SZ    {"env":{"ANTHROPIC_API_KEY":"x"}}\r\n    Flag    REG_DWORD    0x1\r\n`;
+    const layers = registryLayers(K, fake(0, listing));
+    expect(layers.map((l) => l.where)).toEqual([`managed:${K}\\Settings`, `managed:${K}\\Flag`]);
+    expect(law7Scan({}, layers.map((l) => ({ ...l, kind: 'settings' as const }))).map((h) => h.key).sort()).toEqual(['(unreadable)', 'ANTHROPIC_API_KEY']);
+    expect(registryLayers(K, fake(5, ''))).toEqual([{ where: `managed:${K}`, json: undefined }]); // access denied ⇒ unreadable (fail closed)
+    expect(registryLayers('HKLM\\SOFTWARE\\x;evil', fake(0, ''))).toEqual([{ where: 'managed:HKLM\\SOFTWARE\\x;evil', json: undefined }]);
   });
   it('the platform registry names managed sources for every OS (no platform branch)', () => {
     for (const p of ['darwin', 'win32', 'linux'] as const) expect(CLAUDE_CODE_PLATFORMS[p].managedSettings.length).toBeGreaterThan(0);

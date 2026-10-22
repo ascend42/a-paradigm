@@ -269,7 +269,9 @@ describe('round 3 (Aegis H1, node half): every session profile denies writes to 
     const denies = plans[0]!.policy.denyWrite.map((d) => d.path);
     expect(denies).toContain(nodeReal);
     const cellar = nodeReal.split(path.sep).lastIndexOf('Cellar');
-    expect(denies).toContain(cellar > 0 ? nodeReal.split(path.sep).slice(0, cellar).join(path.sep) : path.dirname(path.dirname(nodeReal)));
+    // the Windows install layout (node.exe at the top of its dir): the prefix is that dir, never Program Files itself
+    const winLayout = path.basename(nodeReal).toLowerCase() === 'node.exe' && path.basename(path.dirname(nodeReal)).toLowerCase() !== 'bin';
+    expect(denies).toContain(cellar > 0 ? nodeReal.split(path.sep).slice(0, cellar).join(path.sep) : winLayout ? path.dirname(nodeReal) : path.dirname(path.dirname(nodeReal)));
     expect(denies).toContain(fs.realpathSync.native(pin.dir));
   });
 

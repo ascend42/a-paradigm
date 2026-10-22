@@ -107,7 +107,10 @@ components:
       safari.html for Safari by hand, P09_SAFARI_LINE to record it),
       p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
       loaded under the §11.2 CSP; violations by phase, size, parse time),
-      p14-link-outbound (default-deny sandbox-exec link profile); founder-run
+      p14-link-outbound (default-deny sandbox-exec link profile), p03-pipe-dacl
+      (win32, W1: Node cannot adopt a foreign pipe, the default pipe DACL lets Everyone and
+      Anonymous read, a WRITE_DAC client handle makes it owner-only pipe-wide, a squatted
+      name fails the listen EADDRINUSE); founder-run
       p00-sign-notary, p04-se-helper, p05-keychain-acl (signed
       GnomonHelperProbe.app from _shared/helper/ProbeHelper.swift; fail fast
       with a founder-steps pointer when the identity / provisioning profile /
@@ -145,6 +148,23 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    windows-pipe: >-
+      BUILT (Windows parity W3, docs/plans/gnomon-windows.md; spec §16 Kernel endpoint, G-WIN-01, probe P03).
+      On win32 selectSocketPath returns the named pipe gnomon-<32 hex> (windowsPipePath: sha256 of the case-folded
+      realpath of the home; via 'pipe'). listenSocket binds it (libuv FIRST_PIPE_INSTANCE: a squatter fails the
+      listen, endpoint-busy) and REQUIRES opts.securePipe (else endpoint-acl): until it resolves every accepted
+      connection is destroyed unserved, then every earlier one is dropped. The daemon passes
+      platform/win32/pipe.ts secureKernelPipe: the helper's pipe.secure sets the protected current-user-only
+      DACL plus a DENY for the Gnomon session SID (a session token carries the user SID), and the kernel accepts
+      only an owner-only read-back with that deny AND serverPid === its own pid. Before it, the kernel shields its
+      own process (platform/win32/shield.ts: process, threads and default DACL deny the session SID).
+      The helper sets the OWNER to the current user as well (pipe.secure and the home's owner-only DACL): on an
+      elevated admin, new objects are owned by BUILTIN\Administrators, and the owner-only read-back requires the
+      user. The first ownerOnlyDir in a process calls the helper's process.owner-default (TokenOwner := the token's
+      own user), so what the kernel creates below the home passes the strict per-file check too. Verdicts compare
+      in the SDDL spelling of the user (info.userSddlSid: the built-in Administrator reads back as LA). platform/win32/system-root.ts win32SystemRoot is the ONE Windows-directory lookup (reg.exe, the helper
+      PATH, the transport child's env): the canonical SystemRoot first, then case-insensitive, and only a
+      drive-rooted absolute path (never relative or UNC); otherwise C:\Windows.
     journal-cursor: >-
       BUILT (slice A4, T-2026-10-19-001, TD-2026-10-19-648 item 8, §5):
       SERVER_FEATURES = ['journal.cursor'] (inside the signed
@@ -778,6 +798,11 @@ components:
     description: >-
       #dev-launch (spec §2.4 rule 6) — the UNSIGNED, DEV-ONLY dogfood launch
       path until #identity M1.3. src/cli/dev-home.ts + src/cli/dev-cli.ts.
+      `gnomon dev local --model <id> [--base] [--compat] [--id] [--runner]` is the
+      dev root act that enables the local lane: it signs local.signed.json (one
+      loopback/LAN endpoint, default Ollama 127.0.0.1:11434; the gnomon-local
+      runner pinned by node + tree sha256, default this clone's
+      gnomon-local/dist), the version climbing past the last one (test/dev-local.test.ts).
       `gnomon dev init [--home <abs>]` provisions a DEV home (default
       ~/.gnomon-dev): a software P-256 dev-test root (DevTestRootAuthority
       behind DEV_TEST_ROOT_ACK, persisted 0600 as keys/DEV-ONLY-root-p256.pem),
@@ -2008,6 +2033,21 @@ components:
       1-2 argv words) + a {type:'bash-prefix', detail} block node the GUI
       verifies against contentHash.
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).
+      W4 phase A (Windows hybrid, TD-2026-10-22-278): an ApprovalsKey with
+      clickClass (platform/win32/approvals.ts: the win32 helper's Software-KSP key,
+      bound to the human by a root-signed gnomon-approvals-key:v1 row; dev homes
+      via `gnomon dev up`) signs a CACHED-class GUI decision of a CLICK_KINDS card
+      (permission, ask-user, plan) with no presence: approval.decide{presence:
+      'click'}, no unlock. Everything else on such a key refuses presence-
+      unavailable kernel-side (cached, batch), and fresh only with W4 phase B's
+      SEPARATE Windows Hello presence key bound (presencePublicKeyPem, a
+      root-signed gnomon-presence-key:v1 row; `gnomon dev up` creates it with one
+      Hello prompt): the approvals key signs the decision, the Hello key the
+      presence challenge (verified against presenceKeyId, never the click key);
+      no unlock is ever kept. A click never learns a rule (rules.ts takes
+      fresh/cli only); click-beyond-class is a suspicion. The GUI's approve calls
+      wait 150 s (a PIN prompt), above the kernel's 120 s helper sign timeout.
+      Tests: test/identity-hardware.test.ts, test/win32-approvals.test.ts.
       Voice (TD-2026-10-19-194): whether voice may take a decision is
       gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not
       classes.ts; test/voice-golden.test.ts pins abiId and checks the list
@@ -2946,7 +2986,15 @@ components:
       session.open uuid), lstat-only, never through a link, logged
       session.sandbox{phase:'session-env-emptied'}. Tests:
       test/session-sandbox.test.ts, test/session-env-cleanup.test.ts.
-      Linux/Windows: data only, no backend. repin-card.ts (TD-2026-10-19-063):
+      Linux: data only, no backend. Windows (W5, platform/win32/session-sandbox.ts; founder decision after the
+      Aegis W5 review): a LOW-integrity restricted token (gnomon-helper sandbox --low --desktop --session-sid),
+      Claude Code's PowerShell tool with Bash removed (claudePermissions(policy,'win32'): Git Bash cannot start
+      nested at Low), Low labels on the writable roots, deny ACEs for the Gnomon SID (read denies deny-all, the
+      parent of an in-root literal deny loses FILE_DELETE_CHILD), label-readable + allow-read carve-backs,
+      label-meta on their home ancestors (Claude vets its settings path), own-SID grants on this session's
+      session-env and home dir (released at exit), every read-back checked; ensureSessionEnvDir reads owner +
+      DACL there (privateToUser). Reported partial (prefix/steering existing-only, temp dir and transcripts shared
+      between sessions, no WFP loopback deny until P10w). Test: test/session-sandbox-win32.test.ts. repin-card.ts (TD-2026-10-19-063):
       the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE
       #approval-broker gate-class card per new sha (on an open refused
       claude_binary_changed, and on a poll of the resolved source at
@@ -2970,6 +3018,7 @@ components:
       - test/session-preflight.test.ts
       - test/session-profile.test.ts
       - test/session-sandbox.test.ts
+      - test/session-sandbox-win32.test.ts
     oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]
 
   supervisor:
@@ -4281,7 +4330,8 @@ components:
       forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via
       config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
       assertNotClaude: law 7 never runs claude under a backend:local permit),
-      probe.ts (/slots n_ctx, else /props; tools only on a live tool call),
+      probe.ts (/slots n_ctx, else /props, else Ollama /api/show num_ctx, else
+      the loaded context in /api/ps; tools only on a live tool call),
       routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
       opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
       JSONL driver, tolerant parse, LocalUsageMeter no double count),
@@ -4636,6 +4686,14 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    windows-home: >-
+      BUILT (Windows parity W3; spec §16 Home dir + modes, G-WIN-02). ensureGnomonHome on win32 calls
+      platform/owner-only.ts ownerOnlyDir: the win32 helper (platform/win32/helper-client.ts; repo-built,
+      sha256-pinned and re-checked before every spawn in a dev kernel, refused unsigned by a release kernel until
+      W7) applies the protected owner-only DACL D:P(A;OICI;FA;;;<user SID>) and the home is accepted only from the
+      read-back, then becomes a verified root. isOwnerOnly / ownerOnlyFile replace the POSIX mode checks
+      (device-key.ts, dev-home.ts so far): a path inside a verified root inherits the ACE and needs no round trip;
+      anything else is read back with acl.read. POSIX behaviour is unchanged (0700 / 0600 read back).
     daemon-stop: >-
       PARTLY BUILT (T-2026-10-19-014 B0, TD-2026-10-19-528 F3, spec §3.1 I3).
       Kernel side built: DaemonHandle.requestStop(connId, reason='stop') raises

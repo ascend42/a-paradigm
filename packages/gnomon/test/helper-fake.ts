@@ -56,6 +56,10 @@ export interface FakeHelperOptions {
   touch?: boolean;
   /** sign with this key instead of the real one (an impostor / broken helper) */
   wrongKey?: boolean;
+  /** refuse sign {mode:'click'} (a helper with no click class) */
+  noClick?: boolean;
+  /** the win32 shape (W4 phase B): a SEPARATE presence key signs a fresh sign's presence message (the 2nd) */
+  presenceKey?: boolean;
   /** corrupt the n-th signature of a sign reply (0-based) */
   corruptSig?: number;
   /** the human approves this many prompts, then declines */
@@ -105,7 +109,7 @@ export class FakeHelper implements HelperTransport {
   /** `gen` = keys that already exist in this fake SE; null = an empty SE. */
   constructor(gen: string | null = 'test0001', opts: FakeHelperOptions = {}) {
     this.opts = opts;
-    if (gen !== null) for (const k of ['root', 'approvals']) {
+    if (gen !== null) for (const k of ['root', 'approvals', ...(opts.presenceKey ? ['presence'] : [])]) {
       const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
       this.keys.set(`${gen}.${k}`, { priv: privateKey, pub: publicKey });
     }
@@ -157,7 +161,7 @@ export class FakeHelper implements HelperTransport {
     if (this.#alive) this.crash();
   }
 
-  publicPem(key: 'root' | 'approvals', gen = 'test0001'): string {
+  publicPem(key: 'root' | 'approvals' | 'presence', gen = 'test0001'): string {
     return this.keys.get(`${gen}.${key}`)!.pub.export({ type: 'spki', format: 'pem' }).toString();
   }
 
@@ -276,11 +280,14 @@ export class FakeHelper implements HelperTransport {
         if (!k) throw new HelperRefusal('not-found', 'no key');
         const msgs = (req.messages as string[]).map((m) => Buffer.from(m, 'base64'));
         if (req.keep !== undefined && typeof req.keep !== 'boolean') throw new HelperRefusal('bad-request', 'keep must be a boolean');
-        const allowed = req.mode === 'cached' ? CACHED_DOMAINS : DOMAINS[String(req.key)]!;
+        // 'click' (the win32 helper, W4 phase A): the approvals key, decision messages only, no prompt, no unlock
+        const allowed = req.mode === 'cached' || req.mode === 'click' ? CACHED_DOMAINS : DOMAINS[String(req.key)]!;
         for (const m of msgs) if (!allowed.some((d) => m.subarray(0, d.length).toString() === d)) throw new HelperRefusal('domain-refused', 'domain');
         const line = helperLine(String(req.key), msgs);
         const conn = typeof req.connId === 'string' ? req.connId : undefined;
-        if (req.mode === 'cached') {
+        if (req.mode === 'click') {
+          if (req.key !== 'approvals' || this.opts.noClick) throw new HelperRefusal('presence-unavailable', 'no click class here');
+        } else if (req.mode === 'cached') {
           if (req.key !== 'approvals' || !conn || !this.unlocks.has(conn)) throw new HelperRefusal('no-unlock', 'no unlock');
         } else {
           this.prompts.push(String(req.reason));
@@ -294,8 +301,9 @@ export class FakeHelper implements HelperTransport {
         }
         this.signs.push({ key: String(req.key), mode: String(req.mode), ...(conn ? { connId: conn } : {}), n: msgs.length });
         const priv = this.opts.wrongKey ? this.#other.privateKey : k.priv;
+        const presence = this.opts.presenceKey && req.mode === 'fresh' ? this.keys.get(`${String(req.gen)}.presence`)!.priv : null;
         const sigs = msgs.map((m, i) => {
-          const s = cryptoSign('sha256', i === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: priv, dsaEncoding: 'der' });
+          const s = cryptoSign('sha256', i === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: presence && i === 1 ? presence : priv, dsaEncoding: 'der' });
           return s.toString('base64');
         });
         // #first-run I1 falsifiers: a broken / impostor helper drops (null) or replaces its own prompt line

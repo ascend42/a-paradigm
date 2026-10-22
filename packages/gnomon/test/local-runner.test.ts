@@ -89,6 +89,21 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
     expect(await probeLocalEndpoint({ id: 'e', base: srv.base, model: 'm' })).toMatchObject({ ok: true, tools: false, nCtx: 4096, nCtxSource: 'props' });
     expect(await probeLocalEndpoint({ id: 'e', base: 'http://127.0.0.1:9', model: 'm' })).toMatchObject({ ok: false });
   });
+  it('Ollama (no /slots, no /props): n_ctx from /api/show num_ctx, else the loaded context in /api/ps, else unknown', async () => {
+    const ollama = (show: string, ps: unknown): ((u: string, i: RequestInit) => Promise<Response>) => async (u) => {
+      const p = new URL(u).pathname;
+      const json = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+      if (p === '/v1/models') return json(200, { data: [{ id: 'qwen3.5-9b-16k' }] });
+      if (p === '/api/show') return json(200, { parameters: show });
+      if (p === '/api/ps') return json(200, ps);
+      if (p === '/v1/chat/completions') return json(200, { choices: [{ message: { tool_calls: [{ function: { name: 'get_time', arguments: '{"tz":"UTC"}' } }] } }] });
+      return new Response('404 page not found', { status: 404 });
+    };
+    const ep = { id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5-9b-16k' };
+    expect(await probeLocalEndpoint(ep, { fetch: ollama('top_k                          20\nnum_ctx                        16384\ntemperature 1', { models: [] }) })).toMatchObject({ ok: true, tools: true, nCtx: 16384, nCtxSource: 'ollama-show' });
+    expect(await probeLocalEndpoint(ep, { fetch: ollama('temperature 1', { models: [{ name: 'qwen3.5-9b-16k', context_length: 4096 }] }) })).toMatchObject({ nCtx: 4096, nCtxSource: 'ollama-ps' });
+    expect(await probeLocalEndpoint(ep, { fetch: ollama('temperature 1', { models: [{ name: 'other', context_length: 4096 }] }) })).toMatchObject({ nCtx: null, nCtxSource: null });
+  });
   it('Aegis L2 / reviewer: the configured model id wins when /v1/models lists it; else data[0] (string ≤ 128)', async () => {
     srv = await fakeOpenAI({ tools: true });
     expect((await probeLocalEndpoint({ id: 'e', base: srv.base, model: 'fake-qwen-7b-q4' })).model).toBe('fake-qwen-7b-q4');

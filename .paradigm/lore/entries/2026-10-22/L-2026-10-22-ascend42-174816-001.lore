@@ -1,0 +1,55 @@
+id: L-2026-10-22-ascend42-174816-001
+type: agent-session
+timestamp: '2026-10-22T17:48:16.181Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'W5 Windows session sandbox: Low integrity + PowerShell, end to end from the GUI'
+summary: Built and verified the Windows session sandbox. A Medium restricted token (needed for Git Bash) was rejected after Aegis showed a session could inject into the user's other processes; the founder chose Low integrity with Claude Code's PowerShell tool and Bash removed. The session profile is Low labels + Gnomon/per-session-SID ACEs, label-meta for Claude's settings-path vetting, own-SID carve-backs and temp dir, kernel self-shield and a session-denied pipe, and holds released at session end. A GUI -> kernel -> Low Claude 2.1.292 session read a repo file end to end; a PowerShell call raised a card, and approvals wait for W4 (Windows Hello).
+symbols_touched:
+  - '#gnomon-helper'
+  - '#session-runner'
+  - '#claude-adapter'
+  - '#supervisor'
+  - '#wrapper-channel'
+  - '#local-runner'
+decisions:
+  - id: W5-session-integrity
+    decision: Windows sessions run at Low integrity with Claude Code's PowerShell tool; Bash is denied
+    rationale: 'Git Bash cannot start nested at Low; Medium was no boundary (Aegis H3: CreateRemoteThread into the user''s processes); a separate user account is the heavier W11 option'
+  - id: W5-owner-rights
+    decision: The OWNER RIGHTS ACE grants READ_CONTROL only
+    rationale: Sessions carry the user SID, so a full-control OWNER RIGHTS ACE matched them and beat inherited denies (cross-session write found by test)
+errors_encountered:
+  - description: 'A session could read the home''s key file: two policy entries on one path replaced each other''s ACE'
+    resolution: 'mergeSessionAcls: one ACE entry and one label entry per path'
+  - description: The shielded kernel's default DACL (deny session SID) was inherited by the session launcher, so the session could not open its own threads/desktop
+    resolution: The restricted token gets an explicit user+SYSTEM default DACL and the desktop an explicit SA; the launcher keeps the shielded default
+  - description: 'Claude refused its settings file: Low could not vet path components in the no-read-up home'
+    resolution: label-meta (inherit-only no-read-up) on allowReadMetadata ancestors, restored at release
+  - description: Windows PowerShell 5.1 mangles JSON piped to native exes; wrapper-channel saw a Windows pipe as 'other' (isFIFO false)
+    resolution: Node-based label tooling; channelKind checks the S_IFIFO mode bit
+learnings:
+  - Node's fs isFIFO() is false for pipes on Windows; the mode bit 0o010000 is right
+  - MIC no-read-up does not block attribute reads (stat), but it blocks listing and data
+  - SetNamedSecurityInfo propagation does not follow junctions
+  - schannel refuses restricted tokens; git uses OpenSSL via GIT_CONFIG_* env
+verification:
+  status: pass
+  details:
+    win32-sandbox-tests: 14/14
+    cargo-test: 10/10
+    kernel-suite: 1985 pass; 13 environmental (symlink EPERM without Developer Mode, Node SQLite warning)
+    live: GUI session read README at Low; PowerShell card raised
+tags:
+  - windows
+  - gnomon
+  - W5
+  - security
+linked_tasks:
+  - T-2026-10-22-008
+git_context:
+  ref: 301e90313c232df9112650fffd3cd22d900e33d8
+  branch: feat/gnomon-windows
+  dirty: true

@@ -227,7 +227,9 @@ function runGrep(rootDir: string, pattern: string): string {
     const globArgs = [...SKIP_DIRECTORIES.flatMap(d => ['--glob', `!**/${d}/**`]), '--glob', '!*.md', '--glob', '!*.mdx'];
     const rgArgs = ['-n', '--no-ignore-vcs', ...globArgs, '--engine', 'auto', pattern, rootDir];
     return execFileSync('rg', rgArgs, options);
-  } catch {
+  } catch (err) {
+    // rg exits 1 on no matches: that is an answer, not a failure — re-scanning with grep cost ~2s per pattern
+    if ((err as { status?: number }).status === 1) return '';
     // rg not found or error — fall back to grep
   }
 

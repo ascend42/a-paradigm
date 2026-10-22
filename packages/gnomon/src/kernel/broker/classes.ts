@@ -64,6 +64,13 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
 /** P8-D92: the meter raises no `budget` card, so `budget` is not among them (it stays a spec card kind). */
 export const M16_RAISABLE_KINDS: readonly CardKind[] = Object.freeze(['permission', 'gate-class', 'install', 'fallback', 'ask-user', 'plan', 'api-token'] as CardKind[]);
 
+/**
+ * W4 (Windows hybrid, TD-2026-10-22-278; Aegis W4-A L3): the ONLY kinds whose cached-class decisions may be a click
+ * (no presence) on a click-class approvals key: tool permission allow/deny, an ask-user answer, a plan. Every other
+ * cached-class decision (incident, handoff reject, reconsider reject, strictness deny) still takes presence.
+ */
+export const CLICK_KINDS: readonly string[] = Object.freeze(['permission', 'ask-user', 'plan']);
+
 /** Decisions that create a standing rule (B8: never under a cached unlock, never under an arm). */
 export const STANDING_DECISIONS: readonly string[] = Object.freeze(['always', 'install']);
 

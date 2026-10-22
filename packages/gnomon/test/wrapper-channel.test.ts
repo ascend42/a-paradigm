@@ -180,7 +180,8 @@ describe('#gnomon-wrapper channel kinds', () => {
     expect(channelKind({ fd })).toBe('file');
     expect(channelKind({ isTTY: true })).toBe('tty');
     expect(channelKind({})).toBe('in-memory');
-    const p = spawnSync(process.execPath, ['-e', `const fs=require('fs');const s=fs.fstatSync(1);process.stdout.write(s.isFIFO()||s.isSocket()?'pipe':'no')`], { encoding: 'utf8' });
+    // channelKind's own test (win32 too: there isFIFO() is false for a pipe, the S_IFIFO mode bit is not)
+    const p = spawnSync(process.execPath, ['-e', `const fs=require('fs');const s=fs.fstatSync(1);process.stdout.write(s.isFIFO()||s.isSocket()||(s.mode&0o170000)===0o010000?'pipe':'no')`], { encoding: 'utf8' });
     expect(p.stdout).toBe('pipe');
     expect(wrapperChannelProblem({ stdin: new PassThrough(), stdout: { write: () => true, fd } as never, stderr: { write: () => true } })).toMatch(/stdout is a file/);
     expect(wrapperChannelProblem({ stdin: Object.assign(new PassThrough(), { isTTY: true }), stdout: { write: () => true }, stderr: { write: () => true } })).toMatch(/stdin is a tty/);

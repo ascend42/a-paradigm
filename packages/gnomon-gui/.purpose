@@ -9,6 +9,10 @@ description: >-
   (gnomon-bundle-tree:v1) and with --embed writes the generated
   packages/gnomon/src/kernel/web/gui-bundle.ts (opaque base64 + pin literal);
   --check (first step of `npm test`) fails when that file is stale.
+  The transcript (core/store.ts lineItems) reads Claude's stream-json AND
+  gnomon-local's lines (a message_end reply, a tool_execution_start tool
+  line); a local-model session's replies are labelled "local model"
+  (ui/app.ts agentLabel/backendWord; rows remount when the label changes).
   TD-2026-10-19-063: a session.open refused claude_binary_changed shows a
   fail toast (#gui-toast) with a Re-pin key that focuses the kernel's pre-staged
   re-pin card (never decides); a claim-mismatch card renders its first line

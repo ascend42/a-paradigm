@@ -620,6 +620,17 @@ export class WebEndpoint {
       failed?.(new LifecycleRefusal('web-transport-failed', `transport child exited before ready (${code ?? signal}) ${stderrTail.slice(-256)}`));
       if (this.#child === child) void this.#onChildExit(code, signal);
     });
+    // win32 (W5): the child is confined (Low integrity, locked-down job) BEFORE it gets its config or any socket
+    if (plan.confine) {
+      try {
+        if (child.pid === undefined) throw new Error('no pid');
+        await plan.confine(child.pid);
+      } catch (e) {
+        readyP.catch(() => undefined); // nobody awaits it now: the exit below must not become an unhandled rejection
+        child.kill('SIGKILL');
+        throw e instanceof LifecycleRefusal ? e : new LifecycleRefusal('sandbox-unavailable', `the transport child could not be confined: ${e instanceof Error ? e.message : String(e)}`, { profile: 'transport' });
+      }
+    }
     this.#send(
       { t: 'config', bundleDir, pingMs: this.#o.pingMs ?? WS_PING_MS, missedPongs: this.#o.missedPongs ?? WS_MISSED_PONGS, maxFrameBytes: WS_MAX_FRAME_BYTES,
         preAuthMaxFrameBytes: WS_PRE_AUTH_MAX_FRAME_BYTES,

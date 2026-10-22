@@ -27,6 +27,7 @@ import path from 'node:path';
 import { hashBundleDir } from '../src/kernel/web/bundle.js';
 import { materializeGuiBundle } from '../src/kernel/web/gui-pin.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/index.js';
+import { TRANSPORT_BACKENDS } from '../src/kernel/sandbox/transport.js';
 import { validateChildRecord } from '../src/kernel/web/protocol.js';
 import { acceptKey, encodeClientFrame, FrameDecoder, OP, validCloseCode } from '../src/transport/ws-codec.js';
 
@@ -239,7 +240,7 @@ describe('G-WEB-08 bundle pin', () => {
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
   });
   it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
-    expect(GUI_BUNDLE_HASH).toBe('sha256:6dcf800d93392b3c4cc56ffe7f2727d2a3db4b7d3b97a9e51ae0162a7e00c4fb');
+    expect(GUI_BUNDLE_HASH).toBe('sha256:e6525a3467fe25ff18b8cab54b01c1d3497932354f4b1b15701b9bb45e7a946d');
     expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
     const f = guiBundleFiles();
     f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
@@ -293,8 +294,11 @@ describe('G-WEB-08 bundle pin', () => {
 });
 
 describe('the transport profile is looked up per platform and fails closed (§15.5, G-WIN-05)', () => {
-  it.each(['linux', 'win32', 'freebsd'])('%s has no transport backend ⇒ sandbox-unavailable (never an unsandboxed child)', (platform) => {
+  it.each(['linux', 'freebsd'])('%s has no transport backend ⇒ sandbox-unavailable (never an unsandboxed child)', (platform) => {
     expect(() => transportLaunchPlan({ scriptPath: '/x.js', bundleDir: '/b' }, platform)).toThrow(expect.objectContaining({ reason: 'sandbox-unavailable' }));
+  });
+  it('darwin (sandbox-exec) and win32 (the confined child, W5) are the registered backends', () => {
+    expect(Object.keys(TRANSPORT_BACKENDS).sort()).toEqual(['darwin', 'win32']);
   });
 });
 

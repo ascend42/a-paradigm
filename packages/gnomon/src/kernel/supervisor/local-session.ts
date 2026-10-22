@@ -72,6 +72,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
 import { hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
@@ -80,7 +81,7 @@ import { buildSessionPolicy, policyHash, type PolicyPath, type SessionPolicy } f
 import { defaultClaudeJson } from '../manifest/layers.js';
 import { sessionLaunchPlan, type SessionLaunchInput, type SessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, type SessionIdentity } from '../runner/env.js';
+import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, type SessionIdentity } from '../runner/env.js';
 import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -598,7 +599,7 @@ export class LocalLane {
     await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: !loop, ...(loopRun ? { principalClass: req.principalClass, origin: LOOP_ORIGIN, loopRun } : {}) }, { session: hsid });
     await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools: loop && !loop.act ? 'none' : tools, ...(loop?.act ? { allowTools: loop.act.tools } : {}) }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
-    const built = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath });
+    const built = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath, ...(this.#platform === 'win32' ? { tempDir: win32SessionTempDir(hsid) } : {}) });
     const env = built.env;
     let envKeys = built.envKeys;
     if (loop) {
@@ -655,8 +656,8 @@ export class LocalLane {
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: env.TMPDIR ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
-      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
+      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras, hsid };
       // step 10: an act step runs under `loop-act` (the session profile narrowed to its scratch and its endpoint port)
       const actLaunch: LoopActLaunchInput | null = loop?.act ? { ...launch, act: { home: this.#o.home, userHome, scratch: loop.act.scratch.tree, tmp: loop.act.scratch.tmp, repo: loop.act.scratch.repo, nodeModules: loop.act.scratch.nodeModules, endpointPort: loop.act.endpointPort, gitDeny: [loop.act.scratch.commonDir, ...loop.act.scratch.siblingWorktrees] } } : null;
       const plan = this.#o.launchPlan ? this.#o.launchPlan(actLaunch ?? launch) : actLaunch ? loopActLaunchPlan(actLaunch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
@@ -667,7 +668,7 @@ export class LocalLane {
       }
       // round 3 (Aegis H1, node half): node is re-hashed HERE, synchronously, with no await before spawn
       if (verifyNode(pin) !== runner.command) throw refused('PERMIT_REQUIRED', 'the node binary changed between staging and spawn', { why: 'runner-pin-mismatch', part: 'node' });
-      child = spawn(plan.command, plan.args, { cwd: wtReal ?? cwdReal, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      child = spawn(plan.command, plan.args, { cwd: wtReal ?? cwdReal, env, detached: this.#platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] }); // win32: stay in libuv's kill-on-close job
       const c = child;
       const exited = new Promise<void>((r) => c.once('close', () => r()));
       const spawnError = await new Promise<Error | null>((resolve) => {
@@ -681,9 +682,17 @@ export class LocalLane {
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
+      if (this.#platform === 'win32' && !live) {
+        // W5: an open that failed before a live session undoes its win32 labels and grants
+        try {
+          releaseSession(sessionSidFor(hsid));
+        } catch (e) {
+          await this.#o.log('session.sandbox', { hsid, phase: 'release-failed', error: e instanceof Error ? e.message : String(e) }, { session: hsid }).catch(() => undefined);
+        }
+      }
       if (tracked && child) {
         await this.#o.children.stop(child, 'open-failed').catch(() => undefined);
         if (live) await live.exited.catch(() => undefined);
@@ -723,6 +732,14 @@ export class LocalLane {
   async #onExit(s: LocalSession): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    if (this.#platform === 'win32') {
+      // W5: this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession)
+      try {
+        releaseSession(sessionSidFor(s.hsid));
+      } catch (err) {
+        await this.#o.log('session.sandbox', { hsid: s.hsid, phase: 'session-grant-kept', error: err instanceof Error ? err.message : String(err) }, { session: s.hsid }).catch(() => undefined);
+      }
+    }
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
     if (s.loop?.pending) s.loop.pending({ text: null, tokens: s.loop.tokens, stopReason: null, error: s.loop.fatal ?? 'the loop session exited' });

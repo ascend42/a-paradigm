@@ -682,6 +682,16 @@ function lineItems(line: string, guidanceHash: string | null = null): Array<Pick
       }
     return out;
   }
+  // gnomon-local (#local-runner, pi rpc shape): a finished assistant message carries its whole text (the streamed
+  // message_update deltas before it are noise here, like claude's partials); each tool call is shown as it starts,
+  // with its arguments (the message_end only names it)
+  if (m.type === 'message_end' && msg && msg.role === 'assistant') {
+    const text = textOf(msg.content);
+    if (!text.trim()) return [];
+    const { said, body } = splitSpeak(text);
+    return [{ role: 'assistant', text: cap(body, CHAT_TEXT_MAX), ...(said !== null ? { said } : {}) }];
+  }
+  if (m.type === 'tool_execution_start' && typeof m.toolName === 'string') return [{ role: 'tool', text: toolSummary(m.toolName, m.args) }];
   // the user's own message as claude replays it (--replay-user-messages): the only row that carries its text
   // (session.inject / turn.sent log a hash and a byte count, never the text — G-LOG-03)
   if (m.type === 'user' && msg) {

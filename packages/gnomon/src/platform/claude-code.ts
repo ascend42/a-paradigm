@@ -47,7 +47,8 @@ export const CLAUDE_CODE_PLATFORMS: Readonly<Record<ClaudePlatform, ClaudeCodePl
     userClaudeDir: '.claude',
   },
   win32: {
-    knownBinaries: ['~/.local/bin/claude.exe'],
+    // WinGet (`winget install Anthropic.ClaudeCode`) first, then the native installer; the first that exists is used
+    knownBinaries: ['~/AppData/Local/Microsoft/WinGet/Packages/Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe/claude.exe', '~/.local/bin/claude.exe'],
     managedSettings: ['C:\\Program Files\\ClaudeCode\\managed-settings.json'],
     managedSettingsDirs: ['C:\\Program Files\\ClaudeCode\\managed-settings.d'],
     managedUnscannable: ['HKLM\\SOFTWARE\\Policies\\ClaudeCode', 'HKCU\\SOFTWARE\\Policies\\ClaudeCode'],
