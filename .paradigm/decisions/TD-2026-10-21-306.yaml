@@ -32,7 +32,11 @@ participants:
   - id: founder
     role: human
     stance: proposed
-status: active
+status: superseded
+supersession_note: >-
+  Superseded by T-2026-10-21-023 (Arky, option a): the protocol lives in skills, since behaviors are never read at
+  runtime. ui-build-protocol and design-options-protocol are bundled skills owned by designer; review-checklist was
+  already the ui-critique-loop skill.
 tags:
   - design
   - mika
