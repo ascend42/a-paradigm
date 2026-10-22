@@ -9,7 +9,7 @@ Handoff for a Claude Code session on the founder's Windows machine. Read this fi
 
 ## Decided
 
-1. **Approvals are hybrid.** Routine cards (tool permission, ask-user, plan) are approved by click, with no presence. Windows Hello (PIN is acceptable) is required for: root provisioning and rotation, config and grant signing, gate-class cards, `always` rules, installs, budget resume, cloud fallback, `api-token`, link pairing, and voice enrolment and arms. `status` reports presence per class and `rootKeyCustody`.
+1. **Approvals are hybrid.** Routine cards (tool permission, ask-user, plan) are approved by click, with no presence. Windows Hello (PIN is acceptable) is required for: root provisioning and rotation, config and grant signing, gate-class cards, `always` rules, installs, budget resume, cloud fallback, `api-token`, link pairing, voice enrolment and arms, and loops (`loop-trust`, `grant.loop-envelope` and loop resume; docs/specs/gnomon-loops.md §3.1). `status` reports presence per class and `rootKeyCustody`.
 2. **Install** goes to `%LOCALAPPDATA%\Programs\Gnomon\<version>\`, not MSIX. Because a same-user process can modify that folder, verify Authenticode before every launch, and open `node.exe` without `FILE_SHARE_WRITE|DELETE`, verify the hash and signature on that handle, and hold it across `CreateProcess`. Verify the child's image after spawn.
 3. **x64 first.** Windows on ARM is not a target.
 4. **The Mac 8.0 bar is the template:** compiled release pins (M1 `b0edca77`), the wrapper trust root (M2 `6f6c7f7d`), packaging and the publish gate (M3 `daa7af22`), and first run through the wrapper's `--cli` with an env allow-list (M4 `adbd1e12`).
