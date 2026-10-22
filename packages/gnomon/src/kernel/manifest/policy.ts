@@ -255,8 +255,10 @@ export const KERNEL_LOG_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> 
 export function localRunnerDenies(r: { node: string; dir: string }, userHome?: string): PolicyPath[] {
   const node = realpathLoose(r.node);
   // POSIX: <prefix>/bin/node, so the prefix (bin/ + lib/) is two up. Windows: node.exe sits at the top of its install
-  // dir (Program Files/nodejs/node.exe) beside its DLLs: the prefix is that dir, never Program Files itself
-  let prefix = /^[A-Za-z]:[\\/]/.test(node) ? path.dirname(node) : path.dirname(path.dirname(node));
+  // dir (Program Files/nodejs/node.exe) beside its DLLs: the prefix is that dir, never Program Files itself (keyed on the
+  // layout, a node.exe outside a bin/ dir, not on the platform: a POSIX-layout node under a drive path stays two up)
+  const winLayout = path.basename(node).toLowerCase() === 'node.exe' && path.basename(path.dirname(node)).toLowerCase() !== 'bin';
+  let prefix = winLayout ? path.dirname(node) : path.dirname(path.dirname(node));
   // Homebrew (Aegis): node loads sibling kegs' dylibs via <prefix>/opt/*/lib (libuv, llhttp, ada-url, simdjson, …),
   // so a Cellar node denies the WHOLE Homebrew prefix — the parent of `Cellar` (/opt/homebrew, /usr/local,
   // /home/linuxbrew/.linuxbrew) — covering Cellar/, opt/ and lib/. Consequence: sessions cannot brew install/upgrade.

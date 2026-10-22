@@ -360,9 +360,13 @@ export class HelperProcess implements HelperTransport {
   }
 
   /** Re-check the pin synchronously, spawn, verify the running child, then handshake (`info`). */
-  static start(pin: PinnedHelper): HelperProcess {
+  /**
+   * `o.env` / `o.checkInfo`: the platform's (win32: platform/win32/approvals.ts); the defaults are darwin's (the POSIX
+   * helper env, the darwin protocol + version floor).
+   */
+  static start(pin: PinnedHelper, o: { env?: NodeJS.ProcessEnv; checkInfo?: (info: HelperReply) => string } = {}): HelperProcess {
     pin.recheck();
-    const child = spawn(pin.exe, ['serve'], { stdio: ['pipe', 'pipe', 'pipe'], env: helperEnv() });
+    const child = spawn(pin.exe, ['serve'], { stdio: ['pipe', 'pipe', 'pipe'], env: o.env ?? helperEnv(), windowsHide: true });
     const p = new HelperProcess(child);
     try {
       if (typeof child.pid !== 'number') throw new HelperUnavailableError('spawn', 'the helper did not start');
@@ -378,7 +382,7 @@ export class HelperProcess implements HelperTransport {
       timeoutMs: HELPER_OP_TIMEOUT_MS,
       resolve: (info) => {
         try {
-          p.#version = checkHelperInfo(info);
+          p.#version = (o.checkInfo ?? checkHelperInfo)(info);
           p.#ready = true;
         } catch (e) {
           p.#gone(e as Error);

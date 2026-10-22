@@ -73,7 +73,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/prefix-policy-alias-posix.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/prefix-policy-alias-win32.test.ts' },
   { test: 'test/prefix-policy-alias-win32.test.ts', platforms: ['win32'], sibling: 'test/prefix-policy-alias-posix.test.ts' },
   // W2/W3 (docs/plans/gnomon-windows.md): the Windows platform helper against the real OS (pipe and home DACLs, job launcher, durable rename).
-  { test: 'test/win32-helper.test.ts', platforms: ['win32'], na: 'Windows-only mechanisms (DACL, job object, MoveFileExW); the POSIX equivalents are covered by test/socket-server.test.ts, test/daemon-lifecycle.test.ts and test/kernel-log-posix.test.ts' },
+  { test: 'test/win32-approvals.test.ts', platforms: ['win32'], na: 'the W4 phase A approvals key lives in the Windows Software KSP via the win32 helper; the darwin Secure Enclave key is test/identity-hw.test.ts (founder hardware) and the broker logic for both is platform-independent in test/identity-hardware.test.ts' },
+  { test: 'test/win32-helper.test.ts', platforms: ['win32'], na:'Windows-only mechanisms (DACL, job object, MoveFileExW); the POSIX equivalents are covered by test/socket-server.test.ts, test/daemon-lifecycle.test.ts and test/kernel-log-posix.test.ts' },
   { test: 'test/web-sandbox-win32.test.ts', platforms: ['win32'], sibling: 'test/web-sandbox.test.ts' },
   // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
   { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },

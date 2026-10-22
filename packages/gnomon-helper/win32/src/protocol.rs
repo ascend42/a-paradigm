@@ -294,6 +294,41 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             win::shell_open(url)?;
             Ok(json!({}))
         }
+        // W4 phase A (approvals.rs): the approvals key; the root key and presence (Windows Hello) are phase B
+        "key.create" | "key.public" => {
+            if str_arg(req, "key")? != "approvals" {
+                return Err(HelperError::new("unsupported-op", "only the approvals key lives in this helper (the root is phase B)"));
+            }
+            let gen = str_arg(req, "gen")?;
+            let pk = if op == "key.create" { crate::approvals::create(gen)? } else { crate::approvals::public(gen)? };
+            Ok(json!({ "publicKey": crate::b64::encode(&pk) }))
+        }
+        "sign" => {
+            if str_arg(req, "key")? != "approvals" {
+                return Err(HelperError::new("unsupported-op", "only the approvals key lives in this helper (the root is phase B)"));
+            }
+            let gen = str_arg(req, "gen")?;
+            let msgs = req.get("messages").and_then(Value::as_array).ok_or_else(|| bad("messages must be an array"))?;
+            if msgs.is_empty() || msgs.len() > crate::approvals::MAX_MESSAGES {
+                return Err(bad("messages: 1-4"));
+            }
+            let messages = msgs
+                .iter()
+                .map(|m| m.as_str().and_then(crate::b64::decode).ok_or_else(|| bad("each message is standard base64")))
+                .collect::<Result<Vec<_>, _>>()?;
+            match str_arg(req, "mode")? {
+                // the click classes take no presence on Windows (approvals.rs): the kernel asks for them by name
+                "click" => {
+                    let sigs = crate::approvals::sign_click(gen, &messages)?;
+                    Ok(json!({ "sigs": sigs.iter().map(|s| crate::b64::encode(s)).collect::<Vec<_>>(), "kept": false }))
+                }
+                "cached" => Err(HelperError::new("no-unlock", "this helper holds no unlocks (click classes sign as mode click)")),
+                "fresh" => Err(HelperError::new("presence-unavailable", "Windows Hello presence is not built yet (W4 phase B)")),
+                _ => Err(bad("mode must be click, cached or fresh")),
+            }
+        }
+        // no unlocks and no voice arms are held here: dropping them is a no-op (the kernel escalates on a failure)
+        "unlock.drop" | "unlock.drop-all" | "conn.close" => Ok(json!({})),
         _ => Err(HelperError::new("unsupported-op", &format!("{op} is not a win32 helper op"))),
     }
 }
@@ -472,7 +507,7 @@ mod tests {
         assert_eq!(handle_line("[]")["error"], "bad-request");
         assert_eq!(handle_line(r#"{"op":"info"}"#)["error"], "bad-request");
         assert_eq!(handle_line(r#"{"id":1}"#)["error"], "bad-request");
-        let r = handle_line(r#"{"id":"x","op":"key.create"}"#);
+        let r = handle_line(r#"{"id":"x","op":"arm.open"}"#);
         assert_eq!(r["id"], "x");
         assert_eq!(r["ok"], false);
         assert_eq!(r["error"], "unsupported-op");

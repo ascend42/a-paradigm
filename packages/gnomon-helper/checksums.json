@@ -15,8 +15,8 @@
       "groupGrant": "team-wildcard"
     },
     "bin/win32/gnomon-helper.exe": {
-      "sha256": "44b09b2762d5c7db0050c0273cd3fc18a8e374f9ac3591ccba405e5f16f3ec70",
-      "version": "0.1.0",
+      "sha256": "4a48aedbd34eb6f3ab0a2a85e75cb8ff43a9013d7607ed91cbcf85a590f235ae",
+      "version": "0.2.0",
       "signed": false
     }
   }

@@ -62,11 +62,13 @@ describeHelper('win32 helper (W2/W3)', () => {
     expect(() => pinWin32Helper(path.join(tmp(), 'nope.exe'))).toThrow(/no helper/);
   });
 
-  it('info names the protocol and the user SID; key ops are not in this helper', () => {
+  it('info names the protocol and the user SID; only the approvals key lives here (W4 phase A); no voice arms', () => {
     const r = helperOpSync(pin(), 'info');
     expect(r).toMatchObject({ protocol: 'gnomon-helper:v2', platform: 'win32' });
     expect(String(r.userSid)).toMatch(/^S-1-5-/);
-    expect(() => helperOpSync(pin(), 'key.create')).toThrow(/unsupported-op/);
+    expect(() => helperOpSync(pin(), 'key.create', { key: 'root', gen: 'g1' })).toThrow(/unsupported-op/);
+    expect(() => helperOpSync(pin(), 'key.public', { key: 'approvals', gen: 'Bad Gen' })).toThrow(/bad-request/);
+    expect(() => helperOpSync(pin(), 'arm.open')).toThrow(/unsupported-op/);
   });
 
   it('G-WIN-02: the home gets a protected owner-only DACL, read back; files below inherit it', () => {

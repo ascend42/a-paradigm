@@ -56,6 +56,8 @@ export interface FakeHelperOptions {
   touch?: boolean;
   /** sign with this key instead of the real one (an impostor / broken helper) */
   wrongKey?: boolean;
+  /** refuse sign {mode:'click'} (a helper with no click class) */
+  noClick?: boolean;
   /** corrupt the n-th signature of a sign reply (0-based) */
   corruptSig?: number;
   /** the human approves this many prompts, then declines */
@@ -276,11 +278,14 @@ export class FakeHelper implements HelperTransport {
         if (!k) throw new HelperRefusal('not-found', 'no key');
         const msgs = (req.messages as string[]).map((m) => Buffer.from(m, 'base64'));
         if (req.keep !== undefined && typeof req.keep !== 'boolean') throw new HelperRefusal('bad-request', 'keep must be a boolean');
-        const allowed = req.mode === 'cached' ? CACHED_DOMAINS : DOMAINS[String(req.key)]!;
+        // 'click' (the win32 helper, W4 phase A): the approvals key, decision messages only, no prompt, no unlock
+        const allowed = req.mode === 'cached' || req.mode === 'click' ? CACHED_DOMAINS : DOMAINS[String(req.key)]!;
         for (const m of msgs) if (!allowed.some((d) => m.subarray(0, d.length).toString() === d)) throw new HelperRefusal('domain-refused', 'domain');
         const line = helperLine(String(req.key), msgs);
         const conn = typeof req.connId === 'string' ? req.connId : undefined;
-        if (req.mode === 'cached') {
+        if (req.mode === 'click') {
+          if (req.key !== 'approvals' || this.opts.noClick) throw new HelperRefusal('presence-unavailable', 'no click class here');
+        } else if (req.mode === 'cached') {
           if (req.key !== 'approvals' || !conn || !this.unlocks.has(conn)) throw new HelperRefusal('no-unlock', 'no unlock');
         } else {
           this.prompts.push(String(req.reason));

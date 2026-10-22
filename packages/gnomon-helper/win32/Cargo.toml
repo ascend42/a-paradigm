@@ -2,7 +2,7 @@
 # Every direct dependency is pinned EXACT (spec §18, law 6), as in gnomon-wrapper.
 [package]
 name = "gnomon-helper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Gnomon platform helper for Windows: owner-only DACLs (pipe, home), job-object launcher, durable rename, boot id, ShellExecute hand-off"
@@ -22,6 +22,7 @@ windows-sys = { version = "=0.61.2", features = [
   "Win32_Graphics_Gdi",
   "Win32_Security",
   "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
   "Win32_Storage_FileSystem",
   "Win32_System_Console",
   "Win32_System_Diagnostics_ToolHelp",

@@ -81,7 +81,7 @@ import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
 import { HardwarePresenceDenied, HelperUnlockGone, type DecisionBatchRequest, type DecisionBatchResult, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
 import { decisionRowV2, intentOf, type DecisionRowV2 } from '../identity/decision-batch.js';
-import { baseClass, KIND_DECISIONS, validDecisions, type DecisionClass } from './classes.js';
+import { baseClass, CLICK_KINDS, KIND_DECISIONS, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { helperBoundsOf, UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
 import { SESSION_DISARM_REASON } from './arm-custody.js';
@@ -164,6 +164,12 @@ export interface ApprovalsKey {
   decisionBatchAvailable?(): Promise<boolean>;
   /** TD-2026-10-20-514: ONE presence signs the decision and every root row */
   signDecisionBatch?(req: DecisionBatchRequest): Promise<DecisionBatchResult>;
+  /**
+   * W4 (Windows hybrid, TD-2026-10-22-278): the CACHED decision class (permission allow/deny, ask-user, plan) is a
+   * click: the key signs it with no presence (signDecision mode 'click'), never under an unlock. fresh / root are
+   * untouched. Unset everywhere else (darwin: Touch ID once per connection).
+   */
+  readonly clickClass?: boolean;
   /** Drop a connection's unlock where the key lives (the helper). */
   dropUnlock?(connId: string): Promise<void>;
   /** Helper 1.6.0 (`conn.close`): drop the connection's unlock AND close every voice arm naming it. Preferred over dropUnlock on close. */
@@ -934,6 +940,17 @@ export class ApprovalBroker {
       presence = 'fresh'; // unreachable in M1.6 (no held cards); withdraw takes no presence
     } else if (helperCached) {
       presence = 'cached';
+    } else if (helperSigns && cls === 'cached' && this.#approvals.clickClass === true && !isCli && CLICK_KINDS.includes(String(card.kind))) {
+      // W4 (Windows hybrid, TD-2026-10-22-278): a click-class decision takes no presence and opens no unlock; the
+      // approvals key still signs it (decisionSig verified by the key before it is returned). Only the routine kinds
+      // (CLICK_KINDS, Aegis W4-A L3): any other cached-class decision falls through and takes presence.
+      try {
+        decisionSig = (await this.#approvals.signDecision!({ connId: ctx.connId, unlockKey: uk, approver: ctx.principal, message, mode: 'click' })).decisionSig;
+      } catch (err) {
+        if (err instanceof HardwarePresenceDenied) throw await this.#presenceDenied(card, ctx, `click signature refused: ${err.why}`, false);
+        throw this.#helperFailure(err, cardId);
+      }
+      presence = 'click';
     } else if (helperSigns) {
       const hadUnlock = this.unlocks.has(uk);
       const keep = (cls === 'cached' || keepForGrant) && !isCli;
@@ -1188,6 +1205,7 @@ export class ApprovalBroker {
     if (prov && prov.tty === null) out.push('no-tty');
     if (prov && this.#o.liveSessionPgids?.().has(prov.pgid)) out.push('cli-ancestry-session');
     if (presence === 'cached' && cls !== 'cached') out.push('unlock-beyond-class');
+    if (presence === 'click' && cls !== 'cached') out.push('click-beyond-class'); // Aegis W4-A L2
     return out;
   }
 

@@ -94,7 +94,14 @@ components:
       in the job with no race and killing the launcher kills the tree
       (G-RUN-03); never a .cmd/.bat, never a PATH lookup. Inputs bounded:
       absolute drive paths only (no UNC, device or .. paths), pipe names
-      gnomon-<hex>. Key ops (Windows Hello, W4) refuse unsupported-op.
+      gnomon-<hex>. W4 phase A (approvals.rs): key.create / key.public / sign for
+      the APPROVALS key only — a non-exportable P-256 key in the Microsoft Software
+      KSP (gnomon-<gen>-approvals, DPAPI per user); sign {mode:'click'} signs
+      approve-domain messages only (gnomon:approve:v1, domain-refused otherwise),
+      DER over SHA-256; mode fresh refuses presence-unavailable and cached
+      no-unlock (Windows Hello presence is phase B, a separate Passport KSP key);
+      unlock.drop / unlock.drop-all / conn.close are no-ops; the root key and
+      voice arms refuse unsupported-op. Version 0.2.0.
       exec is containment for well-behaved trees (partial: WMI/COM/Task Scheduler
       launches are not descendants, Aegis M4). W5 (sessions): sandbox [--desktop]
       [--low] [--session-sid <S-1-9-4174-2026-1022-n>] runs a session under a

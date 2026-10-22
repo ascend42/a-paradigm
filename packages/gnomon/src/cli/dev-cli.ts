@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { GNOMON_VERSION } from '../version.js';
 import { LOCAL_COMPAT_NAMES, LOCAL_CONFIG_FILE, validateLocalEndpoints, writeSignedLocalConfig } from '../kernel/local/config.js';
 import { pinOf } from '../kernel/local/runner-pin.js';
+import { ensureDevApprovals } from '../platform/win32/approvals.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
 import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
@@ -28,7 +29,9 @@ export const DEV_EXIT_USAGE = 64;
 
 export const DEV_BANNER =
   'DEV ONLY  unsigned dogfood path (#dev-launch): a SOFTWARE dev-test root, never production.\n' +
-  '          Approvals are refused UNSUPPORTED until M1.3 (hardware root, signed helper).\n';
+  (process.platform === 'win32'
+    ? '          Approvals: routine cards by click (dev approvals key, no presence); Windows Hello classes refused until W4 phase B.\n'
+    : '          Approvals are refused UNSUPPORTED until M1.3 (hardware root, signed helper).\n');
 
 export const DEV_USAGE = `gnomon ${GNOMON_VERSION} dev — DEV ONLY, unsigned, until M1.3
 usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnomon-dev'})
@@ -94,6 +97,10 @@ export async function runDevInit(argv: readonly string[], io: DevCliIo, opts: De
 /** A kernel running in THIS process on a dev home, with the CLI's own device connection held open. */
 export interface DevKernel extends InProcessKernel {
   readonly dev: LoadedDevHome;
+  /** win32: the helper-held approvals key is wired (routine cards are a click) */
+  readonly approvals?: boolean;
+  /** win32: the approvals key's long-lived helper, closed when the kernel stops (Aegis W4-A L4) */
+  readonly approvalsHelper?: { close(): Promise<void> };
 }
 
 export interface DevUpDeps {
@@ -102,6 +109,8 @@ export interface DevUpDeps {
   idleMs?: number;
   /** The env / execArgv the unsafe-env guard reads (default this process's). */
   runtime?: RuntimeFacts;
+  /** The platform (default this process's): win32 wires the dev approvals key. */
+  platform?: NodeJS.Platform;
 }
 
 /**
@@ -113,9 +122,13 @@ export interface DevUpDeps {
 export async function startDevKernel(home: string, opts: DevHomeOptions & DevUpDeps = {}): Promise<DevKernel> {
   const dev = loadDevHome(home, opts);
   const start = opts.start ?? startDaemon;
-  const handle = await start({ home: dev.home, kernelSigner: dev.kernel, rootAuthority: dev.root, ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}) });
+  // W4 phase A (win32): the helper-held approvals key, bound to this home's human by the dev root; routine cards are
+  // a click (platform/win32/approvals.ts). darwin dev homes keep refusing approvals until M1.3, as before.
+  const wired = (opts.platform ?? process.platform) === 'win32' && !opts.start ? await ensureDevApprovals(dev.home, dev.root, dev.device.principalId) : null;
+  const approvals = wired?.approvals ?? null;
+  const handle = await start({ home: dev.home, kernelSigner: dev.kernel, rootAuthority: dev.root, ...(approvals ? { approvalsKey: approvals } : {}), ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}) });
   const k = await attachInProcess(handle, { home: dev.home, clientName: 'gnomon-dev-up', kernelKey: dev.kernelKey, credential: dev.device });
-  return { ...k, dev };
+  return { ...k, dev, approvals: approvals !== null, ...(wired ? { approvalsHelper: wired.helper } : {}) };
 }
 
 export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
@@ -164,10 +177,11 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
       ['socket', k.handle.pidfile.socketPath],
       ['root', `dev-test ${k.dev.root.rootKeyId}`],
       ['device', `${k.dev.device.deviceId} as ${k.client.principal ?? k.dev.device.principalId}`],
-      ['approve', 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
+      ['approve', k.approvals ? 'routine cards by click (dev approvals key, no presence); Windows Hello classes refused until W4 phase B' : 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
     ],
     keysHint: 'Enter = a fresh URL (a reload cannot Reconnect until M1.3)   q or Ctrl-C = stop',
   });
+  await k.approvalsHelper?.close().catch(() => undefined);
   return code === 0 ? DEV_EXIT_OK : DEV_EXIT_REFUSED;
 }
 
