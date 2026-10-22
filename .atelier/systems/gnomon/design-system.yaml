@@ -28,6 +28,13 @@
 # New: components alert, trust-slip, loops-word, loops-leaf, loop-row, loop-list, loop-detail, budget-field,
 # loop-graph, run-trace, loop-trust-unfolded, loop-diff, loop-listing; card variants loop-trust and loop-choice; key
 # variant cost-label; loop vocabulary; Today's ruler as future (components.loop-list.future).
+#
+# Amended 2026-10-22 by session 2026-10-22-gnomon-local-model (guided local-model setup, TD-2026-10-22-769; the founder
+# approved the design, refs/local-model.html, and picked C1 check-first, C2 confirm-when-used, C3 the ⊙ gnomon family).
+# New: component settings-form (the sheets' form row; row kinds form and request); card family ⊙ gnomon and variant
+# local-config; alert variant refused-start; loop-detail's can't-start line; the sheet's section-focused open defined;
+# vocabulary local model, card waiting, presence (amended); rules form-says-where-the-card-is, no-password-for-a-typo;
+# migration batch settings-form (pending). Bridge CSS until the build: .atelier/systems/gnomon/local-model-bridge.css.
 
 version: 2
 product: gnomon
@@ -291,13 +298,14 @@ components:
   card:
     role: "A kernel decision as a paper sheet: in the global stack and pinned in its session; deciding either removes both."
     anatomy: [state edge (left), "head (■ project · kind · by requester · voice tag chip)", title, raised line or held note, held bar, keys, contentHash line, details disclosure, stamp]
-    variants: { neutral: "edge = project ink (pe-h0..5)", knot: "violet edge, uppercase violet title", failed: "vermilion edge + title, droops once", gate/held: "amber edge; held shows the 3s bar", claim-mismatch: "vermilion edge, red first body line, Deny focused, no primary", voice-origin: "amber edge + 'asked during a voice-sent turn'", loop-trust: "↻ loop family; --key-edge edge; short in the pile (title, by, what changed in one line, 'hand only · root key'); Read unfolds the same card over the centre (component loop-trust-unfolded); Trust only after the whole definition", loop-choice: "↻ loop family; kind 'decide'; the kernel line 'Raised by loop <id> (authored by <who>)'; the run path with marks; Continue (pri, hand only, fresh presence) and Stop" }
+    variants: { neutral: "edge = project ink (pe-h0..5)", knot: "violet edge, uppercase violet title", failed: "vermilion edge + title, droops once", gate/held: "amber edge; held shows the 3s bar", claim-mismatch: "vermilion edge, red first body line, Deny focused, no primary", voice-origin: "amber edge + 'asked during a voice-sent turn'", loop-trust: "↻ loop family; --key-edge edge; short in the pile (title, by, what changed in one line, 'hand only · root key'); Read unfolds the same card over the centre (component loop-trust-unfolded); Trust only after the whole definition", loop-choice: "↻ loop family; kind 'decide'; the kernel line 'Raised by loop <id> (authored by <who>)'; the run path with marks; Continue (pri, hand only, fresh presence) and Stop", local-config: "⊙ gnomon family; kind grant, detail.action local.config (clientApiId unchanged); kernel-composed title 'Set up the local model' | 'Change the local model'; k-line 'asked from Settings · hh:mm · applies at once, no restart'; 'This decision signs' lists every field of the gnomon-root-local:v1 row, one per line (config version, each endpoint with server and address, model and whether loops may use it, the runner pin), changed lines with the loop-diff marks; Allow (pri) and Deny; presence line; hand only · root key" }
     family:
-      rule: "The head opens with what the card or alert relates to, by glyph and word: ↻ loop, ◇ session; ✦ mod and a voice family are planned. Never by hue (colour means one thing). The left edge keeps its meanings (project ink, vermilion failed, amber gate/held, violet KNOT); loop cards use --key-edge."
-      families: { loop: "↻ loop", session: "◇ session (permission, gate, knot: every card a session raises)", mod: "✦ mod (planned; matches the offer slip's glyph)", voice: "planned; glyph open" }
+      rule: "The head opens with what the card or alert relates to, by glyph and word: ↻ loop, ◇ session, ⊙ gnomon (root configuration); ✦ mod and a voice family are planned. Never by hue (colour means one thing). The left edge keeps its meanings (project ink, vermilion failed, amber gate/held, violet KNOT); loop cards use --key-edge."
+      families: { loop: "↻ loop", session: "◇ session (permission, gate, knot: every card a session raises)", gnomon: "⊙ gnomon (root configuration of Gnomon itself: local.config; daemon-stop and api-token join in migration batch settings-form)", mod: "✦ mod (planned; matches the offer slip's glyph)", voice: "planned; glyph open" }
       tokens: { fam: "--ink 600, letter-spacing .04em, 10.5 in the head" }
       status: clear
       from: { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, decided_by: creator, origin: { board: agent-loops-surface, note: "founder: 'decision cards canbe styled a certain way depending on what they relate to'" }, concern_met: "Mika: family by glyph and word, never a family hue" }
+      amended_by: [{ session: 2026-10-22-gnomon-local-model, board: C3, choice: gnomon, decided_by: creator, what: "family ⊙ gnomon; ⊙ reads as a sundial's face and has no emoji presentation" }]
     voice_tag:
       # The tag quotes the exact phrase the voice grammar (spec §14.7, D59/A26-05) accepts for this card, then its
       # class, in the same place in the head. <prefix> is the configured approvals prefix (default "claude admin",
@@ -318,12 +326,15 @@ components:
       session-family: '<section class="card kind-permission pe-h0" role="group" aria-label="permission card"><header class="card-head k"><span class="fam">◇ session</span> · <span class="card-project">■ storefront</span> · <span class="card-kind">permission</span> · <span class="card-requester">by claude</span> <span class="chip card-voice kernel-owned">say “claude admin approve card 3” · reversible</span></header><p class="card-title composed">Allow Bash <code class="card-arg">pnpm test --filter checkout</code></p><div class="card-keys"><button class="key pri" type="button">Allow</button><button class="key" type="button">Deny</button></div><small class="content-hash">contentHash 71c0e9a4</small></section>'
       loop-trust: '<section class="card kind-loop" role="group" aria-label="loop-trust card"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ a-paradigm</span> · <span class="card-kind">loop-trust</span> · <span class="card-requester">by arky</span> <span class="chip card-voice kernel-owned">hand only · root key</span></header><p class="card-title">Trust the change to green-typecheck-gnomon</p><p class="card-body">rounds 8 → 12 · lands + packages/gnomon/test/**</p><div class="card-keys"><button class="key pri" type="button">Read</button><button class="key" type="button">Don''t trust</button></div><small class="content-hash">contentHash 6b07d3e5</small></section>'
       loop-choice: '<section class="card loop-choice" role="group" aria-label="loop-choice card"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ a-paradigm</span> · <span class="card-kind">decide</span> <span class="chip card-voice kernel-owned">hand only</span></header><p class="card-title">green-typecheck-gnomon: fix is unsure</p><span class="k-line kernel-owned">Raised by loop green-typecheck-gnomon (authored by arky)</span><p class="path">tsc <span class="x">✕</span> → fix ×3 → tsc <span class="x">✕</span> → fix <span class="u">?</span> → ask</p><div class="card-keys"><button class="key pri" type="button">Continue</button><button class="key" type="button">Stop</button></div><small class="content-hash">run 7f3a · round 3 of 8 · Continue needs Touch ID</small><span class="stamp">CONTINUED</span></section>'
+      local-config: '<section class="card kind-grant" role="group" aria-label="grant card"><header class="card-head k"><span class="fam">⊙ gnomon</span> · <span class="card-kind">grant</span> · <span class="card-requester">by you</span> <span class="chip card-voice kernel-owned">hand only · root key</span></header><p class="card-title">Set up the local model</p><span class="k-line kernel-owned">asked from Settings · 23:20 · applies at once, no restart</span><div class="card-root-rows kernel-owned"><p class="meta root-rows-title">This decision signs</p><ul><li>local model config v1 · new</li><li>endpoint ollama · an Ollama server at http://127.0.0.1:11434</li><li>model qwen2.5-coder:14b · loops may use it</li><li>runner gnomon-local 8.0.0 · bundled · tree 9c41e0b2…3a7f · node 24.10.0 · sha 5e2a90c1…</li></ul></div><div class="card-keys"><button class="key pri" type="button">Allow</button><button class="key" type="button">Deny</button></div><div class="lt-presence">Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice</div><small class="content-hash">contentHash 4d1c0a77</small></section>'
+      local-config-change: '<section class="card kind-grant" role="group" aria-label="grant card"><header class="card-head k"><span class="fam">⊙ gnomon</span> · <span class="card-kind">grant</span> · <span class="card-requester">by you</span> <span class="chip card-voice kernel-owned">hand only · root key</span></header><p class="card-title">Change the local model</p><span class="k-line kernel-owned">asked from Settings · 23:52 · replaces v2, signed 23:23</span><div class="card-root-rows kernel-owned"><p class="meta root-rows-title">This decision signs</p><ul><li>local model config v2 → v3</li><li>endpoint ollama · an Ollama server at http://127.0.0.1:11434 · unchanged</li><li class="del">model qwen2.5-coder:14b</li><li class="add">model qwen2.5-coder:32b</li><li>loops may use it · unchanged</li></ul></div><div class="card-keys"><button class="key pri" type="button">Allow</button><button class="key" type="button">Deny</button></div><small class="content-hash">contentHash 91be0c44</small></section>'
     status: clear
     from: { session: 2026-10-20-gnomon-gui-fidelity, board: s3-card-and-pile, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
     amended_by:
       - { session: 2026-10-22-gnomon-loops-ui, board: trust-card, what: "variant loop-trust (short in the pile, unfolds into the centre)" }
       - { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, what: "variant loop-choice; the family head on every card" }
-    build_requirements: ["a loop card's title wraps to two lines at the 300-340px stack width instead of truncating ('fix is un…' in the direction at 1024)", "loop-choice's voice tag: the spec makes Stop voice-eligible (deny-direction, gnomon-loops.md §3.3) while the direction shows 'hand only'; the tag quotes Stop's phrase once the grammar has one (rule voice-tag-quotes-the-phrase), else stays 'hand only'"]
+      - { session: 2026-10-22-gnomon-local-model, decided_by: creator, what: "variant local-config; family ⊙ gnomon (C3)" }
+    build_requirements: ["core/render.ts rootRowLine gains a case on schemaVersion 'gnomon-root-local:v1' that renders every signed field and returns null on any it can't (no Allow; Aegis C1e). Session 2026-10-22-gnomon-local-model.", "a loop card's title wraps to two lines at the 300-340px stack width instead of truncating ('fix is un…' in the direction at 1024)", "loop-choice's voice tag: the spec makes Stop voice-eligible (deny-direction, gnomon-loops.md §3.3) while the direction shows 'hand only'; the tag quotes Stop's phrase once the grammar has one (rule voice-tag-quotes-the-phrase), else stays 'hand only'"]
   pile:
     role: "The global stack as a paper pile: decision cards sorted by urgency, then alerts, then the waiting-for-trust slip at the foot; fans on hover AND focus-within so buried keys are keyboard-reachable (alerts and the slip sit flat)."
     states: [stacked, fanned, open, empty]
@@ -377,11 +388,71 @@ components:
     anatomy: [head (title h2, scope note, close/done), body (sections h3 of label | value | note rows)]
     variants: { card: ".sheet-card", settings: ".settings-card", drawer: ".vs-drawer .voice-sheet" }
     states: [open, closed, section-focused (opened at a section)]
+    section_focused: "open(section) scrolls to the section, focuses its heading (h3, tabindex -1) and draws a 2px --key-edge rule at its left until focus leaves; Esc or close returns focus to whatever opened it (a Loops can't-start key, an alert key, ⌘K). Entry points name the section: palette local.setup, the loop detail's can't-start line, the refused-start alert."
+    section_owner: "A section the kernel owns says '· kernel-owned' once in its heading (10.5 --sec mono) and its rows drop the per-row suffix (styles.css:940)."
+    row_kinds: "choice, toggle, action, revoke, readonly (shipped, core/settings.ts SettingRow) + form and request (component settings-form). form and request, like revoke, have their own press path outside SETTINGS_RUNS; every press is a trusted user event (G-GUI-04)."
+    sections: "Appearance, Layout, Voice, Local model, Permissions, About"
+    amended_by: [{ session: 2026-10-22-gnomon-local-model, decided_by: creator, what: "section-focused defined; kernel-owned section heading; row kinds form and request; the Local model section" }]
     source: packages/gnomon-gui/static/styles.css:518-523,687-720,921-934
     examples:
       settings: '<div class="sheet-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="settings-head"><h2 id="settings-title" class="title">Settings</h2><span class="meta">kept in this browser unless it says the kernel owns it</span><button class="key quiet" type="button">close</button></div><div class="settings-body"></div></div>'
     status: clear
     from: { session: 2026-10-21-gnomon-voice, board: setup-home, choice: ladder-plus-settings-sheet, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+  settings-form:
+    role: "A form that opens inline under its row in a sheet (Settings, Mods) and asks the kernel for a change. Labelled fields, one key that names its cost, cancel. When the change raises a card, the row shows the request in place and offers Decide in the stack, because toasts are hidden and the stack sits under the scrim while a sheet is open. Codifies the shipped Mods Configure form (.mod-config/.mod-field) and the Voice sheet's inline flow (.vs-flow)."
+    anatomy: ["lead line (11.5 --ink2)", "fields: label (10.5 --sec) over control (.field or .seg) over note (10.5 --sec)", "Advanced: a quiet key on a <summary> for rarely needed fields", "keys: the cost-label pri key + quiet cancel; a disabled key says why beside it", "foot note: what happens after the key", "request line after submit: plain chip 'card waiting' + what was asked + quiet key Decide in the stack", "result line: role=status; a refusal in --fail with CODE, reason and next:"]
+    row_kinds: { form: "closed: one key (Set up local model…, Change…); open: the form", request: "the card-waiting line that replaces the form while its card waits" }
+    behaviour:
+      - "Enter in a field presses the key; Esc closes the form before the sheet; entries are kept until the sheet closes"
+      - "anything checkable without signing is checked first (rule no-password-for-a-typo): the page's own checks, then the kernel's read-only check; on errors focus moves to the first invalid field"
+      - "on submit focus moves to the request line's key; Decide in the stack closes the sheet and focuses the card group, never its Allow"
+      - "one request at a time: the form is replaced by the request line while its card waits"
+      - "denied or expired brings the form back with the entries and a 'Not changed' line"
+      - "a change that loses something others depend on and costs presence to undo asks once inline, naming what stops (Turn off the local model when loops use it); otherwise it acts on the first press"
+    states: [closed, open, invalid, checking, submitting, card-waiting, denied, expired, refused, applied]
+    tokens:
+      rule: "2px solid --ink at the left, padding-left 12 (as .vs-flow)"
+      gap: "10 between fields; 2 between label, control and note"
+      label: "10.5 --sec"
+      control: "11.5, min-height 28; width by content: address 34ch, name 16ch, model and paths min(100%, 60ch)"
+      note: "10.5 --sec"
+      invalid: "aria-invalid, 2px --fail-edge, message 10.5 600 --fail led by ✕, linked by aria-describedby; it replaces the note"
+      request-chip: "chip (plain): a waiting card is not a warning (rule three-semantic-colours)"
+      result: "10.5 --ink2, the outcome word 600; a refusal in --fail"
+    never: ["a modal over a sheet (rule teach-inline)", "a toast as the only sign the request went out", "an amber chip for a waiting card", "a placeholder that looks like a value", "a form that drops config it doesn't show (it edits one endpoint by id and keeps the rest)"]
+    copy:
+      local-model:
+        section: { title: "Local model", owner: "· kernel-owned", intro: "A model server on this Mac that sessions and loops can use instead of Claude. The kernel owns it: setting or changing it raises a root card; turning it off doesn’t.", terminal: "Terminal: gnomon local status | set | remove" }
+        none: { value: "none set up", how: "Loops with model steps can’t start. A session that asks for a local model raises a fallback card instead.", key: "Set up local model…" }
+        windows: { value: "not on Windows in 8.0", how: "Local models run on the Mac for now. On this PC loops with model steps can’t start, and a session that asks for a local model raises a fallback card." }
+        not-offered: { value: "not offered by this kernel", how: "Update Gnomon to set one up here. The terminal form is gnomon local status." }
+        form: { lead: "Point Gnomon at a model server running on this Mac.", lead-change: "Changing the local model. The card shows exactly what changes.", server: "Ollama | LM Studio | llama.cpp | vLLM | MLX (picking one fills the address only while you haven't typed in it)", address-note: "this Mac only in 8.0: 127.0.0.1 or localhost", model-note: "its name as `ollama list` shows it", used-by: "Sessions and loops | Sessions only", advanced: "endpoint name · runner gnomon-local <v> · bundled with Gnomon · use another runner (optional)", key: "Save · root card", unchanged: "no change", foot: "Nothing changes until you Allow its card in the stack. Allow takes the root key and your presence: Touch ID or your Mac password." }
+        errors: { lan: "✕ <host> is another machine on your network. In 8.0 the server must be on this Mac: use 127.0.0.1 or localhost.", malformed: "✕ Not an address: start it with http://", port: "✕ Add the port, e.g. :11434", cloud: "✕ <host> is not a local server", model: "✕ Name the model as `ollama list` shows it, e.g. qwen2.5-coder:14b.", no-answer: "✕ No answer at <address>: <error>. Start the server, then Save again." }
+        request: { chip: "card waiting", line: "hh:mm · <name> · <address> · <model> · sessions and loops", key: "Decide in the stack", how: "Allow takes the root key and your presence. Deny keeps things as they are and brings your entries back here." }
+        results: { denied: "Not changed: you denied the card at hh:mm. Your entries are below.", expired: "Not changed: the card expired at hh:mm (Gnomon restarted). Your entries are below.", turned-off: "Turned off at hh:mm. <loops> won’t start until a local model is set up." }
+        check: { checking: "checking… started hh:mm", ok: "✓ answers · tools native · context 32 768 · hh:mm", no-answer: "✕ no answer: connection refused · hh:mm (Check again)", no-tools: "✕ answers, but can’t call tools", ctx-below-floor: "✕ context 4 096: sessions need 8 192", ctx-unknown: "? context size unknown", no-runner: "✕ runner not pinned" }
+        turn-off-confirm: { text: "Turn off <model>? n loops use it: <ids>. They won’t start until you set one up again, and that takes a card and your password.", keys: "Turn off · keep it", busy: "Turning off…" }
+        toasts: { applied: "local model · set · <model> on <address> · ✓ answers …", applied-no-answer: "local model · set, but no answer … · next: … (fail, stays)", turned-off: "local model · turned off · … (only when no sheet is open)" }
+    examples:
+      closed: '<div class="settings-row settings-form"><span class="settings-label"></span><button class="key pri" type="button" aria-expanded="false">Set up local model…</button></div>'
+      open: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-lead">Point Gnomon at a model server running on this Mac.</p><div class="sf-field" role="group" aria-labelledby="sf-server"><span class="sf-label" id="sf-server">server</span><span class="seg" role="radiogroup" aria-labelledby="sf-server"><button class="key quiet seg-key current" type="button" role="radio" aria-checked="true">Ollama</button><button class="key quiet seg-key" type="button" role="radio" aria-checked="false">LM Studio</button><button class="key quiet seg-key" type="button" role="radio" aria-checked="false">llama.cpp</button><button class="key quiet seg-key" type="button" role="radio" aria-checked="false">vLLM</button><button class="key quiet seg-key" type="button" role="radio" aria-checked="false">MLX</button></span><p class="sf-note">Ollama listens on 127.0.0.1:11434 unless you changed it</p></div><label class="sf-field"><span class="sf-label">address</span><input class="field w-addr" type="text" value="http://127.0.0.1:11434" spellcheck="false"><span class="sf-note">this Mac only in 8.0: 127.0.0.1 or localhost</span></label><label class="sf-field"><span class="sf-label">model</span><input class="field w-model" type="text" value="qwen2.5-coder:14b" spellcheck="false"><span class="sf-note">its name as <code>ollama list</code> shows it</span></label><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div><p class="sf-note">Nothing changes until you Allow its card in the stack. Allow takes the root key and your presence: Touch ID or your Mac password.</p></form></div>'
+      invalid: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><label class="sf-field"><span class="sf-label">address</span><input class="field w-addr" type="text" value="http://192.168.1.20:11434" aria-invalid="true" aria-describedby="sf-err-addr"><span class="sf-err" role="alert" id="sf-err-addr">✕ 192.168.1.20 is another machine on your network. In 8.0 the server must be on this Mac: use 127.0.0.1 or localhost.</span></label><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
+      checking: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><div class="sf-keys"><button class="key pri" type="submit" aria-busy="true" disabled>Checking…</button><button class="key quiet" type="button">cancel</button></div><p class="sf-result" role="status">checking 127.0.0.1:11434 before raising the card…</p></form></div>'
+      submitting: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><div class="sf-keys"><button class="key pri" type="submit" aria-busy="true" disabled>Save · root card…</button><button class="key quiet" type="button" disabled>cancel</button></div></form></div>'
+      card-waiting: '<div class="settings-row settings-form"><span class="settings-label">Asked</span><p class="sf-request" role="status"><span class="chip">card waiting</span> 23:20 · ollama · 127.0.0.1:11434 · qwen2.5-coder:14b · sessions and loops</p><div class="sf-keys"><button class="key" type="button">Decide in the stack</button></div><p class="meta settings-how">Allow takes the root key and your presence. Deny keeps things as they are and brings your entries back here.</p></div>'
+      denied: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-lead">Point Gnomon at a model server running on this Mac.</p><p class="sf-result" role="status"><b>Not changed:</b> you denied the card at 23:22. Your entries are below.</p><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
+      expired: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-result" role="status"><b>Not changed:</b> the card expired at 23:50 (Gnomon restarted). Your entries are below.</p><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
+      refused: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-result fail" role="alert">BILLING_REFUSED  192.168.1.20 is not on this Mac · next: use 127.0.0.1 or localhost</p><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
+      applied: '<div class="settings-row settings-readonly" data-readonly="true" aria-live="polite"><span class="settings-label">Check</span><span class="settings-value kernel-owned"><span class="mk">✓</span> answers · tools native · context 32 768 · 23:24</span></div>'
+    source: ".atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (classes .set-form .sf-*); CSS bridge .atelier/systems/gnomon/local-model-bridge.css; shipped precedent packages/gnomon-gui/src/ui/mods-panel.ts:80-95"
+    build_requirements:
+      - "core/settings.ts: SectionId 'local-model' between voice and permissions; row kinds form and request; values from status.local only, never the form's copy"
+      - "ui/settings-sheet.ts: open(section?) (sheet section-focused); Esc closes an open form first; press paths for request.local.config, the read-only check and the remove request, trusted events only"
+      - "kernel: a read-only, loopback-only check of an address and model before the card (C1 check-first); status.local carries endpoints, runner, config version and signer, last check, last fallback and unsupported:'platform'"
+      - "palette local.setup opens Settings at local-model ('Set up local model…' | 'Local model settings…')"
+      - "rendered at 1024 and 1440, day and night, with 0, 1 and 2 endpoints, a 52-character model id and a 90-character runner path"
+    status: clear
+    from: { session: 2026-10-22-gnomon-local-model, board: local-model, choice: settings-form, decided_by: creator, contested: { C1: check-first, C2: confirm-when-used } }
   notice:
     role: "The band under the header, for kernel alerts only (re-pin, voice dev build). Kernel-owned, role=alert; it stays until acknowledged or resolved. Everything else is a toast."
     variants: { repin: ".notice.repin (kernel)", voice-dev: ".notice.voice-dev (kernel)" }
@@ -468,18 +539,21 @@ components:
   alert:
     role: "A stack sheet that decides nothing: a loop that is stuck and still needs you (failed, stopped by a budget or exit, paused by the kernel). It sorts under every decision card and above the trust slip, and stays until dismissed or its cause clears."
     anatomy: ["family head (↻ loop · ■ project · alert · hh:mm)", "title led by a state mark (✕ failed, ■ stopped, ‖ paused)", "run path with node marks", "quiet keys only: Open run, Dismiss"]
-    variants: { fail: "vermilion left edge; ✕ and the title in --fail", stop: "--key-edge edge; ■ and the title in ink; names the limit that stopped it", kernel-pause: "dashed amber left edge; ‖ and the reason; Resume · presence lives in the detail, not on the alert" }
+    variants: { fail: "vermilion left edge; ✕ and the title in --fail", stop: "--key-edge edge; ■ and the title in ink; names the limit that stopped it", kernel-pause: "dashed amber left edge; ‖ and the reason; Resume · presence lives in the detail, not on the alert", refused-start: "--key-edge edge; a loop whose trigger fired but which was refused before any step (no-local-model): title '■ <id> didn’t start', path '<reason> · scheduled hh:mm · refused before any step · ×n since <day>'; quiet keys to the fix (Set up local model…) and Dismiss; one per loop, a repeat refusal updates its count; clears itself when the cause clears; the loop also pins to needs you" }
     never: ["a decision key (Allow, Trust, Continue)", "the fold shadow or the fan rotation (alerts sit flat, --r 0deg)", "a family told by hue", "an outcome that needs nothing (goal, landed: a toast)"]
-    states: [fail, stop, kernel-pause]
+    states: [fail, stop, kernel-pause, refused-start]
     tokens: { fill: --sheet, shadow: none, day-ring: "1px --rule", edge-w: --edge-w, fail-edge: --fail-edge, kernel-pause-edge: "--warn-edge, dashed", title: "11.5 control" }
     source: ".atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame desk, .card.alert); not yet in packages/gnomon-gui"
     examples:
       fail: '<section class="card alert fail" role="group" aria-label="loop alert"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ storefront</span> · <span class="card-kind">alert · 14:24</span></header><p class="card-title">✕ flow-health-checkout failed at tests</p><p class="path">defn ✓ → gates ✓ → tests <span class="x">✕</span> 3 failed in test/checkout → why → tell</p><div class="card-keys"><button class="key quiet" type="button">Open run</button><button class="key quiet" type="button">Dismiss</button></div></section>'
       stop: '<section class="card alert" role="group" aria-label="loop alert"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ a-paradigm</span> · <span class="card-kind">alert · 02:41</span></header><p class="card-title">■ green-typecheck-gnomon stopped: 8 of 8 rounds used</p><p class="path">tsc <span class="x">✕</span> → fix ×8 → tsc <span class="x">✕</span> → @stop</p><div class="card-keys"><button class="key quiet" type="button">Open run</button><button class="key quiet" type="button">Dismiss</button></div></section>'
       kernel-pause: '<section class="card alert kpause" role="group" aria-label="loop alert"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ a-paradigm</span> · <span class="card-kind">alert · 18:44</span></header><p class="card-title">‖ evening-tidy paused by the kernel: day compute cap reached (900s)</p><p class="path">reindex ✓ → digest ‖</p><div class="card-keys"><button class="key quiet" type="button">Open run</button><button class="key quiet" type="button">Dismiss</button></div></section>'
-    example_note: "stop and kernel-pause are composed from the fail markup; the direction drew only fail"
+      refused-start: '<section class="card alert" role="group" aria-label="loop alert"><header class="card-head k"><span class="fam">↻ loop</span> · <span class="card-project">■ a-paradigm</span> · <span class="card-kind">alert · 18:30</span></header><p class="card-title">■ evening-tidy didn’t start</p><p class="path">no local model · scheduled 18:30 · refused before any step · ×3 since Monday</p><div class="card-keys"><button class="key quiet" type="button">Set up local model…</button><button class="key quiet" type="button">Dismiss</button></div></section>'
+    example_note: "stop and kernel-pause are composed from the fail markup; the direction drew only fail; refused-start is from session 2026-10-22-gnomon-local-model refs/local-model.html"
+    build_requirements: ["refused-start needs the kernel to log a refused fire (today runner.ts:443 refuses no-local-model with no row a GUI can read)"]
     status: clear
     from: { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, choice: stack-alerts-toast-outcomes, decided_by: creator }
+    amended_by: [{ session: 2026-10-22-gnomon-local-model, decided_by: creator, what: "variant refused-start (rule stuck-to-stack-done-to-toast: a scheduled loop must not fail silently)" }]
   trust-slip:
     role: "The foot of the stack: loops an agent wrote or changed that wait for trust, before any card exists. One line per loop, each with a Review key that raises the real loop-trust card. It is not a card: dashed edge, no fill, no fold shadow, never a decision key."
     anatomy: ["tab: ↻ n loops waiting for trust · no card yet", "row: <id> · new|changed · by <author> + Review (24px quiet key)"]
@@ -572,19 +646,30 @@ components:
     from: { session: 2026-10-22-gnomon-loops-ui, board: loop-list, choice: project-groups-needs-you, decided_by: creator }
   loop-detail:
     role: "One loop in the leaf: a head with every key naming its cost, a meta line, the graph, inline budgets, the last run, and the run timeline with Revert on each landed sha."
-    anatomy: ["head: ← Loops (narrow only) · name (17) · state chip · by chip · keys", "meta (10.5 --sec): ■ project · trigger · autonomy (with cap reason) · local only · trusted <hash8> · a disabled key's reason", "graph", "budgets", "last run (run-trace)", "timeline: runs with landed sha + Revert"]
+    anatomy: ["head: ← Loops (narrow only) · name (17) · state chip · by chip · keys", "meta (10.5 --sec): ■ project · trigger · autonomy (with cap reason) · local only · trusted <hash8> · a disabled key's reason", "can't-start line (only when the kernel refused a start): '✕ can’t start · <code>' (600 --ink), the kernel's reason in words, one key to the fix; --key-edge box, no fill colour", "graph", "budgets", "last run (run-trace)", "timeline: runs with landed sha + Revert"]
     keys: { run-now: "Run now (pri); disabled with the reason in words while a loop waits for trust ('Run now waits for trust')", review: "Review change (pri) while a change waits; raises the loop-trust card unfolded", pause: "Pause | Resume; after a kernel pause or Pause all it reads 'Resume · presence'", quiet: "Untrust, Delete", revert: "Revert on each landed sha in the timeline" }
-    states: [idle, running, waiting-trust, kernel-paused, paused-all]
-    source: ".atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-dhead .lp-dmeta)"
+    cant_start:
+      rule: "The line maps the kernel's why (runner.ts:487-488, plus none set up) to words; the GUI never infers a reason. Run now is disabled with its reason in the meta."
+      copy:
+        none: { text: "No local model is set up, and this loop has a model step (<node ids>).", key: "Set up local model…", run_now_why: "Run now needs a local model" }
+        sessions-only: { text: "<model> is set up for sessions only. Let loops use it in Settings.", key: "Local model settings…", run_now_why: "Run now needs a local model loops may use" }
+        no-runner: { text: "The local model has no runner pinned. Change it in Settings and Save to pin the bundled one.", key: "Local model settings…" }
+      key_opens: "Settings at the Local model section (sheet state section-focused); closing Settings returns focus to this key"
+      list_row: "the loop pins to needs you with ◆: l1 '<id> · can’t start', l2 '<project> · needs a local model (<node>) · <autonomy> · by <author>'"
+      from: { session: 2026-10-22-gnomon-local-model, decided_by: creator }
+    states: [idle, running, waiting-trust, kernel-paused, paused-all, cant-start]
+    source: ".atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-dhead .lp-dmeta); can't-start line .atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (.lp-refusal)"
     examples:
       waiting-trust: '<div class="lp-dhead"><span class="title">green-typecheck-gnomon</span><span class="chip ink">paused · change waiting</span><span class="chip">by arky</span><span class="spacer" style="flex:1"></span><button class="key pri" type="button">Review change</button><button class="key" type="button" disabled title="waits for trust">Run now</button><button class="key quiet" type="button">Untrust</button><button class="key quiet" type="button">Delete</button></div><div class="lp-dmeta">■ a-paradigm · daily 02:00 · act → propose (L2: a-paradigm strictness) · local only · trusted 3f9a1c02 · change 6b07d3e5 waits for trust · <span class="dis-why">Run now waits for trust</span></div>'
       idle: '<div class="lp-dhead"><span class="title">evening-tidy</span><span class="chip ink">idle · next 18:30</span><span class="chip">by you</span><span class="spacer" style="flex:1"></span><button class="key pri" type="button">Run now</button><button class="key" type="button">Pause</button><button class="key quiet" type="button">Untrust</button><button class="key quiet" type="button">Delete</button></div>'
       running: '<div class="lp-dhead"><span class="title">flow-health-checkout</span><span class="chip ink">running · at tests (3 of 4)</span><span class="chip">by you</span><span class="spacer" style="flex:1"></span><button class="key" type="button" disabled>Run now</button><button class="key" type="button">Pause</button><button class="key quiet" type="button">Untrust</button><button class="key quiet" type="button">Delete</button></div><div class="lp-dmeta">■ storefront · daily 07:30 + on change · observe · local only · <span class="dis-why">Run now waits for this run to end</span></div>'
       kernel-paused: '<div class="lp-dhead"><span class="title">evening-tidy</span><span class="chip ink">kernel-paused · day compute cap</span><span class="chip">by you</span><span class="spacer" style="flex:1"></span><button class="key pri" type="button">Resume · presence</button><button class="key quiet" type="button">Untrust</button><button class="key quiet" type="button">Delete</button></div>'
       paused-all: '<div class="lp-dhead"><span class="title">green-typecheck-gnomon</span><span class="chip ink">paused · kill switch</span><span class="chip">by arky</span><span class="spacer" style="flex:1"></span><button class="key" type="button">Resume · presence</button><button class="key quiet" type="button">Untrust</button><button class="key quiet" type="button">Delete</button></div>'
-    example_note: "waiting-trust is verbatim; the other heads are composed from it"
+      cant-start: '<div class="lp-dhead"><span class="title">evening-tidy</span><span class="chip ink">idle · can’t start</span><span class="chip">by you</span><span class="spacer" style="flex:1"></span><button class="key pri" type="button" disabled>Run now</button><button class="key" type="button">Pause</button><button class="key quiet" type="button">Untrust</button></div><div class="lp-dmeta">■ a-paradigm · daily 18:30 · act · local only · trusted 3f9a1c02 · <span class="dis-why">Run now needs a local model</span></div><div class="lp-refusal" role="status"><span class="rf-h">✕ can’t start · no-local-model</span><span class="rf-t">No local model is set up, and this loop has a model step (digest).</span><button class="key" type="button">Set up local model…</button></div>'
+    example_note: "waiting-trust is verbatim; the other heads are composed from it; cant-start is from session 2026-10-22-gnomon-local-model"
     status: clear
     from: { session: 2026-10-22-gnomon-loops-ui, board: steer-stop, choice: detail-head-keys, decided_by: creator }
+    amended_by: [{ session: 2026-10-22-gnomon-local-model, decided_by: creator, what: "the can't-start line and state cant-start" }]
   budget-field:
     role: "An inline budget cap in the loop detail: label, number field, one key that names its cost, a note. Tightening applies at once; loosening raises a loop-trust card and the old cap holds until you trust it."
     anatomy: [label, "field (8ch)", "key: Save (disabled, 'no change') | Apply · tighter | Loosen · needs trust", "note (10.5 --sec)"]
@@ -785,7 +870,9 @@ content:
       alert: "a stack sheet that decides nothing: a loop that is stuck and still needs you"
       family: "what a card or alert relates to, named by glyph and word in its head (↻ loop, ◇ session)"
       autonomy: "observe / act / propose, with the cap reason ('act → propose (L2: a-paradigm strictness)'); never 'mode'"
-      presence: "fresh Touch ID; named in a key's cost ('Resume · presence')"
+      presence: "fresh Touch ID, or the Mac password where Touch ID is unavailable; named in a key's cost ('Resume · presence'); long copy says 'Touch ID or your Mac password' (amended by session 2026-10-22-gnomon-local-model)"
+      local model: "a model server on this Mac that sessions and loops can use instead of Claude (8.0: loopback only); 'Set up local model…', 'none set up'"
+      card waiting: "a request whose card is in the stack (a plain chip in the sheet that asked for it)"
       land: "a loop committing its scratch work to the branch; 'landed <sha>'; 'waiting to land'; 'parked' when it waited too long"
       Workshop: "the caps mod: Needs you | Working"
       cap: "one session in the Workshop"
@@ -814,6 +901,9 @@ content:
         decision: "Keep both words and keep them apart; no rename. 'run' is the spec's and the kernel's word ($loop-run, loop.run.*, Run now) and the founder approved copy built on it; 'run mode' is shipped, kernel-owned vocabulary. They never share a surface (the Loops leaf covers the chat header that holds run mode ▾), so the collision is only in the words: 'run mode' always appears as both words, loops never use 'mode' (they have 'autonomy'), and 'loop run' is the long form outside loop surfaces."
         decided_by: recommendation
         note: "Decided, not contested: renaming run mode would churn shipped kernel copy for a collision that never shares a screen. Reopen if a loop surface ever shows run mode."
+      - session: 2026-10-22-gnomon-local-model
+        what: "local model, card waiting; presence includes the Mac password"
+        decided_by: creator
   voice:
     - "Name the state plus one live fact; never only a glyph (board pill)"
     - "Lowercase, numbers before nouns ('4 running'), items joined with ' · ' (cli-voice)"
@@ -833,7 +923,9 @@ content:
   from: { session: 2026-10-15-gnomon-aesthetic, board: cli-voice, choice: instrument-readout, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
 
 specimen:
-  stylesheets: [packages/gnomon-gui/static/styles.css]
+  stylesheets: [packages/gnomon-gui/static/styles.css, .atelier/systems/gnomon/local-model-bridge.css]
+  # local-model-bridge.css is a bridge: the settings-form, .lp-refusal and .card-root-rows CSS from session
+  # 2026-10-22-gnomon-local-model until the build moves it into styles.css (migration batch settings-form)
   # the loops-direction.css bridge was dropped by the LP8 build: styles.css carries the loop classes
   themes:
     day: { html_attrs: 'data-theme="day" data-motion="full"' }
@@ -944,7 +1036,8 @@ rules:
     rule: "The stack holds decision cards first (most urgent first), then alerts, then the waiting-for-trust slip at the foot. Alerts and the slip never carry a decision key and never bury one; the pile still fans on hover and focus."
     from: { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, decided_by: creator, origin: { board: agent-loops-surface, override: "the stack holds only cards" } }
   - id: family-by-glyph-and-word
-    rule: "A card or alert names what it relates to in its head by glyph and word (↻ loop, ◇ session); never by a hue. The six minerals stay projects; the three semantic colours stay three."
+    amended_by: [{ session: 2026-10-22-gnomon-local-model, board: C3, choice: gnomon, decided_by: creator, what: "⊙ gnomon for root configuration cards" }]
+    rule: "A card or alert names what it relates to in its head by glyph and word (↻ loop, ◇ session, ⊙ gnomon); never by a hue. The six minerals stay projects; the three semantic colours stay three."
     from: { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, decided_by: creator }
   - id: stuck-to-stack-done-to-toast
     rule: "What still needs you is in the stack (a loop's fail, stop or kernel pause as an alert; a loop-choice as a card; loops waiting for trust in the slip), so nothing that needs you can time out. What simply happened is a 6s toast (goal reached, landed, Pause all done, Run now started, a budget applied)."
@@ -964,6 +1057,12 @@ rules:
   - id: pause-all-everywhere
     rule: "Pause all is in the Loops leaf head, Gnomon ▾ and ⌘K loops.pause-all. After it, the header word, the leaf head, every row, the open detail, the keep-alive line and the edge tab change at once, and one toast says what was stopped and parked."
     from: { session: 2026-10-22-gnomon-loops-ui, board: running-indicator, decided_by: creator, requirement_from: { board: steer-stop, by: Mika } }
+  - id: form-says-where-the-card-is
+    rule: "A form whose submit raises a card names the cost in its key ('Save · root card'), shows the request in place ('card waiting'), and offers Decide in the stack, which focuses the card, never its Allow. It never relies on a toast while an overlay is open."
+    from: { session: 2026-10-22-gnomon-local-model, decided_by: creator }
+  - id: no-password-for-a-typo
+    rule: "Anything the page or the kernel can check without signing is checked before a card that needs presence is raised: the address and model of a local model are checked (read-only, loopback only) before its root card."
+    from: { session: 2026-10-22-gnomon-local-model, board: C1, choice: check-first, decided_by: creator }
   - id: target-floor
     rule: "Every pointer target >= 24x24 (WCAG 2.2 AA 2.5.8); header controls 28px."
     from: { session: 2026-10-21-gnomon-voice, board: header-5b, note: "28px header; 24px floor added by Mika's vet; small keys from board gnomon-chip" }
@@ -1034,6 +1133,10 @@ decisions:
   - { session: 2026-10-22-gnomon-loops-ui, board: loop-detail, choice: node-graph, decided_by: creator, over: "recommended listing", requirements_from: Mika }
   - { session: 2026-10-22-gnomon-loops-ui, board: steer-stop, choice: detail-head-keys, decided_by: creator }
   - { session: 2026-10-22-gnomon-loops-ui, what: "'run' (a loop run) vs 'run mode': keep both, kept apart (content.vocabulary)", decided_by: recommendation }
+  - { session: 2026-10-22-gnomon-local-model, board: local-model, choice: "the Local model section, settings-form, local-config card, refused-start alert, can't-start line", decided_by: creator }
+  - { session: 2026-10-22-gnomon-local-model, board: C1, choice: check-first, decided_by: creator }
+  - { session: 2026-10-22-gnomon-local-model, board: C2, choice: confirm-when-used, decided_by: creator }
+  - { session: 2026-10-22-gnomon-local-model, board: C3, choice: gnomon, decided_by: creator }
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # Migration: every change to existing UI the system makes. Batched by zone or component; each batch goes through the
@@ -1097,6 +1200,13 @@ migration:
   - { batch: stack-and-toasts-for-loops, from: "the pile renders cards only, all fanned", to: "cards, then alerts, then the trust slip; alerts and the slip flat (no rotation, no fold shadow); stack head 'n to decide · m alerts · hover to fan' (the direction drops the ' · ' before 'hover to fan')", uses: 2, files: ["packages/gnomon-gui/static/styles.css:307-312,366-378", "packages/gnomon-gui/src/ui/app.ts:904,907"], from_decision: { session: 2026-10-22-gnomon-loops-ui, board: agent-loops-surface } }
   - { batch: stack-and-toasts-for-loops, from: "kernel status: link dot and risk chip", to: "plus the loops word while any loop is enabled; Loops… and Pause all loops in the wordmark menu", uses: 2, files: ["packages/gnomon-gui/static/index.html:21"], from_decision: { session: 2026-10-22-gnomon-loops-ui, board: running-indicator } }
   - { batch: stack-and-toasts-for-loops, from: "toast placement recorded as 'under the voice pill'", to: "the record now matches styles.css:956 (chat column top-right); add the 36px step-in while the Loops edge tab shows", uses: 1, files: ["packages/gnomon-gui/static/styles.css:956-966"], from_decision: { session: 2026-10-22-gnomon-loops-ui, board: notify-decide } }
+  # batch settings-form (session 2026-10-22-gnomon-local-model): pending, each goes through the UI review
+  - { batch: settings-form, status: pending, from: ".mod-config / .mod-field and 'Ask for the change' in the Mods sheet", to: "settings-form classes and anatomy; the key names its cost ('Save · card')", uses: 2, files: ["packages/gnomon-gui/src/ui/mods-panel.ts:85-95", "packages/gnomon-gui/static/styles.css:1072-1077"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  - { batch: settings-form, status: pending, from: "Mods 'card waiting' chips drawn as chip warn (amber)", to: "chip (plain): a waiting card is not a warning", uses: 1, files: ["packages/gnomon-gui/src/ui/mods-panel.ts:80-82"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  - { batch: settings-form, status: pending, from: "daemon-stop and api-token cards with no family in the head", to: "'⊙ gnomon' family head", uses: 2, files: ["packages/gnomon-gui/src/core/render.ts:770-776"], from_decision: { session: 2026-10-22-gnomon-local-model, board: C3, decided_by: creator } }
+  - { batch: settings-form, status: pending, from: "the Settings sheet's per-row '· kernel-owned' suffix in a section the kernel owns", to: "once in the section heading", uses: 1, files: ["packages/gnomon-gui/static/styles.css:940"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  - { batch: settings-form, status: pending, from: ".key.pri[disabled]: --sec text on the ink fill (about 2.6:1 by day; Run now, a busy Allow)", to: "sheet fill, --rule edge, --sec text (as .seg-key[disabled], styles.css:924)", uses: 1, files: ["packages/gnomon-gui/static/styles.css:183,192"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  - { batch: settings-form, status: pending, from: "local-model-bridge.css in specimen.stylesheets", to: "the classes moved into styles.css by the build; drop the bridge", uses: 1, files: [".atelier/systems/gnomon/local-model-bridge.css"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
   # batch tokens
   - { batch: tokens, from: "--t-walk defined, unused (cap walk not built)", to: "build the walk or drop the token", uses: 0, files: ["packages/gnomon-gui/static/styles.css:122"], from_decision: { extract: 2026-10-21, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } } }
 
