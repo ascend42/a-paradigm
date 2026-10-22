@@ -222,11 +222,11 @@ describe('#loop-runner: the walk (§2)', () => {
     }
   });
 
-  it('act and write nodes are refused at run start: "lands in step 10", nothing runs', () => {
+  it('write checks are refused at run start (act nodes run since step 10), nothing runs', () => {
     const root = repo([{ schema: 'loop:v2', id: 'writer', start: 'a', land: { paths: ['src/**'], message: 'chore(#x): y' }, nodes: [chk('a', { pass: '@stop' }, { effect: 'write' })] }]);
     const r = rig(root);
     r.trust('writer');
-    expect(() => r.runner.start(r.key('writer'), { type: 'manual' })).toThrow(/act and write nodes land in step 10/);
+    expect(() => r.runner.start(r.key('writer'), { type: 'manual' })).toThrow(/write checks \(effect: write\) are not built in 8\.0 yet/);
     expect(r.rows).toEqual([]);
   });
 
@@ -284,7 +284,7 @@ describe('#loop-runner: the walk (§2)', () => {
     await new Promise((res) => setTimeout(res, 50));
     const card = r.cards[0]!;
     expect(card).toMatchObject({ kind: 'loop-choice', decisions: ['continue', 'stop'], attended: false, detail: { loopId: 'ask', runId: p1.runId, nodeId: 'q', origin: 'loop' } });
-    expect(card.lines.slice(0, 2)).toEqual([`Raised by loop ask (authored by file)`, `Run ${p1.runId}`]);
+    expect(card.lines.slice(0, 2)).toEqual([`Raised by loop ask (from the loop file)`, `Run ${p1.runId}`]);
     expect(card.detail).toMatchObject({ origin: 'loop', authoredBy: 'file' });
     await card.effect('continue', { connId: gui.connId });
     expect(await p1.done).toMatchObject({ reason: 'goal' });

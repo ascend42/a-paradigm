@@ -54,6 +54,14 @@
  *   never Claude: no capable endpoint is LoopModelUnavailable (G-LCL-02,
  *   G-LOOP-13). Its model text never reaches a turn.event row (hash only);
  *   ask() hands it back to the runner, which stores it secret-scanned.
+ * LOOPS STEP 10 (#loop-act, §3.2-§3.4, §4): openLoop(ref, {role:'act', act}) opens the same unattended session
+ *   for an ACT step, in the run's live scratch worktree (kernel/git liveScratch: the cwd and the ONE root, the
+ *   one root allowed inside the Gnomon home), under the `loop-act` profile (sandbox/loop-act.ts: outbound only to
+ *   the endpoint's loopback port, writes only in the scratch). Its tools are the trust card's declared tools
+ *   through the loop clamp (loopActTools; none ⇒ FORBIDDEN), its protected globs go to the child, which refuses
+ *   a write to one with no card (a `protected-input:` tool result the turn reports as protectedHits ⇒ the node
+ *   fails, G-LOOP-22). Tool lines are hashed in turn.event like model text (they carry model-written content).
+ *   A LAN endpoint cannot serve an act step in 8.0 (LoopModelUnavailable 'act-needs-loopback-endpoint').
  * DEFERRED (reported): unattended local automations other than loops (law 5;
  * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
@@ -85,7 +93,9 @@ import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
-import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED } from './loop-clamp.js';
+import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED, loopActTools } from './loop-clamp.js';
+import { liveScratch, type Scratch } from '../git/scratch.js';
+import { loopActLaunchPlan, type LoopActLaunchInput } from '../sandbox/loop-act.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -135,7 +145,9 @@ export interface LocalLaneOptions {
 
 /** openLoop's request (the runner's model step). */
 export interface LoopOpenRequest {
-  role: 'judge' | 'summarize';
+  role: 'judge' | 'summarize' | 'act';
+  /** role act only: the node's declared tools (the clamp admits them), its protected globs and its turn cap */
+  act?: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number };
   /** a configured endpoint id (model.profile); absent: the first capable endpoint in root-signed config order */
   profile?: string;
   systemPrompt: string;
@@ -151,6 +163,8 @@ export interface LoopTurn {
   tokens: number;
   stopReason: string | null;
   error: string | null;
+  /** an act turn: the protected paths the child refused (each is the node's fail, G-LOOP-22) */
+  protectedHits?: string[];
 }
 
 export interface LoopSessionHandle {
@@ -172,6 +186,8 @@ export class LoopModelUnavailable extends Error {
 
 interface LoopState {
   info: Readonly<LoopRunRefInfo>;
+  /** an act session: its scratch and the protected writes the child refused */
+  act?: { scratch: Readonly<Scratch>; hits: string[] };
   reply: string | null;
   tokens: number;
   fatal: string | null;
@@ -348,6 +364,15 @@ export class LocalLane {
     return this.#spawn(req, declared, route.reason, route.tools ?? 'native', first!.ep, first!.v.base, caps!, cfg);
   }
 
+  /**
+   * Step 10 (Aegis M1): resolves once every loop session of `runId` has exited (the runner parks only after this; the
+   * loop-act profile denies process-fork, so the child has no descendant to wait for).
+   */
+  async loopSessionsSettled(runId: string): Promise<void> {
+    const live = [...this.#sessions.values()].filter((s) => s.loop?.info.runId === runId);
+    await Promise.all(live.map((s) => s.exited.catch(() => undefined)));
+  }
+
   /** Is this a loop session (origin 'loop')? Step 12's loop.request pre-gate refuses them (LL5). */
   isLoopSession(hsid: unknown): boolean {
     return typeof hsid === 'string' && this.#sessions.get(hsid)?.loop !== undefined;
@@ -364,7 +389,17 @@ export class LocalLane {
     if (!info) throw refused('FORBIDDEN', 'an unattended open takes a trusted loop run reference from the runner', { reason: 'not-a-loop-run' });
     const live = info.live();
     if (!live.ok) throw refused('FORBIDDEN', `the loop cannot run: ${live.reason}`, { reason: 'loop-not-runnable' });
-    if (req.role !== 'judge' && req.role !== 'summarize') throw refused('BAD_REQUEST', 'only judge and summarize steps open here (act nodes land in step 10)', { reason: 'bad-params' });
+    if (req.role !== 'judge' && req.role !== 'summarize' && req.role !== 'act') throw refused('BAD_REQUEST', 'only judge, summarize and act steps open here', { reason: 'bad-params' });
+    // step 10: an act step works ONLY in its run's live scratch, with only the tools its trust card admits (the clamp)
+    let act: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number } | null = null;
+    if (req.role === 'act') {
+      const scratch = liveScratch(info.runId);
+      if (!req.act || !scratch || scratch.loopId !== info.loopId) throw refused('FORBIDDEN', 'an act step works only in its run\'s scratch worktree', { reason: 'no-scratch' });
+      const tools = loopActTools(req.act.tools, info.trustCard);
+      if (!tools.length) throw refused('FORBIDDEN', 'the loop\'s trust card admits no tools for this act step', { reason: 'no-trusted-tools' });
+      const protect = req.act.protect.filter((g): g is string => typeof g === 'string' && g.length > 0 && g.length <= 512);
+      act = { scratch, tools, protect, maxSteps: Math.max(1, Math.min(128, Math.floor(req.act.maxSteps) || 1)) };
+    } else if (req.act) throw refused('BAD_REQUEST', 'act options are for act steps', { reason: 'bad-params' });
     if (req.signal?.aborted) throw new LoopModelUnavailable('aborted');
     const cfg: LocalLaneConfig = this.#o.config ?? { endpoints: [] };
     let eps;
@@ -390,7 +425,8 @@ export class LocalLane {
       // a failed probe is not cached for a loop step: each retry asks the endpoint again
       if (this.#probes.get(e.ep.id)?.caps.ok !== true) this.#probes.delete(e.ep.id);
       const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model }).catch(() => null);
-      // judge and summarize use no tools (surface 'none'): capable = reachable and n_ctx ≥ the floor
+      // judge and summarize use no tools (surface 'none'): capable = reachable and n_ctx ≥ the floor; an act step uses
+      // tools (native, or the text-tool fallback): the same test, the route's tools mode kept
       const k = capability(c, floor, true);
       if (k.capable && c) {
         pick = { e, caps: c };
@@ -399,8 +435,15 @@ export class LocalLane {
       reason = k.reason;
     }
     if (!pick) return unavailable(reason);
-    const lane: LocalOpenRequest = { principal: this.#o.kernelPrincipal, principalClass: 'kernel', attended: false, cwd: info.repoRoot, backend: 'local', model: 'local', systemPrompt: req.systemPrompt };
-    const opened = await this.#spawn(lane, 'local', 'capable', 'text', pick.e.ep, pick.e.v.base, pick.caps, cfg, { info, maxTokens: req.maxTokens });
+    let endpointPort: number | null = null;
+    if (act) {
+      // 8.0: an act session reaches its endpoint on loopback only (the loop-act profile allows one localhost port)
+      endpointPort = loopbackPort(pick.e.v.base);
+      if (endpointPort === null) return unavailable('act-needs-loopback-endpoint');
+    }
+    const lane: LocalOpenRequest = { principal: this.#o.kernelPrincipal, principalClass: 'kernel', attended: false, cwd: act ? act.scratch.tree : info.repoRoot, backend: 'local', model: 'local', systemPrompt: req.systemPrompt };
+    const tools = pick.caps.tools ? 'native' : 'text';
+    const opened = await this.#spawn(lane, 'local', 'capable', act ? tools : 'text', pick.e.ep, pick.e.v.base, pick.caps, cfg, { info, maxTokens: req.maxTokens, ...(act && endpointPort !== null ? { act: { ...act, endpointPort } } : {}) });
     const s = this.#sessions.get(opened.hsid)!;
     const close = async (): Promise<void> => {
       if (s.state === 'exited') return;
@@ -442,6 +485,7 @@ export class LocalLane {
     const contentHash = sha(text);
     L.reply = null;
     L.tokens = 0;
+    if (L.act) L.act.hits = [];
     const done = new Promise<LoopTurn>((resolve) => (L.pending = resolve));
     // L2: kernel-added bytes are logged before the child reads them; the receipt names every fenced data block
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'loop', hash: contentHash, bytes: Buffer.byteLength(text, 'utf8'), ...(o.receipt ? { receipt: o.receipt.slice(0, 32) } : {}) }, { session: s.hsid });
@@ -490,7 +534,7 @@ export class LocalLane {
     if (Date.parse(permit.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the spawn permit expired', {});
   }
 
-  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig, loop?: { info: Readonly<LoopRunRefInfo>; maxTokens: number }): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
+  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig, loop?: { info: Readonly<LoopRunRefInfo>; maxTokens: number; act?: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number; endpointPort: number } }): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
     const pin = cfg.runner!;
     // before any row: claude never runs under a local permit (source paths), then the MANDATORY pin (round 2, Aegis H1):
     // the tree is copied into <home>/runners/<treeSha256>/ and the COPY is hashed; node is verified; we exec the copy
@@ -527,7 +571,9 @@ export class LocalLane {
       for (const r of rootsReal) {
         const under = (a: string, b: string): boolean => a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
         // slice 2: a root INSIDE the Gnomon home (keys/, sessions/) is refused too — the tools would otherwise confine to it
-        if (r === path.parse(r).root || r === uh || gh === r || under(gh, r) || under(r, gh)) {
+        // step 10: the ONE exception is an act step's live scratch tree (<home>/loop-work/act-<runId>/tree, kernel-made)
+        const scratchRoot = loop?.act !== undefined && r === loop.act.scratch.tree && liveScratch(loop.info.runId) === loop.act.scratch;
+        if (r === path.parse(r).root || r === uh || gh === r || under(gh, r) || (under(r, gh) && !scratchRoot)) {
           throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home, an ancestor of it or a path inside it', { reason: 'bad-params' });
         }
       }
@@ -543,11 +589,12 @@ export class LocalLane {
     const hsid = mintHsid();
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;
-    const repo = repoIdOf(cwdReal);
+    // an act step's permit names the human repo, never its scratch path
+    const repo = repoIdOf(loop?.act ? loop.act.scratch.repo : cwdReal);
     const userHome = this.#userHome();
     const loopRun = loop ? { loopId: loop.info.loopId, runId: loop.info.runId, nodeId: loop.info.nodeId, scope: loop.info.scope, repoKey: loop.info.repoKey } : null;
     await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: !loop, ...(loopRun ? { principalClass: req.principalClass, origin: LOOP_ORIGIN, loopRun } : {}) }, { session: hsid });
-    await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools: loop ? 'none' : tools }, { session: hsid });
+    await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools: loop && !loop.act ? 'none' : tools, ...(loop?.act ? { allowTools: loop.act.tools } : {}) }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     const built = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath });
     const env = built.env;
@@ -556,6 +603,8 @@ export class LocalLane {
       // LL5: a loop session talks to nothing but its model endpoint (no socket, no session key: no loop.request)
       for (const k of LOOP_SESSION_ENV_DROPPED) delete env[k];
       envKeys = envKeys.filter((k) => !LOOP_SESSION_ENV_DROPPED.includes(k));
+      // an act session's TMPDIR is its run's private tmp (the only other place the loop-act profile lets it write)
+      if (loop.act) env.TMPDIR = loop.act.scratch.tmp;
     }
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
@@ -592,9 +641,11 @@ export class LocalLane {
         roots: rootsReal,
         endpoint: { base, model, compat: ep.compat },
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
-        // a loop judge/summarize step: no tools at all and one model step per turn (§3.4)
-        surface: loop ? 'none' : (ep.surface ?? 'compact'),
-        maxSteps: loop ? 1 : (cfg.maxSteps ?? 16),
+        // a loop judge/summarize step: no tools at all and one model step per turn (§3.4); an act step: only the
+        // tools its trust card admits, its protected globs, the node's turn cap
+        surface: loop && !loop.act ? 'none' : (ep.surface ?? 'compact'),
+        maxSteps: loop ? (loop.act ? loop.act.maxSteps : 1) : (cfg.maxSteps ?? 16),
+        ...(loop?.act ? { tools: loop.act.tools, protect: loop.act.protect } : {}),
         maxTokens: loop ? Math.max(16, Math.min(loop.maxTokens, cfg.maxTokens ?? 1024)) : (cfg.maxTokens ?? 1024),
         // the compaction working target: ~8k, never above what the endpoint holds
         contextTarget: Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET),
@@ -604,7 +655,9 @@ export class LocalLane {
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: env.TMPDIR ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
       const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
-      const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      // step 10: an act step runs under `loop-act` (the session profile narrowed to its scratch and its endpoint port)
+      const actLaunch: LoopActLaunchInput | null = loop?.act ? { ...launch, act: { home: this.#o.home, userHome, scratch: loop.act.scratch.tree, tmp: loop.act.scratch.tmp, repo: loop.act.scratch.repo, nodeModules: loop.act.scratch.nodeModules, endpointPort: loop.act.endpointPort, gitDeny: [loop.act.scratch.commonDir, ...loop.act.scratch.siblingWorktrees] } } : null;
+      const plan = this.#o.launchPlan ? this.#o.launchPlan(actLaunch ?? launch) : actLaunch ? loopActLaunchPlan(actLaunch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
       // re-check (M3): a root swapped since the check refuses; nothing between here and spawn awaits
       if (realRoot(req.cwd) !== cwdReal || (req.worktree !== undefined && realRoot(req.worktree) !== wtReal)) {
@@ -622,11 +675,11 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null } } : {}) };
+      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (tracked && child) {
@@ -682,10 +735,15 @@ export class LocalLane {
     // S2: every driver event is a turn.event before anything acts on it
     // a loop session's model text is DATA the runner stores secret-scanned on its loop.node row: the turn.event
     // row of a message line carries its hash and size only (never unscanned model text in the log)
-    const hashOnly = bytes > EVENT_LINE_CAP || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.type.startsWith('message')));
+    // step 10: an act session's tool lines carry model-written paths and file content: hashed the same way
+    const hashOnly = bytes > EVENT_LINE_CAP || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
     if (s.loop && ev.kind === 'fatal') s.loop.fatal = ev.error ?? 'fatal';
+    if (s.loop?.act && ev.kind === 'tool' && ev.phase === 'end' && ev.isError) {
+      const hit = protectedHitOf(line);
+      if (hit !== null && s.loop.act.hits.length < 64) s.loop.act.hits.push(hit);
+    }
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
       if (source === 'turn.usage' && tokens <= 0) return;
       if (s.loop) s.loop.tokens += Math.max(0, tokens);
@@ -723,7 +781,7 @@ export class LocalLane {
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
-        if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null) });
+        if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null), ...(s.loop.act ? { protectedHits: [...s.loop.act.hits] } : {}) });
         return;
       }
       case 'response':
@@ -817,5 +875,30 @@ export class LocalLane {
 
   stateOf(hsid: string): string | null {
     return this.#sessions.get(hsid)?.state ?? (this.#history.some((h) => h.hsid === hsid) ? 'exited' : null);
+  }
+}
+
+/** The loopback port of an endpoint base URL (127.0.0.0/8, ::1, localhost), or null for anything else. */
+export function loopbackPort(base: string): number | null {
+  let u: URL;
+  try {
+    u = new URL(base);
+  } catch {
+    return null;
+  }
+  const h = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h !== 'localhost' && h !== '::1' && !/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return null;
+  const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : u.protocol === 'http:' ? 80 : NaN;
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
+}
+
+/** A gnomon-local tool_execution_end line whose result is a protected-input refusal: the path, else null. */
+function protectedHitOf(line: string): string | null {
+  try {
+    const j = JSON.parse(line) as { type?: unknown; result?: unknown };
+    if (j.type !== 'tool_execution_end' || typeof j.result !== 'string' || !j.result.startsWith('protected-input:')) return null;
+    return j.result.slice('protected-input:'.length).trim().split(' is a protected')[0]!.slice(0, 200);
+  } catch {
+    return null;
   }
 }

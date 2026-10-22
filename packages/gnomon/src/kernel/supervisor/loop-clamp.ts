@@ -8,7 +8,12 @@
  *   - standing grants and the human's `always` rules (exact and prefix), the auto-edits pass and the read-only
  *     passes do NOT apply: loopClampAllows() admits only a modeRef of the loop's OWN trust card
  *     (`loop-trust:<cardId>` or `loop-trust:<cardId>#<rule>`, exact). Default deny, so a modeRef added later is clamped unless added here deliberately.
- *     8.0 has no loop trust rules (act nodes land in step 10), so nothing auto-passes at all;
+ *     The supervisor's Claude path (#onPermission: the mode, read-only, rule/always passes) asks it through
+ *     mayAuto for a session with loopOrigin; 8.0 loops are local only, so no Claude session is a loop session yet
+ *     (8.1's escalation sets loopOrigin there). The LOCAL act session (step 10) has no per-tool approval at all: its
+ *     tools are decided once, at open, by loopActTools() through the same loopClampAllows, so only the trust card's
+ *     declared tools (`loop-trust:<cardId>#tool-read|tool-edit`) reach the child; a standing grant, an always rule or
+ *     a mode never widens them, and anything else is denied with no card (it counts as the node's fail);
  *   - every card the session raises carries detail.origin 'loop', detail.loopId, detail.authoredBy and the
  *     kernel-composed first line "Raised by loop X (authored by Y)" (withLoopOrigin);
  *   - the session gets no kernel socket, no session key and no tools (judge and summarize: surface 'none'), so it
@@ -30,7 +35,24 @@ export function loopClampAllows(modeRef: string, trustCardId: string | undefined
 /** The kernel-composed first line of a card raised by (or for) a loop. Display-sanitised by the caller's renderer. */
 export function loopClampLine(loopId: string, authoredBy: string): string {
   // an agent's authorship is a claim made with its key (registry LoopAuthor basis 'agent-key-claim'), never a fact
-  return authoredBy === 'file' ? `Raised by loop ${loopId} (authored by file)` : `Raised by loop ${loopId} (claimed by ${authoredBy})`;
+  return authoredBy === 'file' ? `Raised by loop ${loopId} (from the loop file)` : `Raised by loop ${loopId} (claimed by ${authoredBy})`;
+}
+
+/** The gnomon-local tools each declared loop tool maps to (8.0: read and edit; bash lands in 8.1). */
+export const LOOP_TOOL_MAP: Readonly<Record<string, readonly string[]>> = Object.freeze({ read: Object.freeze(['read_file', 'list_dir']), edit: Object.freeze(['write_file']) });
+
+/**
+ * ^loop-origin-clamp for a local act session: the gnomon-local tool names its trust card admits. Each declared tool
+ * passes only as the exact trust rule `loop-trust:<cardId>#tool-<name>` (loopClampAllows); no trust card ⇒ none.
+ */
+export function loopActTools(declared: readonly unknown[], trustCardId: string | undefined): string[] {
+  const out = new Set<string>();
+  for (const t of declared) {
+    if (typeof t !== 'string' || !Object.hasOwn(LOOP_TOOL_MAP, t)) continue;
+    if (!loopClampAllows(`loop-trust:${trustCardId ?? ''}#tool-${t}`, trustCardId)) continue;
+    for (const n of LOOP_TOOL_MAP[t]!) out.add(n);
+  }
+  return [...out].sort();
 }
 
 /** A card plan raised inside a loop session: detail.origin 'loop', the kernel line first, the block rebuilt. */

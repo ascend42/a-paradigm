@@ -715,6 +715,11 @@ export class SessionSupervisor {
   }
 
   /** Is this a loop session (origin 'loop', LL5)? */
+  /** Step 10: every loop session of a run has exited (LocalLane.loopSessionsSettled). */
+  loopSessionsSettled(runId: string): Promise<void> {
+    return this.#local.loopSessionsSettled(runId);
+  }
+
   isLoopSession(hsid: unknown): boolean {
     return this.#local.isLoopSession(hsid);
   }

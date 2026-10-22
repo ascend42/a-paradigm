@@ -678,7 +678,8 @@ export interface CardLoop {
 }
 
 const LOOP_ID = '[a-z][a-z0-9]*(?:-[a-z0-9]+)*';
-const RAISED_RE = new RegExp(`^Raised by loop (${LOOP_ID}) \\((?:authored|claimed) by ([^)]{1,80})\\)$`);
+// the kernel's loopClampLine: "(claimed by <agent>)" or "(from the loop file)" (older builds: "(authored by …)")
+const RAISED_RE = new RegExp(`^Raised by loop (${LOOP_ID}) \\((?:(?:authored|claimed) by ([^)]{1,80})|from the loop file)\\)$`);
 const RESUME_RE = new RegExp(`^Resume loop (${LOOP_ID})\\?$`);
 const TRUST_RE = new RegExp(`^Trust loop (${LOOP_ID}) \\(`);
 
@@ -706,10 +707,10 @@ export function cardLoopOf(card: Record<string, unknown>, notified?: ReadonlyMap
   if (d && typeof d.loopId === 'string') return { loopId: d.loopId, ...(str(d.scope) ? { scope: str(d.scope) } : {}), ...(str(d.repoKey) ? { repoKey: str(d.repoKey) } : {}), changed: typeof d.previousHash === 'string', ...(kernelLine ? { kernelLine } : {}) };
   const n = typeof card.cardId === 'string' ? notified?.get(card.cardId) : undefined;
   const raised = kernelLine ? RAISED_RE.exec(kernelLine) : null;
-  if (n) return { loopId: n.loopId, ...(n.runId ? { runId: n.runId } : {}), ...(n.nodeId ? { nodeId: n.nodeId } : {}), ...(raised ? { authoredBy: raised[2] } : {}), ...(kernelLine ? { kernelLine } : {}) };
+  if (n) return { loopId: n.loopId, ...(n.runId ? { runId: n.runId } : {}), ...(n.nodeId ? { nodeId: n.nodeId } : {}), ...(raised ? { authoredBy: (raised[2] ?? 'file') } : {}), ...(kernelLine ? { kernelLine } : {}) };
   if (raised) {
     const run = lines.find((l) => /^Run \S+$/.test(l));
-    return { loopId: raised[1]!, authoredBy: raised[2]!, ...(run ? { runId: run.slice(4) } : {}), kernelLine: kernelLine! };
+    return { loopId: raised[1]!, authoredBy: (raised[2] ?? 'file')!, ...(run ? { runId: run.slice(4) } : {}), kernelLine: kernelLine! };
   }
   const resume = kernelLine ? RESUME_RE.exec(kernelLine) : null;
   if (resume) return { loopId: resume[1]!, resume: true, kernelLine: kernelLine! };

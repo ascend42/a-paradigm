@@ -27,8 +27,12 @@
  *     configured endpoint) is refused at start.
  *   - **Thrash** (§3.5, k=3): in a loop with model or write steps, three rounds in a row whose check evidence hashes
  *     the same end the run `thrash` and write loop.paused{reason:'thrash'}; only a human resumes (fresh presence).
- *   - Act (model `role: act`) and write (`effect: write`) nodes are not built yet (step 10): a loop with one is
- *     refused at run start.
+ *   - **Act** (step 10, #loop-act): a top-level run with act nodes first creates a scratch worktree at the branch
+ *     head (kernel/git createScratch, outside the repo); its checks copy the SCRATCH, its act steps edit it through
+ *     LocalLane.openLoop (role act: the clamp's tools, the protected globs, the `loop-act` profile). When the run
+ *     ends, any change is parked at refs/gnomon/loops/<id>/<runId> (loop.parked) and becomes one `verdict` card
+ *     (loop.proposed, propose.ts): 8.0 never lands (step 11). A called loop with act nodes is refused, and so are
+ *     write checks (`effect: write`). The scratch tree is removed when the run ends.
  *   - **Strictness** (step 9, #loop-strictness, strictness-cap.ts): the `strictness` port's repo cap folds into the
  *     effective autonomy at run start, before EVERY node and on every `loop.node` row (Aegis M2). L3 or `manual`
  *     refuses the start FORBIDDEN{strictness-paused} and pauses a running loop before its next node
@@ -64,6 +68,8 @@ import { dayKeyOf, type LoopLedger } from './ledger.js';
 import { resolveInputs, runModelStep, type LoopModelPort, type ModelStepResult, type NodeNote } from './model-node.js';
 import { authorLabel, parseTightened, type LoopEntry, type LoopRegistry, type LoopRunRef, type TightenedBudgets } from './registry.js';
 import { loopClampLine } from '../supervisor/loop-clamp.js';
+import { createScratch, dropParkedRef, GitRefusal, listScratchFiles, parkScratch, removeScratch, type Scratch } from '../git/scratch.js';
+import { landHazards, proposeLines, proposeReasons } from './propose.js';
 import { parseLoopTarget, type LoopAsker } from './trust.js';
 import { effectiveAutonomy, FAIL_SAFE_CAP, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
 
@@ -93,7 +99,9 @@ export const LOOP_GLOBAL_CAPS: Readonly<LoopGlobalCaps> = Object.freeze({ repo: 
 /** evidence tails kept on the loop.node row (each) */
 export const LOOP_NODE_EVIDENCE_BYTES = 16 * 1024;
 export const NO_LOCAL_MODEL = 'no local model is configured for this loop (the root-signed local config marks no endpoint loops: true, or none matches model.profile)';
-export const ACT_NODES_LATER = 'act and write nodes land in step 10 (scratch worktree, LP6a)';
+export const ACT_NODES_LATER = 'write checks (effect: write) are not built in 8.0 yet';
+/** Paths an act node never edits beyond the loop's protected set: loop definitions (LL5) and the repo's Gnomon dir. */
+export const ACT_ALWAYS_PROTECTED: readonly string[] = Object.freeze(['.paradigm/loops/**', '.gnomon/**', '**/node_modules/**']);
 const KERNEL_PAUSES_NEED_PRESENCE = new Set(['kill-switch', 'thrash', 'strictness', 'budget', 'node-exit', 'unavailable', 'timeout']);
 
 export type LoopRunEnd = {
@@ -202,6 +210,8 @@ interface WalkCtx {
   notes: Map<string, NodeNote>;
   /** the trigger (model inputs read only its kernel-stamped fields) */
   trigger: Record<string, unknown>;
+  /** step 10: the run's scratch worktree (top-level runs with act nodes) */
+  scratch?: Scratch;
 }
 
 interface NodeResult {
@@ -245,9 +255,14 @@ export function tightenBudgets(b: LoopBudgets, t: TightenedBudgets | null): Loop
   return { ...b, run, day };
 }
 
-/** Nodes this build cannot run (act and write: step 10). */
+/** Nodes this build cannot run (write checks; act nodes run since step 10). */
 export function unsupportedNodes(c: CompiledLoop): string[] {
-  return c.nodes.filter((n) => (n.type === 'model' && n.role === 'act') || (n.type === 'check' && n.effect === 'write')).map((n) => n.id);
+  return c.nodes.filter((n) => n.type === 'check' && n.effect === 'write').map((n) => n.id);
+}
+
+/** Does a loop have act nodes (a scratch worktree and a propose step)? */
+export function hasActNodes(c: CompiledLoop): boolean {
+  return c.nodes.some((n) => n.type === 'model' && n.role === 'act');
 }
 
 /** A notify text: kernel fields only (§2 "text: kernel fields only"); anything else renders `?`. Sanitized, ≤ 500. */
@@ -481,12 +496,31 @@ export class LoopRunner {
     let end: LoopRunEnd;
     let toasted = false;
     let round = 1;
+    let scratchFailed: string | null = null;
+    if (ctx.depth === 0 && hasActNodes(ctx.compiled)) {
+      // step 10: act steps work in a scratch worktree at the branch head, outside the repo (G-GIT-01)
+      try {
+        ctx.scratch = createScratch({ home: this.#o.home, repo: entry.repoRoot, loopId: entry.loopId, runId });
+      } catch (err) {
+        scratchFailed = `the scratch worktree could not be created: ${err instanceof GitRefusal || err instanceof Error ? err.message.slice(0, 240) : 'failed'}`;
+      }
+    }
     try {
-      const r = await this.#walk(ctx, (n) => (round = n), () => (toasted = true));
-      end = r;
-    } catch (err) {
-      end = { reason: 'error', detail: err instanceof Error ? err.message.slice(0, 300) : 'the runner failed' };
-      this.#o.diag?.('loops.run-failed', { runId, why: end.detail! });
+      try {
+        if (scratchFailed) throw new Error(scratchFailed);
+        const r = await this.#walk(ctx, (n) => (round = n), () => (toasted = true));
+        end = r;
+      } catch (err) {
+        end = { reason: 'error', detail: err instanceof Error ? err.message.slice(0, 300) : 'the runner failed' };
+        this.#o.diag?.('loops.run-failed', { runId, why: end.detail! });
+      }
+      if (ctx.scratch) {
+        // Aegis M1: nothing of the act steps may still be writing the scratch when it is read for parking
+        await this.#o.model?.settled?.(runId);
+        await this.#propose(ctx, end);
+      }
+    } finally {
+      if (ctx.scratch) removeScratch(ctx.scratch);
     }
     if (end.terminal === '@pause') {
       await this.#o.append('loop.paused', { loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, runId, reason: end.detail ?? 'node-exit', by: 'kernel' });
@@ -672,6 +706,15 @@ export class LoopRunner {
           abort: ctx.abort.signal, keepOnError: true,
           ...(this.#o.platform ? { platform: this.#o.platform } : {}),
         };
+        // step 10: in a run with a scratch worktree, checks copy the scratch (the act steps' edits), never the checkout
+        const scratch = rootOf(ctx).scratch;
+        if (scratch) {
+          try {
+            input.scratch = { tree: scratch.tree, files: listScratchFiles(scratch.tree) };
+          } catch (err) {
+            return { verdict: 'error', edge: 'error', durationMs: 0, detail: `the scratch could not be listed: ${err instanceof Error ? err.message.slice(0, 200) : 'failed'}` };
+          }
+        }
         const t0 = this.#now();
         const res = await (this.#o.check ?? runCheck)(input);
         const durationMs = Math.max(0, Math.round(res.durationMs ?? this.#now() - t0));
@@ -699,6 +742,7 @@ export class LoopRunner {
         if (!callee?.compiled || !callee.hash || callee.hash.contentHash !== rc.contentHash) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee} changed while resolving` };
         const later = unsupportedNodes(callee.compiled);
         if (later.length) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${ACT_NODES_LATER}` };
+        if (hasActNodes(callee.compiled)) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: act nodes in a called loop are not built in 8.0 (only the top-level run has a scratch worktree)` };
         const noModel = this.#modelRefusal(callee.compiled);
         if (noModel) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${noModel}` };
         const cb = tightenBudgets(effectiveBudgets(callee.compiled.budgets, this.#caps.budgets), this.#o.registry.tightenedBudgets(callee.key, callee.hash?.contentHash));
@@ -718,7 +762,15 @@ export class LoopRunner {
   async #model(ctx: WalkCtx, node: Extract<CompiledNode, { type: 'model' }>, fields: Record<string, string | number | undefined>, refs: { last?: string | undefined; failed?: string | undefined }): Promise<NodeResult> {
     const port = this.#o.model;
     if (!port) return { verdict: 'unavailable', edge: 'unavailable', durationMs: 0, detail: NO_LOCAL_MODEL };
-    if (node.role === 'act') return { verdict: 'error', edge: 'error', durationMs: 0, detail: ACT_NODES_LATER };
+    let act: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number } | undefined;
+    if (node.role === 'act') {
+      if (!ctx.scratch) return { verdict: 'error', edge: 'error', durationMs: 0, detail: 'an act step needs its run\'s scratch worktree' };
+      // an observe loop edits nothing (§2 autonomy): the act step does not run
+      if (this.effective(ctx.entry).autonomy === 'observe') return { verdict: 'fail', edge: 'fail', durationMs: 0, detail: 'autonomy observe: act steps do not edit' };
+      // Aegis H2: the kernel's protected set (goal.inputs, the config closure, argv-named paths, the callees') plus
+      // node_modules and the loop definitions, refused at the tool layer with no card (G-LOOP-22)
+      act = { tools: node.tools, protect: [...new Set([...ctx.entry.compiled!.protected, ...ACT_ALWAYS_PROTECTED])], maxSteps: node.limits.turns };
+    }
     const blocks = resolveInputs(node.inputs, { notes: ctx.notes, ...(refs.last ? { last: refs.last } : {}), ...(refs.failed ? { failed: refs.failed } : {}), trigger: ctx.trigger, fields });
     const left = ctx.meter.remainingTokens();
     if (left <= 0) return { verdict: 'unsure', edge: 'unsure', durationMs: 0, detail: 'run.tokens spent' };
@@ -733,6 +785,7 @@ export class LoopRunner {
       remainingMs: () => ctx.meter.remainingMs(),
       retries: this.#caps.modelRetries, backoffMs: this.#caps.modelBackoffMs,
       ...(this.#o.diag ? { diag: this.#o.diag } : {}),
+      ...(act ? { act } : {}),
     });
     const durationMs = Math.max(0, Math.round(this.#now() - t0));
     ctx.meter.add(durationMs);
@@ -751,11 +804,59 @@ export class LoopRunner {
     };
     const extra: Record<string, unknown> = {
       model: { asked: 'local', used: res.model ?? null, escalated: false, ...(res.endpoint ? { endpoint: res.endpoint } : {}) },
-      usage: { tokens: res.tokens }, role: node.role,
+      usage: { tokens: res.tokens }, role: node.role, ...(res.protectedHits?.length ? { protectedHits: res.protectedHits } : {}),
       ...(res.permitId ? { permitId: res.permitId } : {}), ...(res.hsid ? { hsid: res.hsid } : {}),
       ...(res.confidence !== undefined ? { confidence: res.confidence } : {}), ...(res.class !== undefined ? { class: res.class } : {}),
     };
     return { verdict, edge: verdict, durationMs, ...(detail ? { detail: detail.slice(0, 300) } : {}), evidence, extra, ...(res.aborted || ctx.abort.signal.aborted ? { aborted: true } : {}) };
+  }
+
+  /**
+   * Step 10 propose: park what the run changed in its scratch and raise ONE `verdict` card (§3.3, §3.4, G-LOOP-23).
+   * A run stopped from outside (pause, kill switch, untrust) parks its work and raises no card (§3.3 kill switch).
+   */
+  async #propose(ctx: WalkCtx, end: LoopRunEnd): Promise<void> {
+    const s = ctx.scratch!;
+    const { entry, runId } = ctx;
+    const ids = { loopId: entry.loopId, runId };
+    let parked;
+    try {
+      parked = parkScratch(s, { home: this.#o.home, message: ctx.compiled.land?.message ?? `loop ${entry.loopId}: proposed change`, loopTrailer: `${entry.loopId}@${entry.hash!.contentHash.replace(/^sha256:/, '').slice(0, 8)}`, now: () => this.#now() });
+    } catch (err) {
+      this.#o.diag?.('loops.park-failed', { runId, why: err instanceof Error ? err.message.slice(0, 200) : 'failed' });
+      return;
+    }
+    if (!parked) return;
+    const stopped = !!ctx.top.stopping || ctx.abort.signal.aborted;
+    await this.#o.append('loop.parked', { ...ids, ref: parked.ref, sha: parked.sha, baseSha: s.headSha, reason: stopped ? (ctx.top.stopping ?? 'paused') : 'propose' });
+    if (stopped) return;
+    const eff = this.effective(entry);
+    const hazards = landHazards(parked, [...(entry.compiled?.protected ?? []), ...ACT_ALWAYS_PROTECTED]);
+    const reasons = proposeReasons(eff, hazards);
+    const goalNode = ctx.compiled.goal?.node;
+    const goal = goalNode ? { node: goalNode, verdict: ctx.notes.get(goalNode)?.verdict ?? null, met: end.reason === 'goal' } : null;
+    const author = authorLabel(this.#o.registry.authoredBy(entry));
+    const cardId = mintId('card');
+    const paths = parked.changes.map((c) => c.path);
+    try {
+      await this.#o.broker.raise({
+        kind: 'verdict', cardId, requestedBy: this.#o.kernelPrincipal, attended: false,
+        detail: {
+          op: 'loop.propose', origin: 'loop', loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, repo: entry.repoRoot, runId, authoredBy: author,
+          ref: parked.ref, sha: parked.sha, baseSha: s.headSha, headRef: s.headRef, files: parked.changes.map((c) => ({ path: c.path, status: c.status })),
+          goal, effectiveAutonomy: eff.autonomy, ...(eff.capReason ? { capReason: eff.capReason } : {}), hazards, reasons, diff: parked.diff, diffTruncated: parked.diffTruncated,
+        },
+        lines: proposeLines({ clampLine: loopClampLine(entry.loopId, author), runId, ending: end.terminal ?? end.reason, goal, parked, reasons }),
+        effect: async (decision) => {
+          // accept keeps the parked commit for the land step (11); reject drops the ref (the objects age out)
+          if (decision === 'reject') dropParkedRef(this.#o.home, s.repo, parked.ref);
+        },
+      });
+    } catch (err) {
+      this.#o.diag?.('loops.propose-card-failed', { runId, why: err instanceof Error ? err.message.slice(0, 200) : 'refused' });
+      return;
+    }
+    await this.#o.append('loop.proposed', { ...ids, cardId, paths, why: hazards.length ? 'land-hazard' : eff.autonomy === 'propose' ? 'autonomy' : 'auto-land-later', hazards: hazards.map((h) => h.kind), ref: parked.ref });
   }
 
   async #toast(ctx: WalkCtx, nodeId: string | undefined, text: string): Promise<void> {

@@ -18,6 +18,10 @@
  * tightening pauses the repo's running loops at once, `loop.paused{reason:'strictness'}`); status.loops.effective
  * carries each loop's effective autonomy and capReason for the GUI ("act → propose (L2)").
  */
+import { sweepCheckCopies } from './check-exec.js';
+import { sweepLoopScratch } from '../git/scratch.js';
+/** The default retention window for kept check copies, scratch run dirs and parked refs (loops.retentionDays). */
+export const LOOP_RETENTION_DAYS = 14;
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RaiseInput } from '../broker/broker.js';
 import * as fs from 'node:fs';
@@ -191,6 +195,15 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   if (o.start !== false) {
     registry.start();
     process.once('exit', onExit);
+    // retention (loops.retentionDays, default LOOP_RETENTION_DAYS until the root config is read): kept check copies,
+    // stale scratch run dirs (a daemon restart mid-run) and parked refs past the window, once at boot
+    try {
+      const ms = LOOP_RETENTION_DAYS * 86_400_000;
+      sweepCheckCopies(o.home, ms);
+      sweepLoopScratch(o.home, ms);
+    } catch (err) {
+      o.diag?.('loops.sweep-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'sweep failed' });
+    }
   }
   const agentOps = new LoopAgentOps({
     registry, runner, ledger, trust,

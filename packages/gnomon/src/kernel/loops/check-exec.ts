@@ -122,6 +122,8 @@ export interface CheckExecInput {
    * (SIGKILL, then the setsid sweep) and the check is `error` `killed`. Aborted before the spawn, nothing runs.
    */
   abort?: AbortSignal;
+  /** step 10 (#loop-act): copy this scratch worktree (its kernel-walked file list) instead of the repo's files */
+  scratch?: { tree: string; files: readonly string[] };
 }
 
 export interface CheckEvidence {
@@ -272,20 +274,28 @@ function copyFileContained(repoReal: string, rel: string, dst: string, size: num
  * never inside the repo (the kernel never writes through a repo path). Throws CheckCopyRefusal past the limits
  * or on any path that resolves outside the repo; a partial copy is removed.
  */
-export function makeCheckCopy(repo: string, runId: string, env: Record<string, string>, limits: typeof CHECK_COPY_LIMITS = CHECK_COPY_LIMITS, gnomonHome?: string): CheckCopy {
+export function makeCheckCopy(repo: string, runId: string, env: Record<string, string>, limits: typeof CHECK_COPY_LIMITS = CHECK_COPY_LIMITS, gnomonHome?: string, from?: { tree: string; files: readonly string[] }): CheckCopy {
   if (!CHECK_RUN_ID.test(runId)) throw new CheckCopyRefusal('bad-input', `runId must match ${CHECK_RUN_ID}`);
   if (!gnomonHome) throw new CheckCopyRefusal('bad-input', 'the check copy lives under the Gnomon home');
   const repoReal = fs.realpathSync.native(repo);
   const homeReal = fs.realpathSync.native(gnomonHome);
   if (within(homeReal, repoReal) || within(repoReal, homeReal)) throw new CheckCopyRefusal('bad-input', 'the repo and the Gnomon home must not contain each other');
-  const files = listRepoFiles(repoReal, env);
+  // step 10 (#loop-act): a check in a loop with act nodes copies the run's SCRATCH worktree (kernel-owned, under
+  // <home>/loop-work/act-<runId>/tree; its file list walked by the kernel), never the founder's checkout; its
+  // node_modules links must still resolve inside the human repo
+  let srcReal = repoReal;
+  if (from) {
+    srcReal = fs.realpathSync.native(from.tree);
+    if (path.dirname(path.dirname(srcReal)) !== path.join(homeReal, LOOP_WORK_DIR) || !/^act-[A-Za-z0-9_-]{1,64}$/.test(path.basename(path.dirname(srcReal))) || path.basename(srcReal) !== 'tree') throw new CheckCopyRefusal('bad-input', 'a scratch check copy reads only a kernel scratch worktree');
+  }
+  const files = from ? from.files.filter((f) => !NEVER_COPY.some((re) => re.test(f))) : listRepoFiles(repoReal, env);
   if (files.length > limits.maxFiles) throw new CheckCopyRefusal('copy-too-large', `the repo copy would hold ${files.length} files, over the ${limits.maxFiles}-file cap for a loop check`);
   const entries: Array<{ rel: string; kind: 'file' | 'link'; size: number }> = [];
   let bytes = 0;
   for (const rel of files) {
     let st: fs.Stats;
     try {
-      st = fs.lstatSync(path.join(repoReal, rel));
+      st = fs.lstatSync(path.join(srcReal, rel));
     } catch {
       continue; // tracked but deleted in the worktree
     }
@@ -313,17 +323,17 @@ export function makeCheckCopy(repo: string, runId: string, env: Record<string, s
         for (let d = parent; d !== '.' && d !== ''; d = path.posix.dirname(d)) dirs.add(d);
       }
       if (e.kind === 'link') {
-        const before = parentChain(repoReal, e.rel);
+        const before = parentChain(srcReal, e.rel);
         if (before === null) throw escaped(e.rel);
-        const target = fs.readlinkSync(path.join(repoReal, e.rel));
-        if (parentChain(repoReal, e.rel) !== before) throw escaped(e.rel);
+        const target = fs.readlinkSync(path.join(srcReal, e.rel));
+        if (parentChain(srcReal, e.rel) !== before) throw escaped(e.rel);
         fs.symlinkSync(target, dst); // the sandbox resolves it: a link out of the copy reads nothing
-      } else copyFileContained(repoReal, e.rel, dst, e.size);
+      } else copyFileContained(srcReal, e.rel, dst, e.size);
     }
     const nodeModules: string[] = [];
     for (const d of [...dirs].sort()) {
-      if (d && parentChain(repoReal, `${d}/x`) === null) throw escaped(d);
-      const src = path.join(repoReal, ...(d ? d.split('/') : []), 'node_modules');
+      if (d && parentChain(srcReal, `${d}/x`) === null) throw escaped(d);
+      const src = path.join(srcReal, ...(d ? d.split('/') : []), 'node_modules');
       let st: fs.Stats;
       try {
         st = fs.lstatSync(src);
@@ -633,7 +643,7 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
 
   let copy: CheckCopy;
   try {
-    copy = makeCheckCopy(i.repo, i.runId, kernelEnv, limits, i.home);
+    copy = makeCheckCopy(i.repo, i.runId, kernelEnv, limits, i.home, i.scratch);
   } catch (err) {
     if (err instanceof CheckCopyRefusal) return fail(err.reason, err.message);
     throw err;

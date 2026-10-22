@@ -934,7 +934,7 @@ export class LoopRegistry {
   /**
    * Step 8 (§3.4, §3.6; Aegis step-8 #2): the run-reference minter, issued ONCE to its holder (the runner, at its first
    * model step); a second issue throws, so there is no public mint. The holder's `vouch(key, p)` must confirm the step
-   * (the run is live, the node is a judge or summarize node of that loop, rootKey is the walk's real root) and
+   * (the run is live, the node is a judge, summarize or act node of that loop, rootKey is the walk's real root) and
    * `extra()` adds its own holds (strictness pause, kill switch) to the reference's live() check. A reference is minted
    * only for a loop TRUSTED at its current hash and runnable now; it is an opaque, frozen object whose facts live in a
    * module-private table (loopRunRefInfo). The holder releases it when the step ends; a released reference opens
@@ -959,7 +959,8 @@ export class LoopRegistry {
     const e = this.verify(key);
     if (!e || !e.hash || !this.canRun(key).ok || hold(key) !== null) return null;
     const node = e.compiled?.nodes.find((n) => n.id === p.nodeId);
-    if (!node || node.type !== 'model' || (node.role !== 'judge' && node.role !== 'summarize')) return null;
+    // step 10: act steps too (LocalLane.openLoop then requires the run's live scratch and the clamp's tools)
+    if (!node || node.type !== 'model' || (node.role !== 'judge' && node.role !== 'summarize' && node.role !== 'act')) return null;
     const contentHash = e.hash.contentHash;
     const t = this.#folds.get(key)?.trusted;
     const ref: LoopRunRef = Object.freeze({ runId: p.runId, loopId: e.loopId, nodeId: p.nodeId });

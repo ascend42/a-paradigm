@@ -35,6 +35,7 @@
 import { constants, promises as fsp } from 'node:fs';
 import * as path from 'node:path';
 import type { ToolSpec } from './compat.js';
+import { PROTECTED_PREFIX, ProtectedRefused, protectedHit } from './protect.js';
 
 export interface ToolResult {
   content: string;
@@ -45,6 +46,13 @@ export interface ToolContext {
   cwd: string;
   /** realpath'd roots (cwd + worktree); a path outside every root is refused */
   roots: string[];
+  /**
+   * Loops step 10 (a loop act session): the tool names the kernel allows (the trust card's declared tools, through
+   * the loop clamp); absent = every tool. A tool outside it is refused like an unknown one.
+   */
+  allow?: readonly string[];
+  /** Loops step 10: protected globs (repo-relative to the root); a write that hits one is refused PROTECTED_PREFIX */
+  protect?: readonly RegExp[];
 }
 
 export type ToolImpl = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
@@ -118,12 +126,19 @@ export async function resolveWrite(raw: string, ctx: ToolContext): Promise<strin
   const root = inside(target, await canonRoots(ctx.roots));
   if (!root || target === root) throw new PathRefused(`write outside the session roots is refused (slice 1): ${raw.slice(0, 200)}`);
   if (target.slice(root.length).split(/[\\/]/).some(isDotGit)) throw new PathRefused('writes under .git are refused');
+  // Loops step 10 (Aegis M3): a name with control, format (bidi) or separator characters, or a component over 255
+  // bytes, would forge or hide lines on the card that shows it: refused
+  if (target.slice(root.length).split(/[\\/]/).some((c) => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(c) || Buffer.byteLength(c, 'utf8') > 255)) throw new PathRefused('a path component with control, format or bidi characters, or over 255 bytes, is refused');
+  if (ctx.protect) {
+    const rel = target.slice(root.length).split(/[\\/]/).filter(Boolean).join('/');
+    if (protectedHit(rel, ctx.protect)) throw new ProtectedRefused(`${PROTECTED_PREFIX} ${rel.slice(0, 200)} is a protected goal input of this loop (no edit, no card)`);
+  }
   try {
     const st = await fsp.lstat(target);
     if (st.isSymbolicLink()) throw new PathRefused('the final path component is a symlink');
     if (st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
   } catch (err) {
-    if (err instanceof PathRefused) throw err;
+    if (err instanceof PathRefused || err instanceof ProtectedRefused) throw err;
   }
   return target;
 }
@@ -179,7 +194,7 @@ export const TOOLS: ReadonlyArray<ToolSpec & { run: ToolImpl }> = Object.freeze(
 ]);
 
 export async function runTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
-  const t = TOOLS.find((x) => x.name === name);
+  const t = TOOLS.find((x) => x.name === name && (!ctx.allow || ctx.allow.includes(x.name)));
   if (!t) return { content: `unknown tool ${name.slice(0, 64)}`, isError: true };
   try {
     return await t.run(args, ctx);

@@ -197,7 +197,7 @@ describe('the loop-origin clamp', () => {
     const plan = withLoopOrigin({ detail: { tool: 'Edit' }, lines: ['Edit a.ts'], block: {} }, { loopId: 'tidy', runId: 'lr-1', authoredBy: 'file' });
     expect(plan.detail).toMatchObject({ origin: 'loop', loopId: 'tidy', authoredBy: 'file' });
     expect(plan.lines[0]).toBe(loopClampLine('tidy', 'file'));
-    expect(plan.lines[0]).toBe('Raised by loop tidy (authored by file)');
+    expect(plan.lines[0]).toBe('Raised by loop tidy (from the loop file)');
     // an agent's authorship is a claim made with its key, never stated as fact
     expect(loopClampLine('tidy', 'arky')).toBe('Raised by loop tidy (claimed by arky)');
   });

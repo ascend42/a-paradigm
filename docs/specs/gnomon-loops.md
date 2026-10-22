@@ -208,7 +208,7 @@ nodes:
 
 ### 3.2 Working-branch collisions (`#repo-lease`, `$loop-land`)
 
-- **Where loops work.** Write steps and act nodes work in a scratch worktree detached at the branch head (`<repo>/.gnomon/worktrees/`, G:1176; git hardening, G:1557). It reuses the trusted `node_modules`; there is no network install.
+- **Where loops work.** Write steps and act nodes work in a scratch worktree detached at the branch head, in the kernel-owned run dir `<home>/loop-work/act-<runId>/tree`, outside the repo (build plan step 10; git hardening, G:1557). It is the HEAD tree read with hardened git plumbing, never `git worktree add`, and has no `.git`. Its work parks at `refs/gnomon/loops/<id>/<runId>` in a kernel-owned park repo. It reuses the trusted `node_modules` read-only; there is no network install.
 - **Landing**, under a per-repo land lock held for seconds:
   1. If HEAD moved, rebase the loop commit in scratch and re-run the goal check.
   2. Refuse if:
@@ -298,7 +298,7 @@ nodes:
   - `loop.row` per round (G:1061), extended additively with `{runId, nodeVisits, escalations, landedSha?}` and trusted only from the kernel principal (as scheduler.ts:20-22)
   - `loop.landed`, `loop.land.waiting`
   - `loop.run.ended{reason}`
-- **Restart.** A started run with no end is closed `loop.run.ended{reason:'daemon-restart'}` and its node is never resumed mid-step (like drain-interrupted, G:348). The scratch commit is parked as a ref. Continuous loops restart after the cooldown.
+- **Restart.** A started run with no end is closed `loop.run.ended{reason:'daemon-restart'}` and its node is never resumed mid-step (like drain-interrupted, G:348). Its scratch is not parked: the retention sweep removes the stale run dir. Continuous loops restart after the cooldown.
 - **Uptime hold.** While any loop is enabled, the daemon does not idle-exit and survives the app window closing (§3.3). Live runs and timers due inside the horizon also hold idle exit (scheduler.ts:260).
 - **Concurrency:**
   - one run per loop (triggers during a run coalesce into one rerun flag);

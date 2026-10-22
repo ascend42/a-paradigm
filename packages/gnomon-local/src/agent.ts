@@ -55,11 +55,17 @@ export interface AgentOptions {
   forbiddenPorts?: readonly number[];
   /** the working context target in tokens (default 8192, §13.1 ~8k) */
   contextTarget?: number;
+  /** Loops step 10: the only tools offered and run (a loop act session's declared tools) */
+  allowTools?: readonly string[];
+  /** Loops step 10: protected globs write_file refuses */
+  protect?: readonly RegExp[];
   emit: Emit;
 }
 
 export class Agent {
   readonly #o: AgentOptions;
+  /** the tools offered (all, or a loop act session's allowed ones) */
+  readonly #tools: typeof TOOLS;
   readonly #messages: ChatMessage[] = [];
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
@@ -72,7 +78,8 @@ export class Agent {
 
   constructor(o: AgentOptions) {
     this.#o = o;
-    const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', !o.nativeTools && o.surface !== 'none' ? textToolPrompt(TOOLS) : ''].filter(Boolean).join('\n\n');
+    this.#tools = o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS;
+    const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : ''].filter(Boolean).join('\n\n');
     this.#messages.push({ role: 'system', content: sys });
   }
 
@@ -90,13 +97,13 @@ export class Agent {
 
   /** tokens the history + reply may use: target × 0.85 minus the tools schema sent natively */
   get #budget(): number {
-    const schema = this.#o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(TOOLS, this.#o.surface)).length / 4) : 0;
+    const schema = this.#o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, this.#o.surface)).length / 4) : 0;
     return Math.floor(this.#target * TARGET_HEADROOM) - schema;
   }
 
   #request(): Promise<Completion> {
     this.#abort = new AbortController();
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: TOOLS, nativeTools: this.#o.nativeTools, surface: this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: this.#tools, nativeTools: this.#o.nativeTools, surface: this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
     return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
   }
 
@@ -200,7 +207,7 @@ export class Agent {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });
             return { t, res };
           }),
